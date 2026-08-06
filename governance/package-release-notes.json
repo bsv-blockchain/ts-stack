@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-03",
+  "lastReviewed": "2026-08-04",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -34,9 +34,9 @@
     {
       "name": "@bsv/auth-express-middleware",
       "publishedVersion": "2.1.2",
-      "releaseType": "patch",
-      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries, including containment of both synchronous and asynchronous BRC-103 callback failures, and restores one shared Express 4/5 runtime and type graph for consumers.",
-      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained, authentication callback failures now produce a controlled HTTP error, and Express 4 and 5 applications use their own peer-provided Express installation."
+      "releaseType": "minor",
+      "summary": "Bounds BRC-104 application-response capture before authenticated signing, with an 8 MiB default, a configurable transport limit, stable 413 errors, and boundary regression coverage.",
+      "migration": "Existing middleware construction remains compatible. Operators may set transportLimits.maxResponseBytes to a positive byte count or -1 when the embedding service enforces an equivalent response budget."
     },
     {
       "name": "@bsv/authsocket",
@@ -97,16 +97,16 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.2.2",
-      "releaseType": "patch",
-      "summary": "Adds strict package contracts and hardens PeerPay parsing, proof handling, cancellation, classification, and acknowledgement flows.",
-      "migration": "No consumer migration is required; Message Box protocol and client entry points are unchanged."
+      "releaseType": "minor",
+      "summary": "Follows bounded Message Box server pagination while preserving historical fetch-all behavior and adds offset/skip, total-limit, page-size, and optional page-ceiling controls.",
+      "migration": "Existing listMessages and listMessagesLite calls continue to fetch all available messages. Applications that need an aggregate memory ceiling should set limit and/or maxPages; no additional BRC-105 approval callback is required because AuthFetch uses wallet permissions."
     },
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.2.1",
-      "releaseType": "patch",
-      "summary": "Repairs the documented storage export and decomposes Engine submission validation, broadcast, storage, notification, and propagation orchestration while preserving execution order and behavior.",
-      "migration": "No consumer migration is required; existing imports, submission results, notification contracts, storage order, and network behavior remain unchanged."
+      "releaseType": "minor",
+      "summary": "Adds an engine lookup-result cardinality ceiling before transaction/proof hydration so a compact remote query cannot amplify into unbounded retained work.",
+      "migration": "Existing Engine constructor calls remain valid and default to 1,000 lookup formulas. Pass -1 as the final maxLookupResults argument only when a custom lookup service and deployment enforce an equivalent bound."
     },
     {
       "name": "@bsv/overlay-discovery-services",
@@ -118,9 +118,9 @@
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.4.2",
-      "releaseType": "patch",
-      "summary": "Adds strict package and edge-policy contracts, restores declaration-safe exports, adds idempotent shutdown, and hardens provider-chain failure handling and synchronization configuration.",
-      "migration": "No consumer migration is required; wildcard credential-free public access remains the default and runtimes may opt into the new close method."
+      "releaseType": "minor",
+      "summary": "Adds small, standard, and high-throughput resource profiles; bounded lookup, BASM, admin, connection, body, and response work; and streaming janitor scans with independently capped report retention.",
+      "migration": "The standard profile is selected by default. Existing configuration methods remain compatible; use OVERLAY_RESOURCE_PROFILE or granular OVERLAY_* limits, and ensure custom lookup services bound their own database queries before returning formulas."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.4.22",
+      "publishedVersion": "2.5.0",
       "releaseType": "minor",
-      "summary": "Makes the successful fragmented createAction path atomic and set-based, overlaps batched proof reads with persistence, batch-validates compound proofs and canonical P2PKH signatures, shares BRC-42 derivation work, removes unused commit reads, bulk-inserts outputs, coalesces authenticated timestamp-only Knex session touches, adds timings for every remaining material phase, and makes UMP account lookup resilient to partial overlay failure.",
-      "migration": "No API or persistence migration is required. Storage-provider additions are backward-compatible with fallbacks and existing databases use the normal migration path. Applications may now enter new-user flow when at least one overlay host returns a clean empty result despite malformed or unavailable peers; one verified token still establishes an existing account, multiple unresolved verified tokens remain an error, and WAB existing-account continuity still blocks replacement-wallet onboarding. Wallet results, BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, provider calls, and wallet wire behavior are otherwise unchanged."
+      "summary": "Adds resource-profile-aware Wallet Storage RPC pagination, array and response budgets, bounded authenticated response capture, durable payment replay and session schemas, and double-slash compatibility; makes fragmented createAction atomic and set-based with batched proof reads, validation, output writes, shared derivation work, coalesced session touches, and complete privacy-safe phase timings; makes UMP account lookup resilient to partial overlay failure; and refreshes ChainTracks with credential-free Arcade/go-chaintracks bulk and SSE sources, five-network genesis correctness, prioritized failover, local last-good operation, source health, browser-safe reconnects, and a rate-limited keyless WhatsOnChain fallback.",
+      "migration": "List/find RPC calls that omit a limit now receive the profile default (1,000 in standard), and larger caller limits are rejected above the operator maximum. Existing calls and storage data remain compatible; migrations add auth_sessions, payment_replays, and createAction indexes automatically, and storage-provider additions retain backward-compatible fallbacks. Applications may now enter new-user flow when at least one overlay host returns a clean empty result despite malformed or unavailable peers; one verified token still establishes an existing account, multiple unresolved verified tokens remain an error, and WAB existing-account continuity still blocks replacement-wallet onboarding. The default ChainTracks client for mainnet, testnet, and TerraTestNet now uses each public Arcade v2 endpoint without a credential; explicit ChaintracksClientApi injection and legacy v1 URLs remain supported. STN and Terra Scaling TestNet require an explicit STN_CHAINTRACKS_URL/TSTN_CHAINTRACKS_URL or corresponding Arcade URL. A WhatsOnChain key is optional, anonymous fallback stays below the documented public rate, and ChainTracks header/info requests retry anonymously when a configured key is rejected. Browser/mobile CORS expectations, wallet results, BRC-103/104, AuthFetch, JSON-RPC, and wallet wire behavior are otherwise unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.4.22",
+      "publishedVersion": "2.5.0",
       "releaseType": "minor",
-      "summary": "Carries the lockstep browser build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, and resilient UMP account lookup.",
-      "migration": "No API or persistence migration is required. Browser wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox; older compatible SDK peers retain the validated sequential proof fallback, IndexedDB upgrades automatically, and BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep browser build with the bounded remote-storage contract, batched proof assembly, linear funding and signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, resilient UMP account lookup, and the browser-safe credential-free ChainTracks v2 client with reconnecting SSE and five-network header support.",
+      "migration": "No browser consumer migration is required. Remote storage callers may provide explicit list limits when they need a value other than the operator profile default, and browser wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox. Mainnet, testnet, and TerraTestNet ChainTracks defaults now use public credential-free Arcade v2 endpoints; explicit clients and legacy v1 URLs remain compatible, while STN and Terra Scaling TestNet require an explicit endpoint. Older compatible SDK peers retain the validated sequential proof fallback, IndexedDB upgrades automatically, and CORS, BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage wire behavior remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.4.22",
+      "publishedVersion": "2.5.0",
       "releaseType": "minor",
-      "summary": "Carries the lockstep mobile build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, and resilient UMP account lookup.",
-      "migration": "No API or persistence migration is required. Mobile wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox; older compatible SDK peers retain the validated sequential proof fallback, and BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep mobile build with the bounded remote-storage contract, batched proof assembly, linear funding and signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, resilient UMP account lookup, and the mobile-safe credential-free ChainTracks v2 client with reconnecting SSE and five-network header support.",
+      "migration": "No mobile consumer migration is required. Remote storage callers may provide explicit list limits when they need a value other than the operator profile default, and mobile wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox. Mainnet, testnet, and TerraTestNet ChainTracks defaults now use public credential-free Arcade v2 endpoints; explicit clients and legacy v1 URLs remain compatible, while STN and Terra Scaling TestNet require an explicit endpoint. Older compatible SDK peers retain the validated sequential proof fallback, and BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage wire behavior remain compatible."
     },
     {
       "name": "create-bsv-app",

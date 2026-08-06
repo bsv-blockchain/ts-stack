@@ -53,7 +53,20 @@ const mockRes: jest.Mocked<Response> = {
 let validReq: SendMessageRequest
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 let validRes: { status: string }
-let validMessageBox: { messageBoxId: number; type: string }
+function successfulStoreResponse(q: { sql: string; response: (value: unknown) => void }): void {
+  if (q.sql.includes('select `identityKey`, `messageBoxId` from `messageBox`')) {
+    q.response([
+      {
+        identityKey: '028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1',
+        messageBoxId: 42
+      }
+    ])
+  } else if (q.sql.includes('message_count') && q.sql.includes('body_bytes')) {
+    q.response([{ message_count: 0, body_bytes: 0 }])
+  } else {
+    q.response([])
+  }
+}
 
 describe('sendMessage', () => {
   // Capture original console methods
@@ -84,11 +97,6 @@ describe('sendMessage', () => {
     validRes = {
       status: 'success'
     }
-    validMessageBox = {
-      messageBoxId: 42,
-      type: 'payment_inbox'
-    }
-
     validReq = {
       auth: {
         identityKey: 'mockIdKey'
@@ -107,6 +115,10 @@ describe('sendMessage', () => {
   })
 
   afterEach(() => {
+    delete process.env.MESSAGE_BOX_MAX_SENDER_MESSAGES
+    delete process.env.MESSAGE_BOX_MAX_SENDER_BYTES
+    delete process.env.MESSAGE_BOX_MAX_INBOX_MESSAGES
+    delete process.env.MESSAGE_BOX_MAX_INBOX_BYTES
     jest.clearAllMocks()
 
     if (queryTracker !== null && queryTracker !== undefined) {
@@ -328,17 +340,7 @@ describe('sendMessage', () => {
   })
 
   it('Creates a messageBox when it does not exist', async () => {
-    queryTracker.on('query', (q, step: number) => {
-      if (step === 1) {
-        q.response(0) // Simulate that the messageBox does not exist
-      } else if (step === 2) {
-        q.response([validMessageBox]) // Simulate messageBox being inserted
-      } else if (step === 3) {
-        q.response([validMessageBox]) // Simulate finding a valid messageBoxId
-      } else {
-        q.response([]) // Default response
-      }
-    })
+    queryTracker.on('query', q => successfulStoreResponse(q))
 
     await sendMessage.func(validReq, mockRes as Response)
 
@@ -350,25 +352,46 @@ describe('sendMessage', () => {
     )
   })
 
-  it('Silently ignores duplicate messages via onConflict().ignore()', async () => {
-    queryTracker.on('query', (q, step: number) => {
-      if (step === 1) {
-        q.response({ messageBoxId: 42, type: 'payment_inbox' }) // messageBox exists
-      } else if (step === 2) {
-        q.response({ messageBoxId: 42 }) // get messageBoxId for insert
-      } else if (step === 3) {
-        q.response(0) // insert with onConflict().ignore() returns 0 rows affected
-      } else {
-        q.response([])
+  it('rejects a duplicate message and rolls the transaction back', async () => {
+    queryTracker.on('query', q => {
+      if (q.sql.startsWith('insert into `messages`')) {
+        const error = Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' })
+        q.reject(error)
+        return
       }
+      successfulStoreResponse(q)
     })
 
     await sendMessage.func(validReq, mockRes as Response)
 
-    expect(mockRes.status).toHaveBeenCalledWith(200)
+    expect(mockRes.status).toHaveBeenCalledWith(400)
     expect(mockRes.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: 'success'
+        status: 'error',
+        code: 'ERR_DUPLICATE_MESSAGE'
+      })
+    )
+  })
+
+  it('rejects storage atomically when the shared sender quota is exhausted', async () => {
+    process.env.MESSAGE_BOX_MAX_SENDER_MESSAGES = '1'
+    queryTracker.on('query', q => {
+      if (q.sql.includes('message_count') && q.sql.includes('where `sender` = ?')) {
+        q.response([{ message_count: 1, body_bytes: 2 }])
+        return
+      }
+      successfulStoreResponse(q)
+    })
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(429)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_SENDER_QUOTA_EXCEEDED',
+        resource: 'messages',
+        limit: 1
       })
     )
   })
@@ -397,17 +420,7 @@ describe('sendMessage', () => {
   })
 
   it('creates a new messageBox when one does not exist for recipient', async () => {
-    queryTracker.on('query', (q, step) => {
-      if (step === 1)
-        q.response(undefined) // messageBox not found
-      else if (step === 2)
-        q.response(1) // messageBox insert
-      else if (step === 3)
-        q.response({ messageBoxId: 42 }) // get messageBoxId for message insert
-      else if (step === 4)
-        q.response(1) // insert message
-      else q.response([])
-    })
+    queryTracker.on('query', q => successfulStoreResponse(q))
 
     await sendMessage.func(validReq, mockRes)
 

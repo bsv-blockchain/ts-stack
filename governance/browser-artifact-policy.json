@@ -101,7 +101,7 @@
       "path": "packages/wallet/wallet-toolbox/client",
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",
       "entry": ".",
-      "splittingDisposition": "The dedicated browser export excludes Node storage and database adapters and is verified through its platform-specific exact-package gate."
+      "splittingDisposition": "The dedicated browser export excludes Node storage, database adapters, and direct P2P. Its browser-safe fetch/SSE ChainTracks adapter is an intentional shared capability measured by the platform-specific exact-package gate."
     }
   ]
 }

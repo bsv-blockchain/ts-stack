@@ -6,6 +6,15 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Make ChainTracks credential-free by default on mainnet, testnet, and
+  TerraTestNet through the public Arcade/go-chaintracks v2 HTTP and SSE APIs.
+  Add explicit STN and Terra Scaling TestNet support, exact per-network genesis
+  headers, isolated in-memory storage, and remove silent testnet aliases.
+- Add prioritized bulk/live source failover, locally validated last-good height
+  operation, source health reporting, bounded request timeouts, browser-safe SSE
+  reconnection, network checks, and a globally rate-limited anonymous
+  WhatsOnChain fallback for mainnet/testnet. WhatsOnChain keys remain optional
+  and rejected configured keys retry header/info requests anonymously.
 - Preserve the default automatically negotiated in-memory `noSend` batching and
   `sendWith` lifecycle introduced in #289. Expand inherited txid-only proof
   ancestors for cold clients, preserve caller-declared known txids, report the
@@ -170,10 +179,10 @@ attention to changes that materially alter behavior or extend functionality.
   `auth-express-middleware@2.1.1` likewise declares its `mime-types` runtime
   import so strict package managers do not fail when loading the built packages.
 
- - Release prep for `2.4.2`: proof completion now discovers every local
-   transaction row sharing the proven txid, repairs notification-set drift from
-   concurrent multi-user `internalizeAction` calls, and idempotently completes
-   any local copy omitted by a last-writer-wins notification update.
+- Release prep for `2.4.2`: proof completion now discovers every local
+  transaction row sharing the proven txid, repairs notification-set drift from
+  concurrent multi-user `internalizeAction` calls, and idempotently completes
+  any local copy omitted by a last-writer-wins notification update.
 
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.
@@ -216,7 +225,8 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox 2.1.20
 
 - Update cdn.projectbabbage.com valid blockheaders file hash.
-- 
+-
+
 ## wallet-toolbox 2.1.19
 
 - Merge PR#146. GenerateChange change to better handle dust situations. Redundant trimInputBeef knownTxids safety check.
@@ -239,7 +249,6 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox 2.1.15
 
 - audit fix
- 
 
 ## wallet-toolbox 2.1.14
 
@@ -277,7 +286,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.1.9
 
-- Fix batch sending bug in TaskSendWaiting 
+- Fix batch sending bug in TaskSendWaiting
 
 ## wallet-toolbox 2.1.8
 

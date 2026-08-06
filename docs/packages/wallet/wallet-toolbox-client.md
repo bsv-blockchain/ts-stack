@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.5.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+version: '2.6.0'
+last_updated: '2026-08-05'
+last_verified: '2026-08-05'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -23,6 +23,11 @@ the telemetry sink without adding headers to authenticated requests.
 Browser authentication accepts one verified matching UMP token as an existing
 account. When no token verifies, one clean empty overlay response establishes a
 new account even if other hosts fail or return malformed records.
+
+The browser build includes the fetch-based, credential-free ChainTracks v2
+client and reconnecting SSE adapter without Node-only modules. Public defaults
+cover mainnet, testnet, and TerraTestNet; STN/TSTN use an injected or configured
+endpoint.
 
 ## Install
 

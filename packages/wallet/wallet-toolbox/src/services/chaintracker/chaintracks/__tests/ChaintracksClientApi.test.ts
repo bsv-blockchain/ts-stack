@@ -25,7 +25,7 @@ const fixtureRoot = './src/services/chaintracker/chaintracks/__tests/data/cdnTes
 const fixtureCdnUrl = 'https://fixture.invalid/blockheaders/'
 
 describe('ChaintracksClientApi deterministic contract', () => {
-  const clients: Array<{ client: ChaintracksClientApi, chain: Chain }> = []
+  const clients: Array<{ client: ChaintracksClientApi; chain: Chain }> = []
   let localService: ChaintracksService
   let localChaintracks: Chaintracks
   let firstTip: BlockHeader
@@ -46,7 +46,8 @@ describe('ChaintracksClientApi deterministic contract', () => {
       2,
       100,
       100,
-      36
+      36,
+      { disableChaintracks: true }
     )
     options.logging = () => {}
 
@@ -81,16 +82,9 @@ describe('ChaintracksClientApi deterministic contract', () => {
     // Each Jest worker has a separate process ID, avoiding collisions when
     // package tests execute in parallel.
     await localService.startJsonRpcServer(30000 + (process.pid % 10000))
-    const localServiceClient = new ChaintracksServiceClient(
-      chain,
-      `http://localhost:${localService.port}`,
-      {}
-    )
+    const localServiceClient = new ChaintracksServiceClient(chain, `http://localhost:${localService.port}`, {})
 
-    clients.push(
-      { client: localServiceClient, chain },
-      { client: localChaintracks, chain }
-    )
+    clients.push({ client: localServiceClient, chain }, { client: localChaintracks, chain })
     firstTip = await clients[0].client.findChainTipHeader()
   })
 
@@ -215,12 +209,12 @@ describe('ChaintracksClientApi deterministic contract', () => {
 })
 
 class FixtureFetch {
-  constructor (
+  constructor(
     private readonly filesInfo: BulkHeaderFilesInfo,
     private readonly fileData: Map<string, Uint8Array>
   ) {}
 
-  async fetchJson<R> (url: string): Promise<R> {
+  async fetchJson<R>(url: string): Promise<R> {
     if (url.endsWith('mainNetBlockHeaders.json')) {
       return {
         ...this.filesInfo,
@@ -235,7 +229,7 @@ class FixtureFetch {
     throw new Error(`Unexpected fixture JSON request: ${url}`)
   }
 
-  async download (url: string): Promise<Uint8Array> {
+  async download(url: string): Promise<Uint8Array> {
     const requestedName = url.split('/').at(-1)!
     const fileName = requestedName === '400_499_headers' ? 'mainNet_4.headers' : requestedName
     const data = this.fileData.get(fileName)
@@ -243,7 +237,7 @@ class FixtureFetch {
     return data
   }
 
-  pathJoin (baseUrl: string, subpath: string): string {
+  pathJoin(baseUrl: string, subpath: string): string {
     let baseEnd = baseUrl.length
     while (baseEnd > 0 && baseUrl[baseEnd - 1] === '/') baseEnd--
 
@@ -254,7 +248,7 @@ class FixtureFetch {
   }
 }
 
-async function loadFixtureChain (): Promise<{
+async function loadFixtureChain(): Promise<{
   filesInfo: BulkHeaderFilesInfo
   fileData: Map<string, Uint8Array>
   headers: BlockHeader[]
@@ -273,7 +267,7 @@ async function loadFixtureChain (): Promise<{
   return { filesInfo, fileData, headers }
 }
 
-function toWocHeader (header: BlockHeader): WocGetHeadersHeader {
+function toWocHeader(header: BlockHeader): WocGetHeadersHeader {
   return {
     hash: header.hash,
     confirmations: 1,

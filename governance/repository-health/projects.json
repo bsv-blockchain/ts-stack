@@ -155,6 +155,24 @@
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "infra/uhrp-server-cloud-bucket/src/resourceLimits.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": ["infra/uhrp-server-basic/src/resourceLimits.ts"],
+      "generator": "scripts/sync-service-runtime-copies.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical UHRP resource limits, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "infra/wallet-infra/src/KnexPaymentReplayStore.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "packages/wallet/wallet-toolbox/src/storage/remoting/KnexPaymentReplayStore.ts"
+      ],
+      "generator": "scripts/sync-service-runtime-copies.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical wallet payment replay store, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
     }
   ],
   "profiles": {

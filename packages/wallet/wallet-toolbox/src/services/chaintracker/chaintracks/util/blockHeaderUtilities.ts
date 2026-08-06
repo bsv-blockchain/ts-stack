@@ -468,8 +468,6 @@ export function genesisHeader(chain: Chain): BlockHeader {
         hash: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
       }
     case 'test':
-    case 'ttn':
-    case 'tstn':
       return {
         version: 1,
         previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
@@ -479,6 +477,41 @@ export function genesisHeader(chain: Chain): BlockHeader {
         nonce: 414098458,
         height: 0,
         hash: '000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943'
+      }
+    case 'stn':
+      return {
+        version: 1,
+        previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        merkleRoot: '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+        time: 1296688602,
+        bits: 486604799,
+        nonce: 173779992,
+        height: 0,
+        // go-chaincfg v1.6.1 retains a stale StnParams.GenesisHash literal.
+        // This is the hash of the serialized stnGenesisBlock header itself.
+        hash: '6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594'
+      }
+    case 'ttn':
+      return {
+        version: 1,
+        previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        merkleRoot: '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+        time: 1755606836,
+        bits: 486604799,
+        nonce: 1092578460,
+        height: 0,
+        hash: '000000000499eabba0a88f5b3747231c74b9191c1a4a04b2c2ea817976b7776d'
+      }
+    case 'tstn':
+      return {
+        version: 1,
+        previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        merkleRoot: '64452e5b25c65e492ad6a4f5ce9f427ca986626c28315d88de920d66e28cc98f',
+        time: 1782864000,
+        bits: 486604799,
+        nonce: 1780488216,
+        height: 0,
+        hash: '000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c'
       }
     case 'mock':
       throw new Error("genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.")

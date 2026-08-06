@@ -34,6 +34,34 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; IndexedDB and remote storage only
 
+### ChainTracks sources and networks
+
+Wallet services do not require a WhatsOnChain key for ChainTracks. Mainnet,
+testnet, and TerraTestNet use the public Arcade/go-chaintracks v2 HTTP and SSE
+surfaces by default. Bulk batches still pass through local serialization, hash,
+continuity, and genesis checks; providers are tried in priority order; and a
+synchronized tracker can continue serving its last-good checked data during a
+provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
+requests are serialized below its documented public rate.
+
+The supported chain identifiers are `main`, `test`, `stn`, `ttn`, and `tstn`
+(`mock` remains available for test utilities). STN and Terra Scaling TestNet do
+not have operator-independent public endpoints: set `STN_CHAINTRACKS_URL` or
+`TSTN_CHAINTRACKS_URL`, use the matching Arcade environment variable, or inject
+an explicit `ChaintracksClientApi`. URLs ending in `/v2` use the reconnecting
+go-chaintracks client; existing legacy v1 URLs and explicit clients remain
+compatible. Browser and mobile distributions expose the same fetch/SSE client
+without Node `Buffer` or filesystem dependencies.
+
+Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
+Direct Teranode P2P is not included in browser/mobile artifacts.
+
+Core ChainTracks factories accept a final source-options argument when an
+application must override the defaults. Set `disableChaintracks`, `disableCdn`,
+or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an
+explicit `chaintracks` client to retain an existing deployment topology. All
+earlier positional arguments remain unchanged.
+
 ## Getting Started
 
 ### Installation

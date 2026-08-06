@@ -4,6 +4,10 @@ This repository serves as a reference implementation for building and deploying 
 
 Built on the [wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox), this implementation empowers developers with extensive customization options for authentication, monetization, and database management to name a few.
 
+See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
+for RPC ceilings, API/monitor role separation, official-image provider settings,
+and Wallet Storage HPA prerequisites.
+
 ## Key Features
 
 1. #### Out-of-the-Box UTXO Management

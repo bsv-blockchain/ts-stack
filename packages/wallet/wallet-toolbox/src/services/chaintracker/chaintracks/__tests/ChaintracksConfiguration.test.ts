@@ -1,6 +1,7 @@
 import type { Knex } from 'knex'
 
 import type { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
+import type { ChaintracksClientApi } from '../Api/ChaintracksClientApi'
 import { Chaintracks } from '../Chaintracks'
 import {
   createAndStartDefaultChaintracks,
@@ -118,6 +119,54 @@ describe('Chaintracks configuration compatibility', () => {
     const defaultKnexOptions = createDefaultKnexChaintracksOptions('main')
     await (knexOptions.storage as ChaintracksStorageKnex).shutdown()
     await (defaultKnexOptions.storage as ChaintracksStorageKnex).shutdown()
+  })
+
+  test('adds a credential-free remote bulk/live source without changing legacy source order', () => {
+    const remote = { getChain: jest.fn(async () => 'ttn') } as unknown as ChaintracksClientApi
+    const sources = { chaintracks: remote, remoteMaxHeadersPerRequest: 250 }
+    const options = createDefaultNoDbChaintracksOptions('ttn', ...customTail, sources)
+    const params = resolveDefaultChaintracksArguments(['ttn', ...customTail, sources])
+
+    expect(toDefaultChaintracksArguments(params)).toEqual(['ttn', ...customTail, sources])
+    expect(options.bulkIngestors.map(source => source.constructor.name)).toEqual([
+      'BulkIngestorCDNBabbage',
+      'BulkIngestorChaintracks'
+    ])
+    expect(options.liveIngestors.map(source => source.constructor.name)).toEqual(['LiveIngestorChaintracksSSE'])
+  })
+
+  test.each(['main', 'test', 'ttn'] as const)(
+    '%s includes a credential-free public Arcade source by default',
+    chain => {
+      const options = createDefaultNoDbChaintracksOptions(chain)
+      expect(options.bulkIngestors.map(source => source.constructor.name)).toContain('BulkIngestorChaintracks')
+      expect(options.liveIngestors.map(source => source.constructor.name)).toContain('LiveIngestorChaintracksSSE')
+    }
+  )
+
+  test.each(['stn', 'tstn'] as const)('%s requires an explicit remote live source', chain => {
+    expect(() => createDefaultNoDbChaintracksOptions(chain)).toThrow(
+      `ChainTracks ${chain} requires at least one bulk and live source`
+    )
+  })
+
+  test('allows the public Arcade default to be disabled explicitly', () => {
+    const options = createDefaultNoDbChaintracksOptions(
+      'main',
+      '',
+      100000,
+      2,
+      undefined,
+      'https://cdn.projectbabbage.com/blockheaders/',
+      2000,
+      400,
+      500,
+      400,
+      36,
+      { disableChaintracks: true }
+    )
+    expect(options.bulkIngestors.map(source => source.constructor.name)).not.toContain('BulkIngestorChaintracks')
+    expect(options.liveIngestors.map(source => source.constructor.name)).not.toContain('LiveIngestorChaintracksSSE')
   })
 
   test('starts shared and Knex configurations with exact resolved metadata', async () => {

@@ -1,4 +1,4 @@
-import { Beef, HexString, Utils, WhatsOnChainConfig } from '@bsv/sdk'
+import { Beef, HexString, HttpClientRequestOptions, HttpClientResponse, Utils, WhatsOnChainConfig } from '@bsv/sdk'
 import { convertProofToMerklePath } from '../../utility/tscProofToMerklePath'
 import SdkWhatsOnChain from './SdkWhatsOnChain'
 import { Chain } from '../../sdk/types'
@@ -31,10 +31,38 @@ import {
   ScriptHashHistoryResponse
 } from './whatsOnChainHelpers'
 
+export interface WalletToolboxWhatsOnChainConfig extends WhatsOnChainConfig {
+  /** Optional request-start gate used by ChainTracks' shared public-rate scheduler. */
+  requestGate?: () => Promise<void>
+}
+
 export class WhatsOnChainNoServices extends SdkWhatsOnChain {
-  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}) {
+  private readonly requestGate?: () => Promise<void>
+
+  constructor(chain: Chain = 'main', config: WalletToolboxWhatsOnChainConfig = {}) {
     if (chain === 'mock') throw new Error("WhatsOnChain does not support 'mock' chain. Use MockServices directly.")
     super(chain, config)
+    this.requestGate = config.requestGate
+  }
+
+  private async requestWithAnonymousAuthFallback<T>(
+    url: string,
+    requestOptions: HttpClientRequestOptions
+  ): Promise<HttpClientResponse<T>> {
+    await this.requestGate?.()
+    const response = await this.httpClient.request<T>(url, requestOptions)
+    if ((response.status !== 401 && response.status !== 403) || this.apiKey.trim() === '') {
+      return response
+    }
+
+    // Treat the anonymous retry as another public request start so a stale
+    // key cannot create a burst above the documented keyless allowance.
+    if (this.requestGate != null) await this.requestGate()
+    else await wait(350)
+    return await this.httpClient.request<T>(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    })
   }
 
   /**
@@ -492,7 +520,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const url = `${this.URL}/block/${hash}/header`
 
     for (let retry = 0; retry < 2; retry++) {
-      const response = await this.httpClient.request<WocHeader>(url, requestOptions)
+      const response = await this.requestWithAnonymousAuthFallback<WocHeader>(url, requestOptions)
       if (response.statusText === 'Too Many Requests' && retry < 2) {
         await wait(2000)
         continue
@@ -522,7 +550,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const url = `${this.URL}/chain/info`
 
     for (let retry = 0; retry < 2; retry++) {
-      const response = await this.httpClient.request<WocChainInfo>(url, requestOptions)
+      const response = await this.requestWithAnonymousAuthFallback<WocChainInfo>(url, requestOptions)
       if (response.statusText === 'Too Many Requests' && retry < 2) {
         await wait(2000)
         continue
@@ -545,7 +573,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
 export class WhatsOnChain extends WhatsOnChainNoServices {
   services: Services
 
-  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}, services?: Services) {
+  constructor(chain: Chain = 'main', config: WalletToolboxWhatsOnChainConfig = {}, services?: Services) {
     super(chain, config)
     this.services = services || new Services(chain)
   }

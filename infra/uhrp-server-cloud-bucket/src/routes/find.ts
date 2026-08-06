@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
+import { normalizeUhrpPagination } from '../resourceLimits'
 
 interface FindRequest extends Request {
     auth: {
@@ -8,6 +9,8 @@ interface FindRequest extends Request {
     }
     query: {
         uhrpUrl?: string
+        limit?: string
+        offset?: string
     }
     body: {
         limit?: number
@@ -39,7 +42,10 @@ const findHandler = async (req: FindRequest, res: Response<FindResponse>) => {
         }
 
         const { uhrpUrl } = req.query
-        const { limit, offset } = req.body
+        const pagination = normalizeUhrpPagination(
+            req.body?.limit ?? req.query.limit,
+            req.body?.offset ?? req.query.offset
+        )
         if (!uhrpUrl) {
             return res.status(400).json({
                 status: 'error',
@@ -53,7 +59,7 @@ const findHandler = async (req: FindRequest, res: Response<FindResponse>) => {
             size,
             contentType,
             expiryTime
-        } = await getMetadata(uhrpUrl, identityKey, limit, offset)
+        } = await getMetadata(uhrpUrl, identityKey, pagination.limit, pagination.offset)
 
         return res.status(200).json({
             status: 'success',
@@ -65,6 +71,9 @@ const findHandler = async (req: FindRequest, res: Response<FindResponse>) => {
             }
         })
     } catch (error) {
+        if (error instanceof RangeError) {
+            return res.status(400).json({ status: 'error', code: 'ERR_INVALID_PAGINATION', description: error.message })
+        }
         log.error({ operation: 'find.handle', outcome: 'error', err: error }, 'Find handler failed')
         return res.status(500).json({
             status: 'error',

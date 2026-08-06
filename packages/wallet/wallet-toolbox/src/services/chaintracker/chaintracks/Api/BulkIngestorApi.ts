@@ -5,7 +5,7 @@ import { ChaintracksStorageApi } from './ChaintracksStorageApi'
 
 export interface BulkIngestorBaseOptions {
   /**
-   * The target chain: "main" or "test"
+   * The target chain.
    */
   chain: Chain
 

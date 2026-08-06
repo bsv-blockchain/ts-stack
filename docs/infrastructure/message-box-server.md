@@ -40,7 +40,7 @@ Clients connect with identity-based authentication, send and receive messages th
 | Method | Path                 | Purpose                                                            |
 | ------ | -------------------- | ------------------------------------------------------------------ |
 | POST   | /sendMessage         | Send encrypted message to recipient (authenticated)                |
-| POST   | /listMessages        | List all unacknowledged messages in box (authenticated)            |
+| POST   | /listMessages        | Page unacknowledged messages with `limit` and `offset`/`skip`       |
 | POST   | /acknowledgeMessage  | Mark messages as read/delete them (authenticated)                  |
 | POST   | /registerDevice      | Register a push-notification device for the authenticated identity |
 | GET    | /devices             | List the authenticated identity's devices with redacted tokens     |
@@ -51,6 +51,11 @@ Clients connect with identity-based authentication, send and receive messages th
 | GET    | /health              | Public process liveness                                            |
 | GET    | /ready               | Public database readiness                                          |
 | GET    | /docs, /openapi.json | Public API documentation                                           |
+
+The omitted page size is 1,000 in the standard profile and is operator
+configurable. Responses include `limit`, `offset`, `nextOffset`, and `hasMore`.
+See [Service Resource Profiles](../reference/service-resource-profiles.md) for
+all limits, shared state, BRC-105 pricing, memory evidence, and scaling guidance.
 
 ## WebSocket endpoints
 
