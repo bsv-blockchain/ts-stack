@@ -76,7 +76,10 @@ export class Services implements WalletServices {
     this.chain = typeof optionsOrChain === 'string' ? optionsOrChain : optionsOrChain.chain
 
     if (this.chain === 'mock') {
-      throw new WERR_INVALID_PARAMETER('chain', "'main', 'test', 'ttn', or 'tstn'. Use MockServices for 'mock' chain.")
+      throw new WERR_INVALID_PARAMETER(
+        'chain',
+        "'main', 'test', 'stn', 'ttn', or 'tstn'. Use MockServices for 'mock' chain."
+      )
     }
 
     this.options = typeof optionsOrChain === 'string' ? Services.createDefaultOptions(this.chain) : optionsOrChain
@@ -101,10 +104,10 @@ export class Services implements WalletServices {
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
 
-    // tstn runs only Arcade + ChainTracks; it has no WhatsOnChain /
-    // block-explorer provider. WhatsOnChain-only lookups therefore remain
-    // unavailable on tstn by design.
-    const hasWhatsOnChain = this.chain !== 'tstn'
+    // The public WhatsOnChain API documents mainnet and testnet only.
+    // Teranode-family networks use Arcade/ChainTracks and explicit operator
+    // endpoints instead of being silently aliased to testnet.
+    const hasWhatsOnChain = this.chain === 'main' || this.chain === 'test'
 
     if (hasBitails) {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-05",
   "owner": "ts-stack-maintainers",
   "policy": {
     "publicEdge": {
@@ -86,15 +86,24 @@
       "envExample": "infra/chaintracks-server/.env.example",
       "port": "PORT (default 3011; CDN is port + 1)",
       "livenessPath": "/healthz",
-      "readinessPath": "/getInfo",
+      "readinessPath": "/readyz",
       "configuration": {
         "required": ["CHAIN"],
         "optional": [
           "BULK_HEADERS_PATH",
           "CDN_HOST_URL",
+          "CHAINTRACKS_DISABLE_WHATSONCHAIN",
+          "CHAINTRACKS_UPSTREAM_API_PREFIX",
+          "CHAINTRACKS_UPSTREAM_MAX_HEADERS",
+          "CHAINTRACKS_UPSTREAM_URL",
           "ENABLE_BULK_HEADERS_CDN",
           "PORT",
+          "ROUTING_PREFIX",
           "SOURCE_CDN_URL",
+          "STN_ARCADE_URL",
+          "STN_CHAINTRACKS_URL",
+          "TSTN_ARCADE_URL",
+          "TSTN_CHAINTRACKS_URL",
           "WHATSONCHAIN_API_KEY"
         ],
         "secrets": ["OTEL_EXPORTER_OTLP_HEADERS", "WHATSONCHAIN_API_KEY"]
@@ -104,7 +113,14 @@
         "telemetryFile": "src/telemetry.ts",
         "loggerFile": "src/logger.ts",
         "preload": "--require ./dist/telemetry.js",
-        "operations": ["listen", "shutdown", "headers.export", "headers.ingest"]
+        "operations": [
+          "listen",
+          "shutdown",
+          "headers.export",
+          "headers.ingest",
+          "readiness",
+          "config.summary"
+        ]
       },
       "criticalJourneys": [
         "return current chain information",
@@ -113,7 +129,7 @@
       ],
       "alerts": [
         "header tip age or height stops advancing",
-        "bulk-header export or upstream retrieval repeatedly fails",
+        "all configured bulk/live sources are degraded or upstream retrieval repeatedly fails",
         "API or CDN saturation exceeds its independent concurrency budget"
       ],
       "state": "Bulk-header files under BULK_HEADERS_PATH; upstream headers are reproducible.",

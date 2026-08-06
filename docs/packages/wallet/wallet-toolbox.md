@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.5.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+version: '2.6.0'
+last_updated: '2026-08-05'
+last_verified: '2026-08-05'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -28,6 +28,14 @@ When no token verifies, one clean empty overlay response establishes a new
 account even if other hosts fail or return malformed records. Multiple distinct
 verified tokens and lookups with no usable response remain errors; WAB
 existing-account continuity still prevents replacement-wallet onboarding.
+
+ChainTracks defaults to credential-free Arcade/go-chaintracks v2 HTTP and SSE
+on mainnet, testnet, and TerraTestNet. STN and Terra Scaling TestNet require an
+explicit operator endpoint. Remote header batches pass local serialization,
+hash, continuity, and genesis checks; source failures fall through in priority
+order; and synchronized trackers keep serving last-good local data.
+WhatsOnChain is an optional, rate-limited mainnet/testnet fallback; no key is
+required.
 
 ## Install
 

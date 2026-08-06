@@ -100,4 +100,23 @@ describe('ChaintracksStorageNoDb insertHeader compatibility', () => {
       noPrev: true
     })
   })
+
+  test('keeps in-memory state isolated for every supported network', async () => {
+    const chains = ['main', 'test', 'stn', 'ttn', 'tstn'] as const
+    const stores = chains.map(
+      chain => new ChaintracksStorageNoDb(ChaintracksStorageBase.createStorageBaseOptions(chain))
+    )
+    const datasets = await Promise.all(stores.map(async store => await store.getData()))
+
+    for (const [index, data] of datasets.entries()) {
+      expect(data.chain).toBe(chains[index])
+      for (const [otherIndex, other] of datasets.entries()) {
+        if (otherIndex !== index) {
+          expect(data).not.toBe(other)
+          expect(data.liveHeaders).not.toBe(other.liveHeaders)
+          expect(data.hashToHeaderId).not.toBe(other.hashToHeaderId)
+        }
+      }
+    }
+  })
 })

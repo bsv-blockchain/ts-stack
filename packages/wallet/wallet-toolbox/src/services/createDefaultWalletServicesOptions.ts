@@ -3,9 +3,41 @@ import { WalletServicesOptions } from '../sdk/WalletServices.interfaces'
 import { randomBytesHex } from '../utility/utilityHelpers'
 import { ChaintracksClientApi } from './chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { ChaintracksServiceClient } from './chaintracker/chaintracks/ChaintracksServiceClient'
-import { tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
+import { GoChaintracksServiceClient } from './chaintracker/chaintracks/GoChaintracksServiceClient'
+import { publicArcadeUrl, stnArcadeUrl, stnChaintracksUrl, tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
 
-export function createDefaultWalletServicesOptions (
+function configuredChaintracksClient(chain: Chain, serviceUrl: string): ChaintracksClientApi {
+  let path = ''
+  try {
+    path = new URL(serviceUrl).pathname.replace(/\/+$/, '')
+  } catch {
+    // Preserve the legacy client's existing validation/error behavior for an
+    // operator-supplied non-URL value.
+  }
+  if (path.endsWith('/v2')) return new GoChaintracksServiceClient(chain, serviceUrl)
+  return new ChaintracksServiceClient(chain, serviceUrl)
+}
+
+/**
+ * Returns the credential-free default ChainTracks client for a supported
+ * public network, or an operator-configured client for stn/tstn.
+ */
+export function createDefaultChaintracksClient(chain: Exclude<Chain, 'mock'>): ChaintracksClientApi {
+  switch (chain) {
+    case 'main':
+    case 'test':
+    case 'ttn':
+      return new GoChaintracksServiceClient(chain, arcadeDefaultUrl(chain)!, {
+        apiPrefix: '/chaintracks/v2'
+      })
+    case 'stn':
+      return configuredChaintracksClient(chain, stnChaintracksUrl())
+    case 'tstn':
+      return configuredChaintracksClient(chain, tstnChaintracksUrl())
+  }
+}
+
+export function createDefaultWalletServicesOptions(
   ...[
     chain,
     arcCallbackUrl,
@@ -43,25 +75,16 @@ export function createDefaultWalletServicesOptions (
   ]
 ): WalletServicesOptions {
   if (chain === 'mock') {
-    throw new Error('createDefaultWalletServicesOptions does not support \'mock\' chain. Use MockServices directly.')
+    throw new Error("createDefaultWalletServicesOptions does not support 'mock' chain. Use MockServices directly.")
   }
 
   deploymentId ||= `wallet-toolbox-${randomBytesHex(16)}`
 
-  // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
-  let chaintracksUrl: string
-  if (chain === 'ttn') {
-    chaintracksUrl = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/v1'
-  } else if (chain === 'tstn') {
-    chaintracksUrl = tstnChaintracksUrl()
-  } else {
-    chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
-  }
   // The mainnet endpoint is always used since these are fiat exchange rates,
   // independent of the chain being used.
   const chaintracksFiatExchangeRatesUrl = 'https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates'
 
-  chaintracks ||= new ChaintracksServiceClient(chain, chaintracksUrl)
+  chaintracks ||= createDefaultChaintracksClient(chain)
 
   const o: WalletServicesOptions = {
     chain,
@@ -130,31 +153,32 @@ export function createDefaultWalletServicesOptions (
 
 /**
  * Default Arcade (bsv-blockchain/arcade) endpoint per chain.
- * Returns undefined when no public default is known for the chain (e.g. testnet not yet deployed).
+ * Returns undefined when no public default is known for the chain.
  */
-export function arcadeDefaultUrl (chain: Chain): string | undefined {
+export function arcadeDefaultUrl(chain: Chain): string | undefined {
   switch (chain) {
     case 'main':
-      return 'https://arcade-v2-us-1.bsvblockchain.tech'
+    case 'test':
     case 'ttn':
-      return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
+      return publicArcadeUrl(chain)
+    case 'stn':
+      return stnArcadeUrl()
     case 'tstn':
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL (undefined when unset).
       return tstnArcadeUrl()
-    case 'test':
-      // No public testnet Arcade endpoint deployed yet.
-      return undefined
     case 'mock':
       return undefined
   }
 }
 
-export function arcDefaultUrl (chain: Chain): string {
+export function arcDefaultUrl(chain: Chain): string {
   switch (chain) {
     case 'main':
       return 'https://arc.taal.com'
     case 'test':
       return 'https://arc-test.taal.com'
+    case 'stn':
+      return stnArcadeUrl() ?? ''
     case 'ttn':
       return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/'
     case 'tstn':
@@ -165,6 +189,6 @@ export function arcDefaultUrl (chain: Chain): string {
   }
 }
 
-export function arcGorillaPoolUrl (chain: Chain): string | undefined {
+export function arcGorillaPoolUrl(chain: Chain): string | undefined {
   return chain === 'main' ? 'https://arc.gorillapool.io' : undefined
 }

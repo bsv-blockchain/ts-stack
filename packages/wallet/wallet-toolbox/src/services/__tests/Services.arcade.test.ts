@@ -10,10 +10,10 @@ import { arcadeDefaultUrl, createDefaultWalletServicesOptions } from '../createD
 const ARCADE_URL = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
 
 describe('Services Arcade wiring', () => {
-  test('arcadeDefaultUrl maps known chains and omits testnet', () => {
+  test('arcadeDefaultUrl maps all public Arcade deployments', () => {
     expect(arcadeDefaultUrl('main')).toBe('https://arcade-v2-us-1.bsvblockchain.tech')
     expect(arcadeDefaultUrl('ttn')).toBe('https://arcade-v2-ttn-us-1.bsvblockchain.tech')
-    expect(arcadeDefaultUrl('test')).toBeUndefined()
+    expect(arcadeDefaultUrl('test')).toBe('https://arcade-v2-testnet-us-1.bsvblockchain.tech')
   })
 
   test('arcadeDefaultUrl for tstn is driven by TSTN_ARCADE_URL', () => {
@@ -70,7 +70,14 @@ describe('Services Arcade wiring', () => {
 
   test('explicit empty-string arcadeUrl keeps Arcade disabled', () => {
     const options = createDefaultWalletServicesOptions(
-      'test', undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       '' // arcadeUrl explicitly empty
     )
     expect(options.arcadeUrl).toBeUndefined()

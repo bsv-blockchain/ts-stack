@@ -9,6 +9,24 @@ import { BulkIngestorCDNOptions } from './Ingest/BulkIngestorCDN'
 import { WhatsOnChainServicesOptions } from './Ingest/WhatsOnChainServices'
 import { BulkFileDataManager, BulkFileDataManagerOptions } from './util/BulkFileDataManager'
 import { ChaintracksFetch } from './util/ChaintracksFetch'
+import { ChaintracksClientApi } from './Api/ChaintracksClientApi'
+import { BulkIngestorChaintracks } from './Ingest/BulkIngestorChaintracks'
+import { LiveIngestorChaintracksSSE } from './Ingest/LiveIngestorChaintracksSSE'
+import { GoChaintracksServiceClient } from './GoChaintracksServiceClient'
+import { publicArcadeUrl } from '../../networkConfig'
+
+export interface ChaintracksSourceOptions {
+  /** Preferred go-chaintracks or Arcade source. */
+  chaintracks?: ChaintracksClientApi
+  /** Disable the credential-free public Arcade default. */
+  disableChaintracks?: boolean
+  /** Maximum number of headers requested from the remote source at once. */
+  remoteMaxHeadersPerRequest?: number
+  /** Disable the configured CDN source without changing its URL. */
+  disableCdn?: boolean
+  /** Disable the keyless WhatsOnChain fallback on mainnet/testnet. */
+  disableWhatsOnChain?: boolean
+}
 
 export type ChaintracksArgumentsTail = [
   whatsonchainApiKey?: string,
@@ -20,7 +38,8 @@ export type ChaintracksArgumentsTail = [
   reorgHeightThreshold?: number,
   bulkMigrationChunkSize?: number,
   batchInsertLimit?: number,
-  addLiveRecursionLimit?: number
+  addLiveRecursionLimit?: number,
+  sources?: ChaintracksSourceOptions
 ]
 
 export type DefaultChaintracksArguments = [chain: Chain, ...options: ChaintracksArgumentsTail]
@@ -35,6 +54,7 @@ export interface ChaintracksIngestorParams {
   fetch: ChaintracksFetchApi
   cdnUrl: string
   addLiveRecursionLimit: number
+  sources: ChaintracksSourceOptions
 }
 
 export interface ResolvedDefaultChaintracksParams extends ChaintracksIngestorParams {
@@ -54,7 +74,7 @@ export interface CreatedChaintracks<TStorage extends ChaintracksOptions['storage
   available: Promise<void>
 }
 
-export function resolveDefaultChaintracksArguments (
+export function resolveDefaultChaintracksArguments(
   args: DefaultChaintracksArguments
 ): ResolvedDefaultChaintracksParams {
   const [
@@ -63,12 +83,13 @@ export function resolveDefaultChaintracksArguments (
     maxPerFile = 100000,
     maxRetained = 2,
     fetch = new ChaintracksFetch(),
-    cdnUrl = 'https://cdn.projectbabbage.com/blockheaders/',
+    cdnUrl = chain === 'main' || chain === 'test' ? 'https://cdn.projectbabbage.com/blockheaders/' : '',
     liveHeightThreshold = 2000,
     reorgHeightThreshold = 400,
     bulkMigrationChunkSize = 500,
     batchInsertLimit = 400,
-    addLiveRecursionLimit = 36
+    addLiveRecursionLimit = 36,
+    sources = {}
   ] = args
 
   return {
@@ -82,14 +103,13 @@ export function resolveDefaultChaintracksArguments (
     reorgHeightThreshold,
     bulkMigrationChunkSize,
     batchInsertLimit,
-    addLiveRecursionLimit
+    addLiveRecursionLimit,
+    sources
   }
 }
 
-export function toDefaultChaintracksArguments (
-  params: ResolvedDefaultChaintracksParams
-): DefaultChaintracksArguments {
-  return [
+export function toDefaultChaintracksArguments(params: ResolvedDefaultChaintracksParams): DefaultChaintracksArguments {
+  const args: DefaultChaintracksArguments = [
     params.chain,
     params.whatsonchainApiKey,
     params.maxPerFile,
@@ -102,11 +122,14 @@ export function toDefaultChaintracksArguments (
     params.batchInsertLimit,
     params.addLiveRecursionLimit
   ]
+  // Preserve the exact pre-resiliency positional tuple when no source options
+  // were supplied. This keeps wrappers that inspect or forward arguments
+  // byte-for-byte compatible while allowing the new options to be appended.
+  if (Object.keys(params.sources).length > 0) args.push(params.sources)
+  return args
 }
 
-export function createDefaultBulkFileDataManager (
-  params: ResolvedDefaultChaintracksParams
-): BulkFileDataManager {
+export function createDefaultBulkFileDataManager(params: ResolvedDefaultChaintracksParams): BulkFileDataManager {
   const options: BulkFileDataManagerOptions = {
     chain: params.chain,
     fetch: params.fetch,
@@ -117,9 +140,7 @@ export function createDefaultBulkFileDataManager (
   return new BulkFileDataManager(options)
 }
 
-export function createDefaultChaintracksStorageOptions (
-  params: ResolvedDefaultChaintracksParams
-) {
+export function createDefaultChaintracksStorageOptions(params: ResolvedDefaultChaintracksParams) {
   return {
     chain: params.chain,
     bulkFileDataManager: createDefaultBulkFileDataManager(params),
@@ -130,7 +151,7 @@ export function createDefaultChaintracksStorageOptions (
   }
 }
 
-export function startChaintracks<TStorage extends ChaintracksOptions['storage']> (
+export function startChaintracks<TStorage extends ChaintracksOptions['storage']>(
   params: ResolvedDefaultChaintracksParams,
   options: ChaintracksOptions
 ): CreatedChaintracks<TStorage> {
@@ -145,7 +166,7 @@ export function startChaintracks<TStorage extends ChaintracksOptions['storage']>
   }
 }
 
-export function createAndStartDefaultChaintracks<TStorage extends ChaintracksOptions['storage']> (
+export function createAndStartDefaultChaintracks<TStorage extends ChaintracksOptions['storage']>(
   args: DefaultChaintracksArguments,
   createOptions: (...args: DefaultChaintracksArguments) => ChaintracksOptions
 ): CreatedChaintracks<TStorage> {
@@ -160,11 +181,11 @@ export function createAndStartDefaultChaintracks<TStorage extends ChaintracksOpt
  *
  * The caller is responsible for providing the storage implementation.
  */
-export function buildChaintracksOptionsWithIngestors (
+export function buildChaintracksOptionsWithIngestors(
   params: ChaintracksIngestorParams,
   storage: ChaintracksOptions['storage']
 ): ChaintracksOptions {
-  const { chain, whatsonchainApiKey, maxPerFile, fetch, cdnUrl, addLiveRecursionLimit } = params
+  const { chain, whatsonchainApiKey, maxPerFile, fetch, cdnUrl, addLiveRecursionLimit, sources } = params
 
   const co: ChaintracksOptions = {
     chain,
@@ -178,36 +199,73 @@ export function buildChaintracksOptionsWithIngestors (
 
   const jsonResource = `${chain}NetBlockHeaders.json`
 
-  const bulkCdnOptions: BulkIngestorCDNOptions = {
-    chain,
-    jsonResource,
-    fetch,
-    cdnUrl,
-    maxPerFile
-  }
-  co.bulkIngestors.push(new BulkIngestorCDNBabbage(bulkCdnOptions))
-
-  const wocOptions: WhatsOnChainServicesOptions = {
-    chain,
-    apiKey: whatsonchainApiKey,
-    timeout: 30000,
-    userAgent: 'BabbageWhatsOnChainServices',
-    enableCache: true,
-    chainInfoMsecs: 5000
+  if (!sources.disableCdn && cdnUrl !== '') {
+    const bulkCdnOptions: BulkIngestorCDNOptions = {
+      chain,
+      jsonResource,
+      fetch,
+      cdnUrl,
+      maxPerFile
+    }
+    co.bulkIngestors.push(new BulkIngestorCDNBabbage(bulkCdnOptions))
   }
 
-  const bulkOptions: BulkIngestorWhatsOnChainOptions = {
-    ...wocOptions,
-    jsonResource,
-    idleWait: 5000
+  const chaintracksSource =
+    sources.chaintracks ?? (sources.disableChaintracks ? undefined : createPublicChaintracksSource(chain))
+  if (chaintracksSource != null) {
+    co.bulkIngestors.push(
+      new BulkIngestorChaintracks({
+        chain,
+        jsonResource,
+        chaintracks: chaintracksSource,
+        maxHeadersPerRequest: sources.remoteMaxHeadersPerRequest
+      })
+    )
+    co.liveIngestors.push(
+      new LiveIngestorChaintracksSSE({
+        chain,
+        chaintracks: chaintracksSource
+      })
+    )
   }
-  co.bulkIngestors.push(new BulkIngestorWhatsOnChainCdn(bulkOptions))
 
-  const liveOptions: LiveIngestorWhatsOnChainOptions = {
-    ...wocOptions,
-    idleWait: 100000
+  if ((chain === 'main' || chain === 'test') && !sources.disableWhatsOnChain) {
+    const wocOptions: WhatsOnChainServicesOptions = {
+      chain,
+      apiKey: whatsonchainApiKey,
+      timeout: 30000,
+      userAgent: 'BabbageWhatsOnChainServices',
+      enableCache: true,
+      chainInfoMsecs: 5000
+    }
+
+    const bulkOptions: BulkIngestorWhatsOnChainOptions = {
+      ...wocOptions,
+      jsonResource,
+      idleWait: 5000
+    }
+    co.bulkIngestors.push(new BulkIngestorWhatsOnChainCdn(bulkOptions))
+
+    const liveOptions: LiveIngestorWhatsOnChainOptions = {
+      ...wocOptions,
+      idleWait: 100000
+    }
+    co.liveIngestors.push(new LiveIngestorWhatsOnChainPoll(liveOptions))
   }
-  co.liveIngestors.push(new LiveIngestorWhatsOnChainPoll(liveOptions))
+
+  if (co.bulkIngestors.length === 0 || co.liveIngestors.length === 0) {
+    throw new Error(
+      `ChainTracks ${chain} requires at least one bulk and live source. Configure sources.chaintracks for Teranode networks.`
+    )
+  }
 
   return co
+}
+
+function createPublicChaintracksSource(chain: Chain): ChaintracksClientApi | undefined {
+  const serviceUrl = publicArcadeUrl(chain)
+  if (serviceUrl == null) return undefined
+  return new GoChaintracksServiceClient(chain, serviceUrl, {
+    apiPrefix: '/chaintracks/v2'
+  })
 }

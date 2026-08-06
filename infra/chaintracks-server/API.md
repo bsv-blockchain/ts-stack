@@ -51,17 +51,36 @@ Access-Control-Allow-Private-Network: true
 
 ## Endpoints
 
+The legacy v1-style routes documented below remain unchanged. The service also
+provides this go-chaintracks-compatible v2 surface:
+
+| Method | Path                               | Result                       |
+| ------ | ---------------------------------- | ---------------------------- |
+| GET    | `/v2/network`                      | Configured network           |
+| GET    | `/v2/height`                       | Present height               |
+| GET    | `/v2/tip`                          | Active tip JSON              |
+| GET    | `/v2/tip/stream`                   | Tip SSE stream               |
+| GET    | `/v2/reorg/stream`                 | Reorganization SSE stream    |
+| GET    | `/v2/header/height/:height`        | Header JSON                  |
+| GET    | `/v2/header/hash/:hash`            | Header JSON                  |
+| GET    | `/v2/headers.bin?height=N&count=M` | Concatenated 80-byte headers |
+
+JSON responses accept both raw go-chaintracks values and the server's existing
+`{status,value}` compatibility envelope through `GoChaintracksServiceClient`.
+
 ### GET /
 
 Returns server information page.
 
 **Response:**
+
 ```
 Content-Type: text/plain
 Chaintracks mainNet Block Header Service
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/
 ```
@@ -73,6 +92,7 @@ curl http://localhost:3011/
 Returns robots exclusion standard file.
 
 **Response:**
+
 ```
 User-agent: *
 Disallow: /
@@ -85,6 +105,7 @@ Disallow: /
 Returns the blockchain network the service is tracking.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -93,15 +114,21 @@ Returns the blockchain network the service is tracking.
 ```
 
 **Values:**
+
 - `"main"` - Bitcoin SV mainnet
 - `"test"` - Bitcoin SV testnet
+- `"stn"` - Scaling Test Network
+- `"ttn"` - TerraTestNet
+- `"tstn"` - Terra Scaling TestNet
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/getChain
 ```
 
 **Response Example:**
+
 ```json
 {
   "status": "success",
@@ -116,9 +143,11 @@ curl http://localhost:3011/getChain
 Returns detailed information about the service state, configuration, and current blockchain heights.
 
 **Query Parameters:**
+
 - `wait` (optional): Milliseconds to wait before responding (for testing)
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -127,33 +156,36 @@ Returns detailed information about the service state, configuration, and current
     "heightBulk": 869999,
     "heightLive": 870125,
     "storage": "ChaintracksStorageNoDb",
-    "bulkIngestors": [
-      "BulkIngestorCDNBabbage",
-      "BulkIngestorWhatsOnChainCdn"
-    ],
-    "liveIngestors": [
-      "LiveIngestorWhatsOnChainPoll"
-    ],
-    "packages": []
+    "bulkIngestors": ["BulkIngestorCDNBabbage", "BulkIngestorWhatsOnChainCdn"],
+    "liveIngestors": ["LiveIngestorWhatsOnChainPoll"],
+    "packages": [],
+    "sources": [
+      { "name": "bulk[1]:BulkIngestorChaintracks", "role": "bulk", "state": "healthy" },
+      { "name": "live[0]:LiveIngestorChaintracksSSE", "role": "live", "state": "healthy" }
+    ]
   }
 }
 ```
 
 **Fields:**
-- `chain`: Network name ('main' or 'test')
+
+- `chain`: Network name (`main`, `test`, `stn`, `ttn`, or `tstn`)
 - `heightBulk`: Highest height in bulk storage (CDN-backed)
 - `heightLive`: Highest height in live storage (in-memory)
 - `storage`: Storage backend class name
 - `bulkIngestors`: List of bulk ingestor class names
 - `liveIngestors`: List of live ingestor class names
 - `packages`: Package version information (optional)
+- `sources`: Last observed health, success/failure time, and error for each source
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/getInfo
 ```
 
 **Notes:**
+
 - Response is never cached (Cache-Control: no-cache)
 - Use this endpoint for health checks and monitoring
 - `heightBulk` should be close to `heightLive` (within ~2000 blocks)
@@ -165,6 +197,7 @@ curl http://localhost:3011/getInfo
 Returns the latest blockchain height from configured bulk ingestors. This represents the current "real" blockchain height from external sources.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -173,11 +206,13 @@ Returns the latest blockchain height from configured bulk ingestors. This repres
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/getPresentHeight
 ```
 
 **Notes:**
+
 - Response is cached for 1 minute
 - Value is fetched from WhatsOnChain or other bulk ingestors
 - Response is never cached (Cache-Control: no-cache)
@@ -189,6 +224,7 @@ curl http://localhost:3011/getPresentHeight
 Returns the block hash of the active chain tip.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -197,11 +233,13 @@ Returns the block hash of the active chain tip.
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/findChainTipHashHex
 ```
 
 **Notes:**
+
 - Response is never cached (Cache-Control: no-cache)
 - Returns empty string if no headers available
 
@@ -212,6 +250,7 @@ curl http://localhost:3011/findChainTipHashHex
 Returns the complete block header of the active chain tip.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -229,6 +268,7 @@ Returns the complete block header of the active chain tip.
 ```
 
 **Fields:**
+
 - `version`: Block version number
 - `previousHash`: Hash of previous block (hex string)
 - `merkleRoot`: Merkle root of transactions (hex string)
@@ -239,11 +279,13 @@ Returns the complete block header of the active chain tip.
 - `hash`: Block hash (hex string)
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/findChainTipHeaderHex
 ```
 
 **Notes:**
+
 - Response is never cached (Cache-Control: no-cache)
 - All hash fields are hex strings (lowercase)
 
@@ -254,9 +296,11 @@ curl http://localhost:3011/findChainTipHeaderHex
 Returns the block header for a specific height on the active chain.
 
 **Query Parameters:**
+
 - `height` (required): Block height (integer)
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -274,6 +318,7 @@ Returns the block header for a specific height on the active chain.
 ```
 
 If height not found:
+
 ```json
 {
   "status": "success",
@@ -282,11 +327,13 @@ If height not found:
 ```
 
 **Example:**
+
 ```bash
 curl "http://localhost:3011/findHeaderHexForHeight?height=800000"
 ```
 
 **Notes:**
+
 - Returns `null` if height doesn't exist
 - Only returns headers on active chain
 - Fast O(1) lookup
@@ -298,9 +345,11 @@ curl "http://localhost:3011/findHeaderHexForHeight?height=800000"
 Returns the block header for a specific block hash (if in live storage).
 
 **Query Parameters:**
+
 - `hash` (required): Block hash (hex string)
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -318,6 +367,7 @@ Returns the block header for a specific block hash (if in live storage).
 ```
 
 If hash not found:
+
 ```json
 {
   "status": "success",
@@ -326,11 +376,13 @@ If hash not found:
 ```
 
 **Example:**
+
 ```bash
 curl "http://localhost:3011/findHeaderHexForBlockHash?hash=00000000000000000123456789abcd..."
 ```
 
 **Notes:**
+
 - Only searches live storage (recent ~2000 blocks)
 - Returns `null` if hash not found or in bulk storage
 - For older headers, use `findHeaderHexForHeight` instead
@@ -342,10 +394,12 @@ curl "http://localhost:3011/findHeaderHexForBlockHash?hash=000000000000000001234
 Returns multiple block headers in serialized format starting from a specific height.
 
 **Query Parameters:**
+
 - `height` (required): Starting block height (integer)
 - `count` (required): Number of headers to return (integer, max recommended: 1000)
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -354,18 +408,21 @@ Returns multiple block headers in serialized format starting from a specific hei
 ```
 
 **Format:**
+
 - Returns hex string of concatenated 80-byte block headers
 - Each header is 80 bytes (160 hex characters)
 - Total length: `count × 160` characters
 - Headers are in order from `height` to `height + count - 1`
 
 **Example:**
+
 ```bash
 # Get 10 headers starting from height 800000
 curl "http://localhost:3011/getHeaders?height=800000&count=10"
 ```
 
 **Parsing the Response:**
+
 ```javascript
 const response = await fetch('http://localhost:3011/getHeaders?height=800000&count=10')
 const data = await response.json()
@@ -383,6 +440,7 @@ for (let i = 0; i < count; i++) {
 ```
 
 **Notes:**
+
 - Efficient for bulk header downloads
 - Use for SPV client synchronization
 - Recommended to request in batches (e.g., 100-1000 headers)
@@ -394,6 +452,7 @@ for (let i = 0; i < count; i++) {
 Returns current fiat exchange rates for BSV from configured services.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -411,11 +470,13 @@ Returns current fiat exchange rates for BSV from configured services.
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:3011/getFiatExchangeRates
 ```
 
 **Notes:**
+
 - Response is never cached (Cache-Control: no-cache)
 - Rates are fetched from external services
 - May return empty object if services unavailable
@@ -427,6 +488,7 @@ curl http://localhost:3011/getFiatExchangeRates
 Submits a new block header for consideration and processing.
 
 **Request Body:**
+
 ```json
 {
   "version": 536870912,
@@ -439,6 +501,7 @@ Submits a new block header for consideration and processing.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success"
@@ -446,6 +509,7 @@ Submits a new block header for consideration and processing.
 ```
 
 **Fields:**
+
 - `version`: Block version number (integer)
 - `previousHash`: Hash of previous block (hex string, 64 chars)
 - `merkleRoot`: Merkle root (hex string, 64 chars)
@@ -454,6 +518,7 @@ Submits a new block header for consideration and processing.
 - `nonce`: Block nonce (integer)
 
 **Example:**
+
 ```bash
 curl -X POST http://localhost:3011/addHeaderHex \
   -H "Content-Type: application/json" \
@@ -468,12 +533,14 @@ curl -X POST http://localhost:3011/addHeaderHex \
 ```
 
 **Processing:**
+
 - Header is queued for processing (returns immediately)
 - Header is validated and inserted asynchronously
 - If previous header is unknown, header is ignored
 - Invalid headers are rejected silently
 
 **Notes:**
+
 - Response does not indicate if header was accepted/added
 - Use for submitting newly mined blocks
 - Header must have valid proof-of-work
@@ -488,6 +555,7 @@ curl -X POST http://localhost:3011/addHeaderHex \
 Generic internal server error.
 
 **Example:**
+
 ```json
 {
   "status": "error",
@@ -497,6 +565,7 @@ Generic internal server error.
 ```
 
 **Common Causes:**
+
 - Storage operation failed
 - Invalid data format
 - Unhandled exception
@@ -520,6 +589,7 @@ The server does not implement rate limiting by default. For production use, cons
 Most endpoints include cache headers:
 
 **No Cache (dynamic data):**
+
 ```
 Cache-Control: no-cache, no-store, must-revalidate
 Pragma: no-cache
@@ -527,6 +597,7 @@ Expires: 0
 ```
 
 Applies to:
+
 - `/getInfo`
 - `/getPresentHeight`
 - `/findChainTipHashHex`
@@ -536,10 +607,12 @@ Applies to:
 **Cacheable (static data):**
 
 No explicit cache headers. Clients may cache based on:
+
 - Block height (immutable once confirmed)
 - Block hash (immutable)
 
 Applies to:
+
 - `/findHeaderHexForHeight?height=N` (for heights < chain tip - 100)
 - `/findHeaderHexForBlockHash?hash=H` (for deep blocks)
 - `/getHeaders?height=N&count=M` (for heights < chain tip - 100)
@@ -554,13 +627,15 @@ The service implements internal caching:
 
 ---
 
-## WebSocket Support
+## Real-Time SSE
 
-The service does not currently support WebSocket connections. For real-time updates:
+The go-chaintracks-compatible v2 API exposes browser-safe server-sent events:
 
-1. Poll `/getInfo` endpoint (recommended interval: 30-60 seconds)
-2. Subscribe to events programmatically if using the service as a library
-3. Implement custom WebSocket wrapper on top of the service
+- `GET /v2/tip/stream` sends the current tip and subsequent active tips.
+- `GET /v2/reorg/stream` sends reorganization depth, old/new tips, and optional deactivated headers.
+- Keepalive comments are sent every 15 seconds. Clients should reconnect with bounded backoff; `GoChaintracksServiceClient` does this automatically.
+
+The service does not expose a WebSocket protocol.
 
 ---
 
@@ -569,13 +644,22 @@ The service does not currently support WebSocket connections. For real-time upda
 ### Basic Health Check
 
 ```bash
-curl http://localhost:3011/getInfo
+curl http://localhost:3011/healthz
 ```
 
 Check that:
+
 - Response status is 200
-- `status` field is "success"
-- `heightLive` is increasing over time
+- `status` field is `ok`
+
+Use readiness for synchronization and source state:
+
+```bash
+curl http://localhost:3011/readyz
+```
+
+When `ROUTING_PREFIX` is configured, `/readyz` and all protocol routes move
+under that prefix; root `/healthz` remains available for process liveness.
 
 ### Synchronization Health
 

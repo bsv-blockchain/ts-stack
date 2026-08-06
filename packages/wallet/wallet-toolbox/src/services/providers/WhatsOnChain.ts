@@ -31,10 +31,18 @@ import {
   ScriptHashHistoryResponse
 } from './whatsOnChainHelpers'
 
+export interface WalletToolboxWhatsOnChainConfig extends WhatsOnChainConfig {
+  /** Optional request-start gate used by ChainTracks' shared public-rate scheduler. */
+  requestGate?: () => Promise<void>
+}
+
 export class WhatsOnChainNoServices extends SdkWhatsOnChain {
-  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}) {
+  private readonly requestGate?: () => Promise<void>
+
+  constructor(chain: Chain = 'main', config: WalletToolboxWhatsOnChainConfig = {}) {
     if (chain === 'mock') throw new Error("WhatsOnChain does not support 'mock' chain. Use MockServices directly.")
     super(chain, config)
+    this.requestGate = config.requestGate
   }
 
   /**
@@ -492,7 +500,18 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const url = `${this.URL}/block/${hash}/header`
 
     for (let retry = 0; retry < 2; retry++) {
-      const response = await this.httpClient.request<WocHeader>(url, requestOptions)
+      await this.requestGate?.()
+      let response = await this.httpClient.request<WocHeader>(url, requestOptions)
+      if ((response.status === 401 || response.status === 403) && this.apiKey.trim() !== '') {
+        // Treat the anonymous retry as another public request start so a stale
+        // key cannot create a burst above the documented keyless allowance.
+        if (this.requestGate != null) await this.requestGate()
+        else await wait(350)
+        response = await this.httpClient.request<WocHeader>(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        })
+      }
       if (response.statusText === 'Too Many Requests' && retry < 2) {
         await wait(2000)
         continue
@@ -522,7 +541,16 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const url = `${this.URL}/chain/info`
 
     for (let retry = 0; retry < 2; retry++) {
-      const response = await this.httpClient.request<WocChainInfo>(url, requestOptions)
+      await this.requestGate?.()
+      let response = await this.httpClient.request<WocChainInfo>(url, requestOptions)
+      if ((response.status === 401 || response.status === 403) && this.apiKey.trim() !== '') {
+        if (this.requestGate != null) await this.requestGate()
+        else await wait(350)
+        response = await this.httpClient.request<WocChainInfo>(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        })
+      }
       if (response.statusText === 'Too Many Requests' && retry < 2) {
         await wait(2000)
         continue
@@ -545,7 +573,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
 export class WhatsOnChain extends WhatsOnChainNoServices {
   services: Services
 
-  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}, services?: Services) {
+  constructor(chain: Chain = 'main', config: WalletToolboxWhatsOnChainConfig = {}, services?: Services) {
     super(chain, config)
     this.services = services || new Services(chain)
   }

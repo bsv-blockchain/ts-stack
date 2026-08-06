@@ -2,6 +2,11 @@
 
 A production-ready TypeScript Express server wrapping `ChaintracksService` from `@bsv/wallet-toolbox`, featuring a built-in **Bulk Headers CDN** for hosting and serving blockchain headers to other servers.
 
+ChainTracks supports mainnet, testnet, STN, TerraTestNet (`ttn`), and Terra
+Scaling TestNet (`tstn`). Mainnet, testnet, and TTN use public credential-free
+Arcade/go-chaintracks v2 sources by default. STN and TSTN require an explicit
+operator endpoint and are never silently mapped to testnet.
+
 Resource profiles, limits, memory evidence, and scaling guidance are documented
 in [Service Resource Profiles](../../docs/reference/service-resource-profiles.md).
 
@@ -44,6 +49,7 @@ npm start
 This server provides two main services:
 
 ### 1. ChaintracksService (Port 3011)
+
 - **Tracks BSV blockchain headers** in real-time
 - **In-memory NoDb storage** - no database required
 - **REST API endpoints** for querying headers
@@ -51,6 +57,7 @@ This server provides two main services:
 - **Event subscriptions** for headers and reorgs
 
 ### 2. Bulk Headers CDN (Port 3012)
+
 - **Hosts bulk header files** for download by other servers
 - **Automatic export** at 100k block boundaries
 - **Self-hosting CDN** - becomes a headers source for others
@@ -60,13 +67,16 @@ This server provides two main services:
 ## ✨ Key Features
 
 ### 🌐 Self-Hosting CDN Network
+
 Your server can become a CDN node:
+
 1. Downloads headers from remote CDN (if local files don't exist)
 2. Exports headers to filesystem
 3. Serves headers to other servers via HTTP
 4. Creates a distributed network of header sources
 
 ### 📦 Automatic Header Management
+
 - Downloads from `SOURCE_CDN_URL` on first startup
 - Exports to filesystem automatically
 - Serves via CDN on port 3012
@@ -74,10 +84,23 @@ Your server can become a CDN node:
 - Triggers export at 100k boundaries
 
 ### 🔄 Zero-Config Synchronization
-- First run: Downloads from remote CDN
+
+- Mainnet/testnet: uses the CDN plus public Arcade binary and SSE APIs
+- TTN: uses the public Arcade binary and SSE APIs
 - Subsequent runs: Uses local filesystem
 - Automatically exports new headers
 - Other servers can use you as a source
+- WhatsOnChain is a mainnet/testnet fallback and does not require a key
+
+Remote headers pass through local serialization, hash, continuity, and genesis
+checks before storage. Source failures fall through in priority order, SSE
+reconnects with bounded backoff, and a synchronized process keeps serving
+last-good checked data while reporting degraded sources from `/getInfo` and
+`/readyz`.
+
+Arcade is the HTTPS/SSE gateway suitable for Node.js, browsers, mobile clients,
+and local services. It may be backed by Teranode P2P. Direct Teranode P2P is not
+bundled into this TypeScript/browser distribution.
 
 ## 🎯 Architecture
 
@@ -115,11 +138,14 @@ Your server can become a CDN node:
 All endpoints return JSON with `{ status: "success", value: <data> }` or `{ status: "error", code: "...", description: "..." }`
 
 #### Chain Information
-- `GET /getChain` - Get blockchain network ('main' or 'test')
+
+- `GET /getChain` - Get blockchain network (`main`, `test`, `stn`, `ttn`, or `tstn`)
 - `GET /getInfo` - Detailed service information
 - `GET /getPresentHeight` - Latest available height
+- `GET /readyz` - Readiness, height, and source-health state
 
 #### Header Queries
+
 - `GET /findChainTipHeaderHex` - Get chain tip header as hex
 - `GET /findChainTipHashHex` - Get chain tip hash as hex
 - `GET /findHeaderHexForHeight?height=N` - Get header at height N as hex
@@ -128,6 +154,7 @@ All endpoints return JSON with `{ status: "success", value: <data> }` or `{ stat
 - `POST /addHeaderHex` - Submit a new block header (JSON body with version, previousHash, merkleRoot, time, bits, nonce)
 
 **Note:** The `findHeaderHexForBlockHash` endpoint only works for headers currently retained in memory:
+
 - Recent headers within ~2,000 blocks of chain tip ("live" headers)
 - Headers in the most recently retained bulk files (~200k headers with default `maxRetained: 2`)
 - For querying arbitrary historical headers, use `findHeaderHexForHeight?height=N` instead
@@ -151,13 +178,24 @@ Create `.env` file (copy from `.env.example`):
 
 ```bash
 # Chain selection
-CHAIN=main  # or 'test'
+CHAIN=main  # main | test | stn | ttn | tstn
 
 # Server port (ChaintracksService)
 PORT=3011
 
-# WhatsOnChain API Key (recommended for production)
-WHATSONCHAIN_API_KEY=your_api_key_here
+# Optional. Anonymous fallback is capped below the documented 3 requests/sec.
+WHATSONCHAIN_API_KEY=
+
+# Optional go-chaintracks v2 override. Public defaults exist for main/test/ttn.
+# Required for stn/tstn unless the matching Arcade/ChainTracks URL is set.
+CHAINTRACKS_UPSTREAM_URL=
+CHAINTRACKS_UPSTREAM_API_PREFIX=
+CHAINTRACKS_UPSTREAM_MAX_HEADERS=1000
+CHAINTRACKS_DISABLE_WHATSONCHAIN=false
+STN_ARCADE_URL=
+STN_CHAINTRACKS_URL=
+TSTN_ARCADE_URL=
+TSTN_CHAINTRACKS_URL=
 
 # SOURCE_CDN_URL - Where to download headers FROM (if local files don't exist)
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
@@ -184,7 +222,7 @@ BULK_HEADERS_AUTO_EXPORT_INTERVAL=240000000
 ```bash
 CHAIN=main
 PORT=3011
-WHATSONCHAIN_API_KEY=your_api_key
+WHATSONCHAIN_API_KEY=
 ENABLE_BULK_HEADERS_CDN=true
 CDN_HOST_URL=https://headers.yourdomain.com
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
@@ -241,6 +279,7 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 ## 📚 How It Works
 
 ### First Startup
+
 1. Server starts and checks `./public/headers` for existing files
 2. No files found, downloads from `SOURCE_CDN_URL`
 3. Syncs blockchain headers to current height
@@ -248,12 +287,14 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 5. CDN server starts serving files on port 3012
 
 ### Subsequent Startups
+
 1. Server starts and checks `./public/headers`
 2. Finds existing files, loads them directly (no download!)
 3. Continues syncing from last height
 4. Automatically exports new headers at 100k boundaries
 
 ### Becoming a CDN Source
+
 Other servers can now point to YOUR server:
 
 ```bash
@@ -266,6 +307,7 @@ This creates a **distributed CDN network** where servers help each other!
 ## 📦 File Structure
 
 ### Bulk Headers Directory
+
 ```
 public/headers/
 ├── mainNetBlockHeaders.json       # Metadata with file list
@@ -276,6 +318,7 @@ public/headers/
 ```
 
 ### JSON Metadata Format
+
 ```json
 {
   "rootFolder": "https://headers.yourdomain.com",
@@ -298,11 +341,13 @@ public/headers/
 ## 🔧 Development
 
 ### Build
+
 ```bash
 npm run build
 ```
 
 ### Run Different Configurations
+
 ```bash
 # Standard server (port 3011)
 npm start
@@ -315,6 +360,7 @@ npm run dev
 ```
 
 ### Project Structure
+
 ```
 ├── src/
 │   ├── server.ts              # Main server with CDN
@@ -346,6 +392,7 @@ SOURCE_CDN_URL=https://headers.yourdomain.com
 ### Distributed Network Example
 
 **Server A (Public CDN):**
+
 ```bash
 ENABLE_BULK_HEADERS_CDN=true
 CDN_HOST_URL=https://cdn.example.com
@@ -353,6 +400,7 @@ SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
 ```
 
 **Server B (Uses Server A):**
+
 ```bash
 ENABLE_BULK_HEADERS_CDN=true
 CDN_HOST_URL=https://headers-b.example.com
@@ -360,6 +408,7 @@ SOURCE_CDN_URL=https://cdn.example.com  # Points to Server A
 ```
 
 **Server C (Uses Server B):**
+
 ```bash
 ENABLE_BULK_HEADERS_CDN=true
 CDN_HOST_URL=https://headers-c.example.com
@@ -371,16 +420,19 @@ Creates a **self-healing, distributed CDN network**! 🌍
 ## 📊 Resource Requirements
 
 ### Minimum
+
 - **CPU:** 1 core
 - **RAM:** 2 GB
 - **Disk:** 5 GB (for headers)
 
 ### Recommended
+
 - **CPU:** 2 cores
 - **RAM:** 4 GB
 - **Disk:** 10 GB (with growth room)
 
 ### Storage Growth
+
 - ~7.6 MB per 100k blocks
 - Current blockchain: ~920k blocks = ~70 MB
 - Growth: ~7.6 MB per ~67 days (at 10 min blocks)
@@ -388,6 +440,7 @@ Creates a **self-healing, distributed CDN network**! 🌍
 ## 🔍 Monitoring
 
 ### Check Service Status
+
 ```bash
 # API health
 curl http://localhost:3011/getInfo
@@ -397,11 +450,13 @@ curl http://localhost:3012/mainNetBlockHeaders.json
 ```
 
 ### View Logs (Docker)
+
 ```bash
 docker compose logs -f
 ```
 
 ### View Exported Files
+
 ```bash
 ls -lh public/headers/
 ```
@@ -409,22 +464,30 @@ ls -lh public/headers/
 ## 🆘 Troubleshooting
 
 ### Headers Not Exporting
+
 - Check `ENABLE_BULK_HEADERS_CDN=true` in `.env`
 - Check logs for export messages
 - Verify disk space available
 - Restart server to trigger export
 
 ### CDN Files Not Accessible
+
 - Verify CDN server running on port 3012
 - Check firewall rules
 - Test locally: `curl http://localhost:3012/mainNetBlockHeaders.json`
 
 ### Slow Sync
-- Add `WHATSONCHAIN_API_KEY` for better rate limits
+
+- Check the configured Arcade/go-chaintracks source and `/readyz` source states
 - Check `SOURCE_CDN_URL` is reachable
 - Verify network connectivity
 
+The service does not need a WhatsOnChain key. If one is configured and rejected,
+ChainTracks retries anonymously; remove stale keys unless higher paid limits are
+actually needed.
+
 ### Docker Issues
+
 See [DOCKER.md](DOCKER.md) troubleshooting section.
 
 ## 📖 Additional Documentation
@@ -436,6 +499,7 @@ See [DOCKER.md](DOCKER.md) troubleshooting section.
 ## 🤝 Contributing
 
 Contributions welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
