@@ -6,10 +6,16 @@ import { ChaintracksServiceClient } from './chaintracker/chaintracks/Chaintracks
 import { GoChaintracksServiceClient } from './chaintracker/chaintracks/GoChaintracksServiceClient'
 import { publicArcadeUrl, stnArcadeUrl, stnChaintracksUrl, tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
 
+function stripTrailingSlash(value: string): string {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '/') end--
+  return value.slice(0, end)
+}
+
 function configuredChaintracksClient(chain: Chain, serviceUrl: string): ChaintracksClientApi {
   let path = ''
   try {
-    path = new URL(serviceUrl).pathname.replace(/\/+$/, '')
+    path = stripTrailingSlash(new URL(serviceUrl).pathname)
   } catch {
     // Preserve the legacy client's existing validation/error behavior for an
     // operator-supplied non-URL value.

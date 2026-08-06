@@ -285,7 +285,7 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
   }
 
   private processSseBuffer(buffer: string, onPayload: (payload: unknown) => void): string {
-    buffer = buffer.replace(/\r\n/g, '\n')
+    buffer = buffer.replaceAll('\r\n', '\n')
     for (;;) {
       const boundary = buffer.indexOf('\n\n')
       if (boundary < 0) return buffer
