@@ -15,6 +15,7 @@
  * fixture, so all three implementations refuse the same bytes.
  */
 
+import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { Db, MongoClient } from 'mongodb'
 import {
@@ -531,6 +532,25 @@ describe('the boundary between the subject and the type', () => {
 describe('what readUoraAnchor refuses', () => {
   const manager = new UoraDppTopicManager()
 
+  /** Build a PushDrop with exactly these field byte arrays plus a signature. */
+  async function scriptWithFields(fieldTexts: string[]): Promise<LockingScript> {
+    const fields = fieldTexts.map(value => Utils.toArray(value, 'utf8'))
+    const { signature } = await serviceWallet.createSignature({
+      data: anchorSigningPreimage(fields),
+      protocolID: UORA_ANCHOR_PROTOCOL,
+      keyID: fieldTexts[2] ?? 'x',
+      counterparty: 'anyone'
+    })
+    return await new PushDrop(serviceWallet).lock(
+      [...fields, signature],
+      UORA_ANCHOR_PROTOCOL,
+      fieldTexts[2] ?? 'x',
+      'anyone',
+      true,
+      false
+    )
+  }
+
   it('refuses an output that is not this many fields', async () => {
     // Two fields and no signature. The count is checked before anything is
     // read, because a short output has no field 6 to attribute it by and
@@ -555,6 +575,105 @@ describe('what readUoraAnchor refuses', () => {
     const script = await anchorScript(claim({ anchoredBy: `02${'ff'.repeat(32)}` }))
     expect(() => readUoraAnchor(script)).toThrow(/canonical compressed key/)
   })
+
+  it('refuses a wrong prefix and fields past their bounds', async () => {
+    const base = claim()
+    const good = [
+      UORA_ANCHOR_PREFIX,
+      base.digest,
+      base.attestationId,
+      base.issuer,
+      base.subject,
+      base.uoraType,
+      base.anchoredBy
+    ]
+
+    // Wrong version tag is refused before any other field is interpreted.
+    const wrongPrefix = await scriptWithFields(['uora-anchor-v2', ...good.slice(1)])
+    expect(() => readUoraAnchor(wrongPrefix)).toThrow(/not an anchor output/)
+
+    // Over-length free-text fields are refused so a stranger cannot make the
+    // index expensive. Length checks run before the locking-key derivation.
+    for (const [field, value, pattern] of [
+      ['attestationId', 'i'.repeat(257), /attestation id is too long/],
+      ['subject', 's'.repeat(513), /subject is too long/],
+      ['uoraType', 't'.repeat(65), /attestation type is too long/]
+    ] as const) {
+      const script = await anchorScript(claim({ [field]: value }))
+      expect(() => readUoraAnchor(script)).toThrow(pattern)
+    }
+  })
+
+  it('refuses a field that is not valid UTF-8 text', async () => {
+    // Invalid continuation byte: toUTF8 either throws or produces a string that
+    // does not re-encode to the same bytes. Either path is "not UTF-8".
+    const invalid = [0xff, 0xfe, 0xfd]
+    const one = claim()
+    const fields = [
+      Utils.toArray(UORA_ANCHOR_PREFIX, 'utf8'),
+      Utils.toArray(one.digest, 'utf8'),
+      Utils.toArray(one.attestationId, 'utf8'),
+      Utils.toArray(one.issuer, 'utf8'),
+      invalid,
+      Utils.toArray(one.uoraType, 'utf8'),
+      Utils.toArray(one.anchoredBy, 'utf8')
+    ]
+    const { signature } = await serviceWallet.createSignature({
+      data: anchorSigningPreimage(fields),
+      protocolID: UORA_ANCHOR_PROTOCOL,
+      keyID: one.attestationId,
+      counterparty: 'anyone'
+    })
+    const script = await new PushDrop(serviceWallet).lock(
+      [...fields, signature],
+      UORA_ANCHOR_PROTOCOL,
+      one.attestationId,
+      'anyone',
+      true,
+      false
+    )
+    expect(() => readUoraAnchor(script)).toThrow(/empty or not UTF-8/)
+  })
+
+  it('refuses a did:key whose payload is not a 33-byte compressed key', () => {
+    // Multicodec is secp256k1, but the key material is short. Length is checked
+    // before the hex is handed to PublicKey, so this is refused as unusable
+    // rather than as a parse error deeper in.
+    const short = Utils.toBase58([0xe7, 0x01, 0x02, 0x03, 0x04])
+    expect(identityKeyFromDidKey(`did:key:z${short}`)).toBeUndefined()
+  })
+
+  it('refuses a did:key whose compressed key is not a curve point', () => {
+    // 33 bytes matching the compressed-key shape. `02`+zeros makes PublicKey
+    // throw (catch branch); `02`+`ff` normalises to a different hex (equality
+    // branch). Either way identityKeyFromDidKey must refuse.
+    for (const notAPoint of [`02${'00'.repeat(32)}`, `02${'ff'.repeat(32)}`]) {
+      const raw = Utils.toBase58([0xe7, 0x01, ...Utils.toArray(notAPoint, 'hex')])
+      expect(identityKeyFromDidKey(`did:key:z${raw}`)).toBeUndefined()
+    }
+  })
+
+  it('refuses assertAnchorSignature when no signature field is present', async () => {
+    await expect(assertAnchorSignature([], SERVICE_KEY, 'att-1')).rejects.toThrow(
+      /carries no signature/
+    )
+  })
+
+  it('refuses assertAnchorSignature when verifySignature returns invalid', async () => {
+    // Cover the path where verifySignature resolves with valid:false rather than
+    // throwing — the failure branch was unreachable before the catch was added.
+    const spy = jest
+      .spyOn(ProtoWallet.prototype, 'verifySignature')
+      .mockResolvedValue({ valid: false } as never)
+    try {
+      const { fields, anchor } = readUoraAnchor(await anchorScript())
+      await expect(
+        assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+      ).rejects.toThrow(/not signed by the anchoring service/)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
 
 describe('UoraDppLookupService, at its edges', () => {
@@ -568,6 +687,49 @@ describe('UoraDppLookupService, at its edges', () => {
         query: { issuer: MAKER, skip: -1 }
       } as LookupQuestion)
     ).rejects.toThrow(/Skip must be a non-negative number/)
+  })
+
+  it('refuses a null or missing question, and empty selector strings', async () => {
+    // Presence alone is not enough: `{ issuer: '' }` used to pass the guard,
+    // then storage dropped the empty string and Mongo saw an empty filter.
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(service.lookup(undefined as unknown as LookupQuestion)).rejects.toThrow(
+      /valid query is required/
+    )
+    await expect(service.lookup(null as unknown as LookupQuestion)).rejects.toThrow(
+      /valid query is required/
+    )
+    // `query` omitted is treated as `{}`, not as a missing question object.
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp' } as LookupQuestion)
+    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp', query: { issuer: '' } } as LookupQuestion)
+    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+  })
+
+  it('refuses admission and spend notifications in the wrong mode', async () => {
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(
+      service.outputAdmittedByTopic({
+        mode: 'txid',
+        topic: 'tm_uora_dpp',
+        txid: 'a'.repeat(64),
+        outputIndex: 0
+      } as never)
+    ).rejects.toThrow(/Invalid mode/)
+    await expect(
+      service.outputSpent({
+        mode: 'locking-script',
+        topic: 'tm_uora_dpp',
+        txid: 'a'.repeat(64),
+        outputIndex: 0
+      } as never)
+    ).rejects.toThrow(/Invalid mode/)
   })
 
   it('refuses an anchoring service that is not hex at all', async () => {
