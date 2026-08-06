@@ -173,7 +173,7 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
 
 async function main() {
   const chain = resolveChain()
-  const port = Number.parseInt(process.env.PORT || '3013', 10)
+  const port = Number.parseInt(process.env.PORT || '3011', 10)
   const cdnPort = port + 1 // CDN runs on next port
   const whatsonchainApiKey = process.env.WHATSONCHAIN_API_KEY || ''
 
