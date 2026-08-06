@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const TEST_PRIVATE_KEY = `${'0'.repeat(63)}1`
+const TEST_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const TEST_ENCRYPTION_KEY = 'ab'.repeat(32)
 const TEST_DATABASE_PASSWORD = process.env.CONTRACT_DB_PASSWORD ?? ''
 const databaseConnection = database =>
@@ -156,9 +157,14 @@ const contracts = {
       HTTP_PORT: '3998',
       KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
+      WALLET_INFRA_ROLE: 'all',
       WALLET_STORAGE_MONITOR_START_TASKS: 'true',
       WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE: 'multiuser',
-      WALLET_STORAGE_TRUST_PROXY_HOPS: '1'
+      WALLET_STORAGE_TRUST_PROXY_HOPS: '1',
+      ADMIN_HOST: '127.0.0.1',
+      ADMIN_IDENTITY_KEYS: TEST_PUBLIC_KEY,
+      ADMIN_PORT: '3999',
+      ADMIN_ROOT_KEY_HEX: TEST_PRIVATE_KEY
     },
     invalidEnvironment: { SERVER_PRIVATE_KEY: '' },
     liveness: '/',
@@ -169,9 +175,15 @@ const contracts = {
       status: 200,
       headers: { 'X-Forwarded-For': '198.51.100.7' }
     },
+    auxiliaryEndpoints: [
+      { port: 3999, path: '/healthz', status: 200 },
+      { port: 3999, path: '/admin', status: 200 }
+    ],
     requiredLogPatterns: [
       '"monitor_tasks_enabled":true',
-      '"monitor_startup_task_mode":"multiuser"'
+      '"monitor_startup_task_mode":"multiuser"',
+      '"monitor_admin_enabled":true',
+      '"operation":"monitor_admin.start"'
     ],
     forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
@@ -384,6 +396,10 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     await assertPublicResponse(component, readiness)
     const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
     await assertPublicResponse(component, transaction)
+    for (const endpoint of contract.auxiliaryEndpoints ?? []) {
+      const response = await waitForEndpoint(name, endpoint.port, endpoint)
+      await assertPublicResponse(`${component} ${endpoint.path}`, response)
+    }
     const logs = await containerLogs(name)
     for (const pattern of contract.requiredLogPatterns ?? []) {
       if (!logs.includes(pattern)) {
@@ -421,6 +437,7 @@ export async function runContainerRuntimeContract({ component, image, walletImag
       'readiness',
       'migration-order',
       'public-cors',
+      ...(contract.auxiliaryEndpoints == null ? [] : ['auxiliary-endpoints']),
       'minimal-transaction',
       'graceful-shutdown'
     ]

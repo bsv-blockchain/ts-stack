@@ -287,8 +287,8 @@ Incident handling follows this evidence-preserving sequence:
 ### wallet-infra
 
 - Configuration: required `BSV_NETWORK`, `KNEX_DB_CONNECTION`, `SERVER_PRIVATE_KEY`; optional
-  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`, `WALLET_STORAGE_MONITOR_START_TASKS`, `WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE`, `WALLET_STORAGE_TRUST_PROXY_HOPS`; secret-bearing
-  `KNEX_DB_CONNECTION`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `TAAL_API_KEY`.
+  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`, `WALLET_STORAGE_MONITOR_START_TASKS`, `WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE`, `WALLET_STORAGE_MONITOR_ADMIN_ENABLED`, `WALLET_STORAGE_MONITOR_ADMIN_HOST`, `WALLET_STORAGE_MONITOR_ADMIN_PORT`, `WALLET_STORAGE_MONITOR_ADMIN_ALLOWED_ORIGINS`, `WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY`, `WALLET_STORAGE_ADMIN_IDENTITY_KEYS`, `WALLET_STORAGE_TRUST_PROXY_HOPS`; secret-bearing
+  `KNEX_DB_CONNECTION`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `TAAL_API_KEY`, `WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
   `src/logger.ts`, preload
@@ -307,10 +307,10 @@ Incident handling follows this evidence-preserving sequence:
 - RPO starting point: 15 minutes for wallet storage state.
 - RTO starting point: 4 hours from a verified backup, identity key, and service-provider configuration.
 - Restore validation: Verify schema and storage identity, authenticated RPC, representative wallet state, monitor progress, and provider connectivity.
-- Lifecycle status: **implemented** — SIGTERM/SIGINT stop monitor tasks, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT stop monitor tasks, close the optional monitor admin listener, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.
 - Scaling: Operate one monitor leader; API replicas require shared sessions, rate limits, storage, and explicit monitor leadership.
 - Disruption: Protect the monitor leader or perform an explicit handoff; preserve ready API capacity only after shared-state behavior is proven.
-- Topology: Separate monitor leadership from horizontally safe API capacity when production demand justifies it.
+- Topology: Separate monitor leadership and its private optional admin listener from horizontally safe API capacity when production demand justifies it.
 - Operator guide:
   [infra/wallet-infra/guides/kube_samples/README.md](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md)
 

@@ -37,6 +37,14 @@ multi-user provider should set
 leader, and supply matching Arcade URL/callback-token configuration when SSE
 status delivery is enabled.
 
+The optional monitor operator service is disabled in this sample. If enabled,
+run it only on the singleton `all` or `monitor` pod, mount its private key and
+allowed identity keys from the secret manager, use a port distinct from the
+public storage listener, and expose it only through an operator-private
+ClusterIP, tunnel, or equivalent access path. Its `/healthz` is suitable for
+that singleton's probes; do not route the monitor administration port through
+the public Wallet Storage Ingress.
+
 Wallet Storage is a public protocol service. Its default browser policy remains
 credential-free wildcard CORS, including opaque origins. Configure an exact
 allowlist only when the deployment intentionally serves a closed caller set.

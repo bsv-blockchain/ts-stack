@@ -83,7 +83,7 @@ concurrency when response sizes approach their byte ceiling.
 | Overlay Express | `OVERLAY_MAX_LOOKUP_RESULTS=1000`, `MAX_BASM_TXIDS=1000`, `MAX_BASM_ANCHOR_RANGE=1000`, admin default/max pages 50/200, `JANITOR_BATCH_SIZE=250`, and `JANITOR_MAX_REPORT_RESULTS=1000`. Janitor scans every record through a cursor while retaining only the configured report detail. |
 | UHRP Basic / Cloud | list default/max 200/1,000 and max offset 100,000; `MAX_FILE_BYTES=11000000000`, `MAX_RETENTION_MINUTES=525600`, JSON body 256 KiB, and upload body 64 MiB. Basic also bounds its MIME LRU at 10,000 entries. Downloads and uploads remain streamed. |
 | WAB | 256 KiB JSON, 2 MiB response, MySQL pool min/max 2/10, and separate pre-auth, authentication, user, deletion, faucet, and share rate policies. Account-deletion state is database-backed. |
-| Wallet Storage | RPC default/max rows 1,000/1,000, max request array items 1,000,000, 8 MiB RPC response, 8 MiB JSON, 8 MiB binary, and MySQL pool min/max 2/10 with configurable create/acquire/idle/reap/retry timeouts. Use `WALLET_INFRA_ROLE=api` for HTTP replicas and one `monitor` replica for background work. |
+| Wallet Storage | RPC default/max rows 1,000/1,000, max request array items 1,000,000, 8 MiB RPC response, 8 MiB JSON, 8 MiB binary, and MySQL pool min/max 2/10 with configurable create/acquire/idle/reap/retry timeouts. Use `WALLET_INFRA_ROLE=api` for HTTP replicas and one `monitor` replica for background work. The optional monitor operator UI/API uses its own bounded `WALLET_ADMIN_*` edge policy and must remain on that singleton's private operator listener. |
 
 All names above are appended to the service prefix where it is omitted in the
 table. For example, Message Box `MAX_RECIPIENTS` means

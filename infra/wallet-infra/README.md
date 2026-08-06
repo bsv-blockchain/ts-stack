@@ -40,6 +40,22 @@ hops (for example, `1` for a single Kubernetes ingress). This lets the built-in
 rate limiter key unauthenticated requests by the validated client address
 without trusting caller-supplied forwarding chains.
 
+### RPC list compatibility and balances
+
+Wallet Storage inserts a 1,000-row limit when a list/find RPC omits one and,
+in the standard profile, rejects an explicit page above 1,000. Keep wallet
+clients at or below the operator's `WALLET_STORAGE_RPC_MAX_LIST_LIMIT`; for an
+exact account balance, use wallet-toolbox's balance special operation instead
+of materializing every output.
+
+Some historical BRC-100 clients request pages of 10,000 rows. Operators can
+temporarily set `WALLET_STORAGE_RPC_MAX_LIST_LIMIT=10000` to preserve those
+clients without rebuilding the official image, but the response-byte ceiling
+still applies. Treat that as a measured compatibility profile: test
+production-shaped rows under the real memory limit, reduce concurrency when
+needed, and migrate clients to bounded pages or the balance special operation
+before restoring the standard 1,000-row maximum.
+
 ### Monitor task profile and Arcade events
 
 `WALLET_INFRA_ROLE=all` or `monitor` starts monitor work by default. Set
@@ -54,6 +70,36 @@ When both `WALLET_STORAGE_ARCADE_URL` (or `ARCADE_URL`) and
 the monitor subscribes to Arcade's SSE status stream with the same callback
 token used for transaction broadcasts. Keep the token in the deployment
 secret manager; startup and connection logs do not print it.
+
+### Monitor operator service
+
+The singleton `all` or `monitor` role can optionally expose wallet-toolbox's
+authenticated monitor operator UI and API. This preserves operational access
+to monitor statistics, tasks, UTXO reviews, proof-request inspection, and
+manual rebroadcasts without requiring a custom image.
+
+Set `WALLET_STORAGE_MONITOR_ADMIN_ENABLED=true`, configure one or more
+compressed public keys in `WALLET_STORAGE_ADMIN_IDENTITY_KEYS`, and bind a
+dedicated listener with `WALLET_STORAGE_MONITOR_ADMIN_HOST` (default
+`127.0.0.1`) and `WALLET_STORAGE_MONITOR_ADMIN_PORT` (default `8082`). The
+listener must not share `HTTP_PORT`, or nginx port 8080 when nginx is enabled.
+Keep it private to operators; BRC-100 authentication and the identity allowlist
+protect `/admin/api`, but they do not make a public administrative endpoint a
+good deployment boundary. The unauthenticated `/healthz` and static `/admin`
+bootstrap page remain available on that listener.
+
+`WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY` gives the operator service a stable
+server identity and must come from a secret manager. When omitted, it uses
+`SERVER_PRIVATE_KEY`. `WALLET_STORAGE_MONITOR_ADMIN_ALLOWED_ORIGINS` can apply
+an optional comma-separated browser-origin allowlist. The historical
+`ADMIN_PORT`, `ADMIN_HOST`, `ADMIN_ROOT_KEY_HEX`, `ADMIN_IDENTITY_KEYS`, and
+`ADMIN_ALLOWED_ORIGINS` names remain accepted so existing monitor deployments
+can move to this image without rewriting their secret material. A historical
+`ADMIN_PORT` also enables the service unless the new enabled setting is
+explicitly false, and selects the `monitor` role when `WALLET_INFRA_ROLE` is
+unset. The former monitor wrapper's `CHAIN`, `MAIN_KNEX_DB_CONNECTION`, and
+`TEST_KNEX_DB_CONNECTION` names are also accepted when their current
+`BSV_NETWORK` or `KNEX_DB_CONNECTION` counterparts are absent.
 
 ---
 
