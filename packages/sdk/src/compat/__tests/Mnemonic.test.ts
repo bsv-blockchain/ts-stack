@@ -219,4 +219,39 @@ describe('Mnemonic', function () {
       })
     })
   })
+
+  describe('#toEntropy', () => {
+    it('should round-trip fromEntropy → toEntropy with known buffer', () => {
+      const entropy = Array.from({ length: 32 }, () => 0)
+      const m = new Mnemonic().fromEntropy(entropy)
+      expect(m.toEntropy()).toEqual(entropy)
+    })
+
+    it('should round-trip fromRandom → toEntropy', () => {
+      const buf = Random(32)
+      const m = new Mnemonic().fromEntropy(buf)
+      expect(m.toEntropy()).toEqual(buf)
+    })
+
+    it('should recover entropy matching all BIP-39 vectors', () => {
+      vectors.english.forEach((vector) => {
+        const entropy = toArray(vector.entropy, 'hex')
+        const m = new Mnemonic().fromEntropy(entropy)
+        expect(toHex(m.toEntropy())).toEqual(vector.entropy)
+      })
+    })
+
+    it('should throw on unknown word', () => {
+      const m = new Mnemonic()
+      m.mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon NOTAWORD'
+      expect(() => m.toEntropy()).toThrow('Unknown word in mnemonic: "NOTAWORD"')
+    })
+
+    it('should throw on valid words with bad checksum', () => {
+      // last word changed to one with wrong checksum
+      const m = new Mnemonic()
+      m.mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon'
+      expect(() => m.toEntropy()).toThrow('Mnemonic checksum invalid')
+    })
+  })
 })
