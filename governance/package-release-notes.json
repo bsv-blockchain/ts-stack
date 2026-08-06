@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.2.18",
-      "releaseType": "minor",
-      "summary": "Adds batched proven-transaction BEEF assembly and deferred-then-compound Merkle proof validation, reuses shared proof hashes and BRC-42 counterparty secrets, and accelerates optional-backend P2PKH public-key emission.",
-      "migration": "No consumer migration is required. The new APIs are additive; BEEF ordering and bytes, proof validity, signatures, synchronous signing, SDK 2.x wire encodings, BRC-103/104 behavior, and supported imports are unchanged."
+      "publishedVersion": "2.3.0",
+      "releaseType": "patch",
+      "summary": "Adds checksum-validating BIP-39 entropy recovery and operator-supplied labels on AuthFetch BRC-105 payment actions while retaining deterministic nonce-derived recovery labels.",
+      "migration": "No consumer migration is required. Mnemonic.toEntropy and AuthFetch payment labels are additive; existing BIP-39, AuthFetch, BRC-105 payment, recovery-label, and SDK 2.x behavior is unchanged."
     },
     {
       "name": "@bsv/simple",
