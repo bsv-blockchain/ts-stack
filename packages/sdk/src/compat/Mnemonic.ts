@@ -220,6 +220,47 @@ export default class Mnemonic {
   }
 
   /**
+   * Recovers the original entropy bytes from the instance's mnemonic phrase.
+   * @returns {number[]} The entropy buffer that was originally used to generate the mnemonic.
+   * @throws {Error} If the mnemonic is invalid or contains unknown words.
+   */
+  public toEntropy (): number[] {
+    const words = this.mnemonic.split(this.Wordlist.space)
+    let bin = ''
+    for (const word of words) {
+      const ind = this.Wordlist.value.indexOf(word)
+      if (ind < 0) {
+        throw new Error(`Unknown word in mnemonic: "${word}"`)
+      }
+      bin = bin + ('00000000000' + ind.toString(2)).slice(-11)
+    }
+
+    if (bin.length % 11 !== 0) {
+      throw new Error(
+        'internal error - entropy not an even multiple of 11 bits - ' +
+        bin.length.toString()
+      )
+    }
+
+    const cs = bin.length / 33
+    const entropyBits = bin.slice(0, bin.length - cs)
+    const buf: number[] = []
+    for (let i = 0; i < entropyBits.length / 8; i++) {
+      buf.push(Number.parseInt(entropyBits.slice(i * 8, (i + 1) * 8), 2))
+    }
+
+    const hash = Hash.sha256(buf)
+    let expectedHashBits = hash[0].toString(2)
+    expectedHashBits = ('00000000' + expectedHashBits).slice(-8).slice(0, cs)
+    const actualHashBits = bin.slice(-cs)
+    if (expectedHashBits !== actualHashBits) {
+      throw new Error('Mnemonic checksum invalid')
+    }
+
+    return buf
+  }
+
+  /**
    * Validates the mnemonic phrase.
    * Checks for correct length, absence of invalid words, and proper checksum.
    * @returns {boolean} True if the mnemonic is valid, false otherwise.
