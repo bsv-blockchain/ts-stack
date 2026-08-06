@@ -101,6 +101,12 @@ const result = await wallet.createAction({
 })
 ```
 
+Completed `createAction` and `signAction` results from the public Wallet
+interface return Atomic BEEF in `tx` as a numeric array. This preserves the
+historical BRC-100 shape across plain JSON bridges; parse it with
+`Transaction.fromAtomicBEEF(result.tx)`. The `AtomicBEEF` type and binary Wallet
+Wire transports also support `Uint8Array`.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.

@@ -3,8 +3,8 @@ id: package-api-migrations
 title: 'Package API, Declarations, and Migration Ledger'
 kind: reference
 version: '1.0.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+last_updated: '2026-08-06'
+last_verified: '2026-08-06'
 review_cadence_days: 30
 status: stable
 tags: [reference, packages, api, declarations, migrations, release-notes]
@@ -52,9 +52,9 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/verifast`                   | `0.3.0`      | `0.3.4` | patch     | [API and usage](../packages/sdk/verifast.md)                          | No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged.                                                                                                                                                                                       |
 | `@bsv/wallet-helper`              | `0.1.1`      | `0.1.6` | patch     | [API and usage](../packages/helpers/wallet-helper.md)                 | No consumer migration is required; fluent builder APIs and transaction semantics are unchanged.                                                                                                                                                                                                                               |
 | `@bsv/wallet-relay`               | `0.2.2`      | `0.3.4` | minor     | [API and usage](../packages/wallet/wallet-relay.md)                   | QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers. Express integrations now use the host application's matching Express runtime and type graph. |
-| `@bsv/wallet-toolbox`             | `2.6.0`      | `2.6.1` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required. Fresh keyless ChainTracks deployments can now bootstrap from a valid height-zero Arcade batch; existing CDN-backed, persisted, browser, mobile, explicit-client, and legacy v1 configurations remain compatible and keep the same trust checks.                                            |
-| `@bsv/wallet-toolbox-client`      | `2.6.0`      | `2.6.1` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No browser consumer migration is required. Browser entry points, CORS behavior, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible.                                                                                                                                                    |
-| `@bsv/wallet-toolbox-mobile`      | `2.6.0`      | `2.6.1` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No mobile consumer migration is required. React Native entry points, the mobile bridge, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible.                                                                                                                                            |
+| `@bsv/wallet-toolbox`             | `2.6.1`      | `2.6.2` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays.                                                                                                                    |
+| `@bsv/wallet-toolbox-client`      | `2.6.1`      | `2.6.2` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No browser consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while browser entry points and binary Wallet Wire behavior remain compatible.                                                                                                                              |
+| `@bsv/wallet-toolbox-mobile`      | `2.6.1`      | `2.6.2` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No mobile consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while React Native entry points and binary Wallet Wire behavior remain compatible.                                                                                                                          |
 | `create-bsv-app`                  | `1.0.2`      | `1.0.4` | patch     | [API and usage](../packages/helpers/create-bsv-app.md)                | No consumer migration is required; generated application structure and CLI behavior are unchanged.                                                                                                                                                                                                                            |
 
 `none` means the source manifest matches the recorded npm baseline. Any other
@@ -477,8 +477,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Fixes credential-free Arcade/go-chaintracks initialization when ChainTracks bulk storage is empty while retaining continuity, proof-of-work, file-integrity, chainwork, and exact-network genesis validation.
-- Migration: No consumer migration is required. Fresh keyless ChainTracks deployments can now bootstrap from a valid height-zero Arcade batch; existing CDN-backed, persisted, browser, mobile, explicit-client, and legacy v1 configurations remain compatible and keep the same trust checks.
+- Release note: Restores completed createAction and signAction Atomic BEEF results to JSON-safe numeric arrays at the public wallet boundary, preserving the historical BRC-100 response shape for legacy applications.
+- Migration: No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
 | ---------------- | ---------------------------------------------------- | -------------------------- |
@@ -491,8 +491,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Carries the lockstep browser build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.
-- Migration: No browser consumer migration is required. Browser entry points, CORS behavior, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible.
+- Release note: Carries the lockstep browser build with JSON-safe completed createAction and signAction results at the public wallet boundary.
+- Migration: No browser consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while browser entry points and binary Wallet Wire behavior remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
 | ---------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -503,8 +503,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Carries the lockstep mobile build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.
-- Migration: No mobile consumer migration is required. React Native entry points, the mobile bridge, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible.
+- Release note: Carries the lockstep mobile build with JSON-safe completed createAction and signAction results at the public wallet boundary.
+- Migration: No mobile consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while React Native entry points and binary Wallet Wire behavior remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
 | ---------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |

@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Restore completed `createAction` and `signAction` Atomic BEEF results to
+  numeric arrays at the public wallet boundary so legacy BRC-100 JSON bridges
+  preserve their historical wire shape. Typed byte arrays remain supported by
+  `AtomicBEEF` and binary Wallet Wire transports.
 - Fix credential-free Arcade/go-chaintracks bootstrap when ChainTracks bulk
   storage is empty. A first batch is now accepted only from height zero and is
   still checked for continuity, proof of work, file integrity, and the exact
