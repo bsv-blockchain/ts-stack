@@ -59,4 +59,36 @@ describe('LiveIngestorChaintracksSSE', () => {
     expect(chaintracks.subscribeHeaders).not.toHaveBeenCalled()
     expect(chaintracks.unsubscribe).not.toHaveBeenCalled()
   })
+
+  test('rejects a mismatched upstream network', async () => {
+    const chaintracks = {
+      getChain: jest.fn(async () => 'test'),
+      subscribeHeaders: jest.fn()
+    } as any
+    const ingestor = new LiveIngestorChaintracksSSE({ chain: 'main', chaintracks })
+
+    await expect(ingestor.startListening([])).rejects.toThrow("network 'test' does not match configured chain 'main'")
+    expect(chaintracks.subscribeHeaders).not.toHaveBeenCalled()
+  })
+
+  test('unsubscribes when shutdown wins the pending subscribe race', async () => {
+    let resolveSubscription!: (id: string) => void
+    const subscription = new Promise<string>(resolve => {
+      resolveSubscription = resolve
+    })
+    const chaintracks = {
+      getChain: jest.fn(async () => 'main'),
+      subscribeHeaders: jest.fn(async () => await subscription),
+      unsubscribe: jest.fn(async () => true)
+    } as any
+    const ingestor = new LiveIngestorChaintracksSSE({ chain: 'main', chaintracks })
+
+    const listening = ingestor.startListening([])
+    await new Promise(resolve => setTimeout(resolve, 0))
+    ingestor.stopListening()
+    resolveSubscription('sub-race')
+    await listening
+
+    expect(chaintracks.unsubscribe).toHaveBeenCalledWith('sub-race')
+  })
 })

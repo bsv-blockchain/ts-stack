@@ -1,6 +1,11 @@
 import { Services } from '../Services'
+import { ChaintracksServiceClient } from '../chaintracker/chaintracks/ChaintracksServiceClient'
 import { GoChaintracksServiceClient } from '../chaintracker/chaintracks/GoChaintracksServiceClient'
-import { createDefaultWalletServicesOptions } from '../createDefaultWalletServicesOptions'
+import {
+  arcadeDefaultUrl,
+  arcDefaultUrl,
+  createDefaultWalletServicesOptions
+} from '../createDefaultWalletServicesOptions'
 
 describe('ChainTracks network defaults', () => {
   let stnChaintracks: string | undefined
@@ -37,5 +42,19 @@ describe('ChainTracks network defaults', () => {
     ].map(service => service.name)
     expect(names).not.toContain('WhatsOnChain')
     expect(names).not.toContain('Bitails')
+  })
+
+  test('stn falls back to an operator Arcade v1 path without aliasing another network', () => {
+    delete process.env.STN_CHAINTRACKS_URL
+    process.env.STN_ARCADE_URL = 'https://stn.example///'
+
+    expect(arcadeDefaultUrl('stn')).toBe('https://stn.example///')
+    expect(arcDefaultUrl('stn')).toBe('https://stn.example///')
+    expect(createDefaultWalletServicesOptions('stn').chaintracks).toBeInstanceOf(ChaintracksServiceClient)
+  })
+
+  test('default service factories reject mock-chain construction', () => {
+    expect(() => createDefaultWalletServicesOptions('mock')).toThrow("does not support 'mock' chain")
+    expect(() => new Services('mock')).toThrow("Use MockServices for 'mock' chain")
   })
 })

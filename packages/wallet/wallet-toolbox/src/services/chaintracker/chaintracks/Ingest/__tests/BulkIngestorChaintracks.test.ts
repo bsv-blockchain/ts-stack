@@ -7,6 +7,35 @@ import { BulkIngestorChaintracks } from '../BulkIngestorChaintracks'
 const toHex = (bytes: number[]): string => bytes.map(byte => byte.toString(16).padStart(2, '0')).join('')
 
 describe('BulkIngestorChaintracks', () => {
+  test('rejects invalid batch limits and returns an empty range without contacting the upstream', async () => {
+    const remote = { getChain: jest.fn() } as unknown as ChaintracksClientApi
+    expect(
+      () =>
+        new BulkIngestorChaintracks({
+          chain: 'main',
+          jsonResource: 'mainNetBlockHeaders.json',
+          chaintracks: remote,
+          maxHeadersPerRequest: 0
+        })
+    ).toThrow('maxHeadersPerRequest must be a positive integer')
+
+    const ingestor = new BulkIngestorChaintracks({
+      chain: 'main',
+      jsonResource: 'mainNetBlockHeaders.json',
+      chaintracks: remote
+    })
+    const prior: any[] = []
+    await expect(
+      ingestor.fetchHeaders(
+        { bulk: HeightRange.empty, live: HeightRange.empty },
+        HeightRange.empty,
+        HeightRange.empty,
+        prior
+      )
+    ).resolves.toBe(prior)
+    expect(remote.getChain).not.toHaveBeenCalled()
+  })
+
   test('fetches bounded header batches and forwards them through local storage validation', async () => {
     const headers = [0, 1, 2].map(height =>
       serializeBaseBlockHeader({
@@ -82,5 +111,40 @@ describe('BulkIngestorChaintracks', () => {
         []
       )
     ).rejects.toThrow('returned no headers at height 0')
+  })
+
+  test('rejects malformed and short non-empty upstream batches', async () => {
+    const header = serializeBaseBlockHeader({
+      version: 1,
+      previousHash: '00'.repeat(32),
+      merkleRoot: '11'.repeat(32),
+      time: 1,
+      bits: 0x1d00ffff,
+      nonce: 1
+    })
+    const getHeaders = jest.fn().mockResolvedValueOnce('00').mockResolvedValueOnce(toHex(header))
+    const remote = {
+      getChain: jest.fn(async () => 'main'),
+      getHeaders
+    } as unknown as ChaintracksClientApi
+    const storage = {
+      addBulkHeaders: jest.fn(async (headers, _range, live) => [...live, ...headers])
+    } as unknown as ChaintracksStorageBase
+    const ingestor = new BulkIngestorChaintracks({
+      chain: 'main',
+      jsonResource: 'mainNetBlockHeaders.json',
+      chaintracks: remote,
+      maxHeadersPerRequest: 2
+    })
+    await ingestor.setStorage(storage, () => {})
+    const args = [
+      { bulk: HeightRange.empty, live: HeightRange.empty },
+      new HeightRange(0, 1),
+      new HeightRange(0, 1),
+      []
+    ] as const
+
+    await expect(ingestor.fetchHeaders(...args)).rejects.toThrow('returned 1 bytes for 2 headers')
+    await expect(ingestor.fetchHeaders(...args)).rejects.toThrow('returned 1 of 2 headers at height 0')
   })
 })

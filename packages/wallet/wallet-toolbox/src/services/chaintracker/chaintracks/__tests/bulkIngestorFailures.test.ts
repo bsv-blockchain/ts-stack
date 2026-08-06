@@ -10,6 +10,44 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     shutdown: async () => {}
   }
 
+  test('requires storage and at least one source for each ingestion role', () => {
+    const storage = { log: () => {} } as any
+    const bulk = { getPresentHeight: async () => 1 } as any
+    expect(
+      () =>
+        new Chaintracks({
+          chain: 'main',
+          storage: undefined as any,
+          bulkIngestors: [bulk],
+          liveIngestors: [liveIngestor as any],
+          addLiveRecursionLimit: 36,
+          readonly: false
+        })
+    ).toThrow('storage is required')
+    expect(
+      () =>
+        new Chaintracks({
+          chain: 'main',
+          storage,
+          bulkIngestors: [],
+          liveIngestors: [liveIngestor as any],
+          addLiveRecursionLimit: 36,
+          readonly: false
+        })
+    ).toThrow('At least one bulk ingestor is required')
+    expect(
+      () =>
+        new Chaintracks({
+          chain: 'main',
+          storage,
+          bulkIngestors: [bulk],
+          liveIngestors: [],
+          addLiveRecursionLimit: 36,
+          readonly: false
+        })
+    ).toThrow('At least one live ingestor is required')
+  })
+
   test('falls through failed present-height sources and records their health', async () => {
     const failed = {
       getPresentHeight: jest.fn(async () => {
@@ -65,6 +103,57 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     })
 
     await expect(chaintracks.getPresentHeight()).resolves.toBe(420)
+  })
+
+  test('uses a stale last-good height when providers fail and reports source exhaustion otherwise', async () => {
+    const unavailable = { getPresentHeight: jest.fn(async () => undefined) }
+    const emptyStorage = {
+      log: () => {},
+      getAvailableHeightRanges: jest.fn(async () => ({ bulk: HeightRange.empty, live: HeightRange.empty }))
+    }
+    const withLastGood = new Chaintracks({
+      chain: 'main',
+      storage: emptyStorage as any,
+      bulkIngestors: [unavailable as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    ;(withLastGood as any).lastPresentHeight = 88
+    ;(withLastGood as any).lastPresentHeightMsecs = 0
+    await expect(withLastGood.getPresentHeight()).resolves.toBe(88)
+
+    const exhausted = new Chaintracks({
+      chain: 'main',
+      storage: emptyStorage as any,
+      bulkIngestors: [unavailable as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    await expect(exhausted.getPresentHeight()).rejects.toThrow(
+      'No present-height source or locally validated headers are available'
+    )
+
+    const unreadable = new Chaintracks({
+      chain: 'main',
+      storage: {
+        log: () => {},
+        getAvailableHeightRanges: async () => {
+          throw new Error('local storage unavailable')
+        }
+      } as any,
+      bulkIngestors: [unavailable as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    await expect(unreadable.getPresentHeight()).rejects.toThrow(
+      'No present-height source or locally validated headers are available'
+    )
   })
 
   test('continues missing-header lookup with the next live source after a failure', async () => {
