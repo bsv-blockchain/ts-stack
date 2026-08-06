@@ -52,25 +52,27 @@ None; HTTP JSON-RPC only.
 
 ## Configuration (env vars)
 
-| Variable                             | Required  | Description                                                                                                                                                 |
-| ------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NODE_ENV                             | No        | `development` or `production`                                                                                                                               |
-| HTTP_PORT                            | No        | Express server port (default: 8081, use 8081 if nginx enabled on 8080)                                                                                      |
-| ENABLE_NGINX                         | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false)                                                                                  |
-| BSV_NETWORK                          | No        | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`)                                                                                        |
-| SERVER_PRIVATE_KEY                   | Yes       | 256-bit hex private key for server identity                                                                                                                 |
-| KNEX_DB_CONNECTION                   | Yes       | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`)                 |
-| COMMISSION_FEE                       | No        | Optional commission fee in satoshis per request (default: 0)                                                                                                |
-| COMMISSION_PUBLIC_KEY                | No        | Public key to receive commission payments (if COMMISSION_FEE > 0)                                                                                           |
-| FEE_MODEL                            | No        | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)                                                                                     |
-| TAAL_API_KEY                         | No        | API key used by the default Arc/Taal service configuration (optional)                                                                                       |
-| TSTN_ARCADE_URL                      | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
-| TSTN_CHAINTRACKS_URL                 | No        | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted.                                                      |
-| WALLET_STORAGE_CORS_MODE             | No        | `public` (default), `allowlist`, or `disabled`                                                                                                              |
-| WALLET_STORAGE_CORS_ALLOWED_ORIGINS  | No        | Exact comma-separated origins in allowlist mode                                                                                                             |
-| WALLET_STORAGE_JSON_MAX_BODY_BYTES   | No        | JSON-RPC body ceiling (default 31457280)                                                                                                                    |
-| WALLET_STORAGE_BINARY_MAX_BODY_BYTES | No        | Blob body ceiling (default 8388608)                                                                                                                         |
-| WALLET_STORAGE_TRUST_PROXY_HOPS      | No        | Exact trusted reverse-proxy hop count, 0–10 (default 0/direct exposure)                                                                                     |
+| Variable                                 | Required  | Description                                                                                                                                                 |
+| ---------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NODE_ENV                                 | No        | `development` or `production`                                                                                                                               |
+| HTTP_PORT                                | No        | Express server port (default: 8081, use 8081 if nginx enabled on 8080)                                                                                      |
+| ENABLE_NGINX                             | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false)                                                                                  |
+| BSV_NETWORK                              | No        | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`)                                                                                        |
+| SERVER_PRIVATE_KEY                       | Yes       | 256-bit hex private key for server identity                                                                                                                 |
+| KNEX_DB_CONNECTION                       | Yes       | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`)                 |
+| COMMISSION_FEE                           | No        | Optional commission fee in satoshis per request (default: 0)                                                                                                |
+| COMMISSION_PUBLIC_KEY                    | No        | Public key to receive commission payments (if COMMISSION_FEE > 0)                                                                                           |
+| FEE_MODEL                                | No        | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)                                                                                     |
+| TAAL_API_KEY                             | No        | API key used by the default Arc/Taal service configuration (optional)                                                                                       |
+| TSTN_ARCADE_URL                          | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
+| TSTN_CHAINTRACKS_URL                     | No        | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted.                                                      |
+| WALLET_STORAGE_CORS_MODE                 | No        | `public` (default), `allowlist`, or `disabled`                                                                                                              |
+| WALLET_STORAGE_CORS_ALLOWED_ORIGINS      | No        | Exact comma-separated origins in allowlist mode                                                                                                             |
+| WALLET_STORAGE_JSON_MAX_BODY_BYTES       | No        | JSON-RPC body ceiling (default 31457280)                                                                                                                    |
+| WALLET_STORAGE_BINARY_MAX_BODY_BYTES     | No        | Blob body ceiling (default 8388608)                                                                                                                         |
+| WALLET_STORAGE_TRUST_PROXY_HOPS          | No        | Exact trusted reverse-proxy hop count, 0–10 (default 0/direct exposure)                                                                                     |
+| WALLET_STORAGE_MONITOR_START_TASKS       | No        | Enable monitor work for `all`/`monitor` roles (default true; historical alias supported)                                                                    |
+| WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE | No        | `default`, `multiuser`, `alltoother`, or `none` (default `default`; historical alias supported)                                                             |
 
 See [Public Service Edge Security](service-edge-security.md#wallet-storageserver-and-adminserver)
 for the authentication, rate, timeout, logging, CORS/CSP, admin, and nginx

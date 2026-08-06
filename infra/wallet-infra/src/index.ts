@@ -8,11 +8,13 @@ import {
   StorageServer,
   Wallet,
   Monitor,
+  type MonitorStartupTaskMode,
   KnexSessionManager,
   WalletLogger,
   type WalletLoggerLevel,
   type WalletArgs
 } from '@bsv/wallet-toolbox'
+import EventSource from 'eventsource'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
@@ -135,6 +137,40 @@ function readRole(): WalletInfraRole {
   return role
 }
 
+function readMonitorStartupTaskMode(): MonitorStartupTaskMode {
+  const mode = (
+    process.env.WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE ??
+    process.env.MONITOR_STARTUP_TASK_MODE ??
+    'default'
+  )
+    .trim()
+    .toLowerCase()
+  if (
+    mode === 'none' ||
+    mode === 'default' ||
+    mode === 'multiuser' ||
+    mode === 'alltoother'
+  ) {
+    return mode
+  }
+  throw new Error(
+    'WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE must be none, default, multiuser, or alltoother'
+  )
+}
+
+function readMonitorTasksEnabled(): boolean {
+  const raw =
+    process.env.WALLET_STORAGE_MONITOR_START_TASKS ??
+    process.env.MONITOR_START_TASKS
+  if (raw == null || raw.trim() === '') return true
+  const normalized = raw.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  throw new Error(
+    'WALLET_STORAGE_MONITOR_START_TASKS must be true/false, 1/0, yes/no, or on/off'
+  )
+}
+
 function decodeJsonSetting(name: string, raw: string): string {
   const trimmed = raw.trim()
   const candidates = [trimmed]
@@ -246,6 +282,7 @@ async function createServicesAndMonitorOptions(
   knex: Knex,
   storage: WalletStorageManager
 ) {
+  const startupTaskMode = readMonitorStartupTaskMode()
   if (chain === 'mock') {
     const services = new MockServices(knex)
     await services.initialize()
@@ -261,19 +298,24 @@ async function createServicesAndMonitorOptions(
         abandonedMsecs: 1000 * 60 * 5,
         unprovenAttemptsLimitTest: 10,
         unprovenAttemptsLimitMain: 144,
-        maxRebroadcastAttempts: 0
+        maxRebroadcastAttempts: 0,
+        startupTaskMode
       }
     }
   }
   const services = new Services(configuredServiceOptions(chain))
-  return {
+  const monitorOptions = Monitor.createDefaultWalletMonitorOptions(
+    chain,
+    storage,
     services,
-    monitorOptions: Monitor.createDefaultWalletMonitorOptions(
-      chain,
-      storage,
-      services
-    )
+    undefined,
+    startupTaskMode
+  )
+  if (providerConfig.arcadeUrl && providerConfig.arcadeCallbackToken) {
+    monitorOptions.callbackToken = providerConfig.arcadeCallbackToken
+    monitorOptions.EventSourceClass = EventSource
   }
+  return { services, monitorOptions }
 }
 
 function walletNetworkPreset(
@@ -413,7 +455,6 @@ async function setupWalletStorageAndMonitor(): Promise<{
     const keyDeriver = new KeyDeriver(rootKey)
 
     const monitor = new Monitor(monitorOptions)
-    monitor.addDefaultTasks()
 
     const wallet = new Wallet({
       chain,
@@ -483,6 +524,7 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
   const startedAt = Date.now()
   try {
     const role = readRole()
+    const monitorTasksEnabled = role !== 'api' && readMonitorTasksEnabled()
     const walletToolboxVersion = String(
       packageJson.dependencies['@bsv/wallet-toolbox']
     ).replace(/^[~^]/, '')
@@ -491,7 +533,9 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       {
         operation: 'storage.setup',
         wallet_toolbox_version: walletToolboxVersion,
-        network: BSV_NETWORK
+        network: BSV_NETWORK,
+        monitor_tasks_enabled: monitorTasksEnabled,
+        monitor_startup_task_mode: context.monitor.options.startupTaskMode
       },
       'wallet storage and monitor configured'
     )
@@ -508,7 +552,7 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       )
     }
 
-    if (role !== 'api') {
+    if (monitorTasksEnabled) {
       await context.monitor.startTasks()
       log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
     }
@@ -528,7 +572,7 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
           { operation: 'shutdown', signal },
           'wallet-infra shutdown started'
         )
-        if (role !== 'api') context.monitor.stopTasks()
+        if (monitorTasksEnabled) context.monitor.stopTasks()
         nginxProcess?.kill('SIGTERM')
         if (role !== 'monitor' && context.server.server != null) {
           await closeHttpServer(context.server.server as Server)

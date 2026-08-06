@@ -481,6 +481,8 @@
           "FEE_MODEL",
           "HTTP_PORT",
           "TAAL_API_KEY",
+          "WALLET_STORAGE_MONITOR_START_TASKS",
+          "WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE",
           "WALLET_STORAGE_TRUST_PROXY_HOPS"
         ],
         "secrets": [

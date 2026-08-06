@@ -40,6 +40,21 @@ hops (for example, `1` for a single Kubernetes ingress). This lets the built-in
 rate limiter key unauthenticated requests by the validated client address
 without trusting caller-supplied forwarding chains.
 
+### Monitor task profile and Arcade events
+
+`WALLET_INFRA_ROLE=all` or `monitor` starts monitor work by default. Set
+`WALLET_STORAGE_MONITOR_START_TASKS=false` to keep that work disabled, or
+choose `default`, `multiuser`, `alltoother`, or `none` with
+`WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE`. The default profile preserves the
+existing official-image behavior. The historical `MONITOR_START_TASKS` and
+`MONITOR_STARTUP_TASK_MODE` names remain accepted for migration compatibility.
+
+When both `WALLET_STORAGE_ARCADE_URL` (or `ARCADE_URL`) and
+`WALLET_STORAGE_ARCADE_CALLBACK_TOKEN` (or `ARCADE_CALLBACK_TOKEN`) are set,
+the monitor subscribes to Arcade's SSE status stream with the same callback
+token used for transaction broadcasts. Keep the token in the deployment
+secret manager; startup and connection logs do not print it.
+
 ---
 
 ## Deployment Options

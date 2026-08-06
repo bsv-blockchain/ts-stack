@@ -156,6 +156,8 @@ const contracts = {
       HTTP_PORT: '3998',
       KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
+      WALLET_STORAGE_MONITOR_START_TASKS: 'true',
+      WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE: 'multiuser',
       WALLET_STORAGE_TRUST_PROXY_HOPS: '1'
     },
     invalidEnvironment: { SERVER_PRIVATE_KEY: '' },
@@ -167,6 +169,10 @@ const contracts = {
       status: 200,
       headers: { 'X-Forwarded-For': '198.51.100.7' }
     },
+    requiredLogPatterns: [
+      '"monitor_tasks_enabled":true',
+      '"monitor_startup_task_mode":"multiuser"'
+    ],
     forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
   }
@@ -379,6 +385,13 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
     await assertPublicResponse(component, transaction)
     const logs = await containerLogs(name)
+    for (const pattern of contract.requiredLogPatterns ?? []) {
+      if (!logs.includes(pattern)) {
+        throw new Error(
+          `${component} did not emit required runtime log pattern: ${pattern}\n${logs}`
+        )
+      }
+    }
     for (const pattern of contract.forbiddenLogPatterns ?? []) {
       if (logs.includes(pattern)) {
         throw new Error(`${component} emitted forbidden runtime log pattern: ${pattern}\n${logs}`)
