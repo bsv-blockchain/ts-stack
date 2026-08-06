@@ -16,6 +16,7 @@ describe('BulkFileDataManager tests', () => {
   const chain: Chain = 'main'
   const fs = ChaintracksFs
   const rootFolder = './src/services/chaintracker/chaintracks/__tests/data'
+  let headers0_99: BlockHeader[] = []
   let headers300_399: BlockHeader[] = []
   let headers400_499: BlockHeader[] = []
   let server349: LocalCdnServer | undefined
@@ -25,8 +26,10 @@ describe('BulkFileDataManager tests', () => {
   let server499: LocalCdnServer | undefined
 
   beforeAll(async () => {
+    const data0_99 = await ChaintracksFs.readFile(fs.pathJoin(rootFolder, 'cdnTest499/mainNet_0.headers'))
     const data300_399 = await ChaintracksFs.readFile(fs.pathJoin(rootFolder, 'cdnTest499/mainNet_3.headers'))
     const data400_499 = await ChaintracksFs.readFile(fs.pathJoin(rootFolder, 'cdnTest499/mainNet_4.headers'))
+    headers0_99 = deserializeBlockHeaders(0, data0_99)
     headers300_399 = deserializeBlockHeaders(300, data300_399)
     headers400_499 = deserializeBlockHeaders(400, data400_499)
 
@@ -264,7 +267,41 @@ describe('BulkFileDataManager tests', () => {
     await storage.destroy()
   })
 
-  test('6 validates last-file update transitions', async () => {
+  test('6 bootstraps empty bulk storage from a validated genesis batch', async () => {
+    const computedWorkManager = createEmptyManager()
+
+    await computedWorkManager.mergeIncrementalBlockHeaders(headers0_99)
+    await computedWorkManager.ReValidate()
+
+    const range = await computedWorkManager.getHeightRange()
+    expect(range.minHeight).toBe(0)
+    expect(range.maxHeight).toBe(99)
+    const [file] = await computedWorkManager.getBulkFiles(true)
+    expect(file).toMatchObject({
+      firstHeight: 0,
+      count: 100,
+      fileName: 'incremental',
+      prevChainWork: '00'.repeat(32),
+      prevHash: '00'.repeat(32),
+      lastHash: headers0_99.at(-1)!.hash,
+      validated: true
+    })
+    expect(await computedWorkManager.findHeaderForHeightOrUndefined(0)).toEqual(headers0_99[0])
+
+    const suppliedWorkManager = createEmptyManager()
+    await expect(
+      suppliedWorkManager.mergeIncrementalBlockHeaders(headers0_99, file.lastChainWork)
+    ).resolves.toBeUndefined()
+    await suppliedWorkManager.ReValidate()
+
+    const nonGenesisManager = createEmptyManager()
+    await expect(nonGenesisManager.mergeIncrementalBlockHeaders(headers300_399)).rejects.toThrow(
+      'an extension of existing bulk headers'
+    )
+    expect((await nonGenesisManager.getHeightRange()).isEmpty).toBe(true)
+  })
+
+  test('7 validates last-file update transitions', async () => {
     const manager = createEmptyManager()
     const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
     manager['bfds'] = [cdn] as any
@@ -302,7 +339,7 @@ describe('BulkFileDataManager tests', () => {
     ).resolves.toEqual({ index: 0, truncate: undefined })
   })
 
-  test('7 validates penultimate-file update transitions', async () => {
+  test('8 validates penultimate-file update transitions', async () => {
     const manager = createEmptyManager()
     const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
     cdn.fileId = 7
@@ -345,7 +382,7 @@ describe('BulkFileDataManager tests', () => {
     ).rejects.toThrow('CDN file update followed by an incremental file')
   })
 
-  test('8 preserves or inherits file identity for valid penultimate updates', async () => {
+  test('9 preserves or inherits file identity for valid penultimate updates', async () => {
     const manager = createEmptyManager()
     const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
     cdn.fileId = 7

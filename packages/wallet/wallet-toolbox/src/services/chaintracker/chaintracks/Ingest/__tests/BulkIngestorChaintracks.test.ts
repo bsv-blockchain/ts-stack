@@ -1,5 +1,8 @@
 import { ChaintracksClientApi } from '../../Api/ChaintracksClientApi'
 import { ChaintracksStorageBase } from '../../Storage/ChaintracksStorageBase'
+import { ChaintracksStorageNoDb } from '../../Storage/ChaintracksStorageNoDb'
+import { BulkFileDataManager } from '../../util/BulkFileDataManager'
+import { ChaintracksFs } from '../../util/ChaintracksFs'
 import { HeightRange } from '../../util/HeightRange'
 import { serializeBaseBlockHeader } from '../../util/blockHeaderUtilities'
 import { BulkIngestorChaintracks } from '../BulkIngestorChaintracks'
@@ -77,6 +80,48 @@ describe('BulkIngestorChaintracks', () => {
     expect(getHeaders).toHaveBeenNthCalledWith(2, 2, 1)
     expect(addBulkHeaders).toHaveBeenCalledTimes(2)
     expect(result.map(header => header.height)).toEqual([0, 1, 2])
+  })
+
+  test('bootstraps real empty storage from a validated Arcade genesis batch', async () => {
+    const data = await ChaintracksFs.readFile(
+      './src/services/chaintracker/chaintracks/__tests/data/cdnTest499/mainNet_0.headers'
+    )
+    const getHeaders = jest.fn(async () => toHex([...data]))
+    const remote = {
+      getChain: jest.fn(async () => 'main'),
+      getHeaders
+    } as unknown as ChaintracksClientApi
+    const storageOptions = ChaintracksStorageBase.createStorageBaseOptions('main')
+    storageOptions.bulkFileDataManager = new BulkFileDataManager({
+      chain: 'main',
+      maxPerFile: 100,
+      maxRetained: 2
+    })
+    const storage = new ChaintracksStorageNoDb(storageOptions)
+    const ingestor = new BulkIngestorChaintracks({
+      chain: 'main',
+      jsonResource: 'mainNetBlockHeaders.json',
+      chaintracks: remote,
+      maxHeadersPerRequest: 100
+    })
+    await ingestor.setStorage(storage, () => {})
+
+    await expect(
+      ingestor.fetchHeaders(
+        { bulk: HeightRange.empty, live: HeightRange.empty },
+        new HeightRange(0, 99),
+        new HeightRange(0, 99),
+        []
+      )
+    ).resolves.toEqual([])
+
+    expect(getHeaders).toHaveBeenCalledWith(0, 100)
+    await expect(storage.getAvailableHeightRanges()).resolves.toMatchObject({
+      bulk: { minHeight: 0, maxHeight: 99 }
+    })
+    await expect(storage.bulkManager.findHeaderForHeightOrUndefined(0)).resolves.toMatchObject({
+      hash: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
+    })
   })
 
   test('rejects an upstream configured for another network', async () => {

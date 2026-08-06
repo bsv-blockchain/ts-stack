@@ -290,13 +290,18 @@ export class BulkFileDataManager {
       ))
 
       if (newBulkHeaders.length === 0) return
-      if (lbf == null || nextHeight !== newBulkHeaders[0].height) {
+      if (nextHeight !== newBulkHeaders[0].height) {
         throw new WERR_INVALID_PARAMETER('newBulkHeaders', 'an extension of existing bulk headers')
       }
-      if (!lbf.lastHash) throw new WERR_INTERNAL(`lastHash is not defined for the last bulk file ${lbf.fileName}`)
+      if (lbf != null && !lbf.lastHash) {
+        throw new WERR_INTERNAL(`lastHash is not defined for the last bulk file ${lbf.fileName}`)
+      }
+
+      const prevChainWork = lbf?.lastChainWork ?? '00'.repeat(32)
+      const prevHash = lbf?.lastHash ?? '00'.repeat(32)
 
       const lastChainWork = incrementalChainWork
-        ? addWork(incrementalChainWork, lbf.lastChainWork)
+        ? addWork(incrementalChainWork, prevChainWork)
         : computeChainWorkFromHeaders(newBulkHeaders, lbf)
 
       const data = serializeBaseBlockHeaders(newBulkHeaders)
@@ -308,9 +313,9 @@ export class BulkFileDataManager {
         fileName: 'incremental',
         firstHeight: newBulkHeaders[0].height,
         count: newBulkHeaders.length,
-        prevChainWork: lbf.lastChainWork,
+        prevChainWork,
         lastChainWork,
-        prevHash: lbf.lastHash,
+        prevHash,
         lastHash: newBulkHeaders.at(-1)!.hash,
         fileHash,
         data
@@ -952,12 +957,13 @@ function trimAlreadyStoredHeaders(
 
 /**
  * Computes `lastChainWork` for a sequence of new bulk headers extending `lbf`,
- * validating that the sequence is contiguous.
+ * or beginning at genesis when bulk storage is empty, validating that the
+ * sequence is contiguous.
  */
-function computeChainWorkFromHeaders(headers: BlockHeader[], lbf: BulkHeaderFileInfo): string {
-  let lastHeight = lbf.firstHeight + lbf.count - 1
-  let lastHash = lbf.lastHash!
-  let lastChainWork = lbf.lastChainWork
+function computeChainWorkFromHeaders(headers: BlockHeader[], lbf?: BulkHeaderFileInfo): string {
+  let lastHeight = lbf != null ? lbf.firstHeight + lbf.count - 1 : -1
+  let lastHash = lbf?.lastHash ?? '00'.repeat(32)
+  let lastChainWork = lbf?.lastChainWork ?? '00'.repeat(32)
   for (const h of headers) {
     if (h.height !== lastHeight + 1 || h.previousHash !== lastHash) {
       throw new WERR_INVALID_PARAMETER(
