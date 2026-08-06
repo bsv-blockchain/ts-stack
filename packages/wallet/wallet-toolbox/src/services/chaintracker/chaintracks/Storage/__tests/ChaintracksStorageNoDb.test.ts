@@ -119,4 +119,36 @@ describe('ChaintracksStorageNoDb insertHeader compatibility', () => {
       }
     }
   })
+
+  test('rejects mock storage before it can share a public-network data set', async () => {
+    const mockStorage = new ChaintracksStorageNoDb(ChaintracksStorageBase.createStorageBaseOptions('mock'))
+
+    await expect(mockStorage.getData()).rejects.toThrow("'mock' is unsupported")
+  })
+
+  test('disconnects surviving headers from live ancestors that are pruned', async () => {
+    const bulkTipHash = 'a0'.repeat(32)
+    jest.spyOn(storage.bulkManager, 'getLastFile').mockResolvedValue({
+      chain: 'main',
+      fileName: 'test.headers',
+      firstHeight: 0,
+      count: 100,
+      prevChainWork: '00'.repeat(32),
+      lastChainWork: '01'.repeat(32),
+      prevHash: '00'.repeat(32),
+      lastHash: bulkTipHash,
+      fileHash: null
+    })
+    const first = makeHeader(100, 'b', bulkTipHash)
+    const second = makeHeader(101, 'c', first.hash)
+
+    await storage.insertHeader(first)
+    await storage.insertHeader(second)
+
+    await expect(storage.deleteOlderLiveBlockHeaders(100)).resolves.toBe(1)
+    await expect(storage.findLiveHeaderForBlockHash(first.hash)).resolves.toBeNull()
+    await expect(storage.findLiveHeaderForBlockHash(second.hash)).resolves.toMatchObject({
+      previousHeaderId: null
+    })
+  })
 })
