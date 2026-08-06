@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "overrides": {
     "gaxios": "7.3.0"
   },
