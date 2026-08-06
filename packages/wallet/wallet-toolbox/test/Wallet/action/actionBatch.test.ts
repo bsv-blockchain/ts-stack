@@ -391,10 +391,13 @@ describe('in-memory action batch workspace', () => {
     const signed = await ctx.wallet.signAction({
       reference: created.signableTransaction!.reference,
       spends: {},
-      options: { noSend: true, returnTXIDOnly: true }
+      options: { noSend: true }
     })
     expect(signed.txid).toBeDefined()
-    expect(signed.tx).toBeUndefined()
+    expect(Array.isArray(signed.tx)).toBe(true)
+    const jsonResult = JSON.parse(JSON.stringify(signed)) as typeof signed
+    expect(Array.isArray(jsonResult.tx)).toBe(true)
+    expect(() => Transaction.fromAtomicBEEF(jsonResult.tx!)).not.toThrow()
     expect(legacyCreate).not.toHaveBeenCalled()
     expect(legacyProcess).not.toHaveBeenCalled()
     await ctx.wallet.createAction({ description: 'Commit two-step batch', options: { sendWith: [signed.txid!] } })
