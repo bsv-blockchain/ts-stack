@@ -134,7 +134,7 @@ Incident handling follows this evidence-preserving sequence:
 ### message-box-server
 
 - Configuration: required `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `BSV_NETWORK`, `ENABLE_FIREBASE`, `ENABLE_WEBSOCKETS`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `HOSTING_DOMAIN`, `PORT`, `ROUTING_PREFIX`; secret-bearing
+  `BSV_NETWORK`, `ENABLE_FIREBASE`, `ENABLE_WEBSOCKETS`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `HOSTING_DOMAIN`, `MESSAGE_BOX_DB_DEADLOCK_RETRIES`, `MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS`, `MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS`, `PORT`, `ROUTING_PREFIX`; secret-bearing
   `FIREBASE_SERVICE_ACCOUNT_JSON`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
@@ -148,6 +148,7 @@ Incident handling follows this evidence-preserving sequence:
 - Alerts:
 - message persistence succeeds but delivery or acknowledgement repeatedly fails
 - authenticated WebSocket handshakes or delivery failures spike
+- database serialization retries are sustained or exhaust their bounded retry budget
 - wallet storage, database, or Firebase dependency failures consume error budget
 - State: Knex database plus optional Firebase device registrations.
 - Migration/startup: Migrations complete before listen; back up and verify the target schema first.
@@ -286,7 +287,7 @@ Incident handling follows this evidence-preserving sequence:
 ### wallet-infra
 
 - Configuration: required `BSV_NETWORK`, `KNEX_DB_CONNECTION`, `SERVER_PRIVATE_KEY`; optional
-  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`; secret-bearing
+  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`, `WALLET_STORAGE_TRUST_PROXY_HOPS`; secret-bearing
   `KNEX_DB_CONNECTION`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `TAAL_API_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger

@@ -155,12 +155,19 @@ const contracts = {
       ENABLE_NGINX: 'false',
       HTTP_PORT: '3998',
       KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
-      SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY
+      SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
+      WALLET_STORAGE_TRUST_PROXY_HOPS: '1'
     },
     invalidEnvironment: { SERVER_PRIVATE_KEY: '' },
     liveness: '/',
     readiness: '/',
-    transaction: { method: 'GET', path: '/', status: 200 },
+    transaction: {
+      method: 'GET',
+      path: '/',
+      status: 200,
+      headers: { 'X-Forwarded-For': '198.51.100.7' }
+    },
+    forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
   }
 }
@@ -269,7 +276,8 @@ const startContainer = async (name, image, environment) => {
 
 const responseAt = async (port, request) => {
   const headers = {
-    Origin: 'https://unregistered-container-contract.example'
+    Origin: 'https://unregistered-container-contract.example',
+    ...request.headers
   }
   let body
   if (request.body !== undefined) {
@@ -370,6 +378,12 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     await assertPublicResponse(component, readiness)
     const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
     await assertPublicResponse(component, transaction)
+    const logs = await containerLogs(name)
+    for (const pattern of contract.forbiddenLogPatterns ?? []) {
+      if (logs.includes(pattern)) {
+        throw new Error(`${component} emitted forbidden runtime log pattern: ${pattern}\n${logs}`)
+      }
+    }
     await stopGracefully(name)
     completed = true
   } finally {

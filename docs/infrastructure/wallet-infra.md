@@ -1,10 +1,10 @@
 ---
 id: infra-wallet-infra
-title: "Wallet Infrastructure Services"
+title: 'Wallet Infrastructure Services'
 kind: infra
-version: "2.0.13"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: '2.0.13'
+last_updated: '2026-07-25'
+last_verified: '2026-07-25'
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -30,19 +30,19 @@ Clients connect with identity-based auth headers, manage UTXOs, baskets, labels,
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted) |
+| Type              | Requirement                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Database          | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted)                                                                       |
 | External services | Arc/Taal-compatible services for transaction broadcasting and proof lookup; optional Arcade/Chaintracks support through wallet-toolbox service options |
-| ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware |
+| ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware                                                           |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | / | JSON-RPC 2.0 endpoint (all wallet operations) |
-| PUT | /action-batch/:batchId/blob/:digest | Authenticated bounded binary blob upload |
-| GET | /, /robots.txt | Public service metadata |
+| Method | Path                                | Purpose                                       |
+| ------ | ----------------------------------- | --------------------------------------------- |
+| POST   | /                                   | JSON-RPC 2.0 endpoint (all wallet operations) |
+| PUT    | /action-batch/:batchId/blob/:digest | Authenticated bounded binary blob upload      |
+| GET    | /, /robots.txt                      | Public service metadata                       |
 
 JSON-RPC methods: walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, walletUtxoStorage_getBasket, walletUtxoStorage_listLabels, walletUtxoStorage_upsertLabel, walletUtxoStorage_dropLabels, walletUtxoStorage_listCertificates, walletUtxoStorage_insertCertificate (see @bsv/wallet-toolbox docs for full list).
 
@@ -52,24 +52,25 @@ None; HTTP JSON-RPC only.
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| NODE_ENV | No | `development` or `production` |
-| HTTP_PORT | No | Express server port (default: 8081, use 8081 if nginx enabled on 8080) |
-| ENABLE_NGINX | No | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false) |
-| BSV_NETWORK | No | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`) |
-| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
-| KNEX_DB_CONNECTION | Yes | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`) |
-| COMMISSION_FEE | No | Optional commission fee in satoshis per request (default: 0) |
-| COMMISSION_PUBLIC_KEY | No | Public key to receive commission payments (if COMMISSION_FEE > 0) |
-| FEE_MODEL | No | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`) |
-| TAAL_API_KEY | No | API key used by the default Arc/Taal service configuration (optional) |
-| TSTN_ARCADE_URL | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
-| TSTN_CHAINTRACKS_URL | No | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted. |
-| WALLET_STORAGE_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
-| WALLET_STORAGE_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
-| WALLET_STORAGE_JSON_MAX_BODY_BYTES | No | JSON-RPC body ceiling (default 31457280) |
-| WALLET_STORAGE_BINARY_MAX_BODY_BYTES | No | Blob body ceiling (default 8388608) |
+| Variable                             | Required  | Description                                                                                                                                                 |
+| ------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NODE_ENV                             | No        | `development` or `production`                                                                                                                               |
+| HTTP_PORT                            | No        | Express server port (default: 8081, use 8081 if nginx enabled on 8080)                                                                                      |
+| ENABLE_NGINX                         | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false)                                                                                  |
+| BSV_NETWORK                          | No        | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`)                                                                                        |
+| SERVER_PRIVATE_KEY                   | Yes       | 256-bit hex private key for server identity                                                                                                                 |
+| KNEX_DB_CONNECTION                   | Yes       | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`)                 |
+| COMMISSION_FEE                       | No        | Optional commission fee in satoshis per request (default: 0)                                                                                                |
+| COMMISSION_PUBLIC_KEY                | No        | Public key to receive commission payments (if COMMISSION_FEE > 0)                                                                                           |
+| FEE_MODEL                            | No        | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)                                                                                     |
+| TAAL_API_KEY                         | No        | API key used by the default Arc/Taal service configuration (optional)                                                                                       |
+| TSTN_ARCADE_URL                      | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
+| TSTN_CHAINTRACKS_URL                 | No        | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted.                                                      |
+| WALLET_STORAGE_CORS_MODE             | No        | `public` (default), `allowlist`, or `disabled`                                                                                                              |
+| WALLET_STORAGE_CORS_ALLOWED_ORIGINS  | No        | Exact comma-separated origins in allowlist mode                                                                                                             |
+| WALLET_STORAGE_JSON_MAX_BODY_BYTES   | No        | JSON-RPC body ceiling (default 31457280)                                                                                                                    |
+| WALLET_STORAGE_BINARY_MAX_BODY_BYTES | No        | Blob body ceiling (default 8388608)                                                                                                                         |
+| WALLET_STORAGE_TRUST_PROXY_HOPS      | No        | Exact trusted reverse-proxy hop count, 0–10 (default 0/direct exposure)                                                                                     |
 
 See [Public Service Edge Security](service-edge-security.md#wallet-storageserver-and-adminserver)
 for the authentication, rate, timeout, logging, CORS/CSP, admin, and nginx

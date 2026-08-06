@@ -166,6 +166,9 @@
           "FIREBASE_SERVICE_ACCOUNT_JSON",
           "FIREBASE_SERVICE_ACCOUNT_PATH",
           "HOSTING_DOMAIN",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRIES",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS",
           "PORT",
           "ROUTING_PREFIX"
         ],
@@ -191,6 +194,7 @@
       "alerts": [
         "message persistence succeeds but delivery or acknowledgement repeatedly fails",
         "authenticated WebSocket handshakes or delivery failures spike",
+        "database serialization retries are sustained or exhaust their bounded retry budget",
         "wallet storage, database, or Firebase dependency failures consume error budget"
       ],
       "state": "Knex database plus optional Firebase device registrations.",
@@ -476,7 +480,8 @@
           "ENABLE_NGINX",
           "FEE_MODEL",
           "HTTP_PORT",
-          "TAAL_API_KEY"
+          "TAAL_API_KEY",
+          "WALLET_STORAGE_TRUST_PROXY_HOPS"
         ],
         "secrets": [
           "KNEX_DB_CONNECTION",

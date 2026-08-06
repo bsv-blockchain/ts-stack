@@ -27,6 +27,11 @@ until monitor leadership, shared sessions, rate limits, and storage semantics
 are proven. A hostname topology preference is already present for a future
 replica-safe API tier.
 
+The sample trusts exactly one reverse-proxy hop because Kubernetes ingress is
+expected to sit directly in front of it. Set
+`WALLET_STORAGE_TRUST_PROXY_HOPS=0` for direct exposure, or to the exact known
+hop count for a different topology. Never trust an arbitrary forwarding chain.
+
 Wallet Storage is a public protocol service. Its default browser policy remains
 credential-free wildcard CORS, including opaque origins. Configure an exact
 allowlist only when the deployment intentionally serves a closed caller set.

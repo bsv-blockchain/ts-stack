@@ -119,6 +119,9 @@ describe('sendMessage', () => {
     delete process.env.MESSAGE_BOX_MAX_SENDER_BYTES
     delete process.env.MESSAGE_BOX_MAX_INBOX_MESSAGES
     delete process.env.MESSAGE_BOX_MAX_INBOX_BYTES
+    delete process.env.MESSAGE_BOX_DB_DEADLOCK_RETRIES
+    delete process.env.MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS
+    delete process.env.MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS
     jest.clearAllMocks()
 
     if (queryTracker !== null && queryTracker !== undefined) {
@@ -369,6 +372,32 @@ describe('sendMessage', () => {
       expect.objectContaining({
         status: 'error',
         code: 'ERR_DUPLICATE_MESSAGE'
+      })
+    )
+  })
+
+  it('retries the complete storage transaction after a transient resource-lock deadlock', async () => {
+    process.env.MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS = '1'
+    process.env.MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS = '1'
+    let resourceLockAttempts = 0
+    queryTracker.on('query', q => {
+      if (q.sql.startsWith('select') && q.sql.includes('from `message_resource_locks`')) {
+        resourceLockAttempts += 1
+        if (resourceLockAttempts === 1) {
+          q.reject(Object.assign(new Error('deadlock'), { code: 'ER_LOCK_DEADLOCK' }))
+          return
+        }
+      }
+      successfulStoreResponse(q)
+    })
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(resourceLockAttempts).toBe(2)
+    expect(mockRes.status).toHaveBeenCalledWith(200)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success'
       })
     )
   })

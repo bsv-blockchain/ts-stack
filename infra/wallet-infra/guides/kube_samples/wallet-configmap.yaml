@@ -4,7 +4,8 @@ metadata:
   name: wallet-config
 
 data:
-  NODE_ENV: "production"
-  HTTP_PORT: "8080"
-  BSV_NETWORK: "main"
-  ENABLE_NGINX: "false"
+  NODE_ENV: 'production'
+  HTTP_PORT: '8080'
+  BSV_NETWORK: 'main'
+  ENABLE_NGINX: 'false'
+  WALLET_STORAGE_TRUST_PROXY_HOPS: '1'

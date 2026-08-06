@@ -104,6 +104,21 @@ function readNonNegativeInteger(name: string, fallback: number): number {
   return value
 }
 
+function readOptionalProxyHops(): number | undefined {
+  const raw = process.env.WALLET_STORAGE_TRUST_PROXY_HOPS
+  if (raw == null || raw.trim() === '') return undefined
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(
+      'WALLET_STORAGE_TRUST_PROXY_HOPS must be a non-negative integer'
+    )
+  }
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value > 10) {
+    throw new Error('WALLET_STORAGE_TRUST_PROXY_HOPS must be between 0 and 10')
+  }
+  return value
+}
+
 function readBoolean(name: string, fallback: boolean): boolean {
   const raw = process.env[name]
   if (raw == null || raw.trim() === '') return fallback
@@ -423,6 +438,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
       calculateRequestPrice: () =>
         readNonNegativeInteger('WALLET_STORAGE_PRICE_SATOSHIS', 100),
       adminIdentityKeys: readAdminIdentityKeys(),
+      trustProxy: readOptionalProxyHops(),
       makeLogger,
       sessionManager: new KnexSessionManager(knex, {
         ttlMs: readPositiveInteger(
