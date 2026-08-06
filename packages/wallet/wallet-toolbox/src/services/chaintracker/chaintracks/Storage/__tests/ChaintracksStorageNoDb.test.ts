@@ -151,4 +151,33 @@ describe('ChaintracksStorageNoDb insertHeader compatibility', () => {
       previousHeaderId: null
     })
   })
+
+  test('tolerates a surviving header whose live ancestor is already absent', async () => {
+    const bulkTipHash = 'a0'.repeat(32)
+    jest.spyOn(storage.bulkManager, 'getLastFile').mockResolvedValue({
+      chain: 'main',
+      fileName: 'test.headers',
+      firstHeight: 0,
+      count: 100,
+      prevChainWork: '00'.repeat(32),
+      lastChainWork: '01'.repeat(32),
+      prevHash: '00'.repeat(32),
+      lastHash: bulkTipHash,
+      fileHash: null
+    })
+    const first = makeHeader(100, 'b', bulkTipHash)
+    const second = makeHeader(101, 'c', first.hash)
+
+    await storage.insertHeader(first)
+    await storage.insertHeader(second)
+    const persistedFirst = await storage.findLiveHeaderForBlockHash(first.hash)
+    if (persistedFirst == null) throw new Error('Expected the first live header to be persisted')
+    const data = await storage.getData()
+    data.liveHeaders.delete(persistedFirst.headerId)
+
+    await expect(storage.deleteOlderLiveBlockHeaders(99)).resolves.toBe(0)
+    await expect(storage.findLiveHeaderForBlockHash(second.hash)).resolves.toMatchObject({
+      previousHeaderId: persistedFirst.headerId
+    })
+  })
 })
