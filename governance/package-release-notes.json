@@ -117,10 +117,10 @@
     },
     {
       "name": "@bsv/overlay-express",
-      "publishedVersion": "2.4.2",
-      "releaseType": "minor",
-      "summary": "Adds small, standard, and high-throughput resource profiles; bounded lookup, BASM, admin, connection, body, and response work; and streaming janitor scans with independently capped report retention.",
-      "migration": "The standard profile is selected by default. Existing configuration methods remain compatible; use OVERLAY_RESOURCE_PROFILE or granular OVERLAY_* limits, and ensure custom lookup services bound their own database queries before returning formulas."
+      "publishedVersion": "2.5.0",
+      "releaseType": "patch",
+      "summary": "Preserves forward-compatible browser preflights by adding every well-formed requested header to the known protocol defaults unless the operator configures a strict header allowlist.",
+      "migration": "No consumer migration is required. Omit OVERLAY_CORS_ALLOWED_HEADERS for additive compatibility, or set an exact comma-separated list to retain a strict browser request-header policy. Origin modes, authentication, authorization, and endpoint validation are unchanged."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -196,8 +196,8 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.1",
       "releaseType": "patch",
-      "summary": "Restores completed createAction and signAction Atomic BEEF results to JSON-safe numeric arrays at the public wallet boundary, preserving the historical BRC-100 response shape for legacy applications.",
-      "migration": "No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays."
+      "summary": "Restores completed createAction and signAction Atomic BEEF results to JSON-safe numeric arrays and preserves forward-compatible Storage Server browser preflights unless the operator configures a strict request-header allowlist.",
+      "migration": "No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays. Omit WALLET_STORAGE_CORS_ALLOWED_HEADERS for additive well-formed preflight headers, or configure an exact list for a strict browser policy."
     },
     {
       "name": "@bsv/wallet-toolbox-client",

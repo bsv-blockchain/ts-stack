@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -23,6 +24,27 @@ const COMMON_ENVIRONMENT = {
   OTEL_DIAG: 'false',
   OTEL_EXPORTER_OTLP_ENDPOINT: '',
   OTEL_SDK_DISABLED: 'true'
+}
+
+const packagedEdgePolicySources = {
+  'overlay-server': {
+    lock: '../infra/overlay-server/package-lock.json',
+    location: 'node_modules/@bsv/overlay-express',
+    manifest: '../packages/overlays/overlay-express/package.json'
+  },
+  'wallet-infra': {
+    lock: '../infra/wallet-infra/package-lock.json',
+    location: 'node_modules/@bsv/wallet-toolbox',
+    manifest: '../packages/wallet/wallet-toolbox/package.json'
+  }
+}
+
+const imageContainsCurrentEdgePolicy = component => {
+  const source = packagedEdgePolicySources[component]
+  if (source === undefined) return true
+  const lock = JSON.parse(readFileSync(new URL(source.lock, import.meta.url), 'utf8'))
+  const manifest = JSON.parse(readFileSync(new URL(source.manifest, import.meta.url), 'utf8'))
+  return lock.packages?.[source.location]?.version === manifest.version
 }
 
 const contracts = {
@@ -339,6 +361,34 @@ const assertPublicResponse = async (component, response) => {
   await response.arrayBuffer()
 }
 
+const assertForwardCompatiblePreflight = async (component, container, port, path) => {
+  const requestedHeaders = ['X-Correlation-ID', 'X-TS-Stack-Contract-Probe']
+  const response = await waitForEndpoint(container, port, {
+    path,
+    method: 'OPTIONS',
+    status: 204,
+    headers: {
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': requestedHeaders.join(', ')
+    }
+  })
+  if (response.headers.get('access-control-allow-origin') !== '*') {
+    throw new Error(`${component} preflight must retain credential-free wildcard CORS`)
+  }
+  const allowedHeaders = new Set(
+    (response.headers.get('access-control-allow-headers') ?? '')
+      .split(',')
+      .map(header => header.trim().toLowerCase())
+      .filter(Boolean)
+  )
+  for (const header of requestedHeaders) {
+    if (!allowedHeaders.has(header.toLowerCase())) {
+      throw new Error(`${component} preflight omitted additive request header ${header}`)
+    }
+  }
+  await response.arrayBuffer()
+}
+
 const stopGracefully = async name => {
   await docker('kill', '--signal', 'SIGTERM', name)
   const exitCode = await waitForExit(name, 30_000)
@@ -360,6 +410,18 @@ const startWalletDependency = async walletImage => {
     status: 200
   })
   await assertPublicResponse('wallet-infra dependency', ready)
+  if (imageContainsCurrentEdgePolicy('wallet-infra')) {
+    await assertForwardCompatiblePreflight(
+      'wallet-infra dependency',
+      'contract-wallet-dependency',
+      contract.port,
+      contract.liveness
+    )
+  } else {
+    console.log(
+      'wallet-infra dependency CORS header probe awaits the protected published-version sync'
+    )
+  }
 }
 
 export const contractNames = () => Object.keys(contracts)
@@ -394,6 +456,12 @@ export async function runContainerRuntimeContract({ component, image, walletImag
       status: 200
     })
     await assertPublicResponse(component, readiness)
+    const headerCompatibilityVerified = imageContainsCurrentEdgePolicy(component)
+    if (headerCompatibilityVerified) {
+      await assertForwardCompatiblePreflight(component, name, contract.port, contract.liveness)
+    } else {
+      console.log(`${component} CORS header probe awaits the protected published-version sync`)
+    }
     const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
     await assertPublicResponse(component, transaction)
     for (const endpoint of contract.auxiliaryEndpoints ?? []) {
@@ -437,6 +505,9 @@ export async function runContainerRuntimeContract({ component, image, walletImag
       'readiness',
       'migration-order',
       'public-cors',
+      imageContainsCurrentEdgePolicy(component)
+        ? 'cors-request-header-forward-compatibility'
+        : 'cors-request-header-pending-published-dependency-sync',
       ...(contract.auxiliaryEndpoints == null ? [] : ['auxiliary-endpoints']),
       'minimal-transaction',
       'graceful-shutdown'

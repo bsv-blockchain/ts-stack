@@ -1,14 +1,15 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-30",
+  "lastReviewed": "2026-08-06",
   "owner": "ts-stack-maintainers",
   "defaultContract": {
     "corsMode": "public",
     "allowOrigin": "*",
     "allowCredentials": false,
     "opaqueOrigin": "allowed",
+    "requestHeaders": "reflect-well-formed-unless-explicitly-configured",
     "cspControlsCors": false,
-    "rationale": "WAB, Overlays, Storage, and the other protocol services are intentionally callable by deployed browser, WUI, mobile-webview, and future applications across unknown domains. Authentication and authorization remain protocol concerns; operators may opt into an exact allowlist, credentials, or disabled cross-origin access."
+    "rationale": "WAB, Overlays, Storage, and the other protocol services are intentionally callable by deployed browser, WUI, mobile-webview, and future applications across unknown domains. Authentication and authorization remain protocol concerns. Valid preflight request headers are additive by default because clients and observability layers evolve independently; operators may opt into exact origin and request-header allowlists, credentials, or disabled cross-origin access."
   },
   "canonicalSource": "infra/wab/src/security/edgePolicy.ts",
   "synchronizedSources": [
@@ -26,6 +27,7 @@
   ],
   "requiredContractTests": [
     "keeps public protocol APIs browser-accessible by default",
+    "accepts additive request headers unless operators configure a strict header allowlist",
     "allows only explicitly configured browser origins",
     "supports an explicit cross-origin disabled mode",
     "validates explicit origin and credential options",
