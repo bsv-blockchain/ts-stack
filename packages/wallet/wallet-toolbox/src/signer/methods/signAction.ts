@@ -87,7 +87,7 @@ async function signActionCore(
 
   const r: SignActionResultX = {
     txid: prior.tx.id('hex'),
-    tx: vargs.options.returnTXIDOnly ? undefined : beef.toUint8ArrayAtomic(txid),
+    tx: vargs.options.returnTXIDOnly ? undefined : beef.toBinaryAtomic(txid),
     sendWithResults,
     notDelayedResults
   }
