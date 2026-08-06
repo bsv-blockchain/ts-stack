@@ -500,6 +500,11 @@ paths:
                   minimum: 0
                   maximum: 100000
                   default: 0
+                skip:
+                  type: integer
+                  minimum: 0
+                  maximum: 100000
+                  description: Compatibility alias for offset; both must match if supplied together.
       responses:
         '200':
           description: Messages retrieved successfully (array may be empty).
@@ -507,7 +512,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, messages, limit, offset, hasMore]
+                required: [status, messages, limit, offset, nextOffset, hasMore]
                 properties:
                   status:
                     type: string
@@ -521,6 +526,9 @@ paths:
                     type: integer
                   offset:
                     type: integer
+                  nextOffset:
+                    type: integer
+                    description: Offset for the next page; unchanged when the result is empty.
                   hasMore:
                     type: boolean
         '400':

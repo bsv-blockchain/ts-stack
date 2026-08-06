@@ -1,5 +1,5 @@
-import { Beef } from '@bsv/sdk'
-import { shareReqsWithWorld } from '../../src/storage/methods/processAction'
+import { Beef, Telemetry, TelemetryEvent } from '@bsv/sdk'
+import { processAction, shareReqsWithWorld } from '../../src/storage/methods/processAction'
 import { TableProvenTxReq } from '../../src/storage/schema/tables/TableProvenTxReq'
 
 function makeReadyReq (): TableProvenTxReq {
@@ -34,6 +34,47 @@ function makeStorageFake () {
 }
 
 describe('processAction shareReqsWithWorld', () => {
+  test('reports the successful processAction and share spans', async () => {
+    const events: TelemetryEvent[] = []
+    const storage = {
+      ...makeStorageFake(),
+      telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
+    }
+
+    const result = await processAction(storage as any, { userId: 1 }, {
+      isNewTx: false,
+      isSendWith: false,
+      isNoSend: true,
+      isDelayed: false,
+      sendWith: []
+    })
+
+    expect(result.sendWithResults).toEqual([])
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'wallet.storage.process_action.share', spanStatus: 'ok' }),
+      expect.objectContaining({
+        name: 'wallet.storage.process_action',
+        spanStatus: 'ok',
+        attributes: expect.objectContaining({ 'action.send_result_count': 0 })
+      })
+    ]))
+  })
+
+  test('preserves the non-instrumented processAction path when telemetry is disabled', async () => {
+    const storage = {
+      ...makeStorageFake(),
+      telemetry: new Telemetry()
+    }
+
+    await expect(processAction(storage as any, { userId: 1 }, {
+      isNewTx: false,
+      isSendWith: false,
+      isNoSend: true,
+      isDelayed: false,
+      sendWith: []
+    })).resolves.toMatchObject({ sendWithResults: [] })
+  })
+
   test('delayed sends do not build aggregate BEEF before scheduling', async () => {
     const req = makeReadyReq()
     const storage = {

@@ -33,10 +33,10 @@ trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 525600
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
-# brace-expansion 1.x/2.x. GHSA-mh99-v99m-4gvg is only fixed in 5.0.8, so keep
-# this narrow, tested substitution until Jest adopts minimatch 10.2.5 or newer.
+# brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
+# security-patched release until Jest adopts it directly.
 overrides:
-  brace-expansion@<=5.0.7: 5.0.8
+  brace-expansion@<5.0.9: 5.0.9
   # Stryker's latest typed-rest-client 2.3.1 pins vulnerable qs 6.15.1
   # exactly. Keep this parent-scoped substitution until upstream publishes a
   # release that depends on qs 6.15.2 or newer.

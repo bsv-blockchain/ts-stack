@@ -1,5 +1,24 @@
 # Performance Benchmarks
 
+## Batched proven-transaction BEEF assembly (August 2026)
+
+Wallets with fragmented funding can require more than one hundred independent
+transactions and Merkle proofs in a single Atomic BEEF. `Beef.mergeProvenTxs`
+batches mutation synchronization, groups proofs by block/root, validates each
+compound proof once, and reuses shared intermediate hashes. The final BEEF is
+byte-equivalent to sequential validated merges.
+
+This optimization is exercised by Wallet Toolbox's retained
+`bench:create-action-beef` workload. On a selective production-shaped PXC
+database copy, the 110-input direct storage path improved from approximately
+1.03 s before batched proof work to 77.8 ms p50 and 151.2 ms p95 across five
+samples. Results depend on proof shape, database locality, and host resources.
+
+`KeyDeriver.derivePrivateKeys` provides the corresponding fragmented-signing
+lane: requests are grouped by counterparty, the BRC-42 shared secret is derived
+or retrieved once per group, and every invoice-specific HMAC and child scalar
+retains the same single-key derivation semantics and bytes.
+
 ## Repeated BEEF dependency sorting (August 2026)
 
 Wallet transaction creation can ask the same unchanged BEEF for its dependency

@@ -543,6 +543,9 @@ type ListMessagesJSONBody struct {
 	// Examples: payment_inbox
 	MessageBox string `json:"messageBox"`
 	Offset     *int   `json:"offset,omitempty"`
+
+	// Skip Compatibility alias for offset; both must match if supplied together.
+	Skip *int `json:"skip,omitempty"`
 }
 
 // ListMessages200JSONResponseBodyStatus defines parameters for ListMessages.

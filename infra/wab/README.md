@@ -2,6 +2,9 @@
 
 Welcome to the **Wallet Authentication Backend (WAB)** project! This README provides a **comprehensive, ground-up guide** to help you **understand**, **configure**, **deploy**, and **run** your own WAB server. 
 
+See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
+for bounded defaults, database sizing, and HPA prerequisites.
+
 ---
 
 ## What Is the WAB?

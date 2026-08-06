@@ -8,6 +8,9 @@ import {
   StorageServer,
   Wallet,
   Monitor,
+  KnexSessionManager,
+  WalletLogger,
+  type WalletLoggerLevel,
   type WalletArgs
 } from '@bsv/wallet-toolbox'
 import knexPkg from 'knex'
@@ -19,6 +22,7 @@ import { createRequire } from 'node:module'
 import packageJson from '../package.json' with { type: 'json' }
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { log } from './logger.js'
+import { KnexPaymentReplayStore } from './KnexPaymentReplayStore.js'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
@@ -64,10 +68,230 @@ const {
   SERVER_PRIVATE_KEY,
   KNEX_DB_CONNECTION,
   TAAL_API_KEY,
+  WHATSONCHAIN_API_KEY,
+  BITAILS_API_KEY,
+  ARCADE_URL,
+  ARCADE_API_KEY,
+  ARCADE_CALLBACK_TOKEN,
+  EXCHANGERATESAPI_KEY,
   COMMISSION_FEE = 0,
   COMMISSION_PUBLIC_KEY,
-  FEE_MODEL = '{"model":"sat/kb","value":1}'
+  FEE_MODEL = '{"model":"sat/kb","value":1}',
+  LOGGER_LEVEL
 } = process.env
+
+type WalletInfraRole = 'all' | 'api' | 'monitor'
+
+function readPositiveInteger(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw == null || raw.trim() === '') return fallback
+  if (!/^[1-9]\d*$/.test(raw))
+    throw new Error(`${name} must be a positive integer`)
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value))
+    throw new Error(`${name} must be a safe integer`)
+  return value
+}
+
+function readNonNegativeInteger(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw == null || raw.trim() === '') return fallback
+  if (!/^\d+$/.test(raw))
+    throw new Error(`${name} must be a non-negative integer`)
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value))
+    throw new Error(`${name} must be a safe integer`)
+  return value
+}
+
+function readBoolean(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]
+  if (raw == null || raw.trim() === '') return fallback
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  throw new Error(`${name} must be true or false`)
+}
+
+function readRole(): WalletInfraRole {
+  const role = process.env.WALLET_INFRA_ROLE?.trim().toLowerCase() ?? 'all'
+  if (role !== 'all' && role !== 'api' && role !== 'monitor') {
+    throw new Error('WALLET_INFRA_ROLE must be all, api, or monitor')
+  }
+  return role
+}
+
+function decodeJsonSetting(name: string, raw: string): string {
+  const trimmed = raw.trim()
+  const candidates = [trimmed]
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    candidates.push(Buffer.from(trimmed, 'base64').toString('utf8').trim())
+  }
+  for (const candidate of candidates) {
+    try {
+      JSON.parse(candidate)
+      return candidate
+    } catch {
+      // Try the next representation.
+    }
+  }
+  throw new Error(`${name} must contain JSON or base64-encoded JSON`)
+}
+
+function readAdminIdentityKeys(): string[] | undefined {
+  const raw =
+    process.env.WALLET_STORAGE_ADMIN_IDENTITY_KEYS ??
+    process.env.ADMIN_IDENTITY_KEYS
+  if (raw == null || raw.trim() === '') return undefined
+  const direct = raw.split(',').map(value => value.trim())
+  const decoded = direct.every(value => /^(02|03)[0-9a-fA-F]{64}$/.test(value))
+    ? direct
+    : Buffer.from(raw, 'base64')
+        .toString('utf8')
+        .split(',')
+        .map(value => value.trim())
+  if (!decoded.every(value => /^(02|03)[0-9a-fA-F]{64}$/.test(value))) {
+    throw new Error(
+      'WALLET_STORAGE_ADMIN_IDENTITY_KEYS must contain comma-separated compressed public keys or their base64 encoding'
+    )
+  }
+  return [...new Set(decoded.map(value => value.toLowerCase()))]
+}
+
+function readWalletLoggerLevel(): WalletLoggerLevel | undefined {
+  const raw = LOGGER_LEVEL?.trim().toLowerCase()
+  if (raw == null || raw === '') return undefined
+  if (!['error', 'warn', 'info', 'debug', 'trace'].includes(raw)) {
+    throw new Error('LOGGER_LEVEL must be error, warn, info, debug, or trace')
+  }
+  return raw as WalletLoggerLevel
+}
+
+type WalletChain = 'main' | 'test' | 'ttn' | 'tstn' | 'mock'
+
+function readWalletChain(): WalletChain {
+  const allowedChains: WalletChain[] = ['main', 'test', 'ttn', 'tstn', 'mock']
+  if (
+    typeof BSV_NETWORK === 'string' &&
+    allowedChains.includes(BSV_NETWORK as WalletChain)
+  ) {
+    return BSV_NETWORK as WalletChain
+  }
+  log.warn(
+    {
+      operation: 'chain.select',
+      bsv_network: BSV_NETWORK,
+      fallback_chain: 'main'
+    },
+    'Invalid BSV_NETWORK value provided, falling back to main'
+  )
+  return 'main'
+}
+
+function configuredServiceOptions(chain: Exclude<WalletChain, 'mock'>) {
+  const options = Services.createDefaultOptions(chain)
+  if (providerConfig.taalApiKey) {
+    options.arcConfig.apiKey = providerConfig.taalApiKey
+    options.taalApiKey = providerConfig.taalApiKey
+  }
+  if (providerConfig.whatsOnChainApiKey) {
+    options.whatsOnChainApiKey = providerConfig.whatsOnChainApiKey
+  }
+  if (providerConfig.bitailsApiKey)
+    options.bitailsApiKey = providerConfig.bitailsApiKey
+  if (providerConfig.exchangeRatesApiKey) {
+    options.exchangeratesapiKey = providerConfig.exchangeRatesApiKey
+  }
+  if (process.env.WALLET_STORAGE_TAAL_ARC_URL) {
+    options.arcUrl = process.env.WALLET_STORAGE_TAAL_ARC_URL
+  }
+  let gorillaPoolDefault = true
+  if (process.env.GORILLAPOOL_ARC_ENABLED != null) {
+    gorillaPoolDefault = readBoolean('GORILLAPOOL_ARC_ENABLED', true)
+  }
+  const gorillaPoolEnabled = readBoolean(
+    'WALLET_STORAGE_GORILLAPOOL_ARC_ENABLED',
+    gorillaPoolDefault
+  )
+  if (!gorillaPoolEnabled) options.arcGorillaPoolUrl = undefined
+  if (process.env.WALLET_STORAGE_GORILLAPOOL_ARC_URL) {
+    options.arcGorillaPoolUrl = process.env.WALLET_STORAGE_GORILLAPOOL_ARC_URL
+  }
+  if (providerConfig.arcadeUrl) {
+    options.arcadeUrl = providerConfig.arcadeUrl
+    options.arcadeConfig = {
+      apiKey: providerConfig.arcadeApiKey || undefined,
+      callbackToken: providerConfig.arcadeCallbackToken || undefined
+    }
+  }
+  return options
+}
+
+async function createServicesAndMonitorOptions(
+  chain: WalletChain,
+  knex: Knex,
+  storage: WalletStorageManager
+) {
+  if (chain === 'mock') {
+    const services = new MockServices(knex)
+    await services.initialize()
+    return {
+      services,
+      monitorOptions: {
+        chain,
+        services,
+        storage,
+        chaintracks: services.tracker,
+        msecsWaitPerMerkleProofServiceReq: 500,
+        taskRunWaitMsecs: 5000,
+        abandonedMsecs: 1000 * 60 * 5,
+        unprovenAttemptsLimitTest: 10,
+        unprovenAttemptsLimitMain: 144,
+        maxRebroadcastAttempts: 0
+      }
+    }
+  }
+  const services = new Services(configuredServiceOptions(chain))
+  return {
+    services,
+    monitorOptions: Monitor.createDefaultWalletMonitorOptions(
+      chain,
+      storage,
+      services
+    )
+  }
+}
+
+function walletNetworkPreset(
+  chain: WalletChain
+): 'local' | 'mainnet' | 'testnet' {
+  if (chain === 'main') return 'mainnet'
+  if (chain === 'test') return 'testnet'
+  return 'local'
+}
+
+function createWalletLoggerFactory() {
+  const loggerLevel = readWalletLoggerLevel()
+  if (loggerLevel == null) return undefined
+  return (source?: string | import('@bsv/sdk').WalletLoggerInterface) => {
+    const logger = new WalletLogger(source)
+    logger.level = loggerLevel
+    logger.flushFormat = 'json' as const
+    return logger
+  }
+}
+
+const providerConfig = {
+  taalApiKey: process.env.WALLET_STORAGE_TAAL_API_KEY ?? TAAL_API_KEY,
+  whatsOnChainApiKey:
+    process.env.WALLET_STORAGE_WHATSONCHAIN_API_KEY ?? WHATSONCHAIN_API_KEY,
+  bitailsApiKey: process.env.WALLET_STORAGE_BITAILS_API_KEY ?? BITAILS_API_KEY,
+  arcadeUrl: process.env.WALLET_STORAGE_ARCADE_URL ?? ARCADE_URL,
+  arcadeApiKey: process.env.WALLET_STORAGE_ARCADE_API_KEY ?? ARCADE_API_KEY,
+  arcadeCallbackToken:
+    process.env.WALLET_STORAGE_ARCADE_CALLBACK_TOKEN ?? ARCADE_CALLBACK_TOKEN,
+  exchangeRatesApiKey:
+    process.env.WALLET_STORAGE_EXCHANGE_RATES_API_KEY ?? EXCHANGERATESAPI_KEY
+}
 
 async function setupWalletStorageAndMonitor(): Promise<{
   databaseName: string
@@ -100,7 +324,9 @@ async function setupWalletStorageAndMonitor(): Promise<{
       )
     }
     // Parse database connection details
-    const connection = JSON.parse(KNEX_DB_CONNECTION)
+    const connection = JSON.parse(
+      decodeJsonSetting('KNEX_DB_CONNECTION', KNEX_DB_CONNECTION)
+    )
     const databaseName = connection['database']
 
     // You can also use an imported knex configuration file.
@@ -109,37 +335,39 @@ async function setupWalletStorageAndMonitor(): Promise<{
       connection,
       useNullAsDefault: true,
       pool: {
-        min: 2,
-        max: 10,
-        createTimeoutMillis: 10000,
-        acquireTimeoutMillis: 30000,
-        idleTimeoutMillis: 600000,
-        reapIntervalMillis: 60000,
-        createRetryIntervalMillis: 200,
+        min: readNonNegativeInteger('WALLET_STORAGE_DB_POOL_MIN', 2),
+        max: readPositiveInteger('WALLET_STORAGE_DB_POOL_MAX', 10),
+        createTimeoutMillis: readPositiveInteger(
+          'WALLET_STORAGE_DB_CREATE_TIMEOUT_MS',
+          10_000
+        ),
+        acquireTimeoutMillis: readPositiveInteger(
+          'WALLET_STORAGE_DB_ACQUIRE_TIMEOUT_MS',
+          30_000
+        ),
+        idleTimeoutMillis: readPositiveInteger(
+          'WALLET_STORAGE_DB_IDLE_TIMEOUT_MS',
+          600_000
+        ),
+        reapIntervalMillis: readPositiveInteger(
+          'WALLET_STORAGE_DB_REAP_INTERVAL_MS',
+          60_000
+        ),
+        createRetryIntervalMillis: readPositiveInteger(
+          'WALLET_STORAGE_DB_CREATE_RETRY_MS',
+          200
+        ),
         propagateCreateError: false
       }
     }
-    const knex = makeKnex(knexConfig)
-
-    // Select chain from BSV_NETWORK: "main", "test", "ttn" (TeraTestNet),
-    // "tstn" (Teranode Scaling Test Net), or "mock" (defaults to "main")
-    const allowedChains = ['main', 'test', 'ttn', 'tstn', 'mock'] as const
-    let chain: (typeof allowedChains)[number] = 'main'
-    if (
-      typeof BSV_NETWORK === 'string' &&
-      allowedChains.includes(BSV_NETWORK as any)
-    ) {
-      chain = BSV_NETWORK as (typeof allowedChains)[number]
-    } else if (BSV_NETWORK !== 'main') {
-      log.warn(
-        {
-          operation: 'chain.select',
-          bsv_network: BSV_NETWORK,
-          fallback_chain: 'main'
-        },
-        'Invalid BSV_NETWORK value provided, falling back to main'
+    if ((knexConfig.pool?.min ?? 0) > (knexConfig.pool?.max ?? 0)) {
+      throw new Error(
+        'WALLET_STORAGE_DB_POOL_MIN must not exceed WALLET_STORAGE_DB_POOL_MAX'
       )
     }
+    const knex = makeKnex(knexConfig)
+
+    const chain = readWalletChain()
 
     // Initialize storage components
     const rootKey = PrivateKey.fromHex(SERVER_PRIVATE_KEY)
@@ -150,7 +378,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
       knex,
       commissionSatoshis,
       commissionPubKeyHex: COMMISSION_PUBLIC_KEY || undefined,
-      feeModel: JSON.parse(FEE_MODEL)
+      feeModel: JSON.parse(decodeJsonSetting('FEE_MODEL', String(FEE_MODEL)))
     })
 
     await activeStorage.migrate(databaseName, storageIdentityKey)
@@ -162,54 +390,16 @@ async function setupWalletStorageAndMonitor(): Promise<{
     )
     await storage.makeAvailable()
 
-    // Initialize wallet components
-    let services
-    let monopts
-    if (chain === 'mock') {
-      services = new MockServices(knex)
-      await services.initialize()
-      monopts = {
-        chain,
-        services,
-        storage,
-        chaintracks: services.tracker,
-        msecsWaitPerMerkleProofServiceReq: 500,
-        taskRunWaitMsecs: 5000,
-        abandonedMsecs: 1000 * 60 * 5,
-        unprovenAttemptsLimitTest: 10,
-        unprovenAttemptsLimitMain: 144,
-        maxRebroadcastAttempts: 0
-      }
-    } else {
-      const servOpts = Services.createDefaultOptions(chain)
-      if (TAAL_API_KEY) {
-        servOpts.arcConfig.apiKey = TAAL_API_KEY
-        servOpts.taalApiKey = TAAL_API_KEY
-      }
-      services = new Services(servOpts)
-      monopts = Monitor.createDefaultWalletMonitorOptions(
-        chain,
-        storage,
-        services
-      )
-    }
+    const { services, monitorOptions } = await createServicesAndMonitorOptions(
+      chain,
+      knex,
+      storage
+    )
     const keyDeriver = new KeyDeriver(rootKey)
 
-    const monitor = new Monitor(monopts)
+    const monitor = new Monitor(monitorOptions)
     monitor.addDefaultTasks()
 
-    let networkPresetForLookupResolver: 'local' | 'mainnet' | 'testnet' =
-      'local'
-    switch (chain) {
-      case 'main':
-        networkPresetForLookupResolver = 'mainnet'
-        break
-      case 'test':
-        networkPresetForLookupResolver = 'testnet'
-        break
-      default:
-        break
-    }
     const wallet = new Wallet({
       chain,
       keyDeriver,
@@ -217,18 +407,36 @@ async function setupWalletStorageAndMonitor(): Promise<{
       services,
       monitor,
       lookupResolver: new LookupResolver({
-        networkPreset: networkPresetForLookupResolver
+        networkPreset: walletNetworkPreset(chain)
       })
     })
 
+    const makeLogger = createWalletLoggerFactory()
+
     // Set up server options
-    const serverOptions: WalletStorageServerOptions = {
+    const serverOptions: WalletStorageServerOptions & {
+      paymentReplayStore: KnexPaymentReplayStore
+    } = {
       port: Number(HTTP_PORT),
       wallet,
-      monetize: false,
-      calculateRequestPrice: async () => {
-        return 0 // Monetize your server here! Price is in satoshis.
-      }
+      monetize: readBoolean('WALLET_STORAGE_MONETIZATION_ENABLED', false),
+      calculateRequestPrice: () =>
+        readNonNegativeInteger('WALLET_STORAGE_PRICE_SATOSHIS', 100),
+      adminIdentityKeys: readAdminIdentityKeys(),
+      makeLogger,
+      sessionManager: new KnexSessionManager(knex, {
+        ttlMs: readPositiveInteger(
+          'WALLET_STORAGE_AUTH_SESSION_TTL_MS',
+          24 * 60 * 60 * 1_000
+        )
+      }),
+      paymentReplayStore: new KnexPaymentReplayStore(
+        knex,
+        process.env.WALLET_STORAGE_PAYMENT_REPLAY_TTL_DAYS === '-1'
+          ? -1
+          : readPositiveInteger('WALLET_STORAGE_PAYMENT_REPLAY_TTL_DAYS', 365)
+      ),
+      logRpcRequests: readBoolean('WALLET_STORAGE_LOG_RPC_REQUESTS', true)
     }
     const server = new StorageServer(activeStorage, serverOptions)
 
@@ -258,6 +466,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
 await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
   const startedAt = Date.now()
   try {
+    const role = readRole()
     const walletToolboxVersion = String(
       packageJson.dependencies['@bsv/wallet-toolbox']
     ).replace(/^[~^]/, '')
@@ -275,18 +484,22 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       'storage settings'
     )
 
-    context.server.start()
-    log.info(
-      { operation: 'storage_server.start', outcome: 'ok' },
-      'StorageServer started'
-    )
+    if (role !== 'monitor') {
+      context.server.start()
+      log.info(
+        { operation: 'storage_server.start', outcome: 'ok' },
+        'StorageServer started'
+      )
+    }
 
-    await context.monitor.startTasks()
-    log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
+    if (role !== 'api') {
+      await context.monitor.startTasks()
+      log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
+    }
 
     // Conditionally start nginx
     let nginxProcess: ChildProcess | undefined
-    if (ENABLE_NGINX === 'true') {
+    if (role !== 'monitor' && ENABLE_NGINX === 'true') {
       nginxProcess = spawn('/usr/sbin/nginx', [], {
         stdio: ['inherit', 'inherit', 'inherit']
       })
@@ -299,9 +512,11 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
           { operation: 'shutdown', signal },
           'wallet-infra shutdown started'
         )
-        context.monitor.stopTasks()
+        if (role !== 'api') context.monitor.stopTasks()
         nginxProcess?.kill('SIGTERM')
-        await closeHttpServer(context.server.server as Server)
+        if (role !== 'monitor' && context.server.server != null) {
+          await closeHttpServer(context.server.server as Server)
+        }
         await context.wallet.destroy()
         log.info(
           { operation: 'shutdown', outcome: 'ok', signal },
@@ -322,6 +537,7 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
     const duration_ms = Date.now() - startedAt
     span.setAttribute('bsv.network', String(BSV_NETWORK))
     span.setAttribute('nginx.enabled', ENABLE_NGINX === 'true')
+    span.setAttribute('wallet.infra.role', role)
     span.setStatus({ code: SpanStatusCode.OK })
     log.info(
       { operation: 'bootstrap', outcome: 'ok', duration_ms },

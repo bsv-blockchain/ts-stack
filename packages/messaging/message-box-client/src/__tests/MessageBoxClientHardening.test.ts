@@ -494,16 +494,73 @@ describe('MessageBoxClient hardening branches', () => {
       ).rejects.toThrow(error)
     })
 
-    it('bounds pagination even if a server continually claims another page', async () => {
+    it('allows callers to bound pagination when a server continually claims another page', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ status: 'success', messages: [], hasMore: true }))
 
       await expect(
         client.listMessagesLite({
           messageBox: 'inbox',
-          host: 'https://message-box.example/api'
+          host: 'https://message-box.example/api',
+          maxPages: 100
         })
-      ).rejects.toThrow('pagination exceeded 100000 messages')
+      ).rejects.toThrow('pagination exceeded 100 pages')
       expect(fetchMock).toHaveBeenCalledTimes(100)
+    })
+
+    it('uses server-default pages while honoring client skip and total limits', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({
+            status: 'success',
+            messages: [{ messageId: 'one', sender: recipientA, body: 'one' }],
+            hasMore: true,
+            nextOffset: 6
+          })
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            status: 'success',
+            messages: [
+              { messageId: 'two', sender: recipientA, body: 'two' },
+              { messageId: 'ignored', sender: recipientA, body: 'ignored' }
+            ],
+            hasMore: true,
+            nextOffset: 8
+          })
+        )
+
+      await expect(
+        client.listMessagesLite({
+          messageBox: 'inbox',
+          host: 'https://message-box.example/api',
+          skip: 5,
+          limit: 2
+        })
+      ).resolves.toEqual([
+        expect.objectContaining({ messageId: 'one' }),
+        expect.objectContaining({ messageId: 'two' })
+      ])
+
+      expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+        messageBox: 'inbox',
+        offset: 5,
+        limit: 2
+      })
+      expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+        messageBox: 'inbox',
+        offset: 6,
+        limit: 1
+      })
+    })
+
+    it('rejects ambiguous or unsafe pagination controls before network work', async () => {
+      await expect(
+        client.listMessagesLite({ messageBox: 'inbox', offset: 1, skip: 2 })
+      ).rejects.toThrow('offset and skip must match')
+      await expect(client.listMessagesLite({ messageBox: 'inbox', limit: 0 })).rejects.toThrow(
+        'limit must be'
+      )
+      expect(fetchMock).not.toHaveBeenCalled()
     })
 
     it('marks an individual message when decryption fails', async () => {

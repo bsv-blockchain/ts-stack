@@ -47,7 +47,7 @@ test('workspace discovery exactly matches the 38-project registry', () => {
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
-  assert.equal(projects.generatedArtifacts.length, 10)
+  assert.equal(projects.generatedArtifacts.length, 12)
   assert.ok(projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers'))
   assert.deepEqual(projects.dependencyAutomation.firstParty, {
     pattern: '@bsv/*',
@@ -62,12 +62,32 @@ test('workspace discovery exactly matches the 38-project registry', () => {
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-07-30' })
+  const result = evaluateRepositoryHealth({ today: '2026-08-04' })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 38)
   assert.equal(result.publicPackages, 31)
   assert.equal(result.findings.length, 0)
+})
+
+test('shared package source roots are explicit and repository-relative', () => {
+  const sharedSourceProjects = projects.projects.filter(project => project.sourceRoots)
+  assert.deepEqual(
+    sharedSourceProjects.map(project => [project.name, project.sourceRoots]),
+    [
+      ['@bsv/wallet-toolbox-client', ['packages/wallet/wallet-toolbox/src']],
+      ['@bsv/wallet-toolbox-mobile', ['packages/wallet/wallet-toolbox/src']]
+    ]
+  )
+
+  const invalidProjects = structuredClone(projects)
+  invalidProjects.projects.find(
+    project => project.name === '@bsv/wallet-toolbox-client'
+  ).sourceRoots = ['../wallet-toolbox/src']
+  assert.match(
+    validateProjectRegistry(invalidProjects, discoverWorkspaceProjects()).join('\n'),
+    /invalid source root/
+  )
 })
 
 test('CI performance baseline retains representative full and targeted cohorts', () => {

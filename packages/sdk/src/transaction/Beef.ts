@@ -1,4 +1,4 @@
-import MerklePath from './MerklePath.js'
+import MerklePath, { type MerklePathLeaf } from './MerklePath.js'
 import Transaction from './Transaction.js'
 import ChainTracker from './ChainTracker.js'
 import BeefTx from './BeefTx.js'
@@ -15,6 +15,50 @@ import {
 import { hash256 } from '../primitives/Hash.js'
 import { BEEF_V1, BEEF_V2, ATOMIC_BEEF } from './BeefConstants.js'
 export { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT } from './BeefConstants.js'
+
+function mergeCompatibleBumpLevels(
+  levels: Array<Map<number, MerklePathLeaf>>,
+  other: MerklePath,
+  expectedLevels: number,
+  validateCombined: boolean
+): void {
+  if (other.path.length !== expectedLevels) throw new Error('Mismatched roots')
+  for (let height = 0; height < expectedLevels; height++) {
+    mergeCompatibleBumpLevel(levels[height], other.path[height], validateCombined)
+  }
+}
+
+function mergeCompatibleBumpLevel(
+  level: Map<number, MerklePathLeaf>,
+  otherLeaves: MerklePathLeaf[],
+  validateCombined: boolean
+): void {
+  for (const otherLeaf of otherLeaves) {
+    const existing = level.get(otherLeaf.offset)
+    if (existing == null) {
+      level.set(otherLeaf.offset, otherLeaf)
+      continue
+    }
+    mergeCompatibleBumpLeaf(existing, otherLeaf, validateCombined)
+  }
+}
+
+function mergeCompatibleBumpLeaf(
+  existing: MerklePathLeaf,
+  other: MerklePathLeaf,
+  validateCombined: boolean
+): void {
+  if (validateCombined && (existing.hash !== other.hash || existing.duplicate !== other.duplicate)) {
+    throw new Error('Mismatched roots')
+  }
+  if (other.txid != null) existing.txid = true
+}
+
+function indexBumpTxids(bump: MerklePath, index: number, byTxid: Map<string, number>): void {
+  for (const leaf of bump.path[0]) {
+    if (typeof leaf.hash === 'string') byTxid.set(leaf.hash, index)
+  }
+}
 
 interface BeefTxSerializationState {
   ref: BeefTx
@@ -119,7 +163,7 @@ export class Beef {
   atomicTxid: string | undefined = undefined
   private txidIndex: Map<string, BeefTx> | undefined = undefined
   private txPositionIndex: Map<string, number> | undefined = undefined
-  private bumpIndexByKey: Map<string, number> | undefined = undefined
+  private bumpIndexesByHeight: Map<number, number[]> | undefined = undefined
   private bumpIndexByTxid: Map<string, number> | undefined = undefined
   private rawBytesCache?: Uint8Array
   private hexCache?: string
@@ -545,19 +589,21 @@ export class Beef {
     return this.bumpIndexByTxid
   }
 
-  private ensureBumpKeyIndex(): Map<string, number> {
-    if (this.bumpIndexByKey == null) {
-      this.bumpIndexByKey = new Map<string, number>()
+  private ensureBumpHeightIndex(): Map<number, number[]> {
+    if (this.bumpIndexesByHeight == null) {
+      this.bumpIndexesByHeight = new Map<number, number[]>()
       for (let i = 0; i < this.bumps.length; i++) {
         const bump = this.bumps[i]
-        this.bumpIndexByKey.set(`${bump.blockHeight}:${bump.computeRoot()}`, i)
+        const indexes = this.bumpIndexesByHeight.get(bump.blockHeight) ?? []
+        indexes.push(i)
+        this.bumpIndexesByHeight.set(bump.blockHeight, indexes)
       }
     }
-    return this.bumpIndexByKey
+    return this.bumpIndexesByHeight
   }
 
   private invalidateBumpIndexes(): void {
-    this.bumpIndexByKey = undefined
+    this.bumpIndexesByHeight = undefined
     this.bumpIndexByTxid = undefined
   }
 
@@ -646,6 +692,84 @@ export class Beef {
     this.synchronizeNestedTransactionMutations()
     this.synchronizeNestedBumpMutations()
     this.markMutated(false)
+    return this.mergeBumpEntry(bump)
+  }
+
+  /**
+   * Merge several independently proven transactions in one mutation pass.
+   *
+   * This is equivalent to calling `mergeRawTx` followed by `mergeBump` for
+   * every entry, but synchronizes nested BEEF state only once. That distinction
+   * matters for wallets assembling a BEEF from a fragmented UTXO set because
+   * proof paths are otherwise re-scanned after every input.
+   */
+  mergeProvenTxs(entries: Array<{
+    rawTx: number[] | Uint8Array
+    merklePath: MerklePath
+    merkleRoot?: string
+  }>): BeefTx[] {
+    if (entries.length === 0) return []
+    this.synchronizeNestedTransactionMutations()
+    this.synchronizeNestedBumpMutations()
+    this.markMutated(true)
+    const merged: BeefTx[] = []
+    for (const entry of entries) {
+      merged.push(this.mergeRawTxEntry(entry.rawTx))
+    }
+
+    // A real wallet often owns many transactions mined in the same block.
+    // Combine those paths once per block root, rather than repeatedly hashing,
+    // combining, and trimming an ever-growing compound proof.
+    const heightCounts = new Map<number, number>()
+    for (const entry of entries) {
+      const height = entry.merklePath.blockHeight
+      heightCounts.set(height, (heightCounts.get(height) ?? 0) + 1)
+    }
+    const groups = new Map<string, { first: number; paths: MerklePath[]; validateCombined: boolean }>()
+    for (let index = 0; index < entries.length; index++) {
+      const path = entries[index].merklePath
+      const rootHint = entries[index].merkleRoot
+      const key = heightCounts.get(path.blockHeight) === 1
+        ? `${path.blockHeight}:single:${index}`
+        : `${path.blockHeight}:${rootHint ?? path.computeRoot()}`
+      const group = groups.get(key)
+      if (group == null) {
+        groups.set(key, { first: index, paths: [path], validateCombined: rootHint != null })
+      } else {
+        group.paths.push(path)
+        group.validateCombined = group.validateCombined || rootHint != null
+      }
+    }
+    for (const group of [...groups.values()].sort((a, b) => a.first - b.first)) {
+      this.mergeBumpEntry(this.combineCompatibleBumps(group.paths, group.validateCombined))
+    }
+    return merged
+  }
+
+  /** Combine already root-matched paths while preserving the first path reference. */
+  private combineCompatibleBumps(paths: MerklePath[], validateCombined: boolean = false): MerklePath {
+    const combined = paths[0]
+    if (paths.length === 1 && !validateCombined) return combined
+    const levels = combined.path.map(level => new Map(level.map(leaf => [leaf.offset, leaf])))
+    for (let pathIndex = 1; pathIndex < paths.length; pathIndex++) {
+      mergeCompatibleBumpLevels(levels, paths[pathIndex], combined.path.length, validateCombined)
+    }
+    const combinedPath = levels.map(level => [...level.values()])
+    if (validateCombined) {
+      // Storage-backed paths may have intentionally deferred root validation.
+      // Validate the compound path once here so shared branches are hashed
+      // once, while corrupt or mismatched proofs still fail closed.
+      const validated = new MerklePath(combined.blockHeight, combinedPath)
+      validated.trim()
+      return validated
+    }
+    combined.path = combinedPath
+    combined.trim()
+    return combined
+  }
+
+  /** Merge one bump after the caller has synchronized and marked the BEEF. */
+  private mergeBumpEntry(bump: MerklePath): number {
     const bumpIndex = this.findOrInsertBump(bump)
 
     const b = this.bumps[bumpIndex]
@@ -663,23 +787,23 @@ export class Beef {
    * Find an existing compatible bump or insert a new one; return its index.
    */
   private findOrInsertBump(bump: MerklePath): number {
-    const byKey = this.ensureBumpKeyIndex()
+    const byHeight = this.ensureBumpHeightIndex()
     const byTxid = this.ensureBumpTxidIndex()
-    const key = `${bump.blockHeight}:${bump.computeRoot()}`
-    const existing = byKey.get(key)
-    if (existing !== undefined) {
-      this.bumps[existing].combine(bump)
-      for (const leaf of this.bumps[existing].path[0]) {
-        if (typeof leaf.hash === 'string') byTxid.set(leaf.hash, existing)
+    const sameHeight = byHeight.get(bump.blockHeight) ?? []
+    if (sameHeight.length > 0) {
+      const root = bump.computeRoot()
+      for (const existing of sameHeight) {
+        if (this.bumps[existing].computeRoot() !== root) continue
+        this.bumps[existing].combine(bump)
+        indexBumpTxids(this.bumps[existing], existing, byTxid)
+        return existing
       }
-      return existing
     }
     this.bumps.push(bump)
     const index = this.bumps.length - 1
-    byKey.set(key, index)
-    for (const leaf of bump.path[0]) {
-      if (typeof leaf.hash === 'string') byTxid.set(leaf.hash, index)
-    }
+    sameHeight.push(index)
+    byHeight.set(bump.blockHeight, sameHeight)
+    indexBumpTxids(bump, index, byTxid)
     return index
   }
 
@@ -709,6 +833,11 @@ export class Beef {
   mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx {
     this.synchronizeNestedTransactionMutations()
     this.markMutated(true)
+    return this.mergeRawTxEntry(rawTx, bumpIndex)
+  }
+
+  /** Merge one raw transaction after the caller has synchronized and marked the BEEF. */
+  private mergeRawTxEntry(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx {
     const newTx: BeefTx = new BeefTx(rawTx, bumpIndex)
     this.replaceOrAppendTx(newTx)
     this.tryToValidateBumpIndex(newTx)
@@ -716,7 +845,7 @@ export class Beef {
   }
 
   private mergeTransactionEntry(current: Transaction): BeefTx {
-    const bumpIndex = current.merklePath == null ? undefined : this.mergeBump(current.merklePath)
+    const bumpIndex = current.merklePath == null ? undefined : this.mergeBumpEntry(current.merklePath)
     const newTx = new BeefTx(current, bumpIndex)
     this.replaceOrAppendTx(newTx)
     this.tryToValidateBumpIndex(newTx)
@@ -743,6 +872,11 @@ export class Beef {
   mergeTransaction(tx: Transaction): BeefTx {
     this.synchronizeNestedTransactionMutations()
     this.markMutated(true)
+    return this.mergeTransactionGraph(tx)
+  }
+
+  /** Merge one transaction graph after the caller has synchronized and marked the BEEF. */
+  private mergeTransactionGraph(tx: Transaction): BeefTx {
     tx.materializeSourceTXIDs()
     const rootTxid = tx.id('hex')
     const visited = new Set<string>()
@@ -809,15 +943,40 @@ export class Beef {
     return beefTx
   }
 
+  /** Merge one BEEF transaction after the caller has synchronized and marked the BEEF. */
+  private mergeBeefTxEntry(btx: BeefTx): BeefTx {
+    let beefTx = this.findTxidIndexed(btx.txid)
+
+    if (btx.isTxidOnly && beefTx == null) {
+      beefTx = BeefTx.fromTxid(btx.txid)
+      this.txs.push(beefTx)
+      this.addToIndex(beefTx)
+      this.tryToValidateBumpIndex(beefTx)
+    } else if (btx._tx != null && (beefTx == null || beefTx.isTxidOnly)) {
+      beefTx = this.mergeTransactionGraph(btx._tx)
+    } else if (btx._rawTx != null && (beefTx == null || beefTx.isTxidOnly)) {
+      beefTx = this.mergeRawTxEntry(btx._rawTx)
+    }
+
+    if (beefTx == null) {
+      throw new Error(`Failed to merge BeefTx for txid: ${btx.txid}`)
+    }
+
+    return beefTx
+  }
+
   mergeBeef(beef: Beef | number[] | Uint8Array): void {
     const b: Beef = beef instanceof Beef ? beef : Beef.fromBinary(beef)
+    this.synchronizeNestedTransactionMutations()
+    this.synchronizeNestedBumpMutations()
+    this.markMutated(true)
 
     for (const bump of b.bumps) {
-      this.mergeBump(bump)
+      this.mergeBumpEntry(bump)
     }
 
     for (const tx of b.txs) {
-      this.mergeBeefTx(tx)
+      this.mergeBeefTxEntry(tx)
     }
   }
 
@@ -1434,7 +1593,7 @@ export class Beef {
     c.txs = Array.from(this.txs)
     c.txidIndex = undefined
     c.txPositionIndex = undefined
-    c.bumpIndexByKey = undefined
+    c.bumpIndexesByHeight = undefined
     c.bumpIndexByTxid = undefined
     c.needsSort = this.needsSort
     c.sortResultCache = this.sortResultCache == null ? undefined : this.cloneSortResult(this.sortResultCache)

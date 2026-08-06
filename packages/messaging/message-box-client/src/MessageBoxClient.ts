@@ -1746,24 +1746,31 @@ export class MessageBoxClient {
   async listMessages({
     messageBox,
     host,
-    acceptPayments
+    acceptPayments,
+    offset,
+    skip,
+    limit,
+    pageSize,
+    maxPages
   }: ListMessagesParams): Promise<PeerMessage[]> {
     const shouldAcceptPayments = acceptPayments !== false
     if (typeof messageBox !== 'string' || messageBox.trim() === '') {
       throw new Error('MessageBox cannot be empty')
     }
 
-    let hosts: string[] = host != null ? [normalizeMessageBoxHost(host)] : []
-    if (hosts.length === 0) {
-      const advertisedHosts = await this.queryAdvertisements(await this.getIdentityKey())
-      hosts = Array.from(new Set([this.host, ...advertisedHosts.map(h => h.host)]))
-    }
+    const hosts = await this.resolveMessageHosts(host)
 
     // Query each host in parallel
     const fetchFromHost = async (host: string): Promise<PeerMessage[]> => {
       try {
         Logger.log(`[MB CLIENT] Listing messages from ${host}…`)
-        return await this.fetchMessagePages(host, messageBox)
+        return await this.fetchMessagePages(host, messageBox, {
+          offset,
+          skip,
+          limit,
+          pageSize,
+          maxPages
+        })
       } catch (err) {
         Logger.log(`[MB CLIENT DEBUG] listMessages failed for ${host}:`, err)
         throw err // re-throw to be caught in the settled promise
@@ -1797,7 +1804,8 @@ export class MessageBoxClient {
     // 6. Early‑out: no messages but at least one host succeeded → []
     if (dedupMap.size === 0) return []
 
-    const messages: PeerMessage[] = Array.from(dedupMap.values())
+    const deduplicated = Array.from(dedupMap.values())
+    const messages: PeerMessage[] = limit == null ? deduplicated : deduplicated.slice(0, limit)
 
     const parsed = messages.map(message => this.parseMessageEnvelope(message))
 
@@ -1820,6 +1828,14 @@ export class MessageBoxClient {
     messages.sort((a, b) => Number((b as any).timestamp ?? 0) - Number((a as any).timestamp ?? 0))
 
     return messages
+  }
+
+  private async resolveMessageHosts(host?: string): Promise<string[]> {
+    if (host != null) return [normalizeMessageBoxHost(host)]
+    const advertisedHosts = await this.queryAdvertisements(await this.getIdentityKey())
+    return Array.from(
+      new Set([this.host, ...advertisedHosts.map(advertisement => advertisement.host)])
+    )
   }
 
   /**
@@ -1853,12 +1869,26 @@ export class MessageBoxClient {
    * })
    * console.log(messages)
    */
-  async listMessagesLite({ messageBox, host }: ListMessagesParams): Promise<PeerMessage[]> {
+  async listMessagesLite({
+    messageBox,
+    host,
+    offset,
+    skip,
+    limit,
+    pageSize,
+    maxPages
+  }: ListMessagesParams): Promise<PeerMessage[]> {
     if (typeof messageBox !== 'string' || messageBox.trim() === '') {
       throw new Error('MessageBox cannot be empty')
     }
     const finalHost = normalizeMessageBoxHost(host ?? this.host)
-    const messages = await this.fetchMessagePages(finalHost, messageBox)
+    const messages = await this.fetchMessagePages(finalHost, messageBox, {
+      offset,
+      skip,
+      limit,
+      pageSize,
+      maxPages
+    })
 
     await this.mapWithConcurrency(messages, 4, async message => {
       try {
@@ -1895,39 +1925,128 @@ export class MessageBoxClient {
     return messages
   }
 
-  private async fetchMessagePages(host: string, messageBox: string): Promise<PeerMessage[]> {
-    const pageSize = 1_000
-    const maximumPages = 100
+  private async fetchMessagePages(
+    host: string,
+    messageBox: string,
+    options: Pick<ListMessagesParams, 'offset' | 'skip' | 'limit' | 'pageSize' | 'maxPages'> = {}
+  ): Promise<PeerMessage[]> {
+    const { startingOffset, totalLimit, requestedPageSize, maximumPages } =
+      this.normalizeMessagePageOptions(options)
     const messages: PeerMessage[] = []
+    let offset = startingOffset
+    let page = 0
 
-    for (let page = 0; page < maximumPages; page++) {
-      const offset = page * pageSize
-      const res = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageBox, limit: pageSize, offset })
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-
-      const data = await res.json()
-      if (data.status === 'error') {
-        throw new Error(data.description ?? 'Unknown server error')
-      }
-      if (!Array.isArray(data.messages)) {
-        throw new TypeError('Message Box server returned an invalid messages payload')
-      }
-      messages.push(...(data.messages as PeerMessage[]))
+    while (maximumPages === -1 || page < maximumPages) {
+      const remaining = totalLimit == null ? undefined : totalLimit - messages.length
+      if (remaining != null && remaining <= 0) return messages
+      const pageLimit = this.messagePageLimit(requestedPageSize, remaining)
+      const { data, pageMessages } = await this.fetchMessagePage(
+        host,
+        messageBox,
+        offset,
+        pageLimit
+      )
+      const accepted = remaining == null ? pageMessages : pageMessages.slice(0, remaining)
+      messages.push(...accepted)
 
       // Legacy Message Box servers returned the complete collection without
       // pagination metadata and may ignore limit/offset. Only continue when a
       // pagination-aware server explicitly advertises another page.
       if (data.hasMore !== true) return messages
+      offset = this.nextMessagePageOffset(data, pageMessages.length, offset, requestedPageSize)
+      page += 1
     }
 
     throw new Error(
-      `Message Box pagination exceeded ${maximumPages * pageSize} messages; ` +
-        'acknowledge messages or request smaller application-level batches.'
+      `Message Box pagination exceeded ${maximumPages} pages; ` +
+        'acknowledge messages, raise maxPages, or set an application-level limit.'
     )
+  }
+
+  private normalizeMessagePageOptions(
+    options: Pick<ListMessagesParams, 'offset' | 'skip' | 'limit' | 'pageSize' | 'maxPages'>
+  ): {
+    startingOffset: number
+    totalLimit?: number
+    requestedPageSize?: number
+    maximumPages: number
+  } {
+    if (options.offset != null && options.skip != null && options.offset !== options.skip) {
+      throw new RangeError('offset and skip must match when both are provided')
+    }
+    const startingOffset = options.offset ?? options.skip ?? 0
+    const maximumPages = options.maxPages ?? -1
+    this.assertMessagePageOption('offset', startingOffset, 0)
+    this.assertMessagePageOption('limit', options.limit, 1)
+    this.assertMessagePageOption('pageSize', options.pageSize, 1)
+    this.assertMessagePageOption('maxPages', maximumPages, 1, true)
+    return {
+      startingOffset,
+      totalLimit: options.limit,
+      requestedPageSize: options.pageSize,
+      maximumPages
+    }
+  }
+
+  private assertMessagePageOption(
+    name: string,
+    value: number | undefined,
+    minimum: number,
+    allowUnlimited: boolean = false
+  ): void {
+    if (value == null) return
+    const unlimited = allowUnlimited && value === -1
+    if (Number.isSafeInteger(value) && (unlimited || value >= minimum)) return
+    const unlimitedPrefix = allowUnlimited ? '-1 or ' : ''
+    const sign = minimum === 0 ? 'non-negative' : 'positive'
+    throw new RangeError(`${name} must be ${unlimitedPrefix}a ${sign} safe integer`)
+  }
+
+  private messagePageLimit(
+    requestedPageSize: number | undefined,
+    remaining: number | undefined
+  ): number | undefined {
+    if (requestedPageSize == null) return remaining
+    if (remaining == null) return requestedPageSize
+    return Math.min(requestedPageSize, remaining)
+  }
+
+  private async fetchMessagePage(
+    host: string,
+    messageBox: string,
+    offset: number,
+    limit: number | undefined
+  ): Promise<{ data: any; pageMessages: PeerMessage[] }> {
+    const body: Record<string, unknown> = { messageBox, offset }
+    if (limit != null) body.limit = limit
+    const response = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+
+    const data = await response.json()
+    if (data.status === 'error') throw new Error(data.description ?? 'Unknown server error')
+    if (!Array.isArray(data.messages)) {
+      throw new TypeError('Message Box server returned an invalid messages payload')
+    }
+    return { data, pageMessages: data.messages as PeerMessage[] }
+  }
+
+  private nextMessagePageOffset(
+    data: any,
+    pageMessageCount: number,
+    currentOffset: number,
+    requestedPageSize: number | undefined
+  ): number {
+    const nextOffset = Number(data.nextOffset)
+    if (Number.isSafeInteger(nextOffset) && nextOffset > currentOffset) return nextOffset
+    if (pageMessageCount > 0) return currentOffset + pageMessageCount
+
+    const serverLimit = Number(data.limit)
+    if (Number.isSafeInteger(serverLimit) && serverLimit > 0) return currentOffset + serverLimit
+    return currentOffset + (requestedPageSize ?? 1_000)
   }
 
   /**

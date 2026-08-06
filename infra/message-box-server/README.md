@@ -9,6 +9,9 @@ The maintained source lives in
 [`bsv-blockchain/ts-stack`](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server).
 The service is distributed as a container; it is not a public npm package.
 
+See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
+for all runtime ceilings, BRC-105 pricing, capacity evidence, and HPA prerequisites.
+
 ## Runtime model
 
 - Node.js 24
@@ -97,6 +100,11 @@ Important optional configuration:
 | `MESSAGE_BOX_CORS_ALLOWED_ORIGINS`         | Exact origins for allowlist mode        |
 | `MESSAGE_BOX_MAX_BODY_BYTES`               | 4 MiB                                   |
 | `MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES`     | 1 MiB                                   |
+| `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS` | 4                                     |
+| `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT`    | 300 authenticated sends/minute/socket  |
+| `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS` | 25 notification targets/message |
+| `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY` | 4 recipient notification workers |
+| `MESSAGE_BOX_FCM_SEND_CONCURRENCY`        | 10 device-send workers/recipient       |
 | `MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX`      | 300 per minute per IP                   |
 | `MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX` | 1,000 per minute per identity           |
 

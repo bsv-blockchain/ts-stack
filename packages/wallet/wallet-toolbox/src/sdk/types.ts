@@ -14,7 +14,7 @@ export interface OutPoint {
   vout: number
 }
 
-export type Chain = 'main' | 'test' | 'ttn' | 'tstn' | 'mock'
+export type Chain = 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'mock'
 
 /**
  * Initial status (attempts === 0):
@@ -81,15 +81,7 @@ export const ProvenTxReqNonTerminalStatus: ProvenTxReqStatus[] = [
 ]
 
 export type TransactionStatus =
-  | 'completed'
-  | 'failed'
-  | 'unprocessed'
-  | 'sending'
-  | 'unproven'
-  | 'unsigned'
-  | 'nosend'
-  | 'nonfinal'
-  | 'unfail'
+  'completed' | 'failed' | 'unprocessed' | 'sending' | 'unproven' | 'unsigned' | 'nosend' | 'nonfinal' | 'unfail'
 
 export interface Paged {
   limit: number
@@ -124,7 +116,7 @@ export interface ScriptTemplateUnlock {
 
 export interface WalletBalance {
   total: number
-  utxos: Array<{ satoshis: number, outpoint: string }>
+  utxos: Array<{ satoshis: number; outpoint: string }>
 }
 
 export interface ReqHistoryNote {
@@ -189,13 +181,10 @@ export const specOpSetWalletChangeParams = 'a4979d28ced8581e9c1c92f1001cc7cb3aab
  * @param basket Output basket name value.
  * @returns true iff the `basket` name is a reserved `listOutputs` special operation identifier.
  */
-export function isListOutputsSpecOp (basket: string): boolean {
-  return [
-    specOpWalletBalance,
-    specOpWalletManagedUtxos,
-    specOpInvalidChange,
-    specOpSetWalletChangeParams
-  ].includes(basket)
+export function isListOutputsSpecOp(basket: string): boolean {
+  return [specOpWalletBalance, specOpWalletManagedUtxos, specOpInvalidChange, specOpSetWalletChangeParams].includes(
+    basket
+  )
 }
 
 /**
@@ -220,7 +209,7 @@ export const specOpFailedActions = '97d4eb1e49215e3374cc2c1939a7c43a55e95c7427bf
  * @param label Action / Transaction label name value.
  * @returns true iff the `label` name is a reserved `listActions` special operation identifier.
  */
-export function isListActionsSpecOp (label: string): boolean {
+export function isListActionsSpecOp(label: string): boolean {
   return [specOpNoSendActions, specOpFailedActions].includes(label)
 }
 
@@ -236,6 +225,6 @@ export const specOpThrowReviewActions = 'a496e747fc3ad5fabdd4ae8f91184e71f87539b
  * @param label Action / Transaction label name value.
  * @returns true iff the `label` name is a reserved `createAction` special operation identifier.
  */
-export function isCreateActionSpecOp (label: string): boolean {
+export function isCreateActionSpecOp(label: string): boolean {
   return [specOpThrowReviewActions].includes(label)
 }

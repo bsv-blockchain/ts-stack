@@ -12,7 +12,7 @@ export interface LiveIngestorChaintracksSSEOptions extends LiveIngestorBaseOptio
  * `/chaintracks/v2/tip/stream`, into the local Chaintracks live-ingestor API.
  */
 export class LiveIngestorChaintracksSSE extends LiveIngestorBase {
-  static createLiveIngestorChaintracksSSEOptions (
+  static createLiveIngestorChaintracksSSEOptions(
     chain: Chain,
     chaintracks: ChaintracksClientApi
   ): LiveIngestorChaintracksSSEOptions {
@@ -26,26 +26,36 @@ export class LiveIngestorChaintracksSSE extends LiveIngestorBase {
   private stopped = false
   private resolveStopped?: () => void
 
-  constructor (private readonly options: LiveIngestorChaintracksSSEOptions) {
+  constructor(private readonly options: LiveIngestorChaintracksSSEOptions) {
     super(options)
   }
 
-  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
     return await this.options.chaintracks.findHeaderForBlockHash(hash)
   }
 
-  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
+  async startListening(liveHeaders: BlockHeader[]): Promise<void> {
     this.stopped = false
-    this.subscriptionId = await this.options.chaintracks.subscribeHeaders(header => {
+    const actual = await this.options.chaintracks.getChain()
+    if (actual !== this.chain) {
+      throw new Error(`ChainTracks upstream network '${actual}' does not match configured chain '${this.chain}'.`)
+    }
+    if (this.stopped) return
+    const subscriptionId = await this.options.chaintracks.subscribeHeaders(header => {
       if (!this.stopped) liveHeaders.push(header)
     })
+    if (this.stopped) {
+      await this.options.chaintracks.unsubscribe(subscriptionId)
+      return
+    }
+    this.subscriptionId = subscriptionId
     await new Promise<void>(resolve => {
       this.resolveStopped = resolve
       if (this.stopped) resolve()
     })
   }
 
-  stopListening (): void {
+  stopListening(): void {
     this.stopped = true
     const subscriptionId = this.subscriptionId
     this.subscriptionId = undefined
@@ -54,10 +64,12 @@ export class LiveIngestorChaintracksSSE extends LiveIngestorBase {
         this.log(`LiveIngestorChaintracksSSE unsubscribe failed: ${e}`)
       })
     }
-    this.resolveStopped?.()
+    const resolveStopped = this.resolveStopped
+    this.resolveStopped = undefined
+    resolveStopped?.()
   }
 
-  override async shutdown (): Promise<void> {
+  override async shutdown(): Promise<void> {
     this.stopListening()
   }
 }

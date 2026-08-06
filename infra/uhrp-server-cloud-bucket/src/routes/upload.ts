@@ -4,6 +4,7 @@ import { Utils } from '@bsv/sdk'
 import getPriceForFile from '../utils/getPriceForFile'
 import getUploadURL from '../utils/getUploadURL'
 import { log } from '../logger'
+import { readResourceLimit } from '../security/edgePolicy'
 
 const MIN_HOSTING_MINUTES = process.env.MIN_HOSTING_MINUTES
 
@@ -45,7 +46,7 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
         description: 'The file size must be a positive integer.'
       })
     }
-    if (!retentionPeriod) {
+    if (!retentionPeriod || !Number.isSafeInteger(retentionPeriod)) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_NO_RETENTION_PERIOD',
@@ -53,6 +54,7 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
       })
     }
     const minHostingMinutes = Number(MIN_HOSTING_MINUTES) || 0
+    const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
     if (retentionPeriod < minHostingMinutes) {
       return res.status(400).json({
         status: 'error',
@@ -60,12 +62,20 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
         description: `The retention period must be >= ${minHostingMinutes} minutes`
       })
     }
+    if (maxRetentionMinutes !== -1 && retentionPeriod > maxRetentionMinutes) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'ERR_INVALID_RETENTION_PERIOD',
+        description: `The retention period must not exceed ${maxRetentionMinutes} minutes.`
+      })
+    }
 
-    if (fileSize > 11000000000) {
+    const maxFileBytes = readResourceLimit('UHRP', 'MAX_FILE_BYTES', 11_000_000_000)
+    if (maxFileBytes !== -1 && fileSize > maxFileBytes) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_INVALID_SIZE',
-        description: 'Max supported file size is 11000000000 bytes.'
+        description: `Max supported file size is ${maxFileBytes} bytes.`
       })
     }
 

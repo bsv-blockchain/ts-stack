@@ -120,7 +120,12 @@ export class BeefParty extends Beef {
     const b: Beef = beef instanceof Beef ? beef : Beef.fromBinary(beef)
     const knownTxids = b.getValidTxids()
     this.mergeBeef(b)
-    this.addKnownTxidsForParty(party, knownTxids)
+    if (!this.isParty(party)) this.addParty(party)
+    const knownToParty = this.knownTo[party]
+    // Every valid txid was just bulk-merged above. Recording party knowledge
+    // directly avoids re-running the BEEF-wide mutation synchronization once
+    // per txid through mergeTxidOnly.
+    for (const txid of knownTxids) knownToParty[txid] = true
   }
 }
 

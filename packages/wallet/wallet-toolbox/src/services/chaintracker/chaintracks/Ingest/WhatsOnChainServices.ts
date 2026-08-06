@@ -4,6 +4,7 @@ import { WhatsOnChain, WocChainInfo } from '../../../providers/WhatsOnChain'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { ChaintracksFetch } from '../util/ChaintracksFetch'
 import { HeightRange } from '../util/HeightRange'
+import { wait } from '../../../../utility/utilityHelpers'
 
 /**
  * return true to ignore error, false to close service connection
@@ -62,14 +63,14 @@ async function resolveHeaderFileLink(
 
 export interface WhatsOnChainServicesOptions {
   /**
-   * Which chain is being tracked: main, test, or stn.
+   * Which chain is being tracked. The public WhatsOnChain fallback is only
+   * configured automatically for mainnet and testnet.
    */
   chain: Chain
   /**
-   * WhatsOnChain.com API Key
-   * https://docs.taal.com/introduction/get-an-api-key
-   * If unknown or empty, maximum request rate is limited.
-   * https://developers.whatsonchain.com/#rate-limits
+   * Optional WhatsOnChain API key. ChainTracks works without one and limits
+   * anonymous traffic to the documented public rate.
+   * https://docs.whatsonchain.com/
    */
   apiKey?: string
   /**
@@ -88,6 +89,8 @@ export interface WhatsOnChainServicesOptions {
    * How long chainInfo is considered still valid before updating (msecs).
    */
   chainInfoMsecs: number
+  /** Minimum interval between keyless API request starts. Defaults below 3 requests/second. */
+  minRequestIntervalMsecs?: number
 }
 
 export class WhatsOnChainServices {
@@ -98,7 +101,8 @@ export class WhatsOnChainServices {
       timeout: 30000,
       userAgent: 'BabbageWhatsOnChainServices',
       enableCache: true,
-      chainInfoMsecs: 5000
+      chainInfoMsecs: 5000,
+      minRequestIntervalMsecs: 350
     }
     return options
   }
@@ -106,6 +110,9 @@ export class WhatsOnChainServices {
   static readonly chainInfo: Array<WocChainInfo | undefined> = []
   static readonly chainInfoTime: Array<Date | undefined> = []
   static readonly chainInfoMsecs: number[] = []
+  static readonly chainInfoPromise: Partial<Record<Chain, Promise<WocChainInfo>>> = {}
+  private static requestTail: Promise<void> = Promise.resolve()
+  private static nextRequestMsecs = 0
 
   chain: Chain
   woc: WhatsOnChain
@@ -115,7 +122,8 @@ export class WhatsOnChainServices {
       apiKey: this.options.apiKey,
       timeout: this.options.timeout,
       userAgent: this.options.userAgent,
-      enableCache: this.options.enableCache
+      enableCache: this.options.enableCache,
+      requestGate: async () => await this.waitForRateLimit()
     }
     this.chain = options.chain
     const chainInfoMsecs = WhatsOnChainServices.chainInfoMsecs as unknown as Record<Chain, number>
@@ -139,7 +147,18 @@ export class WhatsOnChainServices {
       update = elapsed > chainInfoMsecs[this.chain]!
     }
     if (update) {
-      chainInfo[this.chain] = await this.woc.getChainInfo()
+      let pending = WhatsOnChainServices.chainInfoPromise[this.chain]
+      if (pending == null) {
+        pending = this.woc.getChainInfo()
+        WhatsOnChainServices.chainInfoPromise[this.chain] = pending
+      }
+      try {
+        chainInfo[this.chain] = await pending
+      } finally {
+        if (WhatsOnChainServices.chainInfoPromise[this.chain] === pending) {
+          delete WhatsOnChainServices.chainInfoPromise[this.chain]
+        }
+      }
       chainInfoTime[this.chain] = now
     }
     if (!chainInfo[this.chain]) throw new Error('Unexpected failure to update chainInfo.')
@@ -160,6 +179,7 @@ export class WhatsOnChainServices {
    */
   async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> {
     fetch ||= new ChaintracksFetch()
+    await this.waitForRateLimit()
     const headers = await fetch.fetchJson<WocGetHeadersHeader[]>(
       `https://api.whatsonchain.com/v1/bsv/${this.chain}/block/headers`
     )
@@ -171,6 +191,7 @@ export class WhatsOnChainServices {
     fetch?: ChaintracksFetchApi
   ): Promise<GetHeaderByteFileLinksResult[]> {
     fetch ||= new ChaintracksFetch()
+    await this.waitForRateLimit()
     const files = await fetch.fetchJson<WocGetHeaderByteFileLinks>(
       `https://api.whatsonchain.com/v1/bsv/${this.chain}/block/headers/resources`
     )
@@ -184,6 +205,22 @@ export class WhatsOnChainServices {
       if (resolved.result != null) r.push(resolved.result)
     }
     return r
+  }
+
+  private async waitForRateLimit(): Promise<void> {
+    let release!: () => void
+    const previous = WhatsOnChainServices.requestTail
+    WhatsOnChainServices.requestTail = new Promise<void>(resolve => {
+      release = resolve
+    })
+    await previous
+    try {
+      const delay = Math.max(0, WhatsOnChainServices.nextRequestMsecs - Date.now())
+      if (delay > 0) await wait(delay)
+      WhatsOnChainServices.nextRequestMsecs = Date.now() + (this.options.minRequestIntervalMsecs ?? 350)
+    } finally {
+      release()
+    }
   }
 }
 

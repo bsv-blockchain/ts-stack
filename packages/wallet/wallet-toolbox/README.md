@@ -34,6 +34,34 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; IndexedDB and remote storage only
 
+### ChainTracks sources and networks
+
+Wallet services do not require a WhatsOnChain key for ChainTracks. Mainnet,
+testnet, and TerraTestNet use the public Arcade/go-chaintracks v2 HTTP and SSE
+surfaces by default. Bulk batches still pass through local serialization, hash,
+continuity, and genesis checks; providers are tried in priority order; and a
+synchronized tracker can continue serving its last-good checked data during a
+provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
+requests are serialized below its documented public rate.
+
+The supported chain identifiers are `main`, `test`, `stn`, `ttn`, and `tstn`
+(`mock` remains available for test utilities). STN and Terra Scaling TestNet do
+not have operator-independent public endpoints: set `STN_CHAINTRACKS_URL` or
+`TSTN_CHAINTRACKS_URL`, use the matching Arcade environment variable, or inject
+an explicit `ChaintracksClientApi`. URLs ending in `/v2` use the reconnecting
+go-chaintracks client; existing legacy v1 URLs and explicit clients remain
+compatible. Browser and mobile distributions expose the same fetch/SSE client
+without Node `Buffer` or filesystem dependencies.
+
+Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
+Direct Teranode P2P is not included in browser/mobile artifacts.
+
+Core ChainTracks factories accept a final source-options argument when an
+application must override the defaults. Set `disableChaintracks`, `disableCdn`,
+or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an
+explicit `chaintracks` client to retain an existing deployment topology. All
+earlier positional arguments remain unchanged.
+
 ## Getting Started
 
 ### Installation
@@ -105,12 +133,26 @@ The retained fragmented-funding benchmark is runnable with:
 
 ```bash
 pnpm bench:create-action-funding
+pnpm bench:create-action-beef
 ```
 
 Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
 fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,
 one transaction, and 8.8 ms. Query and transaction counts remain flat when the
 selected input count grows; networked database deployments should benefit most.
+
+The proof-bearing benchmark also exercises the authenticated remote wallet,
+real BRC-103 storage RPC, BRC-29 signing, packed WASM digest verification, and
+24-level proofs grouped by block. On the PXC staging topology, 20 independent
+153-input samples measured 376.0 ms p50 and 461.6 ms p95; the corresponding
+direct storage cohort measured 99.3 ms p50 and 137.4 ms p95. A normal one-input
+authenticated cohort measured 78.6 ms p50 and 105.6 ms p95. All 3,080 signature
+verdicts passed. A selective production-shaped database copy with 110 fragmented
+inputs measured 75.5 ms p50 and 155.4 ms p95 for direct storage. The benchmark
+captures client, server HTTP, authentication, RPC, storage, signing,
+verification, and serialization spans and retains gates of 100 ms p50 / 150 ms
+p95 for the normal cohort and 500 ms p95 for the 153-input cohort. These are
+regression gates, not universal hardware guarantees.
 
 Trace context remains local to the telemetry carrier and sink. Wallet Toolbox
 does not add telemetry headers to AuthFetch, so BRC-103/104, Auth Express
@@ -133,7 +175,9 @@ await storage.migrate(storageName, storageIdentityKey)
 await storage.makeAvailable()
 
 const sessionManager = new KnexSessionManager(storage.knex, {
-  ttlMs: 24 * 60 * 60 * 1000
+  ttlMs: 24 * 60 * 60 * 1000,
+  // Optional. Set to 0 when every authenticated use must update the row.
+  touchIntervalMs: 60 * 1000
 })
 
 const server = new StorageServer(storage, {
@@ -157,6 +201,13 @@ const server = new StorageServer(storage, {
 })
 server.start()
 ```
+
+Shared Knex sessions immediately persist authentication, nonce, identity, and
+certificate-state transitions. For an already-authenticated row, the default
+manager coalesces only timestamp-only usage touches for up to one minute. This
+avoids a synchronous replicated write on every RPC while keeping durable expiry
+within a bounded minute of the most recent use. Use `touchIntervalMs: 0` to
+retain exact per-request timestamp persistence.
 
 Both stages return HTTP 429 with `ERR_RATE_LIMITED`. For multi-process or
 multi-replica deployments, configure a shared `express-rate-limit` store in

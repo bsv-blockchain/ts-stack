@@ -25,6 +25,7 @@ export function toWalletNetwork(chain: Chain): WalletNetwork {
     case 'main':
       return 'mainnet'
     case 'test':
+    case 'stn':
     case 'ttn':
     case 'tstn':
     case 'mock':
@@ -42,6 +43,7 @@ export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'lo
       return 'mainnet'
     case 'test':
       return 'testnet'
+    case 'stn':
     case 'ttn':
     case 'tstn':
     case 'mock':

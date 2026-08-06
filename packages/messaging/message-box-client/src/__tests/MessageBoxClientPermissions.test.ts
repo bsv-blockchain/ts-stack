@@ -202,7 +202,6 @@ describe('MessageBoxClient permission contract', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
       messageBox: 'inbox',
-      limit: 1_000,
       offset: 1_000
     })
   })

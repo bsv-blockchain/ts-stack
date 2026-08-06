@@ -30,7 +30,6 @@ const contracts = {
     environment: {
       CHAIN: 'test',
       ENABLE_BULK_HEADERS_CDN: 'false',
-      PORT: '3011',
       SOURCE_CDN_URL: 'https://cdn.projectbabbage.com/blockheaders/'
     },
     invalidEnvironment: { CHAIN: 'invalid' },
@@ -338,6 +337,8 @@ const startWalletDependency = async walletImage => {
 }
 
 export const contractNames = () => Object.keys(contracts)
+
+export const contractEnvironment = component => ({ ...contracts[component]?.environment })
 
 export async function runContainerRuntimeContract({ component, image, walletImage }) {
   const contract = contracts[component]

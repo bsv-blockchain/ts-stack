@@ -23,7 +23,13 @@ describe('public health routes', () => {
 
     expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store')
     expect(response.status).toHaveBeenCalledWith(200)
-    expect(response.json).toHaveBeenCalledWith({ status: 'ok' })
+    expect(response.json).toHaveBeenCalledWith({
+      ok: true,
+      status: 'ok',
+      service: 'messagebox-server',
+      network: process.env.BSV_NETWORK ?? 'mainnet',
+      websockets: process.env.ENABLE_WEBSOCKETS !== 'false'
+    })
   })
 
   test('reports readiness when the database responds', async () => {

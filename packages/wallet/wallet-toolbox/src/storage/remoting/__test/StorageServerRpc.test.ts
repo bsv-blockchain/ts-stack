@@ -328,6 +328,171 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
+  test('defaults and bounds direct RPC list limits before storage dispatch', async () => {
+    const server = makeServer(
+      {},
+      {
+        defaultRpcListLimit: 100,
+        maxRpcListLimit: 1_000
+      }
+    )
+    const listParams: any[] = [{ identityKey: 'alice' }, {}]
+    await invoke(server, 'enforceRpcRequestBudgets', 'listActions', listParams)
+    expect(listParams[1].limit).toBe(100)
+
+    const findParams: any[] = [{ identityKey: 'alice' }, { partial: {} }]
+    await invoke(server, 'enforceRpcRequestBudgets', 'findOutputsAuth', findParams)
+    expect(findParams[1].paged).toEqual({ limit: 100 })
+
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'listOutputs', [{ identityKey: 'alice' }, { limit: 1_001 }])
+    ).rejects.toThrow('must not exceed 1000')
+  })
+
+  test('validates configured, paged, and synchronization RPC limits', async () => {
+    expect(() => makeServer({}, { defaultRpcListLimit: 11, maxRpcListLimit: 10 })).toThrow(
+      'defaultRpcListLimit must not exceed maxRpcListLimit'
+    )
+
+    const server = makeServer(
+      {},
+      {
+        defaultRpcListLimit: 5,
+        maxRpcListLimit: 10,
+        maxRpcResponseBytes: 128
+      }
+    )
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'findOutputsAuth', [{}, { paged: [] }])).rejects.toThrow(
+      'paged must be an object'
+    )
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'listActions', [{}, []])).rejects.toThrow(
+      'RPC parameter 1 must be an object'
+    )
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'listActions', [{}, { limit: 0 }])).rejects.toThrow(
+      'positive safe integers'
+    )
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'listActions', [{}, { limit: Number.MAX_SAFE_INTEGER + 1 }])
+    ).rejects.toThrow('positive safe integers')
+
+    const syncParams: any[] = [{ maxRoughSize: 'unbounded' }]
+    await invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', syncParams)
+    expect(syncParams[0]).toEqual({ maxItems: 5, maxRoughSize: 128 })
+
+    const oversizedSyncParams: any[] = [{ maxItems: 4, maxRoughSize: 129 }]
+    await invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', oversizedSyncParams)
+    expect(oversizedSyncParams[0]).toEqual({ maxItems: 4, maxRoughSize: 128 })
+
+    const unlimited = makeServer(
+      {},
+      {
+        defaultRpcListLimit: -1,
+        maxRpcArrayItems: -1,
+        maxRpcListLimit: -1,
+        maxRpcResponseBytes: -1
+      }
+    )
+    const unlimitedParams: any[] = [null]
+    await invoke(unlimited, 'enforceRpcRequestBudgets', 'getSyncChunk', unlimitedParams)
+    expect(unlimitedParams[0]).toEqual({ maxItems: Number.MAX_SAFE_INTEGER })
+    await expect(
+      invoke(unlimited, 'enforceRpcRequestBudgets', 'getSettings', [Array.from({ length: 10_000 }, () => 1)])
+    ).resolves.toBeUndefined()
+  })
+
+  test('serves public service metadata without storage access', () => {
+    const server = makeServer()
+    const app = Reflect.get(server, 'app')
+    const healthLayer = app.router.stack.find((layer: any) => layer.route?.path === '/healthz')
+    const healthHandler = healthLayer.route.stack[0].handle
+    const response = {
+      setHeader: jest.fn(),
+      status: jest.fn(),
+      json: jest.fn(),
+      type: jest.fn(),
+      send: jest.fn()
+    }
+    response.status.mockReturnValue(response)
+    response.json.mockReturnValue(response)
+    response.type.mockReturnValue(response)
+    response.send.mockReturnValue(response)
+
+    healthHandler({} as Request, response as unknown as Response)
+
+    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store')
+    expect(response.status).toHaveBeenCalledWith(200)
+    expect(response.json).toHaveBeenCalledWith({ status: 'ok' })
+
+    for (const [path, expected] of [
+      ['/robots.txt', 'User-agent: *\nDisallow: /'],
+      ['/', 'BRC-100 testNet Storage Provider.']
+    ]) {
+      const routeLayer = app.router.stack.find((layer: any) => layer.route?.path === path)
+      routeLayer.route.stack[0].handle({} as Request, response as unknown as Response)
+      expect(response.send).toHaveBeenLastCalledWith(expected)
+    }
+    expect(response.type).toHaveBeenCalledTimes(2)
+    expect(response.type).toHaveBeenCalledWith('text/plain')
+  })
+
+  test('supports default and operator-defined request pricing', () => {
+    const paymentWallet = {
+      chain: 'test',
+      internalizeAction: jest.fn()
+    } as any
+    expect(() => makeServer({}, { monetize: true, wallet: paymentWallet })).not.toThrow()
+    expect(() =>
+      makeServer(
+        {},
+        {
+          monetize: true,
+          wallet: paymentWallet,
+          calculateRequestPrice: () => 42
+        }
+      )
+    ).not.toThrow()
+  })
+
+  test('handles cyclic RPC values while rejecting excessive array size and nesting', async () => {
+    const server = makeServer({}, { maxRpcArrayItems: 2 })
+    const cyclic: any = { values: [1, 2] }
+    cyclic.self = cyclic
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'getSettings', [cyclic])).resolves.toBeUndefined()
+
+    const deeplyNested: Record<string, unknown> = {}
+    let cursor = deeplyNested
+    for (let index = 0; index < 65; index += 1) {
+      const child: Record<string, unknown> = {}
+      cursor.child = child
+      cursor = child
+    }
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'getSettings', [deeplyNested])).rejects.toThrow(
+      'nesting exceeds 64 levels'
+    )
+  })
+
+  test('bounds nested request arrays and serialized RPC responses', async () => {
+    const server = makeServer(
+      { getSettings: jest.fn(() => ({ value: 'x'.repeat(1_000) })) },
+      { maxRpcArrayItems: 2, maxRpcResponseBytes: 128 }
+    )
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'getSettings', [[1, 2, 3]])).rejects.toThrow(
+      'must not exceed 2 items'
+    )
+
+    const captured = makeResponse()
+    await invoke(
+      server,
+      'handleRpcRequest',
+      makeRequest({ jsonrpc: '2.0', method: 'getSettings', params: [], id: 11 }),
+      captured.response
+    )
+    expect(captured.statusCode).toBe(413)
+    expect(captured.body).toMatchObject({
+      error: { code: -32005 }
+    })
+  })
+
   test('rejects an RPC request without a valid authenticated identity', async () => {
     const server = makeServer()
     const body = {

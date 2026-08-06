@@ -8,8 +8,19 @@ export const healthRoute = {
   path: '/health',
   func: (_req: Request, res: Response): Response => {
     res.setHeader('Cache-Control', NO_STORE)
-    return res.status(200).json({ status: 'ok' })
+    return res.status(200).json({
+      ok: true,
+      status: 'ok',
+      service: 'messagebox-server',
+      network: process.env.BSV_NETWORK ?? 'mainnet',
+      websockets: process.env.ENABLE_WEBSOCKETS !== 'false'
+    })
   }
+}
+
+export const healthzRoute = {
+  ...healthRoute,
+  path: '/healthz'
 }
 
 export const readinessRoute = {

@@ -297,6 +297,39 @@ function validateHostPeerDependencies(project, prefix) {
   return errors
 }
 
+function validateSourceRoots(project, prefix) {
+  if (project.sourceRoots === undefined) return []
+  const roots = project.sourceRoots
+  if (!Array.isArray(roots) || roots.length === 0) {
+    return [`${prefix} sourceRoots must be a non-empty array`]
+  }
+
+  const errors = []
+  for (const root of roots) {
+    const parts = typeof root === 'string' ? root.split('/') : []
+    if (
+      !isNonEmptyString(root) ||
+      root.startsWith('/') ||
+      root.includes('\\') ||
+      parts.some(part => part === '' || part === '.' || part === '..')
+    ) {
+      errors.push(`${prefix} has invalid source root ${JSON.stringify(root)}`)
+      continue
+    }
+    if (root === project.path || root.startsWith(`${project.path}/`)) {
+      errors.push(`${prefix} source root ${root} is already owned by the project path`)
+    }
+  }
+  for (const duplicate of duplicateValues(roots)) {
+    errors.push(`${prefix} repeats source root ${duplicate}`)
+  }
+  const canonical = [...roots].sort((left, right) => left.localeCompare(right))
+  if (JSON.stringify(roots) !== JSON.stringify(canonical)) {
+    errors.push(`${prefix} sourceRoots must use canonical lexical order`)
+  }
+  return errors
+}
+
 function validateConsumerProfiles(project, prefix) {
   const profiles = project.consumerProfiles
   if (project.release !== 'npm-oidc') {
@@ -352,6 +385,7 @@ function validateProjectMetadata(project, registry) {
   errors.push(
     ...validateDeclarationDependencies(project, prefix),
     ...validateHostPeerDependencies(project, prefix),
+    ...validateSourceRoots(project, prefix),
     ...validateConsumerProfiles(project, prefix)
   )
   return errors

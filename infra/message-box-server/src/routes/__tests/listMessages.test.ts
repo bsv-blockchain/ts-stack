@@ -290,6 +290,39 @@ describe('listMessages', () => {
     )
   })
 
+  it('detects another page when the query batch exactly fills the requested limit', async () => {
+    validReq.body.limit = 8
+    const page = Array.from({ length: 8 }, (_, index) => ({
+      ...validMessages[0],
+      messageId: `msg-${index + 1}`
+    }))
+    const extra = { ...validMessages[0], messageId: 'msg-9' }
+
+    queryTracker.on('query', (q, sequence) => {
+      if (sequence === 1) q.response([{ messageBoxId: 123 }])
+      else if (sequence === 2) q.response(page)
+      else if (sequence === 3) q.response([extra])
+      else q.response([])
+    })
+
+    await listMessages.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(200)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ messageId: 'msg-1' }),
+          expect.objectContaining({ messageId: 'msg-8' })
+        ]),
+        limit: 8,
+        offset: 0,
+        nextOffset: 8,
+        hasMore: true
+      })
+    )
+  })
+
   it('Throws unknown errors', async () => {
     queryTracker.on('query', () => {
       throw new Error('Failed')

@@ -23,6 +23,7 @@ docker compose logs -f
 ```
 
 That's it! The service is now running with:
+
 - ChaintracksService on http://localhost:3011
 - Bulk Headers CDN on http://localhost:3012
 
@@ -53,10 +54,21 @@ Edit `.env` file to customize:
 
 ```bash
 # Chain selection
-CHAIN=main  # or 'test' for testnet
+CHAIN=main  # main | test | stn | ttn | tstn
 
-# WhatsOnChain API Key (recommended for better rate limits)
-WHATSONCHAIN_API_KEY=your_api_key_here
+# Optional. Anonymous main/test fallback is already rate limited.
+WHATSONCHAIN_API_KEY=
+
+# Public credential-free defaults exist for main/test/ttn. Configure a v2
+# Arcade/go-chaintracks endpoint for stn/tstn.
+CHAINTRACKS_UPSTREAM_URL=
+CHAINTRACKS_UPSTREAM_API_PREFIX=
+CHAINTRACKS_UPSTREAM_MAX_HEADERS=1000
+CHAINTRACKS_DISABLE_WHATSONCHAIN=false
+STN_ARCADE_URL=
+STN_CHAINTRACKS_URL=
+TSTN_ARCADE_URL=
+TSTN_CHAINTRACKS_URL=
 
 # Source CDN (where to download FROM if local files don't exist)
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
@@ -77,11 +89,13 @@ BULK_HEADERS_AUTO_EXPORT_INTERVAL=240000000
 For production deployment:
 
 1. **Set CDN_HOST_URL to your domain:**
+
    ```bash
    CDN_HOST_URL=https://headers.yourdomain.com
    ```
 
 2. **Configure reverse proxy (nginx example):**
+
    ```nginx
    # Proxy to CDN server
    server {
@@ -113,11 +127,13 @@ For production deployment:
 ## Docker Commands
 
 ### Start the service
+
 ```bash
 docker compose up -d
 ```
 
 ### View logs
+
 ```bash
 # All logs
 docker compose logs -f
@@ -127,21 +143,25 @@ docker compose logs -f chaintracks-server
 ```
 
 ### Stop the service
+
 ```bash
 docker compose down
 ```
 
 ### Restart the service
+
 ```bash
 docker compose restart
 ```
 
 ### Rebuild after code changes
+
 ```bash
 docker compose up -d --build
 ```
 
 ### View resource usage
+
 ```bash
 docker stats chaintracks-server
 ```
@@ -149,6 +169,7 @@ docker stats chaintracks-server
 ## Volumes
 
 ### Viewing bulk headers
+
 ```bash
 # List files
 docker compose exec chaintracks-server ls -lh /app/public/headers
@@ -158,6 +179,7 @@ docker compose exec chaintracks-server cat /app/public/headers/mainNetBlockHeade
 ```
 
 ### Backup bulk headers
+
 ```bash
 # Create backup
 docker run --rm -v chaintracks-server_bulk-headers:/data -v $(pwd):/backup alpine tar czf /backup/headers-backup.tar.gz -C /data .
@@ -167,6 +189,7 @@ docker run --rm -v chaintracks-server_bulk-headers:/data -v $(pwd):/backup alpin
 ```
 
 ### Clean up volumes
+
 ```bash
 # Stop and remove containers and volumes
 docker compose down -v
@@ -175,6 +198,7 @@ docker compose down -v
 ## Accessing the Services
 
 ### ChaintracksService API (Port 3011)
+
 ```bash
 # Get chain info
 curl http://localhost:3011/getInfo
@@ -187,6 +211,7 @@ curl http://localhost:3011/findChainTipHeader
 ```
 
 ### Bulk Headers CDN (Port 3012)
+
 ```bash
 # Get metadata
 curl http://localhost:3012/mainNetBlockHeaders.json
@@ -201,6 +226,7 @@ ls -lh mainNet_0.headers
 ## Troubleshooting
 
 ### Container won't start
+
 ```bash
 # Check logs for errors
 docker compose logs chaintracks-server
@@ -211,6 +237,7 @@ lsof -i :3012
 ```
 
 ### Out of disk space
+
 ```bash
 # Check volume size
 docker system df -v
@@ -220,6 +247,7 @@ docker system prune -a
 ```
 
 ### Headers not exporting
+
 ```bash
 # Check logs for export messages
 docker compose logs chaintracks-server | grep -i export
@@ -232,6 +260,7 @@ docker compose restart chaintracks-server
 ```
 
 ### Slow sync
+
 - Add `WHATSONCHAIN_API_KEY` for better rate limits
 - Increase `SOURCE_CDN_URL` if you have a closer CDN
 - Check resource limits in `docker-compose.yml`
@@ -239,11 +268,13 @@ docker compose restart chaintracks-server
 ## Resource Requirements
 
 **Minimum:**
+
 - CPU: 1 core
 - RAM: 2 GB
 - Disk: 5 GB (for headers)
 
 **Recommended:**
+
 - CPU: 2 cores
 - RAM: 4 GB
 - Disk: 10 GB (with room to grow)
@@ -251,6 +282,7 @@ docker compose restart chaintracks-server
 ## Monitoring
 
 ### Health Check
+
 Docker Compose includes a health check that verifies the service is responding:
 
 ```bash
@@ -259,6 +291,7 @@ docker compose ps
 ```
 
 ### Logs
+
 ```bash
 # Follow logs
 docker compose logs -f
@@ -288,6 +321,7 @@ docker compose logs -f
 To have other servers use YOUR server as a CDN source:
 
 **On other servers, set:**
+
 ```bash
 SOURCE_CDN_URL=http://yourserver:3012
 # or
@@ -323,6 +357,7 @@ networks:
 ## Support
 
 For issues:
+
 1. Check logs: `docker compose logs -f`
 2. Check GitHub issues
 3. Verify configuration in `.env`

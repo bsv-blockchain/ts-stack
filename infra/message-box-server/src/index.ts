@@ -17,7 +17,7 @@
  */
 
 import * as dotenv from 'dotenv'
-import { app, appReady, getWallet, knex } from './app.js'
+import { app, appReady, getWallet, knex, paymentReplayStore, sessionManager } from './app.js'
 import { createServer } from 'node:http'
 import { Logger, log } from './utils/logger.js'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
@@ -31,6 +31,10 @@ import * as crypto from 'node:crypto'
 import { initializeFirebase } from './config/firebase.js'
 import { configureHttpServer } from './security/edgePolicy.js'
 import { resolveHttpPort } from './config/runtime.js'
+import {
+  startMessageBoxMaintenance,
+  type MessageBoxMaintenance
+} from './security/resourceMaintenance.js'
 ;(global.self as any) = { crypto }
 
 dotenv.config()
@@ -75,6 +79,7 @@ configureHttpServer(http, 'MESSAGE_BOX', {
 // WebSocket setup (only if enabled)
 // Held in a const container so the exported binding is never reassigned.
 const ioRef: { current: AuthSocketServer | null } = { current: null }
+let maintenance: MessageBoxMaintenance | undefined
 
 /**
  * @function start
@@ -98,7 +103,9 @@ export const start = async (): Promise<void> => {
     const ctx = createMessageBoxContext({
       wallet,
       knex,
-      enableWebSockets: true
+      enableWebSockets: true,
+      sessionManager,
+      paymentReplayStore
     })
     ioRef.current = attachMessageBoxWebSockets(http, ctx)
   }
@@ -132,6 +139,7 @@ export async function startStandalone(): Promise<void> {
   })
 
   await start()
+  maintenance = startMessageBoxMaintenance(knex)
   await new Promise<void>((resolve, reject) => {
     http.once('error', reject)
     http.listen(HTTP_PORT, () => {
@@ -147,6 +155,8 @@ let shutdownPromise: Promise<void> | undefined
 export function shutdownStandalone(signal: NodeJS.Signals): Promise<void> {
   shutdownPromise ??= (async () => {
     log.info({ operation: 'server.shutdown', signal }, 'MessageBox shutdown started')
+    maintenance?.stop()
+    maintenance = undefined
     await closeMessageBoxWebSockets(ioRef.current)
     ioRef.current = null
     if (http.listening) {
