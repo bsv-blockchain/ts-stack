@@ -69,6 +69,10 @@ describe('createAction2 nosend transactions', () => {
       }
       const fundingResult: CreateActionResult = await wallet.createAction(fundingArgs)
       expect(fundingResult.tx).toBeDefined()
+      expect(Array.isArray(fundingResult.tx)).toBe(true)
+      const jsonResult = JSON.parse(JSON.stringify(fundingResult)) as CreateActionResult
+      expect(Array.isArray(jsonResult.tx)).toBe(true)
+      expect(() => Transaction.fromAtomicBEEF(jsonResult.tx!)).not.toThrow()
       const actionsResult = await wallet.listActions({
         labels: [fundingLabel],
         includeInputs: true,

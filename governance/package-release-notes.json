@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-06",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.1",
       "releaseType": "patch",
-      "summary": "Fixes credential-free Arcade/go-chaintracks initialization when ChainTracks bulk storage is empty while retaining continuity, proof-of-work, file-integrity, chainwork, and exact-network genesis validation.",
-      "migration": "No consumer migration is required. Fresh keyless ChainTracks deployments can now bootstrap from a valid height-zero Arcade batch; existing CDN-backed, persisted, browser, mobile, explicit-client, and legacy v1 configurations remain compatible and keep the same trust checks."
+      "summary": "Restores completed createAction and signAction Atomic BEEF results to JSON-safe numeric arrays at the public wallet boundary, preserving the historical BRC-100 response shape for legacy applications.",
+      "migration": "No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.1",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.",
-      "migration": "No browser consumer migration is required. Browser entry points, CORS behavior, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible."
+      "summary": "Carries the lockstep browser build with JSON-safe completed createAction and signAction results at the public wallet boundary.",
+      "migration": "No browser consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while browser entry points and binary Wallet Wire behavior remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.1",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.",
-      "migration": "No mobile consumer migration is required. React Native entry points, the mobile bridge, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible."
+      "summary": "Carries the lockstep mobile build with JSON-safe completed createAction and signAction results at the public wallet boundary.",
+      "migration": "No mobile consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while React Native entry points and binary Wallet Wire behavior remain compatible."
     },
     {
       "name": "create-bsv-app",
