@@ -38,6 +38,7 @@ import {
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
+import { walletJsonReplacer, normalizeJsonMangledBytes } from './utils/jsonByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
 
 function deserializeWalletError(data: any): Error | undefined {
@@ -104,10 +105,10 @@ export default class HTTPWalletJSON implements WalletInterface {
           ...(origin ? { Origin: origin } : {}),
           ...(origin ? { Originator: origin } : {})
         },
-        body: JSON.stringify(args)
+        body: JSON.stringify(args, walletJsonReplacer)
       })
 
-      const data = await res.json()
+      const data = normalizeJsonMangledBytes(await res.json())
 
       // Check the HTTP status on the original response
       if (!res.ok) {
