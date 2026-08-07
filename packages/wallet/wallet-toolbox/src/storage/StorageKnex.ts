@@ -88,7 +88,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       inputBEEF: undefined
     }
 
-    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid } }))
+    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
     if (r.proven == null) {
       const reqRawTx = verifyOneOrNone(
         await k('proven_tx_reqs')
