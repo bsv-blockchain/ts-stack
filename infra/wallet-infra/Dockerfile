@@ -17,7 +17,7 @@ RUN npm run build \
 FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 RUN apk add --no-cache nginx \
- && chown -R nginx:www-data /var/lib/nginx
+ && chown -R node:node /var/lib/nginx
 
 COPY ./nginx.conf /etc/nginx/nginx.conf
 
@@ -36,6 +36,6 @@ USER node
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD ["node", "-e", "const port=process.env.HTTP_PORT||'8080';fetch('http://127.0.0.1:'+port+'/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+  CMD ["node", "-e", "const role=(process.env.WALLET_INFRA_ROLE||'all').toLowerCase();const nginx=role!=='monitor'&&(process.env.ENABLE_NGINX??'true')==='true';const port=nginx?'8080':role==='monitor'?(process.env.WALLET_STORAGE_MONITOR_ADMIN_PORT||process.env.ADMIN_PORT):(process.env.HTTP_PORT||'8081');if(!port){process.kill(1,0);process.exit(0)}const path=role==='monitor'?'/healthz':'/';fetch('http://127.0.0.1:'+port+path).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
 
 CMD ["node", "--import", "./out/src/telemetry.js", "out/src/index.js"]

@@ -717,11 +717,6 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       )
     }
 
-    if (monitorTasksEnabled) {
-      await context.monitor.startTasks()
-      log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
-    }
-
     let monitorAdmin: ReturnType<typeof createMonitorAdmin> | undefined
     if (monitorAdminConfig != null) {
       monitorAdmin = createMonitorAdmin(monitorAdminConfig, context)
@@ -746,13 +741,25 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       log.info({ operation: 'nginx.spawn', outcome: 'ok' }, 'nginx started')
     }
 
+    // startTasks intentionally runs until stopTasks is called. Keep it in the
+    // background so API/admin listeners become ready before monitor work, then
+    // join it during shutdown.
+    let monitorTasksPromise: Promise<void> | undefined
+    if (monitorTasksEnabled) {
+      monitorTasksPromise = context.monitor.startTasks()
+      log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
+    }
+
     const shutdown = (signal: NodeJS.Signals): Promise<void> => {
       shutdownPromise ??= (async () => {
         log.info(
           { operation: 'shutdown', signal },
           'wallet-infra shutdown started'
         )
-        if (monitorTasksEnabled) context.monitor.stopTasks()
+        if (monitorTasksEnabled) {
+          context.monitor.stopTasks()
+          await monitorTasksPromise
+        }
         if (monitorAdmin != null) {
           await monitorAdmin.server.close()
           await monitorAdmin.authWallet.destroy()

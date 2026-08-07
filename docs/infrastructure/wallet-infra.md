@@ -190,7 +190,10 @@ local integration tests complete quickly.
 
 ## Health checks
 
-The storage listener exposes `/healthz`. When the optional monitor operator
+The storage listener exposes `/healthz`. The image health check probes nginx on
+port 8080 when it is enabled and otherwise probes the configured application
+listener, so a healthy loopback upstream cannot mask a failed public proxy.
+When the optional monitor operator
 listener is enabled, it exposes its own `/healthz` plus the static `/admin`
 bootstrap page; authenticated and allowlisted BRC-100 clients can use
 `/admin/api`. Monitor:
@@ -203,8 +206,9 @@ bootstrap page; authenticated and allowlisted BRC-100 clients can use
   failures.
 - Database indexes are present and functional.
 
-If this component is deployed behind nginx, also check the nginx listener and the
-upstream app port (`HTTP_PORT`, default `8081`).
+If this component is deployed behind nginx, separately monitor the upstream app
+port (`HTTP_PORT`, default `8081`) for diagnostics; public readiness should use
+the nginx listener.
 
 ## Spec conformance
 

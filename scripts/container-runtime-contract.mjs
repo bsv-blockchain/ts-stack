@@ -205,7 +205,8 @@ const contracts = {
       '"monitor_tasks_enabled":true',
       '"monitor_startup_task_mode":"multiuser"',
       '"monitor_admin_enabled":true',
-      '"operation":"monitor_admin.start"'
+      '"operation":"monitor_admin.start"',
+      '"operation":"nginx.spawn"'
     ],
     forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
