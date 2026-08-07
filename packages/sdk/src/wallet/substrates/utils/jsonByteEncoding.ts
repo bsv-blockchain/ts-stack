@@ -26,35 +26,22 @@ export function walletJsonReplacer (_key: string, value: unknown): unknown {
  * Only values under these keys are ever repaired, so structured objects
  * elsewhere in a result can never be misinterpreted.
  */
-const BYTE_FIELD_NAMES = new Set([
-  'tx',
-  'BEEF',
-  'beef',
-  'rawTx',
-  'inputBEEF',
-  'signature',
-  'ciphertext',
-  'plaintext',
-  'hmac',
-  'encryptedLinkage',
-  'encryptedLinkageProof'
-])
+const BYTE_FIELD_NAME =
+  /^(?:tx|BEEF|beef|rawTx|inputBEEF|signature|ciphertext|plaintext|hmac|encryptedLinkage(?:Proof)?)$/
 
 /** Convert a JSON-mangled Uint8Array ({"0":n,...}) to number[]; return undefined if not that shape. */
 function asMangledBytes (value: unknown): number[] | undefined {
   if (value == null || typeof value !== 'object' || Array.isArray(value) || value instanceof Uint8Array) {
     return undefined
   }
-  const obj = value as Record<number, unknown>
-  const length = Object.keys(obj).length
-  if (length === 0) return undefined
-  const out: number[] = Array.from({ length })
-  for (let i = 0; i < length; i++) {
-    const byte = obj[i]
+  const entries = Object.entries(value)
+  if (entries.length === 0) return undefined
+  const out: number[] = []
+  for (const [key, byte] of entries) {
     // A missing index (non-contiguous keys) or non-numeric value means this is
     // an ordinary object, not a mangled byte array.
-    if (typeof byte !== 'number') return undefined
-    out[i] = byte
+    if (key !== String(out.length) || typeof byte !== 'number') return undefined
+    out.push(byte)
   }
   return out
 }
@@ -66,14 +53,9 @@ function asMangledBytes (value: unknown): number[] | undefined {
  */
 export function normalizeJsonMangledBytes<T> (value: T): T {
   if (value == null || typeof value !== 'object') return value
-  if (Array.isArray(value)) {
-    for (const item of value) normalizeJsonMangledBytes(item)
-    return value
-  }
   const obj = value as Record<string, unknown>
-  for (const key of Object.keys(obj)) {
-    const child = obj[key]
-    if (BYTE_FIELD_NAMES.has(key)) {
+  for (const [key, child] of Object.entries(obj)) {
+    if (BYTE_FIELD_NAME.test(key)) {
       const repaired = asMangledBytes(child)
       if (repaired !== undefined) {
         obj[key] = repaired
