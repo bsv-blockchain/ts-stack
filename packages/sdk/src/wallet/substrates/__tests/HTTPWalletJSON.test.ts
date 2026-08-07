@@ -507,3 +507,51 @@ describe('HTTPWalletJSON – response body passthrough', () => {
     expect(result).toEqual(expected)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Byte-field wire compatibility (Uint8Array JSON mangling)
+// ---------------------------------------------------------------------------
+
+describe('HTTPWalletJSON – byte-field wire compatibility', () => {
+  it('repairs a createAction tx returned as a numeric-keyed object', async () => {
+    // Wallets that JSON.stringify a Uint8Array result serialize tx as
+    // {"0":1,"1":1,...} instead of an array (observed in the wild).
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 72])))
+    const mockFetch = makeFetch({ txid: 'abc', tx: mangledTx })
+    const client = makeClient(mockFetch)
+
+    const result = await client.createAction({ description: 'test action' })
+    expect(result.tx).toEqual([1, 1, 1, 1, 128, 72])
+  })
+
+  it('repairs a mangled signableTransaction.tx from createAction', async () => {
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 9])))
+    const mockFetch = makeFetch({ signableTransaction: { reference: 'ref', tx: mangledTx } })
+    const client = makeClient(mockFetch)
+
+    const result = await client.createAction({ description: 'test action' })
+    expect(result.signableTransaction?.tx).toEqual([1, 1, 1, 1, 9])
+  })
+
+  it('leaves a healthy number[] tx untouched', async () => {
+    const tx = [1, 1, 1, 1, 42]
+    const mockFetch = makeFetch({ txid: 'abc', tx })
+    const client = makeClient(mockFetch)
+
+    const result = await client.createAction({ description: 'test action' })
+    expect(result.tx).toEqual(tx)
+  })
+
+  it('serializes Uint8Array request args (inputBEEF) as JSON arrays', async () => {
+    const mockFetch = makeFetch({ txid: 'abc' })
+    const client = makeClient(mockFetch)
+
+    await client.createAction({
+      description: 'test action',
+      inputBEEF: new Uint8Array([2, 0, 190, 239])
+    })
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.inputBEEF).toEqual([2, 0, 190, 239])
+  })
+})
