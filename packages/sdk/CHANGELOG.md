@@ -296,9 +296,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
-- Preserve `HTTPWalletJSON` byte-array wire compatibility by serializing
-  `Uint8Array` request fields as JSON arrays and normalizing known byte fields
-  returned by older wallet HTTP implementations.
+- Preserve `HTTPWalletJSON` action wire compatibility by serializing
+  `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
+  returned by older wallet HTTP implementations. Generic HTTP errors no longer
+  duplicate the complete request arguments in their message.
 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.

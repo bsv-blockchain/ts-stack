@@ -38,7 +38,7 @@ import {
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
-import { walletJsonReplacer, normalizeJsonMangledBytes } from './utils/jsonByteEncoding.js'
+import { walletJsonReplacer, walletJsonReviver } from './utils/jsonByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
 
 function deserializeWalletError(data: any): Error | undefined {
@@ -79,36 +79,26 @@ export default class HTTPWalletJSON implements WalletInterface {
     this.httpClient = httpClient
 
     // Detect if we're in a browser environment
-    const isBrowser =
-      globalThis.window !== undefined &&
-      typeof document !== 'undefined' &&
-      globalThis.window?.origin !== 'file://'
+    const isBrowser = typeof window !== 'undefined' && window.origin !== 'file://'
 
     this.api = async (call: string, args: object) => {
       // In browser environments, let the browser handle Origin header automatically
       // In Node.js environments, we need to set it manually if originator is provided
-      const origin =
-        !isBrowser && this.originator ? toOriginHeader(this.originator, 'http') : undefined
-
-      if (!isBrowser && origin === undefined) {
-        throw new Error(
-          'HTTPWalletJSON: originator is required when using the HTTP substrate in Node.js. ' +
-            'Pass an originator (e.g. "example.com") to the constructor.'
-        )
+      if (!isBrowser && !this.originator) {
+        throw new Error('HTTPWalletJSON: originator required')
       }
+      const origin = isBrowser ? undefined : toOriginHeader(this.originator!, 'http')
 
       const res = await httpClient(`${this.baseUrl}/${call}`, {
         method: 'POST',
         headers: {
-          Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...(origin ? { Origin: origin } : {}),
-          ...(origin ? { Originator: origin } : {})
+          ...(origin ? { Origin: origin, Originator: origin } : {})
         },
         body: JSON.stringify(args, walletJsonReplacer)
       })
 
-      const data = normalizeJsonMangledBytes(await res.json())
+      const data = JSON.parse(await res.text(), walletJsonReviver)
 
       // Check the HTTP status on the original response
       if (!res.ok) {
@@ -116,12 +106,7 @@ export default class HTTPWalletJSON implements WalletInterface {
           const walletError = deserializeWalletError(data)
           if (walletError !== undefined) throw walletError
         }
-        const err = {
-          call,
-          args,
-          message: data.message ?? `HTTP Client error ${res.status}`
-        }
-        throw new Error(JSON.stringify(err))
+        throw new Error(`${call}: ${data.message ?? `HTTP ${res.status}`}`)
       }
       return data
     }
