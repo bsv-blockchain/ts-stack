@@ -483,6 +483,7 @@ export const walletDependencyEnvironment = () => ({
   ENABLE_NGINX: 'false',
   HTTP_PORT: new URL(WALLET_URL).port,
   WALLET_INFRA_ROLE: 'api',
+  WALLET_STORAGE_MONITOR_ADMIN_ENABLED: 'false',
   WALLET_STORAGE_MONITOR_START_TASKS: 'false'
 })
 

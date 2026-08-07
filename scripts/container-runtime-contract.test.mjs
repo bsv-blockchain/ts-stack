@@ -27,6 +27,7 @@ test('wallet dependency profile coexists with services on port 8080', () => {
   assert.equal(environment.ENABLE_NGINX, 'false')
   assert.equal(environment.HTTP_PORT, '3998')
   assert.equal(environment.WALLET_INFRA_ROLE, 'api')
+  assert.equal(environment.WALLET_STORAGE_MONITOR_ADMIN_ENABLED, 'false')
   assert.equal(environment.WALLET_STORAGE_MONITOR_START_TASKS, 'false')
 })
 
