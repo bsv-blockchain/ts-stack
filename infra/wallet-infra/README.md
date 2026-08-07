@@ -34,6 +34,12 @@ and Wallet Storage HPA prerequisites.
 
 ### Trusted reverse proxies
 
+The official image binds the application listener to `127.0.0.1` when its
+built-in nginx proxy is enabled and to `0.0.0.0` in direct mode. Override this
+with `WALLET_STORAGE_BIND_HOST` when a platform requires a specific IPv4 or IPv6
+interface. A direct container or Kubernetes Service must not use a loopback-only
+bind, while a sidecar or built-in proxy normally should.
+
 Direct deployments should leave `WALLET_STORAGE_TRUST_PROXY_HOPS` unset or set
 it to `0`. Behind a known ingress, set it to the exact number of trusted proxy
 hops (for example, `1` for a single Kubernetes ingress). This lets the built-in

@@ -163,6 +163,8 @@ function firstRequestHeader(req: Request, name: string): string | undefined {
 }
 
 export interface WalletStorageServerOptions {
+  /** Listener bind host. Omit to retain Node's historical all-interface behavior. */
+  host?: string
   port: number
   wallet: Wallet
   monetize: boolean
@@ -223,6 +225,7 @@ export interface WalletStorageServerOptions {
 
 export class StorageServer {
   private readonly app = express()
+  private readonly host?: string
   private readonly port: number
   private readonly storage: StorageProvider
   private readonly wallet: Wallet
@@ -249,6 +252,7 @@ export class StorageServer {
 
   constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
+    this.host = options.host
     this.port = options.port
     this.wallet = options.wallet
     this.monetize = options.monetize
@@ -906,9 +910,11 @@ export class StorageServer {
   server: any
 
   public start(): void {
-    this.server = this.app.listen(this.port, () => {
-      console.log(`WalletStorageServer listening at http://localhost:${this.port}`)
-    })
+    const listening = (): void => {
+      console.log(`WalletStorageServer listening at http://${this.host ?? 'localhost'}:${this.port}`)
+    }
+    this.server =
+      this.host == null ? this.app.listen(this.port, listening) : this.app.listen(this.port, this.host, listening)
     configureHttpServer(this.server, 'WALLET_STORAGE', this.httpPolicy)
   }
 

@@ -83,13 +83,17 @@ const {
 } = process.env
 
 const BSV_NETWORK = process.env.BSV_NETWORK ?? process.env.CHAIN ?? 'main'
-const KNEX_DB_CONNECTION =
-  process.env.KNEX_DB_CONNECTION ??
-  (BSV_NETWORK === 'main'
-    ? process.env.MAIN_KNEX_DB_CONNECTION
-    : BSV_NETWORK === 'test'
-      ? process.env.TEST_KNEX_DB_CONNECTION
-      : undefined)
+
+function readKnexDatabaseConnection(network: string): string | undefined {
+  if (process.env.KNEX_DB_CONNECTION != null) {
+    return process.env.KNEX_DB_CONNECTION
+  }
+  if (network === 'main') return process.env.MAIN_KNEX_DB_CONNECTION
+  if (network === 'test') return process.env.TEST_KNEX_DB_CONNECTION
+  return undefined
+}
+
+const KNEX_DB_CONNECTION = readKnexDatabaseConnection(BSV_NETWORK)
 
 type WalletInfraRole = 'all' | 'api' | 'monitor'
 
@@ -150,6 +154,12 @@ function readBoolean(name: string, fallback: boolean): boolean {
   if (raw === 'true') return true
   if (raw === 'false') return false
   throw new Error(`${name} must be true or false`)
+}
+
+function readStorageBindHost(): string {
+  const configured = process.env.WALLET_STORAGE_BIND_HOST?.trim()
+  if (configured != null && configured !== '') return configured
+  return ENABLE_NGINX === 'true' ? '127.0.0.1' : '0.0.0.0'
 }
 
 function readRole(): WalletInfraRole {
@@ -621,8 +631,10 @@ async function setupWalletStorageAndMonitor(): Promise<WalletRuntimeContext> {
 
     // Set up server options
     const serverOptions: WalletStorageServerOptions & {
+      host: string
       paymentReplayStore: KnexPaymentReplayStore
     } = {
+      host: readStorageBindHost(),
       port: Number(HTTP_PORT),
       wallet,
       monetize: readBoolean('WALLET_STORAGE_MONETIZATION_ENABLED', false),

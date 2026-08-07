@@ -172,11 +172,11 @@ const contracts = {
     migration: 'readiness-after-startup-migration'
   },
   'wallet-infra': {
-    port: 3998,
+    port: 8080,
     environment: {
       BSV_NETWORK: 'test',
-      ENABLE_NGINX: 'false',
-      HTTP_PORT: '3998',
+      ENABLE_NGINX: 'true',
+      HTTP_PORT: '8081',
       KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
       WALLET_INFRA_ROLE: 'all',
@@ -424,6 +424,53 @@ const startWalletDependency = async walletImage => {
   }
 }
 
+const assertComponentCors = async (component, name, contract) => {
+  if (imageContainsCurrentEdgePolicy(component)) {
+    await assertForwardCompatiblePreflight(component, name, contract.port, contract.liveness)
+    return
+  }
+  console.log(`${component} CORS header probe awaits the protected published-version sync`)
+}
+
+const assertAuxiliaryEndpoints = async (component, name, contract) => {
+  for (const endpoint of contract.auxiliaryEndpoints ?? []) {
+    const response = await waitForEndpoint(name, endpoint.port, endpoint)
+    await assertPublicResponse(`${component} ${endpoint.path}`, response)
+  }
+}
+
+const assertRuntimeLogPatterns = async (component, name, contract) => {
+  const logs = await containerLogs(name)
+  for (const pattern of contract.requiredLogPatterns ?? []) {
+    if (!logs.includes(pattern)) {
+      throw new Error(`${component} did not emit required runtime log pattern: ${pattern}\n${logs}`)
+    }
+  }
+  for (const pattern of contract.forbiddenLogPatterns ?? []) {
+    if (logs.includes(pattern)) {
+      throw new Error(`${component} emitted forbidden runtime log pattern: ${pattern}\n${logs}`)
+    }
+  }
+}
+
+const exerciseRunningContainer = async (component, name, contract) => {
+  const liveness = await waitForEndpoint(name, contract.port, {
+    path: contract.liveness,
+    status: 200
+  })
+  await assertPublicResponse(component, liveness)
+  const readiness = await waitForEndpoint(name, contract.port, {
+    path: contract.readiness,
+    status: 200
+  })
+  await assertPublicResponse(component, readiness)
+  await assertComponentCors(component, name, contract)
+  const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
+  await assertPublicResponse(component, transaction)
+  await assertAuxiliaryEndpoints(component, name, contract)
+  await assertRuntimeLogPatterns(component, name, contract)
+}
+
 export const contractNames = () => Object.keys(contracts)
 
 export const contractEnvironment = component => ({ ...contracts[component]?.environment })
@@ -446,41 +493,7 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     }
     const name = `contract-${component}`
     await startContainer(name, image, contract.environment)
-    const liveness = await waitForEndpoint(name, contract.port, {
-      path: contract.liveness,
-      status: 200
-    })
-    await assertPublicResponse(component, liveness)
-    const readiness = await waitForEndpoint(name, contract.port, {
-      path: contract.readiness,
-      status: 200
-    })
-    await assertPublicResponse(component, readiness)
-    const headerCompatibilityVerified = imageContainsCurrentEdgePolicy(component)
-    if (headerCompatibilityVerified) {
-      await assertForwardCompatiblePreflight(component, name, contract.port, contract.liveness)
-    } else {
-      console.log(`${component} CORS header probe awaits the protected published-version sync`)
-    }
-    const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
-    await assertPublicResponse(component, transaction)
-    for (const endpoint of contract.auxiliaryEndpoints ?? []) {
-      const response = await waitForEndpoint(name, endpoint.port, endpoint)
-      await assertPublicResponse(`${component} ${endpoint.path}`, response)
-    }
-    const logs = await containerLogs(name)
-    for (const pattern of contract.requiredLogPatterns ?? []) {
-      if (!logs.includes(pattern)) {
-        throw new Error(
-          `${component} did not emit required runtime log pattern: ${pattern}\n${logs}`
-        )
-      }
-    }
-    for (const pattern of contract.forbiddenLogPatterns ?? []) {
-      if (logs.includes(pattern)) {
-        throw new Error(`${component} emitted forbidden runtime log pattern: ${pattern}\n${logs}`)
-      }
-    }
+    await exerciseRunningContainer(component, name, contract)
     await stopGracefully(name)
     completed = true
   } finally {

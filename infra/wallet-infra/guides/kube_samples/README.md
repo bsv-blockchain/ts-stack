@@ -31,6 +31,8 @@ The sample trusts exactly one reverse-proxy hop because Kubernetes ingress is
 expected to sit directly in front of it. Set
 `WALLET_STORAGE_TRUST_PROXY_HOPS=0` for direct exposure, or to the exact known
 hop count for a different topology. Never trust an arbitrary forwarding chain.
+It also sets `WALLET_STORAGE_BIND_HOST=0.0.0.0` because nginx is disabled and a
+Kubernetes Service must reach the application over the pod's IPv4 address.
 It also uses the existing official-image `default` monitor task profile. A
 multi-user provider should set
 `WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE=multiuser`, keep exactly one monitor

@@ -57,7 +57,8 @@ None; HTTP JSON-RPC only.
 | ---------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | NODE_ENV                                 | No        | `development` or `production`                                                                                                                               |
 | HTTP_PORT                                | No        | Express server port (default: 8081, use 8081 if nginx enabled on 8080)                                                                                      |
-| ENABLE_NGINX                             | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false)                                                                                  |
+| ENABLE_NGINX                             | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: true)                                                                                   |
+| WALLET_STORAGE_BIND_HOST                 | No        | Application listener host (default `127.0.0.1` behind nginx, otherwise `0.0.0.0`)                                                                           |
 | BSV_NETWORK                              | No        | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`); historical monitor alias `CHAIN` is accepted                                          |
 | SERVER_PRIVATE_KEY                       | Yes       | 256-bit hex private key for server identity                                                                                                                 |
 | KNEX_DB_CONNECTION                       | Yes       | Knex database connection JSON string; historical monitor aliases `MAIN_KNEX_DB_CONNECTION` and `TEST_KNEX_DB_CONNECTION` are selected by network            |
@@ -135,7 +136,9 @@ docker build -t wallet-infra:latest .
 # Run with MySQL backend
 docker run -d \
   -e NODE_ENV=production \
+  -e ENABLE_NGINX=false \
   -e HTTP_PORT=8081 \
+  -e WALLET_STORAGE_BIND_HOST=0.0.0.0 \
   -e BSV_NETWORK=main \
   -e SERVER_PRIVATE_KEY=<256-bit-hex> \
   -e KNEX_DB_CONNECTION='{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}' \
