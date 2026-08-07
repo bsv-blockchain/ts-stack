@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.3.0",
+      "publishedVersion": "2.3.1",
       "releaseType": "patch",
-      "summary": "Adds checksum-validating BIP-39 entropy recovery and operator-supplied labels on AuthFetch BRC-105 payment actions while retaining deterministic nonce-derived recovery labels.",
-      "migration": "No consumer migration is required. Mnemonic.toEntropy and AuthFetch payment labels are additive; existing BIP-39, AuthFetch, BRC-105 payment, recovery-label, and SDK 2.x behavior is unchanged."
+      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
+      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
     },
     {
       "name": "@bsv/simple",

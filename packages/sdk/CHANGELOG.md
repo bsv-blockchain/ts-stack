@@ -296,6 +296,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Bind the default `HTTPWalletWire` fetch client to its global receiver so
+  browser `WalletClient` auto-discovery can reach Cicada on port 3301 instead
+  of falling through after an `Illegal invocation` error.
 - Preserve `HTTPWalletJSON` action wire compatibility by serializing
   `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
   returned by older wallet HTTP implementations.
