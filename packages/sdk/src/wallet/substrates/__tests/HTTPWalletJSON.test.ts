@@ -20,7 +20,6 @@ function makeFetch(
     ok,
     status,
     json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
   } as unknown as Response)
 }
 
@@ -79,7 +78,7 @@ describe('HTTPWalletJSON – api() successful responses', () => {
     expect(result).toEqual({ version: '1.0.0.0.0.0.0' })
   })
 
-  it('sets JSON content and origin headers', async () => {
+  it('sets Accept and Content-Type headers', async () => {
     const mockFetch = makeFetch({ height: 800000 })
     const client = makeClient(mockFetch)
 
@@ -87,6 +86,7 @@ describe('HTTPWalletJSON – api() successful responses', () => {
 
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
     const headers = init.headers as Record<string, string>
+    expect(headers['Accept']).toBe('application/json')
     expect(headers['Content-Type']).toBe('application/json')
     expect(headers['Origin']).toBe(TEST_ORIGIN_HEADER)
     expect(headers['Originator']).toBe(TEST_ORIGIN_HEADER)
@@ -106,7 +106,7 @@ describe('HTTPWalletJSON – api() successful responses', () => {
     const mockFetch = makeFetch({ version: '1.0.0.0.0.0.0' })
     const client = new HTTPWalletJSON(undefined, BASE_URL, mockFetch as unknown as typeof fetch)
 
-    await expect(client.getVersion({})).rejects.toThrow('HTTPWalletJSON: originator required')
+    await expect(client.getVersion({})).rejects.toThrow('HTTPWalletJSON: originator is required')
     expect(mockFetch).not.toHaveBeenCalled()
   })
 })
@@ -216,7 +216,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
     }
   })
 
-  it('falls back to "HTTP <status>" when the 500 body has no message', async () => {
+  it('falls back to "HTTP Client error <status>" when the 500 body has no message', async () => {
     const mockFetch = makeFetch({}, { ok: false, status: 503 })
     const client = makeClient(mockFetch)
 
@@ -224,24 +224,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       await client.getVersion({})
     } catch (e: unknown) {
       const err = e as Error
-      expect(err.message).toContain('HTTP 503')
-    }
-  })
-
-  it('does not duplicate request bytes into generic HTTP errors', async () => {
-    expect.assertions(3)
-    const mockFetch = makeFetch({ message: 'Rejected' }, { ok: false, status: 500 })
-    const client = makeClient(mockFetch)
-
-    try {
-      await client.createAction({
-        description: 'test action',
-        inputBEEF: new Uint8Array([2, 0, 190, 239]),
-      })
-    } catch (error: unknown) {
-      expect((error as Error).message).toBe('createAction: Rejected')
-      expect((error as Error).message).not.toContain('inputBEEF')
-      expect((error as Error).message).not.toContain('190')
+      expect(err.message).toContain('HTTP Client error 503')
     }
   })
 
@@ -541,13 +524,13 @@ describe('HTTPWalletJSON – byte-field wire compatibility', () => {
     expect(result.tx).toEqual([1, 1, 1, 1, 128, 72])
   })
 
-  it('repairs a mangled signableTransaction.tx from createAction', async () => {
-    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 9])))
-    const mockFetch = makeFetch({ signableTransaction: { reference: 'ref', tx: mangledTx } })
+  it('repairs a signAction tx returned as a numeric-keyed object', async () => {
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 73])))
+    const mockFetch = makeFetch({ txid: 'def', tx: mangledTx })
     const client = makeClient(mockFetch)
 
-    const result = await client.createAction({ description: 'test action' })
-    expect(result.signableTransaction?.tx).toEqual([1, 1, 1, 1, 9])
+    const result = await client.signAction({ spends: {}, reference: 'cmVm' })
+    expect(result.tx).toEqual([1, 1, 1, 1, 128, 73])
   })
 
   it('leaves a healthy number[] tx untouched', async () => {

@@ -10,8 +10,9 @@
  * or number[]`), and clients sending `Uint8Array` args (e.g. `inputBEEF`)
  * corrupt requests.
  *
- * `walletJsonReplacer` makes serialization safe. `walletJsonReviver` repairs
- * already-corrupted action results produced by the affected deployed wallets.
+ * `walletJsonReplacer` makes serialization safe. `normalizeWalletJsonTx`
+ * repairs already-corrupted action results produced by affected deployed
+ * wallets.
  */
 
 /** JSON.stringify replacer that encodes Uint8Array values as plain number arrays. */
@@ -21,18 +22,21 @@ export function walletJsonReplacer(_key: string, value: unknown): unknown {
 }
 
 /**
- * JSON.parse reviver that repairs the action-result `tx` regression introduced
- * by Uint8Array action serialization. Healthy arrays and all other fields are
- * returned untouched.
+ * Repair the top-level action-result `tx` regression introduced by Uint8Array
+ * action serialization. Healthy arrays and all other fields are returned
+ * untouched.
  */
-export function walletJsonReviver(key: string, value: unknown): unknown {
-  if (key !== 'tx' || !value || typeof value !== 'object' || Array.isArray(value)) {
+export function normalizeWalletJsonTx<T>(value: T): T {
+  const tx = (value as { tx?: unknown } | null)?.tx
+  if (!tx || typeof tx !== 'object' || Array.isArray(tx)) {
     return value
   }
-  const bytes = Object.assign([] as unknown[], value)
-  return bytes.length > 0 &&
-    bytes.length === Object.keys(value).length &&
-    bytes.every(byte => typeof byte === 'number')
-    ? bytes
-    : value
+  const entries = Object.entries(tx)
+  if (
+    entries.length > 0 &&
+    entries.every(([key, byte], index) => key === String(index) && typeof byte === 'number')
+  ) {
+    Object.assign(value as object, { tx: entries.map(([, byte]) => byte) })
+  }
+  return value
 }
