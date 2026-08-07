@@ -28,9 +28,12 @@ if (
   policy.defaultContract?.allowOrigin !== '*' ||
   policy.defaultContract?.allowCredentials !== false ||
   policy.defaultContract?.opaqueOrigin !== 'allowed' ||
+  policy.defaultContract?.requestHeaders !== 'reflect-well-formed-unless-explicitly-configured' ||
   policy.defaultContract?.cspControlsCors !== false
 ) {
-  policyErrors.push('service edge browser policy changed the public/no-credentials contract')
+  policyErrors.push(
+    'service edge browser policy changed the public/no-credentials/header-forward-compatibility contract'
+  )
 }
 for (const testName of policy.requiredContractTests ?? []) {
   if (!canonicalTest.includes(`it('${testName}'`)) {

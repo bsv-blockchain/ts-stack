@@ -216,6 +216,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add `Mnemonic.toEntropy()` to recover and checksum-validate the entropy encoded
+  by a BIP-39 mnemonic without deriving its seed.
+- Add optional caller labels to AuthFetch BRC-105 payment actions while retaining
+  the deterministic nonce-derived recovery label on every payment.
 - Add `Beef.mergeProvenTxs` and opt-in deferred `MerklePath` root validation
   for storage engines that batch independently proven transactions. The final
   compound proof is still validated before use, while shared branches are
@@ -291,6 +295,10 @@ All notable changes to this project will be documented in this file. The format 
 ### Removed
 
 ### Fixed
+
+- Preserve `HTTPWalletJSON` action wire compatibility by serializing
+  `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
+  returned by older wallet HTTP implementations.
 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.

@@ -112,7 +112,10 @@ can report a locally or remotely sourced height; it also includes source health.
 Public browser access is enabled by default. Use
 `CHAINTRACKS_CORS_MODE=allowlist` and
 `CHAINTRACKS_CORS_ALLOWED_ORIGINS` only for a deployment with a closed browser
-caller set. API JSON bodies are capped at 256 KiB, the optional bulk CDN has a
+caller set. Omit `CHAINTRACKS_CORS_ALLOWED_HEADERS` and
+`CHAINTRACKS_CDN_CORS_ALLOWED_HEADERS` for additive well-formed preflight
+header compatibility; set exact comma-separated lists only for a strict
+browser header allowlist. API JSON bodies are capped at 256 KiB, the optional bulk CDN has a
 separate concurrency/timeout policy, and all responses receive the shared
 security-header baseline. See
 [Public Service Edge Security](service-edge-security.md#chaintracks-server-and-reusable-chaintracksservice).

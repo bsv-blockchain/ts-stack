@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Let Storage Server operators select an explicit listener host while retaining
+  the historical omitted-host behavior for existing callers. The official
+  Wallet Infrastructure image uses this to bind direct-mode traffic on IPv4
+  and to keep the application listener on loopback behind nginx.
+- Preserve forward-compatible Storage Server browser preflights by accepting
+  additive well-formed request headers when operators have not configured a
+  strict `WALLET_STORAGE_CORS_ALLOWED_HEADERS` list.
 - Restore completed `createAction` and `signAction` Atomic BEEF results to
   numeric arrays at the public wallet boundary so legacy BRC-100 JSON bridges
   preserve their historical wire shape. Typed byte arrays remain supported by

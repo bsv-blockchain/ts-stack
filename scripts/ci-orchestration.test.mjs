@@ -119,11 +119,12 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
 })
 
-test('specialized workflows are scoped and bounded', () => {
+test('specialized workflows are bounded and required conformance checks always run on PRs', () => {
   const conformance = readFileSync(CONFORMANCE_PATH, 'utf8')
   const runtime = readFileSync(RUNTIME_PATH, 'utf8')
 
-  assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 2)
+  assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 1)
+  assert.match(conformance, /^  pull_request:\n    branches: \[main\]\n\nconcurrency:/m)
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)

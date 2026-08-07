@@ -43,6 +43,7 @@ import {
 import { readMessageBoxPricingConfig } from '../config/pricing.js'
 import type { Knex } from 'knex'
 import { mapWithConcurrency } from '../utils/boundedConcurrency.js'
+import { readDatabaseRetryConfig, withDatabaseConflictRetry } from '../utils/databaseRetry.js'
 
 // Type definition for the incoming message format
 export interface Message {
@@ -545,17 +546,21 @@ function enforceQuota(
   }
 }
 
-async function acquireResourceLocks(
-  transaction: Knex.Transaction,
-  identities: string[],
-  now: Date
-): Promise<void> {
-  const keys = [...new Set(identities)].sort((left, right) => left.localeCompare(right))
-  await transaction('message_resource_locks')
+function resourceLockKeys(identities: string[]): string[] {
+  return [...new Set(identities)].sort((left, right) => left.localeCompare(right))
+}
+
+async function ensureResourceLockRows(knex: Knex, keys: string[], now: Date): Promise<void> {
+  await knex('message_resource_locks')
     .insert(keys.map(identity_key => ({ identity_key, updated_at: now })))
     .onConflict('identity_key')
     .ignore()
-  // Stable ordering prevents deadlocks when multi-recipient requests overlap.
+}
+
+async function acquireResourceLocks(transaction: Knex.Transaction, keys: string[]): Promise<void> {
+  // The short autocommit ensure operation runs before this transaction. That
+  // prevents concurrent INSERT IGNORE shared locks from being upgraded to
+  // FOR UPDATE locks inside long-lived quota transactions on MySQL/PXC.
   await transaction('message_resource_locks')
     .whereIn('identity_key', keys)
     .orderBy('identity_key', 'asc')
@@ -600,89 +605,118 @@ async function storeMessages(
   recipientOutputs: RecipientOutputs
 ): Promise<RouteResult<Array<{ recipient: string; messageId: string }>>> {
   const resourceConfig = readMessageBoxResourceConfig()
+  const databaseRetryConfig = readDatabaseRetryConfig()
   const now = new Date()
   const expiresAt = messageExpiresAt(resourceConfig, now)
+  const lockKeys = resourceLockKeys([senderKey, ...validated.recipients])
+
+  const onRetry = (error: unknown, retry: number, delayMs: number): void => {
+    const code =
+      error != null && typeof error === 'object' && 'code' in error
+        ? String(error.code)
+        : 'serialization-conflict'
+    log.warn(
+      {
+        operation: 'message.store.retry',
+        reason: code,
+        retry,
+        max_retries: databaseRetryConfig.maxRetries,
+        delay_ms: delayMs
+      },
+      'Retrying transient database lock conflict'
+    )
+  }
 
   try {
-    const rows = await runtimeDeps.knex.transaction(async transaction => {
-      await acquireResourceLocks(transaction, [senderKey, ...validated.recipients], now)
+    await withDatabaseConflictRetry(
+      async () => await ensureResourceLockRows(runtimeDeps.knex, lockKeys, now),
+      databaseRetryConfig,
+      onRetry
+    )
+    const rows = await withDatabaseConflictRetry(
+      async () =>
+        await runtimeDeps.knex.transaction(async transaction => {
+          await acquireResourceLocks(transaction, lockKeys)
 
-      await transaction('messageBox')
-        .insert(
-          validated.recipients.map(identityKey => ({
-            identityKey,
-            type: validated.boxType,
-            created_at: now,
-            updated_at: now
-          }))
-        )
-        .onConflict(['type', 'identityKey'])
-        .ignore()
+          await transaction('messageBox')
+            .insert(
+              validated.recipients.map(identityKey => ({
+                identityKey,
+                type: validated.boxType,
+                created_at: now,
+                updated_at: now
+              }))
+            )
+            .onConflict(['type', 'identityKey'])
+            .ignore()
 
-      const messageBoxes = await transaction('messageBox')
-        .whereIn('identityKey', validated.recipients)
-        .where('type', validated.boxType)
-        .select('identityKey', 'messageBoxId')
-      const messageBoxIds = new Map<string, number>(
-        messageBoxes.map(row => [String(row.identityKey), Number(row.messageBoxId)])
-      )
-
-      const storedRows: StoredMessageRow[] = validated.recipients.map(recipient => {
-        const messageId = validated.messageIdByRecipient.get(recipient)
-        const messageBoxId = messageBoxIds.get(recipient)
-        if (messageId == null || messageId === '' || messageBoxId == null) {
-          throw new RouteFailureError(
-            routeFailure(400, 'ERR_INVALID_MESSAGEID', `Missing message data for ${recipient}`)
+          const messageBoxes = await transaction('messageBox')
+            .whereIn('identityKey', validated.recipients)
+            .where('type', validated.boxType)
+            .select('identityKey', 'messageBoxId')
+          const messageBoxIds = new Map<string, number>(
+            messageBoxes.map(row => [String(row.identityKey), Number(row.messageBoxId)])
           )
-        }
-        const body = buildStoredBody(validated, recipient, payment, recipientOutputs)
-        return {
-          messageId,
-          messageBoxId,
-          sender: senderKey,
-          recipient,
-          body,
-          bodyBytes: Buffer.byteLength(body, 'utf8'),
-          created_at: now,
-          updated_at: now,
-          expires_at: expiresAt
-        }
-      })
 
-      const senderUsage = await resourceUsage(transaction, 'sender', senderKey, now)
-      enforceQuota(
-        senderUsage,
-        {
-          messageCount: storedRows.length,
-          bodyBytes: storedRows.reduce((total, row) => total + row.bodyBytes, 0)
-        },
-        resourceConfig.maxSenderMessages,
-        resourceConfig.maxSenderBytes,
-        'ERR_SENDER_QUOTA_EXCEEDED',
-        'The sender storage quota has been reached. Retry after messages expire.'
-      )
+          const storedRows: StoredMessageRow[] = validated.recipients.map(recipient => {
+            const messageId = validated.messageIdByRecipient.get(recipient)
+            const messageBoxId = messageBoxIds.get(recipient)
+            if (messageId == null || messageId === '' || messageBoxId == null) {
+              throw new RouteFailureError(
+                routeFailure(400, 'ERR_INVALID_MESSAGEID', `Missing message data for ${recipient}`)
+              )
+            }
+            const body = buildStoredBody(validated, recipient, payment, recipientOutputs)
+            return {
+              messageId,
+              messageBoxId,
+              sender: senderKey,
+              recipient,
+              body,
+              bodyBytes: Buffer.byteLength(body, 'utf8'),
+              created_at: now,
+              updated_at: now,
+              expires_at: expiresAt
+            }
+          })
 
-      for (const recipient of validated.recipients) {
-        const recipientRows = storedRows.filter(row => row.recipient === recipient)
-        const usage = await resourceUsage(transaction, 'recipient', recipient, now)
-        enforceQuota(
-          usage,
-          {
-            messageCount: recipientRows.length,
-            bodyBytes: recipientRows.reduce((total, row) => total + row.bodyBytes, 0)
-          },
-          resourceConfig.maxInboxMessages,
-          resourceConfig.maxInboxBytes,
-          'ERR_INBOX_QUOTA_EXCEEDED',
-          'The recipient inbox storage quota has been reached. Retry after messages are acknowledged or expire.'
-        )
-      }
+          const senderUsage = await resourceUsage(transaction, 'sender', senderKey, now)
+          enforceQuota(
+            senderUsage,
+            {
+              messageCount: storedRows.length,
+              bodyBytes: storedRows.reduce((total, row) => total + row.bodyBytes, 0)
+            },
+            resourceConfig.maxSenderMessages,
+            resourceConfig.maxSenderBytes,
+            'ERR_SENDER_QUOTA_EXCEEDED',
+            'The sender storage quota has been reached. Retry after messages expire.'
+          )
 
-      await transaction('messages').insert(
-        storedRows.map(({ bodyBytes: _bodyBytes, ...row }) => row)
-      )
-      return storedRows
-    })
+          for (const recipient of validated.recipients) {
+            const recipientRows = storedRows.filter(row => row.recipient === recipient)
+            const usage = await resourceUsage(transaction, 'recipient', recipient, now)
+            enforceQuota(
+              usage,
+              {
+                messageCount: recipientRows.length,
+                bodyBytes: recipientRows.reduce((total, row) => total + row.bodyBytes, 0)
+              },
+              resourceConfig.maxInboxMessages,
+              resourceConfig.maxInboxBytes,
+              'ERR_INBOX_QUOTA_EXCEEDED',
+              'The recipient inbox storage quota has been reached. Retry after messages are acknowledged or expire.'
+            )
+          }
+
+          await transaction('messages').insert(
+            storedRows.map(({ bodyBytes: _bodyBytes, ...row }) => row)
+          )
+          return storedRows
+        }),
+      databaseRetryConfig,
+      onRetry
+    )
 
     const results = rows.map(({ recipient, messageId }) => ({ recipient, messageId }))
     await mapWithConcurrency(

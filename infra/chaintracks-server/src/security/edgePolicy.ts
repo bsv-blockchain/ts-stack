@@ -51,6 +51,8 @@ const DEFAULT_EXPOSED_HEADERS = [
   'X-BSV-Payment-Version'
 ]
 
+const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
 export interface CorsPolicyOptions {
   environmentPrefix: string
   methods: string[]
@@ -166,6 +168,30 @@ function readCsv(name: string, fallback: string[] = []): string[] {
   return [...new Set(values)]
 }
 
+function mergeHeaderNames(...groups: string[][]): string[] {
+  const names = new Map<string, string>()
+  for (const name of groups.flat()) {
+    const normalized = name.toLowerCase()
+    if (!names.has(normalized)) names.set(normalized, name)
+  }
+  return [...names.values()]
+}
+
+function responseAllowedHeaders(
+  req: Request,
+  configuredHeaders: string[],
+  reflectRequestedHeaders: boolean
+): string[] {
+  if (!reflectRequestedHeaders) return configuredHeaders
+  const requested = req.get('access-control-request-headers')
+  if (requested == null || requested.trim() === '') return configuredHeaders
+  const requestedHeaders = requested
+    .split(',')
+    .map(name => name.trim())
+    .filter(name => HTTP_HEADER_NAME.test(name))
+  return mergeHeaderNames(configuredHeaders, requestedHeaders)
+}
+
 function normalizeOrigin(origin: string, name: string): string {
   if (origin === 'null') throw new Error(`${name} must not contain the opaque "null" origin`)
   let parsed: URL
@@ -275,10 +301,20 @@ export function corsPolicy(options: CorsPolicyOptions): RequestHandler {
   if (policy.mode === 'public' && options.allowCredentials === true) {
     throw new Error('Public CORS mode cannot be combined with cookie credentials')
   }
+  const allowedHeadersVariable = `${options.environmentPrefix}_CORS_ALLOWED_HEADERS`
   const allowedHeaders = readCsv(
-    `${options.environmentPrefix}_CORS_ALLOWED_HEADERS`,
+    allowedHeadersVariable,
     options.allowedHeaders ?? DEFAULT_ALLOWED_HEADERS
   )
+  // Public protocol clients evolve independently from service deployments.
+  // When an operator or embedding application has not supplied a strict
+  // header allowlist, preserve that compatibility by adding every well-formed
+  // requested preflight header to the known protocol defaults. CORS is not an
+  // authentication boundary; endpoints still validate and authorize headers.
+  const reflectRequestedHeaders =
+    (process.env[allowedHeadersVariable] == null ||
+      process.env[allowedHeadersVariable]?.trim() === '') &&
+    options.allowedHeaders === undefined
   const exposedHeaders = readCsv(
     `${options.environmentPrefix}_CORS_EXPOSED_HEADERS`,
     options.exposedHeaders ?? DEFAULT_EXPOSED_HEADERS
@@ -298,9 +334,10 @@ export function corsPolicy(options: CorsPolicyOptions): RequestHandler {
     // from opaque origins such as sandboxed documents, file-based apps, and
     // mobile webviews, which send `Origin: null` and are covered by `*`.
     if (policy.mode === 'public') {
+      const responseHeaders = responseAllowedHeaders(req, allowedHeaders, reflectRequestedHeaders)
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
-      res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(', '))
+      res.setHeader('Access-Control-Allow-Headers', responseHeaders.join(', '))
       res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))
       res.setHeader('Access-Control-Max-Age', String(maxAgeSeconds))
       if (req.method === 'OPTIONS') {
@@ -338,9 +375,10 @@ export function corsPolicy(options: CorsPolicyOptions): RequestHandler {
     }
 
     appendVary(res, 'Origin')
+    const responseHeaders = responseAllowedHeaders(req, allowedHeaders, reflectRequestedHeaders)
     res.setHeader('Access-Control-Allow-Origin', configuredOrigin)
     res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
-    res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(', '))
+    res.setHeader('Access-Control-Allow-Headers', responseHeaders.join(', '))
     res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))
     res.setHeader('Access-Control-Max-Age', String(maxAgeSeconds))
     if (options.allowCredentials === true) {
