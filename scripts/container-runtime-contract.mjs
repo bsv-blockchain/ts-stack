@@ -405,8 +405,10 @@ const startWalletDependency = async walletImage => {
     throw new Error('--wallet-image is required for this component')
   }
   const contract = contracts['wallet-infra']
-  await startContainer('contract-wallet-dependency', walletImage, contract.environment)
-  const ready = await waitForEndpoint('contract-wallet-dependency', contract.port, {
+  const environment = walletDependencyEnvironment()
+  const port = Number(environment.HTTP_PORT)
+  await startContainer('contract-wallet-dependency', walletImage, environment)
+  const ready = await waitForEndpoint('contract-wallet-dependency', port, {
     path: contract.readiness,
     status: 200
   })
@@ -415,7 +417,7 @@ const startWalletDependency = async walletImage => {
     await assertForwardCompatiblePreflight(
       'wallet-infra dependency',
       'contract-wallet-dependency',
-      contract.port,
+      port,
       contract.liveness
     )
   } else {
@@ -475,6 +477,14 @@ const exerciseRunningContainer = async (component, name, contract) => {
 export const contractNames = () => Object.keys(contracts)
 
 export const contractEnvironment = component => ({ ...contracts[component]?.environment })
+
+export const walletDependencyEnvironment = () => ({
+  ...contracts['wallet-infra'].environment,
+  ENABLE_NGINX: 'false',
+  HTTP_PORT: new URL(WALLET_URL).port,
+  WALLET_INFRA_ROLE: 'api',
+  WALLET_STORAGE_MONITOR_START_TASKS: 'false'
+})
 
 export async function runContainerRuntimeContract({ component, image, walletImage }) {
   const contract = contracts[component]
