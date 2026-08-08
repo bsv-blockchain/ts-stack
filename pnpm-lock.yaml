@@ -8,6 +8,11 @@ overrides:
   brace-expansion@<5.0.9: 5.0.9
   typed-rest-client@2.3.1>qs: 6.15.3
 
+patchedDependencies:
+  image-size@1.2.1:
+    hash: 61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4
+    path: patches/image-size@1.2.1.patch
+
 importers:
 
   .:
@@ -6973,8 +6978,8 @@ packages:
     resolution: {integrity: sha512-Tz09sEL2EEuv5fFowm419c1+a/jSMiBjI9gHxVLrVdbUkkNUUfjsVYs9pVZu5oCon/kmRh9TfLEObFtkVxmY0w==}
     engines: {node: '>=8.0.0'}
 
-  nanoid@3.3.16:
-    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
+  nanoid@3.3.17:
+    resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -12956,7 +12961,7 @@ snapshots:
 
   ieee754@1.2.1: {}
 
-  image-size@1.2.1:
+  image-size@1.2.1(patch_hash=61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4):
     dependencies:
       queue: 6.0.2
 
@@ -14166,7 +14171,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.36.1
-      image-size: 1.2.1
+      image-size: 1.2.1(patch_hash=61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4)
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
@@ -14644,7 +14649,7 @@ snapshots:
     dependencies:
       lru.min: 1.1.4
 
-  nanoid@3.3.16: {}
+  nanoid@3.3.17: {}
 
   napi-build-utils@2.0.0: {}
 
@@ -14900,7 +14905,7 @@ snapshots:
 
   postcss@8.5.23:
     dependencies:
-      nanoid: 3.3.16
+      nanoid: 3.3.17
       picocolors: 1.1.1
       source-map-js: 1.2.1
 

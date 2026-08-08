@@ -20,6 +20,14 @@ allowBuilds:
   sqlite3: true
   unrs-resolver: true
 strictDepBuilds: true
+# Metro 0.87 currently requires image-size 1.x and no patched upstream release
+# exists for these advisories. The exact locked package is remediated by the
+# governed patch below, so the registry findings are ignored only for that
+# locally verified code.
+auditConfig:
+  ignoreCves:
+    - CVE-2025-71330
+    - CVE-2025-71329
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
@@ -41,3 +49,8 @@ overrides:
   # exactly. Keep this parent-scoped substitution until upstream publishes a
   # release that depends on qs 6.15.2 or newer.
   'typed-rest-client@2.3.1>qs': 6.15.3
+
+patchedDependencies:
+  # Remove after Metro resolves an upstream image-size release that rejects
+  # zero-length ICNS entries and always advances through JXL boxes.
+  image-size@1.2.1: patches/image-size@1.2.1.patch
