@@ -35,7 +35,6 @@ import {
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
-
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'

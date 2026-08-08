@@ -18,7 +18,6 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../../utility/utilityHelpers'
-
 import { TransactionStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
 import { blockHash } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
