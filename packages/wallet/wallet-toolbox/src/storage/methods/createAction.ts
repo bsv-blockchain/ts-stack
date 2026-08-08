@@ -35,6 +35,7 @@ import {
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
+import { stripBrc153ReferenceLabels } from '../../utility/brc153ReferenceLabels'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
@@ -675,7 +676,7 @@ async function createNewTxRecord(
   }
   newTx.transactionId = await storage.insertTransaction(newTx, trx)
 
-  const labelNames = [...new Set(vargs.labels)]
+  const labelNames = [...new Set(stripBrc153ReferenceLabels(vargs.labels))]
   const labels = await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)
   for (const label of labelNames) {
     const txLabel = labels[label]

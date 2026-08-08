@@ -1,6 +1,9 @@
 import { ListActionsArgs } from '@bsv/sdk'
 import { _tu, TestWalletProviderNoSetup } from '../../utils/TestUtilsWalletStorage'
-import { makeBrc153ReferenceLabel, parseBrc153ReferenceLabel } from '../../../src/utility/brc153ReferenceLabels'
+import {
+  makeBrc153ReferenceLabel,
+  parseBrc153ReferenceLabel
+} from '../../../src/utility/brc153ReferenceLabels'
 import path from 'node:path'
 import 'fake-indexeddb/auto'
 

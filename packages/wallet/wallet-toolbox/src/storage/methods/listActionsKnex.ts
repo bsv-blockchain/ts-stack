@@ -16,7 +16,7 @@ import { verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
-import { makeBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
+import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 
 
 async function enrichActionLabels (
@@ -27,8 +27,7 @@ async function enrichActionLabels (
 ): Promise<void> {
   action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
   if (tx.reference != null && tx.reference !== '') {
-    const referenceLabel = makeBrc153ReferenceLabel(tx.reference)
-    if (!action.labels.includes(referenceLabel)) action.labels.push(referenceLabel)
+    action.labels = applyBrc153ReferenceLabel(action.labels, tx.reference)
   }
   if (timeFilterRequested) {
     const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : Number.NaN

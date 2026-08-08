@@ -1,6 +1,6 @@
 import { Utils } from '@bsv/sdk'
 
-const REFERENCE_PREFIX = 'reference '
+export const BRC153_REFERENCE_PREFIX = 'reference '
 
 /**
  * Build the BRC-153 synthetic listActions label for an action reference.
@@ -8,7 +8,30 @@ const REFERENCE_PREFIX = 'reference '
  */
 export function makeBrc153ReferenceLabel (referenceBase64: string): string {
   const bytes = Utils.toArray(referenceBase64, 'base64')
-  return `${REFERENCE_PREFIX}${Utils.toHex(bytes)}`
+  return `${BRC153_REFERENCE_PREFIX}${Utils.toHex(bytes)}`
+}
+
+/**
+ * True iff the label uses the reserved BRC-153 reference prefix.
+ */
+export function isBrc153ReferenceLabel (label: string): boolean {
+  return label.startsWith(BRC153_REFERENCE_PREFIX)
+}
+
+/**
+ * Remove every reserved BRC-153 reference label from a label list.
+ */
+export function stripBrc153ReferenceLabels (labels: string[]): string[] {
+  return labels.filter(label => !isBrc153ReferenceLabel(label))
+}
+
+/**
+ * Strip any reserved reference labels, then append the wallet-authored synthetic label.
+ */
+export function applyBrc153ReferenceLabel (labels: string[], referenceBase64: string): string[] {
+  const next = stripBrc153ReferenceLabels(labels)
+  next.push(makeBrc153ReferenceLabel(referenceBase64))
+  return next
 }
 
 /**
@@ -16,8 +39,8 @@ export function makeBrc153ReferenceLabel (referenceBase64: string): string {
  * Returns undefined if the label is not a valid reference label.
  */
 export function parseBrc153ReferenceLabel (label: string): string | undefined {
-  if (!label.startsWith(REFERENCE_PREFIX)) return undefined
-  const hex = label.slice(REFERENCE_PREFIX.length)
+  if (!label.startsWith(BRC153_REFERENCE_PREFIX)) return undefined
+  const hex = label.slice(BRC153_REFERENCE_PREFIX.length)
   if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-f]+$/.test(hex)) return undefined
   return Utils.toBase64(Utils.toArray(hex, 'hex'))
 }

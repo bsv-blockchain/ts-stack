@@ -1,5 +1,10 @@
 import { Utils } from '@bsv/sdk'
-import { makeBrc153ReferenceLabel, parseBrc153ReferenceLabel } from '../brc153ReferenceLabels'
+import {
+  applyBrc153ReferenceLabel,
+  makeBrc153ReferenceLabel,
+  parseBrc153ReferenceLabel,
+  stripBrc153ReferenceLabels
+} from '../brc153ReferenceLabels'
 
 describe('brc153ReferenceLabels', () => {
   it('round-trips base64 reference through the synthetic hex label', () => {
@@ -15,5 +20,13 @@ describe('brc153ReferenceLabels', () => {
     expect(parseBrc153ReferenceLabel('reference ')).toBeUndefined()
     expect(parseBrc153ReferenceLabel('reference xyz')).toBeUndefined()
     expect(parseBrc153ReferenceLabel('reference ab')).toBe('qw==')
+  })
+
+  it('strips reserved labels and replaces them with the wallet-authored value', () => {
+    const reference = Utils.toBase64([0xde, 0xad, 0xbe, 0xef])
+    const forged = 'reference 00000000'
+    const labels = applyBrc153ReferenceLabel(['payment', forged, 'personal'], reference)
+    expect(labels).toEqual(['payment', 'personal', makeBrc153ReferenceLabel(reference)])
+    expect(stripBrc153ReferenceLabels(['a', forged, 'b'])).toEqual(['a', 'b'])
   })
 })
