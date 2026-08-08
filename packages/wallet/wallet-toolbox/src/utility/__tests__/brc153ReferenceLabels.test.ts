@@ -3,7 +3,7 @@ import {
   applyBrc153ReferenceLabel,
   makeBrc153ReferenceLabel,
   parseBrc153ReferenceLabel,
-  stripBrc153ReferenceLabels
+  rejectBrc153ReferenceLabels
 } from '../brc153ReferenceLabels'
 
 describe('brc153ReferenceLabels', () => {
@@ -22,11 +22,14 @@ describe('brc153ReferenceLabels', () => {
     expect(parseBrc153ReferenceLabel('reference ab')).toBe('qw==')
   })
 
-  it('strips reserved labels and replaces them with the wallet-authored value', () => {
+  it('overwrites any reserved reference labels with the wallet-authored value', () => {
     const reference = Utils.toBase64([0xde, 0xad, 0xbe, 0xef])
     const forged = 'reference 00000000'
     const labels = applyBrc153ReferenceLabel(['payment', forged, 'personal'], reference)
     expect(labels).toEqual(['payment', 'personal', makeBrc153ReferenceLabel(reference)])
-    expect(stripBrc153ReferenceLabels(['a', forged, 'b'])).toEqual(['a', 'b'])
+  })
+
+  it('drops caller-supplied reserved labels on create/internalize', () => {
+    expect(rejectBrc153ReferenceLabels(['a', 'reference deadbeef', 'b'])).toEqual(['a', 'b'])
   })
 })

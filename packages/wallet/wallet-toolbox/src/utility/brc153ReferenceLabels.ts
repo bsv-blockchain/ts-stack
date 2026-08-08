@@ -19,19 +19,20 @@ export function isBrc153ReferenceLabel (label: string): boolean {
 }
 
 /**
- * Remove every reserved BRC-153 reference label from a label list.
+ * Ensure labels contain exactly one wallet-authored `reference <hex>`.
+ * Any existing reserved-prefix labels are replaced.
  */
-export function stripBrc153ReferenceLabels (labels: string[]): string[] {
-  return labels.filter(label => !isBrc153ReferenceLabel(label))
+export function applyBrc153ReferenceLabel (labels: string[], referenceBase64: string): string[] {
+  const next = labels.filter(label => !isBrc153ReferenceLabel(label))
+  next.push(makeBrc153ReferenceLabel(referenceBase64))
+  return next
 }
 
 /**
- * Strip any reserved reference labels, then append the wallet-authored synthetic label.
+ * Drop caller-supplied reserved reference labels (create/internalize).
  */
-export function applyBrc153ReferenceLabel (labels: string[], referenceBase64: string): string[] {
-  const next = stripBrc153ReferenceLabels(labels)
-  next.push(makeBrc153ReferenceLabel(referenceBase64))
-  return next
+export function rejectBrc153ReferenceLabels (labels: string[]): string[] {
+  return labels.filter(label => !isBrc153ReferenceLabel(label))
 }
 
 /**
