@@ -29,13 +29,6 @@ export function applyBrc153ReferenceLabel (labels: string[], referenceBase64: st
 }
 
 /**
- * Drop caller-supplied reserved reference labels (create/internalize).
- */
-export function rejectBrc153ReferenceLabels (labels: string[]): string[] {
-  return labels.filter(label => !isBrc153ReferenceLabel(label))
-}
-
-/**
  * Parse a BRC-153 synthetic reference label back to the BRC-100 Base64String reference.
  * Returns undefined if the label is not a valid reference label.
  */

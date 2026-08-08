@@ -2,8 +2,7 @@ import { Utils } from '@bsv/sdk'
 import {
   applyBrc153ReferenceLabel,
   makeBrc153ReferenceLabel,
-  parseBrc153ReferenceLabel,
-  rejectBrc153ReferenceLabels
+  parseBrc153ReferenceLabel
 } from '../brc153ReferenceLabels'
 
 describe('brc153ReferenceLabels', () => {
@@ -27,9 +26,5 @@ describe('brc153ReferenceLabels', () => {
     const forged = 'reference 00000000'
     const labels = applyBrc153ReferenceLabel(['payment', forged, 'personal'], reference)
     expect(labels).toEqual(['payment', 'personal', makeBrc153ReferenceLabel(reference)])
-  })
-
-  it('drops caller-supplied reserved labels on create/internalize', () => {
-    expect(rejectBrc153ReferenceLabels(['a', 'reference deadbeef', 'b'])).toEqual(['a', 'b'])
   })
 })
