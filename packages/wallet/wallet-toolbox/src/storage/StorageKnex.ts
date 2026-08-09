@@ -134,8 +134,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   protected override supportsActionBatchPersistence (): boolean { return true }
   protected override requiresActionBatchCleanupBeforeCreateAction (): boolean { return false }
 
-  async readSettings (): Promise<TableSettings> {
-    return this.validateEntity(verifyOne(await this.toDb()<TableSettings>('settings')))
+  async readSettings (trx?: TrxToken): Promise<TableSettings> {
+    return this.validateEntity(verifyOne(await this.toDb(trx)<TableSettings>('settings')))
   }
 
   override async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
@@ -1317,7 +1317,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * @param trx
    */
   async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
-    this._settings ??= await this.readSettings()
+    this._settings ??= await this.readSettings(trx)
 
     // Always run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
     // This is necessary because PRAGMA foreign_keys is a per-connection setting,
