@@ -1095,25 +1095,16 @@ export class WalletPermissionsManager implements WalletInterface {
         })
       }
 
-      const created = await this.createPermissionTokensBestEffort(toCreate)
-      const renewed = await this.renewPermissionTokensBestEffort(toRenew)
-      for (const req of [...created, ...renewed]) {
-        this.markRecentGrant(req)
-      }
-
-      // Success - resolve all pending promises for this request
-      for (const p of matching.pending) {
-        p.resolve(true)
-      }
+      // A user-visible grouped grant is atomic from the caller's perspective:
+      // never resolve the waiting wallet call if one of the requested tokens
+      // failed to persist. The best-effort helpers intentionally suppress
+      // singleton failures and are therefore only suitable for maintenance
+      // operations where a partial result is explicitly returned.
+      await this.persistPermissionGrant(toCreate, toRenew)
+      this.settleActiveGrant(params.requestID, matching, 'resolve', true)
     } catch (error) {
-      // Failure - reject all pending promises so callers don't hang forever
-      for (const p of matching.pending) {
-        p.reject(error)
-      }
+      this.settleActiveGrant(params.requestID, matching, 'reject', error)
       throw error
-    } finally {
-      // Always clean up the request entry
-      this.activeRequests.delete(params.requestID)
     }
   }
 
@@ -1151,6 +1142,25 @@ export class WalletPermissionsManager implements WalletInterface {
       p.reject(err)
     }
     this.activeRequests.delete(requestID)
+  }
+
+  private settleActiveGrant(
+    requestID: string,
+    matching: { pending: Array<{ resolve: (value: any) => void; reject: (error: any) => void }> },
+    method: 'resolve' | 'reject',
+    value: any
+  ): void {
+    for (const pending of matching.pending) pending[method](value)
+    this.activeRequests.delete(requestID)
+  }
+
+  private async persistPermissionGrant(
+    toCreate: Array<{ request: PermissionRequest; expiry: number; amount?: number }>,
+    toRenew: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
+  ): Promise<void> {
+    const created = await this.createPermissionTokensBestEffort(toCreate, true)
+    const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
+    for (const request of [...created, ...renewed]) this.markRecentGrant(request)
   }
 
   public async denyGroupedPermission(requestID: string): Promise<void> {
@@ -1238,16 +1248,13 @@ export class WalletPermissionsManager implements WalletInterface {
       }
     }
 
-    const created = await this.createPermissionTokensBestEffort(toCreate)
-    const renewed = await this.renewPermissionTokensBestEffort(toRenew)
-    for (const req of [...created, ...renewed]) {
-      this.markRecentGrant(req)
+    try {
+      await this.persistPermissionGrant(toCreate, toRenew)
+      this.settleActiveGrant(params.requestID, matching, 'resolve', true)
+    } catch (error) {
+      this.settleActiveGrant(params.requestID, matching, 'reject', error)
+      throw error
     }
-
-    for (const p of matching.pending) {
-      p.resolve(true)
-    }
-    this.activeRequests.delete(params.requestID)
   }
 
   public async denyCounterpartyPermission(requestID: string): Promise<void> {
@@ -3083,13 +3090,14 @@ export class WalletPermissionsManager implements WalletInterface {
   private async runBestEffortBatches<T, R>(
     items: T[],
     chunkSize: number,
-    runChunk: (chunk: T[]) => Promise<R[]>
+    runChunk: (chunk: T[]) => Promise<R[]>,
+    strict = false
   ): Promise<R[]> {
     if (items.length === 0) return []
     const out: R[] = []
     for (let i = 0; i < items.length; i += chunkSize) {
       const chunk = items.slice(i, i + chunkSize)
-      out.push(...(await this.runBestEffortChunk(chunk, runChunk)))
+      out.push(...(strict ? await runChunk(chunk) : await this.runBestEffortChunk(chunk, runChunk)))
     }
     return out
   }
@@ -3146,7 +3154,8 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   private async createPermissionTokensBestEffort(
-    items: Array<{ request: PermissionRequest; expiry: number; amount?: number }>
+    items: Array<{ request: PermissionRequest; expiry: number; amount?: number }>,
+    strict = false
   ): Promise<PermissionRequest[]> {
     const CHUNK = 25
     return await this.runBestEffortBatches(items, CHUNK, async chunk => {
@@ -3164,11 +3173,12 @@ export class WalletPermissionsManager implements WalletInterface {
         this.adminOriginator
       )
       return built.map(b => b.request)
-    })
+    }, strict)
   }
 
   private async renewPermissionTokensBestEffort(
-    items: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
+    items: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>,
+    strict = false
   ): Promise<PermissionRequest[]> {
     const CHUNK = 15
     return await this.runBestEffortBatches(items, CHUNK, async chunk => {
@@ -3231,7 +3241,7 @@ export class WalletPermissionsManager implements WalletInterface {
       })
       if (!txid) throw new Error('Failed to finalize renewal transaction')
       return built.map(b => b.request)
-    })
+    }, strict)
   }
 
   private async coalescePermissionTokens(

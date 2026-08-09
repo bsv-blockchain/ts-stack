@@ -19,25 +19,38 @@ allowBuilds:
   mongodb-memory-server: true
   sqlite3: true
   unrs-resolver: true
-strictDepBuilds: true
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@bsv/*'
-trustPolicy: no-downgrade
-# Apply provenance downgrade checks to the recent supply-chain window. Older
-# packages predate consistent registry attestations and otherwise create known
-# false positives (for example chokidar 4.0.3 in pnpm's own documentation).
-trustPolicyIgnoreAfter: 525600
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
 # security-patched release until Jest adopts it directly.
 overrides:
   brace-expansion@<5.0.9: 5.0.9
+  # Vite's PostCSS graph permits nanoid 3 releases older than the security
+  # fix. Select the first patched 3.x release without changing its public API.
+  nanoid@<3.3.17: 3.3.17
   # Stryker's latest typed-rest-client 2.3.1 pins vulnerable qs 6.15.1
   # exactly. Keep this parent-scoped substitution until upstream publishes a
   # release that depends on qs 6.15.2 or newer.
   'typed-rest-client@2.3.1>qs': 6.15.3
+patchedDependencies:
+  image-size@1.2.1: patches/image-size@1.2.1.patch
+auditConfig:
+  # These advisories have no published fixed image-size release. The committed
+  # pnpm patch rejects their non-progressing ICNS, HEIF, and JPEG XL records;
+  # keep ignoring only these exact advisory IDs until Metro can consume a
+  # patched upstream release.
+  ignoreGhsas:
+    - GHSA-5p2g-fcmc-qvqq
+    - GHSA-w3rx-r6r6-pgpr
+strictDepBuilds: true
+trustPolicy: no-downgrade
+# Apply provenance downgrade checks to the recent supply-chain window. Older
+# packages predate consistent registry attestations and otherwise create known
+# false positives (for example chokidar 4.0.3 in pnpm's own documentation).
+trustPolicyIgnoreAfter: 525600

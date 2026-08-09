@@ -20,10 +20,19 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 19)
+  assert.equal(overrides.length, 20)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
+})
+
+test('image-size patch contains both parser progress guards', () => {
+  const patch = fs.readFileSync(path.join(process.cwd(), 'patches/image-size@1.2.1.patch'), 'utf8')
+  assert.match(
+    patch,
+    /if \(imageLength < SIZE_HEADER \|\| imageLength > input\.length - imageOffset\)/
+  )
+  assert.match(patch, /if \(boxSize < 8\)/)
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {

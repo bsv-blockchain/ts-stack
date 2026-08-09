@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-09",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,11 +144,11 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-08-04",
-    "method": "Regenerated each standalone npm lockfile without gaxios, uuid, or brace-expansion overrides and compared the resulting natural graph; separately rechecked the root Jest/minimatch, typed-rest-client/qs, and isolated Redocly codegen closures, then refreshed the affected locks against the current brace-expansion, fast-uri, ip-address, and socket.io-parser advisories.",
-    "retainedCount": 19,
-    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. No override can be removed safely in this wave.",
-    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, or Socket.IO dependency changes."
+    "reviewedAt": "2026-08-09",
+    "method": "Rechecked all retained root and standalone overrides against their current natural dependency graphs, refreshed the root lock against the current advisory database, and reproduced the new nanoid and image-size findings before selecting the narrowest compatible override and committed parser patch.",
+    "retainedCount": 20,
+    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. The nanoid override selects the first patched 3.x release for the Vite/PostCSS graph. No override can be removed safely in this wave.",
+    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [
     {
@@ -156,6 +156,12 @@
       "selector": "brace-expansion@<5.0.9",
       "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "nanoid@<3.3.17",
+      "value": "3.3.17",
+      "exceptionId": "nanoid-postcss-advisory-override"
     },
     {
       "source": "pnpm-workspace.yaml",

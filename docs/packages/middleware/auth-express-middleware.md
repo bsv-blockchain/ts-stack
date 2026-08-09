@@ -3,7 +3,7 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.0'
+version: '2.2.1'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-04'
 last_verified: '2026-08-04'

@@ -200,6 +200,9 @@ messages:
   `408`/`413`/`503` rates.
 - Validate authorization separately after identity authentication.
 - Keep request body limits and normal Express hardening in place.
+- Late authentication failures after a response or connection has already
+  settled are contained to that request and are never written as a second
+  Express response.
 
 ## API
 
