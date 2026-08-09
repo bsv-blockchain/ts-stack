@@ -8,7 +8,7 @@ verifiable certificates.
 ## Requirements
 
 - Node.js 22 or newer
-- Express 5
+- Express 4.18 or newer, including Express 5
 - A BRC-100 `WalletInterface`
 
 The package ships native ESM and CommonJS entry points with declarations for
@@ -19,6 +19,11 @@ both module systems.
 ```bash
 npm install @bsv/auth-express-middleware @bsv/sdk express
 ```
+
+Express is a peer dependency, so the middleware uses the application's single
+Express runtime and type graph. This prevents duplicate Express installations
+from making `AuthRequest` or the returned middleware incompatible with the
+application's route types.
 
 ## Basic use
 
@@ -62,7 +67,8 @@ const auth = createAuthMiddleware({
   logLevel: 'error',
   transportLimits: {
     requestTimeoutMs: 30_000,
-    maxPendingRequests: 1_000
+    maxPendingRequests: 1_000,
+    maxResponseBytes: 8 * 1024 * 1024
   }
 })
 ```
@@ -82,6 +88,10 @@ const auth = createAuthMiddleware({
   certificate, and response-signing state. It defaults to 30 seconds.
 - `transportLimits.maxPendingRequests` bounds per-process pending protocol
   state. It defaults to 1,000 and fails closed with `503` at capacity.
+- `transportLimits.maxResponseBytes` bounds application responses buffered for
+  BRC-104 signing, including files passed to `res.sendFile`. It defaults to 8
+  MiB and fails closed with a signed `413` response. Set it to `-1` only when
+  the embedding service enforces an equivalent response budget.
 
 Invalid option types fail during startup.
 
@@ -186,9 +196,13 @@ messages:
   temporarily wrapped while an authenticated response is signed.
 - Do not trust `req.auth.identityKey === 'unknown'` as authorization.
 - Use shared session state for multi-instance deployments.
-- Keep timeouts and capacity limits finite and monitor `408`/`503` rates.
+- Keep timeouts, response sizes, and capacity limits finite and monitor
+  `408`/`413`/`503` rates.
 - Validate authorization separately after identity authentication.
 - Keep request body limits and normal Express hardening in place.
+- Late authentication failures after a response or connection has already
+  settled are contained to that request and are never written as a second
+  Express response.
 
 ## API
 

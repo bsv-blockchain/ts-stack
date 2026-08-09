@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-07-24T22:49:48.768Z",
-  "totalVectors": 6650,
-  "totalFiles": 74,
+  "timestamp": "2026-08-06T03:52:21.445Z",
+  "totalVectors": 6681,
+  "totalFiles": 75,
   "parseErrors": 0,
   "suites": [
     {
@@ -28494,6 +28494,166 @@
         },
         {
           "name": "sync.gasprotocol.20",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "transport/air-gap-optical",
+      "cases": [
+        {
+          "name": "transport.air-gap-optical.crc32.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.length.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.length.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.length.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.encode.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.decode.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.decode.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.decode.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.session.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.session.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.session.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.session.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "transport.air-gap-optical.reject.31",
           "pass": true,
           "error": null
         }

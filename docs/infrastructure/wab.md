@@ -1,10 +1,10 @@
 ---
 id: infra-wab
-title: "Wallet Authentication Backend (WAB)"
+title: 'Wallet Authentication Backend (WAB)'
 kind: infra
-version: "1.4.10"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: '1.4.10'
+last_updated: '2026-07-25'
+last_verified: '2026-07-25'
 review_cadence_days: 30
 status: stable
 tags: [wallet, authentication, mfa, presentation-keys, bsv-wallet]
@@ -34,29 +34,29 @@ Clients authenticate by phone number, recover original presentation keys, and op
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | SQLite (dev: ./dev.sqlite3) or MySQL (production: DB_CLIENT, DB_USER, DB_PASS, DB_NAME, DB_HOST, DB_PORT) |
-| External services | Twilio (if TwilioAuthMethod), Wallet Storage (if faucet enabled), ARC (for transaction broadcasting) |
-| ts-stack packages | @bsv/sdk, @bsv/wallet-toolbox |
+| Type              | Requirement                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| Database          | SQLite (dev: ./dev.sqlite3) or MySQL (production: DB_CLIENT, DB_USER, DB_PASS, DB_NAME, DB_HOST, DB_PORT) |
+| External services | Twilio (if TwilioAuthMethod), Wallet Storage (if faucet enabled), ARC (for transaction broadcasting)      |
+| ts-stack packages | @bsv/sdk, @bsv/wallet-toolbox                                                                             |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | /info | Server configuration info |
-| POST | /auth/start | Start authentication (methodType, presentationKey, payload) |
-| POST | /auth/complete | Complete authentication (methodType, presentationKey, payload) |
-| POST | /user/linkedMethods | List user's linked auth methods (presentationKey) |
-| POST | /user/unlinkMethod | Unlink auth method (presentationKey, methodId) |
-| POST | /user/delete | Delete user account (presentationKey) |
-| POST | /faucet/request | Request faucet payment (presentationKey) |
-| POST | /account/delete/start | Start OTP-confirmed account deletion |
-| POST | /account/delete/complete | Complete account deletion |
-| POST | /share/store | OTP-confirmed Shamir share creation |
-| POST | /share/retrieve | OTP-confirmed Shamir share recovery |
-| POST | /share/update | OTP-confirmed Shamir share rotation |
-| POST | /share/delete | OTP-confirmed share/account deletion |
+| Method | Path                     | Purpose                                                        |
+| ------ | ------------------------ | -------------------------------------------------------------- |
+| GET    | /info                    | Server configuration info                                      |
+| POST   | /auth/start              | Start authentication (methodType, presentationKey, payload)    |
+| POST   | /auth/complete           | Complete authentication (methodType, presentationKey, payload) |
+| POST   | /user/linkedMethods      | List user's linked auth methods (presentationKey)              |
+| POST   | /user/unlinkMethod       | Unlink auth method (presentationKey, methodId)                 |
+| POST   | /user/delete             | Delete user account (presentationKey)                          |
+| POST   | /faucet/request          | Request faucet payment (presentationKey)                       |
+| POST   | /account/delete/start    | Start OTP-confirmed account deletion                           |
+| POST   | /account/delete/complete | Complete account deletion                                      |
+| POST   | /share/store             | OTP-confirmed Shamir share creation                            |
+| POST   | /share/retrieve          | OTP-confirmed Shamir share recovery                            |
+| POST   | /share/update            | OTP-confirmed Shamir share rotation                            |
+| POST   | /share/delete            | OTP-confirmed share/account deletion                           |
 
 ## WebSocket endpoints
 
@@ -64,29 +64,30 @@ None.
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| NODE_ENV | No | `development` or `production` |
-| PORT | No | HTTP server port (default: 3000) |
-| TWILIO_ACCOUNT_SID | No | Twilio account ID (if using TwilioAuthMethod) |
-| TWILIO_AUTH_TOKEN | No | Twilio auth token |
-| TWILIO_VERIFY_SERVICE_SID | No | Twilio Verify service ID (VAxxxx or VExxxx) |
-| SERVER_PRIVATE_KEY | No | 256-bit hex key for faucet transactions |
-| STORAGE_URL | No | Overlay services URL for faucet (e.g., wallet storage endpoint) |
-| COMMISSION_FEE | No | Commission fee in satoshis per faucet request (default: 0) |
-| DB_CLIENT | No | Database client (default: sqlite3; or mysql2) |
-| DB_USER | No | Database user (production MySQL) |
-| DB_PASS | No | Database password |
-| DB_NAME | No | Database name |
-| DB_HOST | No | Database host |
-| DB_PORT | No | Database port |
-| DB_CONNECTION_NAME | No | GCP Cloud SQL connection name (for Cloud SQL with Unix socket) |
-| DEV_CONSOLE_AUTH_METHOD_ENABLED | No | Development/test-only explicit console OTP opt-in |
-| WAB_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
-| WAB_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins for allowlist mode |
-| WAB_MAX_BODY_BYTES | No | JSON body ceiling (default 262144) |
-| WAB_MAX_CONCURRENT_REQUESTS | No | Per-process in-flight ceiling (default 200) |
-| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+| Variable                        | Required | Description                                                                                                  |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| NODE_ENV                        | No       | `development` or `production`                                                                                |
+| PORT                            | No       | HTTP server port (default: 3000)                                                                             |
+| TWILIO_ACCOUNT_SID              | No       | Twilio account ID (if using TwilioAuthMethod)                                                                |
+| TWILIO_AUTH_TOKEN               | No       | Twilio auth token                                                                                            |
+| TWILIO_VERIFY_SERVICE_SID       | No       | Twilio Verify service ID (VAxxxx or VExxxx)                                                                  |
+| SERVER_PRIVATE_KEY              | No       | 256-bit hex key for faucet transactions                                                                      |
+| STORAGE_URL                     | No       | Overlay services URL for faucet (e.g., wallet storage endpoint)                                              |
+| COMMISSION_FEE                  | No       | Commission fee in satoshis per faucet request (default: 0)                                                   |
+| DB_CLIENT                       | No       | Database client (default: sqlite3; or mysql2)                                                                |
+| DB_USER                         | No       | Database user (production MySQL)                                                                             |
+| DB_PASS                         | No       | Database password                                                                                            |
+| DB_NAME                         | No       | Database name                                                                                                |
+| DB_HOST                         | No       | Database host                                                                                                |
+| DB_PORT                         | No       | Database port                                                                                                |
+| DB_CONNECTION_NAME              | No       | GCP Cloud SQL connection name (for Cloud SQL with Unix socket)                                               |
+| DEV_CONSOLE_AUTH_METHOD_ENABLED | No       | Development/test-only explicit console OTP opt-in                                                            |
+| WAB_CORS_MODE                   | No       | `public` (default), `allowlist`, or `disabled`                                                               |
+| WAB_CORS_ALLOWED_ORIGINS        | No       | Exact comma-separated origins for allowlist mode                                                             |
+| WAB_CORS_ALLOWED_HEADERS        | No       | Strict comma-separated browser request-header allowlist; omit to accept additive well-formed request headers |
+| WAB_MAX_BODY_BYTES              | No       | JSON body ceiling (default 262144)                                                                           |
+| WAB_MAX_CONCURRENT_REQUESTS     | No       | Per-process in-flight ceiling (default 200)                                                                  |
+| TRUST_PROXY_HOPS                | No       | Exact trusted proxy hop count, 0 through 10                                                                  |
 
 See [Public Service Edge Security](service-edge-security.md#wab) for endpoint
 rate limits, errors, CORS/CSP behavior, and the threat model.
@@ -163,6 +164,7 @@ Creates tables: users (id, presentationKey), auth_methods (id, userId, methodTyp
 ## Health checks
 
 No explicit health endpoint. Monitor:
+
 - Database connectivity (run `npm run migrate` to verify)
 - Auth method configuration (Twilio credentials, etc.)
 - POST /auth/start endpoint responds with 200/4xx

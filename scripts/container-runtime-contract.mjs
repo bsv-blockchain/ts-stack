@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const TEST_PRIVATE_KEY = `${'0'.repeat(63)}1`
+const TEST_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const TEST_ENCRYPTION_KEY = 'ab'.repeat(32)
 const TEST_DATABASE_PASSWORD = process.env.CONTRACT_DB_PASSWORD ?? ''
 const databaseConnection = database =>
@@ -24,13 +26,33 @@ const COMMON_ENVIRONMENT = {
   OTEL_SDK_DISABLED: 'true'
 }
 
+const packagedEdgePolicySources = {
+  'overlay-server': {
+    lock: '../infra/overlay-server/package-lock.json',
+    location: 'node_modules/@bsv/overlay-express',
+    manifest: '../packages/overlays/overlay-express/package.json'
+  },
+  'wallet-infra': {
+    lock: '../infra/wallet-infra/package-lock.json',
+    location: 'node_modules/@bsv/wallet-toolbox',
+    manifest: '../packages/wallet/wallet-toolbox/package.json'
+  }
+}
+
+const imageContainsCurrentEdgePolicy = component => {
+  const source = packagedEdgePolicySources[component]
+  if (source === undefined) return true
+  const lock = JSON.parse(readFileSync(new URL(source.lock, import.meta.url), 'utf8'))
+  const manifest = JSON.parse(readFileSync(new URL(source.manifest, import.meta.url), 'utf8'))
+  return lock.packages?.[source.location]?.version === manifest.version
+}
+
 const contracts = {
   'chaintracks-server': {
     port: 3011,
     environment: {
       CHAIN: 'test',
       ENABLE_BULK_HEADERS_CDN: 'false',
-      PORT: '3011',
       SOURCE_CDN_URL: 'https://cdn.projectbabbage.com/blockheaders/'
     },
     invalidEnvironment: { CHAIN: 'invalid' },
@@ -150,18 +172,43 @@ const contracts = {
     migration: 'readiness-after-startup-migration'
   },
   'wallet-infra': {
-    port: 3998,
+    port: 8080,
     environment: {
       BSV_NETWORK: 'test',
-      ENABLE_NGINX: 'false',
-      HTTP_PORT: '3998',
+      ENABLE_NGINX: 'true',
+      HTTP_PORT: '8081',
       KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
-      SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY
+      SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
+      WALLET_INFRA_ROLE: 'all',
+      WALLET_STORAGE_MONITOR_START_TASKS: 'true',
+      WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE: 'multiuser',
+      WALLET_STORAGE_TRUST_PROXY_HOPS: '1',
+      ADMIN_HOST: '127.0.0.1',
+      ADMIN_IDENTITY_KEYS: TEST_PUBLIC_KEY,
+      ADMIN_PORT: '3999',
+      ADMIN_ROOT_KEY_HEX: TEST_PRIVATE_KEY
     },
     invalidEnvironment: { SERVER_PRIVATE_KEY: '' },
     liveness: '/',
     readiness: '/',
-    transaction: { method: 'GET', path: '/', status: 200 },
+    transaction: {
+      method: 'GET',
+      path: '/',
+      status: 200,
+      headers: { 'X-Forwarded-For': '198.51.100.7' }
+    },
+    auxiliaryEndpoints: [
+      { port: 3999, path: '/healthz', status: 200 },
+      { port: 3999, path: '/admin', status: 200 }
+    ],
+    requiredLogPatterns: [
+      '"monitor_tasks_enabled":true',
+      '"monitor_startup_task_mode":"multiuser"',
+      '"monitor_admin_enabled":true',
+      '"operation":"monitor_admin.start"',
+      '"operation":"nginx.spawn"'
+    ],
+    forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
   }
 }
@@ -270,7 +317,8 @@ const startContainer = async (name, image, environment) => {
 
 const responseAt = async (port, request) => {
   const headers = {
-    Origin: 'https://unregistered-container-contract.example'
+    Origin: 'https://unregistered-container-contract.example',
+    ...request.headers
   }
   let body
   if (request.body !== undefined) {
@@ -314,6 +362,34 @@ const assertPublicResponse = async (component, response) => {
   await response.arrayBuffer()
 }
 
+const assertForwardCompatiblePreflight = async (component, container, port, path) => {
+  const requestedHeaders = ['X-Correlation-ID', 'X-TS-Stack-Contract-Probe']
+  const response = await waitForEndpoint(container, port, {
+    path,
+    method: 'OPTIONS',
+    status: 204,
+    headers: {
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': requestedHeaders.join(', ')
+    }
+  })
+  if (response.headers.get('access-control-allow-origin') !== '*') {
+    throw new Error(`${component} preflight must retain credential-free wildcard CORS`)
+  }
+  const allowedHeaders = new Set(
+    (response.headers.get('access-control-allow-headers') ?? '')
+      .split(',')
+      .map(header => header.trim().toLowerCase())
+      .filter(Boolean)
+  )
+  for (const header of requestedHeaders) {
+    if (!allowedHeaders.has(header.toLowerCase())) {
+      throw new Error(`${component} preflight omitted additive request header ${header}`)
+    }
+  }
+  await response.arrayBuffer()
+}
+
 const stopGracefully = async name => {
   await docker('kill', '--signal', 'SIGTERM', name)
   const exitCode = await waitForExit(name, 30_000)
@@ -329,15 +405,87 @@ const startWalletDependency = async walletImage => {
     throw new Error('--wallet-image is required for this component')
   }
   const contract = contracts['wallet-infra']
-  await startContainer('contract-wallet-dependency', walletImage, contract.environment)
-  const ready = await waitForEndpoint('contract-wallet-dependency', contract.port, {
+  const environment = walletDependencyEnvironment()
+  const port = Number(environment.HTTP_PORT)
+  await startContainer('contract-wallet-dependency', walletImage, environment)
+  const ready = await waitForEndpoint('contract-wallet-dependency', port, {
     path: contract.readiness,
     status: 200
   })
   await assertPublicResponse('wallet-infra dependency', ready)
+  if (imageContainsCurrentEdgePolicy('wallet-infra')) {
+    await assertForwardCompatiblePreflight(
+      'wallet-infra dependency',
+      'contract-wallet-dependency',
+      port,
+      contract.liveness
+    )
+  } else {
+    console.log(
+      'wallet-infra dependency CORS header probe awaits the protected published-version sync'
+    )
+  }
+}
+
+const assertComponentCors = async (component, name, contract) => {
+  if (imageContainsCurrentEdgePolicy(component)) {
+    await assertForwardCompatiblePreflight(component, name, contract.port, contract.liveness)
+    return
+  }
+  console.log(`${component} CORS header probe awaits the protected published-version sync`)
+}
+
+const assertAuxiliaryEndpoints = async (component, name, contract) => {
+  for (const endpoint of contract.auxiliaryEndpoints ?? []) {
+    const response = await waitForEndpoint(name, endpoint.port, endpoint)
+    await assertPublicResponse(`${component} ${endpoint.path}`, response)
+  }
+}
+
+const assertRuntimeLogPatterns = async (component, name, contract) => {
+  const logs = await containerLogs(name)
+  for (const pattern of contract.requiredLogPatterns ?? []) {
+    if (!logs.includes(pattern)) {
+      throw new Error(`${component} did not emit required runtime log pattern: ${pattern}\n${logs}`)
+    }
+  }
+  for (const pattern of contract.forbiddenLogPatterns ?? []) {
+    if (logs.includes(pattern)) {
+      throw new Error(`${component} emitted forbidden runtime log pattern: ${pattern}\n${logs}`)
+    }
+  }
+}
+
+const exerciseRunningContainer = async (component, name, contract) => {
+  const liveness = await waitForEndpoint(name, contract.port, {
+    path: contract.liveness,
+    status: 200
+  })
+  await assertPublicResponse(component, liveness)
+  const readiness = await waitForEndpoint(name, contract.port, {
+    path: contract.readiness,
+    status: 200
+  })
+  await assertPublicResponse(component, readiness)
+  await assertComponentCors(component, name, contract)
+  const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
+  await assertPublicResponse(component, transaction)
+  await assertAuxiliaryEndpoints(component, name, contract)
+  await assertRuntimeLogPatterns(component, name, contract)
 }
 
 export const contractNames = () => Object.keys(contracts)
+
+export const contractEnvironment = component => ({ ...contracts[component]?.environment })
+
+export const walletDependencyEnvironment = () => ({
+  ...contracts['wallet-infra'].environment,
+  ENABLE_NGINX: 'false',
+  HTTP_PORT: new URL(WALLET_URL).port,
+  WALLET_INFRA_ROLE: 'api',
+  WALLET_STORAGE_MONITOR_ADMIN_ENABLED: 'false',
+  WALLET_STORAGE_MONITOR_START_TASKS: 'false'
+})
 
 export async function runContainerRuntimeContract({ component, image, walletImage }) {
   const contract = contracts[component]
@@ -357,18 +505,7 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     }
     const name = `contract-${component}`
     await startContainer(name, image, contract.environment)
-    const liveness = await waitForEndpoint(name, contract.port, {
-      path: contract.liveness,
-      status: 200
-    })
-    await assertPublicResponse(component, liveness)
-    const readiness = await waitForEndpoint(name, contract.port, {
-      path: contract.readiness,
-      status: 200
-    })
-    await assertPublicResponse(component, readiness)
-    const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
-    await assertPublicResponse(component, transaction)
+    await exerciseRunningContainer(component, name, contract)
     await stopGracefully(name)
     completed = true
   } finally {
@@ -393,6 +530,10 @@ export async function runContainerRuntimeContract({ component, image, walletImag
       'readiness',
       'migration-order',
       'public-cors',
+      imageContainsCurrentEdgePolicy(component)
+        ? 'cors-request-header-forward-compatibility'
+        : 'cors-request-header-pending-published-dependency-sync',
+      ...(contract.auxiliaryEndpoints == null ? [] : ['auxiliary-endpoints']),
       'minimal-transaction',
       'graceful-shutdown'
     ]

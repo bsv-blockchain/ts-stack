@@ -5,6 +5,8 @@ import { getWallet } from '../utils/walletSingleton'
 import { PushDrop, SHIPBroadcaster, Transaction, Utils } from '@bsv/sdk'
 import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
+import { normalizeUhrpPagination } from '../resourceLimits'
+import { readResourceLimit } from '../security/edgePolicy'
 
 const storage = new Storage()
 const GCP_BUCKET_NAME = process.env.GCP_BUCKET_NAME as string
@@ -97,18 +99,21 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
         description: 'Missing objectIdentifier or additionalMinutes.'
       })
     }
-    if (additionalMinutes <= 0) {
+    const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
+    if (!Number.isSafeInteger(additionalMinutes) || additionalMinutes <= 0 ||
+      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_INVALID_TIME',
         description: 'Additional Minutes must be a positive integer'
       })
     }
+    const pagination = normalizeUhrpPagination(limit, offset)
     const {
       objectIdentifier,
       size,
       expiryTime: prevExpiryTime
-    } = await getMetadata(uhrpUrl, identityKey, limit, offset)
+    } = await getMetadata(uhrpUrl, identityKey, pagination.limit, pagination.offset)
 
     // Convert to MS to create an ISO string
     const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
@@ -124,8 +129,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       tagQueryMode: 'all',
       includeTags: true,
       include: 'entire transactions',
-      limit: limit ?? 200,
-      offset: offset ?? 0
+      ...pagination
     })
 
     if (!outputs || outputs.length === 0) {

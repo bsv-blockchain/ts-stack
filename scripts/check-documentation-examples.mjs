@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const execFileAsync = promisify(execFile)
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -22,6 +22,26 @@ if (!nodeTypesVersion)
   throw new Error('@bsv/sdk must govern the compiled-example @types/node version')
 const nativeTypeScript = join(ROOT, sdkProject.path, 'node_modules/.bin/tsc')
 
+function selectedProjectNames(value, label) {
+  if (value === undefined) return undefined
+  let records
+  try {
+    records = JSON.parse(value)
+  } catch {
+    throw new Error(`${label} must be a JSON array`)
+  }
+  if (!Array.isArray(records)) throw new Error(`${label} must be a JSON array`)
+  return new Set(
+    records.map(record => {
+      const name = typeof record === 'string' ? record : record?.name
+      if (typeof name !== 'string' || name === '') {
+        throw new Error(`${label} entries must be package names or project records`)
+      }
+      return name
+    })
+  )
+}
+
 async function run(command, args, options = {}) {
   try {
     return await execFileAsync(command, args, {
@@ -35,7 +55,7 @@ async function run(command, args, options = {}) {
   }
 }
 
-function extractExamples(markdown) {
+export function extractExamples(markdown) {
   const blocks = []
   const ids = new Set()
   let sourceLines
@@ -92,6 +112,24 @@ async function firstPartyClosure(initialNames) {
   return [...closure].sort((left, right) => left.localeCompare(right))
 }
 
+export async function selectExamples(blocks, directProjectNames) {
+  if (directProjectNames === undefined) return blocks
+  const selected = []
+  for (const block of blocks) {
+    const closure = await firstPartyClosure(importedPackages([block]))
+    if (closure.some(name => directProjectNames.has(name))) selected.push(block)
+  }
+  return selected
+}
+
+async function buildMissingProjects(packageNames, prebuiltProjectNames) {
+  if (prebuiltProjectNames === undefined) return
+  const missing = packageNames.filter(name => !prebuiltProjectNames.has(name))
+  if (missing.length === 0) return
+  const filters = missing.flatMap(name => ['--filter', name])
+  await run('pnpm', ['-r', '--if-present', ...filters, 'run', 'build'])
+}
+
 async function packProject(name, tarballDirectory) {
   const project = projectsByName.get(name)
   const { stdout } = await run('pnpm', ['pack', '--json', '--pack-destination', tarballDirectory], {
@@ -106,82 +144,100 @@ async function packProject(name, tarballDirectory) {
   return tarballPath
 }
 
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'ts-stack-doc-examples-'))
-try {
-  const blocks = extractExamples(await readFile(EXAMPLES, 'utf8'))
-  const packageNames = await firstPartyClosure(importedPackages(blocks))
-  const tarballDirectory = join(temporaryDirectory, 'tarballs')
-  const consumerDirectory = join(temporaryDirectory, 'consumer')
-  await mkdir(tarballDirectory)
-  await mkdir(consumerDirectory)
+export async function main() {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'ts-stack-doc-examples-'))
+  try {
+    const allBlocks = extractExamples(await readFile(EXAMPLES, 'utf8'))
+    const directProjectNames = selectedProjectNames(
+      process.env.DOC_EXAMPLE_DIRECT_PROJECTS,
+      'DOC_EXAMPLE_DIRECT_PROJECTS'
+    )
+    const prebuiltProjectNames = selectedProjectNames(
+      process.env.DOC_EXAMPLE_PREBUILT_PROJECTS,
+      'DOC_EXAMPLE_PREBUILT_PROJECTS'
+    )
+    const blocks = await selectExamples(allBlocks, directProjectNames)
+    if (blocks.length === 0) {
+      console.log('Compiled documentation examples skipped: no example depends on changed packages')
+      return
+    }
+    const packageNames = await firstPartyClosure(importedPackages(blocks))
+    await buildMissingProjects(packageNames, prebuiltProjectNames)
+    const tarballDirectory = join(temporaryDirectory, 'tarballs')
+    const consumerDirectory = join(temporaryDirectory, 'consumer')
+    await mkdir(tarballDirectory)
+    await mkdir(consumerDirectory)
 
-  const dependencies = {}
-  for (const name of packageNames) {
-    dependencies[name] = `file:${await packProject(name, tarballDirectory)}`
-  }
+    const dependencies = {}
+    for (const name of packageNames) {
+      dependencies[name] = `file:${await packProject(name, tarballDirectory)}`
+    }
 
-  const developmentDependencies = {
-    '@types/node': nodeTypesVersion
-  }
-  await writeFile(
-    join(consumerDirectory, 'package.json'),
-    `${JSON.stringify(
-      {
-        name: 'ts-stack-compiled-documentation-consumer',
-        private: true,
-        type: 'module',
-        dependencies,
-        devDependencies: developmentDependencies
-      },
-      null,
-      2
-    )}\n`
-  )
-  await writeFile(
-    join(consumerDirectory, 'pnpm-workspace.yaml'),
-    `${JSON.stringify({ overrides: dependencies }, null, 2)}\n`
-  )
-  const combinedExamples = blocks
-    .map(block => [`// ${block.id}`, block.source].join('\n'))
-    .join('\n\n')
-  await writeFile(join(consumerDirectory, 'examples.ts'), `${combinedExamples}\n`)
-  await writeFile(
-    join(consumerDirectory, 'tsconfig.json'),
-    `${JSON.stringify(
-      {
-        compilerOptions: {
-          strict: true,
-          noEmit: true,
-          target: 'ES2024',
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          lib: ['ES2024', 'DOM'],
-          types: ['node'],
-          skipLibCheck: false
+    const developmentDependencies = {
+      '@types/node': nodeTypesVersion
+    }
+    await writeFile(
+      join(consumerDirectory, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'ts-stack-compiled-documentation-consumer',
+          private: true,
+          type: 'module',
+          dependencies,
+          devDependencies: developmentDependencies
         },
-        include: ['examples.ts']
-      },
-      null,
-      2
-    )}\n`
-  )
+        null,
+        2
+      )}\n`
+    )
+    await writeFile(
+      join(consumerDirectory, 'pnpm-workspace.yaml'),
+      `${JSON.stringify({ overrides: dependencies }, null, 2)}\n`
+    )
+    const combinedExamples = blocks
+      .map(block => [`// ${block.id}`, block.source].join('\n'))
+      .join('\n\n')
+    await writeFile(join(consumerDirectory, 'examples.ts'), `${combinedExamples}\n`)
+    await writeFile(
+      join(consumerDirectory, 'tsconfig.json'),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            target: 'ES2024',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            lib: ['ES2024', 'DOM'],
+            types: ['node'],
+            skipLibCheck: false
+          },
+          include: ['examples.ts']
+        },
+        null,
+        2
+      )}\n`
+    )
 
-  await run('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile'], {
-    cwd: consumerDirectory
-  })
-  await run(
-    nativeTypeScript,
-    ['--project', join(consumerDirectory, 'tsconfig.json'), '--pretty', 'false'],
-    { cwd: consumerDirectory }
-  )
+    await run('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile'], {
+      cwd: consumerDirectory
+    })
+    await run(
+      nativeTypeScript,
+      ['--project', join(consumerDirectory, 'tsconfig.json'), '--pretty', 'false'],
+      { cwd: consumerDirectory }
+    )
 
-  const tarballs = (await readdir(tarballDirectory)).filter(file => file.endsWith('.tgz'))
-  if (tarballs.length !== packageNames.length) {
-    throw new Error(`Expected ${packageNames.length} tarballs, found ${tarballs.length}`)
+    const tarballs = (await readdir(tarballDirectory)).filter(file => file.endsWith('.tgz'))
+    if (tarballs.length !== packageNames.length) {
+      throw new Error(`Expected ${packageNames.length} tarballs, found ${tarballs.length}`)
+    }
+    console.log(
+      `Compiled documentation examples passed: ${blocks.length} examples, ${packageNames.length} exact package tarballs`
+    )
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true })
   }
-  console.log(
-    `Compiled documentation examples passed: ${blocks.length} examples, ${packageNames.length} exact package tarballs`
-  )
-} finally {
-  await rm(temporaryDirectory, { recursive: true, force: true })
 }
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) await main()

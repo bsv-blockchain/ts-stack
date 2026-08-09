@@ -156,15 +156,16 @@ export async function WocHeadersBulkListener(
   let webSocketUrl: string
   switch (chain) {
     case 'test':
-    case 'ttn':
-    case 'tstn':
       webSocketUrl = `wss://socket-v2-testnet.whatsonchain.com/websocket/blockheaders/history?from=${fromHeight}&to=${toHeight}`
       break
     case 'main':
       webSocketUrl = `wss://socket-v2.whatsonchain.com/websocket/blockheaders/history?from=${fromHeight}&to=${toHeight}`
       break
+    case 'stn':
+    case 'ttn':
+    case 'tstn':
     case 'mock':
-      throw new Error("WocHeadersBulkListener does not support 'mock' chain.")
+      throw new Error(`WocHeadersBulkListener does not support '${chain}' chain.`)
   }
 
   const ws = new WebSocket(webSocketUrl)
@@ -335,15 +336,16 @@ export async function WocHeadersLiveListener(
   let webSocketUrl: string
   switch (chain) {
     case 'test':
-    case 'ttn':
-    case 'tstn':
       webSocketUrl = 'wss://socket-v2-testnet.whatsonchain.com/websocket/blockHeaders'
       break
     case 'main':
       webSocketUrl = 'wss://socket-v2.whatsonchain.com/websocket/blockHeaders'
       break
+    case 'stn':
+    case 'ttn':
+    case 'tstn':
     case 'mock':
-      throw new Error("WocHeadersLiveListener does not support 'mock' chain.")
+      throw new Error(`WocHeadersLiveListener does not support '${chain}' chain.`)
   }
 
   function processData(rawData: WebSocket.Data) {

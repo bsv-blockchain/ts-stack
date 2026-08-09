@@ -1,5 +1,6 @@
 import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
+import { normalizeUhrpPagination } from '../resourceLimits'
 
 
 interface FileMetadata {
@@ -20,13 +21,13 @@ interface FileMetadata {
  */
 export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, limit?: number, offset?: number): Promise<FileMetadata> {
   const wallet = await getWallet()
+  const pagination = normalizeUhrpPagination(limit, offset)
   const { outputs } = await wallet.listOutputs({
     basket: 'uhrp advertisements',
     tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `uploader_identity_key_${uploaderIdentityKey}`],
     tagQueryMode: 'all',
     includeTags: true,
-    limit: limit ?? 200,
-    offset: offset ?? 0
+    ...pagination
   })
 
   let objectIdentifier, name, contentType, size

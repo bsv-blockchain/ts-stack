@@ -5,13 +5,18 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readAllowedOrigins,
   readBodyLimitBytes,
   readCorsOriginSetting,
+  readResourceLimit,
+  readResourceProfile,
+  responseSizeLimit,
   securityHeaders
 } from './edgePolicy'
 
-async function listen (app: express.Express): Promise<{
+async function listen(app: express.Express): Promise<{
   server: Server
   origin: string
 }> {
@@ -25,7 +30,7 @@ async function listen (app: express.Express): Promise<{
   return { server, origin: `http://127.0.0.1:${address.port}` }
 }
 
-async function close (server: Server): Promise<void> {
+async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     server.close(error => {
       if (error != null) reject(error)
@@ -47,10 +52,12 @@ describe('shared service edge policy', () => {
     delete process.env.CORS_MODE
     delete process.env.CORS_ALLOWED_ORIGINS
     const app = express()
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET', 'POST']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET', 'POST']
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -73,25 +80,88 @@ describe('shared service edge policy', () => {
         headers: {
           Origin: 'https://another-unknown-app.example',
           'Access-Control-Request-Method': 'POST',
-          'Access-Control-Request-Headers': 'X-BSV-Action-Batch-Encoding'
+          'Access-Control-Request-Headers':
+            'X-BSV-Action-Batch-Encoding, X-Correlation-ID, X-Future-BSV-Header'
         }
       })
       expect(preflight.status).toBe(204)
       expect(preflight.headers.get('access-control-allow-origin')).toBe('*')
-      expect(preflight.headers.get('access-control-allow-headers'))
-        .toContain('X-BSV-Action-Batch-Encoding')
+      expect(preflight.headers.get('access-control-allow-headers')).toContain(
+        'X-BSV-Action-Batch-Encoding'
+      )
+      expect(preflight.headers.get('access-control-allow-headers')).toContain('X-Correlation-ID')
+      expect(preflight.headers.get('access-control-allow-headers')).toContain('X-Future-BSV-Header')
     } finally {
       await close(server)
+    }
+  })
+
+  it('accepts additive request headers unless operators configure a strict header allowlist', async () => {
+    delete process.env.TEST_CORS_ALLOWED_HEADERS
+    const compatibleApp = express()
+    compatibleApp.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['POST']
+      })
+    )
+    const compatible = await listen(compatibleApp)
+
+    try {
+      const response = await fetch(compatible.origin, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://wallet.example',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'X-Correlation-ID, X-New-Protocol-Header'
+        }
+      })
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-headers')).toContain('X-Correlation-ID')
+      expect(response.headers.get('access-control-allow-headers')).toContain(
+        'X-New-Protocol-Header'
+      )
+    } finally {
+      await close(compatible.server)
+    }
+
+    process.env.TEST_CORS_ALLOWED_HEADERS = 'Authorization, X-Correlation-ID'
+    const restrictedApp = express()
+    restrictedApp.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['POST']
+      })
+    )
+    const restricted = await listen(restrictedApp)
+
+    try {
+      const response = await fetch(restricted.origin, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://wallet.example',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'X-Correlation-ID, X-New-Protocol-Header'
+        }
+      })
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-headers')).toBe(
+        'Authorization, X-Correlation-ID'
+      )
+    } finally {
+      await close(restricted.server)
     }
   })
 
   it('allows only explicitly configured browser origins', async () => {
     process.env.TEST_CORS_ALLOWED_ORIGINS = 'https://wallet.example'
     const app = express()
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET', 'POST']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET', 'POST']
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -124,10 +194,12 @@ describe('shared service edge policy', () => {
     delete process.env.TEST_CORS_ALLOWED_ORIGINS
     delete process.env.CORS_ALLOWED_ORIGINS
     const app = express()
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET']
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -146,10 +218,12 @@ describe('shared service edge policy', () => {
   it('answers allowed preflight without wildcard policy', async () => {
     process.env.TEST_CORS_ALLOWED_ORIGINS = 'https://wallet.example'
     const app = express()
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET', 'POST']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET', 'POST']
+      })
+    )
     const { server, origin } = await listen(app)
 
     try {
@@ -170,16 +244,20 @@ describe('shared service edge policy', () => {
 
   it('rejects wildcard and malformed origin configuration', () => {
     process.env.TEST_CORS_ALLOWED_ORIGINS = '*'
-    expect(() => corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET']
-    })).toThrow(/wildcard/)
+    expect(() =>
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET']
+      })
+    ).toThrow(/wildcard/)
 
     process.env.TEST_CORS_ALLOWED_ORIGINS = 'https://wallet.example/path'
-    expect(() => corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET']
-    })).toThrow(/without paths/)
+    expect(() =>
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET']
+      })
+    ).toThrow(/without paths/)
   })
 
   it('validates the complete CORS mode configuration matrix', () => {
@@ -202,14 +280,8 @@ describe('shared service edge policy', () => {
     process.env.TEST_CORS_MODE = 'allowlist'
     process.env.TEST_CORS_ALLOWED_ORIGINS =
       'https://wallet.example, https://wallet.example, https://wui.example'
-    expect(readAllowedOrigins('TEST')).toEqual([
-      'https://wallet.example',
-      'https://wui.example'
-    ])
-    expect(readCorsOriginSetting('TEST')).toEqual([
-      'https://wallet.example',
-      'https://wui.example'
-    ])
+    expect(readAllowedOrigins('TEST')).toEqual(['https://wallet.example', 'https://wui.example'])
+    expect(readCorsOriginSetting('TEST')).toEqual(['https://wallet.example', 'https://wui.example'])
 
     delete process.env.TEST_CORS_MODE
     delete process.env.TEST_CORS_ALLOWED_ORIGINS
@@ -217,21 +289,27 @@ describe('shared service edge policy', () => {
   })
 
   it('validates explicit origin and credential options', () => {
-    expect(() => corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET'],
-      allowedOrigins: ['null']
-    })).toThrow(/opaque/)
-    expect(() => corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET'],
-      allowedOrigins: ['not an origin']
-    })).toThrow(/invalid origin/)
-    expect(() => corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET'],
-      allowCredentials: true
-    })).toThrow(/cookie credentials/)
+    expect(() =>
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET'],
+        allowedOrigins: ['null']
+      })
+    ).toThrow(/opaque/)
+    expect(() =>
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET'],
+        allowedOrigins: ['not an origin']
+      })
+    ).toThrow(/invalid origin/)
+    expect(() =>
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET'],
+        allowCredentials: true
+      })
+    ).toThrow(/cookie credentials/)
 
     const disabled = corsPolicy({
       environmentPrefix: 'TEST',
@@ -277,11 +355,7 @@ describe('shared service edge policy', () => {
       sendStatus: jest.fn()
     }
     const next = jest.fn()
-    middleware(
-      { get: () => 'https://wallet.example', method: 'GET' } as any,
-      response as any,
-      next
-    )
+    middleware({ get: () => 'https://wallet.example', method: 'GET' } as any, response as any, next)
     expect(headers.get('Vary')).toBe('Accept-Encoding, Origin')
     expect(headers.get('Access-Control-Allow-Origin')).toBe('https://wallet.example')
     expect(headers.get('Access-Control-Allow-Credentials')).toBe('true')
@@ -296,10 +370,12 @@ describe('shared service edge policy', () => {
     process.env.TEST_CORS_MODE = 'allowlist'
     process.env.TEST_CORS_ALLOWED_ORIGINS = 'https://wallet.example'
     const app = express()
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET']
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -342,15 +418,17 @@ describe('shared service edge policy', () => {
     process.env.TEST_STRICT_TRANSPORT_SECURITY = 'false'
     const app = express()
     app.enable('trust proxy')
-    app.use(securityHeaders({
-      environmentPrefix: 'TEST',
-      contentSecurityPolicy: "default-src 'none'",
-      crossOriginResourcePolicy: 'same-origin',
-      crossOriginOpenerPolicy: 'same-origin',
-      frameOptions: 'DENY',
-      permissionsPolicy: 'camera=()',
-      strictTransportSecurity: true
-    }))
+    app.use(
+      securityHeaders({
+        environmentPrefix: 'TEST',
+        contentSecurityPolicy: "default-src 'none'",
+        crossOriginResourcePolicy: 'same-origin',
+        crossOriginOpenerPolicy: 'same-origin',
+        frameOptions: 'DENY',
+        permissionsPolicy: 'camera=()',
+        strictTransportSecurity: true
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -375,10 +453,12 @@ describe('shared service edge policy', () => {
     delete process.env.TEST_CORS_ALLOWED_ORIGINS
     const app = express()
     app.use(securityHeaders({ environmentPrefix: 'TEST' }))
-    app.use(corsPolicy({
-      environmentPrefix: 'TEST',
-      methods: ['GET']
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['GET']
+      })
+    )
     app.get('/', (_req, res) => res.json({ ok: true }))
     const { server, origin } = await listen(app)
 
@@ -389,8 +469,9 @@ describe('shared service edge policy', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('access-control-allow-origin')).toBe('*')
       expect(response.headers.get('access-control-allow-credentials')).toBeNull()
-      expect(response.headers.get('content-security-policy'))
-        .toBe("default-src 'self'; connect-src https:")
+      expect(response.headers.get('content-security-policy')).toBe(
+        "default-src 'self'; connect-src https:"
+      )
     } finally {
       await close(server)
     }
@@ -519,7 +600,9 @@ describe('shared service edge policy', () => {
     app.use(concurrencyLimit('TEST', 10))
     let releaseFirst: (() => void) | undefined
     app.get('/', async (_req, res) => {
-      await new Promise<void>(resolve => { releaseFirst = resolve })
+      await new Promise<void>(resolve => {
+        releaseFirst = resolve
+      })
       res.json({ ok: true })
     })
     const { server, origin } = await listen(app)
@@ -528,7 +611,8 @@ describe('shared service edge policy', () => {
       headersTimeoutMs: 10_000,
       keepAliveTimeoutMs: 5_000,
       socketTimeoutMs: 30_000,
-      maxRequestsPerSocket: 100
+      maxRequestsPerSocket: 100,
+      maxConnections: 50
     })
 
     try {
@@ -545,8 +629,156 @@ describe('shared service edge policy', () => {
       expect(server.headersTimeout).toBe(10_000)
       expect(server.keepAliveTimeout).toBe(5_000)
       expect(server.maxRequestsPerSocket).toBe(100)
+      expect(server.maxConnections).toBe(50)
     } finally {
       await close(server)
     }
+  })
+
+  it('honors explicit unlimited body, response, concurrency, and connection limits', () => {
+    process.env.TEST_MAX_BODY_BYTES = '-1'
+    expect(readBodyLimitBytes('TEST', 256)).toBe(Number.MAX_SAFE_INTEGER)
+
+    process.env.TEST_MAX_RESPONSE_BYTES = 'unlimited'
+    const responseNext = jest.fn()
+    responseSizeLimit('TEST', 256)({} as any, {} as any, responseNext)
+    expect(responseNext).toHaveBeenCalledTimes(1)
+
+    process.env.TEST_MAX_CONCURRENT_REQUESTS = '-1'
+    const concurrencyNext = jest.fn()
+    concurrencyLimit('TEST', 8)({} as any, {} as any, concurrencyNext)
+    expect(concurrencyNext).toHaveBeenCalledTimes(1)
+
+    process.env.TEST_MAX_CONNECTIONS = '-1'
+    const server = {
+      setTimeout: jest.fn()
+    } as unknown as Server
+    configureHttpServer(server, 'TEST', {
+      requestTimeoutMs: 30_000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 30_000,
+      maxRequestsPerSocket: 100,
+      maxConnections: 50
+    })
+    expect(server.maxConnections).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('rejects invalid positive HTTP server settings', () => {
+    process.env.TEST_REQUEST_TIMEOUT_MS = '0'
+    const server = {
+      setTimeout: jest.fn()
+    } as unknown as Server
+
+    expect(() =>
+      configureHttpServer(server, 'TEST', {
+        requestTimeoutMs: 30_000,
+        headersTimeoutMs: 10_000,
+        keepAliveTimeoutMs: 5_000,
+        socketTimeoutMs: 30_000,
+        maxRequestsPerSocket: 100,
+        maxConnections: 50
+      })
+    ).toThrow(/positive integer/)
+  })
+
+  it('selects tested resource profiles and explicit operator limits', () => {
+    expect(readResourceProfile('TEST')).toBe('standard')
+    process.env.TEST_RESOURCE_PROFILE = 'high-throughput'
+    expect(readResourceProfile('TEST')).toBe('high-throughput')
+    expect(profileValue('small', { small: 1, standard: 2, highThroughput: 3 })).toBe(1)
+    expect(profileValue('standard', { small: 1, standard: 2, highThroughput: 3 })).toBe(2)
+    expect(profileValue('high-throughput', { small: 1, standard: 2, highThroughput: 3 })).toBe(3)
+
+    process.env.TEST_MAX_ITEMS = '1000'
+    expect(readResourceLimit('TEST', 'MAX_ITEMS', 100)).toBe(1_000)
+    process.env.TEST_MAX_ITEMS = '-1'
+    expect(readResourceLimit('TEST', 'MAX_ITEMS', 100)).toBe(-1)
+    process.env.TEST_MAX_ITEMS = 'unlimited'
+    expect(readResourceLimit('TEST', 'MAX_ITEMS', 100)).toBe(-1)
+    process.env.TEST_MAX_ITEMS = '0'
+    expect(() => readResourceLimit('TEST', 'MAX_ITEMS', 100)).toThrow(/positive integer/)
+
+    process.env.TEST_RESOURCE_PROFILE = 'oversized'
+    expect(() => readResourceProfile('TEST')).toThrow(/small, standard, or high-throughput/)
+  })
+
+  it('tolerates only repeated initial slashes for compatibility', () => {
+    const next = jest.fn()
+    const request = { url: '///auth/start?mode=test' }
+    initialDoubleSlashCompatibility(request as any, {} as any, next)
+    expect(request.url).toBe('/auth/start?mode=test')
+    expect(next).toHaveBeenCalledTimes(1)
+
+    const interior = { url: '/auth//start' }
+    initialDoubleSlashCompatibility(interior as any, {} as any, jest.fn())
+    expect(interior.url).toBe('/auth//start')
+  })
+
+  it('rejects materialized responses above the configured byte budget', async () => {
+    process.env.TEST_MAX_RESPONSE_BYTES = '128'
+    const app = express()
+    app.use(responseSizeLimit('TEST', 1024))
+    app.get('/small', (_req, res) => res.json({ ok: true }))
+    app.get('/large', (_req, res) => res.json({ value: 'x'.repeat(512) }))
+    const { server, origin } = await listen(app)
+
+    try {
+      const small = await fetch(`${origin}/small`)
+      expect(small.status).toBe(200)
+      await expect(small.json()).resolves.toEqual({ ok: true })
+
+      const large = await fetch(`${origin}/large`)
+      expect(large.status).toBe(413)
+      await expect(large.json()).resolves.toMatchObject({ code: 'ERR_RESPONSE_TOO_LARGE' })
+    } finally {
+      await close(server)
+    }
+  })
+
+  it.each([
+    ['send', '12345', undefined],
+    ['send', Buffer.from('12345'), undefined],
+    ['send', new Uint8Array([1, 2, 3, 4, 5]), undefined],
+    ['send', { value: '12345' }, undefined],
+    ['end', '12345', 'utf8'],
+    ['end', Buffer.from('12345'), undefined],
+    ['end', new Uint8Array([1, 2, 3, 4, 5]), undefined],
+    ['end', { value: '12345' }, undefined]
+  ])('bounds every materialized %s response shape', (method, value, encoding) => {
+    process.env.TEST_MAX_RESPONSE_BYTES = '4'
+    let response: any
+    const originalEnd = jest.fn(() => response)
+    const originalSend = jest.fn((chunk: unknown) => {
+      response.end(chunk)
+      return response
+    })
+    const originalJson = jest.fn((body: unknown) => {
+      response.send(JSON.stringify(body))
+      return response
+    })
+    response = {
+      status: jest.fn(() => response),
+      json: originalJson,
+      send: originalSend,
+      end: originalEnd
+    }
+    const next = jest.fn()
+    responseSizeLimit('TEST', 256)({} as any, response, next)
+
+    if (method === 'send') response.send(value)
+    else response.end(value, encoding)
+
+    expect(response.status).toHaveBeenCalledWith(413)
+    expect(originalJson).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ERR_RESPONSE_TOO_LARGE' })
+    )
+    expect(originalSend).toHaveBeenCalled()
+    expect(originalEnd).toHaveBeenCalled()
+
+    response.json({ ignored: true })
+    response.send('ignored')
+    response.end('ignored')
+    expect(response.status).toHaveBeenCalledTimes(1)
   })
 })

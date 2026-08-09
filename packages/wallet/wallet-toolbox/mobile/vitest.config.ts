@@ -7,7 +7,12 @@ export default defineConfig({
     include: ['mobile/test/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/index.mobile.ts', 'src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts'],
+      include: [
+        'src/index.mobile.ts',
+        'src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts',
+        'src/services/chaintracker/chaintracks/Api/BulkIngestorApi.ts',
+        'src/services/chaintracker/chaintracks/Api/ChaintracksClientApi.ts'
+      ],
       reportsDirectory: 'mobile/coverage',
       reporter: ['text', 'lcov'],
       thresholds: {

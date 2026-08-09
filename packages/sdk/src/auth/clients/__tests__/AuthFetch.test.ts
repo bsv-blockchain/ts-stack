@@ -116,9 +116,13 @@ describe('AuthFetch payment handling', () => {
       Utils.toArray(JSON.stringify(config.body), 'utf8').length
     )
 
+    const prefixHex = Utils.toHex(Utils.toArray('test-prefix', 'base64'))
+    const suffixHex = Utils.toHex(Utils.toArray('suffix-from-test', 'base64'))
+
     expect(wallet.createAction).toHaveBeenCalledWith(
       expect.objectContaining({
         description: expect.stringContaining('https://api.example.com'),
+        labels: [`brc105 ${prefixHex} ${suffixHex}`],
         outputs: [
           expect.objectContaining({
             satoshis: 42,
@@ -127,6 +131,46 @@ describe('AuthFetch payment handling', () => {
         ]
       }),
       undefined
+    )
+  })
+
+  test('createPaymentContext merges caller labels with the brc105 payment label', async () => {
+    const wallet = createWalletStub()
+    const authFetch = new AuthFetch(wallet as any)
+
+    createNonceMock.mockResolvedValueOnce('suffix-from-test')
+
+    await (authFetch as any).createPaymentContext(
+      'https://api.example.com/resource',
+      { labels: ['1sat-name mining', 'job-payment'] },
+      42,
+      'remote-identity-key',
+      'test-prefix'
+    )
+
+    const prefixHex = Utils.toHex(Utils.toArray('test-prefix', 'base64'))
+    const suffixHex = Utils.toHex(Utils.toArray('suffix-from-test', 'base64'))
+
+    expect(wallet.createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: [`brc105 ${prefixHex} ${suffixHex}`, '1sat-name mining', 'job-payment']
+      }),
+      undefined
+    )
+  })
+
+  test('brc105 payment label hex survives lowercasing and round-trips to base64', () => {
+    const authFetch = new AuthFetch(createWalletStub() as any)
+    const prefix = 'AbCdEfGhIjKlMnOp'
+    const suffix = 'ZyXwVuTsRqPoNmLk'
+    const label = (authFetch as any).buildPaymentActionLabels({}, prefix, suffix)[0] as string
+    const lowercased = label.toLowerCase()
+    const [, prefixHex, suffixHex] = lowercased.split(' ')
+    expect(Utils.toBase64(Utils.toArray(prefixHex, 'hex'))).toBe(
+      Utils.toBase64(Utils.toArray(prefix, 'base64'))
+    )
+    expect(Utils.toBase64(Utils.toArray(suffixHex, 'hex'))).toBe(
+      Utils.toBase64(Utils.toArray(suffix, 'base64'))
     )
   })
 

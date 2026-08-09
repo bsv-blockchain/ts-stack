@@ -100,4 +100,84 @@ describe('ChaintracksStorageNoDb insertHeader compatibility', () => {
       noPrev: true
     })
   })
+
+  test('keeps in-memory state isolated for every supported network', async () => {
+    const chains = ['main', 'test', 'stn', 'ttn', 'tstn'] as const
+    const stores = chains.map(
+      chain => new ChaintracksStorageNoDb(ChaintracksStorageBase.createStorageBaseOptions(chain))
+    )
+    const datasets = await Promise.all(stores.map(async store => await store.getData()))
+
+    for (const [index, data] of datasets.entries()) {
+      expect(data.chain).toBe(chains[index])
+      for (const [otherIndex, other] of datasets.entries()) {
+        if (otherIndex !== index) {
+          expect(data).not.toBe(other)
+          expect(data.liveHeaders).not.toBe(other.liveHeaders)
+          expect(data.hashToHeaderId).not.toBe(other.hashToHeaderId)
+        }
+      }
+    }
+  })
+
+  test('rejects mock storage before it can share a public-network data set', async () => {
+    const mockStorage = new ChaintracksStorageNoDb(ChaintracksStorageBase.createStorageBaseOptions('mock'))
+
+    await expect(mockStorage.getData()).rejects.toThrow("'mock' is unsupported")
+  })
+
+  test('disconnects surviving headers from live ancestors that are pruned', async () => {
+    const bulkTipHash = 'a0'.repeat(32)
+    jest.spyOn(storage.bulkManager, 'getLastFile').mockResolvedValue({
+      chain: 'main',
+      fileName: 'test.headers',
+      firstHeight: 0,
+      count: 100,
+      prevChainWork: '00'.repeat(32),
+      lastChainWork: '01'.repeat(32),
+      prevHash: '00'.repeat(32),
+      lastHash: bulkTipHash,
+      fileHash: null
+    })
+    const first = makeHeader(100, 'b', bulkTipHash)
+    const second = makeHeader(101, 'c', first.hash)
+
+    await storage.insertHeader(first)
+    await storage.insertHeader(second)
+
+    await expect(storage.deleteOlderLiveBlockHeaders(100)).resolves.toBe(1)
+    await expect(storage.findLiveHeaderForBlockHash(first.hash)).resolves.toBeNull()
+    await expect(storage.findLiveHeaderForBlockHash(second.hash)).resolves.toMatchObject({
+      previousHeaderId: null
+    })
+  })
+
+  test('tolerates a surviving header whose live ancestor is already absent', async () => {
+    const bulkTipHash = 'a0'.repeat(32)
+    jest.spyOn(storage.bulkManager, 'getLastFile').mockResolvedValue({
+      chain: 'main',
+      fileName: 'test.headers',
+      firstHeight: 0,
+      count: 100,
+      prevChainWork: '00'.repeat(32),
+      lastChainWork: '01'.repeat(32),
+      prevHash: '00'.repeat(32),
+      lastHash: bulkTipHash,
+      fileHash: null
+    })
+    const first = makeHeader(100, 'b', bulkTipHash)
+    const second = makeHeader(101, 'c', first.hash)
+
+    await storage.insertHeader(first)
+    await storage.insertHeader(second)
+    const persistedFirst = await storage.findLiveHeaderForBlockHash(first.hash)
+    if (persistedFirst == null) throw new Error('Expected the first live header to be persisted')
+    const data = await storage.getData()
+    data.liveHeaders.delete(persistedFirst.headerId)
+
+    await expect(storage.deleteOlderLiveBlockHeaders(99)).resolves.toBe(0)
+    await expect(storage.findLiveHeaderForBlockHash(second.hash)).resolves.toMatchObject({
+      previousHeaderId: persistedFirst.headerId
+    })
+  })
 })

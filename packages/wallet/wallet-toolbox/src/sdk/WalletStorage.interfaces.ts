@@ -453,6 +453,7 @@ export interface FindProvenTxReqsArgs extends FindSincePagedArgs {
 }
 export interface FindProvenTxsArgs extends FindSincePagedArgs {
   partial: Partial<TableProvenTx>
+  txids?: string[]
 }
 export interface FindStaleMerkleRootsArgs {
   height: number

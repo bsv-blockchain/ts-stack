@@ -97,4 +97,12 @@ describe('rate-limit security policy', () => {
       limit: 1
     })).toThrow(/must not exceed/)
   })
+
+  it.each(['-1', 'unlimited'])('allows an explicit %s rate-limit opt-out', value => {
+    process.env.TEST_RATE_LIMIT_MAX = value
+    expect(rateLimitOptions('TEST_RATE_LIMIT', {
+      windowMs: 60_000,
+      limit: 1
+    }).limit).toBe(Number.MAX_SAFE_INTEGER)
+  })
 })

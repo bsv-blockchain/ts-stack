@@ -7,10 +7,11 @@ import {
   LockingScript,
   P2PKH,
   PrivateKey,
+  PublicKey,
   Script,
   CachedKeyDeriver
 } from '@bsv/sdk'
-import { asBsvSdkPrivateKey, verifyTruthy } from './utilityHelpers'
+import { verifyTruthy } from './utilityHelpers'
 
 export const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
@@ -39,7 +40,13 @@ export class ScriptTemplateBRC29 implements ScriptTemplate {
   }
 
   getKeyDeriver (privKey: PrivateKey | HexString): KeyDeriverApi {
-    if (typeof privKey === 'string') privKey = PrivateKey.fromHex(privKey)
+    if (this.params.keyDeriver?.rootKey === privKey) return this.params.keyDeriver
+    if (typeof privKey === 'string') {
+      // The wallet signing path supplies its existing root key on every input.
+      // Avoid parsing the same hex key into a BigNumber for each template.
+      if (this.params.keyDeriver?.rootKey.toHex() === privKey) return this.params.keyDeriver
+      privKey = PrivateKey.fromHex(privKey)
+    }
     if (this.params.keyDeriver == null || this.params.keyDeriver.rootKey.toHex() !== privKey.toHex()) { return new CachedKeyDeriver(privKey) }
     return this.params.keyDeriver
   }
@@ -53,16 +60,22 @@ export class ScriptTemplateBRC29 implements ScriptTemplate {
   }
 
   unlock (
-    unlockerPrivKey: string,
-    lockerPubKey: string,
+    unlockerPrivKey: PrivateKey | HexString,
+    lockerPubKey: PublicKey | string,
     sourceSatoshis?: number,
     lockingScript?: Script
   ): ScriptTemplateUnlock {
     const derivedPrivateKey = this.getKeyDeriver(unlockerPrivKey)
       .derivePrivateKey(brc29ProtocolID, this.getKeyID(), lockerPubKey)
-      .toHex()
-    const r = this.p2pkh.unlock(asBsvSdkPrivateKey(derivedPrivateKey), 'all', false, sourceSatoshis, lockingScript)
-    return r
+    return this.unlockWithDerivedPrivateKey(derivedPrivateKey, sourceSatoshis, lockingScript)
+  }
+
+  unlockWithDerivedPrivateKey (
+    derivedPrivateKey: PrivateKey,
+    sourceSatoshis?: number,
+    lockingScript?: Script
+  ): ScriptTemplateUnlock {
+    return this.p2pkh.unlock(derivedPrivateKey, 'all', false, sourceSatoshis, lockingScript)
   }
 
   /**

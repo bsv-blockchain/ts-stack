@@ -47,7 +47,7 @@ test('workspace discovery exactly matches the 38-project registry', () => {
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
-  assert.equal(projects.generatedArtifacts.length, 10)
+  assert.equal(projects.generatedArtifacts.length, 12)
   assert.ok(projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers'))
   assert.deepEqual(projects.dependencyAutomation.firstParty, {
     pattern: '@bsv/*',
@@ -62,12 +62,32 @@ test('workspace discovery exactly matches the 38-project registry', () => {
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-07-30' })
+  const result = evaluateRepositoryHealth({ today: '2026-08-09' })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 38)
   assert.equal(result.publicPackages, 31)
   assert.equal(result.findings.length, 0)
+})
+
+test('shared package source roots are explicit and repository-relative', () => {
+  const sharedSourceProjects = projects.projects.filter(project => project.sourceRoots)
+  assert.deepEqual(
+    sharedSourceProjects.map(project => [project.name, project.sourceRoots]),
+    [
+      ['@bsv/wallet-toolbox-client', ['packages/wallet/wallet-toolbox/src']],
+      ['@bsv/wallet-toolbox-mobile', ['packages/wallet/wallet-toolbox/src']]
+    ]
+  )
+
+  const invalidProjects = structuredClone(projects)
+  invalidProjects.projects.find(
+    project => project.name === '@bsv/wallet-toolbox-client'
+  ).sourceRoots = ['../wallet-toolbox/src']
+  assert.match(
+    validateProjectRegistry(invalidProjects, discoverWorkspaceProjects()).join('\n'),
+    /invalid source root/
+  )
 })
 
 test('CI performance baseline retains representative full and targeted cohorts', () => {
@@ -101,6 +121,11 @@ test('published declaration dependencies are explicit and backed by runtime modu
         project.declarationDependencies[0] === '@types/express'
     )
   )
+  const authExpress = discoverWorkspaceProjects().find(
+    project => project.manifest.name === '@bsv/auth-express-middleware'
+  ).manifest
+  assert.equal(authExpress.dependencies?.['@types/express'], undefined)
+  assert.equal(authExpress.peerDependencies?.['@types/express'], '>=4.17.0 <6')
 
   const invalidProjects = structuredClone(projects)
   invalidProjects.projects.find(
@@ -114,9 +139,72 @@ test('published declaration dependencies are explicit and backed by runtime modu
   const invalidDiscovered = structuredClone(discoverWorkspaceProjects())
   delete invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail').manifest
     .dependencies['@types/express']
+  delete invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail').manifest
+    .peerDependencies?.['@types/express']
   assert.match(
     validateProjectRegistry(projects, invalidDiscovered).join('\n'),
     /must publish declaration dependency @types\/express/
+  )
+})
+
+test('host framework extensions share the consumer runtime and declaration graph', () => {
+  const hostExtensions = projects.projects.filter(project => project.hostPeerDependencies)
+  assert.deepEqual(
+    hostExtensions.map(project => project.name),
+    [
+      '@bsv/paymail',
+      '@bsv/auth-express-middleware',
+      '@bsv/payment-express-middleware',
+      '@bsv/wallet-relay'
+    ]
+  )
+  assert.ok(
+    hostExtensions.every(
+      project =>
+        project.hostPeerDependencies.length === 1 && project.hostPeerDependencies[0] === 'express'
+    )
+  )
+
+  const invalidDiscovered = structuredClone(discoverWorkspaceProjects())
+  const paymail = invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail')
+  paymail.manifest.dependencies.express = paymail.manifest.peerDependencies.express
+  delete paymail.manifest.peerDependencies.express
+  assert.match(
+    validateProjectRegistry(projects, invalidDiscovered).join('\n'),
+    /must publish host framework express as a peer dependency/
+  )
+
+  const untestedDiscovered = structuredClone(discoverWorkspaceProjects())
+  const walletRelay = untestedDiscovered.find(
+    project => project.manifest.name === '@bsv/wallet-relay'
+  )
+  walletRelay.manifest.scripts['pack:check'] = 'pnpm build'
+  assert.match(
+    validateProjectRegistry(projects, untestedDiscovered).join('\n'),
+    /must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check/
+  )
+
+  const unsafePathDiscovered = structuredClone(discoverWorkspaceProjects())
+  const authExpress = unsafePathDiscovered.find(
+    project => project.manifest.name === '@bsv/auth-express-middleware'
+  )
+  authExpress.manifest.scripts['pack:check'] = authExpress.manifest.scripts['pack:check'].replace(
+    '@bsv/auth-express-middleware',
+    '.'
+  )
+  assert.match(
+    validateProjectRegistry(projects, unsafePathDiscovered).join('\n'),
+    /must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check/
+  )
+
+  const hiddenDevelopmentDependency = structuredClone(discoverWorkspaceProjects())
+  const walletRelayWithoutExpressTypes = hiddenDevelopmentDependency.find(
+    project => project.manifest.name === '@bsv/wallet-relay'
+  )
+  delete walletRelayWithoutExpressTypes.manifest.devDependencies['@types/express']
+  assert.match(
+    validateProjectRegistry(projects, hiddenDevelopmentDependency).join('\n'),
+    /must install host framework declarations @types\/express as a development dependency for clean package QA/
   )
 })
 

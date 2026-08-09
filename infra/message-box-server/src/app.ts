@@ -22,7 +22,7 @@ import * as dotenv from 'dotenv'
 import express, { Express } from 'express'
 import bodyParser from 'body-parser'
 import { Logger } from './utils/logger.js'
-import { Setup } from '@bsv/wallet-toolbox'
+import { KnexSessionManager, Setup } from '@bsv/wallet-toolbox'
 import knexLib, { Knex } from 'knex'
 import knexConfig from '../knexfile.js'
 import type { WalletInterface } from '@bsv/sdk'
@@ -37,9 +37,17 @@ import {
   bodyParserErrorHandler,
   concurrencyLimit,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readBodyLimitBytes,
+  readResourceLimit,
+  readResourceProfile,
+  responseSizeLimit,
   securityHeaders
 } from './security/edgePolicy.js'
+import { calculateConfiguredRequestPrice } from './config/pricing.js'
+import { readMessageBoxResourceConfig } from './config/resources.js'
+import { KnexPaymentReplayStore } from './security/KnexPaymentReplayStore.js'
 ;(global.self as any) = { crypto }
 
 dotenv.config()
@@ -77,6 +85,20 @@ export const knex: Knex =
       ? knexConfig.production
       : knexConfig.development
   )
+
+const authSessionTtlMs = readResourceLimit(
+  'MESSAGE_BOX',
+  'AUTH_SESSION_TTL_MS',
+  24 * 60 * 60 * 1_000
+)
+if (authSessionTtlMs === -1) {
+  throw new Error('MESSAGE_BOX_AUTH_SESSION_TTL_MS must be finite')
+}
+export const sessionManager = new KnexSessionManager(knex, { ttlMs: authSessionTtlMs })
+export const paymentReplayStore = new KnexPaymentReplayStore(
+  knex,
+  readResourceLimit('MESSAGE_BOX', 'PAYMENT_REPLAY_TTL_DAYS', 365)
+)
 
 // Wallet initialization logic
 let _wallet: WalletInterface | undefined
@@ -145,6 +167,8 @@ export const appReady = (async () => {
  * @throws If wallet is not available when needed
  */
 export async function useRoutes(): Promise<void> {
+  const profile = readResourceProfile('MESSAGE_BOX')
+  app.use(initialDoubleSlashCompatibility)
   app.use(
     securityHeaders({
       environmentPrefix: 'MESSAGE_BOX',
@@ -158,17 +182,30 @@ export async function useRoutes(): Promise<void> {
       methods: ['GET', 'POST', 'OPTIONS']
     })
   )
-  app.use(concurrencyLimit('MESSAGE_BOX', 200))
+  app.use(
+    concurrencyLimit(
+      'MESSAGE_BOX',
+      profileValue(profile, { small: 8, standard: 24, highThroughput: 96 })
+    )
+  )
   app.use(
     rateLimit(rateLimitOptions('MESSAGE_BOX_PRE_AUTH_RATE_LIMIT', { windowMs: 60_000, limit: 300 }))
   )
   app.use(
     bodyParser.json({
-      limit: readBodyLimitBytes('MESSAGE_BOX', 4 * 1024 * 1024),
+      limit: readBodyLimitBytes(
+        'MESSAGE_BOX',
+        profileValue(profile, {
+          small: 1024 * 1024,
+          standard: 4 * 1024 * 1024,
+          highThroughput: 16 * 1024 * 1024
+        })
+      ),
       type: 'application/json'
     })
   )
   app.use(bodyParserErrorHandler)
+  app.use(responseSizeLimit('MESSAGE_BOX', readMessageBoxResourceConfig().listMaxResponseBytes))
 
   // Enable Swagger docs
   setupSwagger(app)
@@ -183,17 +220,21 @@ export async function useRoutes(): Promise<void> {
   app.use(
     createAuthMiddleware({
       wallet: _wallet,
+      sessionManager,
       logger: console
     })
   )
+  // Auth middleware intercepts responses for BRC-104 signing. Install the
+  // limiter again after that interception so the signed materialization is
+  // bounded even with older compatible auth-middleware releases.
+  app.use(responseSizeLimit('MESSAGE_BOX', readMessageBoxResourceConfig().listMaxResponseBytes))
 
   registerMessageBoxPostAuthRoutes(
     app,
     {
       wallet: _wallet,
-      // Message delivery is free unless an embedding operator injects a price
-      // calculator through the composable context.
-      calculateRequestPrice: () => 0
+      calculateRequestPrice: calculateConfiguredRequestPrice,
+      paymentReplayStore
     },
     ROUTING_PREFIX
   )

@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express'
 import { Chaintracks } from '@bsv/wallet-toolbox'
 import { log } from './logger'
+import { parseHeaderRange } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -37,11 +38,18 @@ function reverseHex(hex: string): Buffer {
 // Convert header to 80-byte binary format
 // Note: previousHash and merkleRoot are byte-reversed in JSON (display format)
 // but need to be in internal byte order for binary serialization
-function headerToBytes(header: { version: number; previousHash: string; merkleRoot: string; time: number; bits: number; nonce: number }): Buffer {
+function headerToBytes(header: {
+  version: number
+  previousHash: string
+  merkleRoot: string
+  time: number
+  bits: number
+  nonce: number
+}): Buffer {
   const buf = Buffer.alloc(80)
   buf.writeUInt32LE(header.version, 0)
-  reverseHex(header.previousHash).copy(buf, 4)   // Reverse from display to internal
-  reverseHex(header.merkleRoot).copy(buf, 36)    // Reverse from display to internal
+  reverseHex(header.previousHash).copy(buf, 4) // Reverse from display to internal
+  reverseHex(header.merkleRoot).copy(buf, 36) // Reverse from display to internal
   buf.writeUInt32LE(header.time, 68)
   buf.writeUInt32LE(header.bits, 72)
   buf.writeUInt32LE(header.nonce, 76)
@@ -62,6 +70,17 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
     }
   })
 
+  // GET /v2/height - Get current chain height (go-chaintracks compatible)
+  router.get('/height', async (_req: Request, res: Response) => {
+    try {
+      res.set('Cache-Control', 'public, max-age=60')
+      res.json(success({ height: await chaintracks.getPresentHeight() }))
+    } catch (err) {
+      log.error({ operation: 'v2.get_height', outcome: 'error', err }, 'Failed to get chain height')
+      res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain height'))
+    }
+  })
+
   // GET /v2/tip - Get chain tip header
   router.get('/tip', async (_req: Request, res: Response) => {
     try {
@@ -74,6 +93,110 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
     } catch (err) {
       log.error({ operation: 'v2.get_tip', outcome: 'error', err }, 'Failed to get chain tip')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip'))
+    }
+  })
+
+  // GET /v2/tip/stream - SSE stream compatible with go-chaintracks/Arcade.
+  router.get('/tip/stream', async (req: Request, res: Response) => {
+    res.status(200)
+    res.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    })
+    res.flushHeaders()
+
+    let subscriptionId: string | undefined
+    let closed = false
+    const keepalive = setInterval(() => {
+      if (!res.writableEnded) res.write(': keepalive\n\n')
+    }, 15000)
+    const cleanup = () => {
+      closed = true
+      clearInterval(keepalive)
+      if (subscriptionId != null) {
+        const id = subscriptionId
+        subscriptionId = undefined
+        chaintracks.unsubscribe(id).catch(err => {
+          log.warn(
+            { operation: 'v2.tip_stream.unsubscribe', outcome: 'error', err },
+            'Failed to unsubscribe tip stream'
+          )
+        })
+      }
+    }
+    req.once('close', cleanup)
+
+    try {
+      subscriptionId = await chaintracks.subscribeHeaders(header => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify(header)}\n\n`)
+      })
+      if (closed) {
+        const id = subscriptionId
+        subscriptionId = undefined
+        await chaintracks.unsubscribe(id)
+        return
+      }
+      const tip = await chaintracks.findChainTipHeader()
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify(tip)}\n\n`)
+    } catch (err) {
+      log.error({ operation: 'v2.tip_stream', outcome: 'error', err }, 'Failed to start tip stream')
+      cleanup()
+      if (!res.writableEnded) res.end()
+    }
+  })
+
+  // GET /v2/reorg/stream - SSE reorganization stream.
+  router.get('/reorg/stream', async (req: Request, res: Response) => {
+    res.status(200)
+    res.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    })
+    res.flushHeaders()
+
+    let subscriptionId: string | undefined
+    let closed = false
+    const keepalive = setInterval(() => {
+      if (!res.writableEnded) res.write(': keepalive\n\n')
+    }, 15000)
+    const cleanup = () => {
+      closed = true
+      clearInterval(keepalive)
+      if (subscriptionId != null) {
+        const id = subscriptionId
+        subscriptionId = undefined
+        chaintracks.unsubscribe(id).catch(err => {
+          log.warn(
+            { operation: 'v2.reorg_stream.unsubscribe', outcome: 'error', err },
+            'Failed to unsubscribe reorg stream'
+          )
+        })
+      }
+    }
+    req.once('close', cleanup)
+
+    try {
+      subscriptionId = await chaintracks.subscribeReorgs(
+        (depth, oldTip, newTip, deactivatedHeaders) => {
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ depth, oldTip, newTip, deactivatedHeaders })}\n\n`)
+          }
+        }
+      )
+      if (closed) {
+        const id = subscriptionId
+        subscriptionId = undefined
+        await chaintracks.unsubscribe(id)
+      }
+    } catch (err) {
+      log.error(
+        { operation: 'v2.reorg_stream', outcome: 'error', err },
+        'Failed to start reorg stream'
+      )
+      cleanup()
+      if (!res.writableEnded) res.end()
     }
   })
 
@@ -98,7 +221,10 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       }
       res.json(success(header))
     } catch (err) {
-      log.error({ operation: 'v2.get_header_by_height', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v2.get_header_by_height', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -125,7 +251,10 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
 
       res.json(success(header))
     } catch (err) {
-      log.error({ operation: 'v2.get_header_by_hash', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v2.get_header_by_hash', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -133,15 +262,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers?height=N&count=M - Get multiple headers as binary
   router.get('/headers', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      const count = Number.parseInt(req.query.count as string, 10)
-
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
-      }
-      if (Number.isNaN(count) || count <= 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
-      }
+      const { height, count } = parseHeaderRange(req.query as Record<string, unknown>)
 
       const currentHeight = await chaintracks.currentHeight()
       if (height < currentHeight - 100) {
@@ -161,6 +282,9 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('Content-Type', 'application/octet-stream')
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      if (err instanceof RangeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
       log.error({ operation: 'v2.get_headers', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
@@ -209,7 +333,10 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
-      log.error({ operation: 'v2.get_header_by_height_bin', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v2.get_header_by_height_bin', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -238,7 +365,10 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
-      log.error({ operation: 'v2.get_header_by_hash_bin', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v2.get_header_by_hash_bin', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -246,15 +376,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers.bin?height=N&count=M - Get multiple headers as binary (80 bytes each)
   router.get('/headers.bin', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      const count = Number.parseInt(req.query.count as string, 10)
-
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
-      }
-      if (Number.isNaN(count) || count <= 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
-      }
+      const { height, count } = parseHeaderRange(req.query as Record<string, unknown>)
 
       const currentHeight = await chaintracks.currentHeight()
       if (height < currentHeight - 100) {
@@ -278,6 +400,9 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Header-Count', String(headerCount))
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      if (err instanceof RangeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
       log.error({ operation: 'v2.get_headers_bin', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }

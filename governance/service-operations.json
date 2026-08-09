@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "lastReviewed": "2026-07-29",
+  "lastReviewed": "2026-08-05",
   "owner": "ts-stack-maintainers",
   "policy": {
     "publicEdge": {
@@ -85,16 +85,25 @@
       "path": "infra/chaintracks-server",
       "envExample": "infra/chaintracks-server/.env.example",
       "port": "PORT (default 3011; CDN is port + 1)",
-      "livenessPath": "/getInfo",
-      "readinessPath": "/getInfo",
+      "livenessPath": "/healthz",
+      "readinessPath": "/readyz",
       "configuration": {
         "required": ["CHAIN"],
         "optional": [
           "BULK_HEADERS_PATH",
           "CDN_HOST_URL",
+          "CHAINTRACKS_DISABLE_WHATSONCHAIN",
+          "CHAINTRACKS_UPSTREAM_API_PREFIX",
+          "CHAINTRACKS_UPSTREAM_MAX_HEADERS",
+          "CHAINTRACKS_UPSTREAM_URL",
           "ENABLE_BULK_HEADERS_CDN",
           "PORT",
+          "ROUTING_PREFIX",
           "SOURCE_CDN_URL",
+          "STN_ARCADE_URL",
+          "STN_CHAINTRACKS_URL",
+          "TSTN_ARCADE_URL",
+          "TSTN_CHAINTRACKS_URL",
           "WHATSONCHAIN_API_KEY"
         ],
         "secrets": ["OTEL_EXPORTER_OTLP_HEADERS", "WHATSONCHAIN_API_KEY"]
@@ -104,7 +113,14 @@
         "telemetryFile": "src/telemetry.ts",
         "loggerFile": "src/logger.ts",
         "preload": "--require ./dist/telemetry.js",
-        "operations": ["listen", "shutdown", "headers.export", "headers.ingest"]
+        "operations": [
+          "listen",
+          "shutdown",
+          "headers.export",
+          "headers.ingest",
+          "readiness",
+          "config.summary"
+        ]
       },
       "criticalJourneys": [
         "return current chain information",
@@ -113,7 +129,7 @@
       ],
       "alerts": [
         "header tip age or height stops advancing",
-        "bulk-header export or upstream retrieval repeatedly fails",
+        "all configured bulk/live sources are degraded or upstream retrieval repeatedly fails",
         "API or CDN saturation exceeds its independent concurrency budget"
       ],
       "state": "Bulk-header files under BULK_HEADERS_PATH; upstream headers are reproducible.",
@@ -138,7 +154,7 @@
       "path": "infra/message-box-server",
       "envExample": "infra/message-box-server/.env.example",
       "port": "PORT, then HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": ["SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
@@ -150,6 +166,9 @@
           "FIREBASE_SERVICE_ACCOUNT_JSON",
           "FIREBASE_SERVICE_ACCOUNT_PATH",
           "HOSTING_DOMAIN",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRIES",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS",
+          "MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS",
           "PORT",
           "ROUTING_PREFIX"
         ],
@@ -175,6 +194,7 @@
       "alerts": [
         "message persistence succeeds but delivery or acknowledgement repeatedly fails",
         "authenticated WebSocket handshakes or delivery failures spike",
+        "database serialization retries are sustained or exhaust their bounded retry budget",
         "wallet storage, database, or Firebase dependency failures consume error budget"
       ],
       "state": "Knex database plus optional Firebase device registrations.",
@@ -199,7 +219,7 @@
       "path": "infra/overlay-server",
       "envExample": "infra/overlay-server/.env.example",
       "port": "8080",
-      "livenessPath": "/health/live",
+      "livenessPath": "/healthz",
       "readinessPath": "/health/ready",
       "configuration": {
         "required": [
@@ -277,7 +297,7 @@
       "path": "infra/uhrp-server-basic",
       "envExample": "infra/uhrp-server-basic/.env.example",
       "port": "HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": ["BSV_NETWORK", "SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
@@ -323,7 +343,7 @@
       "path": "infra/uhrp-server-cloud-bucket",
       "envExample": "infra/uhrp-server-cloud-bucket/secrets/.env.example",
       "port": "HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": [
@@ -381,7 +401,7 @@
       "path": "infra/wab",
       "envExample": "infra/wab/.env.example",
       "port": "PORT (default 8080)",
-      "livenessPath": "/info",
+      "livenessPath": "/healthz",
       "readinessPath": "/info",
       "configuration": {
         "required": [
@@ -450,7 +470,7 @@
       "path": "infra/wallet-infra",
       "envExample": "infra/wallet-infra/.env.example",
       "port": "HTTP_PORT (default 8081; samples set 8080 without nginx)",
-      "livenessPath": "/",
+      "livenessPath": "/healthz",
       "readinessPath": "/",
       "configuration": {
         "required": ["BSV_NETWORK", "KNEX_DB_CONNECTION", "SERVER_PRIVATE_KEY"],
@@ -460,13 +480,24 @@
           "ENABLE_NGINX",
           "FEE_MODEL",
           "HTTP_PORT",
-          "TAAL_API_KEY"
+          "TAAL_API_KEY",
+          "WALLET_STORAGE_BIND_HOST",
+          "WALLET_STORAGE_MONITOR_START_TASKS",
+          "WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE",
+          "WALLET_STORAGE_MONITOR_ADMIN_ENABLED",
+          "WALLET_STORAGE_MONITOR_ADMIN_HOST",
+          "WALLET_STORAGE_MONITOR_ADMIN_PORT",
+          "WALLET_STORAGE_MONITOR_ADMIN_ALLOWED_ORIGINS",
+          "WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY",
+          "WALLET_STORAGE_ADMIN_IDENTITY_KEYS",
+          "WALLET_STORAGE_TRUST_PROXY_HOPS"
         ],
         "secrets": [
           "KNEX_DB_CONNECTION",
           "OTEL_EXPORTER_OTLP_HEADERS",
           "SERVER_PRIVATE_KEY",
-          "TAAL_API_KEY"
+          "TAAL_API_KEY",
+          "WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY"
         ]
       },
       "observability": {
@@ -479,6 +510,7 @@
           "wallet_storage.setup",
           "storage_server.start",
           "monitor.start",
+          "monitor_admin.start",
           "shutdown"
         ]
       },
@@ -500,10 +532,10 @@
       "restoreValidation": "Verify schema and storage identity, authenticated RPC, representative wallet state, monitor progress, and provider connectivity.",
       "lifecycle": {
         "status": "implemented",
-        "shutdown": "SIGTERM/SIGINT stop monitor tasks, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.",
+        "shutdown": "SIGTERM/SIGINT stop monitor tasks, close the optional monitor admin listener, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.",
         "scaling": "Operate one monitor leader; API replicas require shared sessions, rate limits, storage, and explicit monitor leadership.",
         "disruption": "Protect the monitor leader or perform an explicit handoff; preserve ready API capacity only after shared-state behavior is proven.",
-        "topology": "Separate monitor leadership from horizontally safe API capacity when production demand justifies it."
+        "topology": "Separate monitor leadership and its private optional admin listener from horizontally safe API capacity when production demand justifies it."
       },
       "operatorGuide": "infra/wallet-infra/guides/kube_samples/README.md",
       "publicProtocol": true,

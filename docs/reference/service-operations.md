@@ -3,8 +3,8 @@ id: service-operations
 title: 'Service Operations Contract'
 kind: reference
 version: '2.0.0'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-08-05'
+last_verified: '2026-08-05'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, operations, observability, slo, recovery]
@@ -26,15 +26,15 @@ and CSP remains an independent document/UI policy rather than API authorization.
 
 ## Runtime endpoints and lifecycle
 
-| Service                    | Port contract                                            | Liveness       | Readiness       | Lifecycle   | Operations                                                                                                     |
-| -------------------------- | -------------------------------------------------------- | -------------- | --------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
-| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/getInfo`     | `/getInfo`      | implemented | [guide](../infrastructure/chaintracks-server.md)                                                               |
-| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/health`      | `/ready`        | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
-| `overlay-server`           | 8080                                                     | `/health/live` | `/health/ready` | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
-| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
-| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
-| `wab`                      | PORT (default 8080)                                      | `/info`        | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
-| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/`            | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
+| Service                    | Port contract                                            | Liveness   | Readiness       | Lifecycle   | Operations                                                                                                     |
+| -------------------------- | -------------------------------------------------------- | ---------- | --------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/healthz` | `/readyz`       | implemented | [guide](../infrastructure/chaintracks-server.md)                                                               |
+| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/healthz` | `/ready`        | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
+| `overlay-server`           | 8080                                                     | `/healthz` | `/health/ready` | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
+| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
+| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
+| `wab`                      | PORT (default 8080)                                      | `/healthz` | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
+| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/healthz` | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
 
 Health endpoints are public and non-sensitive. They do not replace protocol
 authentication, administrative authorization, rate limits, or dependency-aware
@@ -104,7 +104,7 @@ Incident handling follows this evidence-preserving sequence:
 ### chaintracks-server
 
 - Configuration: required `CHAIN`; optional
-  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `SOURCE_CDN_URL`, `WHATSONCHAIN_API_KEY`; secret-bearing
+  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `CHAINTRACKS_DISABLE_WHATSONCHAIN`, `CHAINTRACKS_UPSTREAM_API_PREFIX`, `CHAINTRACKS_UPSTREAM_MAX_HEADERS`, `CHAINTRACKS_UPSTREAM_URL`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `ROUTING_PREFIX`, `SOURCE_CDN_URL`, `STN_ARCADE_URL`, `STN_CHAINTRACKS_URL`, `TSTN_ARCADE_URL`, `TSTN_CHAINTRACKS_URL`, `WHATSONCHAIN_API_KEY`; secret-bearing
   `OTEL_EXPORTER_OTLP_HEADERS`, `WHATSONCHAIN_API_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
@@ -116,7 +116,7 @@ Incident handling follows this evidence-preserving sequence:
 - ingest and persist a verified header
 - Alerts:
 - header tip age or height stops advancing
-- bulk-header export or upstream retrieval repeatedly fails
+- all configured bulk/live sources are degraded or upstream retrieval repeatedly fails
 - API or CDN saturation exceeds its independent concurrency budget
 - State: Bulk-header files under BULK_HEADERS_PATH; upstream headers are reproducible.
 - Migration/startup: No schema migration. Validate the retained header corpus before rollout.
@@ -134,7 +134,7 @@ Incident handling follows this evidence-preserving sequence:
 ### message-box-server
 
 - Configuration: required `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `BSV_NETWORK`, `ENABLE_FIREBASE`, `ENABLE_WEBSOCKETS`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `HOSTING_DOMAIN`, `PORT`, `ROUTING_PREFIX`; secret-bearing
+  `BSV_NETWORK`, `ENABLE_FIREBASE`, `ENABLE_WEBSOCKETS`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_PATH`, `HOSTING_DOMAIN`, `MESSAGE_BOX_DB_DEADLOCK_RETRIES`, `MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS`, `MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS`, `PORT`, `ROUTING_PREFIX`; secret-bearing
   `FIREBASE_SERVICE_ACCOUNT_JSON`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
@@ -148,6 +148,7 @@ Incident handling follows this evidence-preserving sequence:
 - Alerts:
 - message persistence succeeds but delivery or acknowledgement repeatedly fails
 - authenticated WebSocket handshakes or delivery failures spike
+- database serialization retries are sustained or exhaust their bounded retry budget
 - wallet storage, database, or Firebase dependency failures consume error budget
 - State: Knex database plus optional Firebase device registrations.
 - Migration/startup: Migrations complete before listen; back up and verify the target schema first.
@@ -286,8 +287,8 @@ Incident handling follows this evidence-preserving sequence:
 ### wallet-infra
 
 - Configuration: required `BSV_NETWORK`, `KNEX_DB_CONNECTION`, `SERVER_PRIVATE_KEY`; optional
-  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`; secret-bearing
-  `KNEX_DB_CONNECTION`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `TAAL_API_KEY`.
+  `COMMISSION_FEE`, `COMMISSION_PUBLIC_KEY`, `ENABLE_NGINX`, `FEE_MODEL`, `HTTP_PORT`, `TAAL_API_KEY`, `WALLET_STORAGE_BIND_HOST`, `WALLET_STORAGE_MONITOR_START_TASKS`, `WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE`, `WALLET_STORAGE_MONITOR_ADMIN_ENABLED`, `WALLET_STORAGE_MONITOR_ADMIN_HOST`, `WALLET_STORAGE_MONITOR_ADMIN_PORT`, `WALLET_STORAGE_MONITOR_ADMIN_ALLOWED_ORIGINS`, `WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY`, `WALLET_STORAGE_ADMIN_IDENTITY_KEYS`, `WALLET_STORAGE_TRUST_PROXY_HOPS`; secret-bearing
+  `KNEX_DB_CONNECTION`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `TAAL_API_KEY`, `WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
   `src/logger.ts`, preload
@@ -306,10 +307,10 @@ Incident handling follows this evidence-preserving sequence:
 - RPO starting point: 15 minutes for wallet storage state.
 - RTO starting point: 4 hours from a verified backup, identity key, and service-provider configuration.
 - Restore validation: Verify schema and storage identity, authenticated RPC, representative wallet state, monitor progress, and provider connectivity.
-- Lifecycle status: **implemented** — SIGTERM/SIGINT stop monitor tasks, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT stop monitor tasks, close the optional monitor admin listener, terminate optional nginx, drain StorageServer, destroy wallet storage, and flush telemetry.
 - Scaling: Operate one monitor leader; API replicas require shared sessions, rate limits, storage, and explicit monitor leadership.
 - Disruption: Protect the monitor leader or perform an explicit handoff; preserve ready API capacity only after shared-state behavior is proven.
-- Topology: Separate monitor leadership from horizontally safe API capacity when production demand justifies it.
+- Topology: Separate monitor leadership and its private optional admin listener from horizontally safe API capacity when production demand justifies it.
 - Operator guide:
   [infra/wallet-infra/guides/kube_samples/README.md](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md)
 

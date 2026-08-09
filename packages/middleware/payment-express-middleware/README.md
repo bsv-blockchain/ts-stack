@@ -12,7 +12,7 @@ contracts are not interchangeable.
 ## Requirements
 
 - Node.js 22 or newer
-- Express 5
+- Express 4.18 or newer, including Express 5
 - `@bsv/auth-express-middleware` earlier in the middleware chain
 - A BRC-100 wallet implementing `internalizeAction`
 
@@ -24,6 +24,11 @@ both module systems.
 ```bash
 npm install @bsv/payment-express-middleware @bsv/auth-express-middleware @bsv/sdk express
 ```
+
+Express is a peer dependency, so the middleware uses the application's single
+Express runtime and type graph. This prevents duplicate Express installations
+from making `PaymentRequest` or the returned middleware incompatible with the
+application's route types.
 
 ## Basic use
 

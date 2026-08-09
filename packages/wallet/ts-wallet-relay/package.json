@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-relay",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -70,7 +70,7 @@
     "typecheck": "tsc --noEmit",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/ts-wallet-relay/**/*.{cjs,js,json,md,mjs,ts,tsx}\"",
     "lint": "oxlint build.mjs bin src tests --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --allow-source-prefixes template --consumer-dependencies react --exports QRSessionManager,WalletRelayService,WalletRequestHandler,WebSocketRelay,compileOriginMatcher --entry-exports \"./client=WalletPairingSession|WalletRelayClient|WalletRelayError;./react=QRDisplay|QRPairingCode|RequestLog|WalletConnectionModal|useQRPairing|useWalletRelayClient\" --bin wallet-relay --bin-args --help",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --allow-source-prefixes template --consumer-dependencies react --exports QRSessionManager,WalletRelayService,WalletRequestHandler,WebSocketRelay,compileOriginMatcher --entry-exports \"./client=WalletPairingSession|WalletRelayClient|WalletRelayError;./react=QRDisplay|QRPairingCode|RequestLog|WalletConnectionModal|useQRPairing|useWalletRelayClient\" --bin wallet-relay --bin-args --help && node ../../../scripts/check-auth-express-consumers.mjs @bsv/wallet-relay",
     "test": "jest --config jest.config.cjs --watchman=false",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --config jest.config.cjs --coverage --watchman=false",
@@ -79,11 +79,15 @@
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6",
-    "express": ">=4.0.0",
+    "@types/express": ">=4.17.0 <6",
+    "express": ">=4.18.0 <6",
     "qrcode": ">=1.5.0",
     "react": ">=17.0.0"
   },
   "peerDependenciesMeta": {
+    "@types/express": {
+      "optional": true
+    },
     "express": {
       "optional": true
     },
@@ -102,6 +106,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@types/qrcode": "^1.5.6",
@@ -121,7 +126,6 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@types/express": "^5.0.6",
     "ws": "^8.21.1"
   },
   "repository": {

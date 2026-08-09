@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.4.20'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '2.6.5'
+last_updated: '2026-08-09'
+last_verified: '2026-08-09'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,44 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Immediate actions may use wallet-managed change from a transaction awaiting
+background broadcast. The child broadcast recursively carries the delayed
+parent BEEF, preventing queued work from temporarily hiding most of the
+wallet's spendable balance.
+
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. A broadcast failure rejects the
+grant, so the application can surface the existing error and safely retry
+without planning against temporarily reserved funding inputs.
+
+Completed `createAction` and `signAction` results expose Atomic BEEF as a
+numeric array at the public wallet boundary. The historical shape survives
+plain JSON serialization for older BRC-100 applications; typed arrays remain
+supported by the `AtomicBEEF` type and binary Wallet Wire transports.
+
+`WalletStorageManager.getStores()` reports the configured `endpointURL` for
+remote providers without relying on a class name. Browser and application
+bundlers may safely minify the provider constructor while backup selection and
+make-primary flows continue matching the original endpoint URL.
+
+Opt-in remote-storage timing spans retain trace and parent-span correlation in
+the telemetry sink without adding headers to authenticated requests. BRC-103,
+BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
+
+UMP account lookup accepts one verified matching token as an existing account.
+When no token verifies, one clean empty overlay response establishes a new
+account even if other hosts fail or return malformed records. Multiple distinct
+verified tokens and lookups with no usable response remain errors; WAB
+existing-account continuity still prevents replacement-wallet onboarding.
+
+ChainTracks defaults to credential-free Arcade/go-chaintracks v2 HTTP and SSE
+on mainnet, testnet, and TerraTestNet. STN and Terra Scaling TestNet require an
+explicit operator endpoint. Remote header batches pass local serialization,
+hash, continuity, and genesis checks; source failures fall through in priority
+order; and synchronized trackers keep serving last-good local data.
+WhatsOnChain is an optional, rate-limited mainnet/testnet fallback; no key is
+required.
 
 ## Install
 

@@ -118,6 +118,28 @@ describe('KeyDeriver', () => {
     )
   })
 
+  test('batch private-key derivation is byte-equivalent and shares ECDH by counterparty', () => {
+    const otherCounterparty = new PrivateKey(70).toPublicKey()
+    const cacheSharedSecret = jest.fn()
+    const retrieveCachedSharedSecret = jest.fn(() => undefined)
+    const batched = new KeyDeriver(rootPrivateKey, cacheSharedSecret, retrieveCachedSharedSecret)
+    const derivations = [
+      { protocolID, keyID: 'one', counterparty: counterpartyPublicKey },
+      { protocolID, keyID: 'two', counterparty: counterpartyPublicKey.toString() },
+      { protocolID, keyID: 'three', counterparty: otherCounterparty }
+    ] as const
+
+    expect(batched.derivePrivateKeys(derivations).map(key => key.toHex())).toEqual(
+      derivations.map(derivation => keyDeriver.derivePrivateKey(
+        derivation.protocolID,
+        derivation.keyID,
+        derivation.counterparty
+      ).toHex())
+    )
+    expect(retrieveCachedSharedSecret).toHaveBeenCalledTimes(2)
+    expect(cacheSharedSecret).toHaveBeenCalledTimes(2)
+  })
+
   test('should derive the correct symmetric key', () => {
     const derivedSymmetricKey = keyDeriver.deriveSymmetricKey(
       protocolID,

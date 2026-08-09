@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.20",
+  "version": "2.0.29",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -45,6 +45,7 @@
     "prepublishOnly": "npm run lint && npm run build"
   },
   "devDependencies": {
+    "@types/eventsource": "^1.1.15",
     "@types/node": "^24.13.3",
     "@typescript/native": "npm:typescript@7.0.2",
     "oxlint": "^1.76.0",
@@ -53,9 +54,9 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@bsv/payment-express-middleware": "^2.1.4",
-    "@bsv/sdk": "^2.2.16",
-    "@bsv/wallet-toolbox": "^2.4.20",
+    "@bsv/payment-express-middleware": "^2.1.5",
+    "@bsv/sdk": "^2.3.1",
+    "@bsv/wallet-toolbox": "^2.6.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
@@ -71,6 +72,7 @@
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
+    "eventsource": "^2.0.2",
     "express": "^5.2.1",
     "knex": "^3.3.0",
     "mysql2": "^3.23.2",

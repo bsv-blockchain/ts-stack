@@ -17,6 +17,8 @@ import {
   SignActionArgs,
   SignActionResult,
   Transaction,
+  type TelemetryConfig,
+  type SpendVerifierInterface,
   Utils,
   WalletAction,
   WalletActionInput,
@@ -58,6 +60,7 @@ import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorE
 import { TableCommission } from '../../src/storage/schema/tables/TableCommission'
 import { asArray } from '../../src/utility/utilityHelpers.noBuffer'
 import { ScriptTemplateBRC29 } from '../../src/utility/ScriptTemplateBRC29'
+import type { ActionBatchMode } from '../../src/signer/actionBatch/ActionBatchWorkspace'
 
 dotenv.config()
 
@@ -307,6 +310,9 @@ export abstract class TestUtilsWalletStorage {
     active?: WalletStorageProvider
     backups?: WalletStorageProvider[]
     privKeyHex?: string
+    actionBatchMode?: ActionBatchMode
+    telemetry?: TelemetryConfig
+    scriptVerifier?: SpendVerifierInterface
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     args.rootKeyHex ||= '1'.repeat(64)
@@ -337,7 +343,10 @@ export abstract class TestUtilsWalletStorage {
       storage,
       services,
       monitor,
-      privilegedKeyManager
+      privilegedKeyManager,
+      actionBatchMode: args.actionBatchMode,
+      telemetry: args.telemetry,
+      scriptVerifier: args.scriptVerifier
     })
     const r: TestWalletOnly = {
       rootKey,
@@ -400,16 +409,22 @@ export abstract class TestUtilsWalletStorage {
     rootKeyHex?: string
     endpointUrl?: string
     chain?: Chain
+    actionBatchMode?: ActionBatchMode
+    telemetry?: TelemetryConfig
+    scriptVerifier?: SpendVerifierInterface
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     const wo = await _tu.createWalletOnly({
       chain: args.chain,
-      rootKeyHex: args.rootKeyHex
+      rootKeyHex: args.rootKeyHex,
+      actionBatchMode: args.actionBatchMode,
+      telemetry: args.telemetry,
+      scriptVerifier: args.scriptVerifier
     })
     args.endpointUrl ||=
       args.chain === 'main' ? 'https://storage.babbage.systems' : 'https://staging-storage.babbage.systems'
 
-    const client = new StorageClient(wo.wallet, args.endpointUrl)
+    const client = new StorageClient(wo.wallet, args.endpointUrl, { telemetry: args.telemetry })
     await wo.storage.addWalletStorageProvider(client)
     return wo
   }

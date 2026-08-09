@@ -114,7 +114,11 @@ for (const pkg of pkgList) {
       }
     }
     for (const dependency of declarationDependencies) {
-      if (!Object.hasOwn(d.dependencies ?? {}, dependency)) {
+      const publishedDependencies = {
+        ...d.dependencies,
+        ...d.peerDependencies
+      }
+      if (!Object.hasOwn(publishedDependencies, dependency)) {
         console.log(
           `DECLARATION DEPENDENCY  ${d.name} must publish governed dependency ${dependency}`
         )

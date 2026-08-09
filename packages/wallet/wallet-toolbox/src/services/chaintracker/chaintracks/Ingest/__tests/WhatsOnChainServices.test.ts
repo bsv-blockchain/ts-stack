@@ -2,6 +2,28 @@ import { WhatsOnChainServices, parseFileLink } from '../WhatsOnChainServices'
 import { HeightRange } from '../../util/HeightRange'
 
 describe('WhatsOnChain header file links', () => {
+  test('coalesces concurrent chain-height reads into one rate-limited request', async () => {
+    const options = WhatsOnChainServices.createWhatsOnChainServicesOptions('test')
+    options.chainInfoMsecs = 0
+    options.minRequestIntervalMsecs = 0
+    const service = new WhatsOnChainServices(options)
+    const result = {
+      chain: 'test',
+      blocks: 123,
+      headers: 123,
+      bestblockhash: '00'.repeat(32),
+      difficulty: 1,
+      mediantime: 1,
+      verificationprogress: 1,
+      pruned: false,
+      chainwork: '00'.repeat(32)
+    }
+    const getChainInfo = jest.spyOn(service.woc, 'getChainInfo').mockResolvedValue(result)
+
+    await expect(Promise.all([service.getChainTipHeight(), service.getChainTipHeight()])).resolves.toEqual([123, 123])
+    expect(getChainInfo).toHaveBeenCalledTimes(1)
+  })
+
   test('parses latest and bounded header resources', () => {
     expect(parseFileLink('https://cdn.example/headers/latest')).toEqual({
       range: 'latest',

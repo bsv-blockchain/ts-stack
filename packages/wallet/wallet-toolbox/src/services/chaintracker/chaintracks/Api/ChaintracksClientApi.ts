@@ -36,6 +36,18 @@ export interface ChaintracksInfoApi {
   bulkIngestors: string[]
   liveIngestors: string[]
   packages: ChaintracksPackageInfoApi[]
+  /** Last observed source state. Additive and omitted by older services. */
+  sources?: ChaintracksSourceStatusApi[]
+}
+
+/** @public */
+export interface ChaintracksSourceStatusApi {
+  name: string
+  role: 'bulk' | 'live'
+  state: 'unknown' | 'healthy' | 'degraded'
+  lastSuccess?: string
+  lastFailure?: string
+  error?: string
 }
 
 /**

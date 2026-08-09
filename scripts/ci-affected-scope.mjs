@@ -112,8 +112,9 @@ export function changedLockfileImporters(baseSource, headSource) {
     .sort((left, right) => left.localeCompare(right))
 }
 
-function projectOwnsFile(projectPath, file) {
-  return projectPath !== '.' && (file === projectPath || file.startsWith(`${projectPath}/`))
+function projectOwnsFile(project, file) {
+  const roots = [project.path, ...(project.sourceRoots ?? [])]
+  return roots.some(root => root !== '.' && (file === root || file.startsWith(`${root}/`)))
 }
 
 function documentationOnlyProjectFile(projectPath, file) {
@@ -165,7 +166,7 @@ export function selectWorkspaceScope(projects, changedFiles, changedImporters = 
       if (
         files.some(
           file =>
-            projectOwnsFile(project.path, file) && !documentationOnlyProjectFile(project.path, file)
+            projectOwnsFile(project, file) && !documentationOnlyProjectFile(project.path, file)
         ) ||
         changedImporters.includes(project.path)
       ) {
@@ -275,7 +276,13 @@ function loadProjects() {
     const manifest = JSON.parse(
       readFileSync(path.join(REPOSITORY_ROOT, project.path, 'package.json'), 'utf8')
     )
-    return { name: manifest.name, path: normalized(project.path), manifest }
+    return {
+      ...project,
+      name: manifest.name,
+      path: normalized(project.path),
+      sourceRoots: (project.sourceRoots ?? []).map(normalized),
+      manifest
+    }
   })
 }
 

@@ -126,12 +126,23 @@ export class BanService {
     return record !== null
   }
 
-  /**
-   * Lists all bans, optionally filtered by type.
-   */
-  async listBans (type?: 'domain' | 'outpoint'): Promise<BannedRecord[]> {
+  /** Lists bans in newest-first order using an operator-bounded page. */
+  async listBans (type?: 'domain' | 'outpoint', limit: number = 1000, skip: number = 0): Promise<BannedRecord[]> {
+    if (limit !== -1 && (!Number.isSafeInteger(limit) || limit < 1)) {
+      throw new TypeError('limit must be a positive integer or -1')
+    }
+    if (!Number.isSafeInteger(skip) || skip < 0) {
+      throw new TypeError('skip must be a non-negative integer')
+    }
     const query = typeof type === 'string' ? { type } : {}
-    return await this.bans.find(query).sort({ bannedAt: -1 }).toArray()
+    let cursor: any = this.bans.find(query).sort({ bannedAt: -1 })
+    if (skip > 0 && typeof cursor.skip === 'function') cursor = cursor.skip(skip)
+    if (limit !== -1 && typeof cursor.limit === 'function') cursor = cursor.limit(limit)
+    const records = await cursor.toArray()
+    // MongoDB always provides skip/limit. The slice also keeps lightweight
+    // Mongo-compatible adapters and test doubles within the same contract.
+    const skipped = typeof cursor.skip === 'function' ? records : records.slice(skip)
+    return limit === -1 || typeof cursor.limit === 'function' ? skipped : skipped.slice(0, limit)
   }
 
   /**

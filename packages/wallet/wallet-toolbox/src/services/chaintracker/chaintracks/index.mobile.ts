@@ -1,6 +1,7 @@
 export type { Chain } from '../../../sdk/types'
 
 export * from './Api/ChaintracksApi'
+export * from './Api/ChaintracksClientApi'
 export * from './Api/ChaintracksFsApi'
 export * from './Api/ChaintracksFetchApi'
 export * from './Api/ChaintracksStorageApi'
@@ -19,6 +20,7 @@ export * from './Ingest/LiveIngestorBase'
 export * from './Ingest/BulkIngestorCDN'
 export * from './Ingest/BulkIngestorCDNBabbage'
 export * from './Ingest/BulkIngestorWhatsOnChainCdn'
+export * from './Ingest/BulkIngestorChaintracks'
 export * from './Ingest/LiveIngestorWhatsOnChainPoll'
 export * from './Ingest/LiveIngestorChaintracksSSE'
 export * from './Ingest/WhatsOnChainServices'
@@ -30,6 +32,7 @@ export * from './Storage/ChaintracksStorageIdb'
 
 export * from './createDefaultNoDbChaintracksOptions'
 export * from './createNoDbChaintracks'
+export * from './configureChaintracksIngestors'
 
 export * from './util/BulkFilesReader'
 export * from './util/HeightRange'
