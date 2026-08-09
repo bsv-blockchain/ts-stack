@@ -898,6 +898,54 @@ describe('ExpressTransport hardening', () => {
     ).toThrow('onCertificatesReceived')
   })
 
+  it('does not write a second handshake response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.headersSent = true
+    res.writableEnded = true
+    rejectProcessing(new Error('late handshake processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+  })
+
+  it('does not write a second general response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validGeneralRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.headersSent = true
+    res.writableEnded = true
+    rejectProcessing(new Error('late general processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+  })
+
   it('creates a configured middleware and logs only request metadata', () => {
     const debug = jest.fn()
     const info = jest.fn()

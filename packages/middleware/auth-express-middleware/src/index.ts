@@ -246,6 +246,10 @@ function safeErrorDetails(error: unknown): Record<string, unknown> {
   return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
 }
 
+function canWriteResponse(res: Response): boolean {
+  return !res.headersSent && !res.writableEnded && !res.destroyed
+}
+
 class ResponseFileTooLargeError extends Error {
   constructor() {
     super('The response file exceeds the configured service limit.')
@@ -498,7 +502,7 @@ export class ExpressTransport implements Transport {
     handle.timeout = setTimeout(() => {
       this.removeNonGeneralHandle(requestId, handle)
       this.clearActiveCertificateRequest(requestId)
-      if (!res.headersSent) {
+      if (canWriteResponse(res)) {
         res.status(408).json({
           status: 'error',
           code: 'ERR_AUTH_TIMEOUT',
@@ -553,7 +557,7 @@ export class ExpressTransport implements Transport {
   }
 
   private respondWithProtocolError(res: Response, error: AuthProtocolError): void {
-    if (res.headersSent) return
+    if (!canWriteResponse(res)) return
     const capacity = error.message.includes('capacity')
     res.status(capacity ? 503 : 400).json({
       status: 'error',
@@ -825,11 +829,13 @@ export class ExpressTransport implements Transport {
           this.log('error', 'Error in messageCallback', safeErrorDetails(err))
           this.removeNonGeneralHandle(requestId)
           this.clearActiveCertificateRequest(requestId)
-          return res.status(500).json({
-            status: 'error',
-            code: 'ERR_INTERNAL_SERVER_ERROR',
-            description: 'Authentication processing failed.'
-          })
+          if (canWriteResponse(res)) {
+            res.status(500).json({
+              status: 'error',
+              code: 'ERR_INTERNAL_SERVER_ERROR',
+              description: 'Authentication processing failed.'
+            })
+          }
         })
     }
   }
@@ -870,7 +876,7 @@ export class ExpressTransport implements Transport {
         )
           .catch(error => {
             this.log('error', 'Error in certificate listener callback', safeErrorDetails(error))
-            if (!res.headersSent) {
+            if (canWriteResponse(res)) {
               res.status(500).json({
                 status: 'error',
                 code: 'ERR_CERTIFICATE_HANDLER',
@@ -986,7 +992,7 @@ export class ExpressTransport implements Transport {
     )
     const timeout = setTimeout(() => {
       this.clearActiveGeneralRequest(expectedRequestId)
-      if (!res.headersSent) {
+      if (canWriteResponse(res)) {
         res.status(408).json({
           status: 'error',
           code: 'ERR_AUTH_TIMEOUT',
@@ -1017,7 +1023,9 @@ export class ExpressTransport implements Transport {
           const description = isAuthError
             ? 'Authentication failed.'
             : 'Authentication processing failed.'
-          return res.status(statusCode).json({ status: 'error', code, description })
+          if (canWriteResponse(res)) {
+            res.status(statusCode).json({ status: 'error', code, description })
+          }
         })
     }
   }

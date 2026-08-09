@@ -33,10 +33,10 @@
     },
     {
       "name": "@bsv/auth-express-middleware",
-      "publishedVersion": "2.1.2",
-      "releaseType": "minor",
-      "summary": "Bounds BRC-104 application-response capture before authenticated signing, with an 8 MiB default, a configurable transport limit, stable 413 errors, and boundary regression coverage.",
-      "migration": "Existing middleware construction remains compatible. Operators may set transportLimits.maxResponseBytes to a positive byte count or -1 when the embedding service enforces an equivalent response budget."
+      "publishedVersion": "2.2.0",
+      "releaseType": "patch",
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, preventing a second Express response from terminating the service process.",
+      "migration": "No consumer migration is required; valid request, response, authentication, and error contracts are unchanged."
     },
     {
       "name": "@bsv/authsocket",
