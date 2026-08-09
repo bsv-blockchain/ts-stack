@@ -33,10 +33,10 @@
     },
     {
       "name": "@bsv/auth-express-middleware",
-      "publishedVersion": "2.1.2",
-      "releaseType": "minor",
-      "summary": "Bounds BRC-104 application-response capture before authenticated signing, with an 8 MiB default, a configurable transport limit, stable 413 errors, and boundary regression coverage.",
-      "migration": "Existing middleware construction remains compatible. Operators may set transportLimits.maxResponseBytes to a positive byte count or -1 when the embedding service enforces an equivalent response budget."
+      "publishedVersion": "2.2.0",
+      "releaseType": "patch",
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, preventing a second Express response from terminating the service process.",
+      "migration": "No consumer migration is required; valid request, response, authentication, and error contracts are unchanged."
     },
     {
       "name": "@bsv/authsocket",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.1",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Restores completed createAction and signAction Atomic BEEF results to JSON-safe numeric arrays and preserves forward-compatible Storage Server browser preflights unless the operator configures a strict request-header allowlist.",
-      "migration": "No consumer migration is required. Existing JSON bridges regain the historical numeric-array response shape; AtomicBEEF consumers and binary Wallet Wire transports continue to support typed byte arrays. Omit WALLET_STORAGE_CORS_ALLOWED_HEADERS for additive well-formed preflight headers, or configure an exact list for a strict browser policy."
+      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast, preventing a queued transaction from temporarily stranding most of the wallet balance.",
+      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child now recursively includes its delayed parent BEEF when it spends that parent's wallet-managed change."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.1",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with JSON-safe completed createAction and signAction results at the public wallet boundary.",
-      "migration": "No browser consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while browser entry points and binary Wallet Wire behavior remain compatible."
+      "summary": "Carries the lockstep browser build that can fund immediate actions from change awaiting background broadcast.",
+      "migration": "No browser consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.1",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with JSON-safe completed createAction and signAction results at the public wallet boundary.",
-      "migration": "No mobile consumer migration is required. Legacy JSON bridges regain the historical numeric-array response shape, while React Native entry points and binary Wallet Wire behavior remain compatible."
+      "summary": "Carries the lockstep mobile build that can fund immediate actions from change awaiting background broadcast.",
+      "migration": "No mobile consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
     },
     {
       "name": "create-bsv-app",

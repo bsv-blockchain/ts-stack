@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Allow immediate actions to chain wallet-managed change from transactions
+  awaiting background broadcast when settled change is insufficient. The child
+  broadcast recursively includes the delayed parent BEEF, preventing a large
+  funding output from making the wallet appear temporarily unfunded while
+  preserving settled-change preference and delayed-broadcast semantics.
+- Finish broadcasting durable permission-token grants before resuming the
+  waiting application request, preventing the grant transaction from briefly
+  reserving the wallet's funding inputs out from under the resumed action.
 - Let Storage Server operators select an explicit listener host while retaining
   the historical omitted-host behavior for existing callers. The official
   Wallet Infrastructure image uses this to bind direct-mode traffic on IPv4
