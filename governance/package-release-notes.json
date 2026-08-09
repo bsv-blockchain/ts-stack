@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.3",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Finishes broadcasting durable permission-token grants before resuming the waiting application request, so the grant transaction cannot temporarily reserve funding inputs needed by that request.",
-      "migration": "No consumer migration is required. Durable grants now reject when their token transaction cannot be broadcast instead of resuming an application against temporarily reserved funds; applications can surface the existing error and safely retry."
+      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast, preventing a queued transaction from temporarily stranding most of the wallet balance.",
+      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child now recursively includes its delayed parent BEEF when it spends that parent's wallet-managed change."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.3",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build that settles durable permission-token broadcasts before application requests resume.",
-      "migration": "No browser consumer migration is required. A broadcast failure now rejects the durable grant so applications can display the failure and safely retry."
+      "summary": "Carries the lockstep browser build that can fund immediate actions from change awaiting background broadcast.",
+      "migration": "No browser consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.3",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build that settles durable permission-token broadcasts before application requests resume.",
-      "migration": "No mobile consumer migration is required. A broadcast failure now rejects the durable grant so applications can display the failure and safely retry."
+      "summary": "Carries the lockstep mobile build that can fund immediate actions from change awaiting background broadcast.",
+      "migration": "No mobile consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
     },
     {
       "name": "create-bsv-app",

@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.6.4'
+version: '2.6.5'
 last_updated: '2026-08-09'
 last_verified: '2026-08-09'
 review_cadence_days: 30
@@ -18,6 +18,9 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
+Immediate mobile actions can chain wallet-managed change from a delayed parent;
+the child broadcast includes the parent BEEF so background delivery cannot
+temporarily strand the wallet balance.
 Durable permission grants finish broadcasting their internal token transaction
 before the waiting mobile request resumes, keeping the grant's funding change
 available to the following wallet action.
