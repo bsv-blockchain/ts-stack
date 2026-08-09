@@ -3,44 +3,38 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const require = createRequire(path.join(process.cwd(), 'package.json'))
-const metroManifest = require.resolve('metro/package.json')
-const imageSizeManifest = createRequire(metroManifest).resolve('image-size/package.json')
-const imageSizeTypes = path.join(path.dirname(imageSizeManifest), 'dist', 'types')
+const requireFromMobile = createRequire(path.join(process.cwd(), 'mobile/package.json'))
+const metroManifest = requireFromMobile.resolve('metro/package.json')
+const requireFromMetro = createRequire(metroManifest)
+const imageSizeEntry = requireFromMetro.resolve('image-size')
+const imageSizeManifest = requireFromMetro.resolve('image-size/package.json')
+const imageSizeUtils = path.join(path.dirname(imageSizeManifest), 'dist/types/utils.js')
 
-function expectParserToTerminate(moduleName: string, exportName: string, input: number[]): void {
-  const modulePath = path.join(imageSizeTypes, moduleName)
-  const script = `
-    const handler = require(${JSON.stringify(modulePath)})[${JSON.stringify(exportName)}]
-    try {
-      handler.calculate(Uint8Array.from(${JSON.stringify(input)}))
-    } catch {}
-  `
-  const result = spawnSync(process.execPath, ['-e', script], { timeout: 1_000 })
-  const error = result.error as NodeJS.ErrnoException | undefined
-
-  expect(error?.code).not.toBe('ETIMEDOUT')
-  expect(result.signal).toBeNull()
-}
-
-describe('patched image-size parsers', () => {
-  it('rejects an ICNS entry whose length cannot advance the parser', () => {
-    expectParserToTerminate(
-      'icns.js',
-      'ICNS',
-      [0x69, 0x63, 0x6e, 0x73, 0x00, 0x00, 0x00, 0x10, 0x69, 0x63, 0x30, 0x37, 0x00, 0x00, 0x00, 0x00]
-    )
-    expectParserToTerminate(
-      'icns.js',
-      'ICNS',
-      [
-        0x69, 0x63, 0x6e, 0x73, 0x00, 0x00, 0x00, 0x18, 0x69, 0x63, 0x30, 0x37, 0x00, 0x00, 0x00, 0x08, 0x69, 0x63,
-        0x30, 0x38, 0x00, 0x00, 0x00, 0x00
-      ]
-    )
-  })
-
-  it('advances past a zero-size JXL partial-stream box', () => {
-    expectParserToTerminate('jxl.js', 'JXL', [0x00, 0x00, 0x00, 0x00, 0x6a, 0x78, 0x6c, 0x70])
+describe('patched image-size parser', () => {
+  it('rejects zero-sized boxes and non-progressing ICNS entries', () => {
+    const source = `
+      const { imageSize } = require(${JSON.stringify(imageSizeEntry)})
+      const { findBox } = require(${JSON.stringify(imageSizeUtils)})
+      const zeroBox = Buffer.alloc(8)
+      zeroBox.write('meta', 4)
+      if (findBox(zeroBox, 'meta', 0) !== undefined) process.exit(4)
+      const input = Buffer.alloc(16)
+      input.write('icns', 0)
+      input.writeUInt32BE(16, 4)
+      input.write('ic07', 8)
+      input.writeUInt32BE(0, 12)
+      try {
+        imageSize(input)
+        process.exit(2)
+      } catch (error) {
+        if (!String(error).includes('Invalid ICNS image entry length')) process.exit(3)
+      }
+    `
+    const result = spawnSync(process.execPath, ['-e', source], {
+      encoding: 'utf8',
+      timeout: 2_000
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr).toBe(0)
   })
 })

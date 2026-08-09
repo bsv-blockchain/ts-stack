@@ -400,6 +400,65 @@ describe('ExpressTransport hardening', () => {
     })
   })
 
+  it('does not write a certificate error after the response settles', async () => {
+    let listener: ((sender: string, certificates: any[]) => void) | undefined
+    const peer = peerMock({
+      sessionManager: {
+        hasSession: jest.fn().mockResolvedValue(false)
+      },
+      listenForCertificatesReceived: jest.fn(callback => {
+        listener = callback
+        return 9
+      })
+    })
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const res = responseMock()
+    await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn(), async () => {
+      await processing
+    })
+
+    listener?.(IDENTITY_KEY, [{}])
+    await flushPromises()
+    res.headersSent = true
+    rejectProcessing(new Error('late certificate failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+    expect(peer.stopListeningForCertificatesReceived).toHaveBeenCalledWith(9)
+  })
+
+  it('does not write a handshake timeout after the response settles', async () => {
+    jest.useFakeTimers()
+    try {
+      const peer = peerMock({
+        sessionManager: {
+          hasSession: jest.fn().mockResolvedValue(false)
+        }
+      })
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        requestTimeoutMs: 20
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn())
+      res.destroyed = true
+      jest.advanceTimersByTime(20)
+      await flushPromises()
+
+      expect(res.status).not.toHaveBeenCalled()
+      expect(res.json).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('times out general verification and removes the SDK listener', async () => {
     jest.useFakeTimers()
     try {
@@ -426,6 +485,29 @@ describe('ExpressTransport hardening', () => {
     }
   })
 
+  it('does not write a general timeout after the response settles', async () => {
+    jest.useFakeTimers()
+    try {
+      const peer = peerMock()
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        requestTimeoutMs: 20
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      await transport.handleIncomingRequest(validGeneralRequest(), res, jest.fn())
+      res.writableEnded = true
+      jest.advanceTimersByTime(20)
+      await flushPromises()
+
+      expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledWith(1)
+      expect(res.status).not.toHaveBeenCalled()
+      expect(res.json).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('rejects a duplicate pending general request identifier', async () => {
     const peer = peerMock()
     const transport = new ExpressTransport()
@@ -441,6 +523,23 @@ describe('ExpressTransport hardening', () => {
       code: 'ERR_AUTH_MALFORMED',
       description: 'The authentication request is malformed.'
     })
+    expect(peer.listenForGeneralMessages).toHaveBeenCalledTimes(1)
+
+    ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
+  })
+
+  it('does not write a protocol error after the response settles', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+
+    await transport.handleIncomingRequest(validGeneralRequest(), responseMock(), jest.fn())
+    const duplicateResponse = responseMock()
+    duplicateResponse.headersSent = true
+    await transport.handleIncomingRequest(validGeneralRequest(), duplicateResponse, jest.fn())
+
+    expect(duplicateResponse.status).not.toHaveBeenCalled()
+    expect(duplicateResponse.json).not.toHaveBeenCalled()
     expect(peer.listenForGeneralMessages).toHaveBeenCalledTimes(1)
 
     ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
@@ -896,6 +995,52 @@ describe('ExpressTransport hardening', () => {
         onCertificatesReceived: true as any
       })
     ).toThrow('onCertificatesReceived')
+  })
+
+  it('does not write a second handshake response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.writableEnded = true
+    rejectProcessing(new Error('late handshake processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+  })
+
+  it('does not write a second general response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validGeneralRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.destroyed = true
+    rejectProcessing(new Error('late general processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
   })
 
   it('creates a configured middleware and logs only request metadata', () => {

@@ -6,11 +6,12 @@ settings:
 
 overrides:
   brace-expansion@<5.0.9: 5.0.9
+  nanoid@<3.3.17: 3.3.17
   typed-rest-client@2.3.1>qs: 6.15.3
 
 patchedDependencies:
   image-size@1.2.1:
-    hash: 61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4
+    hash: b0a3d6b530c1c42a785b8a87026f77a3e96cb950d2f10c36a34d2c93bf6b464a
     path: patches/image-size@1.2.1.patch
 
 importers:
@@ -12961,7 +12962,7 @@ snapshots:
 
   ieee754@1.2.1: {}
 
-  image-size@1.2.1(patch_hash=61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4):
+  image-size@1.2.1(patch_hash=b0a3d6b530c1c42a785b8a87026f77a3e96cb950d2f10c36a34d2c93bf6b464a):
     dependencies:
       queue: 6.0.2
 
@@ -14171,7 +14172,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.36.1
-      image-size: 1.2.1(patch_hash=61796eb20d0b80a3a54a0158bda98fc499f6e5c6de06b448e8bc70b802061db4)
+      image-size: 1.2.1(patch_hash=b0a3d6b530c1c42a785b8a87026f77a3e96cb950d2f10c36a34d2c93bf6b464a)
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
