@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.6.2'
-last_updated: '2026-08-06'
-last_verified: '2026-08-06'
+version: '2.6.5'
+last_updated: '2026-08-09'
+last_verified: '2026-08-09'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -19,10 +19,25 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
+Immediate actions may use wallet-managed change from a transaction awaiting
+background broadcast. The child broadcast recursively carries the delayed
+parent BEEF, preventing queued work from temporarily hiding most of the
+wallet's spendable balance.
+
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. A broadcast failure rejects the
+grant, so the application can surface the existing error and safely retry
+without planning against temporarily reserved funding inputs.
+
 Completed `createAction` and `signAction` results expose Atomic BEEF as a
 numeric array at the public wallet boundary. The historical shape survives
 plain JSON serialization for older BRC-100 applications; typed arrays remain
 supported by the `AtomicBEEF` type and binary Wallet Wire transports.
+
+`WalletStorageManager.getStores()` reports the configured `endpointURL` for
+remote providers without relying on a class name. Browser and application
+bundlers may safely minify the provider constructor while backup selection and
+make-primary flows continue matching the original endpoint URL.
 
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests. BRC-103,
