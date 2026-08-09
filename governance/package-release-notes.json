@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.2",
+      "publishedVersion": "2.6.3",
       "releaseType": "patch",
-      "summary": "Makes grouped and counterparty permission grants durable by surfacing token creation or renewal failures instead of resolving pending grants before every required token exists.",
-      "migration": "No consumer migration is required. Successful grouped grants retain their existing behavior; incomplete grants now reject so applications can display the failure and safely retry."
+      "summary": "Finishes broadcasting durable permission-token grants before resuming the waiting application request, so the grant transaction cannot temporarily reserve funding inputs needed by that request.",
+      "migration": "No consumer migration is required. Durable grants now reject when their token transaction cannot be broadcast instead of resuming an application against temporarily reserved funds; applications can surface the existing error and safely retry."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.2",
+      "publishedVersion": "2.6.3",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with durable grouped and counterparty permission grants.",
-      "migration": "No browser consumer migration is required. Incomplete grants now reject so applications can display the failure and safely retry."
+      "summary": "Carries the lockstep browser build that settles durable permission-token broadcasts before application requests resume.",
+      "migration": "No browser consumer migration is required. A broadcast failure now rejects the durable grant so applications can display the failure and safely retry."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.2",
+      "publishedVersion": "2.6.3",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with durable grouped and counterparty permission grants.",
-      "migration": "No mobile consumer migration is required. Incomplete grants now reject so applications can display the failure and safely retry."
+      "summary": "Carries the lockstep mobile build that settles durable permission-token broadcasts before application requests resume.",
+      "migration": "No mobile consumer migration is required. A broadcast failure now rejects the durable grant so applications can display the failure and safely retry."
     },
     {
       "name": "create-bsv-app",
