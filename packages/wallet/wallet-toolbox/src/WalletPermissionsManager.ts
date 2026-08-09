@@ -1011,7 +1011,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
 
-    await this.completeActiveGrant(params.requestID, matching, async () => {
+    try {
       const originalRequest = matching.request as {
         originator: string
         permissions: GroupedPermissions
@@ -1101,7 +1101,11 @@ export class WalletPermissionsManager implements WalletInterface {
       // singleton failures and are therefore only suitable for maintenance
       // operations where a partial result is explicitly returned.
       await this.persistPermissionGrant(toCreate, toRenew)
-    })
+      this.settleActiveGrant(params.requestID, matching, 'resolve', true)
+    } catch (error) {
+      this.settleActiveGrant(params.requestID, matching, 'reject', error)
+      throw error
+    }
   }
 
   /**
@@ -1140,20 +1144,14 @@ export class WalletPermissionsManager implements WalletInterface {
     this.activeRequests.delete(requestID)
   }
 
-  private async completeActiveGrant(
+  private settleActiveGrant(
     requestID: string,
     matching: { pending: Array<{ resolve: (value: any) => void; reject: (error: any) => void }> },
-    grant: () => Promise<void>
-  ): Promise<void> {
-    try {
-      await grant()
-      for (const pending of matching.pending) pending.resolve(true)
-    } catch (error) {
-      for (const pending of matching.pending) pending.reject(error)
-      throw error
-    } finally {
-      this.activeRequests.delete(requestID)
-    }
+    method: 'resolve' | 'reject',
+    value: any
+  ): void {
+    for (const pending of matching.pending) pending[method](value)
+    this.activeRequests.delete(requestID)
   }
 
   private async persistPermissionGrant(
@@ -1190,7 +1188,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
 
-    await this.completeActiveGrant(params.requestID, matching, async () => {
+    try {
       const originalRequest = matching.request as {
         originator: string
         counterparty: PubKeyHex
@@ -1259,7 +1257,11 @@ export class WalletPermissionsManager implements WalletInterface {
       }
 
       await this.persistPermissionGrant(toCreate, toRenew)
-    })
+      this.settleActiveGrant(params.requestID, matching, 'resolve', true)
+    } catch (error) {
+      this.settleActiveGrant(params.requestID, matching, 'reject', error)
+      throw error
+    }
   }
 
   public async denyCounterpartyPermission(requestID: string): Promise<void> {
