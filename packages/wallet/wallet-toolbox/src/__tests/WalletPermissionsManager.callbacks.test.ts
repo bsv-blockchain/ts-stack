@@ -507,6 +507,37 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
       expect((manager as any).activeRequests.has(requestID)).toBe(false)
     })
 
+    it('should reject instead of reporting success when grouped permission tokens fail to persist', async () => {
+      const requestID = 'group:persistence-test.com'
+      const requestedPermissions: Partial<GroupedPermissions> = {
+        protocolPermissions: [
+          { protocolID: [1, 'test-proto'] as WalletProtocol, counterparty: 'self', description: 'Test' }
+        ]
+      }
+      const persistenceError = new Error('permission token persistence failed')
+      jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(null)
+      jest.spyOn(manager as any, 'createPermissionTokensStrict').mockRejectedValue(persistenceError)
+
+      const pendingResult = new Promise<boolean>((resolve, reject) => {
+        ;(manager as any).activeRequests.set(requestID, {
+          request: {
+            originator: 'persistence-test.com',
+            permissions: requestedPermissions
+          },
+          pending: [{ resolve, reject }]
+        })
+      }).catch(error => error)
+
+      const grantPromise = manager.grantGroupedPermission({
+        requestID,
+        granted: requestedPermissions
+      })
+
+      await expect(grantPromise).rejects.toBe(persistenceError)
+      await expect(pendingResult).resolves.toBe(persistenceError)
+      expect((manager as any).activeRequests.has(requestID)).toBe(false)
+    })
+
     it('should resolve pending promises when grantGroupedPermission succeeds', async () => {
       // Mock createPermissionOnChain to prevent actual on-chain operations
       jest.spyOn(manager as any, 'createPermissionOnChain').mockResolvedValue(undefined)
@@ -544,6 +575,39 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
       expect(wasResolved).toBe(true)
 
       // The request should be cleaned up
+      expect((manager as any).activeRequests.has(requestID)).toBe(false)
+    })
+  })
+
+  describe('grantCounterpartyPermission error handling', () => {
+    it('should reject and clean up when counterparty permission tokens fail to persist', async () => {
+      const requestID = 'pact:persistence-test.com:counterparty'
+      const persistenceError = new Error('counterparty permission token persistence failed')
+      jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(null)
+      jest.spyOn(manager as any, 'createPermissionTokensStrict').mockRejectedValue(persistenceError)
+
+      const pendingResult = new Promise<boolean>((resolve, reject) => {
+        ;(manager as any).activeRequests.set(requestID, {
+          request: {
+            originator: 'persistence-test.com',
+            counterparty: '02'.padEnd(66, '1'),
+            permissions: {
+              protocols: [{ protocolName: 'peer protocol', description: 'Test peer protocol' }]
+            }
+          },
+          pending: [{ resolve, reject }]
+        })
+      }).catch(error => error)
+
+      const grantPromise = manager.grantCounterpartyPermission({
+        requestID,
+        granted: {
+          protocols: [{ protocolName: 'peer protocol', description: 'Test peer protocol' }]
+        }
+      })
+
+      await expect(grantPromise).rejects.toBe(persistenceError)
+      await expect(pendingResult).resolves.toBe(persistenceError)
       expect((manager as any).activeRequests.has(requestID)).toBe(false)
     })
   })
