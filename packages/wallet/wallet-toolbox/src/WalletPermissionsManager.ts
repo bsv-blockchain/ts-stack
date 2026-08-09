@@ -1011,7 +1011,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
 
-    try {
+    await this.completeActiveGrant(params.requestID, matching, async () => {
       const originalRequest = matching.request as {
         originator: string
         permissions: GroupedPermissions
@@ -1100,26 +1100,8 @@ export class WalletPermissionsManager implements WalletInterface {
       // failed to persist. The best-effort helpers intentionally suppress
       // singleton failures and are therefore only suitable for maintenance
       // operations where a partial result is explicitly returned.
-      const created = await this.createPermissionTokensBestEffort(toCreate, true)
-      const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
-      for (const req of [...created, ...renewed]) {
-        this.markRecentGrant(req)
-      }
-
-      // Success - resolve all pending promises for this request
-      for (const p of matching.pending) {
-        p.resolve(true)
-      }
-    } catch (error) {
-      // Failure - reject all pending promises so callers don't hang forever
-      for (const p of matching.pending) {
-        p.reject(error)
-      }
-      throw error
-    } finally {
-      // Always clean up the request entry
-      this.activeRequests.delete(params.requestID)
-    }
+      await this.persistPermissionGrant(toCreate, toRenew)
+    })
   }
 
   /**
@@ -1158,6 +1140,31 @@ export class WalletPermissionsManager implements WalletInterface {
     this.activeRequests.delete(requestID)
   }
 
+  private async completeActiveGrant(
+    requestID: string,
+    matching: { pending: Array<{ resolve: (value: any) => void; reject: (error: any) => void }> },
+    grant: () => Promise<void>
+  ): Promise<void> {
+    try {
+      await grant()
+      for (const pending of matching.pending) pending.resolve(true)
+    } catch (error) {
+      for (const pending of matching.pending) pending.reject(error)
+      throw error
+    } finally {
+      this.activeRequests.delete(requestID)
+    }
+  }
+
+  private async persistPermissionGrant(
+    toCreate: Array<{ request: PermissionRequest; expiry: number; amount?: number }>,
+    toRenew: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
+  ): Promise<void> {
+    const created = await this.createPermissionTokensBestEffort(toCreate, true)
+    const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
+    for (const request of [...created, ...renewed]) this.markRecentGrant(request)
+  }
+
   public async denyGroupedPermission(requestID: string): Promise<void> {
     this.denyActiveRequest(requestID)
   }
@@ -1183,7 +1190,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
 
-    try {
+    await this.completeActiveGrant(params.requestID, matching, async () => {
       const originalRequest = matching.request as {
         originator: string
         counterparty: PubKeyHex
@@ -1251,23 +1258,8 @@ export class WalletPermissionsManager implements WalletInterface {
         }
       }
 
-      const created = await this.createPermissionTokensBestEffort(toCreate, true)
-      const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
-      for (const req of [...created, ...renewed]) {
-        this.markRecentGrant(req)
-      }
-
-      for (const p of matching.pending) {
-        p.resolve(true)
-      }
-    } catch (error) {
-      for (const p of matching.pending) {
-        p.reject(error)
-      }
-      throw error
-    } finally {
-      this.activeRequests.delete(params.requestID)
-    }
+      await this.persistPermissionGrant(toCreate, toRenew)
+    })
   }
 
   public async denyCounterpartyPermission(requestID: string): Promise<void> {
