@@ -166,7 +166,7 @@ test('container release workflows scan before push and publish signed evidence',
   assert.match(infraRelease, /gh attestation verify[\s\S]+--deny-self-hosted-runners >\/dev\/null/)
   assert.match(infraRelease, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/)
   assert.match(infraRelease, /anchore\/sbom-action@e22c389904149dbc22b58101806040fa8d37a610/)
-  assert.match(infraRelease, /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/)
+  assert.match(infraRelease, /actions\/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d/)
   assert.match(infraRelease, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/)
   assert.equal(
     infraRelease.match(/docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/g)
@@ -190,7 +190,7 @@ test('container release workflows scan before push and publish signed evidence',
     /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/
   )
   assert.match(marketplaceRelease, /anchore\/sbom-action@e22c389904149dbc22b58101806040fa8d37a610/)
-  assert.match(marketplaceRelease, /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/)
+  assert.match(marketplaceRelease, /actions\/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d/)
   assert.ok(
     marketplaceRelease.indexOf('Reject high and critical image vulnerabilities') <
       marketplaceRelease.indexOf('Push image to Marketplace ECR'),
