@@ -425,6 +425,15 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
   // 3) Grouped Permission Error Handling Tests
   // -------------------------------------------------------------------------
 
+  it('keeps maintenance batches best-effort when strict mode is omitted', async () => {
+    const runChunk = jest.fn(async (chunk: number[]) => chunk)
+
+    await expect((manager as any).runBestEffortBatches([1], 1, runChunk)).resolves.toEqual([1])
+    await expect((manager as any).createPermissionTokensBestEffort([])).resolves.toEqual([])
+    await expect((manager as any).renewPermissionTokensBestEffort([])).resolves.toEqual([])
+    expect(runChunk).toHaveBeenCalledWith([1])
+  })
+
   describe('grantGroupedPermission error handling', () => {
     it('should reject pending promises when grantGroupedPermission throws a validation error', async () => {
       // This test verifies the fix for the bug where pending promises would hang forever
