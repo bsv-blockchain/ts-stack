@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.3.0",
+      "publishedVersion": "2.3.1",
       "releaseType": "patch",
-      "summary": "Adds checksum-validating BIP-39 entropy recovery and operator-supplied labels on AuthFetch BRC-105 payment actions while retaining deterministic nonce-derived recovery labels.",
-      "migration": "No consumer migration is required. Mnemonic.toEntropy and AuthFetch payment labels are additive; existing BIP-39, AuthFetch, BRC-105 payment, recovery-label, and SDK 2.x behavior is unchanged."
+      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
+      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
     },
     {
       "name": "@bsv/simple",
@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast, preventing a queued transaction from temporarily stranding most of the wallet balance.",
-      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child now recursively includes its delayed parent BEEF when it spends that parent's wallet-managed change."
+      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast and preserves remote storage endpoint discovery after production minification.",
+      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build that can fund immediate actions from change awaiting background broadcast.",
-      "migration": "No browser consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
+      "summary": "Carries the lockstep browser build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build that can fund immediate actions from change awaiting background broadcast.",
-      "migration": "No mobile consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed."
+      "summary": "Carries the lockstep mobile build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "create-bsv-app",

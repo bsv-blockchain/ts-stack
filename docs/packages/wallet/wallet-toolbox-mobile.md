@@ -18,6 +18,9 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
+`WalletStorageManager.getStores()` retains each remote provider's configured
+`endpointURL` after production bundlers minify class names, so backup selection
+and make-primary flows remain stable.
 Immediate mobile actions can chain wallet-managed change from a delayed parent;
 the child broadcast includes the parent BEEF so background delivery cannot
 temporarily strand the wallet balance.
