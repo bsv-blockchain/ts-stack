@@ -14,14 +14,18 @@ import { TransactionStatus } from '../../sdk/types'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
+import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 
 async function enrichIdbActionLabels (
   storage: StorageIdb,
-  tx: { transactionId: number, created_at?: any },
+  tx: { transactionId: number, created_at?: any, reference?: string },
   action: WalletAction,
   timeFilterRequested: boolean
 ): Promise<void> {
   action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
+  if (tx.reference != null && tx.reference !== '') {
+    action.labels = applyBrc153ReferenceLabel(action.labels, tx.reference)
+  }
   if (timeFilterRequested) {
     const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : Number.NaN
     if (!Number.isNaN(ts)) {
