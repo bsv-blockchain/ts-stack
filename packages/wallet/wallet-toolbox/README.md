@@ -26,6 +26,13 @@ BSV Desktop and BSV Browser are the BSV Association reference wallet application
 | **MockChain**      | In-memory blockchain for testing — mock mining, UTXO tracking, and merkle proof generation without a network                                     |
 | **Entropy**        | `EntropyCollector` gathers mouse/touch entropy for high-quality randomness in browser environments                                               |
 
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. This keeps the grant atomic from
+the caller's perspective and makes its funding change immediately reusable by a
+following wallet action. If broadcasting is unavailable, the grant rejects and
+the application can safely surface the error and retry; ephemeral one-time grants
+remain off-chain.
+
 ### Packages
 
 The toolbox publishes three npm packages from this repo:

@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.6.3'
-last_updated: '2026-08-06'
-last_verified: '2026-08-06'
+version: '2.6.4'
+last_updated: '2026-08-09'
+last_verified: '2026-08-09'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. A broadcast failure rejects the
+grant, so the application can surface the existing error and safely retry
+without planning against temporarily reserved funding inputs.
 
 Completed `createAction` and `signAction` results expose Atomic BEEF as a
 numeric array at the public wallet boundary. The historical shape survives
