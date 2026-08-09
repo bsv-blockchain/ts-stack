@@ -19,6 +19,7 @@ import {
 } from '../../sdk/WalletStorage.interfaces'
 import {
   WERR_INTERNAL,
+  WERR_INSUFFICIENT_FUNDS,
   WERR_INVALID_OPERATION,
   WERR_INVALID_PARAMETER,
   WERR_REVIEW_ACTIONS
@@ -161,9 +162,10 @@ async function createActionCore(
   const feeModel = validateStorageFeeModel(storage.feeModel)
   logger?.log(`validated fee model ${JSON.stringify(feeModel)}`)
 
-  const initialFundingPlan = await prepareFundingPlan(
+  const initialFundingPlan = await prepareFundingPlanWithSendingFallback(
     storage,
-    [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, parent]
+    [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel],
+    parent
   )
   logger?.log(`planned funding from ${initialFundingPlan.availableChangeCount} change inputs`)
 
@@ -989,14 +991,8 @@ interface PreparedFundingPlan {
   result: GenerateChangeSdkResult
   selected: ManagedChangeInputCandidate[]
   availableChangeCount: number
+  excludeSending: boolean
 }
-
-// A transaction waiting for background broadcast already has a complete raw
-// transaction and input BEEF in storage. Its wallet-managed change is safe to
-// chain: the immediate broadcast path recursively merges that ancestor into
-// the child BEEF. Excluding these outputs can strand nearly the entire wallet
-// balance behind one delayed transaction.
-const excludeSendingChangeFromFunding = false
 
 type FundingClaimRequest = readonly [
   userId: number,
@@ -1013,14 +1009,19 @@ function fundingPlanSatoshis (plan: PreparedFundingPlan): number {
     plan.selected.reduce((sum, output) => sum + output.satoshis, 0)
 }
 
-type FundingPlanContext = readonly [
+type FundingPlanBaseContext = readonly [
   userId: number,
   vargs: Validation.ValidCreateActionArgs,
   xinputs: XValidCreateActionInput[],
   xoutputs: XValidCreateActionOutput[],
   changeBasket: TableOutputBasket,
   noSendChangeIn: TableOutput[],
-  feeModel: StorageFeeModel,
+  feeModel: StorageFeeModel
+]
+
+type FundingPlanContext = readonly [
+  ...FundingPlanBaseContext,
+  excludeSending: boolean,
   parent?: TelemetrySpan,
   trx?: TrxToken
 ]
@@ -1091,8 +1092,7 @@ async function prepareFundingPlan (
   storage: StorageProvider,
   context: FundingPlanContext
 ): Promise<PreparedFundingPlan> {
-  const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, parent, trx] = context
-  const excludeSending = excludeSendingChangeFromFunding
+  const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, excludeSending, parent, trx] = context
   const candidates = await traceStorageStep(
     storage,
     'wallet.storage.create_action.funding_candidates',
@@ -1165,10 +1165,31 @@ async function prepareFundingPlan (
         params,
         result,
         selected,
-        availableChangeCount: candidates.length
+        availableChangeCount: candidates.length,
+        excludeSending
       }
     }
   )
+}
+
+async function prepareFundingPlanWithSendingFallback (
+  storage: StorageProvider,
+  context: FundingPlanBaseContext,
+  parent?: TelemetrySpan,
+  trx?: TrxToken
+): Promise<PreparedFundingPlan> {
+  const excludeSending = !context[1].isDelayed
+  try {
+    return await prepareFundingPlan(storage, [...context, excludeSending, parent, trx])
+  } catch (error) {
+    if (!excludeSending || !(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+    // A transaction waiting for background broadcast already has a complete
+    // raw transaction and input BEEF in storage. Its wallet-managed change is
+    // safe to chain: the immediate broadcast path recursively merges that
+    // ancestor into the child BEEF. Prefer settled change, then admit queued
+    // change only when excluding it would report an underfunded wallet.
+    return await prepareFundingPlan(storage, [...context, false, parent, trx])
+  }
 }
 
 async function claimFundingPlan (
@@ -1307,7 +1328,7 @@ async function fundNewTransactionSdk(
         const claim = await claimFundingPlan(storage, [
           userId,
           ctx.changeBasket.basketId,
-          excludeSendingChangeFromFunding,
+          plan.excludeSending,
           ctx.transactionId,
           ctx.noSendChangeIn,
           plan,
@@ -1329,7 +1350,7 @@ async function fundNewTransactionSdk(
           throw new WERR_INVALID_PARAMETER('noSendChange', 'outputs that remain spendable during action planning')
         }
         retryCount++
-        plan = await prepareFundingPlan(
+        plan = await prepareFundingPlanWithSendingFallback(
           storage,
           [
             userId,
@@ -1338,10 +1359,10 @@ async function fundNewTransactionSdk(
             ctx.xoutputs,
             ctx.changeBasket,
             ctx.noSendChangeIn,
-            ctx.feeModel,
-            parent,
-            trx
-          ]
+            ctx.feeModel
+          ],
+          parent,
+          trx
         )
       }
       throw new WERR_INVALID_OPERATION('wallet funding changed repeatedly during action planning; retry createAction')
