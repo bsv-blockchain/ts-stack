@@ -617,6 +617,42 @@ describe('in-memory action batch workspace', () => {
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
   })
 
+  test('an expired batch does not permanently wedge unrelated createActions', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    ctx.wallet.randomVals = randomVals
+    // A connected app stages a noSend action and then abandons it, leaving the
+    // workspace and its server-side batch behind in the long-lived wallet process.
+    await ctx.wallet.createAction(actionArgs())
+    const begun = await begin.mock.results[0].value
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    // The lease lapses and server-side cleanup retires the batch.
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
+    await cleanupExpiredActionBatches(ctx.activeStorage)
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('expired')
+
+    // An unrelated immediate payment arrives from another app. Its funding
+    // exceeds the client-held reservations, so planning must call
+    // extendActionBatch — which the storage refuses for the retired batch.
+    const payment = async () =>
+      await ctx.wallet.createAction({
+        description: 'unrelated immediate payment',
+        outputs: [
+          {
+            satoshis: 40000,
+            lockingScript: '76a914' + '00'.repeat(20) + '88ac',
+            outputDescription: 'payment output'
+          }
+        ],
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      })
+
+    // The caller that trips over the dead batch may see one refusal…
+    await payment().catch(() => {})
+    // …but the wallet must recover: the dead workspace cannot be allowed to
+    // capture and fail every subsequent createAction until process restart.
+    await expect(payment()).resolves.toEqual(expect.objectContaining({ txid: expect.any(String) }))
+  })
+
   test('expired reservations cannot be reacquired after another batch claims an input', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     ctx.wallet.randomVals = randomVals

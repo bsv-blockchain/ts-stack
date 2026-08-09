@@ -58,6 +58,21 @@ function mergeUnique (values: string[]): string[] {
   return [...new Set(values)]
 }
 
+const batchLivenessMessages = new Set([
+  'action batch is not active',
+  'action batch was not found',
+  'action batch hard lifetime has expired'
+])
+
+// True when storage refused an operation because the batch itself is dead
+// (expired, cleaned up, or missing) — matched by name rather than instanceof
+// so errors recovered from remote storage transports are recognized too.
+function isBatchLivenessError (error: unknown): boolean {
+  return error instanceof Error &&
+    error.name === 'WERR_INVALID_OPERATION' &&
+    batchLivenessMessages.has(error.message)
+}
+
 function nextGeometricTarget (value: number): number {
   return Math.min(Number.MAX_SAFE_INTEGER, value * 2)
 }
@@ -896,10 +911,40 @@ export class ActionBatchController {
         if (beganWorkspace) {
           await workspace.abort()
           this.workspace = undefined
+          throw error
         }
-        throw error
+        if (!isBatchLivenessError(error)) throw error
+        // The server-side batch died (lease or hard lifetime lapsed while the
+        // workspace sat idle). The workspace must not capture and refuse every
+        // subsequent createAction until process restart.
+        if (!args.isNoSend) {
+          // Immediate actions fall back to the legacy path. The workspace is
+          // preserved: its staged actions remain committable through the
+          // reacquire path of commitActionBatch.
+          return undefined
+        }
+        // A new noSend staging cannot be served by the dead batch: release it
+        // and begin a fresh one.
+        await this.abortWorkspace(workspace)
+        workspace = await this.begin(args)
+        if (workspace == null) return undefined
+        try {
+          return await workspace.plan(args)
+        } catch (freshError) {
+          await workspace.abort()
+          this.workspace = undefined
+          throw freshError
+        }
       }
     })
+  }
+
+  private async abortWorkspace (workspace: ActionBatchWorkspace): Promise<void> {
+    try {
+      await workspace.abort()
+    } finally {
+      if (this.workspace === workspace) this.workspace = undefined
+    }
   }
 
   async process (
