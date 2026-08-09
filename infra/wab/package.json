@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.24",
+  "version": "1.4.25",
   "overrides": {
     "brace-expansion": "5.0.9",
     "gaxios": "7.3.0"
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@bsv/sdk": "^2.3.1",
-    "@bsv/wallet-toolbox": "^2.6.3",
+    "@bsv/wallet-toolbox": "^2.6.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
