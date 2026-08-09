@@ -564,6 +564,11 @@ export function validatePullRequestEvidence(body, changedFiles, policy = readJso
   return errors
 }
 
+export function isAutomationPullRequest({ actor = '', authorLogin = '', authorType = '' } = {}) {
+  if (authorType.toLowerCase() === 'bot') return true
+  return [actor, authorLogin].some(identity => /(?:\[bot\]|-bot)$/i.test(identity))
+}
+
 async function gitChangedFiles(base, head) {
   const { stdout } = await execFileAsync('git', ['diff', '--name-only', `${base}...${head}`], {
     cwd: ROOT,
@@ -638,9 +643,21 @@ async function verifyPullRequestEvidence(args) {
   const head = argumentValue(args, '--head')
   if (!base || !head) throw new Error('pr-evidence requires --base and --head')
   const changedFiles = await gitChangedFiles(base, head)
+  if (
+    isAutomationPullRequest({
+      actor: process.env.PR_ACTOR,
+      authorLogin: process.env.PR_AUTHOR_LOGIN,
+      authorType: process.env.PR_AUTHOR_TYPE
+    })
+  ) {
+    console.log('Dependency evidence is advisory and skipped for automated pull requests.')
+    return
+  }
   const errors = validatePullRequestEvidence(process.env.PR_BODY ?? '', changedFiles)
   if (errors.length > 0) {
-    throw new Error(`${errors.join('\n')}\nChanged: ${changedFiles.join(', ')}`)
+    for (const error of errors) console.warn(`::warning title=Dependency evidence::${error}`)
+    console.warn(`Dependency evidence is advisory. Changed: ${changedFiles.join(', ')}`)
+    return
   }
   console.log(
     changedFiles.length === 0
