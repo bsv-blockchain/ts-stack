@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
+  duck-type provider `endpointUrl` instead of matching
+  `constructor.name === 'StorageClient'`. Production minifiers rename classes,
+  so the name check left remote stores with `endpointURL: undefined` while
+  sync still worked; clients that select a backup by URL (make primary) failed.
 - Allow immediate actions to chain wallet-managed change from transactions
   awaiting background broadcast when settled change is insufficient. The child
   broadcast recursively includes the delayed parent BEEF, preventing a large

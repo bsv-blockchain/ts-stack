@@ -34,6 +34,11 @@ numeric array at the public wallet boundary. The historical shape survives
 plain JSON serialization for older BRC-100 applications; typed arrays remain
 supported by the `AtomicBEEF` type and binary Wallet Wire transports.
 
+`WalletStorageManager.getStores()` reports the configured `endpointURL` for
+remote providers without relying on a class name. Browser and application
+bundlers may safely minify the provider constructor while backup selection and
+make-primary flows continue matching the original endpoint URL.
+
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests. BRC-103,
 BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.

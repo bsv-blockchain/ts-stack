@@ -52,9 +52,9 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/verifast`                   | `0.3.0`      | `0.3.4` | patch     | [API and usage](../packages/sdk/verifast.md)                          | No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged.                                                                                                                                                                                       |
 | `@bsv/wallet-helper`              | `0.1.1`      | `0.1.6` | patch     | [API and usage](../packages/helpers/wallet-helper.md)                 | No consumer migration is required; fluent builder APIs and transaction semantics are unchanged.                                                                                                                                                                                                                               |
 | `@bsv/wallet-relay`               | `0.2.2`      | `0.3.4` | minor     | [API and usage](../packages/wallet/wallet-relay.md)                   | QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers. Express integrations now use the host application's matching Express runtime and type graph. |
-| `@bsv/wallet-toolbox`             | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child now recursively includes its delayed parent BEEF when it spends that parent's wallet-managed change.                                                                                                                         |
-| `@bsv/wallet-toolbox-client`      | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No browser consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed.                                                                                                                                                                                       |
-| `@bsv/wallet-toolbox-mobile`      | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No mobile consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed.                                                                                                                                                                                        |
+| `@bsv/wallet-toolbox`             | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name.                                                   |
+| `@bsv/wallet-toolbox-client`      | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL.                                                                                                                         |
+| `@bsv/wallet-toolbox-mobile`      | `2.6.4`      | `2.6.5` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL.                                                                                                                          |
 | `create-bsv-app`                  | `1.0.2`      | `1.0.4` | patch     | [API and usage](../packages/helpers/create-bsv-app.md)                | No consumer migration is required; generated application structure and CLI behavior are unchanged.                                                                                                                                                                                                                            |
 
 `none` means the source manifest matches the recorded npm baseline. Any other
@@ -477,8 +477,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast, preventing a queued transaction from temporarily stranding most of the wallet balance.
-- Migration: No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child now recursively includes its delayed parent BEEF when it spends that parent's wallet-managed change.
+- Release note: Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast and preserves remote storage endpoint discovery after production minification.
+- Migration: No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
 | ---------------- | ---------------------------------------------------- | -------------------------- |
@@ -491,8 +491,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Carries the lockstep browser build that can fund immediate actions from change awaiting background broadcast.
-- Migration: No browser consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed.
+- Release note: Carries the lockstep browser build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.
+- Migration: No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
 | ---------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -503,8 +503,8 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Carries the lockstep mobile build that can fund immediate actions from change awaiting background broadcast.
-- Migration: No mobile consumer migration is required. Immediate child broadcasts now include queued parent transaction and proof data when needed.
+- Release note: Carries the lockstep mobile build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.
+- Migration: No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
 | ---------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
