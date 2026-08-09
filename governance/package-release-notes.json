@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-31",
+  "lastReviewed": "2026-08-06",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -33,10 +33,10 @@
     },
     {
       "name": "@bsv/auth-express-middleware",
-      "publishedVersion": "2.1.2",
+      "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries, including containment of both synchronous and asynchronous BRC-103 callback failures, and restores one shared Express 4/5 runtime and type graph for consumers.",
-      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained, authentication callback failures now produce a controlled HTTP error, and Express 4 and 5 applications use their own peer-provided Express installation."
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, preventing a second Express response from terminating the service process.",
+      "migration": "No consumer migration is required; valid request, response, authentication, and error contracts are unchanged."
     },
     {
       "name": "@bsv/authsocket",
@@ -97,16 +97,16 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.2.2",
-      "releaseType": "patch",
-      "summary": "Adds strict package contracts and hardens PeerPay parsing, proof handling, cancellation, classification, and acknowledgement flows.",
-      "migration": "No consumer migration is required; Message Box protocol and client entry points are unchanged."
+      "releaseType": "minor",
+      "summary": "Follows bounded Message Box server pagination while preserving historical fetch-all behavior and adds offset/skip, total-limit, page-size, and optional page-ceiling controls.",
+      "migration": "Existing listMessages and listMessagesLite calls continue to fetch all available messages. Applications that need an aggregate memory ceiling should set limit and/or maxPages; no additional BRC-105 approval callback is required because AuthFetch uses wallet permissions."
     },
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.2.1",
-      "releaseType": "patch",
-      "summary": "Repairs the documented storage export and decomposes Engine submission validation, broadcast, storage, notification, and propagation orchestration while preserving execution order and behavior.",
-      "migration": "No consumer migration is required; existing imports, submission results, notification contracts, storage order, and network behavior remain unchanged."
+      "releaseType": "minor",
+      "summary": "Adds an engine lookup-result cardinality ceiling before transaction/proof hydration so a compact remote query cannot amplify into unbounded retained work.",
+      "migration": "Existing Engine constructor calls remain valid and default to 1,000 lookup formulas. Pass -1 as the final maxLookupResults argument only when a custom lookup service and deployment enforce an equivalent bound."
     },
     {
       "name": "@bsv/overlay-discovery-services",
@@ -117,10 +117,10 @@
     },
     {
       "name": "@bsv/overlay-express",
-      "publishedVersion": "2.4.2",
+      "publishedVersion": "2.5.0",
       "releaseType": "patch",
-      "summary": "Adds strict package and edge-policy contracts, restores declaration-safe exports, adds idempotent shutdown, and hardens provider-chain failure handling and synchronization configuration.",
-      "migration": "No consumer migration is required; wildcard credential-free public access remains the default and runtimes may opt into the new close method."
+      "summary": "Preserves forward-compatible browser preflights by adding every well-formed requested header to the known protocol defaults unless the operator configures a strict header allowlist.",
+      "migration": "No consumer migration is required. Omit OVERLAY_CORS_ALLOWED_HEADERS for additive compatibility, or set an exact comma-separated list to retain a strict browser request-header policy. Origin modes, authentication, authorization, and endpoint validation are unchanged."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.2.0",
+      "publishedVersion": "2.3.1",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and hardens BRC-103 message, handshake, response, async listener, timeout, and pending-request boundaries.",
-      "migration": "The 2.x wire encodings and supported imports are unchanged. Peer listeners may continue returning void and may now return Promise<void>; rejected or malformed authenticated HTTP responses reject and clean up the owning request, and pending authenticated responses now time out after 30 seconds."
+      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
+      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
     },
     {
       "name": "@bsv/simple",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, safe telemetry, and restores remote-storage compatibility by retaining trace correlation locally instead of adding unsupported AuthFetch headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, persisted schemas, provider behavior, and the 2.x wallet and storage interfaces remain unchanged."
+      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast and preserves remote storage endpoint discovery after production minification.",
+      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox browser candidate with safe local trace correlation and no unsupported authenticated request headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, browser entry points, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep browser build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with safe local trace correlation and no unsupported authenticated request headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, React Native, mobile bridge, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep mobile build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "create-bsv-app",

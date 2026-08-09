@@ -6,6 +6,95 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
+  duck-type provider `endpointUrl` instead of matching
+  `constructor.name === 'StorageClient'`. Production minifiers rename classes,
+  so the name check left remote stores with `endpointURL: undefined` while
+  sync still worked; clients that select a backup by URL (make primary) failed.
+- Allow immediate actions to chain wallet-managed change from transactions
+  awaiting background broadcast when settled change is insufficient. The child
+  broadcast recursively includes the delayed parent BEEF, preventing a large
+  funding output from making the wallet appear temporarily unfunded while
+  preserving settled-change preference and delayed-broadcast semantics.
+- Finish broadcasting durable permission-token grants before resuming the
+  waiting application request, preventing the grant transaction from briefly
+  reserving the wallet's funding inputs out from under the resumed action.
+- Let Storage Server operators select an explicit listener host while retaining
+  the historical omitted-host behavior for existing callers. The official
+  Wallet Infrastructure image uses this to bind direct-mode traffic on IPv4
+  and to keep the application listener on loopback behind nginx.
+- Preserve forward-compatible Storage Server browser preflights by accepting
+  additive well-formed request headers when operators have not configured a
+  strict `WALLET_STORAGE_CORS_ALLOWED_HEADERS` list.
+- Restore completed `createAction` and `signAction` Atomic BEEF results to
+  numeric arrays at the public wallet boundary so legacy BRC-100 JSON bridges
+  preserve their historical wire shape. Typed byte arrays remain supported by
+  `AtomicBEEF` and binary Wallet Wire transports.
+- Fix credential-free Arcade/go-chaintracks bootstrap when ChainTracks bulk
+  storage is empty. A first batch is now accepted only from height zero and is
+  still checked for continuity, proof of work, file integrity, and the exact
+  configured network genesis before it becomes available.
+- Make ChainTracks credential-free by default on mainnet, testnet, and
+  TerraTestNet through the public Arcade/go-chaintracks v2 HTTP and SSE APIs.
+  Add explicit STN and Terra Scaling TestNet support, exact per-network genesis
+  headers, isolated in-memory storage, and remove silent testnet aliases.
+- Add prioritized bulk/live source failover, locally validated last-good height
+  operation, source health reporting, bounded request timeouts, browser-safe SSE
+  reconnection, network checks, and a globally rate-limited anonymous
+  WhatsOnChain fallback for mainnet/testnet. WhatsOnChain keys remain optional
+  and rejected configured keys retry header/info requests anonymously.
+- Preserve the default automatically negotiated in-memory `noSend` batching and
+  `sendWith` lifecycle introduced in #289. Expand inherited txid-only proof
+  ancestors for cold clients, preserve caller-declared known txids, report the
+  actual viable-change funding shortfall, and document aborting listed staged
+  actions by transaction ID.
+- Collapse fragmented `createAction` storage work into one atomic write
+  transaction, batch proof retrieval and compound-proof validation, overlap
+  independent proof reads with persistence, bulk-insert untagged outputs, and
+  batch canonical P2PKH verification. The retained 153-input authenticated
+  remote PXC workload is below 500 ms at p95.
+- Reuse parsed root and counterparty keys and one BRC-42 shared secret per
+  counterparty while signing managed BRC-29 inputs, keep funding selection and
+  transaction-size accounting linear, and avoid redundant BEEF validation,
+  unused process reads, and unconditional commission reads on the successful
+  path. Generated scripts, signatures, fees, input ordering, BEEF bytes, and
+  error diagnostics remain equivalence-tested.
+- Add bounded-cardinality spans for proof decode/merge, persistence, signing,
+  verification, result assembly, serialization, and server-side processing.
+  No telemetry header or protocol field is added; BRC-103/104, AuthFetch, Auth
+  Express Middleware, AuthSocket, JSON-RPC, and wallet wire behavior are unchanged.
+- Coalesce only recent timestamp-only touches for already-authenticated shared
+  Knex sessions, while immediately persisting every authentication and
+  certificate transition. This removes a synchronous replicated PXC write from
+  the normal RPC path; exact per-request persistence remains available with
+  `touchIntervalMs: 0`.
+- Make expired action-batch reservations non-blocking in indexed queries and
+  repair MySQL rollback support indexes. Existing databases migrate through the
+  normal Knex path, and full PXC down-to-empty/re-upgrade is regression-tested.
+- Make UMP account lookup resilient to stale SLAP advertisements and partial
+  overlay failure. One verified matching token establishes an existing account;
+  otherwise one clean empty response establishes a new account. Malformed,
+  rejected, empty, and unavailable peers cannot veto a verified token, and
+  malformed or unavailable peers cannot veto a clean empty response. Lookups
+  with no usable response remain errors; WAB existing-account continuity still
+  prevents replacement-wallet onboarding.
+- Resolve competing verified UMP tokens on on-chain proof. A candidate spent
+  anywhere in another candidate's BEEF ancestry is superseded (evidence merged
+  across hosts serving different depths; ancestry walked iteratively so deep
+  update chains cannot exhaust the stack). Forked candidates resolve only when
+  exactly one provably consumed a same-identity predecessor token, which
+  requires the account's keys; anything less decisive stays an error so a
+  wrong token can never be chosen silently. Resolved conflicts report a
+  `supersededTokens` count in lookup telemetry.
+- Plan legacy `createAction` funding against the exact unreserved managed-change
+  set before persistence, claim the selected inputs atomically in one storage
+  transaction, and fail economically impossible fragmented wallets before
+  inserting a transaction row. Add targeted Knex and IndexedDB indexes and
+  remove IndexedDB's per-output transaction-status lookup.
+- Avoid building full known-txid indexes on the common single-proof path and
+  report privacy-safe createAction candidate, funding, proof-fetch, BEEF merge,
+  trim, serialization, and known-history timings. BRC-103/104, AuthFetch, Auth
+  Express Middleware, AuthSocket, JSON-RPC, and wallet wire behavior are unchanged.
 - Keep remote-storage trace correlation inside the telemetry sink instead of
   adding unsupported headers to AuthFetch requests. BRC-103/104, AuthFetch,
   Auth Express Middleware, AuthSocket, JSON-RPC, and storage wire behavior are
@@ -118,10 +207,10 @@ attention to changes that materially alter behavior or extend functionality.
   `auth-express-middleware@2.1.1` likewise declares its `mime-types` runtime
   import so strict package managers do not fail when loading the built packages.
 
- - Release prep for `2.4.2`: proof completion now discovers every local
-   transaction row sharing the proven txid, repairs notification-set drift from
-   concurrent multi-user `internalizeAction` calls, and idempotently completes
-   any local copy omitted by a last-writer-wins notification update.
+- Release prep for `2.4.2`: proof completion now discovers every local
+  transaction row sharing the proven txid, repairs notification-set drift from
+  concurrent multi-user `internalizeAction` calls, and idempotently completes
+  any local copy omitted by a last-writer-wins notification update.
 
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.
@@ -164,7 +253,8 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox 2.1.20
 
 - Update cdn.projectbabbage.com valid blockheaders file hash.
-- 
+-
+
 ## wallet-toolbox 2.1.19
 
 - Merge PR#146. GenerateChange change to better handle dust situations. Redundant trimInputBeef knownTxids safety check.
@@ -187,7 +277,7 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox 2.1.15
 
 - audit fix
- 
+
 ## wallet-toolbox 2.1.14
 
 - fix update timestamp on all updated currencies
@@ -224,7 +314,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.1.9
 
-- Fix batch sending bug in TaskSendWaiting 
+- Fix batch sending bug in TaskSendWaiting
 
 ## wallet-toolbox 2.1.8
 

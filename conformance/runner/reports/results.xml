@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="bsv-conformance" tests="6650" failures="0" errors="0" skipped="0">
+<testsuites name="bsv-conformance" tests="6681" failures="0" errors="0" skipped="0">
   <testsuite name="auth/brc31-handshake" tests="16" failures="0" errors="0" skipped="0">
     <testcase name="auth.brc31-handshake.1" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.2" classname="auth/brc31-handshake" time="0"/>
@@ -5742,6 +5742,39 @@
     <testcase name="sync.gasprotocol.18" classname="sync/gasp-protocol" time="0"/>
     <testcase name="sync.gasprotocol.19" classname="sync/gasp-protocol" time="0"/>
     <testcase name="sync.gasprotocol.20" classname="sync/gasp-protocol" time="0"/>
+  </testsuite>
+  <testsuite name="transport/air-gap-optical" tests="31" failures="0" errors="0" skipped="0">
+    <testcase name="transport.air-gap-optical.crc32.1" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.length.2" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.length.3" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.length.4" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.5" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.6" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.7" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.8" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.9" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.10" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.11" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.12" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.13" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.14" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.encode.15" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.decode.16" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.decode.17" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.decode.18" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.session.19" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.session.20" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.session.21" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.session.22" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.23" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.24" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.25" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.26" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.27" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.28" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.29" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.30" classname="transport/air-gap-optical" time="0"/>
+    <testcase name="transport.air-gap-optical.reject.31" classname="transport/air-gap-optical" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/abortaction" tests="8" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.abortaction.1" classname="wallet/brc100/abortaction" time="0"/>

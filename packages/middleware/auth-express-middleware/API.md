@@ -32,6 +32,7 @@ export interface AuthMiddlewareOptions {
   logger?: typeof console
   logLevel?: LogLevel
   transportLimits?: Partial<AuthTransportLimits>
+  telemetry?: TelemetryConfig
 }
 ```
 
@@ -63,6 +64,15 @@ Optional logger (e.g., console). If not provided, logging is disabled.
 
 ```ts
 logger?: typeof console
+```
+
+#### Property telemetry
+
+Optional provider-neutral authentication timing. Header values, signatures,
+certificate contents, wallet data, and peer identities are never emitted.
+
+```ts
+telemetry?: TelemetryConfig
 ```
 
 #### Property transportLimits
@@ -102,8 +112,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export interface AuthTransportLimits {
   requestTimeoutMs: number
   maxPendingRequests: number
+  maxResponseBytes: number
 }
 ```
+
+<details>
+
+<summary>Interface AuthTransportLimits Details</summary>
+
+#### Property maxResponseBytes
+
+Maximum encoded application-response bytes retained for BRC-104 signing.
+Set to `-1` only when the embedding service enforces an equivalent bound
+before this middleware. Defaults to 8 MiB.
+
+```ts
+maxResponseBytes: number
+```
+
+</details>
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
@@ -290,12 +317,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Creates an Express middleware that handles authentication via BSV-SDK.
 
 ```ts
-export function createAuthMiddleware(
-  options: AuthMiddlewareOptions
-): (req: AuthRequest, res: Response, next: NextFunction) => void
+export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHandler
 ```
 
-See also: [AuthMiddlewareOptions](#interface-authmiddlewareoptions), [AuthRequest](#interface-authrequest)
+See also: [AuthMiddlewareOptions](#interface-authmiddlewareoptions)
 
 <details>
 

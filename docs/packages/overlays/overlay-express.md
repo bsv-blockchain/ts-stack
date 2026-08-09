@@ -4,9 +4,9 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.4.9'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '2.5.1'
+last_updated: '2026-08-06'
+last_verified: '2026-08-06'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
@@ -179,6 +179,9 @@ monitor.start()
 - **Admin token** — Bearer token for protected endpoints (`/admin/syncAdvertisements`, `/admin/startGASPSync`)
 - **Knex vs MongoDB** — Knex for SQL (global application storage), MongoDB for per-service indices
 - **Health endpoints** — Follow Kubernetes liveness/readiness probe patterns
+- **Browser preflights** — Public CORS accepts additive well-formed request
+  headers by default; set `OVERLAY_CORS_ALLOWED_HEADERS` only for a strict
+  comma-separated browser header allowlist
 - **JanitorService** — Periodically validates SHIP/SLAP hosts; revokes failing entries
 - **Provider callbacks** — `/arc-ingest` accepts Arc/Arcade callback notifications,
   applies proofs, and evicts terminal invalid or double-spent transactions

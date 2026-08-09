@@ -61,6 +61,7 @@ import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { managedChangeOutputFields } from './methods/managedChange'
+import type { ManagedChangeInputCandidate } from './methods/availableManagedChange'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -72,6 +73,7 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 // Keep bulk statements below conservative SQLite/MySQL bind-parameter
 // ceilings. The surrounding transaction still makes a complete pack atomic.
 const ACTION_BATCH_BLOB_SQL_CHUNK = 500
+const OUTPUT_INSERT_SQL_CHUNK = 500
 
 interface KnexTelemetryQuery {
   __knexQueryUid?: string
@@ -130,9 +132,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   protected override supportsActionBatchPersistence (): boolean { return true }
+  protected override requiresActionBatchCleanupBeforeCreateAction (): boolean { return false }
 
-  async readSettings (): Promise<TableSettings> {
-    return this.validateEntity(verifyOne(await this.toDb()<TableSettings>('settings')))
+  async readSettings (trx?: TrxToken): Promise<TableSettings> {
+    return this.validateEntity(verifyOne(await this.toDb(trx)<TableSettings>('settings')))
   }
 
   override async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
@@ -143,7 +146,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       inputBEEF: undefined
     }
 
-    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid } }))
+    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
     if (r.proven == null) {
       const reqRawTx = verifyOneOrNone(
         await k('proven_tx_reqs')
@@ -157,6 +160,40 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
     }
     return r
+  }
+
+  override async getProvenOrRawTxs (txids: string[], trx?: TrxToken): Promise<Map<string, ProvenOrRawTx>> {
+    const unique = [...new Set(txids)]
+    const results = new Map<string, ProvenOrRawTx>()
+    if (unique.length === 0) return results
+
+    const proven = await this.findProvenTxs({ partial: {}, txids: unique, trx })
+    const provenTxids = new Set(proven.map(transaction => transaction.txid))
+    for (const transaction of proven) {
+      results.set(transaction.txid, { proven: transaction, rawTx: undefined, inputBEEF: undefined })
+    }
+
+    const unresolved = unique.filter(txid => !provenTxids.has(txid))
+    if (unresolved.length > 0) {
+      const requests = await this.findProvenTxReqs({
+        partial: {},
+        txids: unresolved,
+        status: ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'],
+        trx
+      })
+      for (const request of requests) {
+        results.set(request.txid, {
+          proven: undefined,
+          rawTx: Array.from(request.rawTx),
+          inputBEEF: request.inputBEEF == null ? undefined : Array.from(request.inputBEEF)
+        })
+      }
+    }
+
+    for (const txid of unique) {
+      if (!results.has(txid)) results.set(txid, { proven: undefined, rawTx: undefined, inputBEEF: undefined })
+    }
+    return results
   }
 
   dbTypeSubstring (source: string, fromOffset: number, forLength?: number): string {
@@ -378,9 +415,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findReservedActionBatchOutputIds (outputIds: number[], trx?: TrxToken): Promise<number[]> {
     if (outputIds.length === 0) return []
+    const now = new Date()
     const rows = await this.toDb(trx)<TableActionBatchOutput>('action_batch_outputs')
+      .join('action_batches', 'action_batch_outputs.actionBatchId', 'action_batches.actionBatchId')
       .whereIn('outputId', outputIds)
-      .select('outputId')
+      .whereIn('action_batches.status', ['active', 'prepared'])
+      .where('action_batches.expiresAt', '>', now)
+      .where('action_batches.hardExpiresAt', '>', now)
+      .select('action_batch_outputs.outputId')
     return rows.map(r => r.outputId)
   }
 
@@ -537,6 +579,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
     output.outputId = id
     return output.outputId
+  }
+
+  override async insertOutputs(outputs: TableOutput[], trx?: TrxToken): Promise<void> {
+    if (outputs.length === 0) return
+    const rows = await Promise.all(outputs.map(async output => {
+      const row = await this.validateEntityForInsert(output, trx)
+      if (row.outputId === 0) delete row.outputId
+      return row
+    }))
+    for (let offset = 0; offset < rows.length; offset += OUTPUT_INSERT_SQL_CHUNK) {
+      await this.toDb(trx)<TableOutput>('outputs').insert(rows.slice(offset, offset + OUTPUT_INSERT_SQL_CHUNK))
+    }
   }
 
   override async insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {
@@ -864,7 +918,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         'undefined. ProvenTxs may not be found by merklePath value.'
       )
     }
-    return this.setupQuery('proven_txs', args)
+    const q = this.setupQuery('proven_txs', args)
+    if (args.txids != null) {
+      const txids = [...new Set(args.txids.filter(txid => txid !== undefined))]
+      if (txids.length > 0) void q.whereIn('txid', txids)
+    }
+    return q
   }
 
   findStaleMerkleRootsQuery (args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
@@ -1258,7 +1317,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * @param trx
    */
   async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
-    this._settings ??= await this.readSettings()
+    this._settings ??= await this.readSettings(trx)
 
     // Always run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
     // This is necessary because PRAGMA foreign_keys is a per-connection setting,
@@ -1392,6 +1451,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
+    const now = new Date()
     const q = this.knex<TableOutput>('outputs as o')
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({
@@ -1408,9 +1468,95 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereNot('o.derivationPrefix', '')
       .whereNotNull('o.derivationSuffix')
       .whereNot('o.derivationSuffix', '')
+      .whereNotExists(function () {
+        void this.select(1)
+          .from('action_batch_outputs as abo')
+          .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          .whereRaw('abo.outputId = o.outputId')
+          .whereIn('ab.status', ['active', 'prepared'])
+          .where('ab.expiresAt', '>', now)
+          .where('ab.hardExpiresAt', '>', now)
+      })
       .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
+  }
+
+  override async findAvailableManagedChangeInputs (
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<TableOutput[]> {
+    const statuses: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) statuses.push('sending')
+    const now = new Date()
+    const rows = await this.toDb(trx)<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({
+        'o.userId': userId,
+        'o.basketId': basketId,
+        'o.spendable': true,
+        'o.type': managedChangeOutputFields.type,
+        'o.change': managedChangeOutputFields.change,
+        'o.providedBy': managedChangeOutputFields.providedBy,
+        'o.purpose': managedChangeOutputFields.purpose
+      })
+      .whereNull('o.spentBy')
+      .whereNotNull('o.derivationPrefix')
+      .whereNot('o.derivationPrefix', '')
+      .whereNotNull('o.derivationSuffix')
+      .whereNot('o.derivationSuffix', '')
+      .whereNotExists(function () {
+        void this.select(1)
+          .from('action_batch_outputs as abo')
+          .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          .whereRaw('abo.outputId = o.outputId')
+          .whereIn('ab.status', ['active', 'prepared'])
+          .where('ab.expiresAt', '>', now)
+          .where('ab.hardExpiresAt', '>', now)
+      })
+      .whereIn('t.status', statuses)
+      .select(outputColumnsWithoutLockingScript.map(column => `o.${column}`))
+    return this.validateEntities(rows, undefined, ['spendable', 'change'])
+  }
+
+  override async findAvailableManagedChangeInputCandidates (
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<ManagedChangeInputCandidate[]> {
+    const statuses: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) statuses.push('sending')
+    const now = new Date()
+    return await this.toDb(trx)<ManagedChangeInputCandidate>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({
+        'o.userId': userId,
+        'o.basketId': basketId,
+        'o.spendable': true,
+        'o.type': managedChangeOutputFields.type,
+        'o.change': managedChangeOutputFields.change,
+        'o.providedBy': managedChangeOutputFields.providedBy,
+        'o.purpose': managedChangeOutputFields.purpose
+      })
+      .whereNull('o.spentBy')
+      .whereNotNull('o.derivationPrefix')
+      .whereNot('o.derivationPrefix', '')
+      .whereNotNull('o.derivationSuffix')
+      .whereNot('o.derivationSuffix', '')
+      .whereNotExists(function () {
+        void this.select(1)
+          .from('action_batch_outputs as abo')
+          .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          .whereRaw('abo.outputId = o.outputId')
+          .whereIn('ab.status', ['active', 'prepared'])
+          .where('ab.expiresAt', '>', now)
+          .where('ab.hardExpiresAt', '>', now)
+      })
+      .whereIn('t.status', statuses)
+      .select('o.outputId', 'o.transactionId', 'o.satoshis', 'o.txid', 'o.vout')
   }
 
   override async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
@@ -1455,7 +1601,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async findOutputsByOutpointsForUpdate (
     userId: number,
     outpoints: Array<{ txid: string, vout: number }>,
-    trx: TrxToken
+    trx: TrxToken,
+    noScript = false
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
     if (outpoints.length < 1) return byOutpoint
@@ -1468,10 +1615,63 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .forUpdate()
     const filteredRows = rows.filter(r => outpointSet.has(`${String(r.txid)}.${String(r.vout)}`))
     for (const row of this.validateEntities(filteredRows, undefined, ['spendable', 'change'])) {
-      await this.validateOutputScript(row, trx)
+      if (!noScript) await this.validateOutputScript(row, trx)
       byOutpoint[`${String(row.txid)}.${String(row.vout)}`] = row
     }
     return byOutpoint
+  }
+
+  override async findTransactionStatusesByIds (
+    userId: number,
+    transactionIds: number[],
+    trx?: TrxToken
+  ): Promise<Map<number, TransactionStatus>> {
+    const statuses = new Map<number, TransactionStatus>()
+    if (transactionIds.length === 0) return statuses
+    const rows = await this.toDb(trx)<Pick<TableTransaction, 'transactionId' | 'status'>>('transactions')
+      .where('userId', userId)
+      .whereIn('transactionId', [...new Set(transactionIds)])
+      .select('transactionId', 'status')
+    for (const row of rows) statuses.set(row.transactionId, row.status)
+    return statuses
+  }
+
+  override async findFundingOutputsForUpdate (
+    userId: number,
+    outputIds: number[],
+    statuses: TransactionStatus[],
+    trx: TrxToken
+  ): Promise<Record<number, TableOutput>> {
+    const byId: Record<number, TableOutput> = {}
+    if (outputIds.length === 0) return byId
+    const uniqueOutputIds = [...new Set(outputIds)].sort((a, b) => a - b)
+    // Lock source outputs through their primary key first. A single joined
+    // SELECT ... FOR UPDATE caused PXC to lock one joined row at a time and
+    // turned a 150-input claim into a ~220 ms statement. Transaction status
+    // and action-batch reservations are then checked under the same database
+    // transaction; action-batch reservation follows the same output-first lock
+    // order, so a concurrent reserver cannot pass after this claim commits.
+    const rows = await this.toDb(trx)<TableOutput>('outputs as o')
+      .where('o.userId', userId)
+      .whereIn('o.outputId', uniqueOutputIds)
+      .select('o.*')
+      .forUpdate()
+    const transactionIds = [...new Set(rows.map(output => output.transactionId))].sort((a, b) => a - b)
+    const validTransactions = transactionIds.length === 0
+      ? []
+      : await this.toDb(trx)<Pick<TableTransaction, 'transactionId'>>('transactions')
+        .where('userId', userId)
+        .whereIn('transactionId', transactionIds)
+        .whereIn('status', statuses)
+        .select('transactionId')
+        .forShare()
+    const validTransactionIds = new Set(validTransactions.map(transaction => transaction.transactionId))
+    const reservedOutputIds = new Set(await this.findReservedActionBatchOutputIds(uniqueOutputIds, trx))
+    for (const output of this.validateEntities(rows, undefined, ['spendable', 'change'])) {
+      if (!validTransactionIds.has(output.transactionId) || reservedOutputIds.has(output.outputId)) continue
+      byId[output.outputId] = output
+    }
+    return byId
   }
 
   override async findOrInsertOutputBasketsBulk (
@@ -1641,6 +1841,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     })
 
     return r
+  }
+
+  override async markChangeInputsSpent (outputIds: number[], transactionId: number, trx: TrxToken): Promise<number> {
+    if (outputIds.length === 0) return 0
+    return await this.toDb(trx)<TableOutput>('outputs')
+      .whereIn('outputId', outputIds)
+      .where('spendable', true)
+      .whereNull('spentBy')
+      .update({ spendable: false, spentBy: transactionId })
   }
 
   /** Convert null→undefined and Buffer→number[] on a retrieved entity in-place. */

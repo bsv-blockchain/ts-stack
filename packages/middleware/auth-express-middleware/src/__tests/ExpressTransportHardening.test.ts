@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PrivateKey, Utils } from '@bsv/sdk'
 import { createAuthMiddleware, ExpressTransport } from '../index'
 import { MockWallet } from './MockWallet'
@@ -80,6 +83,19 @@ function peerMock(overrides: Record<string, unknown> = {}): any {
   }
 }
 
+function peerWithSignedResponse(): { peer: any; signed: Promise<void> } {
+  let resolveSigned!: () => void
+  const signed = new Promise<void>(resolve => {
+    resolveSigned = resolve
+  })
+  return {
+    peer: peerMock({
+      toPeer: jest.fn().mockImplementation(async () => resolveSigned())
+    }),
+    signed
+  }
+}
+
 function responsePayload(
   status: number,
   headers: Record<string, string>,
@@ -116,7 +132,10 @@ describe('ExpressTransport hardening', () => {
     [{ requestTimeoutMs: 0 }, 'requestTimeoutMs'],
     [{ requestTimeoutMs: 1.5 }, 'requestTimeoutMs'],
     [{ maxPendingRequests: 0 }, 'maxPendingRequests'],
-    [{ maxPendingRequests: Number.MAX_SAFE_INTEGER + 1 }, 'maxPendingRequests']
+    [{ maxPendingRequests: Number.MAX_SAFE_INTEGER + 1 }, 'maxPendingRequests'],
+    [{ maxResponseBytes: 0 }, 'maxResponseBytes'],
+    [{ maxResponseBytes: -2 }, 'maxResponseBytes'],
+    [{ maxResponseBytes: Number.MAX_SAFE_INTEGER + 1 }, 'maxResponseBytes']
   ])('rejects invalid transport limits', (limits, expected) => {
     expect(() => new ExpressTransport(false, undefined, undefined, limits)).toThrow(expected)
   })
@@ -381,6 +400,65 @@ describe('ExpressTransport hardening', () => {
     })
   })
 
+  it('does not write a certificate error after the response settles', async () => {
+    let listener: ((sender: string, certificates: any[]) => void) | undefined
+    const peer = peerMock({
+      sessionManager: {
+        hasSession: jest.fn().mockResolvedValue(false)
+      },
+      listenForCertificatesReceived: jest.fn(callback => {
+        listener = callback
+        return 9
+      })
+    })
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const res = responseMock()
+    await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn(), async () => {
+      await processing
+    })
+
+    listener?.(IDENTITY_KEY, [{}])
+    await flushPromises()
+    res.headersSent = true
+    rejectProcessing(new Error('late certificate failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+    expect(peer.stopListeningForCertificatesReceived).toHaveBeenCalledWith(9)
+  })
+
+  it('does not write a handshake timeout after the response settles', async () => {
+    jest.useFakeTimers()
+    try {
+      const peer = peerMock({
+        sessionManager: {
+          hasSession: jest.fn().mockResolvedValue(false)
+        }
+      })
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        requestTimeoutMs: 20
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn())
+      res.destroyed = true
+      jest.advanceTimersByTime(20)
+      await flushPromises()
+
+      expect(res.status).not.toHaveBeenCalled()
+      expect(res.json).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('times out general verification and removes the SDK listener', async () => {
     jest.useFakeTimers()
     try {
@@ -407,6 +485,29 @@ describe('ExpressTransport hardening', () => {
     }
   })
 
+  it('does not write a general timeout after the response settles', async () => {
+    jest.useFakeTimers()
+    try {
+      const peer = peerMock()
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        requestTimeoutMs: 20
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      await transport.handleIncomingRequest(validGeneralRequest(), res, jest.fn())
+      res.writableEnded = true
+      jest.advanceTimersByTime(20)
+      await flushPromises()
+
+      expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledWith(1)
+      expect(res.status).not.toHaveBeenCalled()
+      expect(res.json).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('rejects a duplicate pending general request identifier', async () => {
     const peer = peerMock()
     const transport = new ExpressTransport()
@@ -422,6 +523,23 @@ describe('ExpressTransport hardening', () => {
       code: 'ERR_AUTH_MALFORMED',
       description: 'The authentication request is malformed.'
     })
+    expect(peer.listenForGeneralMessages).toHaveBeenCalledTimes(1)
+
+    ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
+  })
+
+  it('does not write a protocol error after the response settles', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+
+    await transport.handleIncomingRequest(validGeneralRequest(), responseMock(), jest.fn())
+    const duplicateResponse = responseMock()
+    duplicateResponse.headersSent = true
+    await transport.handleIncomingRequest(validGeneralRequest(), duplicateResponse, jest.fn())
+
+    expect(duplicateResponse.status).not.toHaveBeenCalled()
+    expect(duplicateResponse.json).not.toHaveBeenCalled()
     expect(peer.listenForGeneralMessages).toHaveBeenCalledTimes(1)
 
     ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
@@ -534,6 +652,160 @@ describe('ExpressTransport hardening', () => {
     expect(originalSet).toHaveBeenCalledWith('x-bsv-result', '7')
     expect(originalSend).toHaveBeenCalledWith(Buffer.from('{"ok":true}'))
     expect(transport.openGeneralHandles.has(REQUEST_ID)).toBe(false)
+  })
+
+  it('replaces an oversized authenticated response before signing', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport(false, undefined, undefined, {
+      maxResponseBytes: 64
+    })
+    transport.peer = peer
+    const res = responseMock()
+
+    ;(transport as any).setupAuthenticatedResponse(
+      validGeneralRequest(),
+      res,
+      jest.fn(),
+      IDENTITY_KEY,
+      REQUEST_ID
+    )
+
+    res.json({ value: 'x'.repeat(1_024) })
+    await flushPromises()
+
+    const expectedBody = Utils.toArray(
+      JSON.stringify({
+        status: 'error',
+        code: 'ERR_RESPONSE_TOO_LARGE',
+        description: 'The requested response exceeds the configured service limit.'
+      }),
+      'utf8'
+    )
+    expect(peer.toPeer).toHaveBeenCalledWith(responsePayload(413, {}, expectedBody), SESSION_NONCE)
+  })
+
+  it.each([false, true])(
+    'reads and signs an authenticated file within the response limit (unlimited: %s)',
+    async unlimited => {
+      const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+      const filePath = join(temporaryDirectory, 'response.bin')
+      const contents = Buffer.from('bounded authenticated file')
+      writeFileSync(filePath, contents)
+      const { peer, signed } = peerWithSignedResponse()
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        maxResponseBytes: unlimited ? -1 : contents.length
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      try {
+        ;(transport as any).setupAuthenticatedResponse(
+          validGeneralRequest(),
+          res,
+          jest.fn(),
+          IDENTITY_KEY,
+          REQUEST_ID
+        )
+        res.sendFile(filePath)
+        await signed
+
+        expect(peer.toPeer).toHaveBeenCalledWith(
+          responsePayload(200, {}, Array.from(contents)),
+          SESSION_NONCE
+        )
+      } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('stops an authenticated file read at the response limit and signs a 413', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'oversized.bin')
+    writeFileSync(filePath, Buffer.alloc(65, 7))
+    const { peer, signed } = peerWithSignedResponse()
+    const transport = new ExpressTransport(false, undefined, undefined, {
+      maxResponseBytes: 64
+    })
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      res.sendFile(filePath)
+      await signed
+
+      const expectedBody = Utils.toArray(
+        JSON.stringify({
+          status: 'error',
+          code: 'ERR_RESPONSE_TOO_LARGE',
+          description: 'The requested response exceeds the configured service limit.'
+        }),
+        'utf8'
+      )
+      expect(peer.toPeer).toHaveBeenCalledWith(
+        responsePayload(413, {}, expectedBody),
+        SESSION_NONCE
+      )
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('signs a 500 when an authenticated response file cannot be read', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'missing.bin')
+    const { peer, signed } = peerWithSignedResponse()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      res.sendFile(filePath)
+      await signed
+
+      expect(peer.toPeer).toHaveBeenCalledWith(responsePayload(500, {}), SESSION_NONCE)
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('forwards authenticated response file errors to the sendFile callback overload', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'missing.bin')
+    const transport = new ExpressTransport()
+    const peer = peerMock()
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      const callbackError = new Promise<Error>(resolve => res.sendFile(filePath, resolve))
+
+      await expect(callbackError).resolves.toHaveProperty('name', 'Error')
+      expect(peer.toPeer).not.toHaveBeenCalled()
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
   })
 
   it('buffers and signs an authenticated text response with its inferred content type', async () => {
@@ -723,6 +995,52 @@ describe('ExpressTransport hardening', () => {
         onCertificatesReceived: true as any
       })
     ).toThrow('onCertificatesReceived')
+  })
+
+  it('does not write a second handshake response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validHandshakeRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.writableEnded = true
+    rejectProcessing(new Error('late handshake processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
+  })
+
+  it('does not write a second general response when peer processing rejects late', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = peerMock()
+    let rejectProcessing!: (error: Error) => void
+    const processing = new Promise<void>((_resolve, reject) => {
+      rejectProcessing = reject
+    })
+    const callback = jest.fn(async () => await processing)
+    await transport.onData(callback)
+    const res = responseMock()
+
+    await transport.handleIncomingRequest(validGeneralRequest(), res, jest.fn())
+    await flushPromises()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    res.destroyed = true
+    rejectProcessing(new Error('late general processing failure'))
+    await flushPromises()
+
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.json).not.toHaveBeenCalled()
   })
 
   it('creates a configured middleware and logs only request metadata', () => {

@@ -304,4 +304,40 @@ describe('createAction test', () => {
       expect(Array.isArray(r.signableTransaction?.tx)).toBe(true)
     }
   })
+
+  test('5_immediate action chains change from a delayed parent', async () => {
+    for (const { wallet, activeStorage, userId } of ctxs) {
+      const [basket] = await activeStorage.findOutputBaskets({
+        partial: { userId, name: 'default' }
+      })
+      await activeStorage.updateOutputBasket(basket.basketId, {
+        numberOfDesiredUTXOs: 0,
+        minimumDesiredUTXOValue: 1
+      })
+      const funding = (await activeStorage.findAvailableManagedChangeInputs(userId, basket.basketId, true))
+        .sort((a, b) => b.satoshis - a.satoshis)
+      expect(funding.length).toBeGreaterThan(0)
+      for (const output of funding.slice(1)) {
+        await activeStorage.updateOutput(output.outputId, { spendable: false })
+      }
+
+      const delayed = await wallet.createAction({
+        description: 'Queue delayed parent transaction',
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'Delayed parent output' }],
+        options: { acceptDelayedBroadcast: true, randomizeOutputs: false }
+      })
+      expect(delayed.txid).toBeDefined()
+
+      const immediate = await wallet.createAction({
+        description: 'Broadcast child with delayed parent',
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'Immediate child output' }],
+        options: { acceptDelayedBroadcast: false, randomizeOutputs: false }
+      })
+
+      expect(immediate.txid).toBeDefined()
+      expect(immediate.sendWithResults).toEqual([
+        expect.objectContaining({ txid: immediate.txid, status: expect.not.stringMatching(/^failed$/) })
+      ])
+    }
+  })
 })

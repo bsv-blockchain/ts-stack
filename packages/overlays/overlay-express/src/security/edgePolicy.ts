@@ -1,11 +1,6 @@
 // Synchronized by scripts/sync-service-edge-policy.mjs. Edit
 // infra/wab/src/security/edgePolicy.ts, then run the sync command.
-import type {
-  NextFunction,
-  Request,
-  RequestHandler,
-  Response
-} from 'express'
+import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { Server } from 'node:http'
 
 const MAX_BODY_BYTES = 512 * 1024 * 1024
@@ -56,6 +51,8 @@ const DEFAULT_EXPOSED_HEADERS = [
   'X-BSV-Payment-Version'
 ]
 
+const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
 export interface CorsPolicyOptions {
   environmentPrefix: string
   methods: string[]
@@ -85,13 +82,19 @@ export interface HttpServerPolicyDefaults {
   keepAliveTimeoutMs: number
   socketTimeoutMs: number
   maxRequestsPerSocket: number
+  /** Open TCP/WebSocket connections retained by one process. Default: 1,000. */
+  maxConnections?: number
 }
 
-function readPositiveInteger (
-  name: string,
-  fallback: number,
-  maximum: number
-): number {
+export type ResourceProfileName = 'small' | 'standard' | 'high-throughput'
+
+export interface ResourceProfileValues {
+  small: number
+  standard: number
+  highThroughput: number
+}
+
+function readPositiveInteger(name: string, fallback: number, maximum: number): number {
   const value = process.env[name]
   if (value == null || value.trim() === '') return fallback
   if (!/^[1-9]\d*$/.test(value)) {
@@ -104,17 +107,92 @@ function readPositiveInteger (
   return parsed
 }
 
-function readCsv (name: string, fallback: string[] = []): string[] {
+/**
+ * Reads an operator resource limit. `-1` and `unlimited` are explicit opt-outs;
+ * omitting the setting always retains the service's tested safe default.
+ */
+export function readResourceLimit(
+  environmentPrefix: string,
+  suffix: string,
+  fallback: number,
+  maximum: number = Number.MAX_SAFE_INTEGER
+): number {
+  const name = `${environmentPrefix}_${suffix}`
   const value = process.env[name]
   if (value == null || value.trim() === '') return fallback
-  const values = value.split(',').map(item => item.trim()).filter(Boolean)
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '-1' || normalized === 'unlimited') return -1
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    throw new Error(`${name} must be -1, unlimited, or a positive integer`)
+  }
+  const parsed = Number(normalized)
+  if (!Number.isSafeInteger(parsed) || parsed > maximum) {
+    throw new Error(`${name} must not exceed ${maximum}`)
+  }
+  return parsed
+}
+
+export function readResourceProfile(
+  environmentPrefix: string,
+  fallback: ResourceProfileName = 'standard'
+): ResourceProfileName {
+  const prefixed = process.env[`${environmentPrefix}_RESOURCE_PROFILE`]
+  const value =
+    (prefixed == null || prefixed.trim() === '' ? process.env.RESOURCE_PROFILE : prefixed)
+      ?.trim()
+      .toLowerCase() ?? fallback
+  if (!['small', 'standard', 'high-throughput'].includes(value)) {
+    throw new Error(
+      `${environmentPrefix}_RESOURCE_PROFILE must be small, standard, or high-throughput`
+    )
+  }
+  return value as ResourceProfileName
+}
+
+export function profileValue(profile: ResourceProfileName, values: ResourceProfileValues): number {
+  if (profile === 'small') return values.small
+  if (profile === 'high-throughput') return values.highThroughput
+  return values.standard
+}
+
+function readCsv(name: string, fallback: string[] = []): string[] {
+  const value = process.env[name]
+  if (value == null || value.trim() === '') return fallback
+  const values = value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
   if (values.includes('*')) {
     throw new Error(`${name} must contain explicit values; wildcard "*" is not allowed`)
   }
   return [...new Set(values)]
 }
 
-function normalizeOrigin (origin: string, name: string): string {
+function mergeHeaderNames(...groups: string[][]): string[] {
+  const names = new Map<string, string>()
+  for (const name of groups.flat()) {
+    const normalized = name.toLowerCase()
+    if (!names.has(normalized)) names.set(normalized, name)
+  }
+  return [...names.values()]
+}
+
+function responseAllowedHeaders(
+  req: Request,
+  configuredHeaders: string[],
+  reflectRequestedHeaders: boolean
+): string[] {
+  if (!reflectRequestedHeaders) return configuredHeaders
+  const requested = req.get('access-control-request-headers')
+  if (requested == null || requested.trim() === '') return configuredHeaders
+  const requestedHeaders = requested
+    .split(',')
+    .map(name => name.trim())
+    .filter(name => HTTP_HEADER_NAME.test(name))
+  return mergeHeaderNames(configuredHeaders, requestedHeaders)
+}
+
+function normalizeOrigin(origin: string, name: string): string {
   if (origin === 'null') throw new Error(`${name} must not contain the opaque "null" origin`)
   let parsed: URL
   try {
@@ -130,26 +208,26 @@ function normalizeOrigin (origin: string, name: string): string {
     parsed.search !== '' ||
     parsed.hash !== ''
   ) {
-    throw new Error(`${name} must contain HTTP(S) origins without paths, credentials, queries, or fragments`)
+    throw new Error(
+      `${name} must contain HTTP(S) origins without paths, credentials, queries, or fragments`
+    )
   }
   return parsed.origin
 }
 
-export function readAllowedOrigins (environmentPrefix: string): string[] {
+export function readAllowedOrigins(environmentPrefix: string): string[] {
   const originVariable = `${environmentPrefix}_CORS_ALLOWED_ORIGINS`
   const prefixedValue = process.env[originVariable]
-  const sourceVariable = prefixedValue != null && prefixedValue.trim() !== ''
-    ? originVariable
-    : 'CORS_ALLOWED_ORIGINS'
-  return readCsv(sourceVariable)
-    .map(origin => normalizeOrigin(origin, sourceVariable))
+  const sourceVariable =
+    prefixedValue != null && prefixedValue.trim() !== '' ? originVariable : 'CORS_ALLOWED_ORIGINS'
+  return readCsv(sourceVariable).map(origin => normalizeOrigin(origin, sourceVariable))
 }
 
-function resolveCorsPolicy (
+function resolveCorsPolicy(
   environmentPrefix: string,
   configuredOrigins: string[] | undefined,
   defaultMode: CorsMode
-): { mode: CorsMode, origins: string[] } {
+): { mode: CorsMode; origins: string[] } {
   const originVariable = `${environmentPrefix}_CORS_ALLOWED_ORIGINS`
   if (configuredOrigins !== undefined) {
     const origins = configuredOrigins.map(origin => normalizeOrigin(origin, originVariable))
@@ -162,10 +240,10 @@ function resolveCorsPolicy (
   const origins = readAllowedOrigins(environmentPrefix)
   const prefixedMode = process.env[`${environmentPrefix}_CORS_MODE`]?.trim()
   const rawMode = (
-    prefixedMode !== undefined && prefixedMode !== ''
-      ? prefixedMode
-      : process.env.CORS_MODE ?? ''
-  ).trim().toLowerCase()
+    prefixedMode !== undefined && prefixedMode !== '' ? prefixedMode : (process.env.CORS_MODE ?? '')
+  )
+    .trim()
+    .toLowerCase()
   let mode: string = rawMode
   if (mode === '') {
     mode = origins.length > 0 ? 'allowlist' : defaultMode
@@ -186,7 +264,7 @@ function resolveCorsPolicy (
  * Socket.IO and similar transports can consume the same public/allowlist/
  * disabled policy as the HTTP middleware.
  */
-export function readCorsOriginSetting (
+export function readCorsOriginSetting(
   environmentPrefix: string,
   defaultMode: CorsMode = 'public'
 ): '*' | string[] {
@@ -196,7 +274,7 @@ export function readCorsOriginSetting (
   return policy.origins
 }
 
-function appendVary (res: Response, value: string): void {
+function appendVary(res: Response, value: string): void {
   const current = res.getHeader('Vary')
   const values = new Set(
     (Array.isArray(current) ? current.join(',') : String(current ?? ''))
@@ -214,7 +292,7 @@ function appendVary (res: Response, value: string): void {
  * opt into an exact allowlist or disable cross-origin browser calls with
  * <PREFIX>_CORS_MODE.
  */
-export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
+export function corsPolicy(options: CorsPolicyOptions): RequestHandler {
   const policy = resolveCorsPolicy(
     options.environmentPrefix,
     options.allowedOrigins,
@@ -223,10 +301,20 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
   if (policy.mode === 'public' && options.allowCredentials === true) {
     throw new Error('Public CORS mode cannot be combined with cookie credentials')
   }
+  const allowedHeadersVariable = `${options.environmentPrefix}_CORS_ALLOWED_HEADERS`
   const allowedHeaders = readCsv(
-    `${options.environmentPrefix}_CORS_ALLOWED_HEADERS`,
+    allowedHeadersVariable,
     options.allowedHeaders ?? DEFAULT_ALLOWED_HEADERS
   )
+  // Public protocol clients evolve independently from service deployments.
+  // When an operator or embedding application has not supplied a strict
+  // header allowlist, preserve that compatibility by adding every well-formed
+  // requested preflight header to the known protocol defaults. CORS is not an
+  // authentication boundary; endpoints still validate and authorize headers.
+  const reflectRequestedHeaders =
+    (process.env[allowedHeadersVariable] == null ||
+      process.env[allowedHeadersVariable]?.trim() === '') &&
+    options.allowedHeaders === undefined
   const exposedHeaders = readCsv(
     `${options.environmentPrefix}_CORS_EXPOSED_HEADERS`,
     options.exposedHeaders ?? DEFAULT_EXPOSED_HEADERS
@@ -246,9 +334,10 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
     // from opaque origins such as sandboxed documents, file-based apps, and
     // mobile webviews, which send `Origin: null` and are covered by `*`.
     if (policy.mode === 'public') {
+      const responseHeaders = responseAllowedHeaders(req, allowedHeaders, reflectRequestedHeaders)
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
-      res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(', '))
+      res.setHeader('Access-Control-Allow-Headers', responseHeaders.join(', '))
       res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))
       res.setHeader('Access-Control-Max-Age', String(maxAgeSeconds))
       if (req.method === 'OPTIONS') {
@@ -286,9 +375,10 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
     }
 
     appendVary(res, 'Origin')
+    const responseHeaders = responseAllowedHeaders(req, allowedHeaders, reflectRequestedHeaders)
     res.setHeader('Access-Control-Allow-Origin', configuredOrigin)
     res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
-    res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(', '))
+    res.setHeader('Access-Control-Allow-Headers', responseHeaders.join(', '))
     res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))
     res.setHeader('Access-Control-Max-Age', String(maxAgeSeconds))
     if (options.allowCredentials === true) {
@@ -303,7 +393,7 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
   }
 }
 
-function readHeaderSetting (
+function readHeaderSetting(
   environmentPrefix: string | undefined,
   suffix: string
 ): string | undefined {
@@ -315,7 +405,7 @@ function readHeaderSetting (
   return value.trim()
 }
 
-function readOptionalHeader (
+function readOptionalHeader(
   environmentPrefix: string | undefined,
   suffix: string,
   allowedValues?: string[]
@@ -331,7 +421,7 @@ function readOptionalHeader (
   return value
 }
 
-function readOptionalBoolean (
+function readOptionalBoolean(
   environmentPrefix: string | undefined,
   suffix: string
 ): boolean | undefined {
@@ -342,35 +432,29 @@ function readOptionalBoolean (
   throw new Error(`${environmentPrefix ?? 'SERVICE'}_${suffix} must be true or false`)
 }
 
-export function securityHeaders (
-  options: SecurityHeadersOptions = {}
-): RequestHandler {
+export function securityHeaders(options: SecurityHeadersOptions = {}): RequestHandler {
   const contentSecurityPolicy =
     readOptionalHeader(options.environmentPrefix, 'CONTENT_SECURITY_POLICY') ??
     options.contentSecurityPolicy ??
     "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   const crossOriginResourcePolicy =
-    readOptionalHeader(
-      options.environmentPrefix,
-      'CROSS_ORIGIN_RESOURCE_POLICY',
-      ['same-origin', 'same-site', 'cross-origin']
-    ) ??
+    readOptionalHeader(options.environmentPrefix, 'CROSS_ORIGIN_RESOURCE_POLICY', [
+      'same-origin',
+      'same-site',
+      'cross-origin'
+    ]) ??
     options.crossOriginResourcePolicy ??
     'cross-origin'
   const crossOriginOpenerPolicy =
-    readOptionalHeader(
-      options.environmentPrefix,
-      'CROSS_ORIGIN_OPENER_POLICY',
-      ['same-origin', 'same-origin-allow-popups', 'unsafe-none']
-    ) ??
+    readOptionalHeader(options.environmentPrefix, 'CROSS_ORIGIN_OPENER_POLICY', [
+      'same-origin',
+      'same-origin-allow-popups',
+      'unsafe-none'
+    ]) ??
     options.crossOriginOpenerPolicy ??
     'same-origin'
   const frameOptions =
-    readOptionalHeader(
-      options.environmentPrefix,
-      'FRAME_OPTIONS',
-      ['DENY', 'SAMEORIGIN']
-    ) ??
+    readOptionalHeader(options.environmentPrefix, 'FRAME_OPTIONS', ['DENY', 'SAMEORIGIN']) ??
     options.frameOptions ??
     'DENY'
   const permissionsPolicy =
@@ -401,29 +485,132 @@ export function securityHeaders (
     if (contentSecurityPolicy !== false) {
       res.setHeader('Content-Security-Policy', contentSecurityPolicy)
     }
-    if (
-      strictTransportSecurity &&
-      req.secure
-    ) {
+    if (strictTransportSecurity && req.secure) {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     }
     next()
   }
 }
 
-export function readBodyLimitBytes (
+export function readBodyLimitBytes(
   environmentPrefix: string,
   fallback: number,
   maximum: number = MAX_BODY_BYTES
 ): number {
-  return readPositiveInteger(`${environmentPrefix}_MAX_BODY_BYTES`, fallback, maximum)
+  const limit = readResourceLimit(environmentPrefix, 'MAX_BODY_BYTES', fallback, maximum)
+  // raw-body/body-parser interpret negative numbers as a zero-ish ceiling.
+  // A deliberately unlimited operator setting therefore maps to the largest
+  // exactly representable byte count accepted by those APIs.
+  return limit === -1 ? Number.MAX_SAFE_INTEGER : limit
+}
+
+/**
+ * Preserve compatibility with clients that accidentally emit two or more
+ * initial slashes. Only the initial slash run is normalized; the remainder of
+ * the path and query string is unchanged.
+ */
+export function initialDoubleSlashCompatibility(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void {
+  if (req.url.startsWith('//')) req.url = req.url.replace(/^\/{2,}/, '/')
+  next()
+}
+
+function responseChunkByteLength(chunk: unknown, encoding: unknown): number {
+  if (typeof chunk === 'string') {
+    const bufferEncoding = typeof encoding === 'string' ? (encoding as BufferEncoding) : 'utf8'
+    return Buffer.byteLength(chunk, bufferEncoding)
+  }
+  if (Buffer.isBuffer(chunk) || chunk instanceof Uint8Array) return chunk.byteLength
+  return Buffer.byteLength(JSON.stringify(chunk) ?? '', 'utf8')
+}
+
+/**
+ * Bounds materialized JSON/text/binary Express responses before downstream
+ * authentication middleware signs or serializes them again. Streaming
+ * endpoints must enforce their own byte budget while producing chunks.
+ */
+export function responseSizeLimit(
+  environmentPrefix: string,
+  fallback: number,
+  maximum: number = MAX_BODY_BYTES
+): RequestHandler {
+  const limit = readResourceLimit(environmentPrefix, 'MAX_RESPONSE_BYTES', fallback, maximum)
+  if (limit === -1) return (_req, _res, next) => next()
+
+  return (_req: Request, res: Response, next: NextFunction): void => {
+    const originalStatus = res.status.bind(res)
+    const originalJson = res.json.bind(res)
+    const originalSend = res.send.bind(res)
+    const originalEnd = res.end.bind(res)
+    let rejected = false
+    let rejecting = false
+
+    const tooLarge = (byteLength: number): boolean => byteLength > limit
+    const reject = (): Response => {
+      if (rejected) return res
+      rejected = true
+      rejecting = true
+      originalStatus(413)
+      const response = originalJson({
+        status: 'error',
+        code: 'ERR_RESPONSE_TOO_LARGE',
+        description: 'The requested response exceeds the configured service limit.'
+      })
+      rejecting = false
+      return response
+    }
+
+    res.json = ((value: unknown): Response => {
+      if (rejecting) return originalJson(value)
+      if (rejected) return res
+      const serialized = JSON.stringify(value) ?? ''
+      if (tooLarge(Buffer.byteLength(serialized, 'utf8'))) return reject()
+      return originalJson(value)
+    }) as Response['json']
+
+    res.send = ((value: unknown): Response => {
+      if (rejecting) return originalSend(value as never)
+      if (rejected) return res
+      let byteLength: number
+      if (typeof value === 'string') byteLength = Buffer.byteLength(value, 'utf8')
+      else if (Buffer.isBuffer(value) || value instanceof Uint8Array) byteLength = value.byteLength
+      else byteLength = Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8')
+      if (tooLarge(byteLength)) return reject()
+      return originalSend(value as never)
+    }) as Response['send']
+
+    res.end = ((chunk?: unknown, encoding?: unknown, callback?: unknown): Response => {
+      if (rejecting) {
+        return originalEnd(
+          chunk as never,
+          encoding as never,
+          callback as never
+        ) as unknown as Response
+      }
+      if (rejected) return res
+      if (chunk != null) {
+        const byteLength = responseChunkByteLength(chunk, encoding)
+        if (tooLarge(byteLength)) return reject()
+      }
+      return originalEnd(
+        chunk as never,
+        encoding as never,
+        callback as never
+      ) as unknown as Response
+    }) as Response['end']
+
+    next()
+  }
 }
 
 /**
  * Convert body-parser/Express parser failures into stable, non-sensitive
  * protocol errors. Install immediately after all body parsers.
  */
-export function bodyParserErrorHandler (
+export function bodyParserErrorHandler(
   error: unknown,
   _req: Request,
   res: Response,
@@ -466,15 +653,14 @@ export function bodyParserErrorHandler (
  * unbounded in-flight application work. Distributed/global quotas remain the
  * responsibility of the deployment's shared rate-limit store or gateway.
  */
-export function concurrencyLimit (
-  environmentPrefix: string,
-  fallback: number
-): RequestHandler {
-  const maximum = readPositiveInteger(
-    `${environmentPrefix}_MAX_CONCURRENT_REQUESTS`,
+export function concurrencyLimit(environmentPrefix: string, fallback: number): RequestHandler {
+  const maximum = readResourceLimit(
+    environmentPrefix,
+    'MAX_CONCURRENT_REQUESTS',
     fallback,
     MAX_CONCURRENT_REQUESTS
   )
+  if (maximum === -1) return (_req, _res, next) => next()
   let active = 0
 
   return (_req: Request, res: Response, next: NextFunction): void => {
@@ -501,7 +687,7 @@ export function concurrencyLimit (
   }
 }
 
-export function configureHttpServer (
+export function configureHttpServer(
   server: Server,
   environmentPrefix: string,
   defaults: HttpServerPolicyDefaults
@@ -535,6 +721,13 @@ export function configureHttpServer (
     defaults.maxRequestsPerSocket,
     1_000_000
   )
+  const maxConnections = readResourceLimit(
+    environmentPrefix,
+    'MAX_CONNECTIONS',
+    defaults.maxConnections ?? 1_000,
+    1_000_000
+  )
+  server.maxConnections = maxConnections === -1 ? Number.MAX_SAFE_INTEGER : maxConnections
   if (typeof server.setTimeout === 'function') {
     server.setTimeout(socketTimeoutMs)
   }

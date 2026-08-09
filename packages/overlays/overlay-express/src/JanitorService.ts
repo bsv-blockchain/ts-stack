@@ -20,6 +20,10 @@ export interface JanitorConfig {
    * development environments. Never enable this on an internet-facing node.
    */
   allowPrivateHosts?: boolean
+  /** Mongo cursor batch size. This controls retained scan memory, not coverage. */
+  batchSize?: number
+  /** Maximum detailed results retained in a report. Use -1 to retain all results. */
+  maxReportResults?: number
 }
 
 /**
@@ -49,6 +53,7 @@ export interface JanitorReport {
   durationMs: number
   shipResults: HostHealthResult[]
   slapResults: HostHealthResult[]
+  resultsTruncated: boolean
   summary: {
     totalChecked: number
     healthy: number
@@ -74,6 +79,8 @@ export class JanitorService {
   private readonly banService?: BanService
   private readonly autoBanOnRemoval: boolean
   private readonly allowPrivateHosts: boolean
+  private readonly batchSize: number
+  private readonly maxReportResults: number
 
   constructor (config: JanitorConfig) {
     this.mongoDb = config.mongoDb
@@ -83,6 +90,14 @@ export class JanitorService {
     this.banService = config.banService
     this.autoBanOnRemoval = config.autoBanOnRemoval ?? true
     this.allowPrivateHosts = config.allowPrivateHosts ?? false
+    this.batchSize = config.batchSize ?? 250
+    this.maxReportResults = config.maxReportResults ?? 1000
+    if (this.batchSize !== -1 && (!Number.isSafeInteger(this.batchSize) || this.batchSize < 1)) {
+      throw new TypeError('Janitor batchSize must be a positive integer or -1')
+    }
+    if (this.maxReportResults !== -1 && (!Number.isSafeInteger(this.maxReportResults) || this.maxReportResults < 1)) {
+      throw new TypeError('Janitor maxReportResults must be a positive integer or -1')
+    }
   }
 
   /**
@@ -97,17 +112,26 @@ export class JanitorService {
     let slapResults: HostHealthResult[] = []
     let removed = 0
     let banned = 0
+    let totalChecked = 0
+    let healthy = 0
+    let unhealthy = 0
 
     try {
       const shipCheckResult = await this.checkTopicOutputs('shipRecords', 'topic')
       shipResults = shipCheckResult.results
       removed += shipCheckResult.removed
       banned += shipCheckResult.banned
+      totalChecked += shipCheckResult.checked
+      healthy += shipCheckResult.healthy
+      unhealthy += shipCheckResult.unhealthy
 
       const slapCheckResult = await this.checkTopicOutputs('slapRecords', 'service')
       slapResults = slapCheckResult.results
       removed += slapCheckResult.removed
       banned += slapCheckResult.banned
+      totalChecked += slapCheckResult.checked
+      healthy += slapCheckResult.healthy
+      unhealthy += slapCheckResult.unhealthy
 
       this.logger.log(chalk.green('Janitor health checks completed'))
     } catch (error) {
@@ -116,17 +140,17 @@ export class JanitorService {
     }
 
     const completedAt = new Date()
-    const allResults = [...shipResults, ...slapResults]
     return {
       startedAt,
       completedAt,
       durationMs: completedAt.getTime() - startedAt.getTime(),
       shipResults,
       slapResults,
+      resultsTruncated: totalChecked > shipResults.length + slapResults.length,
       summary: {
-        totalChecked: allResults.length,
-        healthy: allResults.filter(r => r.healthy).length,
-        unhealthy: allResults.filter(r => !r.healthy).length,
+        totalChecked,
+        healthy,
+        unhealthy,
         removed,
         banned
       }
@@ -205,9 +229,18 @@ export class JanitorService {
     const shipCollection = this.mongoDb.collection('shipRecords')
     const slapCollection = this.mongoDb.collection('slapRecords')
 
+    const readStatusRecords = async (collection: any): Promise<Record<string, any>[]> => {
+      let cursor = collection.find({})
+      if (this.maxReportResults !== -1 && typeof cursor.limit === 'function') {
+        cursor = cursor.limit(this.maxReportResults)
+      }
+      const records = await cursor.toArray()
+      return this.maxReportResults === -1 ? records : records.slice(0, this.maxReportResults)
+    }
+
     const [shipOutputs, slapOutputs] = await Promise.all([
-      shipCollection.find({}).toArray(),
-      slapCollection.find({}).toArray()
+      readStatusRecords(shipCollection),
+      readStatusRecords(slapCollection)
     ])
 
     const shipResults: HostHealthResult[] = shipOutputs.map(output => ({
@@ -241,23 +274,51 @@ export class JanitorService {
   private async checkTopicOutputs (
     collectionName: string,
     typeField: 'topic' | 'service'
-  ): Promise<{ results: HostHealthResult[], removed: number, banned: number }> {
+  ): Promise<{
+      results: HostHealthResult[]
+      checked: number
+      healthy: number
+      unhealthy: number
+      removed: number
+      banned: number
+    }> {
     const results: HostHealthResult[] = []
+    let checked = 0
+    let healthy = 0
+    let unhealthy = 0
     let removed = 0
     let banned = 0
 
     try {
       const collection = this.mongoDb.collection(collectionName)
-      const outputs = await collection.find({}).toArray()
+      let cursor: any = collection.find({})
+      if (this.batchSize !== -1 && typeof cursor.batchSize === 'function') {
+        cursor = cursor.batchSize(this.batchSize)
+      }
 
-      this.logger.log(chalk.cyan(`Checking ${outputs.length} ${collectionName} outputs...`))
+      this.logger.log(chalk.cyan(`Checking ${collectionName} outputs in bounded batches...`))
 
-      for (const output of outputs) {
+      const processOutput = async (output: Record<string, any>): Promise<void> => {
         const result = await this.checkOutput(output, collection, typeField)
-        results.push(result)
+        checked++
+        if (result.healthy) healthy++
+        else unhealthy++
+        if (this.maxReportResults === -1 || results.length < this.maxReportResults) {
+          results.push(result)
+        }
         if (result.error === 'REMOVED') {
           removed++
         }
+      }
+
+      if (cursor?.[Symbol.asyncIterator] !== undefined) {
+        for await (const output of cursor as AsyncIterable<Record<string, any>>) {
+          await processOutput(output)
+        }
+      } else {
+        // Compatibility for lightweight Mongo-compatible adapters and test doubles.
+        const outputs = await cursor.toArray()
+        for (const output of outputs) await processOutput(output)
       }
 
       // Count auto-bans that happened during this run
@@ -268,7 +329,7 @@ export class JanitorService {
       this.logger.error(chalk.red(`Error checking ${collectionName} outputs:`), error)
     }
 
-    return { results, removed, banned }
+    return { results, checked, healthy, unhealthy, removed, banned }
   }
 
   /**

@@ -54,6 +54,9 @@ BSV_NETWORK=mainnet
 WALLET_STORAGE_URL=https://storage.example.com
 MESSAGE_BOX_CORS_MODE=public
 TRUST_PROXY_HOPS=1
+MESSAGE_BOX_DB_DEADLOCK_RETRIES=5
+MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS=10
+MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS=250
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example.com
 ```
 
@@ -93,7 +96,7 @@ backward-compatible with the prior application version.
 
 ## Probes
 
-- `GET /health` — liveness; does not authenticate or disclose dependencies
+- `GET /healthz` — liveness; does not authenticate or disclose dependencies
 - `GET /ready` — database readiness; returns 503 while unavailable
 
 Gate traffic on readiness. Add an authenticated WebSocket handshake probe when
@@ -115,6 +118,14 @@ At multiple replicas, the default in-memory rate-limit store is per process.
 Enforce an aggregate policy at the trusted ingress or configure a shared store.
 WebSocket routing is also process-local; use sticky sessions or an
 authenticated shared broker.
+
+Message writes create missing quota-lock rows in a short autocommit, then lock
+the existing rows in stable order inside the message transaction. MySQL and
+PXC serialization conflicts are retried with bounded exponential backoff.
+Alert on sustained `message.store.retry` warnings: occasional retries are an
+expected database concurrency signal, while exhausted retries indicate
+database contention or capacity pressure. Set `MESSAGE_BOX_DB_DEADLOCK_RETRIES`
+to `0` only when the database layer already provides equivalent retry handling.
 
 `SIGTERM` and `SIGINT` first disconnect authenticated WebSockets, then drain
 HTTP, close the database pool, and flush telemetry. Set a termination grace
@@ -140,7 +151,7 @@ payment payloads, or plaintext message content.
 
 1. Deploy the immutable image to a canary or staging environment.
 2. Confirm migrations completed.
-3. Confirm `/health` and `/ready`.
+3. Confirm `/healthz` and `/ready`.
 4. Exercise authenticated send, list, and acknowledge.
 5. Exercise an authenticated WebSocket send when enabled.
 6. Verify public/default or allowlisted browser access as configured.

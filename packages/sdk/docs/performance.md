@@ -1,5 +1,42 @@
 # Performance Benchmarks
 
+## Batched proven-transaction BEEF assembly (August 2026)
+
+Wallets with fragmented funding can require more than one hundred independent
+transactions and Merkle proofs in a single Atomic BEEF. `Beef.mergeProvenTxs`
+batches mutation synchronization, groups proofs by block/root, validates each
+compound proof once, and reuses shared intermediate hashes. The final BEEF is
+byte-equivalent to sequential validated merges.
+
+This optimization is exercised by Wallet Toolbox's retained
+`bench:create-action-beef` workload. On a selective production-shaped PXC
+database copy, the 110-input direct storage path improved from approximately
+1.03 s before batched proof work to 77.8 ms p50 and 151.2 ms p95 across five
+samples. Results depend on proof shape, database locality, and host resources.
+
+`KeyDeriver.derivePrivateKeys` provides the corresponding fragmented-signing
+lane: requests are grouped by counterparty, the BRC-42 shared secret is derived
+or retrieved once per group, and every invoice-specific HMAC and child scalar
+retains the same single-key derivation semantics and bytes.
+
+## Repeated BEEF dependency sorting (August 2026)
+
+Wallet transaction creation can ask the same unchanged BEEF for its dependency
+order more than once while preparing known transaction IDs, merging proofs, and
+serializing the final result. The mutation-aware sort cache retains the public
+ordering while avoiding another complete graph partition and topological sort.
+
+```bash
+BEEF_SORT_TXS=20000 node benchmarks/beef-sort-cache-bench.js
+```
+
+Against unmodified commit `c212b5ee7`, seven same-host samples on Apple Silicon
+with Node.js v24.18.0 produced a 235.86 ms median for 50 unchanged sorts. The
+optimized build took 9.72 ms after validating directly reachable dependency
+state, a 24.3x improvement. The cold sort remained about
+7–8 ms; transaction or proof mutation invalidates the cache, and callers receive
+new result arrays so consumer mutation cannot alter the cached order.
+
 ## Transaction and BEEF pipeline (July 2026)
 
 The transaction pipeline benchmark uses built ESM artifacts and is intentionally runnable against another build through `SDK_DIST_ROOT`. Measurements below were taken on the same Apple Silicon host with Node.js v25.9.0. Each comparison uses identical generated transactions and benchmark code.

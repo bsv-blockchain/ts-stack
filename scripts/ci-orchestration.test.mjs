@@ -8,6 +8,10 @@ import { REPOSITORY_ROOT } from './repository-health.mjs'
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 const CONFORMANCE_PATH = join(REPOSITORY_ROOT, '.github/workflows/conformance.yml')
 const RUNTIME_PATH = join(REPOSITORY_ROOT, '.github/workflows/container-runtime-contract.yml')
+const WALLET_MOBILE_COVERAGE_PATH = join(
+  REPOSITORY_ROOT,
+  'packages/wallet/wallet-toolbox/mobile/vitest.config.ts'
+)
 
 function workflowJobBlocks(workflow) {
   const jobsMarker = '\njobs:\n'
@@ -74,6 +78,18 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
   assert.equal(workflow.match(/mongodb-memory-server binary cache warmed/g)?.length, 2)
 })
 
+test('CI contributes mobile and type-only wallet surfaces to aggregate patch coverage', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const mobileCoverage = readFileSync(WALLET_MOBILE_COVERAGE_PATH, 'utf8')
+
+  assert.match(workflow, /pnpm --filter @bsv\/wallet-toolbox-mobile run test:coverage/)
+  assert.match(workflow, /name: coverage-wallet-mobile/)
+  assert.match(workflow, /^      - wallet-mobile-platform$/m)
+  for (const source of ['index.mobile.ts', 'BulkIngestorApi.ts', 'ChaintracksClientApi.ts']) {
+    assert.ok(mobileCoverage.includes(source), `${source} must be present in mobile LCOV`)
+  }
+})
+
 test('CI push jobs survive intentionally skipped pull-request-only gates', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
@@ -103,11 +119,12 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
 })
 
-test('specialized workflows are scoped and bounded', () => {
+test('specialized workflows are bounded and required conformance checks always run on PRs', () => {
   const conformance = readFileSync(CONFORMANCE_PATH, 'utf8')
   const runtime = readFileSync(RUNTIME_PATH, 'utf8')
 
-  assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 2)
+  assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 1)
+  assert.match(conformance, /^  pull_request:\n    branches: \[main\]\n\nconcurrency:/m)
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)

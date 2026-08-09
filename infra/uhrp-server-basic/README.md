@@ -2,6 +2,9 @@
 
 For simple folk
 
+See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
+for list, upload, retention, cache, response, and connection ceilings.
+
 ## Request limits and trusted proxies
 
 Post-authentication routes use two rate-limit stages: 300 requests per minute

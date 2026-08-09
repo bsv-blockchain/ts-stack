@@ -7,7 +7,12 @@ import { validateAgainstDirtyHashes } from './util/dirtyHashes'
 import { ChaintracksOptions, ChaintracksManagementApi } from './Api/ChaintracksApi'
 import { blockHash, validateHeaderFormat } from './util/blockHeaderUtilities'
 import { Chain } from '../../../sdk/types'
-import { ChaintracksInfoApi, HeaderListener, ReorgListener } from './Api/ChaintracksClientApi'
+import {
+  ChaintracksInfoApi,
+  ChaintracksSourceStatusApi,
+  HeaderListener,
+  ReorgListener
+} from './Api/ChaintracksClientApi'
 import { BaseBlockHeader, BlockHeader, LiveBlockHeader } from './Api/BlockHeaderApi'
 import { asString } from '../../../utility/utilityHelpers.noBuffer'
 import { HeightRange, HeightRanges } from './util/HeightRange'
@@ -16,7 +21,7 @@ import { ChaintracksFsApi } from './Api/ChaintracksFsApi'
 import { randomBytesBase64, wait } from '../../../utility/utilityHelpers'
 import { WalletError } from '../../../sdk/WalletError'
 export class Chaintracks implements ChaintracksManagementApi {
-  static createOptions (chain: Chain): ChaintracksOptions {
+  static createOptions(chain: Chain): ChaintracksOptions {
     return {
       chain,
       storage: undefined,
@@ -37,7 +42,10 @@ export class Chaintracks implements ChaintracksManagementApi {
   // Collection of all long running "threads": main thread (liveHeaders consumer / monitor) and each live header ingestor.
   private readonly promises: Array<Promise<void>> = []
 
-  private readonly callbacks: { header: Record<string, HeaderListener | null>, reorg: Record<string, ReorgListener | null> } = { header: {}, reorg: {} }
+  private readonly callbacks: {
+    header: Record<string, HeaderListener | null>
+    reorg: Record<string, ReorgListener | null>
+  } = { header: {}, reorg: {} }
   private readonly storage: ChaintracksStorageApi
   private readonly bulkIngestors: BulkIngestorApi[]
   private readonly liveIngestors: LiveIngestorApi[]
@@ -52,21 +60,34 @@ export class Chaintracks implements ChaintracksManagementApi {
   private subscriberCallbacksEnabled = false
   private stopMainThread = true
 
-  private lastPresentHeight = 0
+  private lastPresentHeight = -1
   private lastPresentHeightMsecs = 0
   private readonly lastPresentHeightMaxAge = 60 * 1000 // 1 minute, in milliseconds
 
   private readonly lock = new SingleWriterMultiReaderLock()
+  private readonly sourceStatus = new Map<string, ChaintracksSourceStatusApi>()
 
-  constructor (public options: ChaintracksOptions) {
+  constructor(public options: ChaintracksOptions) {
     if (options.storage == null) throw new Error('storage is required.')
-    if (!options.bulkIngestors || options.bulkIngestors.length < 1) { throw new Error('At least one bulk ingestor is required.') }
-    if (!options.liveIngestors || options.liveIngestors.length < 1) { throw new Error('At least one live ingestor is required.') }
+    if (!options.bulkIngestors || options.bulkIngestors.length < 1) {
+      throw new Error('At least one bulk ingestor is required.')
+    }
+    if (!options.liveIngestors || options.liveIngestors.length < 1) {
+      throw new Error('At least one live ingestor is required.')
+    }
     this.chain = options.chain
     this.readonly = options.readonly
     this.storage = options.storage
     this.bulkIngestors = options.bulkIngestors
     this.liveIngestors = options.liveIngestors
+    for (const [index, source] of this.bulkIngestors.entries()) {
+      const name = this.sourceName('bulk', index, source)
+      this.sourceStatus.set(name, { name, role: 'bulk', state: 'unknown' })
+    }
+    for (const [index, source] of this.liveIngestors.entries()) {
+      const name = this.sourceName('live', index, source)
+      this.sourceStatus.set(name, { name, role: 'live', state: 'unknown' })
+    }
 
     this.addLiveRecursionLimit = options.addLiveRecursionLimit
 
@@ -76,7 +97,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     this.log(`New ChaintracksBase Instance Constructed ${options.chain}Net`)
   }
 
-  async getChain (): Promise<Chain> {
+  async getChain(): Promise<Chain> {
     return this.chain
   }
 
@@ -84,44 +105,61 @@ export class Chaintracks implements ChaintracksManagementApi {
    * Caches and returns most recently sourced value if less than one minute old.
    * @returns the current externally available chain height (via bulk ingestors).
    */
-  async getPresentHeight (): Promise<number> {
+  async getPresentHeight(): Promise<number> {
     const now = Date.now()
-    if (this.lastPresentHeight && now - this.lastPresentHeightMsecs < this.lastPresentHeightMaxAge) {
+    if (this.lastPresentHeight >= 0 && now - this.lastPresentHeightMsecs < this.lastPresentHeightMaxAge) {
       return this.lastPresentHeight
     }
-    const presentHeights: number[] = []
-    for (const bulk of this.bulkIngestors) {
+    for (const [index, bulk] of this.bulkIngestors.entries()) {
+      const source = this.sourceName('bulk', index, bulk)
       try {
         const presentHeight = await bulk.getPresentHeight()
-        if (presentHeight) presentHeights.push(presentHeight)
+        if (presentHeight != null && Number.isInteger(presentHeight) && presentHeight >= 0) {
+          this.markSourceSuccess(source, 'bulk')
+          this.lastPresentHeight = presentHeight
+          this.lastPresentHeightMsecs = now
+          return presentHeight
+        }
       } catch (uerr: unknown) {
-        console.error(uerr)
+        const error = WalletError.fromUnknown(uerr)
+        this.markSourceFailure(source, 'bulk', error)
+        this.log(`Present-height source ${source} failed: ${error.message}`)
       }
     }
-    const presentHeight = (presentHeights.length > 0) ? Math.max(...presentHeights) : undefined
-    if (!presentHeight) throw new Error('At least one bulk ingestor must implement getPresentHeight.')
-    this.lastPresentHeight = presentHeight
-    this.lastPresentHeightMsecs = now
-    return presentHeight
+
+    // A provider outage must not make an already synchronized tracker unusable.
+    if (this.lastPresentHeight >= 0) return this.lastPresentHeight
+    try {
+      const ranges = await this.storage.getAvailableHeightRanges()
+      const localHeight = Math.max(ranges.bulk.maxHeight, ranges.live.maxHeight)
+      if (localHeight >= 0) {
+        this.lastPresentHeight = localHeight
+        this.lastPresentHeightMsecs = now
+        return localHeight
+      }
+    } catch (error: unknown) {
+      this.log(`Unable to read the locally validated ChainTracks height: ${WalletError.fromUnknown(error).message}`)
+    }
+    throw new Error('No present-height source or locally validated headers are available.')
   }
 
-  async currentHeight (): Promise<number> {
+  async currentHeight(): Promise<number> {
     return await this.getPresentHeight()
   }
 
-  async subscribeHeaders (listener: HeaderListener): Promise<string> {
+  async subscribeHeaders(listener: HeaderListener): Promise<string> {
     const ID = randomBytesBase64(8)
     this.callbacks.header[ID] = listener
     return ID
   }
 
-  async subscribeReorgs (listener: ReorgListener): Promise<string> {
+  async subscribeReorgs(listener: ReorgListener): Promise<string> {
     const ID = randomBytesBase64(8)
     this.callbacks.reorg[ID] = listener
     return ID
   }
 
-  async unsubscribe (subscriptionId: string): Promise<boolean> {
+  async unsubscribe(subscriptionId: string): Promise<boolean> {
     let success = true
     if (this.callbacks.header[subscriptionId]) this.callbacks.header[subscriptionId] = null
     else if (this.callbacks.reorg[subscriptionId]) this.callbacks.reorg[subscriptionId] = null
@@ -138,7 +176,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * @param header
    */
-  async addHeader (header: BaseBlockHeader): Promise<void> {
+  async addHeader(header: BaseBlockHeader): Promise<void> {
     this.baseHeaders.push(header)
   }
 
@@ -151,7 +189,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * @returns when available for client requests
    */
-  async makeAvailable (): Promise<void> {
+  async makeAvailable(): Promise<void> {
     if (this.available) return
     await this.lock.withWriteLock(async () => {
       // Only the first call proceeds to initialize...
@@ -163,13 +201,15 @@ export class Chaintracks implements ChaintracksManagementApi {
 
       // Start all live ingestors to push new headers onto liveHeaders... each long running.
       this.stopMainThread = false
-      for (const liveIngestor of this.liveIngestors) this.promises.push(this.runLiveIngestor(liveIngestor))
+      for (const [index, liveIngestor] of this.liveIngestors.entries()) {
+        this.promises.push(this.runLiveIngestor(liveIngestor, index))
+      }
 
       // Start mai loop to shift out liveHeaders...once sync'd, will set `available` true.
       this.promises.push(this.mainThreadShiftLiveHeaders())
 
       // Wait for the main thread to finish initial sync.
-      while (!this.available && (this.startupError == null)) {
+      while (!this.available && this.startupError == null) {
         await wait(100)
       }
 
@@ -177,11 +217,11 @@ export class Chaintracks implements ChaintracksManagementApi {
     })
   }
 
-  async startPromises (): Promise<void> {
+  async startPromises(): Promise<void> {
     if (this.promises.length > 0 || !this.stopMainThread) return
   }
 
-  async destroy (): Promise<void> {
+  async destroy(): Promise<void> {
     if (!this.available) return
     await this.lock.withWriteLock(async () => {
       if (!this.available || this.stopMainThread) return
@@ -197,16 +237,18 @@ export class Chaintracks implements ChaintracksManagementApi {
     })
   }
 
-  async listening (): Promise<void> {
+  async listening(): Promise<void> {
     return await this.makeAvailable()
   }
 
-  private async runLiveIngestor (liveIngestor: LiveIngestorApi): Promise<void> {
+  private async runLiveIngestor(liveIngestor: LiveIngestorApi, index: number): Promise<void> {
     let restartCount = 0
     const name = liveIngestor.constructor.name
+    const source = this.sourceName('live', index, liveIngestor)
 
     while (!this.stopMainThread) {
       try {
+        this.markSourceSuccess(source, 'live')
         await liveIngestor.startListening(this.liveHeaders)
         if (this.stopMainThread) return
         restartCount++
@@ -217,57 +259,60 @@ export class Chaintracks implements ChaintracksManagementApi {
         if (this.stopMainThread) return
         restartCount++
         const e = WalletError.fromUnknown(error_)
+        this.markSourceFailure(source, 'live', e)
         const waitMsecs = this.liveIngestorRestartWaitMsecs(restartCount)
-        this.log(`Live ingestor ${name} failed restart=${restartCount} retryMsecs=${waitMsecs}: ${e.stack ?? e.message}`)
+        this.log(
+          `Live ingestor ${name} failed restart=${restartCount} retryMsecs=${waitMsecs}: ${e.stack ?? e.message}`
+        )
         await wait(waitMsecs)
       }
     }
   }
 
-  private liveIngestorRestartWaitMsecs (restartCount: number): number {
+  private liveIngestorRestartWaitMsecs(restartCount: number): number {
     return Math.min(1000 * Math.min(2 ** Math.max(restartCount - 1, 0), 60), 60000)
   }
 
-  async isListening (): Promise<boolean> {
+  async isListening(): Promise<boolean> {
     return this.available
   }
 
-  async isSynchronized (): Promise<boolean> {
+  async isSynchronized(): Promise<boolean> {
     await this.makeAvailable()
     return true
   }
 
-  async findHeaderForHeight (height: number): Promise<BlockHeader | undefined> {
+  async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.findHeaderForHeightNoLock(height))
   }
 
-  private async findHeaderForHeightNoLock (height: number): Promise<BlockHeader | undefined> {
+  private async findHeaderForHeightNoLock(height: number): Promise<BlockHeader | undefined> {
     return await this.storage.findHeaderForHeightOrUndefined(height)
   }
 
-  async findHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> {
+  async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.findHeaderForBlockHashNoLock(hash))
   }
 
-  private async findHeaderForBlockHashNoLock (hash: string): Promise<BlockHeader | undefined> {
+  private async findHeaderForBlockHashNoLock(hash: string): Promise<BlockHeader | undefined> {
     return (await this.storage.findLiveHeaderForBlockHash(hash)) || undefined
   }
 
-  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
     const r = await this.findHeaderForHeight(height)
     if (r == null) return false
     const isValid = root === r.merkleRoot
     return isValid
   }
 
-  async getInfo (): Promise<ChaintracksInfoApi> {
+  async getInfo(): Promise<ChaintracksInfoApi> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.getInfoNoLock())
   }
 
-  private async getInfoNoLock (): Promise<ChaintracksInfoApi> {
+  private async getInfoNoLock(): Promise<ChaintracksInfoApi> {
     const liveRange = await this.storage.findLiveHeightRange()
     const info: ChaintracksInfoApi = {
       chain: this.chain,
@@ -276,33 +321,34 @@ export class Chaintracks implements ChaintracksManagementApi {
       storage: this.storage.constructor.name,
       bulkIngestors: this.bulkIngestors.map(bulkIngestor => bulkIngestor.constructor.name),
       liveIngestors: this.liveIngestors.map(liveIngestor => liveIngestor.constructor.name),
-      packages: []
+      packages: [],
+      sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status }))
     }
     return info
   }
 
-  async getHeaders (height: number, count: number): Promise<string> {
+  async getHeaders(height: number, count: number): Promise<string> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => asString(await this.storage.getHeadersUint8Array(height, count)))
   }
 
-  async findChainTipHeader (): Promise<BlockHeader> {
+  async findChainTipHeader(): Promise<BlockHeader> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.storage.findChainTipHeader())
   }
 
-  async findChainTipHash (): Promise<string> {
+  async findChainTipHash(): Promise<string> {
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.storage.findChainTipHash())
   }
 
-  async findLiveHeaderForBlockHash (hash: string): Promise<LiveBlockHeader | undefined> {
+  async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined> {
     await this.makeAvailable()
     const header = await this.lock.withReadLock(async () => await this.storage.findLiveHeaderForBlockHash(hash))
     return header || undefined
   }
 
-  async findChainWorkForBlockHash (hash: string): Promise<string | undefined> {
+  async findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
     const header = await this.findLiveHeaderForBlockHash(hash)
     return header?.chainWork
   }
@@ -310,7 +356,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   /**
    * @returns true iff all headers from height zero through current chainTipHeader height can be retreived and form a valid chain.
    */
-  async validate (): Promise<boolean> {
+  async validate(): Promise<boolean> {
     let h = await this.findChainTipHeader()
     while (h.height > 0) {
       const hp = await this.findHeaderForHeight(h.height - 1)
@@ -322,7 +368,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     return true
   }
 
-  async exportBulkHeaders (
+  async exportBulkHeaders(
     toFolder: string,
     toFs: ChaintracksFsApi,
     sourceUrl?: string,
@@ -334,15 +380,15 @@ export class Chaintracks implements ChaintracksManagementApi {
     await bulk.exportHeadersToFs(toFs, toHeadersPerFile, toFolder, sourceUrl, maxHeight)
   }
 
-  async startListening (): Promise<void> {
+  async startListening(): Promise<void> {
     this.makeAvailable()
   }
 
-  private async syncBulkStorage (presentHeight: number, initialRanges: HeightRanges): Promise<void> {
+  private async syncBulkStorage(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     await this.lock.withWriteLock(async () => await this.syncBulkStorageNoLock(presentHeight, initialRanges))
   }
 
-  private async syncBulkStorageNoLock (presentHeight: number, initialRanges: HeightRanges): Promise<void> {
+  private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     let newLiveHeaders: BlockHeader[] = []
     let before = initialRanges
     let after = before
@@ -359,11 +405,15 @@ export class Chaintracks implements ChaintracksManagementApi {
       if (this.startupError != null) break
       if (result.done) break
       if (!result.madeProgress) {
-        this.log(`Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`)
+        this.log(
+          `Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`
+        )
         break
       }
       if (round === maxSyncRounds) {
-        this.log(`Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`)
+        this.log(
+          `Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`
+        )
       }
     }
 
@@ -379,57 +429,98 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
   }
 
-  private async runBulkSyncRound (
+  private async runBulkSyncRound(
     before: HeightRanges,
     presentHeight: number,
     newLiveHeaders: BlockHeader[]
-  ): Promise<{ after: HeightRanges, newLiveHeaders: BlockHeader[], done: boolean, madeProgress: boolean }> {
+  ): Promise<{ after: HeightRanges; newLiveHeaders: BlockHeader[]; done: boolean; madeProgress: boolean }> {
     let after = before
     let bulkSyncError: WalletError | undefined
     let madeProgress = false
     let hadSuccess = false
     let done = false
 
-    for (const bulk of this.bulkIngestors) {
+    for (const [index, bulk] of this.bulkIngestors.entries()) {
+      const source = this.sourceName('bulk', index, bulk)
       try {
         const beforeBulkMax = before.bulk.maxHeight
         const beforeLiveRange = HeightRange.from(newLiveHeaders)
         const r = await bulk.synchronize(presentHeight, before, newLiveHeaders)
         hadSuccess = true
+        this.markSourceSuccess(source, 'bulk')
 
         newLiveHeaders = r.liveHeaders
         after = await this.storage.getAvailableHeightRanges()
         const added = after.bulk.above(before.bulk)
         const afterLiveRange = HeightRange.from(newLiveHeaders)
-        if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight) madeProgress = true
+        if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight)
+          madeProgress = true
         before = after
-        this.log(`Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`)
-        if (r.done) { done = true; break }
+        this.log(
+          `Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`
+        )
+        if (r.done) {
+          done = true
+          break
+        }
       } catch (error_: unknown) {
         const e = (bulkSyncError = WalletError.fromUnknown(error_))
+        this.markSourceFailure(source, 'bulk', e)
         this.log(`bulk sync error: ${e.message}`)
-        // During initial startup, bulk ingestors must be available.
-        if (!this.available) break
       }
     }
 
-    if (!this.available && (bulkSyncError != null) && !hadSuccess) this.startupError = bulkSyncError
+    if (!this.available && bulkSyncError != null && !hadSuccess) this.startupError = bulkSyncError
     return { after, newLiveHeaders, done, madeProgress }
   }
 
-  private async getMissingBlockHeader (hash: string): Promise<BlockHeader | undefined> {
-    for (const live of this.liveIngestors) {
-      const header = await live.getHeaderByHash(hash)
-      if (header != null) return header
+  private sourceName(role: 'bulk' | 'live', index: number, source: object): string {
+    return `${role}[${index}]:${source.constructor.name}`
+  }
+
+  private markSourceSuccess(name: string, role: 'bulk' | 'live'): void {
+    this.sourceStatus.set(name, {
+      ...this.sourceStatus.get(name),
+      name,
+      role,
+      state: 'healthy',
+      lastSuccess: new Date().toISOString(),
+      error: undefined
+    })
+  }
+
+  private markSourceFailure(name: string, role: 'bulk' | 'live', error: Error): void {
+    this.sourceStatus.set(name, {
+      ...this.sourceStatus.get(name),
+      name,
+      role,
+      state: 'degraded',
+      lastFailure: new Date().toISOString(),
+      error: error.message
+    })
+  }
+
+  private async getMissingBlockHeader(hash: string): Promise<BlockHeader | undefined> {
+    for (const [index, live] of this.liveIngestors.entries()) {
+      const source = this.sourceName('live', index, live)
+      try {
+        const header = await live.getHeaderByHash(hash)
+        this.markSourceSuccess(source, 'live')
+        if (header != null) return header
+      } catch (error: unknown) {
+        const resolved = WalletError.fromUnknown(error)
+        this.markSourceFailure(source, 'live', resolved)
+        this.log(`Header lookup source ${source} failed: ${resolved.message}`)
+      }
     }
     return undefined
   }
 
-  private invalidInsertHeaderResult (ihr: InsertHeaderResult): boolean {
+  private invalidInsertHeaderResult(ihr: InsertHeaderResult): boolean {
     return ihr.noActiveAncestor || ihr.noTip || ihr.badPrev
   }
 
-  private async addLiveHeader (header: BlockHeader): Promise<InsertHeaderResult> {
+  private async addLiveHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     validateHeaderFormat(header)
     validateAgainstDirtyHashes(header.hash)
 
@@ -441,7 +532,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
     if (this.subscriberCallbacksEnabled && ihr.added && ihr.isActiveTip) {
       this.notifyHeaderListeners(header)
-      if (ihr.reorgDepth > 0 && (ihr.priorTip != null)) {
+      if (ihr.reorgDepth > 0 && ihr.priorTip != null) {
         this.notifyReorgListeners(ihr, header)
       }
     }
@@ -449,22 +540,30 @@ export class Chaintracks implements ChaintracksManagementApi {
     return ihr
   }
 
-  private notifyHeaderListeners (header: BlockHeader): void {
+  private notifyHeaderListeners(header: BlockHeader): void {
     for (const id in this.callbacks.header) {
       const listener = this.callbacks.header[id]
       if (listener != null) {
-        try { listener(header) } catch { /* ignore all errors thrown */ }
+        try {
+          listener(header)
+        } catch {
+          /* ignore all errors thrown */
+        }
       }
     }
   }
 
-  private notifyReorgListeners (ihr: InsertHeaderResult, header: BlockHeader): void {
+  private notifyReorgListeners(ihr: InsertHeaderResult, header: BlockHeader): void {
     const priorTip: BlockHeader = { ...ihr.priorTip! }
     const deactivated: BlockHeader[] = ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
     for (const id in this.callbacks.reorg) {
       const listener = this.callbacks.reorg[id]
       if (listener != null) {
-        try { listener(ihr.reorgDepth, priorTip, header, deactivated) } catch { /* ignore all errors thrown */ }
+        try {
+          listener(ihr.reorgDepth, priorTip, header, deactivated)
+        } catch {
+          /* ignore all errors thrown */
+        }
       }
     }
   }
@@ -481,7 +580,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * Periodically CDN bulk ingestor is invoked to check if incremental headers can be migrated to CDN backed files.
    */
-  private async mainThreadShiftLiveHeaders (): Promise<void> {
+  private async mainThreadShiftLiveHeaders(): Promise<void> {
     this.stopMainThread = false
     let lastSyncCheck = 0
     let lastBulkSync = Date.now()
@@ -507,7 +606,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   /** Returns (potentially updated) lastBulkSync timestamp. */
-  private async runBulkSyncIfNeeded (now: number, lastBulkSync: number, cdnSyncRepeatMsecs: number): Promise<number> {
+  private async runBulkSyncIfNeeded(now: number, lastBulkSync: number, cdnSyncRepeatMsecs: number): Promise<number> {
     const presentHeight = await this.getPresentHeight()
     const before = await this.storage.getAvailableHeightRanges()
 
@@ -532,9 +631,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     return lastBulkSync
   }
 
-  private async processNextQueuedHeader (
-    stats: { count: number, liveHeaderDupes: number }
-  ): Promise<boolean | null> {
+  private async processNextQueuedHeader(stats: { count: number; liveHeaderDupes: number }): Promise<boolean | null> {
     const liveHeader = this.liveHeaders.shift()
     if (liveHeader != null) {
       const result = await this.processOneLiveHeader(liveHeader)
@@ -549,57 +646,46 @@ export class Chaintracks implements ChaintracksManagementApi {
     return false
   }
 
-  private async flushLiveHeaderProgress (
-    stats: { count: number, liveHeaderDupes: number }
-  ): Promise<void> {
+  private async flushLiveHeaderProgress(stats: { count: number; liveHeaderDupes: number }): Promise<void> {
     if (stats.count === 0) return
     if (stats.liveHeaderDupes > 0) {
       this.log(`${stats.liveHeaderDupes} duplicate headers ignored.`)
       stats.liveHeaderDupes = 0
     }
     const updated = await this.storage.getAvailableHeightRanges()
-    this.log(
-      `After adding ${stats.count} live headers\n   After live: bulk ${updated.bulk}, live ${updated.live}\n`
-    )
+    this.log(`After adding ${stats.count} live headers\n   After live: bulk ${updated.bulk}, live ${updated.live}\n`)
     stats.count = 0
   }
 
-  private async waitForQueuedHeaders (
-    stats: { count: number, liveHeaderDupes: number },
+  private async waitForQueuedHeaders(
+    stats: { count: number; liveHeaderDupes: number },
     lastSyncCheck: number,
     syncCheckRepeatMsecs: number
   ): Promise<boolean> {
     await this.flushLiveHeaderProgress(stats)
     await this.checkAndEnableSubscribers()
     if (!this.available) this.available = true
-    const needSyncCheck =
-      Date.now() - lastSyncCheck > syncCheckRepeatMsecs
+    const needSyncCheck = Date.now() - lastSyncCheck > syncCheckRepeatMsecs
     if (!needSyncCheck) await wait(1000)
     return needSyncCheck
   }
 
-  private async processLiveHeaderQueue (lastSyncCheck: number, syncCheckRepeatMsecs: number): Promise<void> {
+  private async processLiveHeaderQueue(lastSyncCheck: number, syncCheckRepeatMsecs: number): Promise<void> {
     const stats = { count: 0, liveHeaderDupes: 0 }
     let needSyncCheck = false
     while (!needSyncCheck && !this.stopMainThread) {
       const queuedResult = await this.processNextQueuedHeader(stats)
-      needSyncCheck =
-        queuedResult ??
-        (await this.waitForQueuedHeaders(
-          stats,
-          lastSyncCheck,
-          syncCheckRepeatMsecs
-        ))
+      needSyncCheck = queuedResult ?? (await this.waitForQueuedHeaders(stats, lastSyncCheck, syncCheckRepeatMsecs))
     }
   }
 
-  private formatIhrLog (prefix: string, header: BlockHeader, ihr: InsertHeaderResult): string {
+  private formatIhrLog(prefix: string, header: BlockHeader, ihr: InsertHeaderResult): string {
     return `${prefix} ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
   }
 
-  private async processOneLiveHeader (
+  private async processOneLiveHeader(
     startHeader: BlockHeader
-  ): Promise<{ needSyncCheck: boolean, dupe: boolean, added: boolean }> {
+  ): Promise<{ needSyncCheck: boolean; dupe: boolean; added: boolean }> {
     let header = startHeader
     let recursions = this.addLiveRecursionLimit
 
@@ -612,12 +698,16 @@ export class Chaintracks implements ChaintracksManagementApi {
       if (ihr.noPrev) {
         // Previous header is unknown; request it by hash from the network and try adding it first.
         if (recursions-- <= 0) {
-          this.log(`Ignoring liveHeader ${header.height} ${header.hash} addLiveRecursionLimit=${this.addLiveRecursionLimit} exceeded.`)
+          this.log(
+            `Ignoring liveHeader ${header.height} ${header.hash} addLiveRecursionLimit=${this.addLiveRecursionLimit} exceeded.`
+          )
           return { needSyncCheck: true, dupe: false, added: false }
         }
         const prevHeader = await this.getMissingBlockHeader(header.previousHash)
         if (prevHeader == null) {
-          this.log(`Ignoring liveHeader ${header.height} ${header.hash} failed to find previous header by hash ${asString(header.previousHash)}`)
+          this.log(
+            `Ignoring liveHeader ${header.height} ${header.hash} failed to find previous header by hash ${asString(header.previousHash)}`
+          )
           return { needSyncCheck: true, dupe: false, added: false }
         }
         // Retry adding prevHeader first; then re-queue current header.
@@ -631,7 +721,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     return { needSyncCheck: false, dupe: false, added: false }
   }
 
-  private async processOneBaseHeader (bheader: BaseBlockHeader): Promise<boolean> {
+  private async processOneBaseHeader(bheader: BaseBlockHeader): Promise<boolean> {
     const prev = await this.storage.findLiveHeaderForBlockHash(bheader.previousHash)
     if (prev == null) {
       // Unknown previous hash — ignore without triggering a re-sync.
@@ -648,7 +738,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     return ihr.added
   }
 
-  private async checkAndEnableSubscribers (): Promise<void> {
+  private async checkAndEnableSubscribers(): Promise<void> {
     if (this.subscriberCallbacksEnabled) return
     const live = await this.storage.findLiveHeightRange()
     if (!live.isEmpty) {

@@ -131,6 +131,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return true
   }
 
+  protected override requiresActionBatchCleanupBeforeCreateAction(): boolean {
+    return false
+  }
+
   /**
    * This method must be called at least once before any other method accesses the database,
    * and each time the schema may have updated.
@@ -203,10 +207,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 2, {
-      upgrade(db) {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 3, {
+      upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
+        const outputs = transaction.objectStore('outputs')
+        if (!outputs.indexNames.contains('userId_basketId')) {
+          outputs.createIndex('userId_basketId', ['userId', 'basketId'])
+        }
+        if (!outputs.indexNames.contains('txid_vout_userId')) {
+          outputs.createIndex('txid_vout_userId', ['txid', 'vout', 'userId'], { unique: true })
+        }
         if (!db.objectStoreNames.contains('settings')) {
           if (storageName == null || storageName === '' || storageIdentityKey == null || storageIdentityKey === '') {
             throw new WERR_INVALID_OPERATION('migrate must be called before first access')
@@ -324,6 +335,37 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return r
   }
 
+  override async getProvenOrRawTxs(txids: string[], trx?: TrxToken): Promise<Map<string, ProvenOrRawTx>> {
+    const results = new Map<string, ProvenOrRawTx>()
+    const unique = [...new Set(txids)]
+    if (unique.length === 0) return results
+
+    const dbTrx = this.toDbTrx(['proven_txs', 'proven_tx_reqs'], 'readonly', trx)
+    const provenIndex = dbTrx.objectStore('proven_txs').index('txid')
+    const requestIndex = dbTrx.objectStore('proven_tx_reqs').index('txid')
+    const usableStatuses = new Set(['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'])
+    await Promise.all(unique.map(async txid => {
+      const proven = await provenIndex.get(txid) as TableProvenTx | undefined
+      if (proven != null) {
+        results.set(txid, { proven: this.validateEntity(proven), rawTx: undefined, inputBEEF: undefined })
+        return
+      }
+      const request = await requestIndex.get(txid) as TableProvenTxReq | undefined
+      if (request != null && usableStatuses.has(request.status)) {
+        const validated = this.validateEntity(request)
+        results.set(txid, {
+          proven: undefined,
+          rawTx: Array.from(validated.rawTx),
+          inputBEEF: validated.inputBEEF == null ? undefined : Array.from(validated.inputBEEF)
+        })
+        return
+      }
+      results.set(txid, { proven: undefined, rawTx: undefined, inputBEEF: undefined })
+    }))
+    if (trx == null) await dbTrx.done
+    return results
+  }
+
   async getRawTxOfKnownValidTransaction(
     txid?: string,
     offset?: number,
@@ -415,11 +457,73 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       txStatus,
       noScript: true
     }
-    let count = 0
+    const outputIds: number[] = []
     await this.filterOutputs(args, r => {
-      if (isAutoSpendableChangeOutput(r)) count++
+      if (isAutoSpendableChangeOutput(r)) outputIds.push(r.outputId)
     })
-    return count
+    const reserved = await this.findReservedActionBatchOutputIds(outputIds)
+    return outputIds.length - reserved.length
+  }
+
+  override async findTransactionStatusesByIds(
+    userId: number,
+    transactionIds: number[],
+    trx?: TrxToken
+  ): Promise<Map<number, TransactionStatus>> {
+    const statuses = new Map<number, TransactionStatus>()
+    if (transactionIds.length === 0) return statuses
+    const dbTrx = this.toDbTrx(['transactions'], 'readonly', trx)
+    const store = dbTrx.objectStore('transactions')
+    for (const transactionId of new Set(transactionIds)) {
+      const transaction = await store.get(transactionId)
+      if (transaction?.userId === userId) statuses.set(transactionId, transaction.status)
+    }
+    if (trx == null) await dbTrx.done
+    return statuses
+  }
+
+  private async findOutputsByOutpointsInternal(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken,
+    noScript = false
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    if (outpoints.length === 0) return byOutpoint
+    const dbTrx = this.toDbTrx(
+      noScript ? ['outputs'] : ['outputs', 'proven_txs', 'proven_tx_reqs'],
+      'readonly',
+      trx
+    )
+    const index = dbTrx.objectStore('outputs').index('txid_vout_userId')
+    const unique = [...new Map(outpoints.map(outpoint => [`${outpoint.txid}.${outpoint.vout}`, outpoint])).values()]
+    const rows = await Promise.all(unique.map(async outpoint =>
+      await index.get([outpoint.txid, outpoint.vout, userId])
+    ))
+    for (const row of rows) {
+      if (row == null) continue
+      if (!noScript) await this.validateOutputScript(row, dbTrx)
+      byOutpoint[`${String(row.txid)}.${row.vout}`] = this.validateEntity(row)
+    }
+    if (trx == null) await dbTrx.done
+    return byOutpoint
+  }
+
+  override async findOutputsByOutpoints(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpointsInternal(userId, outpoints, trx)
+  }
+
+  override async findOutputsByOutpointsForUpdate(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx: TrxToken,
+    noScript = false
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpointsInternal(userId, outpoints, trx, noScript)
   }
 
   async findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
@@ -631,6 +735,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.limit,
       async r => {
         if (!matchesProvenTxPartial(r, args.partial)) return false
+        if (args.txids != null && args.txids.length > 0 && !args.txids.includes(r.txid)) return false
         if (userId !== undefined) {
           const txCount = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
           if (txCount === 0) return false
@@ -1228,11 +1333,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   override async findReservedActionBatchOutputIds(outputIds: number[], trx?: TrxToken): Promise<number[]> {
-    const tx = this.toDbTrx(['action_batch_outputs'], 'readonly', trx)
+    const tx = this.toDbTrx(['action_batch_outputs', 'action_batches'], 'readonly', trx)
     const store = tx.objectStore('action_batch_outputs')
+    const batchStore = tx.objectStore('action_batches')
     if (store.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support get')
     const reserved: number[] = []
-    for (const outputId of outputIds) if ((await store.get(outputId)) != null) reserved.push(outputId)
+    const now = Date.now()
+    for (const outputId of outputIds) {
+      const reservation = await store.get(outputId)
+      if (reservation == null) continue
+      const batch = await batchStore.get(reservation.actionBatchId)
+      if (
+        batch != null &&
+        (batch.status === 'active' || batch.status === 'prepared') &&
+        batch.expiresAt.getTime() > now &&
+        batch.hardExpiresAt.getTime() > now
+      ) reserved.push(outputId)
+    }
     if (trx == null) await tx.done
     return reserved
   }
@@ -1546,6 +1663,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           .index('transactionId_vout_userId')
           .openCursor([partial.transactionId, partial.vout, partial.userId], direction)
       }
+      if (partial?.txid != null && partial.txid !== '' && partial?.vout !== undefined) {
+        return store
+          .index('txid_vout_userId')
+          .openCursor([partial.txid, partial.vout, partial.userId], direction)
+      }
+      if (partial?.basketId !== undefined) {
+        return store.index('userId_basketId').openCursor([partial.userId, partial.basketId], direction)
+      }
       return store.index('userId').openCursor(partial.userId, direction)
     }
     if (partial?.transactionId !== undefined)
@@ -1553,6 +1678,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (partial?.basketId !== undefined) return store.index('basketId').openCursor(partial.basketId, direction)
     if (partial?.spentBy !== undefined) return store.index('spentBy').openCursor(partial.spentBy, direction)
     return store.openCursor(null, direction)
+  }
+
+  private async eligibleOutputTransactionIds(
+    args: FindOutputsArgs,
+    dbTrx: IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'>
+  ): Promise<Set<number> | undefined> {
+    if (args.txStatus == null) return undefined
+    const validTransactionIds = new Set<number>()
+    const transactions = dbTrx.objectStore('transactions')
+    for (const status of args.txStatus) {
+      const index = args.partial.userId === undefined
+        ? transactions.index('status')
+        : transactions.index('status_userId')
+      const key = args.partial.userId === undefined ? status : [status, args.partial.userId]
+      for (const transactionId of await index.getAllKeys(key)) validTransactionIds.add(Number(transactionId))
+    }
+    return validTransactionIds
   }
 
   async filterOutputs(
@@ -1574,6 +1716,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending === true ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
+    const validTransactionIds = await this.eligibleOutputTransactionIds(args, dbTrx)
     const cursor = await this.openOutputsCursor(store, args.partial, direction)
     await scanCursor<TableOutput>(
       cursor,
@@ -1582,14 +1725,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.limit,
       async r => {
         if (!matchesOutputPartial(r, args.partial)) return false
-        if (args.txStatus !== undefined) {
-          const txCount = await this.countTransactions({
-            partial: { transactionId: r.transactionId },
-            status: args.txStatus,
-            trx: dbTrx
-          })
-          if (txCount === 0) return false
-        }
+        if (validTransactionIds != null && !validTransactionIds.has(r.transactionId)) return false
         if (
           tagIds != null &&
           tagIds.length > 0 &&

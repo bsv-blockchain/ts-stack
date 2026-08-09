@@ -5,6 +5,7 @@ import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
 import { log } from '../logger'
 import { CDN_ROOT } from './cdnObjectPath'
+import { profileValue, readResourceLimit, readResourceProfile } from '../security/edgePolicy'
 
 /**
  * Cache to store MIME types for object identifiers to avoid repeated database lookups
@@ -12,6 +13,15 @@ import { CDN_ROOT } from './cdnObjectPath'
 const mimeTypeCache = new Map<string, string>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes in milliseconds
 const cacheTimestamps = new Map<string, number>()
+const MAX_MIME_CACHE_ENTRIES = readResourceLimit(
+  'UHRP',
+  'MIME_CACHE_MAX_ENTRIES',
+  profileValue(readResourceProfile('UHRP'), {
+    small: 2_500,
+    standard: 10_000,
+    highThroughput: 50_000
+  })
+)
 const FILE_SIGNATURES = [
   { bytes: [0xff, 0xd8, 0xff], mimeType: 'image/jpeg' },
   { bytes: [0x89, 0x50, 0x4e, 0x47], mimeType: 'image/png' },
@@ -19,6 +29,35 @@ const FILE_SIGNATURES = [
   { bytes: [0x25, 0x50, 0x44, 0x46], mimeType: 'application/pdf' },
   { bytes: [0x50, 0x4b], mimeType: 'application/zip' }
 ] as const
+
+function latestAdvertisedMimeType(outputs: Array<{ tags?: string[] }>): string | null {
+  let mimeType: string | null = null
+  let maxExpiry = 0
+  for (const output of outputs) {
+    const contentTypeTag = output.tags?.find(tag => tag.startsWith('content_type_'))
+    const expiryTag = output.tags?.find(tag => tag.startsWith('expiry_time_'))
+    if (contentTypeTag == null || expiryTag == null) continue
+
+    const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+    if (expiryTime <= Date.now() / 1000 || expiryTime <= maxExpiry) continue
+    maxExpiry = expiryTime
+    mimeType = contentTypeTag.substring('content_type_'.length)
+  }
+  return mimeType
+}
+
+function cacheMimeType(cacheKey: string, mimeType: string): void {
+  if (MAX_MIME_CACHE_ENTRIES !== -1) {
+    while (mimeTypeCache.size >= MAX_MIME_CACHE_ENTRIES) {
+      const oldest = mimeTypeCache.keys().next().value
+      if (oldest == null) break
+      mimeTypeCache.delete(oldest)
+      cacheTimestamps.delete(oldest)
+    }
+  }
+  mimeTypeCache.set(cacheKey, mimeType)
+  cacheTimestamps.set(cacheKey, Date.now())
+}
 
 /**
  * Get MIME type from UHRP advertisement tags
@@ -30,7 +69,16 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
   const cacheTime = cacheTimestamps.get(cacheKey)
 
   if (cachedMimeType && cacheTime && Date.now() - cacheTime < CACHE_TTL) {
+    // Refresh insertion order so the maps act as a bounded LRU cache.
+    mimeTypeCache.delete(cacheKey)
+    cacheTimestamps.delete(cacheKey)
+    mimeTypeCache.set(cacheKey, cachedMimeType)
+    cacheTimestamps.set(cacheKey, cacheTime)
     return cachedMimeType
+  }
+  if (cacheTime != null) {
+    mimeTypeCache.delete(cacheKey)
+    cacheTimestamps.delete(cacheKey)
   }
 
   try {
@@ -43,32 +91,10 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
       limit: 50
     })
 
-    let mimeType: string | null = null
-    let maxExpiry = 0
-
-    // Find the advertisement with the latest expiry time (most recent)
-    for (const output of outputs) {
-      if (!output.tags) continue
-
-      const contentTypeTag = output.tags.find(t => t.startsWith('content_type_'))
-      const expiryTag = output.tags.find(t => t.startsWith('expiry_time_'))
-
-      if (contentTypeTag && expiryTag) {
-        const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-
-        // Only consider non-expired advertisements
-        if (expiryTime > Date.now() / 1000 && expiryTime > maxExpiry) {
-          maxExpiry = expiryTime
-          mimeType = contentTypeTag.substring('content_type_'.length)
-        }
-      }
-    }
+    const mimeType = latestAdvertisedMimeType(outputs)
 
     // Cache the result (even if null)
-    if (mimeType) {
-      mimeTypeCache.set(cacheKey, mimeType)
-      cacheTimestamps.set(cacheKey, Date.now())
-    }
+    if (mimeType != null) cacheMimeType(cacheKey, mimeType)
 
     return mimeType
   } catch (error) {
@@ -99,12 +125,16 @@ function isJson(text: string): boolean {
 }
 
 function detectMimeTypeFromContent(filePath: string): string {
+  let descriptor: number | undefined
   try {
-    const buffer = fs.readFileSync(filePath, { encoding: null })
-    const binaryMimeType = detectBinaryMimeType(buffer)
+    descriptor = fs.openSync(filePath, 'r')
+    const buffer = Buffer.alloc(512)
+    const bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, 0)
+    const sample = buffer.subarray(0, bytesRead)
+    const binaryMimeType = detectBinaryMimeType(sample)
     if (binaryMimeType != null) return binaryMimeType
 
-    const textSample = buffer.slice(0, 512).toString('utf8', 0, Math.min(512, buffer.length))
+    const textSample = sample.toString('utf8')
     if (!/^[\x21-\x7E\s]*$/.test(textSample)) return 'application/octet-stream'
 
     const trimmedSample = textSample.trim()
@@ -117,6 +147,8 @@ function detectMimeTypeFromContent(filePath: string): string {
     return 'text/plain'
   } catch {
     return 'application/octet-stream'
+  } finally {
+    if (descriptor != null) fs.closeSync(descriptor)
   }
 }
 

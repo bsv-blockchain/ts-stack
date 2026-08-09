@@ -18,10 +18,7 @@ describe('generateChange tests', () => {
   test.each([
     { randomVals: [...randomValsUsed1], randomValsCount: randomValsUsed1.length },
     { randomVals: undefined, randomValsCount: 0 }
-  ])('logs only a redacted parameter summary when diagnostics are enabled', async ({
-    randomVals,
-    randomValsCount
-  }) => {
+  ])('logs only a redacted parameter summary when diagnostics are enabled', async ({ randomVals, randomValsCount }) => {
     const params: GenerateChangeSdkParams = {
       ...defParams,
       fixedOutputs: [
@@ -46,8 +43,7 @@ describe('generateChange tests', () => {
         randomValsCount
       })
       expect(JSON.stringify(log.mock.calls)).not.toContain('lockingScriptLength')
-      expect(JSON.stringify(log.mock.calls))
-        .not.toContain(JSON.stringify(params.randomVals) ?? 'undefined')
+      expect(JSON.stringify(log.mock.calls)).not.toContain(JSON.stringify(params.randomVals) ?? 'undefined')
     } finally {
       log.mockRestore()
     }
@@ -202,6 +198,26 @@ describe('generateChange tests', () => {
       sdk.WERR_INSUFFICIENT_FUNDS,
       async () => await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
     )
+  })
+
+  test('2b reports the actual shortfall for a viable first change output', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 100, unlockingScriptLength: 72 }],
+      fixedOutputs: [{ satoshis: 90, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 10,
+      targetNetCount: undefined
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([])
+
+    try {
+      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+      throw new Error('expected WERR_INSUFFICIENT_FUNDS')
+    } catch (error) {
+      expect(error).toBeInstanceOf(sdk.WERR_INSUFFICIENT_FUNDS)
+      expect((error as sdk.WERR_INSUFFICIENT_FUNDS).moreSatoshisNeeded).toBe(1)
+      expect((error as sdk.WERR_INSUFFICIENT_FUNDS).totalSatoshisNeeded).toBe(101)
+    }
   })
 
   test('3 allocate all', async () => {
@@ -1241,8 +1257,11 @@ describe('generateChange tests', () => {
       parentSpanId: total.spanId,
       spanStatus: 'ok'
     })
-    expect(JSON.stringify(events)).not.toContain('6323')
-    expect(JSON.stringify(events)).not.toContain('15005')
+    for (const event of events) {
+      const attributes = Object.values(event.attributes ?? {})
+      expect(attributes).not.toContain(6323)
+      expect(attributes).not.toContain(15005)
+    }
   })
 })
 

@@ -89,6 +89,26 @@ describe('HTTPWalletWire – constructor', () => {
     )
     expect(wire.httpClient).toBe(mockFetch)
   })
+
+  it('binds the default fetch client to the global receiver', async () => {
+    const receiverSensitiveFetch = jest.fn(async function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError('Illegal invocation')
+      }
+      return {
+        arrayBuffer: async () => toArrayBuffer([1, 2, 3]),
+      } as unknown as Response
+    })
+    global.fetch = receiverSensitiveFetch as unknown as typeof fetch
+
+    const wire = new HTTPWalletWire(undefined)
+
+    await expect(wire.transmitToWallet(buildFrame('getVersion'))).resolves.toEqual([1, 2, 3])
+    expect(receiverSensitiveFetch).toHaveBeenCalledWith(
+      'http://localhost:3301/getVersion',
+      expect.any(Object)
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

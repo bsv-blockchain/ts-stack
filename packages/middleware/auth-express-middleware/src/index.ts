@@ -35,6 +35,7 @@ export { writeBodyToWriter } from './authMiddlewareHelpers.js'
 const WELL_KNOWN_AUTH_PATH = '/.well-known/auth'
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_PENDING_REQUESTS = 1_000
+const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 const MAX_AUTH_HEADER_LENGTH = 4_096
 const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i
 
@@ -72,6 +73,12 @@ interface ActiveCertificateRequest {
 export interface AuthTransportLimits {
   requestTimeoutMs: number
   maxPendingRequests: number
+  /**
+   * Maximum encoded application-response bytes retained for BRC-104 signing.
+   * Set to `-1` only when the embedding service enforces an equivalent bound
+   * before this middleware. Defaults to 8 MiB.
+   */
+  maxResponseBytes: number
 }
 
 export interface AuthRequest extends Request {
@@ -239,6 +246,41 @@ function safeErrorDetails(error: unknown): Record<string, unknown> {
   return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
 }
 
+function canWriteResponse(res: Response): boolean {
+  return !res.headersSent && !res.writableEnded && !res.destroyed
+}
+
+class ResponseFileTooLargeError extends Error {
+  constructor() {
+    super('The response file exceeds the configured service limit.')
+    this.name = 'ResponseFileTooLargeError'
+  }
+}
+
+type BoundedFileReadResult = { ok: true; data: Buffer } | { ok: false; error: Error }
+
+function readFileWithinLimit(
+  path: string,
+  maxBytes: number,
+  callback: (result: BoundedFileReadResult) => void
+): void {
+  const stream = fs.createReadStream(path)
+  const chunks: Buffer[] = []
+  let totalBytes = 0
+
+  stream.on('data', (buffer: Buffer) => {
+    if (maxBytes !== -1 && totalBytes + buffer.length > maxBytes) {
+      stream.destroy()
+      callback({ ok: false, error: new ResponseFileTooLargeError() })
+      return
+    }
+    totalBytes += buffer.length
+    chunks.push(buffer)
+  })
+  stream.once('error', error => callback({ ok: false, error }))
+  stream.once('end', () => callback({ ok: true, data: Buffer.concat(chunks, totalBytes) }))
+}
+
 /**
  * ResponseWriterWrapper buffers response data until signing is complete.
  * This pattern matches the Go implementation for cleaner response handling.
@@ -247,6 +289,8 @@ class ResponseWriterWrapper {
   private statusCode: number = 200
   private headers: Record<string, string> = {}
   private body: number[] = []
+
+  constructor(private readonly maxResponseBytes: number) {}
 
   status(code: number): this {
     this.statusCode = code
@@ -265,7 +309,7 @@ class ResponseWriterWrapper {
   }
 
   send(data: any): this {
-    this.body = convertValueToArray(data, this.headers)
+    this.setBody(convertValueToArray(data, this.headers))
     return this
   }
 
@@ -273,7 +317,7 @@ class ResponseWriterWrapper {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'application/json'
     }
-    this.body = Utils.toArray(JSON.stringify(data), 'utf8')
+    this.setBody(Utils.toArray(JSON.stringify(data), 'utf8'))
     return this
   }
 
@@ -281,7 +325,7 @@ class ResponseWriterWrapper {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'text/plain'
     }
-    this.body = Utils.toArray(data, 'utf8')
+    this.setBody(Utils.toArray(data, 'utf8'))
     return this
   }
 
@@ -300,6 +344,36 @@ class ResponseWriterWrapper {
 
   getBody(): number[] {
     return this.body
+  }
+
+  exceedsLimit(byteLength: number): boolean {
+    return this.maxResponseBytes !== -1 && byteLength > this.maxResponseBytes
+  }
+
+  rejectTooLarge(): void {
+    this.setTooLargeError()
+  }
+
+  private setBody(body: number[]): void {
+    if (!this.exceedsLimit(body.length)) {
+      this.body = body
+      return
+    }
+
+    this.setTooLargeError()
+  }
+
+  private setTooLargeError(): void {
+    this.statusCode = 413
+    this.headers['content-type'] = 'application/json'
+    this.body = Utils.toArray(
+      JSON.stringify({
+        status: 'error',
+        code: 'ERR_RESPONSE_TOO_LARGE',
+        description: 'The requested response exceeds the configured service limit.'
+      }),
+      'utf8'
+    )
   }
 }
 
@@ -345,16 +419,23 @@ export class ExpressTransport implements Transport {
     }
     const requestTimeoutMs = limits.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
     const maxPendingRequests = limits.maxPendingRequests ?? DEFAULT_MAX_PENDING_REQUESTS
+    const maxResponseBytes = limits.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
     if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1) {
       throw new RangeError('requestTimeoutMs must be a positive safe integer.')
     }
     if (!Number.isSafeInteger(maxPendingRequests) || maxPendingRequests < 1) {
       throw new RangeError('maxPendingRequests must be a positive safe integer.')
     }
+    if (
+      !Number.isSafeInteger(maxResponseBytes) ||
+      (maxResponseBytes !== -1 && maxResponseBytes < 1)
+    ) {
+      throw new RangeError('maxResponseBytes must be -1 or a positive safe integer.')
+    }
     this.allowUnauthenticated = allowUnauthenticated
     this.logger = logger
     this.logLevel = logLevel || 'error' // Default to 'error' if not provided
-    this.limits = { requestTimeoutMs, maxPendingRequests }
+    this.limits = { requestTimeoutMs, maxPendingRequests, maxResponseBytes }
   }
 
   /**
@@ -421,7 +502,7 @@ export class ExpressTransport implements Transport {
     handle.timeout = setTimeout(() => {
       this.removeNonGeneralHandle(requestId, handle)
       this.clearActiveCertificateRequest(requestId)
-      if (!res.headersSent) {
+      if (canWriteResponse(res)) {
         res.status(408).json({
           status: 'error',
           code: 'ERR_AUTH_TIMEOUT',
@@ -476,7 +557,7 @@ export class ExpressTransport implements Transport {
   }
 
   private respondWithProtocolError(res: Response, error: AuthProtocolError): void {
-    if (res.headersSent) return
+    if (!canWriteResponse(res)) return
     const capacity = error.message.includes('capacity')
     res.status(capacity ? 503 : 400).json({
       status: 'error',
@@ -748,11 +829,13 @@ export class ExpressTransport implements Transport {
           this.log('error', 'Error in messageCallback', safeErrorDetails(err))
           this.removeNonGeneralHandle(requestId)
           this.clearActiveCertificateRequest(requestId)
-          return res.status(500).json({
-            status: 'error',
-            code: 'ERR_INTERNAL_SERVER_ERROR',
-            description: 'Authentication processing failed.'
-          })
+          if (canWriteResponse(res)) {
+            res.status(500).json({
+              status: 'error',
+              code: 'ERR_INTERNAL_SERVER_ERROR',
+              description: 'Authentication processing failed.'
+            })
+          }
         })
     }
   }
@@ -793,7 +876,7 @@ export class ExpressTransport implements Transport {
         )
           .catch(error => {
             this.log('error', 'Error in certificate listener callback', safeErrorDetails(error))
-            if (!res.headersSent) {
+            if (canWriteResponse(res)) {
               res.status(500).json({
                 status: 'error',
                 code: 'ERR_CERTIFICATE_HANDLER',
@@ -909,7 +992,7 @@ export class ExpressTransport implements Transport {
     )
     const timeout = setTimeout(() => {
       this.clearActiveGeneralRequest(expectedRequestId)
-      if (!res.headersSent) {
+      if (canWriteResponse(res)) {
         res.status(408).json({
           status: 'error',
           code: 'ERR_AUTH_TIMEOUT',
@@ -940,7 +1023,9 @@ export class ExpressTransport implements Transport {
           const description = isAuthError
             ? 'Authentication failed.'
             : 'Authentication processing failed.'
-          return res.status(statusCode).json({ status: 'error', code, description })
+          if (canWriteResponse(res)) {
+            res.status(statusCode).json({ status: 'error', code, description })
+          }
         })
     }
   }
@@ -959,7 +1044,7 @@ export class ExpressTransport implements Transport {
     req.auth = { identityKey: senderPublicKey }
     const sessionNonce = singleHeader(req, 'x-bsv-auth-your-nonce') as string
 
-    const wrapper = new ResponseWriterWrapper()
+    const wrapper = new ResponseWriterWrapper(this.limits.maxResponseBytes)
     let responseSent = false
 
     const buildAndSendResponse = async (): Promise<void> => {
@@ -1075,11 +1160,26 @@ export class ExpressTransport implements Transport {
     }
 
     ;(res as any).__sendFile = res.sendFile
-    ;(res as any).sendFile = (path: string, options?: any, callback?: Function) => {
-      fs.readFile(path, (err, data) => {
-        if (err) {
-          this.log('error', 'Error reading file in sendFile', { errorName: err.name })
-          if (callback) return callback(err)
+    ;(res as any).sendFile = (
+      path: string,
+      optionsOrCallback?: unknown,
+      callback?: (error: Error) => void
+    ) => {
+      const errorCallback =
+        typeof optionsOrCallback === 'function'
+          ? (optionsOrCallback as (error: Error) => void)
+          : callback
+      readFileWithinLimit(path, this.limits.maxResponseBytes, result => {
+        if (!result.ok) {
+          if (result.error instanceof ResponseFileTooLargeError) {
+            wrapper.rejectTooLarge()
+            buildAndSendResponse()
+            return
+          }
+          this.log('error', 'Error reading file in sendFile', {
+            errorName: result.error.name
+          })
+          if (errorCallback != null) return errorCallback(result.error)
           wrapper.status(500)
           buildAndSendResponse()
           return
@@ -1087,7 +1187,7 @@ export class ExpressTransport implements Transport {
 
         const mimeType = mime.lookup(path) || 'application/octet-stream'
         wrapper.set('Content-Type', mimeType)
-        wrapper.send(Array.from(data))
+        wrapper.send(result.data)
         buildAndSendResponse()
       })
     }

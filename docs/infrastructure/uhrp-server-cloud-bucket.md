@@ -1,10 +1,10 @@
 ---
 id: infra-uhrp-cloud
-title: "UHRP Server (Cloud Bucket)"
+title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: "0.2.10"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: '0.2.10'
+last_updated: '2026-07-25'
+last_verified: '2026-07-25'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -33,23 +33,23 @@ Clients upload files with authentication, retrieve files via public GET, and ser
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | Optional MySQL via Knex (for backup storage or metadata tracking); not required if using cloud-only |
-| External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional) |
+| Type              | Requirement                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Database          | Optional MySQL via Knex (for backup storage or metadata tracking); not required if using cloud-only                      |
+| External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional)                                             |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET/HEAD | Static object paths | Retrieve stored objects (public) |
-| POST | /advertise | Administrative advertisement using `Authorization: Bearer` |
-| POST | /quote | Public storage-price quote |
-| POST | /upload | Authenticated upload/payment workflow |
-| GET | /list | List the authenticated uploader's objects |
-| GET | /find | Find authenticated uploader metadata |
-| POST | /renew | Authenticated ownership/payment renewal |
+| Method   | Path                | Purpose                                                    |
+| -------- | ------------------- | ---------------------------------------------------------- |
+| GET/HEAD | Static object paths | Retrieve stored objects (public)                           |
+| POST     | /advertise          | Administrative advertisement using `Authorization: Bearer` |
+| POST     | /quote              | Public storage-price quote                                 |
+| POST     | /upload             | Authenticated upload/payment workflow                      |
+| GET      | /list               | List the authenticated uploader's objects                  |
+| GET      | /find               | Find authenticated uploader metadata                       |
+| POST     | /renew              | Authenticated ownership/payment renewal                    |
 
 ## WebSocket endpoints
 
@@ -57,27 +57,28 @@ None; HTTP-only with background advertising worker.
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| HTTP_PORT | No | Express server port (default: 8080, typically 8080 for Cloud Run) |
-| NODE_ENV | No | `development`, `staging`, or `production` |
-| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
-| HOSTING_DOMAIN | No | Public HTTPS domain for advertising (e.g., `https://uhrp-storage.example.com`) |
-| BSV_NETWORK | No | Target blockchain network (`main`, `test`, or `regtest`) |
-| WALLET_STORAGE_URL | No | Wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`) |
-| PRICE_PER_GB_MO | No | Monthly storage price per GB for billing |
-| ENABLE_PAYMENT_MIDDLEWARE | No | Set to `'true'` to require payment for uploads |
-| GOOGLE_CLOUD_PROJECT | No | GCP project ID (auto-detected from service account if available) |
-| GOOGLE_CLOUD_BUCKET | Yes | Cloud Storage bucket name (e.g., `uhrp-storage-prod`) |
-| GOOGLE_APPLICATION_CREDENTIALS | No | Path to service account JSON key (for local/Cloud Run auth) |
-| ARC_API_KEY | No | ARC API key for transaction broadcasting (advertising) |
-| ADVERTISE_INTERVAL_MS | No | Interval for re-advertising to overlay (default: 3600000ms = 1 hour) |
-| BUGSNAG_API_KEY | No | Bugsnag error reporting API key (optional) |
-| ADMIN_TOKEN | Yes | At least 32 random characters for `/advertise` Bearer auth |
-| UHRP_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
-| UHRP_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
-| UHRP_JSON_MAX_BODY_BYTES | No | JSON body ceiling (default 262144) |
-| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+| Variable                       | Required | Description                                                                              |
+| ------------------------------ | -------- | ---------------------------------------------------------------------------------------- |
+| HTTP_PORT                      | No       | Express server port (default: 8080, typically 8080 for Cloud Run)                        |
+| NODE_ENV                       | No       | `development`, `staging`, or `production`                                                |
+| SERVER_PRIVATE_KEY             | Yes      | 256-bit hex private key for server identity                                              |
+| HOSTING_DOMAIN                 | No       | Public HTTPS domain for advertising (e.g., `https://uhrp-storage.example.com`)           |
+| BSV_NETWORK                    | No       | Target blockchain network (`main`, `test`, or `regtest`)                                 |
+| WALLET_STORAGE_URL             | No       | Wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`)                           |
+| PRICE_PER_GB_MO                | No       | Monthly storage price per GB for billing                                                 |
+| ENABLE_PAYMENT_MIDDLEWARE      | No       | Set to `'true'` to require payment for uploads                                           |
+| GOOGLE_CLOUD_PROJECT           | No       | GCP project ID (auto-detected from service account if available)                         |
+| GOOGLE_CLOUD_BUCKET            | Yes      | Cloud Storage bucket name (e.g., `uhrp-storage-prod`)                                    |
+| GOOGLE_APPLICATION_CREDENTIALS | No       | Path to service account JSON key (for local/Cloud Run auth)                              |
+| ARC_API_KEY                    | No       | ARC API key for transaction broadcasting (advertising)                                   |
+| ADVERTISE_INTERVAL_MS          | No       | Interval for re-advertising to overlay (default: 3600000ms = 1 hour)                     |
+| BUGSNAG_API_KEY                | No       | Bugsnag error reporting API key (optional)                                               |
+| ADMIN_TOKEN                    | Yes      | At least 32 random characters for `/advertise` Bearer auth                               |
+| UHRP_CORS_MODE                 | No       | `public` (default), `allowlist`, or `disabled`                                           |
+| UHRP_CORS_ALLOWED_ORIGINS      | No       | Exact comma-separated origins in allowlist mode                                          |
+| UHRP_CORS_ALLOWED_HEADERS      | No       | Strict comma-separated browser request-header allowlist; omit for additive compatibility |
+| UHRP_JSON_MAX_BODY_BYTES       | No       | JSON body ceiling (default 262144)                                                       |
+| TRUST_PROXY_HOPS               | No       | Exact trusted proxy hop count, 0 through 10                                              |
 
 See [Public Service Edge Security](service-edge-security.md#uhrp-cloud-bucket-server)
 for full edge controls.

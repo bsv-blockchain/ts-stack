@@ -53,6 +53,28 @@ test('workspace scope tests direct changes, typechecks dependents, and builds de
   assert.deepEqual(scope.build, ['@bsv/base', '@bsv/consumer', '@bsv/direct'])
 })
 
+test('workspace scope directly selects packages that compile a shared source root', () => {
+  const sharedProjects = [
+    ...projects,
+    {
+      name: '@bsv/direct-browser',
+      path: 'packages/direct/browser',
+      sourceRoots: ['packages/direct/src'],
+      manifest: { name: '@bsv/direct-browser' }
+    },
+    {
+      name: '@bsv/direct-mobile',
+      path: 'packages/direct/mobile',
+      sourceRoots: ['packages/direct/src'],
+      manifest: { name: '@bsv/direct-mobile' }
+    }
+  ]
+
+  const scope = selectWorkspaceScope(sharedProjects, ['packages/direct/src/index.ts'])
+
+  assert.deepEqual(scope.direct, ['@bsv/direct', '@bsv/direct-browser', '@bsv/direct-mobile'])
+})
+
 test('documentation and QA policy changes do not fan out package tests', () => {
   assert.deepEqual(
     selectWorkspaceScope(projects, [

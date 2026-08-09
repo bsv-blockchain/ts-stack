@@ -1,16 +1,9 @@
 import express, { type Express } from 'express'
 import { rateLimit } from 'express-rate-limit'
-import {
-  authenticatedIdentityKey,
-  configureTrustProxy,
-  rateLimitOptions
-} from '../RateLimitPolicy'
+import { authenticatedIdentityKey, configureTrustProxy, rateLimitOptions } from '../RateLimitPolicy'
 import { StorageServer } from '../StorageServer'
 
-async function withServer (
-  app: Express,
-  run: (url: string) => Promise<void>
-): Promise<void> {
+async function withServer(app: Express, run: (url: string) => Promise<void>): Promise<void> {
   const server = app.listen(0, '127.0.0.1')
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve)
@@ -22,7 +15,7 @@ async function withServer (
     await run(`http://127.0.0.1:${address.port}`)
   } finally {
     await new Promise<void>((resolve, reject) => {
-      server.close(error => error == null ? resolve() : reject(error))
+      server.close(error => (error == null ? resolve() : reject(error)))
     })
   }
 }
@@ -36,10 +29,7 @@ describe('StorageServer rate-limit policy', () => {
       }
       next()
     })
-    app.use(rateLimit(rateLimitOptions(
-      { windowMs: 60_000, limit: 1 },
-      { keyGenerator: authenticatedIdentityKey }
-    )))
+    app.use(rateLimit(rateLimitOptions({ windowMs: 60_000, limit: 1 }, { keyGenerator: authenticatedIdentityKey })))
     app.get('/protected', (_req, res) => res.sendStatus(204))
 
     await withServer(app, async url => {
@@ -87,6 +77,7 @@ describe('StorageServer rate-limit policy', () => {
 
   test('StorageServer rejects over-budget work before authentication', async () => {
     const server = new StorageServer({} as any, {
+      host: '127.0.0.1',
       port: 0,
       wallet: {} as any,
       monetize: false,
@@ -105,6 +96,7 @@ describe('StorageServer rate-limit policy', () => {
       })
       const address = httpServer.address()
       if (address == null || typeof address === 'string') throw new Error('missing test server address')
+      expect(address.address).toBe('127.0.0.1')
       const first = await fetch(`http://127.0.0.1:${address.port}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

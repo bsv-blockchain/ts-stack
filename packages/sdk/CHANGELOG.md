@@ -216,6 +216,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add `Mnemonic.toEntropy()` to recover and checksum-validate the entropy encoded
+  by a BIP-39 mnemonic without deriving its seed.
+- Add optional caller labels to AuthFetch BRC-105 payment actions while retaining
+  the deterministic nonce-derived recovery label on every payment.
+- Add `Beef.mergeProvenTxs` and opt-in deferred `MerklePath` root validation
+  for storage engines that batch independently proven transactions. The final
+  compound proof is still validated before use, while shared branches are
+  hashed once instead of once per transaction.
+- Add `KeyDeriver.derivePrivateKeys` so fragmented wallets can reuse one BRC-42
+  shared-secret calculation per counterparty while deriving many exact child
+  keys. Single-key derivation and derived key bytes are unchanged.
 - Add explicit script-verification context and a distinct resource-exhaustion
   error so transaction version and local interpreter limits cannot be mistaken
   for consensus validity.
@@ -230,6 +241,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Batch BEEF mutation bookkeeping and reuse compound Merkle intermediate hashes.
+  The optional asynchronous P2PKH backend now forwards its already validated
+  compressed public key directly into the unlocking script. Existing BEEF
+  bytes, proof validation, synchronous signing, and transaction signatures are
+  unchanged.
+- Cache BEEF dependency-sort results until transaction or proof state changes,
+  so repeated wallet known-txid preparation is proportional to the returned
+  list instead of re-running the complete topological sort. BEEF ordering,
+  validation results, and serialized bytes are unchanged.
 - Point SDK contributors and AI agents to the canonical stack-level
   contribution and quality policy without changing package behavior.
 - Harden UTF-8, binary JSON, secret-redaction, cryptographic compatibility, and
@@ -275,6 +295,13 @@ All notable changes to this project will be documented in this file. The format 
 ### Removed
 
 ### Fixed
+
+- Bind the default `HTTPWalletWire` fetch client to its global receiver so
+  browser `WalletClient` auto-discovery can reach Cicada on port 3301 instead
+  of falling through after an `Illegal invocation` error.
+- Preserve `HTTPWalletJSON` action wire compatibility by serializing
+  `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
+  returned by older wallet HTTP implementations.
 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.

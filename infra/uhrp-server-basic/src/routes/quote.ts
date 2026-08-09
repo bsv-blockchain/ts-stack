@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import getPriceForFile from '../utils/getPriceForFile'
 import { log } from '../logger'
+import { readResourceLimit } from '../security/edgePolicy'
 
 const {
   MIN_HOSTING_MINUTES
@@ -54,6 +55,14 @@ const quoteHandler = async (req: QuoteRequest, res: Response<QuoteResponse>) => 
           'The file size must be an integer.'
       })
     }
+    const maxFileBytes = readResourceLimit('UHRP', 'MAX_FILE_BYTES', 11_000_000_000)
+    if (maxFileBytes !== -1 && fileSize > maxFileBytes) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'ERR_INVALID_SIZE',
+        description: `The file size must not exceed ${maxFileBytes} bytes.`
+      })
+    }
 
     const minHostingMinutes = Number(MIN_HOSTING_MINUTES) || 0
 
@@ -66,12 +75,12 @@ const quoteHandler = async (req: QuoteRequest, res: Response<QuoteResponse>) => 
       })
     }
 
-    // Retention period must not be more than 69 million minutes
-    if (retentionPeriod > 69000000) {
+    const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
+    if (maxRetentionMinutes !== -1 && retentionPeriod > maxRetentionMinutes) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_INVALID_RETENTION_PERIOD',
-        description: 'The retention period must be less than 69 million minutes (about 130 years)'
+        description: `The retention period must not exceed ${maxRetentionMinutes} minutes.`
       })
     }
 

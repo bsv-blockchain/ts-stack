@@ -21,19 +21,30 @@ services:
     container_name: chaintracks-server
     restart: unless-stopped
     ports:
-      - "3011:3011"  # ChaintracksService
-      - "3012:3012"  # CDN Server
+      - '3011:3011' # ChaintracksService
+      - '3012:3012' # CDN Server
     environment:
       # Chain configuration
-      - CHAIN=main
+      - CHAIN=${CHAIN:-main}
       - PORT=3011
 
-      # WhatsOnChain API Key (optional but recommended)
-      # Get your key at: https://whatsonchain.com/
+      # Optional higher-limit key; anonymous fallback works without it.
       - WHATSONCHAIN_API_KEY=${WHATSONCHAIN_API_KEY:-}
 
+      # Arcade/go-chaintracks source. Public defaults exist for main/test/ttn.
+      - CHAINTRACKS_UPSTREAM_URL=${CHAINTRACKS_UPSTREAM_URL:-}
+      - CHAINTRACKS_UPSTREAM_API_PREFIX=${CHAINTRACKS_UPSTREAM_API_PREFIX:-}
+      - CHAINTRACKS_UPSTREAM_MAX_HEADERS=${CHAINTRACKS_UPSTREAM_MAX_HEADERS:-1000}
+      - CHAINTRACKS_DISABLE_WHATSONCHAIN=${CHAINTRACKS_DISABLE_WHATSONCHAIN:-false}
+      - STN_ARCADE_URL=${STN_ARCADE_URL:-}
+      - STN_CHAINTRACKS_URL=${STN_CHAINTRACKS_URL:-}
+      - TSTN_ARCADE_URL=${TSTN_ARCADE_URL:-}
+      - TSTN_CHAINTRACKS_URL=${TSTN_CHAINTRACKS_URL:-}
+      - ROUTING_PREFIX=${ROUTING_PREFIX:-}
+
       # Source CDN - Where to download headers FROM if local files don't exist
-      - SOURCE_CDN_URL=${SOURCE_CDN_URL:-https://cdn.projectbabbage.com/blockheaders/}
+      # Use `${SOURCE_CDN_URL-...}` so an explicitly empty value disables it.
+      - SOURCE_CDN_URL=${SOURCE_CDN_URL-https://cdn.projectbabbage.com/blockheaders/}
 
       # Bulk Headers CDN - Enable hosting
       - ENABLE_BULK_HEADERS_CDN=${ENABLE_BULK_HEADERS_CDN:-true}
@@ -85,7 +96,11 @@ services:
       - bulk-headers:/app/public/headers
 
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3011/"]
+      test:
+        [
+          'CMD-SHELL',
+          'wget --quiet --tries=1 --spider "http://localhost:3011$${ROUTING_PREFIX:-}/readyz"'
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

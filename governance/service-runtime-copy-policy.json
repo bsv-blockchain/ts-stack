@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-08-04",
+  "owner": "ts-stack-maintainers",
+  "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
+  "copies": [
+    {
+      "canonicalSource": "infra/uhrp-server-basic/src/resourceLimits.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/resourceLimits.ts"]
+    },
+    {
+      "canonicalSource": "packages/wallet/wallet-toolbox/src/storage/remoting/KnexPaymentReplayStore.ts",
+      "synchronizedSources": ["infra/wallet-infra/src/KnexPaymentReplayStore.ts"]
+    }
+  ]
+}

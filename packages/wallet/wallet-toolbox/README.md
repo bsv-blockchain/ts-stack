@@ -26,6 +26,19 @@ BSV Desktop and BSV Browser are the BSV Association reference wallet application
 | **MockChain**      | In-memory blockchain for testing — mock mining, UTXO tracking, and merkle proof generation without a network                                     |
 | **Entropy**        | `EntropyCollector` gathers mouse/touch entropy for high-quality randomness in browser environments                                               |
 
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. This keeps the grant atomic from
+the caller's perspective and makes its funding change immediately reusable by a
+following wallet action. If broadcasting is unavailable, the grant rejects and
+the application can safely surface the error and retry; ephemeral one-time grants
+remain off-chain.
+
+Immediate actions can fund from wallet-managed change created by a transaction
+that is still awaiting background broadcast when settled change is insufficient.
+The wallet prefers settled change, then recursively includes the delayed parent
+in the child BEEF only when needed, so queued work cannot temporarily strand the
+wallet's balance behind a large reserved input.
+
 ### Packages
 
 The toolbox publishes three npm packages from this repo:
@@ -33,6 +46,34 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox)** — Full package with all storage backends (SQLite, MySQL, IndexedDB, remote)
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; IndexedDB and remote storage only
+
+### ChainTracks sources and networks
+
+Wallet services do not require a WhatsOnChain key for ChainTracks. Mainnet,
+testnet, and TerraTestNet use the public Arcade/go-chaintracks v2 HTTP and SSE
+surfaces by default. Bulk batches still pass through local serialization, hash,
+continuity, and genesis checks; providers are tried in priority order; and a
+synchronized tracker can continue serving its last-good checked data during a
+provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
+requests are serialized below its documented public rate.
+
+The supported chain identifiers are `main`, `test`, `stn`, `ttn`, and `tstn`
+(`mock` remains available for test utilities). STN and Terra Scaling TestNet do
+not have operator-independent public endpoints: set `STN_CHAINTRACKS_URL` or
+`TSTN_CHAINTRACKS_URL`, use the matching Arcade environment variable, or inject
+an explicit `ChaintracksClientApi`. URLs ending in `/v2` use the reconnecting
+go-chaintracks client; existing legacy v1 URLs and explicit clients remain
+compatible. Browser and mobile distributions expose the same fetch/SSE client
+without Node `Buffer` or filesystem dependencies.
+
+Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
+Direct Teranode P2P is not included in browser/mobile artifacts.
+
+Core ChainTracks factories accept a final source-options argument when an
+application must override the defaults. Set `disableChaintracks`, `disableCdn`,
+or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an
+explicit `chaintracks` client to retain an existing deployment topology. All
+earlier positional arguments remain unchanged.
 
 ## Getting Started
 
@@ -73,6 +114,12 @@ const result = await wallet.createAction({
 })
 ```
 
+Completed `createAction` and `signAction` results from the public Wallet
+interface return Atomic BEEF in `tx` as a numeric array. This preserves the
+historical BRC-100 shape across plain JSON bridges; parse it with
+`Transaction.fromAtomicBEEF(result.tx)`. The `AtomicBEEF` type and binary Wallet
+Wire transports also support `Uint8Array`.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.
@@ -84,6 +131,52 @@ for the default-basket invariant, automatic funding policy, and supported
 See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
+
+### `createAction` performance telemetry
+
+With the optional SDK telemetry sink enabled, legacy `createAction` reports
+bounded-cardinality spans for input validation, record/output persistence,
+funding candidate selection, fee-aware planning, atomic input claiming, input
+assembly, proof fetch, BEEF merge, and final trim/serialization.
+Only counts, byte sizes, fee totals, retry counts, and durations are reported;
+transaction IDs, scripts, payloads, keys, and identities are not attributes.
+
+The planner uses the same exact / least-over / largest-under selection policy
+as the historical allocator, but proves economic sufficiency before writing a
+transaction and claims every selected input in one database transaction. Knex
+storage automatically adds a composite funding-selection index on migration;
+IndexedDB schema version 3 adds corresponding user/basket and outpoint indexes
+and resolves transaction-status eligibility in one indexed pass.
+
+The retained fragmented-funding benchmark is runnable with:
+
+```bash
+pnpm bench:create-action-funding
+pnpm bench:create-action-beef
+```
+
+Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
+fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,
+one transaction, and 8.8 ms. Query and transaction counts remain flat when the
+selected input count grows; networked database deployments should benefit most.
+
+The proof-bearing benchmark also exercises the authenticated remote wallet,
+real BRC-103 storage RPC, BRC-29 signing, packed WASM digest verification, and
+24-level proofs grouped by block. On the PXC staging topology, 20 independent
+153-input samples measured 376.0 ms p50 and 461.6 ms p95; the corresponding
+direct storage cohort measured 99.3 ms p50 and 137.4 ms p95. A normal one-input
+authenticated cohort measured 78.6 ms p50 and 105.6 ms p95. All 3,080 signature
+verdicts passed. A selective production-shaped database copy with 110 fragmented
+inputs measured 75.5 ms p50 and 155.4 ms p95 for direct storage. The benchmark
+captures client, server HTTP, authentication, RPC, storage, signing,
+verification, and serialization spans and retains gates of 100 ms p50 / 150 ms
+p95 for the normal cohort and 500 ms p95 for the 153-input cohort. These are
+regression gates, not universal hardware guarantees.
+
+Trace context remains local to the telemetry carrier and sink. Wallet Toolbox
+does not add telemetry headers to AuthFetch, so BRC-103/104, Auth Express
+Middleware, AuthSocket, JSON-RPC, and mixed-version remote storage behavior are
+unchanged.
 
 The codebase has detailed JSDoc annotations throughout — these will surface inline in editors like VS Code.
 
@@ -101,7 +194,9 @@ await storage.migrate(storageName, storageIdentityKey)
 await storage.makeAvailable()
 
 const sessionManager = new KnexSessionManager(storage.knex, {
-  ttlMs: 24 * 60 * 60 * 1000
+  ttlMs: 24 * 60 * 60 * 1000,
+  // Optional. Set to 0 when every authenticated use must update the row.
+  touchIntervalMs: 60 * 1000
 })
 
 const server = new StorageServer(storage, {
@@ -125,6 +220,13 @@ const server = new StorageServer(storage, {
 })
 server.start()
 ```
+
+Shared Knex sessions immediately persist authentication, nonce, identity, and
+certificate-state transitions. For an already-authenticated row, the default
+manager coalesces only timestamp-only usage touches for up to one minute. This
+avoids a synchronous replicated write on every RPC while keeping durable expiry
+within a bounded minute of the most recent use. Use `touchIntervalMs: 0` to
+retain exact per-request timestamp persistence.
 
 Both stages return HTTP 429 with `ERR_RATE_LIMITED`. For multi-process or
 multi-replica deployments, configure a shared `express-rate-limit` store in

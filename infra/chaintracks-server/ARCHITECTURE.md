@@ -80,13 +80,25 @@ This document provides a deep dive into the ChaintracksService architecture, ini
 │  │  - Returns bulk files with 100k headers each             │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │  ┌──────────────────────────────────────────────────────────┐ │
+│  │  BulkIngestorChaintracks                                 │ │
+│  │  - Fetches bounded binary batches from Arcade/go v2     │ │
+│  │  - Verifies the configured upstream network             │ │
+│  │  - Passes every batch through local chain validation     │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
 │  │  BulkIngestorWhatsOnChainCdn                             │ │
 │  │  - Fetches from WhatsOnChain CDN                         │ │
-│  │  - Fallback if Babbage CDN unavailable                   │ │
-│  │  - Uses WoC API key if configured                        │ │
+│  │  - Mainnet/testnet fallback after CDN and Arcade         │ │
+│  │  - Keyless requests remain below the public rate limit   │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                                                                │
 │  Live Ingestors (Real-time Headers):                          │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  LiveIngestorChaintracksSSE                              │ │
+│  │  - Follows Arcade/go v2 tip events                       │ │
+│  │  - Reconnects with bounded exponential backoff           │ │
+│  │  - Works in Node.js, browser, and mobile runtimes        │ │
+│  └──────────────────────────────────────────────────────────┘ │
 │  ┌──────────────────────────────────────────────────────────┐ │
 │  │  LiveIngestorWhatsOnChainPoll                            │ │
 │  │  - Polls WoC /chain/info endpoint                        │ │
@@ -97,6 +109,13 @@ This document provides a deep dive into the ChaintracksService architecture, ini
 │  └──────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+Sources are tried in priority order rather than queried concurrently. Failures
+are recorded per source and fall through to the next configured provider. Once
+synchronized, the locally validated header range and cached last-good height
+remain serviceable during a provider outage. Arcade supplies the HTTP/SSE
+gateway to Teranode-backed data; direct P2P is intentionally server-only future
+work and is not included in browser/mobile artifacts.
 
 ## Initialization Flow
 
@@ -355,13 +374,13 @@ class ChaintracksStorageNoDb {
 
   // Height ranges
   private ranges: {
-    bulk: HeightRange,  // {minHeight, maxHeight}
-    live: HeightRange   // {minHeight, maxHeight}
+    bulk: HeightRange // {minHeight, maxHeight}
+    live: HeightRange // {minHeight, maxHeight}
   }
 
   // Configuration
-  liveHeightThreshold: number = 2000  // Headers within this are "live"
-  reorgHeightThreshold: number = 400  // Max reorg depth to handle
+  liveHeightThreshold: number = 2000 // Headers within this are "live"
+  reorgHeightThreshold: number = 400 // Max reorg depth to handle
 }
 ```
 
@@ -393,11 +412,9 @@ class BulkFileDataManager {
 
 ```typescript
 // Subscribe to new headers
-const subscriptionId = await chaintracks.subscribeHeaders(
-  (header: BlockHeader) => {
-    console.log('New block:', header.height, header.hash)
-  }
-)
+const subscriptionId = await chaintracks.subscribeHeaders((header: BlockHeader) => {
+  console.log('New block:', header.height, header.hash)
+})
 
 // Called when:
 // - Header is added (inserted successfully)
@@ -414,7 +431,10 @@ const subscriptionId = await chaintracks.subscribeReorgs(
     console.log(`Reorg: ${depth} blocks`)
     console.log('Old tip:', oldTip.hash)
     console.log('New tip:', newTip.hash)
-    console.log('Deactivated:', deactivated?.map(h => h.hash))
+    console.log(
+      'Deactivated:',
+      deactivated?.map(h => h.hash)
+    )
   }
 )
 
