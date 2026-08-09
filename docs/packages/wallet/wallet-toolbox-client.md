@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.6.4'
+version: '2.6.5'
 last_updated: '2026-08-09'
 last_verified: '2026-08-09'
 review_cadence_days: 30
@@ -18,6 +18,9 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
+Immediate browser actions can chain wallet-managed change from a delayed
+parent; the child broadcast includes the parent BEEF so background delivery
+cannot temporarily strand the wallet balance.
 Durable permission grants finish broadcasting their internal token transaction
 before the waiting browser request resumes, keeping the grant's funding change
 available to the following wallet action.

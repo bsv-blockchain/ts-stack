@@ -33,6 +33,11 @@ following wallet action. If broadcasting is unavailable, the grant rejects and
 the application can safely surface the error and retry; ephemeral one-time grants
 remain off-chain.
 
+Immediate actions can fund from wallet-managed change created by a transaction
+that is still awaiting background broadcast. The wallet recursively includes
+the delayed parent in the child BEEF, so queued work cannot temporarily strand
+the wallet's balance behind a large reserved input.
+
 ### Packages
 
 The toolbox publishes three npm packages from this repo:

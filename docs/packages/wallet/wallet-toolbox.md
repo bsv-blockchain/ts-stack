@@ -4,7 +4,7 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.6.4'
+version: '2.6.5'
 last_updated: '2026-08-09'
 last_verified: '2026-08-09'
 review_cadence_days: 30
@@ -18,6 +18,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Immediate actions may use wallet-managed change from a transaction awaiting
+background broadcast. The child broadcast recursively carries the delayed
+parent BEEF, preventing queued work from temporarily hiding most of the
+wallet's spendable balance.
 
 Durable permission grants finish broadcasting their internal token transaction
 before the waiting application request resumes. A broadcast failure rejects the

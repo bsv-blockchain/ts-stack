@@ -90,6 +90,26 @@ describe('createAction funding performance', () => {
     expect(insertTransaction).not.toHaveBeenCalled()
   })
 
+  test('funds an immediate action from change awaiting delayed broadcast', async () => {
+    await replaceFundingCandidates(1, 5_000)
+    const [candidate] = await ctx.activeStorage.findAvailableManagedChangeInputCandidates(
+      ctx.userId,
+      (await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      }))[0].basketId,
+      true
+    )
+    await ctx.activeStorage.updateTransaction(candidate.transactionId, { status: 'sending' })
+
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, true, false)
+    )
+
+    expect(result.inputs).toHaveLength(1)
+    expect(result.inputs[0].sourceTxid).toBe(candidate.txid)
+  })
+
   test('reports funding and BEEF phases with bounded cardinality attributes', async () => {
     await replaceFundingCandidates(1, 5_000)
     const events: TelemetryEvent[] = []
@@ -184,11 +204,15 @@ describe('createAction funding performance', () => {
     )).resolves.toBe(0)
   })
 
-  function actionArgs (satoshis: number, returnTXIDOnly = true): Validation.ValidCreateActionArgs {
+  function actionArgs (
+    satoshis: number,
+    returnTXIDOnly = true,
+    acceptDelayedBroadcast = true
+  ): Validation.ValidCreateActionArgs {
     return Validation.validateCreateActionArgs({
       outputs: [{ satoshis, lockingScript: '51', outputDescription: 'performance test output' }],
       description: 'createAction funding performance test',
-      options: { noSend: true, randomizeOutputs: false, returnTXIDOnly }
+      options: { noSend: true, randomizeOutputs: false, returnTXIDOnly, acceptDelayedBroadcast }
     })
   }
 
