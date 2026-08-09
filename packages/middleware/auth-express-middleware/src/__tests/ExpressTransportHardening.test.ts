@@ -913,7 +913,6 @@ describe('ExpressTransport hardening', () => {
     await flushPromises()
     expect(callback).toHaveBeenCalledTimes(1)
 
-    res.headersSent = true
     res.writableEnded = true
     rejectProcessing(new Error('late handshake processing failure'))
     await flushPromises()
@@ -937,8 +936,7 @@ describe('ExpressTransport hardening', () => {
     await flushPromises()
     expect(callback).toHaveBeenCalledTimes(1)
 
-    res.headersSent = true
-    res.writableEnded = true
+    res.destroyed = true
     rejectProcessing(new Error('late general processing failure'))
     await flushPromises()
 
