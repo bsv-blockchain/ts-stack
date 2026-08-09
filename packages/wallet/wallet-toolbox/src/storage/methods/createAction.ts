@@ -991,6 +991,13 @@ interface PreparedFundingPlan {
   availableChangeCount: number
 }
 
+// A transaction waiting for background broadcast already has a complete raw
+// transaction and input BEEF in storage. Its wallet-managed change is safe to
+// chain: the immediate broadcast path recursively merges that ancestor into
+// the child BEEF. Excluding these outputs can strand nearly the entire wallet
+// balance behind one delayed transaction.
+const excludeSendingChangeFromFunding = false
+
 type FundingClaimRequest = readonly [
   userId: number,
   basketId: number,
@@ -1085,12 +1092,7 @@ async function prepareFundingPlan (
   context: FundingPlanContext
 ): Promise<PreparedFundingPlan> {
   const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, parent, trx] = context
-  // A transaction waiting for background broadcast already has a complete raw
-  // transaction and input BEEF in storage. Its wallet-managed change is safe
-  // to chain: the immediate broadcast path recursively merges that ancestor
-  // into the child BEEF. Excluding these outputs from immediate actions can
-  // strand nearly the entire wallet balance behind one delayed transaction.
-  const excludeSending = false
+  const excludeSending = excludeSendingChangeFromFunding
   const candidates = await traceStorageStep(
     storage,
     'wallet.storage.create_action.funding_candidates',
@@ -1305,7 +1307,7 @@ async function fundNewTransactionSdk(
         const claim = await claimFundingPlan(storage, [
           userId,
           ctx.changeBasket.basketId,
-          false,
+          excludeSendingChangeFromFunding,
           ctx.transactionId,
           ctx.noSendChangeIn,
           plan,
