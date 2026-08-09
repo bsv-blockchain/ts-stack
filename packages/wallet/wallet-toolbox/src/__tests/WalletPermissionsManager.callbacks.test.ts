@@ -516,7 +516,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
       }
       const persistenceError = new Error('permission token persistence failed')
       jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(null)
-      jest.spyOn(manager as any, 'createPermissionTokensStrict').mockRejectedValue(persistenceError)
+      const persist = jest.spyOn(manager as any, 'createPermissionTokensBestEffort').mockRejectedValue(persistenceError)
 
       const pendingResult = new Promise<boolean>((resolve, reject) => {
         ;(manager as any).activeRequests.set(requestID, {
@@ -535,6 +535,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
 
       await expect(grantPromise).rejects.toBe(persistenceError)
       await expect(pendingResult).resolves.toBe(persistenceError)
+      expect(persist).toHaveBeenCalledWith(expect.any(Array), true)
       expect((manager as any).activeRequests.has(requestID)).toBe(false)
     })
 
@@ -584,7 +585,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
       const requestID = 'pact:persistence-test.com:counterparty'
       const persistenceError = new Error('counterparty permission token persistence failed')
       jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(null)
-      jest.spyOn(manager as any, 'createPermissionTokensStrict').mockRejectedValue(persistenceError)
+      const persist = jest.spyOn(manager as any, 'createPermissionTokensBestEffort').mockRejectedValue(persistenceError)
 
       const pendingResult = new Promise<boolean>((resolve, reject) => {
         ;(manager as any).activeRequests.set(requestID, {
@@ -608,6 +609,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
 
       await expect(grantPromise).rejects.toBe(persistenceError)
       await expect(pendingResult).resolves.toBe(persistenceError)
+      expect(persist).toHaveBeenCalledWith(expect.any(Array), true)
       expect((manager as any).activeRequests.has(requestID)).toBe(false)
     })
   })

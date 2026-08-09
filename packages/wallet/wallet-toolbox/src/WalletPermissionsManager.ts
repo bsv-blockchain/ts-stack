@@ -1100,8 +1100,8 @@ export class WalletPermissionsManager implements WalletInterface {
       // failed to persist. The best-effort helpers intentionally suppress
       // singleton failures and are therefore only suitable for maintenance
       // operations where a partial result is explicitly returned.
-      const created = await this.createPermissionTokensStrict(toCreate)
-      const renewed = await this.renewPermissionTokensStrict(toRenew)
+      const created = await this.createPermissionTokensBestEffort(toCreate, true)
+      const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
       for (const req of [...created, ...renewed]) {
         this.markRecentGrant(req)
       }
@@ -1251,8 +1251,8 @@ export class WalletPermissionsManager implements WalletInterface {
         }
       }
 
-      const created = await this.createPermissionTokensStrict(toCreate)
-      const renewed = await this.renewPermissionTokensStrict(toRenew)
+      const created = await this.createPermissionTokensBestEffort(toCreate, true)
+      const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
       for (const req of [...created, ...renewed]) {
         this.markRecentGrant(req)
       }
@@ -3103,13 +3103,14 @@ export class WalletPermissionsManager implements WalletInterface {
   private async runBestEffortBatches<T, R>(
     items: T[],
     chunkSize: number,
-    runChunk: (chunk: T[]) => Promise<R[]>
+    runChunk: (chunk: T[]) => Promise<R[]>,
+    strict = false
   ): Promise<R[]> {
     if (items.length === 0) return []
     const out: R[] = []
     for (let i = 0; i < items.length; i += chunkSize) {
       const chunk = items.slice(i, i + chunkSize)
-      out.push(...(await this.runBestEffortChunk(chunk, runChunk)))
+      out.push(...(strict ? await runChunk(chunk) : await this.runBestEffortChunk(chunk, runChunk)))
     }
     return out
   }
@@ -3166,124 +3167,104 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   private async createPermissionTokensBestEffort(
-    items: Array<{ request: PermissionRequest; expiry: number; amount?: number }>
+    items: Array<{ request: PermissionRequest; expiry: number; amount?: number }>,
+    strict = false
   ): Promise<PermissionRequest[]> {
     const CHUNK = 25
-    return await this.runBestEffortBatches(items, CHUNK, async chunk => await this.createPermissionTokenChunk(chunk))
-  }
-
-  private async createPermissionTokensStrict(
-    items: Array<{ request: PermissionRequest; expiry: number; amount?: number }>
-  ): Promise<PermissionRequest[]> {
-    const CHUNK = 25
-    const created: PermissionRequest[] = []
-    for (let i = 0; i < items.length; i += CHUNK) {
-      const chunk = items.slice(i, i + CHUNK)
-      created.push(...(await this.createPermissionTokenChunk(chunk)))
-    }
-    return created
-  }
-
-  private async createPermissionTokenChunk(
-    chunk: Array<{ request: PermissionRequest; expiry: number; amount?: number }>
-  ): Promise<PermissionRequest[]> {
-    const built = await this.mapWithConcurrency(
-      chunk,
-      8,
-      async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
-    )
-    await this.createAction(
-      {
-        description: `Grant ${built.length} permissions`,
-        outputs: built.map(b => b.output),
-        options: { acceptDelayedBroadcast: true }
+    return await this.runBestEffortBatches(
+      items,
+      CHUNK,
+      async chunk => {
+        const built = await this.mapWithConcurrency(
+          chunk,
+          8,
+          async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
+        )
+        await this.createAction(
+          {
+            description: `Grant ${built.length} permissions`,
+            outputs: built.map(b => b.output),
+            options: { acceptDelayedBroadcast: true }
+          },
+          this.adminOriginator
+        )
+        return built.map(b => b.request)
       },
-      this.adminOriginator
+      strict
     )
-    return built.map(b => b.request)
   }
 
   private async renewPermissionTokensBestEffort(
-    items: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
+    items: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>,
+    strict = false
   ): Promise<PermissionRequest[]> {
     const CHUNK = 15
-    return await this.runBestEffortBatches(items, CHUNK, async chunk => await this.renewPermissionTokenChunk(chunk))
-  }
+    return await this.runBestEffortBatches(
+      items,
+      CHUNK,
+      async chunk => {
+        const built = await this.mapWithConcurrency(
+          chunk,
+          8,
+          async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
+        )
 
-  private async renewPermissionTokensStrict(
-    items: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
-  ): Promise<PermissionRequest[]> {
-    const CHUNK = 15
-    const renewed: PermissionRequest[] = []
-    for (let i = 0; i < items.length; i += CHUNK) {
-      const chunk = items.slice(i, i + CHUNK)
-      renewed.push(...(await this.renewPermissionTokenChunk(chunk)))
-    }
-    return renewed
-  }
-
-  private async renewPermissionTokenChunk(
-    chunk: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
-  ): Promise<PermissionRequest[]> {
-    const built = await this.mapWithConcurrency(
-      chunk,
-      8,
-      async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
-    )
-
-    const inputBeef = new Beef()
-    for (const c of chunk) {
-      inputBeef.mergeBeef(Beef.fromBinary(c.oldToken.tx))
-    }
-
-    const { signableTransaction } = await this.createAction(
-      {
-        description: `Renew ${chunk.length} permissions`,
-        inputBEEF: inputBeef.toBinary(),
-        inputs: chunk.map((c, i) => ({
-          outpoint: `${c.oldToken.txid}.${c.oldToken.outputIndex}`,
-          unlockingScriptLength: 73,
-          inputDescription: `Consume old permission token #${i + 1}`
-        })),
-        outputs: built.map(b => b.output),
-        options: {
-          acceptDelayedBroadcast: true,
-          randomizeOutputs: false,
-          signAndProcess: false
+        const inputBeef = new Beef()
+        for (const c of chunk) {
+          inputBeef.mergeBeef(Beef.fromBinary(c.oldToken.tx))
         }
+
+        const { signableTransaction } = await this.createAction(
+          {
+            description: `Renew ${chunk.length} permissions`,
+            inputBEEF: inputBeef.toBinary(),
+            inputs: chunk.map((c, i) => ({
+              outpoint: `${c.oldToken.txid}.${c.oldToken.outputIndex}`,
+              unlockingScriptLength: 73,
+              inputDescription: `Consume old permission token #${i + 1}`
+            })),
+            outputs: built.map(b => b.output),
+            options: {
+              acceptDelayedBroadcast: true,
+              randomizeOutputs: false,
+              signAndProcess: false
+            }
+          },
+          this.adminOriginator
+        )
+
+        if (!signableTransaction?.reference || !signableTransaction.tx) {
+          throw new Error('Failed to create signable transaction')
+        }
+
+        const partialTx = Transaction.fromAtomicBEEF(signableTransaction.tx)
+        const pushdrop = new PushDrop(this.underlying)
+        const spends: Record<number, { unlockingScript: string }> = {}
+
+        for (let i = 0; i < chunk.length; i++) {
+          const token = chunk[i].oldToken
+          const unlocker = pushdrop.unlock(
+            WalletPermissionsManager.PERM_TOKEN_ENCRYPTION_PROTOCOL,
+            '1',
+            'self',
+            'all',
+            false,
+            1,
+            LockingScript.fromHex(token.outputScript)
+          )
+          const unlockingScript = await unlocker.sign(partialTx, i)
+          spends[i] = { unlockingScript: unlockingScript.toHex() }
+        }
+
+        const { txid } = await this.underlying.signAction({
+          reference: signableTransaction.reference,
+          spends
+        })
+        if (!txid) throw new Error('Failed to finalize renewal transaction')
+        return built.map(b => b.request)
       },
-      this.adminOriginator
+      strict
     )
-
-    if (!signableTransaction?.reference || !signableTransaction.tx) {
-      throw new Error('Failed to create signable transaction')
-    }
-
-    const partialTx = Transaction.fromAtomicBEEF(signableTransaction.tx)
-    const pushdrop = new PushDrop(this.underlying)
-    const spends: Record<number, { unlockingScript: string }> = {}
-
-    for (let i = 0; i < chunk.length; i++) {
-      const token = chunk[i].oldToken
-      const unlocker = pushdrop.unlock(
-        WalletPermissionsManager.PERM_TOKEN_ENCRYPTION_PROTOCOL,
-        '1',
-        'self',
-        'all',
-        false,
-        1,
-        LockingScript.fromHex(token.outputScript)
-      )
-      const unlockingScript = await unlocker.sign(partialTx, i)
-      spends[i] = { unlockingScript: unlockingScript.toHex() }
-    }
-
-    const { txid } = await this.underlying.signAction({
-      reference: signableTransaction.reference,
-      spends
-    })
-    if (!txid) throw new Error('Failed to finalize renewal transaction')
-    return built.map(b => b.request)
   }
 
   private async coalescePermissionTokens(
