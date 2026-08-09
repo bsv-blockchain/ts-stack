@@ -581,6 +581,25 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
   })
 
   describe('grantCounterpartyPermission error handling', () => {
+    it('should resolve and clean up after counterparty permissions persist', async () => {
+      const requestID = 'pact:success-test.com:counterparty'
+      const pendingResult = new Promise<boolean>((resolve, reject) => {
+        ;(manager as any).activeRequests.set(requestID, {
+          request: {
+            originator: 'success-test.com',
+            counterparty: '02'.padEnd(66, '1'),
+            permissions: { protocols: [] }
+          },
+          pending: [{ resolve, reject }]
+        })
+      })
+
+      await manager.grantCounterpartyPermission({ requestID, granted: { protocols: [] } })
+
+      await expect(pendingResult).resolves.toBe(true)
+      expect((manager as any).activeRequests.has(requestID)).toBe(false)
+    })
+
     it('should reject and clean up when counterparty permission tokens fail to persist', async () => {
       const requestID = 'pact:persistence-test.com:counterparty'
       const persistenceError = new Error('counterparty permission token persistence failed')
