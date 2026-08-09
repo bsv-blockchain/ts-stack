@@ -42,12 +42,15 @@ jobs:
       - name: Enforce persistent dependency and release governance
         run: node scripts/dependency-release-governance.mjs check
 
-      - name: Require complete dependency review evidence
+      - name: Report dependency review evidence
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_ACTOR: ${{ github.actor }}
+          PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
         run: >-
           node scripts/dependency-release-governance.mjs pr-evidence
           --base "$BASE_SHA"

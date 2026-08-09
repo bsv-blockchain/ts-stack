@@ -7,6 +7,7 @@ import {
   classifyDirectDependency,
   collectOverrides,
   immutableDeploymentImages,
+  isAutomationPullRequest,
   parsePnpmOverrides,
   validateDependencyReleaseGovernance,
   validatePullRequestEvidence
@@ -93,7 +94,7 @@ test('direct dependency inventory distinguishes freshness holds and governed com
   )
 })
 
-test('dependency evidence is required only for dependency-shaped changes', () => {
+test('dependency evidence findings apply only to dependency-shaped changes', () => {
   assert.deepEqual(validatePullRequestEvidence('', ['packages/sdk/src/index.ts']), [])
   assert.deepEqual(validatePullRequestEvidence('', ['pnpm-lock.yaml']), [
     'Dependency changes require the ## Dependency evidence section'
@@ -110,6 +111,20 @@ test('dependency evidence is required only for dependency-shaped changes', () =>
 - Affected public package versions: No public source changed.
 `
   assert.deepEqual(validatePullRequestEvidence(body, ['infra/wab/package-lock.json']), [])
+})
+
+test('automated pull requests are exempt from dependency evidence', () => {
+  assert.equal(isAutomationPullRequest({ authorType: 'Bot' }), true)
+  assert.equal(isAutomationPullRequest({ authorLogin: 'dependabot[bot]' }), true)
+  assert.equal(isAutomationPullRequest({ actor: 'release-bot' }), true)
+  assert.equal(
+    isAutomationPullRequest({
+      actor: 'maintainer',
+      authorLogin: 'contributor',
+      authorType: 'User'
+    }),
+    false
+  )
 })
 
 test('every checked-in deployment image is immutable and scheduled for pull verification', () => {
