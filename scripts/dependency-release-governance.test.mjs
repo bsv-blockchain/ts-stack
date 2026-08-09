@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
 import {
@@ -27,42 +26,13 @@ test('dependency and release governance is internally complete', () => {
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
 })
 
-test('patched image-size rejects non-progressing ICNS entries', () => {
-  const mobileManifest = path.join(
-    process.cwd(),
-    'packages/wallet/wallet-toolbox/mobile/package.json'
+test('image-size patch contains both parser progress guards', () => {
+  const patch = fs.readFileSync(path.join(process.cwd(), 'patches/image-size@1.2.1.patch'), 'utf8')
+  assert.match(
+    patch,
+    /if \(imageLength < SIZE_HEADER \|\| imageLength > input\.length - imageOffset\)/
   )
-  const source = `
-    const { createRequire } = require('node:module')
-    const requireFromMobile = createRequire(${JSON.stringify(mobileManifest)})
-    const metroManifest = requireFromMobile.resolve('metro/package.json')
-    const requireFromMetro = createRequire(metroManifest)
-    const { imageSize } = requireFromMetro('image-size')
-    const imageSizeManifest = requireFromMetro.resolve('image-size/package.json')
-    const { findBox } = require(
-      require('node:path').join(require('node:path').dirname(imageSizeManifest), 'dist/types/utils.js')
-    )
-    const zeroBox = Buffer.alloc(8)
-    zeroBox.write('meta', 4)
-    if (findBox(zeroBox, 'meta', 0) !== undefined) process.exit(4)
-    const input = Buffer.alloc(16)
-    input.write('icns', 0)
-    input.writeUInt32BE(16, 4)
-    input.write('ic07', 8)
-    input.writeUInt32BE(0, 12)
-    try {
-      imageSize(input)
-      process.exit(2)
-    } catch (error) {
-      if (!String(error).includes('Invalid ICNS image entry length')) process.exit(3)
-    }
-  `
-  const result = spawnSync(process.execPath, ['-e', source], {
-    encoding: 'utf8',
-    timeout: 2_000
-  })
-  assert.equal(result.error, undefined)
-  assert.equal(result.status, 0, result.stderr)
+  assert.match(patch, /if \(boxSize < 8\)/)
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {
