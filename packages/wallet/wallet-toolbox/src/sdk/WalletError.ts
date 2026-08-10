@@ -172,7 +172,7 @@ export class WalletError extends Error implements WalletErrorObject {
     const message =
       t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
     const hasToJson: boolean = t === 'object' && typeof (error as any)?.toJson === 'function'
-    if (ctor != null && ctor !== '' && ctor.startsWith('WERR_') && hasToJson) {
+    if ((error instanceof WalletError || (ctor != null && ctor !== '' && ctor.startsWith('WERR_'))) && hasToJson) {
       json = (error as WalletError).toJson()
     } else if (name !== '' && message !== '') {
       e = new WalletError(name, message)

@@ -56,7 +56,7 @@ describe('WalletError tests', () => {
 
   test('action batch lifecycle state survives JSON transport', () => {
     const werr = new WERR_ACTION_BATCH_STATE('expired', 'batch-123')
-    const recovered = WalletErrorFromJson(JSON.parse(werr.toJson()))
+    const recovered = WalletErrorFromJson(JSON.parse(WalletError.unknownToJson(werr)))
 
     expect(recovered).toBeInstanceOf(WERR_ACTION_BATCH_STATE)
     expect(recovered).toMatchObject({

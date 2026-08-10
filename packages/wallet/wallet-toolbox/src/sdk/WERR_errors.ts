@@ -39,7 +39,7 @@ export type ActionBatchErrorState =
 /**
  * An action-batch lifecycle operation cannot continue in the batch's current state.
  */
-export class WERR_ACTION_BATCH_STATE extends WalletError {
+class WERRActionBatchState extends WalletError {
   constructor(
     public state: ActionBatchErrorState,
     public batchId?: string
@@ -54,6 +54,8 @@ export class WERR_ACTION_BATCH_STATE extends WalletError {
     return JSON.stringify(obj)
   }
 }
+
+export { WERRActionBatchState as WERR_ACTION_BATCH_STATE }
 
 /**
  * Unable to broadcast transaction at this time.
