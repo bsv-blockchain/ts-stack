@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
+
 - Added `configureEdgePolicy` for public/allowlisted browser access, bounded
   JSON and binary bodies, concurrency, Node HTTP timeouts, and configurable
   CSP/browser response headers.
@@ -30,15 +31,22 @@ All notable changes to this project will be documented in this file. The format 
   server API in a clean TypeScript consumer.
 
 ### Deprecated
+
 - (List features that are in the process of being phased out or replaced.)
 
 ### Removed
+
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
+
 - Health and route failures no longer return internal exception messages.
+- Browser preflights now accept additive well-formed request headers by
+  default, while an explicit `OVERLAY_CORS_ALLOWED_HEADERS` value remains a
+  strict operator allowlist.
 
 ### Security
+
 - Added body, concurrency, connection-timeout, parser-error, and browser-header
   baselines to every route.
 - Administrative Bearer tokens are compared in constant time.
@@ -51,6 +59,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.4.1] - 2026-06-27
 
 ### Added
+
 - Added Arcade-first transaction propagation and proof lookup, with standard Arc
   broadcast as fallback when both providers are configured.
 - Added go-chaintracks-compatible Chaintracks configuration for header lookup and
@@ -60,6 +69,7 @@ All notable changes to this project will be documented in this file. The format 
 - Added admin endpoints for proof refresh and unproven transaction maintenance.
 
 ### Changed
+
 - Provider callbacks now classify terminal invalid and double-spend outcomes so
   rejected transactions can be evicted from admitted overlay state.
 - Production overlay-server wiring now defaults to strict broadcast admission
@@ -70,10 +80,12 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.3.0] - 2026-05-28
 
 ### Added
+
 - Added `OverlayMonitor`, a reusable worker for probing Overlay Express `/lookup`
   responses and reporting BEEF proof-shape bloat.
 
 ### Fixed
+
 - ARC broadcasts now include an explicit `/arc-ingest` callback URL, with optional
   callback-token validation for deployments that configure one.
 
@@ -82,6 +94,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.7.11] - 2025-08-13
 
 ### Added
+
 - Healthcheck endpoint
 
 ---
@@ -94,22 +107,22 @@ Replace `X.X.X` with the new version number and `YYYY-MM-DD` with the release da
 ## [X.X.X] - YYYY-MM-DD
 
 ### Added
-- 
+-
 
 ### Changed
-- 
+-
 
 ### Deprecated
-- 
+-
 
 ### Removed
-- 
+-
 
 ### Fixed
-- 
+-
 
 ### Security
-- 
+-
 ```
 
 Use this template as the starting point for each new version. Always update the "Unreleased" section with changes as they're implemented, and then move them under the new version header when that version is released.

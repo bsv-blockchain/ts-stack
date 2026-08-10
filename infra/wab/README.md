@@ -1,6 +1,6 @@
 # Wallet Authentication Backend (WAB)
 
-Welcome to the **Wallet Authentication Backend (WAB)** project! This README provides a **comprehensive, ground-up guide** to help you **understand**, **configure**, **deploy**, and **run** your own WAB server. 
+Welcome to the **Wallet Authentication Backend (WAB)** project! This README provides a **comprehensive, ground-up guide** to help you **understand**, **configure**, **deploy**, and **run** your own WAB server.
 
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for bounded defaults, database sizing, and HPA prerequisites.
@@ -12,6 +12,7 @@ for bounded defaults, database sizing, and HPA prerequisites.
 The **Wallet Authentication Backend (WAB)** is a Node.js/Express server built in **TypeScript** that provides a **modular, extensible** system for **multi-factor** user authentication. It manages **256-bit presentation keys** for users, which can be used to authenticate/authorize actions elsewhere (e.g., in a wallet or other system).
 
 Each user’s presentation key is **guarded** by one or more **Auth Methods** (e.g., Twilio SMS, government ID verification). Once a user completes an Auth Method, the WAB either:
+
 - **Creates** a new record (if they’re a new user), storing their 256-bit key securely, or
 - **Retrieves** an existing key (if they’re returning).
 
@@ -27,7 +28,7 @@ Additionally, the WAB provides a **faucet** feature that can make a one-time BSV
 
 ## Features & Capabilities
 
-1. **Extensible Auth Methods** – Offers a generic interface to link multiple authentication methods to the same key. 
+1. **Extensible Auth Methods** – Offers a generic interface to link multiple authentication methods to the same key.
 2. **Multi-Factor** – Users can link multiple methods, each requiring verification for future access to the same key.
 3. **Faucet** – One-time or recurring (customizable) faucet payment logic for new accounts.
 4. **Knex-based Database** – Uses migrations for reliable schema updates (supports MySQL or SQLite).
@@ -96,16 +97,20 @@ server/
 ### Installation Steps
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/your-org/wab-server.git
    cd wab-server
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
+
    or
+
    ```bash
    yarn
    ```
@@ -127,15 +132,15 @@ By default, in **development**, the [`knexfile.ts`](./knexfile.ts) is configured
 // Example (knexfile.ts snippet):
 const config: { [key: string]: Knex.Config } = {
   development: {
-    client: "sqlite3",
-    connection: { filename: "./dev.sqlite3" },
+    client: 'sqlite3',
+    connection: { filename: './dev.sqlite3' },
     useNullAsDefault: true,
     migrations: {
-      directory: path.resolve(__dirname, "src/db/migrations")
+      directory: path.resolve(__dirname, 'src/db/migrations')
     }
-  },
+  }
   // ...
-};
+}
 ```
 
 ### Environment Variables
@@ -167,13 +172,15 @@ TRUST_PROXY_HOPS=1
 # Public CORS is the default. For a closed caller set:
 # WAB_CORS_MODE=allowlist
 # WAB_CORS_ALLOWED_ORIGINS=https://wallet.example.com
+# Omit WAB_CORS_ALLOWED_HEADERS for forward-compatible preflights, or set an
+# exact comma-separated browser request-header allowlist.
 
 # Console OTP is permitted only in development/test and requires both values.
 # NODE_ENV=development
 # DEV_CONSOLE_AUTH_METHOD_ENABLED=true
 ```
 
-*(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)*
+_(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)_
 
 All state-changing routes are rate-limited and return HTTP 429 with
 `ERR_RATE_LIMITED`. Defaults are 10 authentication attempts per 15 minutes,
@@ -222,14 +229,18 @@ deletion.
    npm run migrate
    ```
 2. **Start the server in dev mode**:
+
    ```bash
    npm run dev
    ```
+
    or
+
    ```bash
    yarn dev
    ```
-   This runs `ts-node-dev` or equivalent. 
+
+   This runs `ts-node-dev` or equivalent.
 
    The server should start on `http://localhost:3000`.
 
@@ -256,14 +267,14 @@ The WAB is **modular**: you can configure multiple ways for users to authenticat
 2. **Create** or **access** a [Verify Service](https://www.twilio.com/console/verify/services). Copy the **Service SID** (looks like `VAxxxxxxxxx` or `VExxxxxxx`).
 3. In your Twilio console, **grab**:
    - **Twilio Account SID** (`ACxxxxxxxxx...`)
-   - **Auth Token**  
+   - **Auth Token**
 4. **Store** them in your environment variables:
    ```bash
    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
    TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
    TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
    ```
-5. **Use** the `TwilioAuthMethod` in code. By default, the [AuthController](./src/controllers/AuthController.ts) can instantiate it if `methodType === "TwilioPhone"`.  
+5. **Use** the `TwilioAuthMethod` in code. By default, the [AuthController](./src/controllers/AuthController.ts) can instantiate it if `methodType === "TwilioPhone"`.
 
 When a client sends a request to `/auth/start` with `methodType = "TwilioPhone"`, the server calls Twilio to send the SMS code. The client then calls `/auth/complete` with the OTP code, and the WAB verifies it with Twilio, linking that phone number to the user’s presentation key.
 
@@ -278,6 +289,7 @@ identity verification without a complete provider integration and review.
 ### Adding More Methods
 
 To add a new method, simply create a class that extends `AuthMethod`. Implement:
+
 - `startAuth(...)`
 - `completeAuth(...)`
 - `buildConfigFromPayload(...)`
@@ -316,7 +328,7 @@ This guide uses **Google Cloud** services:
    - `roles/storage.admin` or `roles/storage.objectAdmin` for GCR
    - `roles/cloudsql.admin` or `roles/cloudsql.client`
 2. Configure **Workload Identity Federation** so GitHub can obtain short-lived credentials without storing a key file. Follow [Google’s official docs](https://github.com/google-github-actions/auth/blob/main/docs/workload-identity-federation.md).
-3. Create a GitHub OIDC provider in your GCP project, link your repository. 
+3. Create a GitHub OIDC provider in your GCP project, link your repository.
 4. Store the resource names (like `GCP_WORKLOAD_IDENTITY_PROVIDER`) and service account email (like `my-wab-deployer@my-project.iam.gserviceaccount.com`) in **GitHub Secrets**.
 
 ### Docker Image & Container Registry
@@ -381,7 +393,7 @@ gcloud run deploy wab-server-production \
 ### Post-Deployment Checks
 
 - Go to **Cloud Run** in GCP console. Confirm your service is running.
-- Check **Logs** to see if any errors occurred. 
+- Check **Logs** to see if any errors occurred.
 - **Test** your endpoint: `curl https://<your-cloud-run-url>/info`.
 - If you used domain mapping, confirm your custom domain is pointing properly.
 
@@ -389,32 +401,32 @@ gcloud run deploy wab-server-production \
 
 ## Troubleshooting & FAQ
 
-1. **Database connection refused**:  
-   - Ensure the `DB_CONNECTION_NAME` in environment variables matches your Cloud SQL instance name.  
-   - Confirm you used `--add-cloudsql-instances=<instance-connection-name>`.  
+1. **Database connection refused**:
+   - Ensure the `DB_CONNECTION_NAME` in environment variables matches your Cloud SQL instance name.
+   - Confirm you used `--add-cloudsql-instances=<instance-connection-name>`.
    - Check IAM permissions for your Cloud Run service account (it needs `Cloud SQL Client` role).
 
-2. **Twilio: “Invalid service SID”**:  
-   - Double-check you used the correct `TWILIO_VERIFY_SERVICE_SID`.  
+2. **Twilio: “Invalid service SID”**:
+   - Double-check you used the correct `TWILIO_VERIFY_SERVICE_SID`.
    - Make sure the Twilio service is active and has an SMS channel.
 
-3. **401 or 403 on GitHub Actions**:  
-   - Confirm your WIF provider is correctly set up.  
+3. **401 or 403 on GitHub Actions**:
+   - Confirm your WIF provider is correctly set up.
    - Verify the `service account` has the correct roles.
 
-4. **Knex migrations** failing on Cloud Run:  
-   - If your container runs migrations on startup, ensure your DB user has `CREATE TABLE` / `ALTER TABLE` privileges.  
+4. **Knex migrations** failing on Cloud Run:
+   - If your container runs migrations on startup, ensure your DB user has `CREATE TABLE` / `ALTER TABLE` privileges.
    - Alternatively, run migrations from a separate pipeline or step before deployment, so your production container can remain read-only.
 
-5. **Performance issues**:  
-   - You may need to scale your Cloud Run service or upgrade your Cloud SQL tier.  
+5. **Performance issues**:
+   - You may need to scale your Cloud Run service or upgrade your Cloud SQL tier.
    - Consider caching or adding a load balancer in front if you have high throughput usage.
 
 ---
 
 ## Contributing
 
-We welcome contributions! Feel free to open **pull requests** or **issues** if you have improvements, bug reports, or new Auth Methods to share. 
+We welcome contributions! Feel free to open **pull requests** or **issues** if you have improvements, bug reports, or new Auth Methods to share.
 
 To contribute:
 

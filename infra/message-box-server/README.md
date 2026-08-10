@@ -85,28 +85,28 @@ unbounded numeric settings fail startup.
 
 Important optional configuration:
 
-| Variable                                   | Default / purpose                       |
-| ------------------------------------------ | --------------------------------------- |
-| `NODE_ENV`                                 | `development`                           |
-| `PORT` / `HTTP_PORT`                       | `8080`; `PORT` takes precedence         |
-| `ROUTING_PREFIX`                           | Empty                                   |
-| `ENABLE_WEBSOCKETS`                        | `true`                                  |
-| `WALLET_STORAGE_URL`                       | Wallet storage service URL              |
-| `BSV_NETWORK`                              | `mainnet`; use `testnet` for test chain |
-| `ENABLE_FIREBASE`                          | Firebase disabled unless `true`         |
-| `LOGGING_ENABLED`                          | Verbose logs when `true`                |
-| `TRUST_PROXY_HOPS`                         | Exact trusted proxy hops, 0–10          |
-| `MESSAGE_BOX_CORS_MODE`                    | `public`                                |
-| `MESSAGE_BOX_CORS_ALLOWED_ORIGINS`         | Exact origins for allowlist mode        |
-| `MESSAGE_BOX_MAX_BODY_BYTES`               | 4 MiB                                   |
-| `MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES`     | 1 MiB                                   |
-| `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS` | 4                                     |
-| `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT`    | 300 authenticated sends/minute/socket  |
-| `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS` | 25 notification targets/message |
-| `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY` | 4 recipient notification workers |
-| `MESSAGE_BOX_FCM_SEND_CONCURRENCY`        | 10 device-send workers/recipient       |
-| `MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX`      | 300 per minute per IP                   |
-| `MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX` | 1,000 per minute per identity           |
+| Variable                                          | Default / purpose                       |
+| ------------------------------------------------- | --------------------------------------- |
+| `NODE_ENV`                                        | `development`                           |
+| `PORT` / `HTTP_PORT`                              | `8080`; `PORT` takes precedence         |
+| `ROUTING_PREFIX`                                  | Empty                                   |
+| `ENABLE_WEBSOCKETS`                               | `true`                                  |
+| `WALLET_STORAGE_URL`                              | Wallet storage service URL              |
+| `BSV_NETWORK`                                     | `mainnet`; use `testnet` for test chain |
+| `ENABLE_FIREBASE`                                 | Firebase disabled unless `true`         |
+| `LOGGING_ENABLED`                                 | Verbose logs when `true`                |
+| `TRUST_PROXY_HOPS`                                | Exact trusted proxy hops, 0–10          |
+| `MESSAGE_BOX_CORS_MODE`                           | `public`                                |
+| `MESSAGE_BOX_CORS_ALLOWED_ORIGINS`                | Exact origins for allowlist mode        |
+| `MESSAGE_BOX_MAX_BODY_BYTES`                      | 4 MiB                                   |
+| `MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES`            | 1 MiB                                   |
+| `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS`      | 4                                       |
+| `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT`           | 300 authenticated sends/minute/socket   |
+| `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS` | 25 notification targets/message         |
+| `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`  | 4 recipient notification workers        |
+| `MESSAGE_BOX_FCM_SEND_CONCURRENCY`                | 10 device-send workers/recipient        |
+| `MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX`             | 300 per minute per IP                   |
+| `MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX`        | 1,000 per minute per identity           |
 
 See
 [`docs/infrastructure/service-edge-security.md`](../../docs/infrastructure/service-edge-security.md)
@@ -143,9 +143,17 @@ database, WebSocket, and overlay services and is intentionally opt-in.
 
 ## Database and readiness
 
-Migrations in `src/migrations/` run at startup. `/health` reports only process
+Migrations in `src/migrations/` run at startup. `/healthz` reports only process
 liveness. `/ready` verifies database connectivity and returns 503 without
 exposing dependency details while the service is unavailable.
+
+Quota writes create their durable identity lock rows in a short autocommit
+operation, then acquire those rows in stable order inside the message
+transaction. MySQL/PXC serialization conflicts are retried with bounded
+exponential backoff. Operators can tune the default five retries and 10–250 ms
+delay range with `MESSAGE_BOX_DB_DEADLOCK_RETRIES`,
+`MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS`, and
+`MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS`; setting retries to `0` disables retry.
 
 After a production build, migrations can also be run explicitly:
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-06",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -33,10 +33,10 @@
     },
     {
       "name": "@bsv/auth-express-middleware",
-      "publishedVersion": "2.1.2",
-      "releaseType": "minor",
-      "summary": "Bounds BRC-104 application-response capture before authenticated signing, with an 8 MiB default, a configurable transport limit, stable 413 errors, and boundary regression coverage.",
-      "migration": "Existing middleware construction remains compatible. Operators may set transportLimits.maxResponseBytes to a positive byte count or -1 when the embedding service enforces an equivalent response budget."
+      "publishedVersion": "2.2.0",
+      "releaseType": "patch",
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, preventing a second Express response from terminating the service process.",
+      "migration": "No consumer migration is required; valid request, response, authentication, and error contracts are unchanged."
     },
     {
       "name": "@bsv/authsocket",
@@ -117,10 +117,10 @@
     },
     {
       "name": "@bsv/overlay-express",
-      "publishedVersion": "2.4.2",
-      "releaseType": "minor",
-      "summary": "Adds small, standard, and high-throughput resource profiles; bounded lookup, BASM, admin, connection, body, and response work; and streaming janitor scans with independently capped report retention.",
-      "migration": "The standard profile is selected by default. Existing configuration methods remain compatible; use OVERLAY_RESOURCE_PROFILE or granular OVERLAY_* limits, and ensure custom lookup services bound their own database queries before returning formulas."
+      "publishedVersion": "2.5.0",
+      "releaseType": "patch",
+      "summary": "Preserves forward-compatible browser preflights by adding every well-formed requested header to the known protocol defaults unless the operator configures a strict header allowlist.",
+      "migration": "No consumer migration is required. Omit OVERLAY_CORS_ALLOWED_HEADERS for additive compatibility, or set an exact comma-separated list to retain a strict browser request-header policy. Origin modes, authentication, authorization, and endpoint validation are unchanged."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.2.18",
-      "releaseType": "minor",
-      "summary": "Adds batched proven-transaction BEEF assembly and deferred-then-compound Merkle proof validation, reuses shared proof hashes and BRC-42 counterparty secrets, and accelerates optional-backend P2PKH public-key emission.",
-      "migration": "No consumer migration is required. The new APIs are additive; BEEF ordering and bytes, proof validity, signatures, synchronous signing, SDK 2.x wire encodings, BRC-103/104 behavior, and supported imports are unchanged."
+      "publishedVersion": "2.3.1",
+      "releaseType": "patch",
+      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
+      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
     },
     {
       "name": "@bsv/simple",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Fixes credential-free Arcade/go-chaintracks initialization when ChainTracks bulk storage is empty while retaining continuity, proof-of-work, file-integrity, chainwork, and exact-network genesis validation.",
-      "migration": "No consumer migration is required. Fresh keyless ChainTracks deployments can now bootstrap from a valid height-zero Arcade batch; existing CDN-backed, persisted, browser, mobile, explicit-client, and legacy v1 configurations remain compatible and keep the same trust checks."
+      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast and preserves remote storage endpoint discovery after production minification.",
+      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.",
-      "migration": "No browser consumer migration is required. Browser entry points, CORS behavior, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible."
+      "summary": "Carries the lockstep browser build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.0",
+      "publishedVersion": "2.6.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with the corrected credential-free Arcade/go-chaintracks empty-store bootstrap and unchanged validation guarantees.",
-      "migration": "No mobile consumer migration is required. React Native entry points, the mobile bridge, explicit clients, legacy v1 URLs, persisted storage, and wire contracts remain compatible."
+      "summary": "Carries the lockstep mobile build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
+      "migration": "No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
     },
     {
       "name": "create-bsv-app",

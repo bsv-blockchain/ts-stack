@@ -38,6 +38,7 @@ import {
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
+import { normalizeWalletJsonTx, walletJsonReplacer } from './utils/jsonByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
 
 function deserializeWalletError(data: any): Error | undefined {
@@ -79,35 +80,32 @@ export default class HTTPWalletJSON implements WalletInterface {
 
     // Detect if we're in a browser environment
     const isBrowser =
-      globalThis.window !== undefined &&
+      typeof window !== 'undefined' &&
       typeof document !== 'undefined' &&
-      globalThis.window?.origin !== 'file://'
+      window.origin !== 'file://'
 
     this.api = async (call: string, args: object) => {
       // In browser environments, let the browser handle Origin header automatically
       // In Node.js environments, we need to set it manually if originator is provided
-      const origin =
-        !isBrowser && this.originator ? toOriginHeader(this.originator, 'http') : undefined
-
-      if (!isBrowser && origin === undefined) {
+      if (!isBrowser && !this.originator) {
         throw new Error(
           'HTTPWalletJSON: originator is required when using the HTTP substrate in Node.js. ' +
             'Pass an originator (e.g. "example.com") to the constructor.'
         )
       }
+      const origin = isBrowser ? undefined : toOriginHeader(this.originator!, 'http')
 
       const res = await httpClient(`${this.baseUrl}/${call}`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...(origin ? { Origin: origin } : {}),
-          ...(origin ? { Originator: origin } : {})
+          ...(origin ? { Origin: origin, Originator: origin } : {})
         },
-        body: JSON.stringify(args)
+        body: JSON.stringify(args, walletJsonReplacer)
       })
 
-      const data = await res.json()
+      const data = normalizeWalletJsonTx(await res.json())
 
       // Check the HTTP status on the original response
       if (!res.ok) {

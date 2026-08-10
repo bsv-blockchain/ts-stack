@@ -23,6 +23,15 @@ interface SimplifiedFetchRequestOptions {
   retryCounter?: number
   paymentContext?: PaymentRetryContext
   paymentRetryAttempts?: number
+  /**
+   * Optional wallet action labels applied to BRC-105 payment transactions
+   * created for 402 responses. Use these to find payments later via
+   * listActions (e.g. app-specific categories). AuthFetch always also
+   * applies `brc105 <hexPrefix> <hexSuffix>`, where prefix/suffix are the
+   * BRC-105 base64 nonces hex-encoded so wallet label lowercasing does not
+   * corrupt them. Decode hex → bytes → base64 to recover the wire values.
+   */
+  labels?: string[]
 }
 
 interface AuthPeer {
@@ -112,7 +121,8 @@ export class AuthFetch {
    * 3) Return the final response.
    *
    * @param url - The URL to send the request to.
-   * @param config - Configuration options for the request, including method, headers, and body.
+   * @param config - Configuration options for the request, including method, headers, body,
+   *   optional payment retry controls, and optional `labels` merged onto any BRC-105 payment action.
    * @returns A promise that resolves with the server's response, structured as a Response-like object.
    *
    * @throws Will throw an error if unsupported headers are used or other validation fails.
@@ -714,6 +724,7 @@ export class AuthFetch {
     const { tx } = await this.wallet.createAction(
       {
         description: `Payment for request to ${new URL(url).origin}`,
+        labels: this.buildPaymentActionLabels(config, derivationPrefix, derivationSuffix),
         outputs: [
           {
             satoshis: satoshisRequired,
@@ -750,6 +761,29 @@ export class AuthFetch {
       errors: [],
       requestSummary: this.buildPaymentRequestSummary(url, config)
     }
+  }
+
+  /**
+   * Builds wallet action labels for a BRC-105 payment.
+   * Always includes `brc105 <hexPrefix> <hexSuffix>` (base64 nonces hex-encoded
+   * so label lowercasing is lossless); appends caller labels when provided.
+   * Caller labels are passed through unchanged — wallet validateLabel trims/lowercases.
+   */
+  private buildPaymentActionLabels(
+    config: SimplifiedFetchRequestOptions,
+    derivationPrefix: string,
+    derivationSuffix: string
+  ): string[] {
+    const callerLabels = Array.isArray(config.labels) ? config.labels : []
+    return [
+      `brc105 ${this.base64NonceToLabelHex(derivationPrefix)} ${this.base64NonceToLabelHex(derivationSuffix)}`,
+      ...callerLabels
+    ]
+  }
+
+  /** Hex-encode a base64 BRC-105 nonce for case-stable wallet labels. */
+  private base64NonceToLabelHex(base64Nonce: string): string {
+    return Utils.toHex(Utils.toArray(base64Nonce, 'base64'))
   }
 
   private getMaxPaymentAttempts(config: SimplifiedFetchRequestOptions): number {

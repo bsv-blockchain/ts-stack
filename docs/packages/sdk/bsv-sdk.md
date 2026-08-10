@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.3.0'
+version: '2.3.2'
 npm: '@bsv/sdk'
-last_updated: '2026-07-31'
-last_verified: '2026-07-31'
+last_updated: '2026-08-07'
+last_verified: '2026-08-07'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']

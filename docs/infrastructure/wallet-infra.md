@@ -1,10 +1,10 @@
 ---
 id: infra-wallet-infra
-title: "Wallet Infrastructure Services"
+title: 'Wallet Infrastructure Services'
 kind: infra
-version: "2.0.13"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: '2.0.25'
+last_updated: '2026-08-06'
+last_verified: '2026-08-06'
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -30,19 +30,20 @@ Clients connect with identity-based auth headers, manage UTXOs, baskets, labels,
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted) |
+| Type              | Requirement                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Database          | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted)                                                                       |
 | External services | Arc/Taal-compatible services for transaction broadcasting and proof lookup; optional Arcade/Chaintracks support through wallet-toolbox service options |
-| ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware |
+| ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware                                                           |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | / | JSON-RPC 2.0 endpoint (all wallet operations) |
-| PUT | /action-batch/:batchId/blob/:digest | Authenticated bounded binary blob upload |
-| GET | /, /robots.txt | Public service metadata |
+| Method | Path                                | Purpose                                       |
+| ------ | ----------------------------------- | --------------------------------------------- |
+| POST   | /                                   | JSON-RPC 2.0 endpoint (all wallet operations) |
+| PUT    | /action-batch/:batchId/blob/:digest | Authenticated bounded binary blob upload      |
+| GET    | /, /robots.txt                      | Public service metadata                       |
+| GET    | /healthz                            | Public process/storage health                 |
 
 JSON-RPC methods: walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, walletUtxoStorage_getBasket, walletUtxoStorage_listLabels, walletUtxoStorage_upsertLabel, walletUtxoStorage_dropLabels, walletUtxoStorage_listCertificates, walletUtxoStorage_insertCertificate (see @bsv/wallet-toolbox docs for full list).
 
@@ -52,24 +53,38 @@ None; HTTP JSON-RPC only.
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| NODE_ENV | No | `development` or `production` |
-| HTTP_PORT | No | Express server port (default: 8081, use 8081 if nginx enabled on 8080) |
-| ENABLE_NGINX | No | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false) |
-| BSV_NETWORK | No | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`) |
-| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
-| KNEX_DB_CONNECTION | Yes | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`) |
-| COMMISSION_FEE | No | Optional commission fee in satoshis per request (default: 0) |
-| COMMISSION_PUBLIC_KEY | No | Public key to receive commission payments (if COMMISSION_FEE > 0) |
-| FEE_MODEL | No | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`) |
-| TAAL_API_KEY | No | API key used by the default Arc/Taal service configuration (optional) |
-| TSTN_ARCADE_URL | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
-| TSTN_CHAINTRACKS_URL | No | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted. |
-| WALLET_STORAGE_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
-| WALLET_STORAGE_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
-| WALLET_STORAGE_JSON_MAX_BODY_BYTES | No | JSON-RPC body ceiling (default 31457280) |
-| WALLET_STORAGE_BINARY_MAX_BODY_BYTES | No | Blob body ceiling (default 8388608) |
+| Variable                                 | Required  | Description                                                                                                                                                 |
+| ---------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NODE_ENV                                 | No        | `development` or `production`                                                                                                                               |
+| HTTP_PORT                                | No        | Express server port (default: 8081, use 8081 if nginx enabled on 8080)                                                                                      |
+| ENABLE_NGINX                             | No        | Set to `'true'` to start nginx reverse proxy on port 8080 (default: true)                                                                                   |
+| WALLET_STORAGE_BIND_HOST                 | No        | Application listener host (default `127.0.0.1` behind nginx, otherwise `0.0.0.0`)                                                                           |
+| BSV_NETWORK                              | No        | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`); historical monitor alias `CHAIN` is accepted                                          |
+| SERVER_PRIVATE_KEY                       | Yes       | 256-bit hex private key for server identity                                                                                                                 |
+| KNEX_DB_CONNECTION                       | Yes       | Knex database connection JSON string; historical monitor aliases `MAIN_KNEX_DB_CONNECTION` and `TEST_KNEX_DB_CONNECTION` are selected by network            |
+| COMMISSION_FEE                           | No        | Optional commission fee in satoshis per request (default: 0)                                                                                                |
+| COMMISSION_PUBLIC_KEY                    | No        | Public key to receive commission payments (if COMMISSION_FEE > 0)                                                                                           |
+| FEE_MODEL                                | No        | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)                                                                                     |
+| TAAL_API_KEY                             | No        | API key used by the default Arc/Taal service configuration (optional)                                                                                       |
+| TSTN_ARCADE_URL                          | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
+| TSTN_CHAINTRACKS_URL                     | No        | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted.                                                      |
+| WALLET_STORAGE_CORS_MODE                 | No        | `public` (default), `allowlist`, or `disabled`                                                                                                              |
+| WALLET_STORAGE_CORS_ALLOWED_ORIGINS      | No        | Exact comma-separated origins in allowlist mode                                                                                                             |
+| WALLET_STORAGE_CORS_ALLOWED_HEADERS      | No        | Strict comma-separated browser request-header allowlist; omit for additive compatibility                                                                    |
+| WALLET_STORAGE_JSON_MAX_BODY_BYTES       | No        | JSON-RPC body ceiling (default 31457280)                                                                                                                    |
+| WALLET_STORAGE_BINARY_MAX_BODY_BYTES     | No        | Blob body ceiling (default 8388608)                                                                                                                         |
+| WALLET_STORAGE_RPC_DEFAULT_LIST_LIMIT    | No        | Row limit inserted for list/find RPCs that omit one (standard default `1000`; `-1`/`unlimited` is an explicit operator opt-out)                             |
+| WALLET_STORAGE_RPC_MAX_LIST_LIMIT        | No        | Largest explicit list/find page (standard default `1000`; legacy 10,000-row clients require a measured `10000` compatibility override)                      |
+| WALLET_STORAGE_RPC_MAX_ARRAY_ITEMS       | No        | Maximum items in any decoded RPC request array (standard default `1000000`)                                                                                 |
+| WALLET_STORAGE_RPC_MAX_RESPONSE_BYTES    | No        | Serialized JSON-RPC response ceiling (standard default `8388608`)                                                                                           |
+| WALLET_STORAGE_TRUST_PROXY_HOPS          | No        | Exact trusted reverse-proxy hop count, 0–10 (default 0/direct exposure)                                                                                     |
+| WALLET_STORAGE_MONITOR_START_TASKS       | No        | Enable monitor work for `all`/`monitor` roles (default true; historical alias supported)                                                                    |
+| WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE | No        | `default`, `multiuser`, `alltoother`, or `none` (default `default`; historical alias supported)                                                             |
+| WALLET_STORAGE_MONITOR_ADMIN_ENABLED     | No        | Enable the private authenticated monitor operator listener on an `all` or `monitor` singleton (default false)                                               |
+| WALLET_STORAGE_MONITOR_ADMIN_HOST        | No        | Operator listener bind host (default `127.0.0.1`)                                                                                                           |
+| WALLET_STORAGE_MONITOR_ADMIN_PORT        | No        | Operator listener port (default `8082`; must not collide with the storage/nginx listener)                                                                   |
+| WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY | No        | Stable operator-service identity key; secret; defaults to `SERVER_PRIVATE_KEY`                                                                              |
+| WALLET_STORAGE_ADMIN_IDENTITY_KEYS       | Admin     | Comma-separated compressed public keys allowed to use storage and monitor admin APIs                                                                        |
 
 See [Public Service Edge Security](service-edge-security.md#wallet-storageserver-and-adminserver)
 for the authentication, rate, timeout, logging, CORS/CSP, admin, and nginx
@@ -80,11 +95,18 @@ contracts.
 > environment at runtime rather than hardcoded, so `TSTN_ARCADE_URL` (and optionally
 > `TSTN_CHAINTRACKS_URL`) must be set whenever `BSV_NETWORK=tstn`.
 
-The reference `infra/wallet-infra` entrypoint currently wires only the default
-wallet-toolbox `Services.createDefaultOptions(chain)` path, plus `TAAL_API_KEY`
-when supplied. The wallet-toolbox package itself also supports Arcade-first /
-Arc-fallback service options, callback tokens, and Chaintracks event integration,
-but those extra env vars are not yet exposed by this reference infra wrapper.
+The reference entrypoint exposes TAAL, WhatsOnChain, Bitails, Arcade,
+GorillaPool ARC, exchange-rate, callback-token, monitor-profile, and database
+pool settings through the documented `WALLET_STORAGE_*` variables. Historical
+provider and monitor variable names remain accepted where documented so an
+operator can adopt the official image without rebuilding it.
+
+Wallets should keep explicit list pages within
+`WALLET_STORAGE_RPC_MAX_LIST_LIMIT`. Balance displays should use
+wallet-toolbox's database-side balance special operation rather than loading
+and summing every output in the client. A temporary 10,000-row maximum can
+support historical BRC-100 clients, but only after production-shaped memory
+testing and with the response-byte and concurrency ceilings still enabled.
 
 ## Run locally
 
@@ -114,7 +136,9 @@ docker build -t wallet-infra:latest .
 # Run with MySQL backend
 docker run -d \
   -e NODE_ENV=production \
+  -e ENABLE_NGINX=false \
   -e HTTP_PORT=8081 \
+  -e WALLET_STORAGE_BIND_HOST=0.0.0.0 \
   -e BSV_NETWORK=main \
   -e SERVER_PRIVATE_KEY=<256-bit-hex> \
   -e KNEX_DB_CONNECTION='{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}' \
@@ -146,11 +170,12 @@ Auto-run on startup via Knex. Creates tables: outputs, baskets, labels, certific
 The process starts both the JSON-RPC storage server and a wallet-toolbox
 `Monitor`:
 
-1. `Monitor.createDefaultWalletMonitorOptions(chain, storage, services)` builds
-   the monitor options for real networks.
-2. `monitor.addDefaultTasks()` installs the default task set.
-3. `monitor.startTasks()` runs the background task loop after the storage server
-   starts.
+1. `Monitor.createDefaultWalletMonitorOptions(chain, storage, services, ...,
+startupTaskMode)` builds the selected task profile for real networks.
+2. Arcade callback-token and EventSource support are attached when both are
+   configured.
+3. `monitor.startTasks()` runs the background task loop when the role and
+   `WALLET_STORAGE_MONITOR_START_TASKS` permit it.
 
 The default task set handles:
 
@@ -165,7 +190,13 @@ local integration tests complete quickly.
 
 ## Health checks
 
-There is no dedicated HTTP health endpoint in this reference wrapper. Monitor:
+The storage listener exposes `/healthz`. The image health check probes nginx on
+port 8080 when it is enabled and otherwise probes the configured application
+listener, so a healthy loopback upstream cannot mask a failed public proxy.
+When the optional monitor operator
+listener is enabled, it exposes its own `/healthz` plus the static `/admin`
+bootstrap page; authenticated and allowlisted BRC-100 clients can use
+`/admin/api`. Monitor:
 
 - MySQL connectivity and query latency.
 - JSON-RPC endpoint responds to method calls, such as
@@ -175,8 +206,9 @@ There is no dedicated HTTP health endpoint in this reference wrapper. Monitor:
   failures.
 - Database indexes are present and functional.
 
-If this component is deployed behind nginx, also check the nginx listener and the
-upstream app port (`HTTP_PORT`, default `8081`).
+If this component is deployed behind nginx, separately monitor the upstream app
+port (`HTTP_PORT`, default `8081`) for diagnostics; public readiness should use
+the nginx listener.
 
 ## Spec conformance
 
@@ -206,11 +238,11 @@ upstream app port (`HTTP_PORT`, default `8081`).
 - BRC-103 auth enforced: all clients must provide signed auth headers; unsigned requests rejected
 - Migrations auto-run: schema changes apply on startup; use Knex CLI for manual migration control if needed
 - Optional nginx: ENABLE_NGINX=true adds another layer; ensure port 8080 available and firewall open
+- Monitor admin: keep its dedicated listener private, use a stable secret-managed server key and explicit allowed identity keys, and run it only on the singleton monitor leader
 - Commission fees: COMMISSION_FEE enforcement requires COMMISSION_PUBLIC_KEY; mismatched config silently skips fee collection
-- Provider concentration: with only `TAAL_API_KEY` wired by the reference wrapper,
-  production deployments can become too dependent on one provider. Prefer
-  exposing Arcade and Chaintracks options in infra before relying on this wrapper
-  for resilient mainnet/TeraTestnet operations.
+- Provider concentration: configure more than one supported provider where the
+  target network offers them, and alert on individual broadcaster/proof-source
+  failures.
 - Monitor liveness: the storage server and monitor run in the same process. A
   crash in monitor startup fails the process, which is good for visibility but
   requires process supervision and alerting.

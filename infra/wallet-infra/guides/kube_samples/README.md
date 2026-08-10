@@ -27,6 +27,26 @@ until monitor leadership, shared sessions, rate limits, and storage semantics
 are proven. A hostname topology preference is already present for a future
 replica-safe API tier.
 
+The sample trusts exactly one reverse-proxy hop because Kubernetes ingress is
+expected to sit directly in front of it. Set
+`WALLET_STORAGE_TRUST_PROXY_HOPS=0` for direct exposure, or to the exact known
+hop count for a different topology. Never trust an arbitrary forwarding chain.
+It also sets `WALLET_STORAGE_BIND_HOST=0.0.0.0` because nginx is disabled and a
+Kubernetes Service must reach the application over the pod's IPv4 address.
+It also uses the existing official-image `default` monitor task profile. A
+multi-user provider should set
+`WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE=multiuser`, keep exactly one monitor
+leader, and supply matching Arcade URL/callback-token configuration when SSE
+status delivery is enabled.
+
+The optional monitor operator service is disabled in this sample. If enabled,
+run it only on the singleton `all` or `monitor` pod, mount its private key and
+allowed identity keys from the secret manager, use a port distinct from the
+public storage listener, and expose it only through an operator-private
+ClusterIP, tunnel, or equivalent access path. Its `/healthz` is suitable for
+that singleton's probes; do not route the monitor administration port through
+the public Wallet Storage Ingress.
+
 Wallet Storage is a public protocol service. Its default browser policy remains
 credential-free wildcard CORS, including opaque origins. Configure an exact
 allowlist only when the deployment intentionally serves a closed caller set.

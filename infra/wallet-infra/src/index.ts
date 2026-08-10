@@ -8,11 +8,15 @@ import {
   StorageServer,
   Wallet,
   Monitor,
+  MonitorDaemon,
+  AdminServer,
+  type MonitorStartupTaskMode,
   KnexSessionManager,
   WalletLogger,
   type WalletLoggerLevel,
   type WalletArgs
 } from '@bsv/wallet-toolbox'
+import EventSource from 'eventsource'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
@@ -62,11 +66,9 @@ const closeHttpServer = async (server: Server): Promise<void> => {
 
 // Load environment variables
 const {
-  BSV_NETWORK = 'main',
   ENABLE_NGINX = 'true',
   HTTP_PORT = 8081, // Must be 8081 if ENABLE_NGINX 'true',
   SERVER_PRIVATE_KEY,
-  KNEX_DB_CONNECTION,
   TAAL_API_KEY,
   WHATSONCHAIN_API_KEY,
   BITAILS_API_KEY,
@@ -80,7 +82,28 @@ const {
   LOGGER_LEVEL
 } = process.env
 
+const BSV_NETWORK = process.env.BSV_NETWORK ?? process.env.CHAIN ?? 'main'
+
+function readKnexDatabaseConnection(network: string): string | undefined {
+  if (process.env.KNEX_DB_CONNECTION != null) {
+    return process.env.KNEX_DB_CONNECTION
+  }
+  if (network === 'main') return process.env.MAIN_KNEX_DB_CONNECTION
+  if (network === 'test') return process.env.TEST_KNEX_DB_CONNECTION
+  return undefined
+}
+
+const KNEX_DB_CONNECTION = readKnexDatabaseConnection(BSV_NETWORK)
+
 type WalletInfraRole = 'all' | 'api' | 'monitor'
+
+interface MonitorAdminConfig {
+  host: string
+  port: number
+  privateKey: string
+  identityKeys: string[]
+  allowedOrigins?: string[]
+}
 
 function readPositiveInteger(name: string, fallback: number): number {
   const raw = process.env[name]
@@ -104,6 +127,27 @@ function readNonNegativeInteger(name: string, fallback: number): number {
   return value
 }
 
+function readPort(name: string, fallback: number): number {
+  const value = readPositiveInteger(name, fallback)
+  if (value > 65_535) throw new Error(`${name} must be between 1 and 65535`)
+  return value
+}
+
+function readOptionalProxyHops(): number | undefined {
+  const raw = process.env.WALLET_STORAGE_TRUST_PROXY_HOPS
+  if (raw == null || raw.trim() === '') return undefined
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(
+      'WALLET_STORAGE_TRUST_PROXY_HOPS must be a non-negative integer'
+    )
+  }
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value > 10) {
+    throw new Error('WALLET_STORAGE_TRUST_PROXY_HOPS must be between 0 and 10')
+  }
+  return value
+}
+
 function readBoolean(name: string, fallback: boolean): boolean {
   const raw = process.env[name]
   if (raw == null || raw.trim() === '') return fallback
@@ -112,12 +156,59 @@ function readBoolean(name: string, fallback: boolean): boolean {
   throw new Error(`${name} must be true or false`)
 }
 
+function readStorageBindHost(): string {
+  const configured = process.env.WALLET_STORAGE_BIND_HOST?.trim()
+  if (configured != null && configured !== '') return configured
+  return ENABLE_NGINX === 'true' ? '127.0.0.1' : '0.0.0.0'
+}
+
 function readRole(): WalletInfraRole {
-  const role = process.env.WALLET_INFRA_ROLE?.trim().toLowerCase() ?? 'all'
+  const explicitRole = process.env.WALLET_INFRA_ROLE?.trim().toLowerCase()
+  const legacyMonitorRole =
+    explicitRole == null &&
+    process.env.ADMIN_PORT != null &&
+    process.env.ADMIN_PORT.trim() !== '' &&
+    process.env.WALLET_STORAGE_MONITOR_ADMIN_ENABLED?.trim().toLowerCase() !==
+      'false'
+  const role = explicitRole ?? (legacyMonitorRole ? 'monitor' : 'all')
   if (role !== 'all' && role !== 'api' && role !== 'monitor') {
     throw new Error('WALLET_INFRA_ROLE must be all, api, or monitor')
   }
   return role
+}
+
+function readMonitorStartupTaskMode(): MonitorStartupTaskMode {
+  const mode = (
+    process.env.WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE ??
+    process.env.MONITOR_STARTUP_TASK_MODE ??
+    'default'
+  )
+    .trim()
+    .toLowerCase()
+  if (
+    mode === 'none' ||
+    mode === 'default' ||
+    mode === 'multiuser' ||
+    mode === 'alltoother'
+  ) {
+    return mode
+  }
+  throw new Error(
+    'WALLET_STORAGE_MONITOR_STARTUP_TASK_MODE must be none, default, multiuser, or alltoother'
+  )
+}
+
+function readMonitorTasksEnabled(): boolean {
+  const raw =
+    process.env.WALLET_STORAGE_MONITOR_START_TASKS ??
+    process.env.MONITOR_START_TASKS
+  if (raw == null || raw.trim() === '') return true
+  const normalized = raw.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  throw new Error(
+    'WALLET_STORAGE_MONITOR_START_TASKS must be true/false, 1/0, yes/no, or on/off'
+  )
 }
 
 function decodeJsonSetting(name: string, raw: string): string {
@@ -155,6 +246,85 @@ function readAdminIdentityKeys(): string[] | undefined {
     )
   }
   return [...new Set(decoded.map(value => value.toLowerCase()))]
+}
+
+function readOptionalCsv(
+  name: string,
+  fallbackName?: string
+): string[] | undefined {
+  const raw =
+    process.env[name] ??
+    (fallbackName == null ? undefined : process.env[fallbackName])
+  if (raw == null || raw.trim() === '') return undefined
+  const values = raw
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+  return values.length === 0 ? undefined : [...new Set(values)]
+}
+
+function readMonitorAdminConfig(
+  role: WalletInfraRole
+): MonitorAdminConfig | undefined {
+  const legacyEnabled =
+    process.env.ADMIN_PORT != null && process.env.ADMIN_PORT.trim() !== ''
+  const enabled = readBoolean(
+    'WALLET_STORAGE_MONITOR_ADMIN_ENABLED',
+    legacyEnabled
+  )
+  if (!enabled) return undefined
+  if (role === 'api') {
+    throw new Error(
+      'WALLET_STORAGE_MONITOR_ADMIN_ENABLED requires WALLET_INFRA_ROLE=monitor or all'
+    )
+  }
+
+  const identityKeys = readAdminIdentityKeys() ?? []
+  if (identityKeys.length === 0) {
+    throw new Error(
+      'WALLET_STORAGE_MONITOR_ADMIN_ENABLED requires WALLET_STORAGE_ADMIN_IDENTITY_KEYS or ADMIN_IDENTITY_KEYS'
+    )
+  }
+
+  const privateKey =
+    process.env.WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY ??
+    process.env.ADMIN_ROOT_KEY_HEX ??
+    SERVER_PRIVATE_KEY
+  if (privateKey == null || privateKey.trim() === '') {
+    throw new Error(
+      'WALLET_STORAGE_MONITOR_ADMIN_ENABLED requires WALLET_STORAGE_MONITOR_ADMIN_PRIVATE_KEY, ADMIN_ROOT_KEY_HEX, or SERVER_PRIVATE_KEY'
+    )
+  }
+
+  const portName =
+    process.env.WALLET_STORAGE_MONITOR_ADMIN_PORT == null
+      ? 'ADMIN_PORT'
+      : 'WALLET_STORAGE_MONITOR_ADMIN_PORT'
+  const port = readPort(portName, 8082)
+  if (role === 'all' && port === Number(HTTP_PORT)) {
+    throw new Error(
+      'WALLET_STORAGE_MONITOR_ADMIN_PORT must differ from HTTP_PORT when WALLET_INFRA_ROLE=all'
+    )
+  }
+  if (role === 'all' && ENABLE_NGINX === 'true' && port === 8080) {
+    throw new Error(
+      'WALLET_STORAGE_MONITOR_ADMIN_PORT must differ from the nginx listener port 8080 when WALLET_INFRA_ROLE=all'
+    )
+  }
+
+  return {
+    host:
+      process.env.WALLET_STORAGE_MONITOR_ADMIN_HOST ??
+      process.env.ADMIN_HOST ??
+      '127.0.0.1',
+    port,
+    privateKey: privateKey.trim(),
+    identityKeys,
+    allowedOrigins: readOptionalCsv(
+      'WALLET_STORAGE_MONITOR_ADMIN_ALLOWED_ORIGINS',
+      'ADMIN_ALLOWED_ORIGINS'
+    )
+  }
 }
 
 function readWalletLoggerLevel(): WalletLoggerLevel | undefined {
@@ -231,6 +401,7 @@ async function createServicesAndMonitorOptions(
   knex: Knex,
   storage: WalletStorageManager
 ) {
+  const startupTaskMode = readMonitorStartupTaskMode()
   if (chain === 'mock') {
     const services = new MockServices(knex)
     await services.initialize()
@@ -246,19 +417,24 @@ async function createServicesAndMonitorOptions(
         abandonedMsecs: 1000 * 60 * 5,
         unprovenAttemptsLimitTest: 10,
         unprovenAttemptsLimitMain: 144,
-        maxRebroadcastAttempts: 0
+        maxRebroadcastAttempts: 0,
+        startupTaskMode
       }
     }
   }
   const services = new Services(configuredServiceOptions(chain))
-  return {
+  const monitorOptions = Monitor.createDefaultWalletMonitorOptions(
+    chain,
+    storage,
     services,
-    monitorOptions: Monitor.createDefaultWalletMonitorOptions(
-      chain,
-      storage,
-      services
-    )
+    undefined,
+    startupTaskMode
+  )
+  if (providerConfig.arcadeUrl && providerConfig.arcadeCallbackToken) {
+    monitorOptions.callbackToken = providerConfig.arcadeCallbackToken
+    monitorOptions.EventSourceClass = EventSource
   }
+  return { services, monitorOptions }
 }
 
 function walletNetworkPreset(
@@ -293,7 +469,8 @@ const providerConfig = {
     process.env.WALLET_STORAGE_EXCHANGE_RATES_API_KEY ?? EXCHANGERATESAPI_KEY
 }
 
-async function setupWalletStorageAndMonitor(): Promise<{
+interface WalletRuntimeContext {
+  chain: WalletChain
   databaseName: string
   knex: Knex
   activeStorage: StorageKnex
@@ -304,7 +481,47 @@ async function setupWalletStorageAndMonitor(): Promise<{
   wallet: Wallet
   server: StorageServer
   monitor: Monitor
-}> {
+}
+
+function createMonitorAdmin(
+  config: MonitorAdminConfig,
+  context: WalletRuntimeContext
+): { server: AdminServer; authWallet: Wallet } {
+  const rootKey = PrivateKey.fromHex(config.privateKey)
+  const keyDeriver = new KeyDeriver(rootKey)
+  const authWallet = new Wallet({
+    chain: context.chain,
+    keyDeriver,
+    storage: new WalletStorageManager(rootKey.toPublicKey().toString()),
+    services: context.services
+  })
+  const daemon = new MonitorDaemon({
+    chain: context.chain,
+    storageProvider: context.activeStorage,
+    storageManager: context.storage,
+    services:
+      context.services instanceof Services ? context.services : undefined,
+    monitor: context.monitor
+  })
+  daemon.setup = daemon.args
+
+  return {
+    server: new AdminServer({
+      config: {
+        chain: context.chain,
+        adminHost: config.host,
+        adminPort: config.port,
+        adminIdentityKeys: config.identityKeys,
+        adminAllowedOrigins: config.allowedOrigins
+      },
+      daemon,
+      authWallet
+    }),
+    authWallet
+  }
+}
+
+async function setupWalletStorageAndMonitor(): Promise<WalletRuntimeContext> {
   try {
     if (!SERVER_PRIVATE_KEY) {
       throw new Error('SERVER_PRIVATE_KEY must be set')
@@ -398,7 +615,6 @@ async function setupWalletStorageAndMonitor(): Promise<{
     const keyDeriver = new KeyDeriver(rootKey)
 
     const monitor = new Monitor(monitorOptions)
-    monitor.addDefaultTasks()
 
     const wallet = new Wallet({
       chain,
@@ -415,14 +631,17 @@ async function setupWalletStorageAndMonitor(): Promise<{
 
     // Set up server options
     const serverOptions: WalletStorageServerOptions & {
+      host: string
       paymentReplayStore: KnexPaymentReplayStore
     } = {
+      host: readStorageBindHost(),
       port: Number(HTTP_PORT),
       wallet,
       monetize: readBoolean('WALLET_STORAGE_MONETIZATION_ENABLED', false),
       calculateRequestPrice: () =>
         readNonNegativeInteger('WALLET_STORAGE_PRICE_SATOSHIS', 100),
       adminIdentityKeys: readAdminIdentityKeys(),
+      trustProxy: readOptionalProxyHops(),
       makeLogger,
       sessionManager: new KnexSessionManager(knex, {
         ttlMs: readPositiveInteger(
@@ -441,6 +660,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
     const server = new StorageServer(activeStorage, serverOptions)
 
     return {
+      chain,
       databaseName,
       knex,
       activeStorage,
@@ -467,6 +687,8 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
   const startedAt = Date.now()
   try {
     const role = readRole()
+    const monitorAdminConfig = readMonitorAdminConfig(role)
+    const monitorTasksEnabled = role !== 'api' && readMonitorTasksEnabled()
     const walletToolboxVersion = String(
       packageJson.dependencies['@bsv/wallet-toolbox']
     ).replace(/^[~^]/, '')
@@ -475,7 +697,10 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       {
         operation: 'storage.setup',
         wallet_toolbox_version: walletToolboxVersion,
-        network: BSV_NETWORK
+        network: BSV_NETWORK,
+        monitor_tasks_enabled: monitorTasksEnabled,
+        monitor_startup_task_mode: context.monitor.options.startupTaskMode,
+        monitor_admin_enabled: monitorAdminConfig != null
       },
       'wallet storage and monitor configured'
     )
@@ -492,9 +717,19 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       )
     }
 
-    if (role !== 'api') {
-      await context.monitor.startTasks()
-      log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
+    let monitorAdmin: ReturnType<typeof createMonitorAdmin> | undefined
+    if (monitorAdminConfig != null) {
+      monitorAdmin = createMonitorAdmin(monitorAdminConfig, context)
+      monitorAdmin.server.start()
+      log.info(
+        {
+          operation: 'monitor_admin.start',
+          outcome: 'ok',
+          host: monitorAdminConfig.host,
+          port: monitorAdminConfig.port
+        },
+        'Monitor admin started'
+      )
     }
 
     // Conditionally start nginx
@@ -506,13 +741,29 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
       log.info({ operation: 'nginx.spawn', outcome: 'ok' }, 'nginx started')
     }
 
+    // startTasks intentionally runs until stopTasks is called. Keep it in the
+    // background so API/admin listeners become ready before monitor work, then
+    // join it during shutdown.
+    let monitorTasksPromise: Promise<void> | undefined
+    if (monitorTasksEnabled) {
+      monitorTasksPromise = context.monitor.startTasks()
+      log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
+    }
+
     const shutdown = (signal: NodeJS.Signals): Promise<void> => {
       shutdownPromise ??= (async () => {
         log.info(
           { operation: 'shutdown', signal },
           'wallet-infra shutdown started'
         )
-        if (role !== 'api') context.monitor.stopTasks()
+        if (monitorTasksEnabled) {
+          context.monitor.stopTasks()
+          await monitorTasksPromise
+        }
+        if (monitorAdmin != null) {
+          await monitorAdmin.server.close()
+          await monitorAdmin.authWallet.destroy()
+        }
         nginxProcess?.kill('SIGTERM')
         if (role !== 'monitor' && context.server.server != null) {
           await closeHttpServer(context.server.server as Server)

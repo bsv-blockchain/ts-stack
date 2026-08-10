@@ -53,9 +53,10 @@ through the release workflow after approval):
 
 ## Dependency evidence
 
-Complete every field when a dependency manifest, lockfile, container base, code
-generator dependency, Dependabot configuration, or pinned workflow action
-changes. Use “Not applicable — <reason>” only when the reason is concrete.
+For human-authored dependency changes, add the useful evidence available for the
+review. Missing or incomplete fields produce an advisory CI warning, not a merge
+block. Automated dependency pull requests are exempt; their generated release,
+compatibility, and security metadata remains the review starting point.
 
 - Release notes and necessity:
 - Runtime, build, and peer compatibility:

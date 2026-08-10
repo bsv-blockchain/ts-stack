@@ -7,6 +7,7 @@ import {
   classifyDirectDependency,
   collectOverrides,
   immutableDeploymentImages,
+  isAutomationPullRequest,
   parsePnpmOverrides,
   validateDependencyReleaseGovernance,
   validatePullRequestEvidence
@@ -20,10 +21,19 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 19)
+  assert.equal(overrides.length, 20)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
+})
+
+test('image-size patch contains both parser progress guards', () => {
+  const patch = fs.readFileSync(path.join(process.cwd(), 'patches/image-size@1.2.1.patch'), 'utf8')
+  assert.match(
+    patch,
+    /if \(imageLength < SIZE_HEADER \|\| imageLength > input\.length - imageOffset\)/
+  )
+  assert.match(patch, /if \(boxSize < 8\)/)
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {
@@ -84,7 +94,7 @@ test('direct dependency inventory distinguishes freshness holds and governed com
   )
 })
 
-test('dependency evidence is required only for dependency-shaped changes', () => {
+test('dependency evidence findings apply only to dependency-shaped changes', () => {
   assert.deepEqual(validatePullRequestEvidence('', ['packages/sdk/src/index.ts']), [])
   assert.deepEqual(validatePullRequestEvidence('', ['pnpm-lock.yaml']), [
     'Dependency changes require the ## Dependency evidence section'
@@ -101,6 +111,20 @@ test('dependency evidence is required only for dependency-shaped changes', () =>
 - Affected public package versions: No public source changed.
 `
   assert.deepEqual(validatePullRequestEvidence(body, ['infra/wab/package-lock.json']), [])
+})
+
+test('automated pull requests are exempt from dependency evidence', () => {
+  assert.equal(isAutomationPullRequest({ authorType: 'Bot' }), true)
+  assert.equal(isAutomationPullRequest({ authorLogin: 'dependabot[bot]' }), true)
+  assert.equal(isAutomationPullRequest({ actor: 'release-bot' }), true)
+  assert.equal(
+    isAutomationPullRequest({
+      actor: 'maintainer',
+      authorLogin: 'contributor',
+      authorType: 'User'
+    }),
+    false
+  )
 })
 
 test('every checked-in deployment image is immutable and scheduled for pull verification', () => {

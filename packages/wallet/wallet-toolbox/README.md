@@ -26,6 +26,19 @@ BSV Desktop and BSV Browser are the BSV Association reference wallet application
 | **MockChain**      | In-memory blockchain for testing — mock mining, UTXO tracking, and merkle proof generation without a network                                     |
 | **Entropy**        | `EntropyCollector` gathers mouse/touch entropy for high-quality randomness in browser environments                                               |
 
+Durable permission grants finish broadcasting their internal token transaction
+before the waiting application request resumes. This keeps the grant atomic from
+the caller's perspective and makes its funding change immediately reusable by a
+following wallet action. If broadcasting is unavailable, the grant rejects and
+the application can safely surface the error and retry; ephemeral one-time grants
+remain off-chain.
+
+Immediate actions can fund from wallet-managed change created by a transaction
+that is still awaiting background broadcast when settled change is insufficient.
+The wallet prefers settled change, then recursively includes the delayed parent
+in the child BEEF only when needed, so queued work cannot temporarily strand the
+wallet's balance behind a large reserved input.
+
 ### Packages
 
 The toolbox publishes three npm packages from this repo:
@@ -100,6 +113,12 @@ const result = await wallet.createAction({
   ]
 })
 ```
+
+Completed `createAction` and `signAction` results from the public Wallet
+interface return Atomic BEEF in `tx` as a numeric array. This preserves the
+historical BRC-100 shape across plain JSON bridges; parse it with
+`Transaction.fromAtomicBEEF(result.tx)`. The `AtomicBEEF` type and binary Wallet
+Wire transports also support `Uint8Array`.
 
 ## Documentation
 

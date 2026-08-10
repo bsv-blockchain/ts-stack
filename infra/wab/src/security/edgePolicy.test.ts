@@ -80,7 +80,8 @@ describe('shared service edge policy', () => {
         headers: {
           Origin: 'https://another-unknown-app.example',
           'Access-Control-Request-Method': 'POST',
-          'Access-Control-Request-Headers': 'X-BSV-Action-Batch-Encoding'
+          'Access-Control-Request-Headers':
+            'X-BSV-Action-Batch-Encoding, X-Correlation-ID, X-Future-BSV-Header'
         }
       })
       expect(preflight.status).toBe(204)
@@ -88,8 +89,67 @@ describe('shared service edge policy', () => {
       expect(preflight.headers.get('access-control-allow-headers')).toContain(
         'X-BSV-Action-Batch-Encoding'
       )
+      expect(preflight.headers.get('access-control-allow-headers')).toContain('X-Correlation-ID')
+      expect(preflight.headers.get('access-control-allow-headers')).toContain('X-Future-BSV-Header')
     } finally {
       await close(server)
+    }
+  })
+
+  it('accepts additive request headers unless operators configure a strict header allowlist', async () => {
+    delete process.env.TEST_CORS_ALLOWED_HEADERS
+    const compatibleApp = express()
+    compatibleApp.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['POST']
+      })
+    )
+    const compatible = await listen(compatibleApp)
+
+    try {
+      const response = await fetch(compatible.origin, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://wallet.example',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'X-Correlation-ID, X-New-Protocol-Header'
+        }
+      })
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-headers')).toContain('X-Correlation-ID')
+      expect(response.headers.get('access-control-allow-headers')).toContain(
+        'X-New-Protocol-Header'
+      )
+    } finally {
+      await close(compatible.server)
+    }
+
+    process.env.TEST_CORS_ALLOWED_HEADERS = 'Authorization, X-Correlation-ID'
+    const restrictedApp = express()
+    restrictedApp.use(
+      corsPolicy({
+        environmentPrefix: 'TEST',
+        methods: ['POST']
+      })
+    )
+    const restricted = await listen(restrictedApp)
+
+    try {
+      const response = await fetch(restricted.origin, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://wallet.example',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'X-Correlation-ID, X-New-Protocol-Header'
+        }
+      })
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-headers')).toBe(
+        'Authorization, X-Correlation-ID'
+      )
+    } finally {
+      await close(restricted.server)
     }
   })
 

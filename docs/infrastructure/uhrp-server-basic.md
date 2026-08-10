@@ -1,10 +1,10 @@
 ---
 id: infra-uhrp-basic
-title: "UHRP Server (Basic)"
+title: 'UHRP Server (Basic)'
 kind: infra
-version: "0.1.8"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: '0.1.8'
+last_updated: '2026-07-25'
+last_verified: '2026-07-25'
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]
@@ -33,23 +33,23 @@ Clients PUT files with authentication, retrieve files via public GET, and query 
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | None; filesystem-based storage |
-| External services | Wallet Storage (WALLET_STORAGE_URL), ARC (optional for payment transactions) |
+| Type              | Requirement                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| Database          | None; filesystem-based storage                                                                      |
+| External services | Wallet Storage (WALLET_STORAGE_URL), ARC (optional for payment transactions)                        |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET/HEAD | Static object paths | Retrieve stored files (public) |
-| PUT | /put | HMAC-authorized streaming object commit (64 MiB default ceiling) |
-| POST | /quote | Public storage-price quote |
-| POST | /upload | Authenticated upload authorization and payment workflow |
-| GET | /list | List the authenticated uploader's objects |
-| GET | /find | Find authenticated uploader metadata |
-| POST | /renew | Authenticated ownership/payment renewal |
+| Method   | Path                | Purpose                                                          |
+| -------- | ------------------- | ---------------------------------------------------------------- |
+| GET/HEAD | Static object paths | Retrieve stored files (public)                                   |
+| PUT      | /put                | HMAC-authorized streaming object commit (64 MiB default ceiling) |
+| POST     | /quote              | Public storage-price quote                                       |
+| POST     | /upload             | Authenticated upload authorization and payment workflow          |
+| GET      | /list               | List the authenticated uploader's objects                        |
+| GET      | /find               | Find authenticated uploader metadata                             |
+| POST     | /renew              | Authenticated ownership/payment renewal                          |
 
 ## WebSocket endpoints
 
@@ -57,20 +57,21 @@ None.
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| PRICE_PER_GB_MO | No | Monthly storage price per GB (e.g., `0.03`) |
-| HOSTING_DOMAIN | No | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
-| BSV_NETWORK | No | Target blockchain network (e.g., `mainnet` or `testnet`) |
-| WALLET_STORAGE_URL | No | Wallet storage endpoint for key derivation (e.g., `https://store-us-1.bsvb.tech`) |
-| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
-| HTTP_PORT | No | Express server port (default: 8080) |
-| NODE_ENV | No | `development` or `production` |
-| UHRP_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
-| UHRP_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
-| UHRP_UPLOAD_MAX_BODY_BYTES | No | Raw `/put` ceiling (default 67108864) |
-| UHRP_JSON_MAX_BODY_BYTES | No | JSON ceiling (default 262144) |
-| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+| Variable                   | Required | Description                                                                                   |
+| -------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| PRICE_PER_GB_MO            | No       | Monthly storage price per GB (e.g., `0.03`)                                                   |
+| HOSTING_DOMAIN             | No       | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
+| BSV_NETWORK                | No       | Target blockchain network (e.g., `mainnet` or `testnet`)                                      |
+| WALLET_STORAGE_URL         | No       | Wallet storage endpoint for key derivation (e.g., `https://store-us-1.bsvb.tech`)             |
+| SERVER_PRIVATE_KEY         | Yes      | 256-bit hex private key for server identity                                                   |
+| HTTP_PORT                  | No       | Express server port (default: 8080)                                                           |
+| NODE_ENV                   | No       | `development` or `production`                                                                 |
+| UHRP_CORS_MODE             | No       | `public` (default), `allowlist`, or `disabled`                                                |
+| UHRP_CORS_ALLOWED_ORIGINS  | No       | Exact comma-separated origins in allowlist mode                                               |
+| UHRP_CORS_ALLOWED_HEADERS  | No       | Strict comma-separated browser request-header allowlist; omit for additive compatibility      |
+| UHRP_UPLOAD_MAX_BODY_BYTES | No       | Raw `/put` ceiling (default 67108864)                                                         |
+| UHRP_JSON_MAX_BODY_BYTES   | No       | JSON ceiling (default 262144)                                                                 |
+| TRUST_PROXY_HOPS           | No       | Exact trusted proxy hop count, 0 through 10                                                   |
 
 `PUT /put` validates authorization, expiry, declared size, and any
 `Content-Length` before consuming the body. It streams into a private

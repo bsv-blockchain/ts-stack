@@ -128,7 +128,7 @@ async function createActionCore(
         wallet,
         'wallet.create_action.serialize_result_beef',
         parent,
-        () => beef.toUint8ArrayAtomic(r.txid!)
+        () => beef.toBinaryAtomic(r.txid!)
       )
     }
   }
