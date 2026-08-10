@@ -90,6 +90,8 @@ import {
   PrepareActionBatchCommitResult,
   PutActionBatchBlobArgs,
   PutActionBatchPackArgs,
+  ResumeActionBatchArgs,
+  ResumeActionBatchResult,
   RenewActionBatchResult,
   StorageCapabilities
 } from '../sdk/ActionBatch.interfaces'
@@ -101,7 +103,8 @@ import {
   commitActionBatchByDigest as commitBatchByDigest,
   extendActionBatch as extendBatch,
   getActionBatchCapabilities,
-  renewActionBatch as renewBatch
+  renewActionBatch as renewBatch,
+  resumeActionBatch as resumeBatch
 } from './methods/actionBatch'
 import {
   prepareActionBatchCommit as prepareBatchCommit,
@@ -117,13 +120,20 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   commissionSatoshis: number
   commissionPubKeyHex?: PubKeyHex
   maxRecursionDepth?: number
+  readonly actionBatchMaxReservedOutputs: number
   readonly scriptVerifier?: SpendVerifierInterface
 
-  static defaultOptions(): { feeModel: StorageFeeModel; commissionSatoshis: number; commissionPubKeyHex: undefined } {
-    const opts: { feeModel: StorageFeeModel; commissionSatoshis: number; commissionPubKeyHex: undefined } = {
-      feeModel: { model: 'sat/kb', value: 100 },
+  static defaultOptions(): {
+    feeModel: StorageFeeModel
+    commissionSatoshis: number
+    commissionPubKeyHex: undefined
+    actionBatchMaxReservedOutputs: number
+  } {
+    const opts = {
+      feeModel: { model: 'sat/kb' as const, value: 100 },
       commissionSatoshis: 0,
-      commissionPubKeyHex: undefined
+      commissionPubKeyHex: undefined,
+      actionBatchMaxReservedOutputs: 256
     }
     return opts
   }
@@ -142,6 +152,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.commissionPubKeyHex = options.commissionPubKeyHex
     this.commissionSatoshis = options.commissionSatoshis
     this.maxRecursionDepth = 12
+    const maxReservedOutputs = options.actionBatchMaxReservedOutputs ?? 256
+    if (maxReservedOutputs !== -1 &&
+      (!Number.isSafeInteger(maxReservedOutputs) || maxReservedOutputs < 1)) {
+      throw new WERR_INVALID_PARAMETER(
+        'actionBatchMaxReservedOutputs',
+        'a positive safe integer or -1 for unlimited'
+      )
+    }
+    this.actionBatchMaxReservedOutputs = maxReservedOutputs
     this.scriptVerifier = options.scriptVerifier
   }
 
@@ -349,7 +368,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async getCapabilities(): Promise<StorageCapabilities> {
-    return this.supportsActionBatchPersistence() ? getActionBatchCapabilities() : {}
+    return this.supportsActionBatchPersistence()
+      ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
+      : {}
   }
 
   protected supportsActionBatchPersistence(): boolean {
@@ -373,6 +394,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
     return await renewBatch(this, auth, batchId)
+  }
+
+  async resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
+    return await resumeBatch(this, auth, args)
   }
 
   async prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {
@@ -1601,6 +1626,11 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * Toolbox extension leaves the BRC-100 wallet interface unchanged.
    */
   scriptVerifier?: SpendVerifierInterface
+  /**
+   * Maximum persisted outputs one action-batch workspace may reserve.
+   * Defaults to 256; -1 disables this cumulative provider limit.
+   */
+  actionBatchMaxReservedOutputs?: number
 }
 
 export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel {

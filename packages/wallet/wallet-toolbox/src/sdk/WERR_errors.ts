@@ -33,6 +33,30 @@ export class WERR_INVALID_OPERATION extends WalletError {
   }
 }
 
+export type ActionBatchErrorState =
+  'missing' | 'expired' | 'hard-expired' | 'inactive' | 'conflicted' | 'aborted' | 'committed'
+
+/**
+ * An action-batch lifecycle operation cannot continue in the batch's current state.
+ */
+class WERRActionBatchState extends WalletError {
+  constructor(
+    public state: ActionBatchErrorState,
+    public batchId?: string
+  ) {
+    super('WERR_ACTION_BATCH_STATE', `Action batch cannot continue because it is ${state}.`)
+  }
+
+  override toJson(): string {
+    const obj = JSON.parse(super.toJson())
+    obj.state = this.state
+    obj.batchId = this.batchId
+    return JSON.stringify(obj)
+  }
+}
+
+export { WERRActionBatchState as WERR_ACTION_BATCH_STATE }
+
 /**
  * Unable to broadcast transaction at this time.
  */

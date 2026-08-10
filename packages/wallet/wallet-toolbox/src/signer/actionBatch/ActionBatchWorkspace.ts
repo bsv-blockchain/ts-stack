@@ -15,7 +15,11 @@ import {
 } from '../../sdk/ActionBatch.interfaces'
 import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
-import { WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import {
+  WERR_ACTION_BATCH_STATE,
+  WERR_INSUFFICIENT_FUNDS,
+  WERR_INVALID_OPERATION
+} from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import {
@@ -56,6 +60,25 @@ interface UploadBlob {
 
 function mergeUnique (values: string[]): string[] {
   return [...new Set(values)]
+}
+
+function isActionBatchStateError (error: unknown): error is WERR_ACTION_BATCH_STATE {
+  if (error instanceof WERR_ACTION_BATCH_STATE) return true
+  if (error == null || typeof error !== 'object') return false
+  const candidate = error as { name?: unknown, code?: unknown, state?: unknown }
+  return (candidate.name === 'WERR_ACTION_BATCH_STATE' || candidate.code === 'WERR_ACTION_BATCH_STATE') &&
+    typeof candidate.state === 'string'
+}
+
+function isActionBatchCapacityError (error: unknown): boolean {
+  if (error == null || typeof error !== 'object') return false
+  const candidate = error as { name?: unknown, code?: unknown, parameter?: unknown, message?: unknown }
+  const code = candidate.name === 'Error' ? candidate.code : candidate.name ?? candidate.code
+  if (code === 'WERR_INVALID_PARAMETER' && candidate.parameter === 'firstAction') return true
+  return code === 'WERR_INVALID_OPERATION' &&
+    typeof candidate.message === 'string' &&
+    candidate.message.includes('action batch') &&
+    (candidate.message.includes('maximum') || candidate.message.includes('reserve'))
 }
 
 function nextGeometricTarget (value: number): number {
@@ -125,6 +148,7 @@ class ActionBatchWorkspace {
   readonly planned = new Map<string, PendingBatchPlan>()
   readonly actions: ActionBatchCommitAction[] = []
   readonly lockingScripts = new Map<string, string>()
+  readonly canResume: boolean
 
   private ewmaConfirmedInputs = 1
   private ewmaConfirmedSatoshis = 0
@@ -149,6 +173,7 @@ class ActionBatchWorkspace {
     this.batchId = begin.batchId
     this.state = makePlannerState(begin, firstAction)
     this.expiresAt = Date.parse(begin.expiresAt)
+    this.canResume = capabilities.resume === true && wallet.storage.resumeActionBatch != null
     this.eagerUploadLanes = Array.from(
       {
         length: capabilities.packedUploads == null
@@ -176,6 +201,24 @@ class ActionBatchWorkspace {
       .some(([pendingReference, pending]) =>
         this.planned.has(pendingReference) && pending.tx.id('hex') === reference
       )
+  }
+
+  ownsTransaction (txid: string): boolean {
+    return this.actions.some(action => action.txid === txid) ||
+      Object.entries(this.wallet.pendingSignActions)
+        .some(([reference, pending]) => this.planned.has(reference) && pending.tx.id('hex') === txid)
+  }
+
+  references (args: Validation.ValidCreateActionArgs): boolean {
+    const referencesStagedOutput = [
+      ...args.inputs.map(input => input.outpoint),
+      ...args.options.noSendChange
+    ].some(outpoint => this.state.staged.has(`${outpoint.txid}.${outpoint.vout}`))
+    return referencesStagedOutput || args.options.sendWith.some(txid => this.ownsTransaction(txid))
+  }
+
+  referencesSendWith (txids: string[]): boolean {
+    return txids.some(txid => this.ownsTransaction(txid))
   }
 
   get isEmpty (): boolean {
@@ -361,12 +404,38 @@ class ActionBatchWorkspace {
     }
   }
 
+  async resume (): Promise<void> {
+    const outpoints = [...new Map(
+      [...this.state.reserved.values(), ...this.state.explicit.values()]
+        .filter(output => output.txid != null)
+        .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
+    ).values()]
+    const result = await this.wallet.storage.resumeActionBatch!({
+      batchId: this.batchId,
+      outpoints
+    })
+    this.expiresAt = Date.parse(result.expiresAt)
+  }
+
   private async renewIfNeeded (): Promise<void> {
-    if (Date.now() >= this.expiresAt) return
+    if (Date.now() >= this.expiresAt) {
+      if (this.canResume) await this.resume()
+      return
+    }
     const renewAt = this.expiresAt - this.capabilities.leaseMs * 0.2
     if (Date.now() < renewAt) return
     this.renewal ??= this.wallet.storage.renewActionBatch(this.batchId)
       .then(result => { this.expiresAt = Date.parse(result.expiresAt) })
+      .catch(async error => {
+        if (isActionBatchStateError(error) && error.state === 'expired') {
+          // Providers without the optional resume extension retain the v1
+          // commit-time reacquisition path. Let commit reach it instead of
+          // converting a renewal race into a permanent client-side wedge.
+          if (this.canResume) await this.resume()
+          return
+        }
+        throw error
+      })
       .finally(() => { this.renewal = undefined })
     await this.renewal
   }
@@ -879,24 +948,77 @@ export class ActionBatchController {
     return this.workspace
   }
 
+  private async retire (workspace: ActionBatchWorkspace): Promise<void> {
+    await workspace.abort().catch(() => undefined)
+    if (this.workspace === workspace) this.workspace = undefined
+  }
+
+  private async recover (
+    workspace: ActionBatchWorkspace,
+    input: Validation.ValidCreateActionArgs
+  ): Promise<StorageCreateActionResult>
+  private async recover (
+    workspace: ActionBatchWorkspace,
+    input: string[],
+    isDelayed: boolean,
+    resume?: boolean
+  ): Promise<StorageProcessActionResults>
+  private async recover (
+    workspace: ActionBatchWorkspace,
+    input: Validation.ValidCreateActionArgs | string[],
+    isDelayed: boolean,
+    resume: boolean
+  ): Promise<StorageCreateActionResult | StorageProcessActionResults>
+  private async recover (
+    workspace: ActionBatchWorkspace,
+    input: Validation.ValidCreateActionArgs | string[],
+    isDelayed = false,
+    resume = false
+  ): Promise<StorageCreateActionResult | StorageProcessActionResults> {
+    try {
+      if (resume) await workspace.resume()
+      return Array.isArray(input)
+        ? await workspace.commit(input, isDelayed)
+        : await workspace.plan(input)
+    } catch (error) {
+      if (!resume && isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
+        return await this.recover(workspace, input, isDelayed, true)
+      }
+      // A soft-expired version-1 batch still has a compatible commit-time
+      // reacquisition path. Only terminal lifecycle errors retire it here.
+      if (isActionBatchStateError(error) && error.state !== 'expired') await this.retire(workspace)
+      throw error
+    }
+  }
+
   async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
     return await this.runExclusive(async () => {
       if (!args.isNewTx) return undefined
-      let workspace = this.workspace
-      let beganWorkspace = false
-      if (workspace == null) {
-        if (!args.isNoSend) return undefined
-        workspace = await this.begin(args)
-        if (workspace == null) return undefined
-        beganWorkspace = true
+      const workspace = this.workspace
+      if (workspace != null) {
+        // Workspace membership is an explicit transaction-graph relationship.
+        // Time adjacency, a shared Wallet instance, or a shared originator are
+        // not sufficient: unrelated work must remain on the legacy path.
+        if (!workspace.references(args)) return undefined
+        return await this.recover(workspace, args)
       }
+      if (!args.isNoSend) return undefined
+      let begun: ActionBatchWorkspace | undefined
       try {
-        return await workspace.plan(args)
+        begun = await this.begin(args)
       } catch (error) {
-        if (beganWorkspace) {
-          await workspace.abort()
-          this.workspace = undefined
-        }
+        // The reservation ceiling bounds the optimization, not the public
+        // createAction contract. A first action that cannot fit must retain
+        // the pre-batch persistence path.
+        if (isActionBatchCapacityError(error)) return undefined
+        throw error
+      }
+      if (begun == null) return undefined
+      try {
+        return await begun.plan(args)
+      } catch (error) {
+        await this.retire(begun)
+        if (isActionBatchCapacityError(error)) return undefined
         throw error
       }
     })
@@ -910,12 +1032,31 @@ export class ActionBatchController {
       const workspace = this.workspace
       if (workspace == null) return undefined
       if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
+      if (prior == null && !workspace.referencesSendWith(args.options.sendWith)) return undefined
       if (prior != null) workspace.stage(prior, args)
-      const shouldCommit = args.isSendWith || (prior != null && !args.isNoSend)
+      const referencesWorkspace = workspace.referencesSendWith(args.options.sendWith)
+      if (prior != null && args.isNoSend && args.isSendWith && !referencesWorkspace) {
+        // The new action belongs to the workspace, but its explicit sendWith
+        // list does not. Preserve the staged action and fulfill the unrelated
+        // broadcast through the ordinary path; returning an empty result here
+        // would silently drop an explicit caller request.
+        return await this.wallet.storage.processAction({
+          isNewTx: false,
+          isSendWith: true,
+          isNoSend: false,
+          isDelayed: args.isDelayed,
+          sendWith: [...args.options.sendWith],
+          logger: args.logger
+        })
+      }
+      const shouldCommit = referencesWorkspace ||
+        (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
       const sendWith = [...args.options.sendWith]
-      if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) sendWith.push(prior.tx.id('hex'))
-      const result = await workspace.commit(sendWith, args.isDelayed)
+      if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) {
+        sendWith.push(prior.tx.id('hex'))
+      }
+      const result = await this.recover(workspace, sendWith, args.isDelayed)
       this.workspace = undefined
       return result
     })

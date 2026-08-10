@@ -15,11 +15,19 @@ import {
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
   RenewActionBatchResult,
+  ResumeActionBatchArgs,
+  ResumeActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
-import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import {
+  ActionBatchErrorState,
+  WERR_ACTION_BATCH_STATE,
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER
+} from '../../sdk/WERR_errors'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import { supportedActionBatchPackEncodings } from '../../utility/actionBatchPack'
@@ -57,8 +65,20 @@ export const ACTION_BATCH_HARD_LIFETIME_MS = 60 * 60 * 1000
 const INITIAL_RESERVATION_LIMIT = 8
 const INITIAL_EXTRA_OUTPUTS = 3
 export const ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS = 64
+export const ACTION_BATCH_MAX_RESERVED_OUTPUTS = 256
 
-export function getActionBatchCapabilities (): StorageCapabilities {
+function isValidOutpoint (outpoint: { txid: string, vout: number }): boolean {
+  // Storage keys and canonical transaction IDs are lowercase. Rejecting an
+  // alternate spelling here is preferable to validating it and then silently
+  // missing the case-sensitive lookup below.
+  return /^[0-9a-f]{64}$/.test(outpoint.txid) &&
+    Number.isSafeInteger(outpoint.vout) && outpoint.vout >= 0
+}
+
+export function getActionBatchCapabilities (
+  maxReservedOutputs = ACTION_BATCH_MAX_RESERVED_OUTPUTS,
+  supportsResume = false
+): StorageCapabilities {
   return {
     actionBatch: {
       version: 1,
@@ -67,6 +87,8 @@ export function getActionBatchCapabilities (): StorageCapabilities {
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
       hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
+      resume: supportsResume ? true : undefined,
+      maxReservedOutputs,
       compactBegin: true,
       manifestVersion: 2,
       commitByDigest: true,
@@ -88,6 +110,19 @@ function activeExpiry (batch: TableActionBatch, now = new Date()): boolean {
   return batch.status !== 'active' && batch.status !== 'prepared' ||
     batch.expiresAt.getTime() <= now.getTime() ||
     batch.hardExpiresAt.getTime() <= now.getTime()
+}
+
+function actionBatchErrorState (
+  batch: TableActionBatch | undefined,
+  now = new Date()
+): ActionBatchErrorState | undefined {
+  if (batch == null) return 'missing'
+  if (batch.hardExpiresAt.getTime() <= now.getTime()) return 'hard-expired'
+  if (batch.status === 'aborted') return 'aborted'
+  if (batch.status === 'committed') return 'committed'
+  if (batch.status === 'expired' || batch.expiresAt.getTime() <= now.getTime()) return 'expired'
+  if (batch.status !== 'active' && batch.status !== 'prepared') return 'inactive'
+  return undefined
 }
 
 function canExpire (batch: TableActionBatch, now = new Date()): boolean {
@@ -377,8 +412,20 @@ export async function beginActionBatch (
     explicit.inputSatoshis + noSendChange.inputSatoshis,
     outputScriptLengths
   )
-  const fixedOutputs = [...explicit.outputs, ...noSendChange.outputs]
-  const requiredCapacity = Math.max(0, INITIAL_RESERVATION_LIMIT - fixedOutputs.length)
+  const fixedOutputs = [...new Map(
+    [...explicit.outputs, ...noSendChange.outputs].map(output => [output.outputId, output])
+  ).values()]
+  const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
+  if (maxReservedOutputs >= 0 && fixedOutputs.length > maxReservedOutputs) {
+    throw new WERR_INVALID_PARAMETER(
+      'firstAction',
+      `no more than ${maxReservedOutputs} persisted inputs`
+    )
+  }
+  const initialCapacity = maxReservedOutputs < 0
+    ? INITIAL_RESERVATION_LIMIT
+    : Math.min(INITIAL_RESERVATION_LIMIT, maxReservedOutputs)
+  const requiredCapacity = Math.max(0, initialCapacity - fixedOutputs.length)
   const funding = chooseReservationPool(
     available,
     target,
@@ -415,8 +462,10 @@ export async function beginActionBatch (
   }
 }
 
-function requireLiveBatch (batch: TableActionBatch | undefined): TableActionBatch {
-  if (batch == null || activeExpiry(batch)) throw new WERR_INVALID_OPERATION('action batch is not active')
+function requireLiveBatch (batch: TableActionBatch | undefined, batchId?: string): TableActionBatch {
+  const state = actionBatchErrorState(batch)
+  if (state != null) throw new WERR_ACTION_BATCH_STATE(state, batchId ?? batch?.batchId)
+  if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', batchId)
   return batch
 }
 
@@ -427,16 +476,50 @@ export async function extendActionBatch (
 ): Promise<ExtendActionBatchResult> {
   const userId = verifyId(auth.userId)
   await cleanupExpiredActionBatches(storage)
-  const batch = requireLiveBatch(await storage.findActionBatch(userId, args.batchId))
+  const batch = requireLiveBatch(await storage.findActionBatch(userId, args.batchId), args.batchId)
   const basket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
   const alreadyReserved = await storage.findActionBatchOutputIds(batch.actionBatchId)
-  const available = await storage.findAvailableManagedChangeInputs(userId, basket.basketId, false)
   if (!Number.isSafeInteger(args.requestedOutputs) || args.requestedOutputs < 0) {
     throw new WERR_INVALID_PARAMETER('requestedOutputs', 'non-negative safe integer')
   }
+  if (!Number.isSafeInteger(args.targetSatoshis) || args.targetSatoshis < 0) {
+    throw new WERR_INVALID_PARAMETER('targetSatoshis', 'non-negative safe integer')
+  }
+  const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
+  if ((maxReservedOutputs >= 0 && args.explicitOutpoints.length > maxReservedOutputs) ||
+    new Set(args.explicitOutpoints.map(outpoint => `${outpoint.txid}.${outpoint.vout}`)).size !==
+      args.explicitOutpoints.length ||
+    args.explicitOutpoints.some(outpoint => !isValidOutpoint(outpoint))) {
+    throw new WERR_INVALID_PARAMETER(
+      'explicitOutpoints',
+      `at most ${maxReservedOutputs < 0 ? 'the configured request capacity' : maxReservedOutputs} valid outpoints`
+    )
+  }
+  const remainingCapacity = maxReservedOutputs < 0
+    ? Number.MAX_SAFE_INTEGER
+    : maxReservedOutputs - alreadyReserved.length
+  if (remainingCapacity <= 0 && (args.requestedOutputs > 0 || args.explicitOutpoints.length > 0)) {
+    throw new WERR_INVALID_OPERATION(
+      `action batch already holds the maximum of ${maxReservedOutputs} outputs`
+    )
+  }
+  const explicitByOutpoint = await storage.findOutputsByOutpoints(userId, args.explicitOutpoints)
+  const explicit = [...new Map(Object.values(explicitByOutpoint)
+    .filter(output => !alreadyReserved.includes(output.outputId))
+    .map(output => [output.outputId, output])).values()]
+  if (explicit.length > remainingCapacity) {
+    throw new WERR_INVALID_PARAMETER(
+      'explicitOutpoints',
+      `no more than ${remainingCapacity} additional reserved outputs`
+    )
+  }
+  const explicitIds = new Set(explicit.map(output => output.outputId))
+  const available = (await storage.findAvailableManagedChangeInputs(userId, basket.basketId, false))
+    .filter(output => !explicitIds.has(output.outputId))
   const requestedCount = Math.min(
     args.requestedOutputs,
-    ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS
+    ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS,
+    remainingCapacity - explicit.length
   )
   const funding = chooseReservationPool(
     available,
@@ -446,9 +529,6 @@ export async function extendActionBatch (
     true,
     reservationPlanningCosts(storage, basket)
   )
-  const explicitByOutpoint = await storage.findOutputsByOutpoints(userId, args.explicitOutpoints)
-  const explicit = Object.values(explicitByOutpoint)
-    .filter(output => !alreadyReserved.includes(output.outputId))
   const fundingShape = argsToFundingShape(args.includeSourceTransactions)
   const fundingResult = await makeFundingResult(storage, fundingShape, [...funding, ...explicit])
   const expiresAt = new Date(Math.min(
@@ -456,8 +536,21 @@ export async function extendActionBatch (
     Date.now() + ACTION_BATCH_LEASE_MS
   ))
   await storage.transaction(async trx => {
-    const current = requireLiveBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx))
-    await reserveOutputs(storage, current, [...funding, ...explicit], trx)
+    const current = requireLiveBatch(
+      await storage.findActionBatchForUpdate(userId, args.batchId, trx),
+      args.batchId
+    )
+    const additions = [...new Map(
+      [...funding, ...explicit].map(output => [output.outputId, output])
+    ).values()]
+    const currentReserved = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
+    const newAdditions = additions.filter(output => !currentReserved.has(output.outputId))
+    if (maxReservedOutputs >= 0 && currentReserved.size + newAdditions.length > maxReservedOutputs) {
+      throw new WERR_INVALID_OPERATION(
+        `action batch cannot reserve more than ${maxReservedOutputs} outputs`
+      )
+    }
+    await reserveOutputs(storage, current, newAdditions, trx)
     await storage.updateActionBatch(current.actionBatchId, { expiresAt }, trx)
   })
   return {
@@ -489,9 +582,88 @@ export async function renewActionBatch (
 ): Promise<RenewActionBatchResult> {
   const userId = verifyId(auth.userId)
   return await storage.transaction(async trx => {
-    const batch = requireLiveBatch(await storage.findActionBatchForUpdate(userId, batchId, trx))
+    const batch = requireLiveBatch(await storage.findActionBatchForUpdate(userId, batchId, trx), batchId)
     const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
     await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
+    return { expiresAt: expiresAt.toISOString() }
+  })
+}
+
+function validateResumeOutpoints (storage: StorageProvider, args: ResumeActionBatchArgs): void {
+  const unique = new Set(args.outpoints.map(outpoint => `${outpoint.txid}.${outpoint.vout}`))
+  const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
+  if ((maxReservedOutputs >= 0 && args.outpoints.length > maxReservedOutputs) ||
+    unique.size !== args.outpoints.length ||
+    args.outpoints.some(outpoint => !isValidOutpoint(outpoint))) {
+    throw new WERR_INVALID_PARAMETER(
+      'outpoints',
+      `at most ${maxReservedOutputs < 0 ? 'the configured request capacity' : maxReservedOutputs} unique valid outpoints`
+    )
+  }
+}
+
+/**
+ * Reacquire exactly the persisted inputs owned by one expired client
+ * workspace. This is deliberately explicit: another action may not become a
+ * member merely because it happens to use the same Wallet instance.
+ */
+export async function resumeActionBatch (
+  storage: StorageProvider,
+  auth: AuthId,
+  args: ResumeActionBatchArgs
+): Promise<ResumeActionBatchResult> {
+  const userId = verifyId(auth.userId)
+  validateResumeOutpoints(storage, args)
+  await cleanupExpiredActionBatches(storage)
+  return await storage.transaction(async trx => {
+    const batch = await storage.findActionBatchForUpdate(userId, args.batchId, trx)
+    const state = actionBatchErrorState(batch)
+    if (state != null && state !== 'expired') {
+      throw new WERR_ACTION_BATCH_STATE(state, args.batchId)
+    }
+    if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', args.batchId)
+
+    const expiresAt = new Date(Math.min(
+      batch.hardExpiresAt.getTime(),
+      Date.now() + ACTION_BATCH_LEASE_MS
+    ))
+    if (state == null) {
+      const reserved = new Set(await storage.findActionBatchOutputIds(batch.actionBatchId, trx))
+      const current = await storage.findOutputsByOutpointsForUpdate(userId, args.outpoints, trx)
+      if (Object.values(current).some(output => !reserved.has(output.outputId)) ||
+        Object.keys(current).length !== args.outpoints.length || reserved.size !== args.outpoints.length) {
+        throw new WERR_ACTION_BATCH_STATE('conflicted', args.batchId)
+      }
+      await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
+      return { expiresAt: expiresAt.toISOString() }
+    }
+
+    const stored = await storage.findOutputsByOutpointsForUpdate(userId, args.outpoints, trx)
+    const outputs = args.outpoints.map(outpoint => stored[`${outpoint.txid}.${outpoint.vout}`])
+    if (outputs.some(output => output == null || !output.spendable || output.spentBy != null)) {
+      throw new WERR_ACTION_BATCH_STATE('conflicted', args.batchId)
+    }
+    await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
+    const exactOutputs = outputs as TableOutput[]
+    const conflicts = await storage.findReservedActionBatchOutputIds(
+      exactOutputs.map(output => output.outputId),
+      trx
+    )
+    if (conflicts.length > 0) throw new WERR_ACTION_BATCH_STATE('conflicted', args.batchId)
+    const now = new Date()
+    await storage.reserveActionBatchOutputs(exactOutputs.map(output => ({
+      actionBatchId: batch.actionBatchId,
+      outputId: output.outputId,
+      created_at: now,
+      updated_at: now
+    })), trx)
+    await storage.updateActionBatch(batch.actionBatchId, {
+      status: 'active',
+      expiresAt,
+      manifest: undefined,
+      manifestDigest: undefined,
+      uploadDigests: undefined
+    }, trx)
     return { expiresAt: expiresAt.toISOString() }
   })
 }
@@ -504,7 +676,7 @@ async function reacquireManifestInputs (
   trx: TrxToken
 ): Promise<void> {
   if (batch.hardExpiresAt.getTime() <= Date.now()) {
-    throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
+    throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
   }
   const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
   const outpoints = [...new Map(validated.actions.flatMap(({ action }) => action.plan.inputs)
@@ -771,25 +943,25 @@ async function persistManifestAtomically (
   }> {
   return await storage.transaction(async trx => {
     const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
-    if (current == null) throw new WERR_INVALID_OPERATION('action batch was not found')
+    if (current == null) throw new WERR_ACTION_BATCH_STATE('missing', batch.batchId)
     if (current.status === 'committed') {
       if (current.manifestDigest !== manifest.digest) {
         throw new WERR_INVALID_OPERATION('batch committed with another manifest')
       }
       return { batch: current, alreadyCommitted: true }
     }
-    if (current.status === 'aborted') throw new WERR_INVALID_OPERATION('aborted action batch cannot be committed')
+    if (current.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', batch.batchId)
     if (current.manifestDigest != null && current.manifestDigest !== manifest.digest) {
       throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
     }
     const needsReacquire = current.status === 'expired' || activeExpiry(current)
     if (needsReacquire) {
       if (current.hardExpiresAt.getTime() <= Date.now()) {
-        throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
+        throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
       }
       await reacquireManifestInputs(storage, userId, current, validated, trx)
     } else {
-      requireLiveBatch(current)
+      requireLiveBatch(current, batch.batchId)
     }
     const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
     const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
@@ -922,16 +1094,16 @@ async function commitActionBatchOnce (
   manifest: ActionBatchManifest
 ): Promise<CommitActionBatchResult> {
   const batch = await storage.findActionBatch(userId, manifest.batchId)
-  if (batch == null) throw new WERR_INVALID_OPERATION('action batch was not found')
+  if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', manifest.batchId)
   if (batch.status === 'committed') {
     if (batch.manifestDigest !== manifest.digest) throw new WERR_INVALID_OPERATION('batch committed with another manifest')
     return await completeCommittedBatch(storage, userId, batch, manifest, true)
   }
-  if (batch.status === 'aborted') throw new WERR_INVALID_OPERATION('aborted action batch cannot be committed')
+  if (batch.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', manifest.batchId)
   const needsReacquire = batch.status === 'expired' || activeExpiry(batch)
-  if (!needsReacquire) requireLiveBatch(batch)
+  if (!needsReacquire) requireLiveBatch(batch, manifest.batchId)
   else if (batch.hardExpiresAt.getTime() <= Date.now()) {
-    throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
+    throw new WERR_ACTION_BATCH_STATE('hard-expired', manifest.batchId)
   }
   if (batch.manifestDigest != null && batch.manifestDigest !== manifest.digest) {
     throw new WERR_INVALID_OPERATION('batch prepared with another manifest')

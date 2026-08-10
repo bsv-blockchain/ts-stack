@@ -500,6 +500,15 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return await this.runAsWriter(async writer => await writer.renewActionBatch(await this.getAuth(true), batchId))
   }
 
+  async resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.resumeActionBatch == null) {
+        throw new sdk.WERR_NOT_IMPLEMENTED('action batch resume is not available')
+      }
+      return await writer.resumeActionBatch(await this.getAuth(true), args)
+    })
+  }
+
   async prepareActionBatchCommit(manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
     return await this.runAsWriter(
       async writer => await writer.prepareActionBatchCommit(await this.getAuth(true), manifest)

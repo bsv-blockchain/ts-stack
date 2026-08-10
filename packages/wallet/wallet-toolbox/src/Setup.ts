@@ -390,6 +390,7 @@ DEV_KEYS = '{
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
       feeModel: { model: 'sat/kb', value: 100 },
+      actionBatchMaxReservedOutputs: args.actionBatchMaxReservedOutputs,
       scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
@@ -497,6 +498,12 @@ export interface SetupWalletArgs {
 export interface SetupWalletKnexArgs extends SetupWalletArgs {
   knex: Knex<any, any[]>
   databaseName: string
+  /**
+   * Maximum persisted outputs one action-batch workspace may reserve.
+   * Defaults to 256. Set to -1 only when the storage operator deliberately
+   * accepts unbounded reservations.
+   */
+  actionBatchMaxReservedOutputs?: number
 }
 
 /**

@@ -6,6 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Isolate each in-memory action batch by explicit staged-output or `sendWith`
+  membership, so unrelated immediate actions and `noSend` roots cannot be
+  captured by or commit a workspace. Add an exact-input resume protocol for
+  expired leases, structured lifecycle errors, and a provider-enforced
+  cumulative reservation limit that defaults to 256 outputs and can be
+  configured, including `-1` for operator-selected unlimited operation.
+- Keep the resumable lifecycle's browser cost bounded: the retained platform
+  contract measures 1,548,179 raw / 364,550 gzip / 285,697 Brotli bytes with
+  Vite and 1,209,217 raw / 331,318 gzip / 267,001 Brotli bytes with esbuild;
+  every browser ceiling remains unchanged. Mobile measures 1,609,633 Metro
+  bytes and 3,253,366 raw Hermes bytes; only the Hermes raw ceiling advances,
+  by less than 0.15%, while every compressed and Metro ceiling remains
+  unchanged.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

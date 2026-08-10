@@ -30,7 +30,7 @@ interface ActualResult {
 }
 
 interface ModelResult {
-  workload: 'dependent' | 'independent' | 'mixed-explicit' | 'two-step'
+  workload: 'dependent' | 'isolated-root' | 'mixed-explicit' | 'two-step'
   actions: number
   scriptBytes: number
   latencyMs: number
@@ -49,7 +49,7 @@ interface ModelResult {
 const actionCounts = [1, 10, 50, 250]
 const scriptSizes = [1024, 64 * 1024, 1024 * 1024, 4 * 1024 * 1024]
 const latencies = [25, 100, 250]
-const workloads: Array<ModelResult['workload']> = ['dependent', 'independent', 'mixed-explicit', 'two-step']
+const workloads: Array<ModelResult['workload']> = ['dependent', 'isolated-root', 'mixed-explicit', 'two-step']
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
 function modeledResults (): ModelResult[] {
@@ -58,14 +58,22 @@ function modeledResults (): ModelResult[] {
     for (const actions of actionCounts) {
       for (const scriptBytes of scriptSizes) {
         for (const latencyMs of latencies) {
-          const uploadedBytes = actions * (scriptBytes + 180)
+          // Isolated roots intentionally remain on the ordinary path after the
+          // first workspace begins; graph-unrelated work is not a batch.
+          const isolated = workload === 'isolated-root'
+          const batchedActions = isolated ? 1 : actions
+          const uploadedBytes = batchedActions * (scriptBytes + 180)
           const inline = uploadedBytes <= 4 * 1024 * 1024
-          const legacyRpcCount = actions * 2 + 1
+          // Legacy dependent chains must persist and process every parent
+          // before its change can fund the next action.
+          const legacyRpcCount = actions * 3
           const packUploadCount = inline
             ? 0
             : Math.ceil(uploadedBytes / (8 * 1024 * 1024 - 44))
           const packUploadWaves = Math.ceil(packUploadCount / 4)
-          const batchControlRpcCount = inline ? 2 : 3 + packUploadCount
+          const batchControlRpcCount = isolated
+            ? (inline ? actions * 2 : actions * 2 + 1 + packUploadCount)
+            : (inline ? 2 : 3 + packUploadCount)
           results.push({
             workload,
             actions,
@@ -74,9 +82,11 @@ function modeledResults (): ModelResult[] {
             legacyRpcCount,
             batchControlRpcCount,
             legacyStorageMs: legacyRpcCount * latencyMs,
-            batchControlMs: (inline ? 2 : 3 + packUploadWaves) * latencyMs,
-            legacyPersistenceWorkflows: actions * 2,
-            batchPersistenceWorkflows: 2,
+            batchControlMs: (isolated
+              ? (inline ? actions * 2 : actions * 2 + 1 + packUploadWaves)
+              : (inline ? 2 : 3 + packUploadWaves)) * latencyMs,
+            legacyPersistenceWorkflows: actions * 3,
+            batchPersistenceWorkflows: isolated ? actions * 2 : 2,
             logicalBytes: uploadedBytes,
             packUploadCount,
             packUploadWaves,
@@ -118,6 +128,11 @@ async function measureActual (
   const ctx: TestWalletNoSetup = await _tu.createLegacyWalletSQLiteCopy(
     `actionBatchBench-${mode}-${actions}-${scriptBytes}`
   )
+  // The retained matrix deliberately measures long dependency chains. Lift
+  // the production recursion guard only inside the benchmark so the legacy
+  // case records its actual BEEF and persistence cost instead of stopping at
+  // the default protective depth of 12.
+  ctx.activeStorage.maxRecursionDepth = actions + 1
   const wallet = mode === 'batch'
     ? ctx.wallet
     : new Wallet({
@@ -226,17 +241,36 @@ async function measureActual (
   const start = performance.now()
   const txids: string[] = []
   let change: string[] = []
+  let commitMs = 0
   try {
     for (let i = 0; i < actions; i++) {
-      const result = await wallet.createAction(args(change, scriptBytes))
+      let result
+      try {
+        result = await wallet.createAction(args(change, scriptBytes))
+      } catch (error) {
+        throw new Error(
+          `action-batch benchmark failed in ${mode} mode at action ${i + 1}/${actions}`,
+          { cause: error }
+        )
+      }
       if (result.txid == null) throw new Error('benchmark action did not return a txid')
       txids.push(result.txid)
       change = result.noSendChange ?? []
+      if (mode === 'legacy') {
+        const commitStart = performance.now()
+        await wallet.createAction({
+          description: 'Process benchmark parent before using its change',
+          options: { sendWith: [result.txid] }
+        })
+        commitMs += performance.now() - commitStart
+      }
       peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed)
     }
-    const commitStart = performance.now()
-    await wallet.createAction({ description: 'Commit benchmark batch', options: { sendWith: txids } })
-    const commitMs = performance.now() - commitStart
+    if (mode === 'batch') {
+      const commitStart = performance.now()
+      await wallet.createAction({ description: 'Commit benchmark batch', options: { sendWith: txids } })
+      commitMs += performance.now() - commitStart
+    }
     const actionMs = performance.now() - start - commitMs
     const cpu = process.cpuUsage(cpuStart)
     return {
@@ -282,9 +316,9 @@ describe('retained action batch benchmark', () => {
     const acceptance = modeled.find(result => result.workload === 'dependent' && result.actions === 250 &&
       result.scriptBytes === 1024 && result.latencyMs === 100)
     expect(acceptance).toMatchObject({
-      legacyRpcCount: 501,
+      legacyRpcCount: 750,
       batchControlRpcCount: 2,
-      legacyStorageMs: 50100,
+      legacyStorageMs: 75000,
       batchControlMs: 200
     })
     const batch250 = actual.find(result => result.mode === 'batch' && result.actions === 250)

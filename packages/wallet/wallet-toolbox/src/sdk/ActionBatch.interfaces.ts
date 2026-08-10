@@ -27,6 +27,10 @@ export interface StorageCapabilities {
     manifestVersion?: 2
     /** A prepared compact manifest may be committed by its semantic digest. */
     commitByDigest?: boolean
+    /** Expired workspaces can atomically reacquire their exact external inputs. */
+    resume?: boolean
+    /** Maximum number of persisted outputs one workspace may reserve at once. */
+    maxReservedOutputs?: number
     /** Multiple logical blobs may share one authenticated binary request. */
     packedUploads?: {
       version: 1
@@ -86,6 +90,14 @@ export interface ExtendActionBatchResult {
 export interface RenewActionBatchResult {
   expiresAt: string
 }
+
+export interface ResumeActionBatchArgs {
+  batchId: string
+  /** Exact persisted outputs still held by the client workspace. */
+  outpoints: Array<{ txid: string, vout: number }>
+}
+
+export interface ResumeActionBatchResult extends RenewActionBatchResult {}
 
 export interface ActionBatchCommitMetadata {
   description: string

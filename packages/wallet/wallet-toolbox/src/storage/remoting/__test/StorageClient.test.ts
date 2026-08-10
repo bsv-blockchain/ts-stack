@@ -7,6 +7,7 @@ import { StorageClient } from '../StorageClient'
 import { WalletError } from '../../../sdk/WalletError'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../utility/actionBatchDigest'
 import { KnexSessionManager } from '../KnexSessionManager'
+import { cleanupExpiredActionBatches } from '../../methods/actionBatch'
 
 describe('StorageClient tests', () => {
   jest.setTimeout(99999999)
@@ -220,6 +221,42 @@ describe('StorageClient tests', () => {
 
     expect(response.status).toBe(400)
     await expect(response.text()).resolves.toContain('binary action batch body required')
+  })
+
+  test('1bd action batch resume and structured lifecycle errors cross RPC', async () => {
+    const batchId = `resume-rpc-${Date.now()}`
+    const begun = await client.storage.beginActionBatch({
+      batchId,
+      firstAction: Validation.validateCreateActionArgs({
+        description: 'resume action batch across RPC',
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'RPC resume output' }],
+        options: { noSend: true }
+      })
+    })
+    const batch = await server.setup.activeStorage.findActionBatch(server.setup.userId, batchId)
+    await server.setup.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      expiresAt: new Date(Date.now() - 1)
+    })
+    await cleanupExpiredActionBatches(server.setup.activeStorage)
+
+    await expect(client.storage.resumeActionBatch({
+      batchId,
+      outpoints: [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
+        txid: output.txid!,
+        vout: output.vout
+      }))
+    })).resolves.toEqual({ expiresAt: expect.any(String) })
+
+    await server.setup.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      expiresAt: new Date(Date.now() - 2),
+      hardExpiresAt: new Date(Date.now() - 1)
+    })
+    await expect(client.storage.renewActionBatch(batchId)).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'hard-expired',
+      batchId
+    })
+    await client.storage.abortActionBatch(batchId)
   })
 
   test('1c batch RPCs are authenticated, user-bound, and restricted to the public protocol', async () => {

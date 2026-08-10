@@ -159,28 +159,12 @@ export class WalletError extends Error implements WalletErrorObject {
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
   static unknownToJson(error: unknown): string {
-    let json: string | undefined
-    let e: WalletError | undefined
-    const t = typeof error
-    const ctorName: unknown =
-      t === 'object' && error !== null ? (error as Record<string, unknown>).constructor : undefined
-    const ctor: string | undefined =
-      ctorName != null && typeof (ctorName as Record<string, unknown>).name === 'string'
-        ? ((ctorName as Record<string, unknown>).name as string)
-        : undefined
-    const name = t === 'object' && error !== null && typeof (error as any).name === 'string' ? (error as any).name : ''
-    const message =
-      t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
-    const hasToJson: boolean = t === 'object' && typeof (error as any)?.toJson === 'function'
-    if (ctor != null && ctor !== '' && ctor.startsWith('WERR_') && hasToJson) {
-      json = (error as WalletError).toJson()
-    } else if (name !== '' && message !== '') {
-      e = new WalletError(name, message)
-      json = e.toJson()
-    } else {
-      e = new WalletError('WERR_UNKNOWN', String(error))
-      json = e.toJson()
+    const candidate = error as WalletError
+    if ((error instanceof WalletError || candidate?.isError === true) &&
+      typeof candidate.toJson === 'function') return candidate.toJson()
+    if (typeof candidate?.name === 'string' && typeof candidate.message === 'string') {
+      return new WalletError(candidate.name, candidate.message).toJson()
     }
-    return json
+    return new WalletError('WERR_UNKNOWN', String(error)).toJson()
   }
 }

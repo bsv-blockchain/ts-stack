@@ -1,10 +1,15 @@
 import { Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
-import { cleanupExpiredActionBatches } from '../methods/actionBatch'
+import {
+  ACTION_BATCH_MAX_RESERVED_OUTPUTS,
+  cleanupExpiredActionBatches,
+  getActionBatchCapabilities
+} from '../methods/actionBatch'
 import {
   ACTION_BATCH_MAX_INLINE_BYTES
 } from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
+import { WERR_ACTION_BATCH_STATE } from '../../sdk/WERR_errors'
 
 function firstAction () {
   return Validation.validateCreateActionArgs({
@@ -15,6 +20,24 @@ function firstAction () {
       outputDescription: 'reservation test output'
     }],
     options: { noSend: true, randomizeOutputs: false }
+  })
+}
+
+function emptyManifest (batchId: string) {
+  const withoutDigest = {
+    batchId,
+    actions: [],
+    dependencyBeef: [],
+    sendWith: [],
+    isDelayed: true
+  }
+  return { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+}
+
+function setReservationLimit (ctx: TestWalletNoSetup, value: number): void {
+  Object.defineProperty(ctx.activeStorage, 'actionBatchMaxReservedOutputs', {
+    configurable: true,
+    value
   })
 }
 
@@ -55,6 +78,8 @@ describe('action batch reservations', () => {
     expect((await ctx.storage.getCapabilities()).actionBatch).toMatchObject({
       version: 1,
       compactBegin: true,
+      resume: true,
+      maxReservedOutputs: ACTION_BATCH_MAX_RESERVED_OUTPUTS,
       packedUploads: { eager: false }
     })
     const first = await ctx.storage.beginActionBatch({ batchId: 'reservation-a', firstAction: firstAction() })
@@ -66,6 +91,33 @@ describe('action batch reservations', () => {
     expect(second.reservedOutputs.length).toBeLessThanOrEqual(4)
     await ctx.storage.abortActionBatch(first.batchId)
     await ctx.storage.abortActionBatch(second.batchId)
+  })
+
+  test('operator reservation limits are advertised, including explicit unlimited operation', () => {
+    expect(getActionBatchCapabilities().actionBatch?.maxReservedOutputs).toBe(ACTION_BATCH_MAX_RESERVED_OUTPUTS)
+    expect(getActionBatchCapabilities(32).actionBatch?.maxReservedOutputs).toBe(32)
+    expect(getActionBatchCapabilities(-1).actionBatch?.maxReservedOutputs).toBe(-1)
+    expect(getActionBatchCapabilities(32).actionBatch?.resume).toBeUndefined()
+    expect(getActionBatchCapabilities(32, { resume: true }).actionBatch?.resume).toBe(true)
+  })
+
+  test.each([
+    { limit: -1, expectedMaximum: 8 },
+    { limit: 1, expectedMaximum: 1 },
+    { limit: 2, expectedMaximum: 2 },
+    { limit: 7, expectedMaximum: 7 }
+  ])('initial reservations honor an operator cap of $limit', async ({ limit, expectedMaximum }) => {
+    setReservationLimit(ctx, limit)
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: `bounded-initial-reservation-${limit}`,
+      firstAction: firstAction()
+    })
+    expect(begun.reservedOutputs.length + begun.explicitOutputs.length).toBeLessThanOrEqual(expectedMaximum)
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(
+      begun.reservedOutputs.length + begun.explicitOutputs.length
+    )
+    await ctx.storage.abortActionBatch(begun.batchId)
   })
 
   test('compact begin accepts deferred external proofs and exact script lengths', async () => {
@@ -111,6 +163,279 @@ describe('action batch reservations', () => {
     expect(Date.parse(renewed.expiresAt)).toBeGreaterThanOrEqual(Date.parse(begun.expiresAt))
     expect(Date.parse(renewed.expiresAt)).toBeLessThanOrEqual(Date.parse(begun.hardExpiresAt))
     await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('reservation cap is rechecked while the batch row is locked', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'bounded-extension', firstAction: firstAction() })
+    const findIds = ctx.activeStorage.findActionBatchOutputIds.bind(ctx.activeStorage)
+    const existing = await findIds((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))!.actionBatchId)
+    jest.spyOn(ctx.activeStorage, 'findActionBatchOutputIds')
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(Array.from(
+        { length: ACTION_BATCH_MAX_RESERVED_OUTPUTS },
+        (_, index) => 100_000 + index
+      ))
+
+    await expect(ctx.storage.extendActionBatch({
+      batchId: begun.batchId,
+      targetSatoshis: 1,
+      requestedOutputs: 1,
+      explicitOutpoints: [],
+      includeSourceTransactions: false
+    })).rejects.toThrow(`cannot reserve more than ${ACTION_BATCH_MAX_RESERVED_OUTPUTS}`)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('an expired workspace resumes only its exact persisted outputs', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'resume-batch', firstAction: firstAction() })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const outpoints = [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
+      txid: output.txid!,
+      vout: output.vout
+    }))
+    const before = await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
+    expect(await cleanupExpiredActionBatches(ctx.activeStorage)).toBe(1)
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
+
+    const resumed = await ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })
+
+    expect(Date.parse(resumed.expiresAt)).toBeLessThanOrEqual(Date.parse(begun.hardExpiresAt))
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(expect.arrayContaining(before))
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })).resolves.toBeDefined()
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('resume reports hard expiry as a structured lifecycle state', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'hard-expired-batch', firstAction: firstAction() })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      expiresAt: new Date(Date.now() - 2),
+      hardExpiresAt: new Date(Date.now() - 1)
+    })
+
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] }))
+      .rejects.toMatchObject<Partial<WERR_ACTION_BATCH_STATE>>({
+        name: 'WERR_ACTION_BATCH_STATE',
+        state: 'hard-expired',
+        batchId: begun.batchId
+      })
+  })
+
+  test('lifecycle state errors distinguish missing, aborted, committed, and inactive batches', async () => {
+    await expect(ctx.storage.resumeActionBatch({ batchId: 'missing-batch', outpoints: [] })).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'missing'
+    })
+
+    for (const status of ['aborted', 'committed', 'inactive'] as const) {
+      const begun = await ctx.storage.beginActionBatch({
+        batchId: `${status}-batch`,
+        firstAction: firstAction()
+      })
+      const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+      await ctx.activeStorage.deleteActionBatchOutputReservations(batch!.actionBatchId)
+      await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+        status: status === 'inactive' ? ('unknown' as any) : status
+      })
+      await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] })).rejects.toMatchObject({
+        name: 'WERR_ACTION_BATCH_STATE',
+        state: status
+      })
+    }
+  })
+
+  test('extension validates numeric, outpoint, cumulative, and unlimited reservation limits', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'extension-validation', firstAction: firstAction() })
+    const request = {
+      batchId: begun.batchId,
+      targetSatoshis: 1,
+      requestedOutputs: 0,
+      explicitOutpoints: [] as Array<{ txid: string; vout: number }>,
+      includeSourceTransactions: false
+    }
+
+    await expect(ctx.storage.extendActionBatch({ ...request, requestedOutputs: -1 })).rejects.toThrow(
+      'requestedOutputs'
+    )
+    await expect(ctx.storage.extendActionBatch({ ...request, targetSatoshis: -1 })).rejects.toThrow('targetSatoshis')
+    await expect(ctx.storage.extendActionBatch({ ...request, targetSatoshis: 0 })).resolves.toBeDefined()
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: [
+          { txid: '11'.repeat(32), vout: 0 },
+          { txid: '11'.repeat(32), vout: 0 }
+        ]
+      })
+    ).rejects.toThrow('explicitOutpoints')
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: [{ txid: 'not-a-txid', vout: -1 }]
+      })
+    ).rejects.toThrow('explicitOutpoints')
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: [{ txid: 'AA'.repeat(32), vout: 0 }]
+      })
+    ).rejects.toThrow('explicitOutpoints')
+
+    setReservationLimit(ctx, -1)
+    await expect(ctx.storage.extendActionBatch(request)).resolves.toBeDefined()
+
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const reserved = await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0]
+    const candidates = (await ctx.activeStorage.findAvailableManagedChangeInputs(ctx.userId, basket.basketId, false))
+      .filter(output => output.txid != null)
+      .slice(0, 2)
+    expect(candidates).toHaveLength(2)
+    setReservationLimit(ctx, reserved.length + 1)
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: candidates.map(output => ({ txid: output.txid!, vout: output.vout }))
+      })
+    ).rejects.toThrow('additional reserved outputs')
+
+    setReservationLimit(ctx, reserved.length)
+    await expect(ctx.storage.extendActionBatch({ ...request, requestedOutputs: 1 })).rejects.toThrow(
+      'already holds the maximum'
+    )
+    setReservationLimit(ctx, 1)
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: [
+          { txid: '22'.repeat(32), vout: 0 },
+          { txid: '33'.repeat(32), vout: 0 }
+        ]
+      })
+    ).rejects.toThrow('explicitOutpoints')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('resume validates exact outpoints and rejects changed or unavailable reservations', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'resume-validation', firstAction: firstAction() })
+    const exact = [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
+      txid: output.txid!,
+      vout: output.vout
+    }))
+    expect(exact.length).toBeGreaterThan(0)
+
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [exact[0], exact[0]]
+      })
+    ).rejects.toThrow('outpoints')
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [{ txid: 'bad', vout: -1 }]
+      })
+    ).rejects.toThrow('outpoints')
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [{ txid: exact[0].txid.toUpperCase(), vout: exact[0].vout }]
+      })
+    ).rejects.toThrow('outpoints')
+    setReservationLimit(ctx, 1)
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [
+          { txid: '44'.repeat(32), vout: 0 },
+          { txid: '55'.repeat(32), vout: 0 }
+        ]
+      })
+    ).rejects.toThrow('outpoints')
+    setReservationLimit(ctx, ACTION_BATCH_MAX_RESERVED_OUTPUTS)
+
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] })).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'conflicted'
+    })
+
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
+    await cleanupExpiredActionBatches(ctx.activeStorage)
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [{ txid: '66'.repeat(32), vout: 0 }]
+      })
+    ).rejects.toMatchObject({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
+  })
+
+  test('blob uploads reject every terminal lifecycle state before authorization checks', async () => {
+    const bytes = [1, 2, 3]
+    const digest = actionBatchBlobDigest(bytes)
+    const upload = async (batchId: string) => await ctx.storage.putActionBatchBlob({ batchId, digest, bytes })
+
+    await expect(upload('missing-upload-batch')).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'missing'
+    })
+    for (const status of ['committed', 'aborted'] as const) {
+      const begun = await ctx.storage.beginActionBatch({
+        batchId: `${status}-upload-batch`,
+        firstAction: firstAction()
+      })
+      const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+      await ctx.activeStorage.deleteActionBatchOutputReservations(batch!.actionBatchId)
+      await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { status })
+      await expect(upload(begun.batchId)).rejects.toMatchObject({ name: 'WERR_ACTION_BATCH_STATE', state: status })
+    }
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'hard-expired-upload-batch',
+      firstAction: firstAction()
+    })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    await ctx.activeStorage.deleteActionBatchOutputReservations(batch!.actionBatchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      hardExpiresAt: new Date(Date.now() - 1)
+    })
+    await expect(upload(begun.batchId)).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'hard-expired'
+    })
+  })
+
+  test('commit reports missing, aborted, and hard-expired lifecycle states before manifest validation', async () => {
+    await expect(ctx.storage.commitActionBatch(emptyManifest('missing-commit-batch'))).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'missing'
+    })
+
+    const aborted = await ctx.storage.beginActionBatch({ batchId: 'aborted-commit-batch', firstAction: firstAction() })
+    await ctx.storage.abortActionBatch(aborted.batchId)
+    await expect(ctx.storage.commitActionBatch(emptyManifest(aborted.batchId))).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'aborted'
+    })
+
+    const expired = await ctx.storage.beginActionBatch({
+      batchId: 'hard-expired-commit-batch',
+      firstAction: firstAction()
+    })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, expired.batchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      expiresAt: new Date(Date.now() - 2),
+      hardExpiresAt: new Date(Date.now() - 1)
+    })
+    await expect(ctx.storage.commitActionBatch(emptyManifest(expired.batchId))).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'hard-expired'
+    })
   })
 
   test('first-action persisted noSendChange is reserved and returned explicitly', async () => {

@@ -5,7 +5,7 @@ import type {
   PutActionBatchPackArgs
 } from '../../sdk/ActionBatch.interfaces'
 import type { AuthId } from '../../sdk/WalletStorage.interfaces'
-import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { WERR_ACTION_BATCH_STATE, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { actionBatchBlobDigest, verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import { verifyId } from '../../utility/utilityHelpers'
 import { asUint8Array } from '../../utility/utilityHelpers.noBuffer'
@@ -41,11 +41,11 @@ export function validateActionBatchInlinePayload (manifest: ActionBatchManifest)
 }
 
 function requireUploadableBatch (batch: TableActionBatch | undefined): TableActionBatch {
-  if (batch == null || batch.status === 'committed' || batch.status === 'aborted') {
-    throw new WERR_INVALID_OPERATION('action batch is not uploadable')
-  }
+  if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing')
+  if (batch.status === 'committed') throw new WERR_ACTION_BATCH_STATE('committed', batch.batchId)
+  if (batch.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', batch.batchId)
   if (batch.hardExpiresAt.getTime() <= Date.now()) {
-    throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
+    throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
   }
   return batch
 }

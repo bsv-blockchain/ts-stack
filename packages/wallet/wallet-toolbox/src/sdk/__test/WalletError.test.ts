@@ -1,6 +1,7 @@
 import { WalletError } from '../WalletError'
 import { WalletErrorFromJson } from '../WalletErrorFromJson'
 import {
+  WERR_ACTION_BATCH_STATE,
   WERR_NOT_IMPLEMENTED,
   WERR_INTERNAL,
   WERR_INVALID_PARAMETER,
@@ -51,6 +52,50 @@ describe('WalletError tests', () => {
       expect(werr3.sendWithResults).toEqual([{ txid: 'txid123', status: 'failed' }])
       expect(werr3.noSendChange).toEqual(['00'.repeat(32) + '.0'])
     }
+  })
+
+  test('action batch lifecycle state survives JSON transport', () => {
+    const werr = new WERR_ACTION_BATCH_STATE('expired', 'batch-123')
+    const recovered = WalletErrorFromJson(JSON.parse(WalletError.unknownToJson(werr)))
+
+    expect(recovered).toBeInstanceOf(WERR_ACTION_BATCH_STATE)
+    expect(recovered).toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'expired',
+      batchId: 'batch-123'
+    })
+  })
+
+  test('action batch lifecycle state survives transport from another package instance', () => {
+    class WERRActionBatchStateCopy extends Error {
+      readonly isError = true
+      readonly state = 'expired'
+      readonly batchId = 'cross-copy-batch'
+
+      constructor () {
+        super('Action batch cannot continue because it is expired.')
+        this.name = 'WERR_ACTION_BATCH_STATE'
+      }
+
+      toJson (): string {
+        return JSON.stringify({
+          isError: true,
+          name: this.name,
+          message: this.message,
+          state: this.state,
+          batchId: this.batchId
+        })
+      }
+    }
+
+    const recovered = WalletErrorFromJson(JSON.parse(
+      WalletError.unknownToJson(new WERRActionBatchStateCopy())
+    ))
+    expect(recovered).toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'expired',
+      batchId: 'cross-copy-batch'
+    })
   })
 
   test('1 - WERR_NOT_IMPLEMENTED basic test', async () => {
