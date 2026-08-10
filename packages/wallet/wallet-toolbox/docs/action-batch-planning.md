@@ -17,13 +17,24 @@ Large first actions use compact bootstrap only when the provider also advertises
 `compactBegin: true`; this keeps new clients compatible with older version-1
 servers during a rolling deployment.
 
+One `Wallet` instance owns at most one in-memory action-batch workspace. An
+independent `noSend` graph created while that workspace is open uses the ordinary
+persistent path; it is not captured merely because the calls overlap. Storage
+providers may host many concurrent batches for different wallets or sessions,
+and their output reservations remain disjoint. A future client-side multi-workspace
+router would also need defined semantics for a `sendWith` request or child action
+that joins more than one graph; this version deliberately does not imply those
+semantics.
+
 The original manifest and one-blob-per-request transport remain version 1. A
 provider can independently advertise the additive `manifestVersion: 2`,
 `commitByDigest`, `resume`, `maxReservedOutputs`, and `packedUploads`
 capabilities. A new client uses each optimization only when its provider
 advertises it. Old clients ignore the extra fields, new clients retain the
 version-1 path against old providers, and additive storage methods remain
-optional for third-party `WalletStorage` implementations.
+optional for third-party `WalletStorage` implementations. The exported capability
+helper does not advertise `resume` by default; built-in providers opt in because
+they implement the optional `resumeActionBatch` method.
 
 The retained browser platform contract measures the resumable implementation at
 1,547,450 raw / 362,883 gzip / 285,514 Brotli bytes with Vite and 1,208,592 raw /
@@ -64,7 +75,10 @@ extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
    explicitly depends on a staged output, validates and atomically persists
    every member action. An unrelated normal action neither joins nor commits
    the workspace. Only the requested transactions are sent; earlier actions
-   retain their `nosend` status.
+   retain their `nosend` status. If a workspace-owned `noSend` action also
+   requests only unrelated persisted transactions through `sendWith`, the new
+   action remains staged and the explicit broadcasts run through the ordinary
+   persistence path; neither request is silently dropped.
 5. Broadcast occurs after the storage transaction. Delayed mode returns after the
    batch is durably queued; immediate mode uses the existing aggregate broadcaster
    and review results.
@@ -80,10 +94,11 @@ can use unreserved outputs normally. A uniqueness constraint prevents one output
 from belonging to two active batches.
 
 The initial reservation includes at most three extra candidates and never more
-than eight outputs. Its canonical funding target includes the marginal P2PKH
-input fee and enough value to recover an economically viable first change output,
-so a low basket minimum cannot repeatedly select inputs that satisfy the nominal
-deficit but cost too much to use.
+than eight outputs or the operator's lower cumulative reservation cap. Its
+canonical funding target includes the marginal P2PKH input fee and enough value
+to recover an economically viable first change output, so a low basket minimum
+cannot repeatedly select inputs that satisfy the nominal deficit but cost too
+much to use.
 
 Extensions add at most 64 outputs per storage call. Built-in providers also
 enforce and advertise a cumulative maximum of 256 persisted output reservations

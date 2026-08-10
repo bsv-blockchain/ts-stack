@@ -169,10 +169,13 @@ export class WalletError extends Error implements WalletErrorObject {
         ? ((ctorName as Record<string, unknown>).name as string)
         : undefined
     const name = t === 'object' && error !== null && typeof (error as any).name === 'string' ? (error as any).name : ''
+    const code = t === 'object' && error !== null && typeof (error as any).code === 'string' ? (error as any).code : ''
     const message =
       t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
     const hasToJson: boolean = t === 'object' && typeof (error as any)?.toJson === 'function'
-    if ((error instanceof WalletError || (ctor != null && ctor !== '' && ctor.startsWith('WERR_'))) && hasToJson) {
+    const identifiesWalletError = name.startsWith('WERR_') || code.startsWith('WERR_') ||
+      (ctor != null && ctor.startsWith('WERR_'))
+    if ((error instanceof WalletError || identifiesWalletError) && hasToJson) {
       json = (error as WalletError).toJson()
     } else if (name !== '' && message !== '') {
       e = new WalletError(name, message)

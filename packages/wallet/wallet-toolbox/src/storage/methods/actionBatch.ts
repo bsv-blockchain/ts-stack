@@ -68,12 +68,16 @@ export const ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS = 64
 export const ACTION_BATCH_MAX_RESERVED_OUTPUTS = 256
 
 function isValidOutpoint (outpoint: { txid: string, vout: number }): boolean {
-  return /^[0-9a-f]{64}$/i.test(outpoint.txid) &&
+  // Storage keys and canonical transaction IDs are lowercase. Rejecting an
+  // alternate spelling here is preferable to validating it and then silently
+  // missing the case-sensitive lookup below.
+  return /^[0-9a-f]{64}$/.test(outpoint.txid) &&
     Number.isSafeInteger(outpoint.vout) && outpoint.vout >= 0
 }
 
 export function getActionBatchCapabilities (
-  maxReservedOutputs = ACTION_BATCH_MAX_RESERVED_OUTPUTS
+  maxReservedOutputs = ACTION_BATCH_MAX_RESERVED_OUTPUTS,
+  options: { resume?: boolean } = {}
 ): StorageCapabilities {
   return {
     actionBatch: {
@@ -83,7 +87,7 @@ export function getActionBatchCapabilities (
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
       hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
-      resume: true,
+      ...(options.resume === true ? { resume: true as const } : {}),
       maxReservedOutputs,
       compactBegin: true,
       manifestVersion: 2,
@@ -418,7 +422,10 @@ export async function beginActionBatch (
       `no more than ${maxReservedOutputs} persisted inputs`
     )
   }
-  const requiredCapacity = Math.max(0, INITIAL_RESERVATION_LIMIT - fixedOutputs.length)
+  const initialCapacity = maxReservedOutputs < 0
+    ? INITIAL_RESERVATION_LIMIT
+    : Math.min(INITIAL_RESERVATION_LIMIT, maxReservedOutputs)
+  const requiredCapacity = Math.max(0, initialCapacity - fixedOutputs.length)
   const funding = chooseReservationPool(
     available,
     target,
@@ -475,8 +482,8 @@ export async function extendActionBatch (
   if (!Number.isSafeInteger(args.requestedOutputs) || args.requestedOutputs < 0) {
     throw new WERR_INVALID_PARAMETER('requestedOutputs', 'non-negative safe integer')
   }
-  if (!Number.isSafeInteger(args.targetSatoshis) || args.targetSatoshis < 1) {
-    throw new WERR_INVALID_PARAMETER('targetSatoshis', 'positive safe integer')
+  if (!Number.isSafeInteger(args.targetSatoshis) || args.targetSatoshis < 0) {
+    throw new WERR_INVALID_PARAMETER('targetSatoshis', 'non-negative safe integer')
   }
   const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
   if ((maxReservedOutputs >= 0 && args.explicitOutpoints.length > maxReservedOutputs) ||

@@ -94,8 +94,30 @@ describe('action batch reservations', () => {
   })
 
   test('operator reservation limits are advertised, including explicit unlimited operation', () => {
+    expect(getActionBatchCapabilities().actionBatch?.maxReservedOutputs).toBe(ACTION_BATCH_MAX_RESERVED_OUTPUTS)
     expect(getActionBatchCapabilities(32).actionBatch?.maxReservedOutputs).toBe(32)
     expect(getActionBatchCapabilities(-1).actionBatch?.maxReservedOutputs).toBe(-1)
+    expect(getActionBatchCapabilities(32).actionBatch?.resume).toBeUndefined()
+    expect(getActionBatchCapabilities(32, { resume: true }).actionBatch?.resume).toBe(true)
+  })
+
+  test.each([
+    { limit: -1, expectedMaximum: 8 },
+    { limit: 1, expectedMaximum: 1 },
+    { limit: 2, expectedMaximum: 2 },
+    { limit: 7, expectedMaximum: 7 }
+  ])('initial reservations honor an operator cap of $limit', async ({ limit, expectedMaximum }) => {
+    setReservationLimit(ctx, limit)
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: `bounded-initial-reservation-${limit}`,
+      firstAction: firstAction()
+    })
+    expect(begun.reservedOutputs.length + begun.explicitOutputs.length).toBeLessThanOrEqual(expectedMaximum)
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(
+      begun.reservedOutputs.length + begun.explicitOutputs.length
+    )
+    await ctx.storage.abortActionBatch(begun.batchId)
   })
 
   test('compact begin accepts deferred external proofs and exact script lengths', async () => {
@@ -237,7 +259,8 @@ describe('action batch reservations', () => {
     await expect(ctx.storage.extendActionBatch({ ...request, requestedOutputs: -1 })).rejects.toThrow(
       'requestedOutputs'
     )
-    await expect(ctx.storage.extendActionBatch({ ...request, targetSatoshis: 0 })).rejects.toThrow('targetSatoshis')
+    await expect(ctx.storage.extendActionBatch({ ...request, targetSatoshis: -1 })).rejects.toThrow('targetSatoshis')
+    await expect(ctx.storage.extendActionBatch({ ...request, targetSatoshis: 0 })).resolves.toBeDefined()
     await expect(
       ctx.storage.extendActionBatch({
         ...request,
@@ -251,6 +274,12 @@ describe('action batch reservations', () => {
       ctx.storage.extendActionBatch({
         ...request,
         explicitOutpoints: [{ txid: 'not-a-txid', vout: -1 }]
+      })
+    ).rejects.toThrow('explicitOutpoints')
+    await expect(
+      ctx.storage.extendActionBatch({
+        ...request,
+        explicitOutpoints: [{ txid: 'AA'.repeat(32), vout: 0 }]
       })
     ).rejects.toThrow('explicitOutpoints')
 
@@ -311,6 +340,12 @@ describe('action batch reservations', () => {
       ctx.storage.resumeActionBatch({
         batchId: begun.batchId,
         outpoints: [{ txid: 'bad', vout: -1 }]
+      })
+    ).rejects.toThrow('outpoints')
+    await expect(
+      ctx.storage.resumeActionBatch({
+        batchId: begun.batchId,
+        outpoints: [{ txid: exact[0].txid.toUpperCase(), vout: exact[0].vout }]
       })
     ).rejects.toThrow('outpoints')
     setReservationLimit(ctx, 1)

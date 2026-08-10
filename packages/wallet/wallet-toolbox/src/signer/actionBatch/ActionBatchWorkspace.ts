@@ -14,7 +14,11 @@ import {
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
 import { actionBatchBootstrap } from './actionBatchBootstrap'
-import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
+import {
+  StorageCreateActionResult,
+  StorageProcessActionArgs,
+  StorageProcessActionResults
+} from '../../sdk/WalletStorage.interfaces'
 import {
   WERR_ACTION_BATCH_STATE,
   WERR_INSUFFICIENT_FUNDS,
@@ -68,6 +72,31 @@ function isActionBatchStateError (error: unknown): error is WERR_ACTION_BATCH_ST
   const candidate = error as { name?: unknown, code?: unknown, state?: unknown }
   return (candidate.name === 'WERR_ACTION_BATCH_STATE' || candidate.code === 'WERR_ACTION_BATCH_STATE') &&
     typeof candidate.state === 'string'
+}
+
+function errorCode (error: unknown): string | undefined {
+  if (error == null || typeof error !== 'object') return undefined
+  const candidate = error as { name?: unknown, code?: unknown }
+  if (typeof candidate.name === 'string' && candidate.name.startsWith('WERR_')) return candidate.name
+  if (typeof candidate.code === 'string') return candidate.code
+  return typeof candidate.name === 'string' ? candidate.name : undefined
+}
+
+function isActionBatchCapacityError (error: unknown): boolean {
+  if (error == null || typeof error !== 'object') return false
+  const candidate = error as { parameter?: unknown, message?: unknown }
+  if (errorCode(error) === 'WERR_INVALID_PARAMETER' && candidate.parameter === 'firstAction') return true
+  return errorCode(error) === 'WERR_INVALID_OPERATION' &&
+    typeof candidate.message === 'string' &&
+    candidate.message.includes('action batch') &&
+    (candidate.message.includes('maximum') || candidate.message.includes('reserve'))
+}
+
+function shouldRetireAfterStateError (error: WERR_ACTION_BATCH_STATE): boolean {
+  // A soft-expired version-1 batch still has a compatible commit-time input
+  // reacquisition path. Destroying it here would turn a recoverable workspace
+  // into permanent data loss.
+  return error.state !== 'expired'
 }
 
 function nextGeometricTarget (value: number): number {
@@ -391,21 +420,27 @@ class ActionBatchWorkspace {
     }
   }
 
+  get canResume (): boolean {
+    return this.capabilities.resume === true && this.wallet.storage.resumeActionBatch != null
+  }
+
+  async resume (): Promise<void> {
+    if (!this.canResume) throw new WERR_INVALID_OPERATION('action batch resume is not available')
+    const outpoints = [...new Map(
+      [...this.state.reserved.values(), ...this.state.explicit.values()]
+        .filter(output => output.txid != null)
+        .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
+    ).values()]
+    const result = await this.wallet.storage.resumeActionBatch!({
+      batchId: this.batchId,
+      outpoints
+    })
+    this.expiresAt = Date.parse(result.expiresAt)
+  }
+
   private async renewIfNeeded (): Promise<void> {
-    const resume = async (): Promise<void> => {
-      const outpoints = [...new Map(
-        [...this.state.reserved.values(), ...this.state.explicit.values()]
-          .filter(output => output.txid != null)
-          .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
-      ).values()]
-      const result = await this.wallet.storage.resumeActionBatch({
-        batchId: this.batchId,
-        outpoints
-      })
-      this.expiresAt = Date.parse(result.expiresAt)
-    }
     if (Date.now() >= this.expiresAt) {
-      if (this.capabilities.resume === true) await resume()
+      if (this.canResume) await this.resume()
       return
     }
     const renewAt = this.expiresAt - this.capabilities.leaseMs * 0.2
@@ -413,9 +448,11 @@ class ActionBatchWorkspace {
     this.renewal ??= this.wallet.storage.renewActionBatch(this.batchId)
       .then(result => { this.expiresAt = Date.parse(result.expiresAt) })
       .catch(async error => {
-        if (this.capabilities.resume === true && isActionBatchStateError(error) &&
-          error.state === 'expired') {
-          await resume()
+        if (isActionBatchStateError(error) && error.state === 'expired') {
+          // Providers without the optional resume extension retain the v1
+          // commit-time reacquisition path. Let commit reach it instead of
+          // converting a renewal race into a permanent client-side wedge.
+          if (this.canResume) await this.resume()
           return
         }
         throw error
@@ -943,13 +980,22 @@ export class ActionBatchController {
       const workspace = this.workspace
       if (workspace == null) {
         if (!args.isNoSend) return undefined
-        const begun = await this.begin(args)
+        let begun: ActionBatchWorkspace | undefined
+        try {
+          begun = await this.begin(args)
+        } catch (error) {
+          // The reservation ceiling bounds the optimization, not the public
+          // createAction contract. A first action that cannot fit must retain
+          // the pre-batch persistence path.
+          if (isActionBatchCapacityError(error)) return undefined
+          throw error
+        }
         if (begun == null) return undefined
         try {
           return await begun.plan(args)
         } catch (error) {
-          await begun.abort()
-          this.workspace = undefined
+          await this.retire(begun)
+          if (isActionBatchCapacityError(error)) return undefined
           throw error
         }
       }
@@ -960,7 +1006,18 @@ export class ActionBatchController {
       try {
         return await workspace.plan(args)
       } catch (error) {
-        if (isActionBatchStateError(error)) {
+        if (isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
+          try {
+            await workspace.resume()
+            return await workspace.plan(args)
+          } catch (recoveryError) {
+            if (isActionBatchStateError(recoveryError) && shouldRetireAfterStateError(recoveryError)) {
+              await this.retire(workspace)
+            }
+            throw recoveryError
+          }
+        }
+        if (isActionBatchStateError(error) && shouldRetireAfterStateError(error)) {
           await this.retire(workspace)
         }
         throw error
@@ -978,7 +1035,23 @@ export class ActionBatchController {
       if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
       if (prior == null && !workspace.referencesSendWith(args.options.sendWith)) return undefined
       if (prior != null) workspace.stage(prior, args)
-      const shouldCommit = workspace.referencesSendWith(args.options.sendWith) ||
+      const referencesWorkspace = workspace.referencesSendWith(args.options.sendWith)
+      if (prior != null && args.isNoSend && args.isSendWith && !referencesWorkspace) {
+        // The new action belongs to the workspace, but its explicit sendWith
+        // list does not. Preserve the staged action and fulfill the unrelated
+        // broadcast through the ordinary path; returning an empty result here
+        // would silently drop an explicit caller request.
+        const persistedSend: StorageProcessActionArgs = {
+          isNewTx: false,
+          isSendWith: true,
+          isNoSend: false,
+          isDelayed: args.isDelayed,
+          sendWith: [...args.options.sendWith],
+          logger: args.logger
+        }
+        return await this.wallet.storage.processAction(persistedSend)
+      }
+      const shouldCommit = referencesWorkspace ||
         (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
       const sendWith = [...args.options.sendWith]
@@ -988,7 +1061,20 @@ export class ActionBatchController {
         this.workspace = undefined
         return result
       } catch (error) {
-        if (isActionBatchStateError(error)) {
+        if (isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
+          try {
+            await workspace.resume()
+            const result = await workspace.commit(sendWith, args.isDelayed)
+            this.workspace = undefined
+            return result
+          } catch (recoveryError) {
+            if (isActionBatchStateError(recoveryError) && shouldRetireAfterStateError(recoveryError)) {
+              await this.retire(workspace)
+            }
+            throw recoveryError
+          }
+        }
+        if (isActionBatchStateError(error) && shouldRetireAfterStateError(error)) {
           await this.retire(workspace)
         }
         throw error

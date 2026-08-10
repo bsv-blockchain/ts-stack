@@ -66,6 +66,37 @@ describe('WalletError tests', () => {
     })
   })
 
+  test('action batch lifecycle state survives transport from another package instance', () => {
+    class WERRActionBatchStateCopy extends Error {
+      readonly state = 'expired'
+      readonly batchId = 'cross-copy-batch'
+
+      constructor () {
+        super('Action batch cannot continue because it is expired.')
+        this.name = 'WERR_ACTION_BATCH_STATE'
+      }
+
+      toJson (): string {
+        return JSON.stringify({
+          isError: true,
+          name: this.name,
+          message: this.message,
+          state: this.state,
+          batchId: this.batchId
+        })
+      }
+    }
+
+    const recovered = WalletErrorFromJson(JSON.parse(
+      WalletError.unknownToJson(new WERRActionBatchStateCopy())
+    ))
+    expect(recovered).toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'expired',
+      batchId: 'cross-copy-batch'
+    })
+  })
+
   test('1 - WERR_NOT_IMPLEMENTED basic test', async () => {
     const werr = new WERR_NOT_IMPLEMENTED('Custom not implemented message')
     expect(werr.name).toBe('WERR_NOT_IMPLEMENTED')
