@@ -476,7 +476,7 @@ describe('listActions2 single action tests', () => {
       // whose value varies per action. Verify it, then compare the rest.
       for (const action of r.actions) {
         const referenceLabels = (action.labels ?? []).filter(isBrc153ReferenceLabel)
-        expect(referenceLabels.length).toBe(1)
+        expect(referenceLabels).toHaveLength(1)
         expect(parseBrc153ReferenceLabel(referenceLabels[0])).toBeDefined()
         action.labels = (action.labels ?? []).filter(label => !isBrc153ReferenceLabel(label))
       }
