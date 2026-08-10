@@ -25,6 +25,17 @@ advertises it. Old clients ignore the extra fields, new clients retain the
 version-1 path against old providers, and additive storage methods remain
 optional for third-party `WalletStorage` implementations.
 
+The retained browser platform contract measures the resumable implementation at
+1,547,450 raw / 362,883 gzip / 285,514 Brotli bytes with Vite and 1,208,592 raw /
+332,013 gzip / 266,705 Brotli bytes with esbuild. This advances only the affected
+raw and esbuild-gzip size ratchets by less than 0.5%; both Brotli ceilings and the
+Vite gzip ceiling remain unchanged.
+
+The mobile contract measures 1,608,905 raw / 405,490 gzip / 315,467 Brotli
+Metro bytes and 3,251,525 raw / 1,308,483 gzip / 1,018,975 Brotli Hermes bytes.
+Only the Hermes raw ceiling advances, by less than 0.05%; every mobile
+compressed-size ceiling remains unchanged.
+
 The capability and its methods are Wallet Toolbox storage extensions. They do not
 extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
 `noSendChange`, `sendWith`, or their results.
