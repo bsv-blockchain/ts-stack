@@ -1,6 +1,10 @@
 import * as bsv from '@bsv/sdk'
 import { sdk } from '../../../src/index.client'
 import { _tu, expectToThrowWERR, MockData, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
+import {
+  isBrc153ReferenceLabel,
+  parseBrc153ReferenceLabel
+} from '../../../src/utility/brc153ReferenceLabels'
 
 const env = _tu.getEnvFlags('test')
 const testName = () => expect.getState().currentTestName || 'test'
@@ -467,7 +471,16 @@ describe('listActions2 single action tests', () => {
         '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"labels":["label","label2"],"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
-      expect(await wallet.listActions(args)).toEqual(expectedResult)
+      const r = await wallet.listActions(args)
+      // includeLabels appends the BRC-153 synthetic `reference <hex>` label,
+      // whose value varies per action. Verify it, then compare the rest.
+      for (const action of r.actions) {
+        const referenceLabels = (action.labels ?? []).filter(isBrc153ReferenceLabel)
+        expect(referenceLabels).toHaveLength(1)
+        expect(parseBrc153ReferenceLabel(referenceLabels[0])).toBeDefined()
+        action.labels = (action.labels ?? []).filter(label => !isBrc153ReferenceLabel(label))
+      }
+      expect(r).toEqual(expectedResult)
     }
   })
 
