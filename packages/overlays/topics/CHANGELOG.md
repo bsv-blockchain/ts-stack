@@ -10,7 +10,15 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+
+- `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation
+  anchors (`uora-anchor-v3`), keyed on the `did:key` of the party that made the
+  claim. Anchors name their anchoring service in the output and lock to its
+  BRC-42 child, so an instance attributes one with nothing configured. The
+  anchor signature covers each field behind its own length, so it commits to
+  where every field ends; `uora-anchor-v2`, which signed the fields run
+  together and so left the subject/type boundary movable by any holder, is not
+  admitted. Additive: no existing topic, export, schema or behaviour changes.
 
 ### Changed
 

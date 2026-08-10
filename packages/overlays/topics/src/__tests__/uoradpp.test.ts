@@ -1,0 +1,834 @@
+/**
+ * Integration tests for UoraDppTopicManager and UoraDppLookupService.
+ *
+ * The test that carries the format is `refuses an anchor naming a service its
+ * locking key cannot come from`. Everything else is structure around it: an
+ * anchor is admissible because it proves who wrote it, and it proves that by
+ * locking to the BRC-42 child of the key it names, under counterparty `anyone`
+ * so a third party can reproduce the derivation.
+ *
+ * The other one to read is `is refused by the signature check`, under `the
+ * boundary between the subject and the type`. It pins the defect that made this
+ * format a v3: a signature over the fields run together fixes the bytes and not
+ * where any field ends, so two adjacent fields whose boundary nothing else pins
+ * can be re-cut by anyone holding the output. Those vectors come from the shared
+ * fixture, so all three implementations refuse the same bytes.
+ */
+
+import { jest } from '@jest/globals'
+import { MongoMemoryServer } from 'mongodb-memory-server'
+import { Db, MongoClient } from 'mongodb'
+import {
+  LockingScript,
+  P2PKH,
+  PrivateKey,
+  ProtoWallet,
+  PushDrop,
+  Transaction,
+  Utils
+} from '@bsv/sdk'
+import type { WalletInterface } from '@bsv/sdk'
+import { LookupQuestion, OutputAdmittedByTopic } from '@bsv/overlay'
+import UoraDppTopicManager from '../uoradpp/UoraDppTopicManager.js'
+import createUoraDppLookupService, {
+  UoraDppLookupService
+} from '../uoradpp/UoraDppLookupService.js'
+import { UoraDppStorage } from '../uoradpp/UoraDppStorage.js'
+import {
+  anchorSigningPreimage,
+  assertAnchorSignature,
+  didKeyFromIdentityKey,
+  expectedLockingKey,
+  identityKeyFromDidKey,
+  readUoraAnchor,
+  UORA_ANCHOR_PREFIX,
+  UORA_ANCHOR_PROTOCOL
+} from '../uoradpp/anchorFormat.js'
+import { ANCHOR_V3_FIXTURE } from '../uoradpp/__tests__/anchor-v3-fixture.js'
+
+const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
+
+const servicePriv = PrivateKey.fromHex('77'.repeat(32))
+const SERVICE_KEY = servicePriv.toPublicKey().toString()
+const serviceWallet = new ProtoWallet(servicePriv) as unknown as WalletInterface
+
+const strangerPriv = PrivateKey.fromHex('66'.repeat(32))
+const STRANGER_KEY = strangerPriv.toPublicKey().toString()
+const strangerWallet = new ProtoWallet(strangerPriv) as unknown as WalletInterface
+
+const MAKER = didKeyFromIdentityKey(PrivateKey.fromHex('88'.repeat(32)).toPublicKey().toString())
+const RECYCLER = didKeyFromIdentityKey(PrivateKey.fromHex('89'.repeat(32)).toPublicKey().toString())
+
+const CELL = 'https://id.gs1.org/01/09506000134352/21/CELL-1'
+const JACKET = 'https://id.gs1.org/01/09506000134352/21/JACKET-1'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface Claim {
+  digest: string
+  attestationId: string
+  issuer: string
+  subject: string
+  uoraType: string
+  anchoredBy: string
+}
+
+function claim(overrides: Partial<Claim> = {}): Claim {
+  return {
+    digest: 'a'.repeat(64),
+    attestationId: `${CELL}/state-1`,
+    issuer: MAKER,
+    subject: CELL,
+    uoraType: 'Origin',
+    anchoredBy: SERVICE_KEY,
+    ...overrides
+  }
+}
+
+/** A fresh array every call, so nothing a caller does can be seen by the next. */
+function fieldsFor(one: Claim): number[][] {
+  return [
+    UORA_ANCHOR_PREFIX,
+    one.digest,
+    one.attestationId,
+    one.issuer,
+    one.subject,
+    one.uoraType,
+    one.anchoredBy
+  ].map(value => Utils.toArray(value, 'utf8'))
+}
+
+/**
+ * Builds an anchor the way a writer must: sign the length-prefixed preimage,
+ * then lock with `includeSignature: false` and the signature already among the
+ * fields. `PushDrop.lock`'s own signature covers `fields.flat()`, which does not
+ * commit to where a field ends, and using it is what made v2 re-cuttable.
+ */
+async function anchorScript(
+  one: Claim = claim(),
+  wallet: WalletInterface = serviceWallet,
+  keyId = one.attestationId
+): Promise<LockingScript> {
+  const fields = fieldsFor(one)
+  const { signature } = await wallet.createSignature({
+    data: anchorSigningPreimage(fields),
+    protocolID: UORA_ANCHOR_PROTOCOL,
+    keyID: keyId,
+    counterparty: 'anyone'
+  })
+  return await new PushDrop(wallet).lock(
+    [...fields, signature],
+    UORA_ANCHOR_PROTOCOL,
+    keyId,
+    'anyone',
+    true,
+    false
+  )
+}
+
+/** A transaction with an input, which `identifyPushDropOutputs` requires. */
+function txWith(...scripts: LockingScript[]): Transaction {
+  const source = new Transaction()
+  source.addOutput({ lockingScript: new LockingScript([]), satoshis: 10000 })
+  const tx = new Transaction()
+  tx.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScript: new LockingScript([])
+  })
+  for (const lockingScript of scripts) tx.addOutput({ lockingScript, satoshis: 1 })
+  return tx
+}
+
+function p2pkhOutput(): LockingScript {
+  return new P2PKH().lock(PrivateKey.fromRandom().toPublicKey().toHash())
+}
+
+// ---------------------------------------------------------------------------
+// did:key
+// ---------------------------------------------------------------------------
+
+describe('did:key encoding', () => {
+  it('round-trips a compressed secp256k1 key', () => {
+    const key = PrivateKey.fromHex('11'.repeat(32)).toPublicKey().toString()
+    expect(identityKeyFromDidKey(didKeyFromIdentityKey(key))).toBe(key)
+    expect(didKeyFromIdentityKey(key).startsWith('did:key:zQ3s')).toBe(true)
+  })
+
+  it('refuses another curve, a bad encoding and a DID it cannot read', () => {
+    // A well-formed Ed25519 did:key, which differs by two bytes at the front.
+    expect(
+      identityKeyFromDidKey('did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK')
+    ).toBeUndefined()
+    expect(identityKeyFromDidKey('did:web:example.com')).toBeUndefined()
+    expect(identityKeyFromDidKey('did:key:zNOTBASE58!!')).toBeUndefined()
+    expect(() => didKeyFromIdentityKey(`02${'ff'.repeat(32)}`)).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UoraDppTopicManager
+// ---------------------------------------------------------------------------
+
+describe('UoraDppTopicManager', () => {
+  const manager = new UoraDppTopicManager()
+
+  it('admits a well-formed anchor', async () => {
+    const result = await manager.identifyAdmissibleOutputs(
+      txWith(await anchorScript()).toBEEF(),
+      []
+    )
+    expect(result).toEqual({ outputsToAdmit: [0], coinsToRetain: [] })
+  })
+
+  it('reproduces the locking key from the service key the output names', async () => {
+    const { anchor, lockingPublicKey } = readUoraAnchor(await anchorScript())
+    expect(anchor.anchoredBy).toBe(SERVICE_KEY)
+    expect(lockingPublicKey.toString()).toBe(expectedLockingKey(SERVICE_KEY, `${CELL}/state-1`))
+  })
+
+  it('refuses an anchor naming a service its locking key cannot come from', async () => {
+    // Signed and sealed correctly by the key that locks it, and lying in field
+    // 6 about who that is. Producing one that passes needs the named service's
+    // private key, which is the whole of the attribution proof.
+    const lying = await anchorScript(claim({ anchoredBy: STRANGER_KEY }), serviceWallet)
+    expect(() => readUoraAnchor(lying)).toThrow(/not derived from the anchoring service/)
+    const result = await manager.identifyAdmissibleOutputs(txWith(lying).toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('admits an anchor from a service it was never told about', async () => {
+    // The reason field 6 exists. A shared instance carries anchors from a
+    // deployment nobody configured it for, and still says whose each one is.
+    const theirs = await anchorScript(claim({ anchoredBy: STRANGER_KEY }), strangerWallet)
+    const result = await manager.identifyAdmissibleOutputs(txWith(theirs).toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([0])
+    expect(readUoraAnchor(theirs).anchor.anchoredBy).toBe(STRANGER_KEY)
+  })
+
+  it('narrows to named services when an instance asks it to', async () => {
+    const narrowed = new UoraDppTopicManager([SERVICE_KEY])
+    const theirs = await anchorScript(claim({ anchoredBy: STRANGER_KEY }), strangerWallet)
+    expect(
+      (await narrowed.identifyAdmissibleOutputs(txWith(theirs).toBEEF(), [])).outputsToAdmit
+    ).toEqual([])
+    expect(
+      (await narrowed.identifyAdmissibleOutputs(txWith(await anchorScript()).toBEEF(), []))
+        .outputsToAdmit
+    ).toEqual([0])
+  })
+
+  it('refuses a digest that is not 64 lower-case hex', async () => {
+    for (const digest of ['A'.repeat(64), 'a'.repeat(63), 'not a digest']) {
+      const bad = await anchorScript(claim({ digest }))
+      expect(() => readUoraAnchor(bad)).toThrow(/digest/)
+    }
+  })
+
+  it('refuses an issuer that is not a secp256k1 did:key', async () => {
+    const bad = await anchorScript(claim({ issuer: 'did:web:example.com' }))
+    expect(() => readUoraAnchor(bad)).toThrow(/did:key/)
+  })
+
+  it('refuses a field edited after signing', async () => {
+    const script = await anchorScript()
+    const chunks = script.chunks.map(chunk => ({ ...chunk }))
+    const digestChunk = chunks.find(
+      chunk => chunk.data !== undefined && Utils.toUTF8(chunk.data) === 'a'.repeat(64)
+    )
+    expect(digestChunk).toBeDefined()
+    digestChunk!.data = Utils.toArray('b'.repeat(64), 'utf8')
+    const result = await manager.identifyAdmissibleOutputs(
+      txWith(new LockingScript(chunks)).toBEEF(),
+      []
+    )
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('refuses an anchor locked under a key id that is not its attestation id', async () => {
+    const wrong = await anchorScript(claim(), serviceWallet, 'some-other-id')
+    expect(() => readUoraAnchor(wrong)).toThrow(/not derived from the anchoring service/)
+  })
+
+  it('admits every anchor in a transaction, so anchors may be batched', async () => {
+    const beef = txWith(
+      await anchorScript(claim({ attestationId: `${CELL}/a`, digest: '1'.repeat(64) })),
+      await anchorScript(claim({ attestationId: `${CELL}/b`, digest: '2'.repeat(64) })),
+      await anchorScript(claim({ attestationId: `${CELL}/c`, digest: '3'.repeat(64) }))
+    ).toBEEF()
+    expect(await manager.identifyAdmissibleOutputs(beef, [])).toEqual({
+      outputsToAdmit: [0, 1, 2],
+      coinsToRetain: []
+    })
+  })
+
+  it('picks anchors out from among ordinary outputs, and never retains', async () => {
+    const beef = txWith(
+      p2pkhOutput(),
+      await anchorScript(),
+      p2pkhOutput(),
+      await anchorScript(claim({ attestationId: `${CELL}/two`, digest: '4'.repeat(64) }))
+    ).toBEEF()
+    const result = await manager.identifyAdmissibleOutputs(beef, [7])
+    expect(result.outputsToAdmit).toEqual([1, 3])
+    // Anchors are leaves: nothing is ever retained, whatever came in.
+    expect(result.coinsToRetain).toEqual([])
+  })
+
+  it('admits nothing from bytes that are not a transaction', async () => {
+    expect(await manager.identifyAdmissibleOutputs([1, 2, 3], [])).toEqual({
+      outputsToAdmit: [],
+      coinsToRetain: []
+    })
+  })
+
+  it('does not reuse a fields array, because PushDrop.lock pushes into it', async () => {
+    const fields = fieldsFor(claim())
+    const before = fields.length
+    await new PushDrop(serviceWallet).lock(
+      fields,
+      UORA_ANCHOR_PROTOCOL,
+      `${CELL}/state-1`,
+      'anyone',
+      true
+    )
+    expect(fields).toHaveLength(before + 1)
+  })
+
+  it('describes itself', async () => {
+    expect(await manager.getMetaData()).toMatchObject({ name: 'UORA DPP Topic Manager' })
+    const docs = await manager.getDocumentation()
+    expect(docs).toContain(UORA_ANCHOR_PREFIX)
+    expect(docs).toContain('did:key')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UoraDppLookupService
+// ---------------------------------------------------------------------------
+
+describe('UoraDppLookupService', () => {
+  let mongo: MongoMemoryServer
+  let client: MongoClient
+  let db: Db
+  let service: UoraDppLookupService
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create(mongoMemoryServerOptions)
+    client = new MongoClient(mongo.getUri())
+    await client.connect()
+    db = client.db('uoradpp_test')
+  }, 90000)
+
+  afterAll(async () => {
+    await client.close()
+    await mongo.stop()
+  })
+
+  beforeEach(async () => {
+    await db.collection('uoraDppAnchors').deleteMany({})
+    service = createUoraDppLookupService(db)
+    await admit(claim({ attestationId: 'att-1', issuer: MAKER, subject: CELL }), 'a'.repeat(64))
+    await admit(claim({ attestationId: 'att-2', issuer: MAKER, subject: JACKET }), 'b'.repeat(64))
+    await admit(
+      claim({ attestationId: 'att-3', issuer: RECYCLER, subject: CELL, uoraType: 'Disposition' }),
+      'c'.repeat(64)
+    )
+  })
+
+  async function admit(one: Claim, txid: string): Promise<void> {
+    const payload: OutputAdmittedByTopic = {
+      mode: 'locking-script',
+      topic: 'tm_uora_dpp',
+      txid,
+      outputIndex: 0,
+      satoshis: 1,
+      lockingScript: await anchorScript(one)
+    }
+    await service.outputAdmittedByTopic(payload)
+  }
+
+  async function ask(query: unknown): Promise<string[]> {
+    const formula = await service.lookup({ service: 'ls_uora_dpp', query } as LookupQuestion)
+    return (formula as Array<{ txid: string }>).map(entry => entry.txid)
+  }
+
+  it('answers what one party has attested, across subjects', async () => {
+    const answers = await ask({ issuer: MAKER })
+    expect(answers.sort()).toEqual(['a'.repeat(64), 'b'.repeat(64)])
+  })
+
+  it('answers the same question keyed on the raw identity key', async () => {
+    const key = PrivateKey.fromHex('89'.repeat(32)).toPublicKey().toString()
+    expect(await ask({ issuerKey: key })).toEqual(await ask({ issuer: RECYCLER }))
+  })
+
+  it('finds every claim about one product, whoever made it', async () => {
+    expect((await ask({ subject: CELL })).sort()).toEqual(['a'.repeat(64), 'c'.repeat(64)])
+  })
+
+  it('finds one attestation, and answers a digest held in hand', async () => {
+    expect(await ask({ attestationId: 'att-2' })).toEqual(['b'.repeat(64)])
+    expect(await ask({ digest: 'a'.repeat(64) })).toHaveLength(3)
+  })
+
+  it('narrows by type and by anchoring service, and refuses to select on either', async () => {
+    expect(await ask({ subject: CELL, uoraType: 'Disposition' })).toEqual(['c'.repeat(64)])
+    expect(await ask({ issuer: MAKER, anchoredBy: SERVICE_KEY })).toHaveLength(2)
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp', query: { uoraType: 'Origin' } } as LookupQuestion)
+    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+  })
+
+  it('refuses an empty query and a foreign service', async () => {
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp', query: {} } as LookupQuestion)
+    ).rejects.toThrow()
+    await expect(
+      service.lookup({ service: 'ls_other', query: { issuer: MAKER } } as LookupQuestion)
+    ).rejects.toThrow(/not supported/)
+  })
+
+  it('pages, and caps what a caller can ask for', async () => {
+    expect(await ask({ issuer: MAKER, limit: 1 })).toHaveLength(1)
+    expect(await ask({ issuer: MAKER, skip: 1 })).toHaveLength(1)
+    await expect(
+      service.lookup({
+        service: 'ls_uora_dpp',
+        query: { issuer: MAKER, limit: -1 }
+      } as LookupQuestion)
+    ).rejects.toThrow(/non-negative/)
+  })
+
+  it('indexes nothing from a topic it does not serve', async () => {
+    const other = createUoraDppLookupService(db)
+    await other.outputAdmittedByTopic({
+      mode: 'locking-script',
+      topic: 'tm_supplychain',
+      txid: 'f'.repeat(64),
+      outputIndex: 0,
+      satoshis: 1,
+      lockingScript: await anchorScript()
+    })
+    expect(await ask({ attestationId: `${CELL}/state-1` })).toEqual([])
+  })
+
+  it('drops an evicted output and keeps a spent one', async () => {
+    // An anchor should never be spent, and if one is, the digest still sat at
+    // that point in the chain's order, so the record stays.
+    await service.outputSpent({
+      mode: 'txid',
+      topic: 'tm_uora_dpp',
+      txid: 'a'.repeat(64),
+      outputIndex: 0,
+      spendingTxid: 'd'.repeat(64)
+    })
+    expect(await ask({ issuer: MAKER })).toHaveLength(2)
+
+    await service.outputEvicted('a'.repeat(64), 0)
+    expect(await ask({ issuer: MAKER })).toEqual(['b'.repeat(64)])
+  })
+
+  it('stores one record per outpoint however often it arrives', async () => {
+    await admit(claim({ attestationId: 'att-1', issuer: MAKER, subject: CELL }), 'a'.repeat(64))
+    expect(await ask({ issuer: MAKER })).toHaveLength(2)
+  })
+
+  it('describes itself', async () => {
+    expect(await service.getMetaData()).toMatchObject({ name: 'UORA DPP Lookup Service' })
+    expect(await service.getDocumentation()).toContain('did:key')
+  })
+})
+
+describe('the shared fixture, which is the contract with the writer', () => {
+  const F = ANCHOR_V3_FIXTURE
+  const manager = new UoraDppTopicManager()
+  const script = (): LockingScript => LockingScript.fromHex(F.lockingScript)
+
+  /*
+   * The same constant is committed in the writer's repository and in the app's,
+   * because none of the three can import the others: this reader is meant to
+   * drop into a shared overlay instance that has never heard of the service that
+   * writes anchors. Byte-identity is the whole of the agreement. If the format
+   * moves on one side and not the others, one of these suites goes red.
+   */
+  it('reads the anchor the writer pinned', () => {
+    const { anchor } = readUoraAnchor(script())
+    expect(anchor.digest).toBe(F.digest)
+    expect(anchor.attestationId).toBe(F.attestationId)
+    expect(anchor.issuer).toBe(F.issuerDid)
+    expect(anchor.subject).toBe(F.subject)
+    expect(anchor.uoraType).toBe(F.uoraType)
+    expect(anchor.anchoredBy).toBe(F.anchoredBy)
+  })
+
+  it('accepts a signature this repository cannot produce', async () => {
+    // Nothing here holds the writer's key. The signature in the fixture was
+    // made in the other repository, so this passing is a real agreement between
+    // two implementations rather than one implementation agreeing with itself.
+    const { anchor, fields } = readUoraAnchor(script())
+    await expect(
+      assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+    ).resolves.toBeUndefined()
+  })
+
+  it('admits it', async () => {
+    const admitted = await manager.identifyAdmissibleOutputs(txWith(script()).toBEEF(), [])
+    expect(admitted.outputsToAdmit).toEqual([0])
+  })
+})
+
+describe('the boundary between the subject and the type', () => {
+  const F = ANCHOR_V3_FIXTURE
+  const manager = new UoraDppTopicManager()
+
+  /*
+   * The forgery v2 admitted, and the only reason this format has a v3.
+   *
+   * Each entry is the pinned output with that one boundary re-cut and the
+   * signature bytes copied across untouched. It is not ordinary tampering: no
+   * field content changes and no signature byte changes, only where one field is
+   * said to stop and the next to start. v2 signed the fields run together, so it
+   * could not see the difference and accepted every one. The v2 anchor on
+   * mainnet reads 63 ways.
+   */
+  it('changes no content and no signature, only where a field ends', () => {
+    const genuine = readUoraAnchor(LockingScript.fromHex(F.lockingScript))
+    expect(F.boundaryShifted.length).toBeGreaterThan(0)
+    for (const hex of F.boundaryShifted) {
+      const { fields } = PushDrop.decode(LockingScript.fromHex(hex))
+      expect(fields.slice(0, -1).flat()).toEqual(genuine.fields.slice(0, -1).flat())
+      expect(fields.at(-1)).toEqual(genuine.fields.at(-1))
+      expect(fields[4]).not.toEqual(genuine.fields[4])
+    }
+  })
+
+  it('is refused by the signature check', async () => {
+    for (const hex of F.boundaryShifted) {
+      const { anchor, fields } = readUoraAnchor(LockingScript.fromHex(hex))
+      // It still reads as well formed: the re-cut leaves the four fields that
+      // `readUoraAnchor` pins exactly where they were, which is why the locking
+      // key still derives and why this check has to be the one that catches it.
+      expect(anchor.anchoredBy).toBe(F.anchoredBy)
+      await expect(
+        assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+      ).rejects.toThrow(/not signed by the anchoring service/)
+    }
+  })
+
+  it('is not admitted', async () => {
+    for (const hex of F.boundaryShifted) {
+      const admitted = await manager.identifyAdmissibleOutputs(
+        txWith(LockingScript.fromHex(hex)).toBEEF(),
+        []
+      )
+      expect(admitted.outputsToAdmit).toEqual([])
+    }
+  })
+})
+
+describe('what readUoraAnchor refuses', () => {
+  const manager = new UoraDppTopicManager()
+
+  /** Build a PushDrop with exactly these field byte arrays plus a signature. */
+  async function scriptWithFields(fieldTexts: string[]): Promise<LockingScript> {
+    const fields = fieldTexts.map(value => Utils.toArray(value, 'utf8'))
+    const { signature } = await serviceWallet.createSignature({
+      data: anchorSigningPreimage(fields),
+      protocolID: UORA_ANCHOR_PROTOCOL,
+      keyID: fieldTexts[2] ?? 'x',
+      counterparty: 'anyone'
+    })
+    return await new PushDrop(serviceWallet).lock(
+      [...fields, signature],
+      UORA_ANCHOR_PROTOCOL,
+      fieldTexts[2] ?? 'x',
+      'anyone',
+      true,
+      false
+    )
+  }
+
+  it('refuses an output that is not this many fields', async () => {
+    // Two fields and no signature. The count is checked before anything is
+    // read, because a short output has no field 6 to attribute it by and
+    // guessing which fields are missing is how a reader invents an anchor.
+    const script = await new PushDrop(serviceWallet).lock(
+      [Utils.toArray(UORA_ANCHOR_PREFIX, 'utf8'), Utils.toArray('a'.repeat(64), 'utf8')],
+      UORA_ANCHOR_PROTOCOL,
+      `${CELL}/state-1`,
+      'anyone',
+      true,
+      false
+    )
+    expect(() => readUoraAnchor(script)).toThrow(/fields and a signature/)
+    const result = await manager.identifyAdmissibleOutputs(txWith(script).toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('refuses an anchoring service that is not a canonical compressed key', async () => {
+    // Right shape, not a point on the curve. `canonicalKey` round-trips the hex
+    // through `PublicKey` rather than pattern-matching it, so this is refused
+    // for being unusable rather than for looking wrong.
+    const script = await anchorScript(claim({ anchoredBy: `02${'ff'.repeat(32)}` }))
+    expect(() => readUoraAnchor(script)).toThrow(/canonical compressed key/)
+  })
+
+  it('refuses a wrong prefix and fields past their bounds', async () => {
+    const base = claim()
+    const good = [
+      UORA_ANCHOR_PREFIX,
+      base.digest,
+      base.attestationId,
+      base.issuer,
+      base.subject,
+      base.uoraType,
+      base.anchoredBy
+    ]
+
+    // Wrong version tag is refused before any other field is interpreted.
+    const wrongPrefix = await scriptWithFields(['uora-anchor-v2', ...good.slice(1)])
+    expect(() => readUoraAnchor(wrongPrefix)).toThrow(/not an anchor output/)
+
+    // Over-length free-text fields are refused so a stranger cannot make the
+    // index expensive. Length checks run before the locking-key derivation.
+    for (const [field, value, pattern] of [
+      ['attestationId', 'i'.repeat(257), /attestation id is too long/],
+      ['subject', 's'.repeat(513), /subject is too long/],
+      ['uoraType', 't'.repeat(65), /attestation type is too long/]
+    ] as const) {
+      const script = await anchorScript(claim({ [field]: value }))
+      expect(() => readUoraAnchor(script)).toThrow(pattern)
+    }
+  })
+
+  it('refuses a field that is not valid UTF-8 text', async () => {
+    // Invalid continuation byte: toUTF8 either throws or produces a string that
+    // does not re-encode to the same bytes. Either path is "not UTF-8".
+    const invalid = [0xff, 0xfe, 0xfd]
+    const one = claim()
+    const fields = [
+      Utils.toArray(UORA_ANCHOR_PREFIX, 'utf8'),
+      Utils.toArray(one.digest, 'utf8'),
+      Utils.toArray(one.attestationId, 'utf8'),
+      Utils.toArray(one.issuer, 'utf8'),
+      invalid,
+      Utils.toArray(one.uoraType, 'utf8'),
+      Utils.toArray(one.anchoredBy, 'utf8')
+    ]
+    const { signature } = await serviceWallet.createSignature({
+      data: anchorSigningPreimage(fields),
+      protocolID: UORA_ANCHOR_PROTOCOL,
+      keyID: one.attestationId,
+      counterparty: 'anyone'
+    })
+    const script = await new PushDrop(serviceWallet).lock(
+      [...fields, signature],
+      UORA_ANCHOR_PROTOCOL,
+      one.attestationId,
+      'anyone',
+      true,
+      false
+    )
+    expect(() => readUoraAnchor(script)).toThrow(/empty or not UTF-8/)
+  })
+
+  it('refuses a did:key whose payload is not a 33-byte compressed key', () => {
+    // Multicodec is secp256k1, but the key material is short. Length is checked
+    // before the hex is handed to PublicKey, so this is refused as unusable
+    // rather than as a parse error deeper in.
+    const short = Utils.toBase58([0xe7, 0x01, 0x02, 0x03, 0x04])
+    expect(identityKeyFromDidKey(`did:key:z${short}`)).toBeUndefined()
+  })
+
+  it('refuses a did:key whose compressed key is not a curve point', () => {
+    // 33 bytes matching the compressed-key shape. `02`+zeros makes PublicKey
+    // throw (catch branch); `02`+`ff` normalises to a different hex (equality
+    // branch). Either way identityKeyFromDidKey must refuse.
+    for (const notAPoint of [`02${'00'.repeat(32)}`, `02${'ff'.repeat(32)}`]) {
+      const raw = Utils.toBase58([0xe7, 0x01, ...Utils.toArray(notAPoint, 'hex')])
+      expect(identityKeyFromDidKey(`did:key:z${raw}`)).toBeUndefined()
+    }
+  })
+
+  it('refuses assertAnchorSignature when no signature field is present', async () => {
+    await expect(assertAnchorSignature([], SERVICE_KEY, 'att-1')).rejects.toThrow(
+      /carries no signature/
+    )
+  })
+
+  it('refuses assertAnchorSignature when verifySignature returns invalid', async () => {
+    // Cover the path where verifySignature resolves with valid:false rather than
+    // throwing — the failure branch was unreachable before the catch was added.
+    const spy = jest
+      .spyOn(ProtoWallet.prototype, 'verifySignature')
+      .mockResolvedValue({ valid: false } as never)
+    try {
+      const { fields, anchor } = readUoraAnchor(await anchorScript())
+      await expect(
+        assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+      ).rejects.toThrow(/not signed by the anchoring service/)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('UoraDppLookupService, at its edges', () => {
+  it('refuses a negative skip as well as a negative limit', async () => {
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(
+      service.lookup({
+        service: 'ls_uora_dpp',
+        query: { issuer: MAKER, skip: -1 }
+      } as LookupQuestion)
+    ).rejects.toThrow(/Skip must be a non-negative number/)
+  })
+
+  it('refuses a null or missing question, and empty selector strings', async () => {
+    // Presence alone is not enough: `{ issuer: '' }` used to pass the guard,
+    // then storage dropped the empty string and Mongo saw an empty filter.
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(service.lookup(undefined as unknown as LookupQuestion)).rejects.toThrow(
+      /valid query is required/
+    )
+    await expect(service.lookup(null as unknown as LookupQuestion)).rejects.toThrow(
+      /valid query is required/
+    )
+    // `query` omitted is treated as `{}`, not as a missing question object.
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp' } as LookupQuestion)
+    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+    await expect(
+      service.lookup({ service: 'ls_uora_dpp', query: { issuer: '' } } as LookupQuestion)
+    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+  })
+
+  it('refuses admission and spend notifications in the wrong mode', async () => {
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(
+      service.outputAdmittedByTopic({
+        mode: 'txid',
+        topic: 'tm_uora_dpp',
+        txid: 'a'.repeat(64),
+        outputIndex: 0
+      } as never)
+    ).rejects.toThrow(/Invalid mode/)
+    await expect(
+      service.outputSpent({
+        mode: 'locking-script',
+        topic: 'tm_uora_dpp',
+        txid: 'a'.repeat(64),
+        outputIndex: 0
+      } as never)
+    ).rejects.toThrow(/Invalid mode/)
+  })
+
+  it('refuses an anchoring service that is not hex at all', async () => {
+    // `canonicalKey` round-trips through `PublicKey`, which throws rather than
+    // returning something falsy for input that is not a key. The refusal has to
+    // survive that, or an unparseable field reaches the derivation check and
+    // fails there with a message about the wrong thing.
+    const script = await anchorScript(claim({ anchoredBy: 'not-a-key' }))
+    expect(() => readUoraAnchor(script)).toThrow(/canonical compressed key/)
+  })
+
+  it('forgets a record the overlay stops retaining, and only for its own topic', async () => {
+    const deleted: Array<[string, number]> = []
+    const db = {
+      collection: () =>
+        ({
+          createIndex: async () => 'ok',
+          deleteOne: async (filter: { txid: string; outputIndex: number }) => {
+            deleted.push([filter.txid, filter.outputIndex])
+            return {}
+          }
+        }) as never
+    } as unknown as Db
+    const service = createUoraDppLookupService(db)
+
+    await service.outputNoLongerRetainedInHistory('f'.repeat(64), 0, 'tm_something_else')
+    expect(deleted).toEqual([])
+
+    await service.outputNoLongerRetainedInHistory('f'.repeat(64), 0, 'tm_uora_dpp')
+    expect(deleted).toEqual([['f'.repeat(64), 0]])
+  })
+
+  it('reports a failure to index rather than throwing at the overlay', async () => {
+    // The engine has already admitted the output by the time this is called, so
+    // throwing here would fail a submission the topic manager accepted. An
+    // unreadable output is logged and skipped instead.
+    const errors: unknown[] = []
+    const original = console.error
+    console.error = (...args: unknown[]): void => {
+      errors.push(args)
+    }
+    try {
+      const service = createUoraDppLookupService({
+        collection: () => ({}) as never
+      } as unknown as Db)
+      await service.outputAdmittedByTopic({
+        mode: 'locking-script',
+        topic: 'tm_uora_dpp',
+        txid: 'e'.repeat(64),
+        outputIndex: 0,
+        satoshis: 1,
+        lockingScript: p2pkhOutput()
+      } as OutputAdmittedByTopic)
+      expect(errors).toHaveLength(1)
+    } finally {
+      console.error = original
+    }
+  })
+})
+
+describe('UoraDppStorage, when Mongo will not build an index', () => {
+  /*
+   * The lazy build is memoised so it happens once. Memoising the *failure* was
+   * the bug: a rejected promise left in place made one unlucky moment disable
+   * the collection's reads and writes for the life of the process, with every
+   * later caller awaiting the same rejection.
+   */
+  function dbThatFailsIndexes(failures: number): { db: Db; calls: () => number } {
+    let attempts = 0
+    const collection = {
+      createIndex: async () => {
+        attempts += 1
+        if (attempts <= failures) throw new Error('index build refused')
+        return 'ok'
+      },
+      updateOne: async () => ({}),
+      deleteOne: async () => ({}),
+      find: () => ({
+        sort: () => ({
+          skip: () => ({ limit: () => ({ project: () => ({ toArray: async () => [] }) }) })
+        })
+      })
+    }
+    return {
+      db: { collection: () => collection } as unknown as Db,
+      calls: () => attempts
+    }
+  }
+
+  it('does not remember a failed build, so the next caller tries again', async () => {
+    const { db, calls } = dbThatFailsIndexes(1)
+    const storage = new UoraDppStorage(db)
+
+    await expect(storage.find({ issuer: MAKER })).rejects.toThrow(/index build refused/)
+    expect(calls()).toBe(1)
+
+    // The retry is the whole point: had the rejection been kept, this would
+    // reject with the same error without touching Mongo again.
+    await expect(storage.find({ issuer: MAKER })).resolves.toEqual([])
+    expect(calls()).toBeGreaterThan(1)
+  })
+})

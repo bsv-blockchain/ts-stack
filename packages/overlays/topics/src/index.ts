@@ -83,6 +83,28 @@ export type { SupplyChainRecord } from './supplychain/types.js'
 export { default as SupplyChainTopicManager } from './supplychain/SupplyChainTopicManager.js'
 export { default as createSupplyChainLookupService } from './supplychain/SupplyChainLookupService.js'
 
+// uoradpp
+export type { UoraDppRecord, UoraDppQuery } from './uoradpp/types.js'
+// `assertAnchorSignature` is exported alongside `readUoraAnchor` on purpose.
+// `readUoraAnchor` checks that an output is well formed and that its locking key
+// derives from the service it names, which anybody can reproduce; the signature
+// is the only step needing that service's private key. A consumer given the
+// first without the second would believe it had checked authorship when it had
+// not, which is precisely how the v2 format's guarantee was overstated.
+export {
+  UORA_ANCHOR_PREFIX,
+  UORA_ANCHOR_PROTOCOL,
+  anchorSigningPreimage,
+  assertAnchorSignature,
+  didKeyFromIdentityKey,
+  expectedLockingKey,
+  identityKeyFromDidKey,
+  readUoraAnchor
+} from './uoradpp/anchorFormat.js'
+export type { UoraAnchor } from './uoradpp/anchorFormat.js'
+export { default as UoraDppTopicManager } from './uoradpp/UoraDppTopicManager.js'
+export { default as createUoraDppLookupService } from './uoradpp/UoraDppLookupService.js'
+
 // uhrp
 export type { UHRPRecord } from './uhrp/types.js'
 export { default as UHRPTopicManager } from './uhrp/UHRPTopicManager.js'

@@ -53,6 +53,7 @@ Each topic ships a matching `*TopicManager` (admission rules for incoming transa
 | `tm_protomap` / `ls_protomap`                 | `ProtoMapTopicManager`         | `createProtoMapLookupService`         |
 | `tm_slackthread` / `ls_slackthread`           | `SlackThreadsTopicManager`     | `createSlackThreadsLookupService`     |
 | `tm_supplychain` / `ls_supplychain`           | `SupplyChainTopicManager`      | `createSupplyChainLookupService`      |
+| `tm_uora_dpp` / `ls_uora_dpp`                 | `UoraDppTopicManager`          | `createUoraDppLookupService`          |
 | `tm_uhrp` / `ls_uhrp`                         | `UHRPTopicManager`             | `createUHRPLookupService`             |
 | `tm_users` / `ls_users`                       | `UMPTopicManager`              | `createUMPLookupService`              |
 | `tm_tokendemo` / `ls_tokendemo`               | `TokenDemoTopicManager`        | `createTokenDemoLookupService`        |

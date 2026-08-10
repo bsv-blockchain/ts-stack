@@ -44,8 +44,14 @@ void connectExampleWallet
 import { BsvDid, type DidDocument } from '@bsv/did'
 import type { DIDQuery } from '@bsv/overlay-topics'
 
+// Declared rather than derived from `PrivateKey`, so this fence compiles on its
+// own. Only fences importing a changed package are selected, so the one above
+// is absent whenever `@bsv/sdk` is unchanged, and a fence that reaches across to
+// it fails for reasons that have nothing to do with the boundary under test.
+declare const examplePublicKeyDer: number[]
+
 const exampleDidDocument: DidDocument = BsvDid.toDidDocument(
-  BsvDid.fromPublicKey(PrivateKey.fromRandom().toPublicKey().toDER() as number[])
+  BsvDid.fromPublicKey(examplePublicKeyDer)
 )
 const acceptDidLookup = (query: DIDQuery): DIDQuery => query
 
@@ -53,9 +59,11 @@ void exampleDidDocument
 void acceptDidLookup
 ```
 
-The compiler combines all marked fences into one consumer module, so imports
-from earlier examples are available here just as they would be in one
-application.
+The compiler combines the *selected* fences into one consumer module, and on a
+pull request it selects only the fences whose import closure reaches a changed
+package. So an earlier fence's imports are available only when that fence
+happened to be selected too, and a fence that leans on one is broken by any
+change that does not touch it. Each fence declares everything it names.
 
 ## Messaging
 
