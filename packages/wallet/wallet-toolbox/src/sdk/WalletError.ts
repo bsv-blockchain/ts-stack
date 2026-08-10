@@ -159,31 +159,40 @@ export class WalletError extends Error implements WalletErrorObject {
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
   static unknownToJson(error: unknown): string {
-    let json: string | undefined
-    let e: WalletError | undefined
-    const t = typeof error
-    const ctorName: unknown =
-      t === 'object' && error !== null ? (error as Record<string, unknown>).constructor : undefined
-    const ctor: string | undefined =
-      ctorName != null && typeof (ctorName as Record<string, unknown>).name === 'string'
-        ? ((ctorName as Record<string, unknown>).name as string)
-        : undefined
-    const name = t === 'object' && error !== null && typeof (error as any).name === 'string' ? (error as any).name : ''
-    const code = t === 'object' && error !== null && typeof (error as any).code === 'string' ? (error as any).code : ''
-    const message =
-      t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
-    const hasToJson: boolean = t === 'object' && typeof (error as any)?.toJson === 'function'
-    const identifiesWalletError = name.startsWith('WERR_') || code.startsWith('WERR_') ||
-      (ctor != null && ctor.startsWith('WERR_'))
-    if ((error instanceof WalletError || identifiesWalletError) && hasToJson) {
-      json = (error as WalletError).toJson()
-    } else if (name !== '' && message !== '') {
-      e = new WalletError(name, message)
-      json = e.toJson()
-    } else {
-      e = new WalletError('WERR_UNKNOWN', String(error))
-      json = e.toJson()
+    const details = describeUnknownError(error)
+    if ((error instanceof WalletError || identifiesWalletError(details)) && details.hasToJson) {
+      return (error as WalletError).toJson()
     }
-    return json
+    if (details.name !== '' && details.message !== '') {
+      return new WalletError(details.name, details.message).toJson()
+    }
+    return new WalletError('WERR_UNKNOWN', String(error)).toJson()
   }
+}
+
+interface UnknownErrorDetails {
+  name: string
+  code: string
+  message: string
+  constructorName: string
+  hasToJson: boolean
+}
+
+function describeUnknownError (error: unknown): UnknownErrorDetails {
+  if (typeof error !== 'object' || error === null) {
+    return { name: '', code: '', message: '', constructorName: '', hasToJson: false }
+  }
+  const candidate = error as Record<string, unknown>
+  const candidateConstructor: unknown = candidate.constructor
+  return {
+    name: typeof candidate.name === 'string' ? candidate.name : '',
+    code: typeof candidate.code === 'string' ? candidate.code : '',
+    message: typeof candidate.message === 'string' ? candidate.message : '',
+    constructorName: typeof candidateConstructor === 'function' ? candidateConstructor.name : '',
+    hasToJson: typeof candidate.toJson === 'function'
+  }
+}
+
+function identifiesWalletError (details: UnknownErrorDetails): boolean {
+  return [details.name, details.code, details.constructorName].some(value => value.startsWith('WERR_'))
 }

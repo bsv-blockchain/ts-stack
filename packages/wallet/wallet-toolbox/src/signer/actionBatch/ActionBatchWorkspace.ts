@@ -974,55 +974,98 @@ export class ActionBatchController {
     if (this.workspace === workspace) this.workspace = undefined
   }
 
+  private async retireForTerminalState (workspace: ActionBatchWorkspace, error: unknown): Promise<void> {
+    if (isActionBatchStateError(error) && shouldRetireAfterStateError(error)) {
+      await this.retire(workspace)
+    }
+  }
+
+  private async runRecoverable<T> (workspace: ActionBatchWorkspace, operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation()
+    } catch (error) {
+      if (!isActionBatchStateError(error) || error.state !== 'expired' || !workspace.canResume) {
+        await this.retireForTerminalState(workspace, error)
+        throw error
+      }
+      try {
+        await workspace.resume()
+        return await operation()
+      } catch (recoveryError) {
+        await this.retireForTerminalState(workspace, recoveryError)
+        throw recoveryError
+      }
+    }
+  }
+
+  private async planFirstAction (
+    args: Validation.ValidCreateActionArgs
+  ): Promise<StorageCreateActionResult | undefined> {
+    let begun: ActionBatchWorkspace | undefined
+    try {
+      begun = await this.begin(args)
+    } catch (error) {
+      // The reservation ceiling bounds the optimization, not the public
+      // createAction contract. A first action that cannot fit must retain
+      // the pre-batch persistence path.
+      if (isActionBatchCapacityError(error)) return undefined
+      throw error
+    }
+    if (begun == null) return undefined
+    try {
+      return await begun.plan(args)
+    } catch (error) {
+      await this.retire(begun)
+      if (isActionBatchCapacityError(error)) return undefined
+      throw error
+    }
+  }
+
   async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
     return await this.runExclusive(async () => {
       if (!args.isNewTx) return undefined
       const workspace = this.workspace
       if (workspace == null) {
         if (!args.isNoSend) return undefined
-        let begun: ActionBatchWorkspace | undefined
-        try {
-          begun = await this.begin(args)
-        } catch (error) {
-          // The reservation ceiling bounds the optimization, not the public
-          // createAction contract. A first action that cannot fit must retain
-          // the pre-batch persistence path.
-          if (isActionBatchCapacityError(error)) return undefined
-          throw error
-        }
-        if (begun == null) return undefined
-        try {
-          return await begun.plan(args)
-        } catch (error) {
-          await this.retire(begun)
-          if (isActionBatchCapacityError(error)) return undefined
-          throw error
-        }
+        return await this.planFirstAction(args)
       }
       // Workspace membership is an explicit transaction-graph relationship.
       // Time adjacency, a shared Wallet instance, or a shared originator are
       // not sufficient: unrelated work must remain on the legacy path.
       if (!workspace.references(args)) return undefined
-      try {
-        return await workspace.plan(args)
-      } catch (error) {
-        if (isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
-          try {
-            await workspace.resume()
-            return await workspace.plan(args)
-          } catch (recoveryError) {
-            if (isActionBatchStateError(recoveryError) && shouldRetireAfterStateError(recoveryError)) {
-              await this.retire(workspace)
-            }
-            throw recoveryError
-          }
-        }
-        if (isActionBatchStateError(error) && shouldRetireAfterStateError(error)) {
-          await this.retire(workspace)
-        }
-        throw error
-      }
+      return await this.runRecoverable(workspace, async () => await workspace.plan(args))
     })
+  }
+
+  private async processUnrelatedSendWith (
+    args: Validation.ValidProcessActionArgs
+  ): Promise<StorageProcessActionResults> {
+    const persistedSend: StorageProcessActionArgs = {
+      isNewTx: false,
+      isSendWith: true,
+      isNoSend: false,
+      isDelayed: args.isDelayed,
+      sendWith: [...args.options.sendWith],
+      logger: args.logger
+    }
+    return await this.wallet.storage.processAction(persistedSend)
+  }
+
+  private async commitWorkspace (
+    workspace: ActionBatchWorkspace,
+    prior: PendingSignAction | undefined,
+    args: Validation.ValidProcessActionArgs
+  ): Promise<StorageProcessActionResults> {
+    const sendWith = [...args.options.sendWith]
+    if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) {
+      sendWith.push(prior.tx.id('hex'))
+    }
+    const result = await this.runRecoverable(
+      workspace,
+      async () => await workspace.commit(sendWith, args.isDelayed)
+    )
+    this.workspace = undefined
+    return result
   }
 
   async process (
@@ -1041,44 +1084,12 @@ export class ActionBatchController {
         // list does not. Preserve the staged action and fulfill the unrelated
         // broadcast through the ordinary path; returning an empty result here
         // would silently drop an explicit caller request.
-        const persistedSend: StorageProcessActionArgs = {
-          isNewTx: false,
-          isSendWith: true,
-          isNoSend: false,
-          isDelayed: args.isDelayed,
-          sendWith: [...args.options.sendWith],
-          logger: args.logger
-        }
-        return await this.wallet.storage.processAction(persistedSend)
+        return await this.processUnrelatedSendWith(args)
       }
       const shouldCommit = referencesWorkspace ||
         (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
-      const sendWith = [...args.options.sendWith]
-      if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) sendWith.push(prior.tx.id('hex'))
-      try {
-        const result = await workspace.commit(sendWith, args.isDelayed)
-        this.workspace = undefined
-        return result
-      } catch (error) {
-        if (isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
-          try {
-            await workspace.resume()
-            const result = await workspace.commit(sendWith, args.isDelayed)
-            this.workspace = undefined
-            return result
-          } catch (recoveryError) {
-            if (isActionBatchStateError(recoveryError) && shouldRetireAfterStateError(recoveryError)) {
-              await this.retire(workspace)
-            }
-            throw recoveryError
-          }
-        }
-        if (isActionBatchStateError(error) && shouldRetireAfterStateError(error)) {
-          await this.retire(workspace)
-        }
-        throw error
-      }
+      return await this.commitWorkspace(workspace, prior, args)
     })
   }
 
