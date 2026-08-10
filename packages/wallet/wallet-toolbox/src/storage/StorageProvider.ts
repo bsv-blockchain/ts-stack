@@ -369,7 +369,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async getCapabilities(): Promise<StorageCapabilities> {
     return this.supportsActionBatchPersistence()
-      ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, { resume: true })
+      ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
       : {}
   }
 

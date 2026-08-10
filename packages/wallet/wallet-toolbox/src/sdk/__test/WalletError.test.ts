@@ -68,6 +68,7 @@ describe('WalletError tests', () => {
 
   test('action batch lifecycle state survives transport from another package instance', () => {
     class WERRActionBatchStateCopy extends Error {
+      readonly isError = true
       readonly state = 'expired'
       readonly batchId = 'cross-copy-batch'
 

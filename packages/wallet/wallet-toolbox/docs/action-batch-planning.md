@@ -37,15 +37,14 @@ helper does not advertise `resume` by default; built-in providers opt in because
 they implement the optional `resumeActionBatch` method.
 
 The retained browser platform contract measures the resumable implementation at
-1,547,450 raw / 362,883 gzip / 285,514 Brotli bytes with Vite and 1,208,592 raw /
-332,013 gzip / 266,705 Brotli bytes with esbuild. This advances only the affected
-raw and esbuild-gzip size ratchets by less than 0.5%; both Brotli ceilings and the
-Vite gzip ceiling remain unchanged.
+1,548,179 raw / 364,550 gzip / 285,697 Brotli bytes with Vite and 1,209,217 raw /
+331,318 gzip / 267,001 Brotli bytes with esbuild. Every browser size ceiling
+remains unchanged.
 
-The mobile contract measures 1,608,905 raw / 405,490 gzip / 315,467 Brotli
-Metro bytes and 3,251,525 raw / 1,308,483 gzip / 1,018,975 Brotli Hermes bytes.
-Only the Hermes raw ceiling advances, by less than 0.05%; every mobile
-compressed-size ceiling remains unchanged.
+The mobile contract measures 1,609,633 raw / 405,646 gzip / 315,527 Brotli
+Metro bytes and 3,253,366 raw / 1,293,591 gzip / 1,018,837 Brotli Hermes bytes.
+Only the Hermes raw ceiling advances, by less than 0.15%; every compressed and
+Metro ceiling remains unchanged.
 
 The capability and its methods are Wallet Toolbox storage extensions. They do not
 extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,

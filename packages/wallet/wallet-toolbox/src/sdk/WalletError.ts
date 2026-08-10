@@ -159,40 +159,12 @@ export class WalletError extends Error implements WalletErrorObject {
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
   static unknownToJson(error: unknown): string {
-    const details = describeUnknownError(error)
-    if ((error instanceof WalletError || identifiesWalletError(details)) && details.hasToJson) {
-      return (error as WalletError).toJson()
-    }
-    if (details.name !== '' && details.message !== '') {
-      return new WalletError(details.name, details.message).toJson()
+    const candidate = error as WalletError
+    if ((error instanceof WalletError || candidate?.isError === true) &&
+      typeof candidate.toJson === 'function') return candidate.toJson()
+    if (typeof candidate?.name === 'string' && typeof candidate.message === 'string') {
+      return new WalletError(candidate.name, candidate.message).toJson()
     }
     return new WalletError('WERR_UNKNOWN', String(error)).toJson()
   }
-}
-
-interface UnknownErrorDetails {
-  name: string
-  code: string
-  message: string
-  constructorName: string
-  hasToJson: boolean
-}
-
-function describeUnknownError (error: unknown): UnknownErrorDetails {
-  if (typeof error !== 'object' || error === null) {
-    return { name: '', code: '', message: '', constructorName: '', hasToJson: false }
-  }
-  const candidate = error as Record<string, unknown>
-  const candidateConstructor: unknown = candidate.constructor
-  return {
-    name: typeof candidate.name === 'string' ? candidate.name : '',
-    code: typeof candidate.code === 'string' ? candidate.code : '',
-    message: typeof candidate.message === 'string' ? candidate.message : '',
-    constructorName: typeof candidateConstructor === 'function' ? candidateConstructor.name : '',
-    hasToJson: typeof candidate.toJson === 'function'
-  }
-}
-
-function identifiesWalletError (details: UnknownErrorDetails): boolean {
-  return [details.name, details.code, details.constructorName].some(value => value.startsWith('WERR_'))
 }

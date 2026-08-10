@@ -13,12 +13,12 @@ attention to changes that materially alter behavior or extend functionality.
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
 - Keep the resumable lifecycle's browser cost bounded: the retained platform
-  contract measures 1,547,450 raw / 362,883 gzip / 285,514 Brotli bytes with
-  Vite and 1,208,592 raw / 332,013 gzip / 266,705 Brotli bytes with esbuild.
-  The Vite gzip/Brotli and esbuild Brotli ceilings remain unchanged; only the
-  affected raw and esbuild-gzip ratchets advance by less than 0.5%. Mobile
-  measures 1,608,905 Metro bytes and 3,251,525 raw Hermes bytes; only the
-  Hermes raw ceiling advances, by less than 0.05%.
+  contract measures 1,548,179 raw / 364,550 gzip / 285,697 Brotli bytes with
+  Vite and 1,209,217 raw / 331,318 gzip / 267,001 Brotli bytes with esbuild;
+  every browser ceiling remains unchanged. Mobile measures 1,609,633 Metro
+  bytes and 3,253,366 raw Hermes bytes; only the Hermes raw ceiling advances,
+  by less than 0.15%, while every compressed and Metro ceiling remains
+  unchanged.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

@@ -77,7 +77,7 @@ function isValidOutpoint (outpoint: { txid: string, vout: number }): boolean {
 
 export function getActionBatchCapabilities (
   maxReservedOutputs = ACTION_BATCH_MAX_RESERVED_OUTPUTS,
-  options: { resume?: boolean } = {}
+  supportsResume = false
 ): StorageCapabilities {
   return {
     actionBatch: {
@@ -87,7 +87,7 @@ export function getActionBatchCapabilities (
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
       hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
-      ...(options.resume === true ? { resume: true as const } : {}),
+      resume: supportsResume ? true : undefined,
       maxReservedOutputs,
       compactBegin: true,
       manifestVersion: 2,
