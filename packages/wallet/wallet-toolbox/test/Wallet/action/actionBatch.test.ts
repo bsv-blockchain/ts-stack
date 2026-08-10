@@ -681,6 +681,31 @@ describe('in-memory action batch workspace', () => {
     })).resolves.toBeDefined()
   })
 
+  test('renewal resumes after a serialized expired-state response', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const resume = jest.spyOn(ctx.storage, 'resumeActionBatch')
+    const renew = jest.spyOn(ctx.storage, 'renewActionBatch').mockRejectedValueOnce({
+      code: 'WERR_ACTION_BATCH_STATE',
+      state: 'expired'
+    })
+    ctx.wallet.randomVals = randomVals
+    const root = await ctx.wallet.createAction(actionArgs())
+    const begun = await begin.mock.results[0].value
+    const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as object
+    Reflect.set(workspace, 'expiresAt', Date.now() + 1_000)
+
+    const child = await ctx.wallet.createAction(actionArgs(root.noSendChange))
+
+    expect(renew).toHaveBeenCalledWith(begun.batchId)
+    expect(resume).toHaveBeenCalledWith(expect.objectContaining({ batchId: begun.batchId }))
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit workspace recovered from serialized expiry',
+        options: { sendWith: [root.txid!, child.txid!] }
+      })
+    ).resolves.toBeDefined()
+  })
+
   test('an open workspace does not capture an unrelated noSend root', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
