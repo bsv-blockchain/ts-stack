@@ -1,6 +1,7 @@
 import { WalletError } from './WalletError'
 import {
   WERR_BAD_REQUEST,
+  WERR_ACTION_BATCH_STATE,
   WERR_BROADCAST_UNAVAILABLE,
   WERR_INSUFFICIENT_FUNDS,
   WERR_INTERNAL,
@@ -28,6 +29,10 @@ export function WalletErrorFromJson (json: object): WalletError {
   let e: WalletError
   const obj = json as any
   switch (obj.name) {
+    case 'WERR_ACTION_BATCH_STATE':
+      e = new WERR_ACTION_BATCH_STATE(obj.state, obj.batchId)
+      e.message = obj.message
+      break
     case 'WERR_NOT_IMPLEMENTED':
       e = new WERR_NOT_IMPLEMENTED(obj.message)
       break

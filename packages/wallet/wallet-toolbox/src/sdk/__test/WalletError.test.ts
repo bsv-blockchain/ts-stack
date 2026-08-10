@@ -1,6 +1,7 @@
 import { WalletError } from '../WalletError'
 import { WalletErrorFromJson } from '../WalletErrorFromJson'
 import {
+  WERR_ACTION_BATCH_STATE,
   WERR_NOT_IMPLEMENTED,
   WERR_INTERNAL,
   WERR_INVALID_PARAMETER,
@@ -51,6 +52,18 @@ describe('WalletError tests', () => {
       expect(werr3.sendWithResults).toEqual([{ txid: 'txid123', status: 'failed' }])
       expect(werr3.noSendChange).toEqual(['00'.repeat(32) + '.0'])
     }
+  })
+
+  test('action batch lifecycle state survives JSON transport', () => {
+    const werr = new WERR_ACTION_BATCH_STATE('expired', 'batch-123')
+    const recovered = WalletErrorFromJson(JSON.parse(werr.toJson()))
+
+    expect(recovered).toBeInstanceOf(WERR_ACTION_BATCH_STATE)
+    expect(recovered).toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'expired',
+      batchId: 'batch-123'
+    })
   })
 
   test('1 - WERR_NOT_IMPLEMENTED basic test', async () => {

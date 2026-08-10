@@ -15,7 +15,11 @@ import {
 } from '../../sdk/ActionBatch.interfaces'
 import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
-import { WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import {
+  WERR_ACTION_BATCH_STATE,
+  WERR_INSUFFICIENT_FUNDS,
+  WERR_INVALID_OPERATION
+} from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import {
@@ -58,19 +62,12 @@ function mergeUnique (values: string[]): string[] {
   return [...new Set(values)]
 }
 
-const batchLivenessMessages = new Set([
-  'action batch is not active',
-  'action batch was not found',
-  'action batch hard lifetime has expired'
-])
-
-// True when storage refused an operation because the batch itself is dead
-// (expired, cleaned up, or missing) — matched by name rather than instanceof
-// so errors recovered from remote storage transports are recognized too.
-function isBatchLivenessError (error: unknown): boolean {
-  return error instanceof Error &&
-    error.name === 'WERR_INVALID_OPERATION' &&
-    batchLivenessMessages.has(error.message)
+function isActionBatchStateError (error: unknown): error is WERR_ACTION_BATCH_STATE {
+  if (error instanceof WERR_ACTION_BATCH_STATE) return true
+  if (error == null || typeof error !== 'object') return false
+  const candidate = error as { name?: unknown, code?: unknown, state?: unknown }
+  return (candidate.name === 'WERR_ACTION_BATCH_STATE' || candidate.code === 'WERR_ACTION_BATCH_STATE') &&
+    typeof candidate.state === 'string'
 }
 
 function nextGeometricTarget (value: number): number {
@@ -191,6 +188,24 @@ class ActionBatchWorkspace {
       .some(([pendingReference, pending]) =>
         this.planned.has(pendingReference) && pending.tx.id('hex') === reference
       )
+  }
+
+  ownsTransaction (txid: string): boolean {
+    return this.actions.some(action => action.txid === txid) ||
+      Object.entries(this.wallet.pendingSignActions)
+        .some(([reference, pending]) => this.planned.has(reference) && pending.tx.id('hex') === txid)
+  }
+
+  references (args: Validation.ValidCreateActionArgs): boolean {
+    const referencesStagedOutput = [
+      ...args.inputs.map(input => input.outpoint),
+      ...args.options.noSendChange
+    ].some(outpoint => this.state.staged.has(`${outpoint.txid}.${outpoint.vout}`))
+    return referencesStagedOutput || args.options.sendWith.some(txid => this.ownsTransaction(txid))
+  }
+
+  referencesSendWith (txids: string[]): boolean {
+    return txids.some(txid => this.ownsTransaction(txid))
   }
 
   get isEmpty (): boolean {
@@ -377,11 +392,34 @@ class ActionBatchWorkspace {
   }
 
   private async renewIfNeeded (): Promise<void> {
-    if (Date.now() >= this.expiresAt) return
+    const resume = async (): Promise<void> => {
+      const outpoints = [...new Map(
+        [...this.state.reserved.values(), ...this.state.explicit.values()]
+          .filter(output => output.txid != null)
+          .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
+      ).values()]
+      const result = await this.wallet.storage.resumeActionBatch({
+        batchId: this.batchId,
+        outpoints
+      })
+      this.expiresAt = Date.parse(result.expiresAt)
+    }
+    if (Date.now() >= this.expiresAt) {
+      if (this.capabilities.resume === true) await resume()
+      return
+    }
     const renewAt = this.expiresAt - this.capabilities.leaseMs * 0.2
     if (Date.now() < renewAt) return
     this.renewal ??= this.wallet.storage.renewActionBatch(this.batchId)
       .then(result => { this.expiresAt = Date.parse(result.expiresAt) })
+      .catch(async error => {
+        if (this.capabilities.resume === true && isActionBatchStateError(error) &&
+          error.state === 'expired') {
+          await resume()
+          return
+        }
+        throw error
+      })
       .finally(() => { this.renewal = undefined })
     await this.renewal
   }
@@ -894,57 +932,40 @@ export class ActionBatchController {
     return this.workspace
   }
 
+  private async retire (workspace: ActionBatchWorkspace): Promise<void> {
+    await workspace.abort().catch(() => undefined)
+    if (this.workspace === workspace) this.workspace = undefined
+  }
+
   async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
     return await this.runExclusive(async () => {
       if (!args.isNewTx) return undefined
-      let workspace = this.workspace
-      let beganWorkspace = false
+      const workspace = this.workspace
       if (workspace == null) {
         if (!args.isNoSend) return undefined
-        workspace = await this.begin(args)
-        if (workspace == null) return undefined
-        beganWorkspace = true
-      }
-      try {
-        return await workspace.plan(args)
-      } catch (error) {
-        if (beganWorkspace) {
-          await workspace.abort()
+        const begun = await this.begin(args)
+        if (begun == null) return undefined
+        try {
+          return await begun.plan(args)
+        } catch (error) {
+          await begun.abort()
           this.workspace = undefined
           throw error
         }
-        if (!isBatchLivenessError(error)) throw error
-        // The server-side batch died (lease or hard lifetime lapsed while the
-        // workspace sat idle). The workspace must not capture and refuse every
-        // subsequent createAction until process restart.
-        if (!args.isNoSend) {
-          // Immediate actions fall back to the legacy path. The workspace is
-          // preserved: its staged actions remain committable through the
-          // reacquire path of commitActionBatch.
-          return undefined
+      }
+      // Workspace membership is an explicit transaction-graph relationship.
+      // Time adjacency, a shared Wallet instance, or a shared originator are
+      // not sufficient: unrelated work must remain on the legacy path.
+      if (!workspace.references(args)) return undefined
+      try {
+        return await workspace.plan(args)
+      } catch (error) {
+        if (isActionBatchStateError(error)) {
+          await this.retire(workspace)
         }
-        // A new noSend staging cannot be served by the dead batch: release it
-        // and begin a fresh one.
-        await this.abortWorkspace(workspace)
-        workspace = await this.begin(args)
-        if (workspace == null) return undefined
-        try {
-          return await workspace.plan(args)
-        } catch (freshError) {
-          await workspace.abort()
-          this.workspace = undefined
-          throw freshError
-        }
+        throw error
       }
     })
-  }
-
-  private async abortWorkspace (workspace: ActionBatchWorkspace): Promise<void> {
-    try {
-      await workspace.abort()
-    } finally {
-      if (this.workspace === workspace) this.workspace = undefined
-    }
   }
 
   async process (
@@ -955,14 +976,23 @@ export class ActionBatchController {
       const workspace = this.workspace
       if (workspace == null) return undefined
       if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
+      if (prior == null && !workspace.referencesSendWith(args.options.sendWith)) return undefined
       if (prior != null) workspace.stage(prior, args)
-      const shouldCommit = args.isSendWith || (prior != null && !args.isNoSend)
+      const shouldCommit = workspace.referencesSendWith(args.options.sendWith) ||
+        (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
       const sendWith = [...args.options.sendWith]
       if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) sendWith.push(prior.tx.id('hex'))
-      const result = await workspace.commit(sendWith, args.isDelayed)
-      this.workspace = undefined
-      return result
+      try {
+        const result = await workspace.commit(sendWith, args.isDelayed)
+        this.workspace = undefined
+        return result
+      } catch (error) {
+        if (isActionBatchStateError(error)) {
+          await this.retire(workspace)
+        }
+        throw error
+      }
     })
   }
 

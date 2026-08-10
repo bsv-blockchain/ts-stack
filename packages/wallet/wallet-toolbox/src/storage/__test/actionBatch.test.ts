@@ -1,10 +1,15 @@
 import { Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
-import { cleanupExpiredActionBatches } from '../methods/actionBatch'
+import {
+  ACTION_BATCH_MAX_RESERVED_OUTPUTS,
+  cleanupExpiredActionBatches,
+  getActionBatchCapabilities
+} from '../methods/actionBatch'
 import {
   ACTION_BATCH_MAX_INLINE_BYTES
 } from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
+import { WERR_ACTION_BATCH_STATE } from '../../sdk/WERR_errors'
 
 function firstAction () {
   return Validation.validateCreateActionArgs({
@@ -55,6 +60,8 @@ describe('action batch reservations', () => {
     expect((await ctx.storage.getCapabilities()).actionBatch).toMatchObject({
       version: 1,
       compactBegin: true,
+      resume: true,
+      maxReservedOutputs: ACTION_BATCH_MAX_RESERVED_OUTPUTS,
       packedUploads: { eager: false }
     })
     const first = await ctx.storage.beginActionBatch({ batchId: 'reservation-a', firstAction: firstAction() })
@@ -66,6 +73,11 @@ describe('action batch reservations', () => {
     expect(second.reservedOutputs.length).toBeLessThanOrEqual(4)
     await ctx.storage.abortActionBatch(first.batchId)
     await ctx.storage.abortActionBatch(second.batchId)
+  })
+
+  test('operator reservation limits are advertised, including explicit unlimited operation', () => {
+    expect(getActionBatchCapabilities(32).actionBatch?.maxReservedOutputs).toBe(32)
+    expect(getActionBatchCapabilities(-1).actionBatch?.maxReservedOutputs).toBe(-1)
   })
 
   test('compact begin accepts deferred external proofs and exact script lengths', async () => {
@@ -111,6 +123,64 @@ describe('action batch reservations', () => {
     expect(Date.parse(renewed.expiresAt)).toBeGreaterThanOrEqual(Date.parse(begun.expiresAt))
     expect(Date.parse(renewed.expiresAt)).toBeLessThanOrEqual(Date.parse(begun.hardExpiresAt))
     await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('reservation cap is rechecked while the batch row is locked', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'bounded-extension', firstAction: firstAction() })
+    const findIds = ctx.activeStorage.findActionBatchOutputIds.bind(ctx.activeStorage)
+    const existing = await findIds((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))!.actionBatchId)
+    jest.spyOn(ctx.activeStorage, 'findActionBatchOutputIds')
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(Array.from(
+        { length: ACTION_BATCH_MAX_RESERVED_OUTPUTS },
+        (_, index) => 100_000 + index
+      ))
+
+    await expect(ctx.storage.extendActionBatch({
+      batchId: begun.batchId,
+      targetSatoshis: 1,
+      requestedOutputs: 1,
+      explicitOutpoints: [],
+      includeSourceTransactions: false
+    })).rejects.toThrow(`cannot reserve more than ${ACTION_BATCH_MAX_RESERVED_OUTPUTS}`)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('an expired workspace resumes only its exact persisted outputs', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'resume-batch', firstAction: firstAction() })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const outpoints = [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
+      txid: output.txid!,
+      vout: output.vout
+    }))
+    const before = await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
+    expect(await cleanupExpiredActionBatches(ctx.activeStorage)).toBe(1)
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
+
+    const resumed = await ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })
+
+    expect(Date.parse(resumed.expiresAt)).toBeLessThanOrEqual(Date.parse(begun.hardExpiresAt))
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(expect.arrayContaining(before))
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })).resolves.toBeDefined()
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('resume reports hard expiry as a structured lifecycle state', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'hard-expired-batch', firstAction: firstAction() })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+      expiresAt: new Date(Date.now() - 2),
+      hardExpiresAt: new Date(Date.now() - 1)
+    })
+
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] }))
+      .rejects.toMatchObject<Partial<WERR_ACTION_BATCH_STATE>>({
+        name: 'WERR_ACTION_BATCH_STATE',
+        state: 'hard-expired',
+        batchId: begun.batchId
+      })
   })
 
   test('first-action persisted noSendChange is reserved and returned explicitly', async () => {

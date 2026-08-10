@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Isolate each in-memory action batch by explicit staged-output or `sendWith`
+  membership, so unrelated immediate actions and `noSend` roots cannot be
+  captured by or commit a workspace. Add an exact-input resume protocol for
+  expired leases, structured lifecycle errors, and a provider-enforced
+  cumulative reservation limit that defaults to 256 outputs and can be
+  configured, including `-1` for operator-selected unlimited operation.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

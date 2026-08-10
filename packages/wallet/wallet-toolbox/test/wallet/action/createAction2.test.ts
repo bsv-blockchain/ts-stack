@@ -325,17 +325,21 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(spendingResult.tx!, spendingActionsResult)
-      expect(rl1.log).toBe(`transactions:2
-  txid:38ded69627603b30bd1f55eb3f88098dbf74f2ef0ff5e3cfe6a34f97ce2db9c2 version:1 lockTime:0 sats:-5 status:nosend 
+      expect(rl1.log).toMatch(/'reference \n\s+[0-9a-f]+'/)
+      const stableLog = rl1.log
+        .replace(/,'reference \n\s+[0-9a-f]+'/, '')
+        .replace(/[ \t]+$/gm, '')
+      expect(stableLog).toBe(`transactions:2
+  txid:471c15662c437ce5765d467eabfdd67adfea5c569b2da520b2d8a09fbb868370 version:1 lockTime:0 sats:-5 status:nosend
      outgoing:true desc:'Check knownTxids and returnTXIDOnly' labels:['custom options test']
   inputs: 1
-    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995 
-       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac 
-       unlock:(212)4730440220113a6f72035a6ddcd6930db7e3f3d5c70486f9aaefb095e6fa3557afa916ec37022054... seq:4294967295
+    0: sourceTXID:63a159d422ba29db52b728b05c30cd181300984bf1ea4dc2354f1d1870fbe016.1 sats:996
+       lock:(50)76a914fbc3ac7e96362b6f0d7bedc217568901488e5ad788ac
+       unlock:(212)47304402201d0f8f1802d33937454e372bc6978ddbad22c95a4442a6c14b23d06f60f96f7d02205e... seq:4294967295
   outputs: 2
-    0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly 
+    0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly
        false test'
-    1: sats:990 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+    1: sats:991 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
     }
   })
 

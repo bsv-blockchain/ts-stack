@@ -12,15 +12,23 @@ import { verifyOne } from '../../../src/utility/utilityHelpers'
  * wallet that failed) and the wallet's own generateChange then mints the dust
  * through ordinary committed actions. No rows are hand-crafted.
  *
- * Expected (correct) behavior: an un-chained noSend sequence of 16 actions
- * stages successfully in batch mode, exactly as it does in legacy mode on the
- * identical wallet shape (the control test below passes).
+ * Expected (correct) behavior: an explicitly connected noSend sequence of 16
+ * actions stages successfully in batch mode, exactly as it does in legacy
+ * mode on the identical wallet shape (the control test below passes).
  */
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
-function noSendArgs (i: number) {
+function noSendArgs (i: number, prior?: { txid?: string, tx?: number[] }) {
   return {
+    inputs: prior?.txid == null
+      ? undefined
+      : [{
+          outpoint: `${prior.txid}.0`,
+          unlockingScript: '00',
+          inputDescription: 'spend prior action-batch chain link'
+        }],
+    inputBEEF: prior?.tx,
     description: `fragmented batch action ${i}`,
     outputs: [{
       satoshis: 1,
@@ -75,7 +83,7 @@ async function fragmentWallet (
 describe('action batch funding on a fragmented wallet', () => {
   jest.setTimeout(300000)
 
-  test('batch mode: un-chained noSend sequence of 16 selects viable funding and commits', async () => {
+  test('batch mode: a connected noSend sequence of 16 selects viable funding and commits', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('fragmentedBatchFunding', 'auto')
     try {
       await mockChain(ctx)
@@ -110,9 +118,11 @@ describe('action batch funding on a fragmented wallet', () => {
       })
 
       const txids: string[] = []
+      let prior: { txid?: string, tx?: number[] } | undefined
       for (let i = 0; i < 16; i++) {
-        const result = await ctx.wallet.createAction(noSendArgs(i))
+        const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
+        prior = result
       }
       expect(txids).toHaveLength(16)
       expect(extendCalls.flatMap(call => call.reservedSatoshis).some(satoshis => satoshis >= 1000)).toBe(true)
@@ -127,7 +137,7 @@ describe('action batch funding on a fragmented wallet', () => {
     }
   })
 
-  test('legacy mode control: identical fragmented wallet, identical un-chained sequence, succeeds', async () => {
+  test('legacy mode control: identical fragmented wallet and connected sequence succeeds', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('fragmentedLegacyControl', 'legacy')
     try {
       await mockChain(ctx)
@@ -137,9 +147,11 @@ describe('action batch funding on a fragmented wallet', () => {
       expect(sats.filter(s => s < 100).length).toBeGreaterThanOrEqual(50)
 
       const txids: string[] = []
+      let prior: { txid?: string, tx?: number[] } | undefined
       for (let i = 0; i < 16; i++) {
-        const result = await ctx.wallet.createAction(noSendArgs(i))
+        const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
+        prior = result
       }
       expect(txids).toHaveLength(16)
 
@@ -153,7 +165,7 @@ describe('action batch funding on a fragmented wallet', () => {
     }
   })
 
-  test('un-chained workspace can consume more than 64 confirmed funding outputs', async () => {
+  test('a connected workspace can consume more than 64 confirmed funding outputs', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('actionBatchBeyond64FundingInputs', 'auto')
     try {
       await mockChain(ctx, 1)
@@ -171,9 +183,11 @@ describe('action batch funding on a fragmented wallet', () => {
       })
 
       const txids: string[] = []
+      let prior: { txid?: string, tx?: number[] } | undefined
       for (let i = 0; i < 80; i++) {
-        const result = await ctx.wallet.createAction(noSendArgs(i))
+        const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
+        prior = result
       }
       const begun = await begin.mock.results[0].value
       expect(begun.reservedOutputs.length + extendedOutputCounts.reduce((sum, count) => sum + count, 0))

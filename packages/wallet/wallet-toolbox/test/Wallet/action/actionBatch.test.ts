@@ -237,14 +237,16 @@ describe('in-memory action batch workspace', () => {
     expect(frontierBytes).toBeLessThan(reconstructed.toUint8Array().length * 2)
   })
 
-  test('concurrent planning shares one workspace without reusing inputs', async () => {
+  test('concurrent independent planning isolates the workspace without reusing inputs', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
     ctx.wallet.randomVals = randomVals
 
     const planned = await Promise.all([ctx.wallet.createAction(actionArgs()), ctx.wallet.createAction(actionArgs())])
     const txids = planned.map(action => action.txid!)
 
     expect(begin).toHaveBeenCalledTimes(1)
+    expect(legacyCreate).toHaveBeenCalledTimes(1)
     expect(new Set(txids).size).toBe(2)
     await expect(
       ctx.wallet.createAction({
@@ -270,17 +272,21 @@ describe('in-memory action batch workspace', () => {
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('aborted')
   })
 
-  test('independent actions extend confirmed-input runway before exhaustion', async () => {
+  test('a connected chain extends confirmed-input runway before exhaustion', async () => {
     const extend = jest.spyOn(ctx.storage, 'extendActionBatch')
     ctx.wallet.randomVals = randomVals
     const txids: string[] = []
+    let change: string[] = []
     for (let index = 0; index < 10; index++) {
-      const staged = await ctx.wallet.createAction(actionArgs())
+      const args = actionArgs(change)
+      args.outputs![0].satoshis = 40_000
+      const staged = await ctx.wallet.createAction(args)
       txids.push(staged.txid!)
+      change = staged.noSendChange ?? []
     }
     expect(extend).toHaveBeenCalled()
     expect(extend.mock.calls[0][0].requestedOutputs).toBeGreaterThanOrEqual(1)
-    await ctx.wallet.createAction({ description: 'Commit independent actions', options: { sendWith: txids } })
+    await ctx.wallet.createAction({ description: 'Commit connected actions', options: { sendWith: txids } })
     const secondRequest = (await ctx.activeStorage.findProvenTxReqs({ partial: { txid: txids[1] } }))[0]
     expect(secondRequest.inputBEEF).toBeDefined()
     expect(Beef.fromBinary(secondRequest.inputBEEF!).findTxid(txids[0])).toBeUndefined()
@@ -617,8 +623,10 @@ describe('in-memory action batch workspace', () => {
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
   })
 
-  test('an expired batch does not permanently wedge unrelated createActions', async () => {
+  test('an expired batch never captures an unrelated createAction', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const extend = jest.spyOn(ctx.storage, 'extendActionBatch')
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
     ctx.wallet.randomVals = randomVals
     // A connected app stages a noSend action and then abandons it, leaving the
     // workspace and its server-side batch behind in the long-lived wallet process.
@@ -630,9 +638,9 @@ describe('in-memory action batch workspace', () => {
     await cleanupExpiredActionBatches(ctx.activeStorage)
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('expired')
 
-    // An unrelated immediate payment arrives from another app. Its funding
-    // exceeds the client-held reservations, so planning must call
-    // extendActionBatch — which the storage refuses for the retired batch.
+    // An unrelated immediate payment arrives from another app. Workspace
+    // membership is checked before planning, so the first request must bypass
+    // the expired batch and succeed through the legacy path.
     const payment = async () =>
       await ctx.wallet.createAction({
         description: 'unrelated immediate payment',
@@ -646,14 +654,77 @@ describe('in-memory action batch workspace', () => {
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
 
-    // The caller that trips over the dead batch may see one refusal…
-    await payment().catch(() => {})
-    // …but the wallet must recover: the dead workspace cannot be allowed to
-    // capture and fail every subsequent createAction until process restart.
     await expect(payment()).resolves.toEqual(expect.objectContaining({ txid: expect.any(String) }))
+    expect(legacyCreate).toHaveBeenCalledTimes(1)
+    expect(extend).not.toHaveBeenCalled()
   })
 
-  test('expired reservations cannot be reacquired after another batch claims an input', async () => {
+  test('a related action resumes its expired workspace before planning', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const resume = jest.spyOn(ctx.storage, 'resumeActionBatch')
+    ctx.wallet.randomVals = randomVals
+    const root = await ctx.wallet.createAction(actionArgs())
+    const begun = await begin.mock.results[0].value
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
+    await cleanupExpiredActionBatches(ctx.activeStorage)
+    const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as object
+    Reflect.set(workspace, 'expiresAt', Date.now() - 1)
+
+    const child = await ctx.wallet.createAction(actionArgs(root.noSendChange))
+
+    expect(resume).toHaveBeenCalledWith(expect.objectContaining({ batchId: begun.batchId }))
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
+    await expect(ctx.wallet.createAction({
+      description: 'Commit resumed connected workspace',
+      options: { sendWith: [root.txid!, child.txid!] }
+    })).resolves.toBeDefined()
+  })
+
+  test('an open workspace does not capture an unrelated noSend root', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
+    ctx.wallet.randomVals = randomVals
+
+    const workspaceRoot = await ctx.wallet.createAction(actionArgs())
+    const unrelated = await ctx.wallet.createAction({
+      ...actionArgs(),
+      description: 'Plan an unrelated noSend root'
+    })
+
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(legacyCreate).toHaveBeenCalledTimes(1)
+    await expect(ctx.wallet.createAction({
+      description: 'Commit only the owned workspace',
+      options: { sendWith: [workspaceRoot.txid!] }
+    })).resolves.toBeDefined()
+    expect((await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: unrelated.txid },
+      noRawTx: true
+    }))).toHaveLength(1)
+  })
+
+  test('an unrelated sendWith does not commit an open workspace', async () => {
+    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    const unrelated = await ctx.wallet.createAction({
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'persisted unrelated output' }],
+      description: 'Create an unrelated persisted action',
+      options: { acceptDelayedBroadcast: true, randomizeOutputs: false }
+    })
+    const workspaceRoot = await ctx.wallet.createAction(actionArgs())
+    await expect(ctx.wallet.createAction({
+      description: 'Send only the unrelated persisted action',
+      options: { sendWith: [unrelated.txid!] }
+    })).resolves.toBeDefined()
+    expect(commit).not.toHaveBeenCalled()
+    await expect(ctx.wallet.createAction({
+      description: 'Commit the owned workspace afterwards',
+      options: { sendWith: [workspaceRoot.txid!] }
+    })).resolves.toBeDefined()
+    expect(commit).toHaveBeenCalledTimes(1)
+  })
+
+  test('a resume conflict retires only the connected workspace', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction(actionArgs())
@@ -667,14 +738,19 @@ describe('in-memory action batch workspace', () => {
       firstAction: Validation.validateCreateActionArgs(actionArgs())
     })
     expect(competing.reservedOutputs.some(output => firstIds.includes(output.outputId))).toBe(true)
+    const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as object
+    Reflect.set(workspace, 'expiresAt', Date.now() - 1)
 
     await expect(
-      ctx.wallet.createAction({
-        description: 'Conflicting expired batch commit',
-        options: { sendWith: [staged.txid!] }
-      })
-    ).rejects.toBeDefined()
+      ctx.wallet.createAction(actionArgs(staged.noSendChange))
+    ).rejects.toMatchObject({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'conflicted',
+      batchId: begun.batchId
+    })
+    expect(ctx.wallet.actionBatch.hasWorkspace).toBe(false)
     await ctx.storage.abortActionBatch(competing.batchId)
+    await expect(ctx.wallet.createAction(actionArgs())).resolves.toBeDefined()
   })
 
   test('a broadcaster failure leaves one durable commit that can be retried', async () => {
@@ -705,7 +781,7 @@ describe('in-memory action batch workspace', () => {
   test('atomic validation rejects duplicate spends across staged actions', async () => {
     ctx.wallet.randomVals = randomVals
     const firstResult = await ctx.wallet.createAction(actionArgs())
-    const secondResult = await ctx.wallet.createAction(actionArgs())
+    const secondResult = await ctx.wallet.createAction(actionArgs(firstResult.noSendChange))
     const captured = await captureCommitManifest(
       ctx,
       [firstResult.txid!, secondResult.txid!],
@@ -889,7 +965,7 @@ describe('in-memory action batch workspace', () => {
   test('atomic validation requires unique action references', async () => {
     ctx.wallet.randomVals = randomVals
     const first = await ctx.wallet.createAction(actionArgs())
-    const second = await ctx.wallet.createAction(actionArgs())
+    const second = await ctx.wallet.createAction(actionArgs(first.noSendChange))
     const captured = await captureCommitManifest(
       ctx,
       [first.txid!, second.txid!],
@@ -1396,7 +1472,9 @@ describe('in-memory action batch workspace', () => {
     expect(await abort.mock.results[0].value).toEqual({ aborted: true })
   })
 
-  test('a normal action commits the open workspace without broadcasting earlier noSend actions', async () => {
+  test('an unrelated normal action bypasses and leaves the open workspace intact', async () => {
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
+    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction({
       ...actionArgs(),
@@ -1415,6 +1493,8 @@ describe('in-memory action batch workspace', () => {
       options: { noSend: false, randomizeOutputs: false }
     })
     expect(normal.txid).toBeDefined()
+    expect(legacyCreate).toHaveBeenCalledTimes(1)
+    expect(commit).not.toHaveBeenCalled()
     const earlier = await ctx.wallet.listActions({ labels: ['earlier noSend action'] })
     const committed = await ctx.wallet.listActions({ labels: ['normal committing action'] })
     expect(earlier.actions).toHaveLength(1)
@@ -1422,6 +1502,11 @@ describe('in-memory action batch workspace', () => {
     expect(earlier.actions[0].status).toBe('nosend')
     expect(committed.actions).toHaveLength(1)
     expect(committed.actions[0].txid).toBe(normal.txid)
+    await ctx.wallet.createAction({
+      description: 'Commit only the explicitly owned workspace',
+      options: { sendWith: [staged.txid!] }
+    })
+    expect(commit).toHaveBeenCalledTimes(1)
   })
 
   test('large finalization derives scripts, packs raw transactions, and commits by manifest digest', async () => {

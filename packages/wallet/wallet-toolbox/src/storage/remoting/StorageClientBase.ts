@@ -43,6 +43,8 @@ import {
   PrepareActionBatchCommitResult,
   PutActionBatchBlobArgs,
   PutActionBatchPackArgs,
+  ResumeActionBatchArgs,
+  ResumeActionBatchResult,
   RenewActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
@@ -291,6 +293,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   async renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
     return await this.rpcCall<RenewActionBatchResult>('renewActionBatch', [auth, batchId])
+  }
+
+  async resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
+    return await this.rpcCall<ResumeActionBatchResult>('resumeActionBatch', [auth, args])
   }
 
   async prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {

@@ -19,10 +19,11 @@ servers during a rolling deployment.
 
 The original manifest and one-blob-per-request transport remain version 1. A
 provider can independently advertise the additive `manifestVersion: 2`,
-`commitByDigest`, and `packedUploads` capabilities. A new client uses each
-optimization only when its provider advertises it. Old clients ignore the extra
-fields, new clients retain the version-1 path against old providers, and the two
-new storage methods are optional for third-party `WalletStorage` implementations.
+`commitByDigest`, `resume`, `maxReservedOutputs`, and `packedUploads`
+capabilities. A new client uses each optimization only when its provider
+advertises it. Old clients ignore the extra fields, new clients retain the
+version-1 path against old providers, and additive storage methods remain
+optional for third-party `WalletStorage` implementations.
 
 The capability and its methods are Wallet Toolbox storage extensions. They do not
 extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
@@ -36,17 +37,23 @@ extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
    output-script lengths at bootstrap. Signed transactions and the external
    proof frontier follow through the binary commit path, so a hexadecimal
    script is not duplicated into a large JSON request.
-2. The wallet plans, signs, validates, and indexes subsequent actions locally. A
-   shared BEEF graph avoids retaining repeated ancestry. The signed transaction
-   is the canonical source for output scripts; format 2 carries script digests
-   for validation, rather than carrying the same scripts as transaction bytes,
-   plan strings, metadata strings, and standalone blobs.
+2. The wallet plans, signs, validates, and indexes a subsequent action locally
+   only when it belongs to the same transaction graph: an input or
+   `noSendChange` outpoint references a staged output, or `sendWith` references
+   a transaction owned by the workspace. Time adjacency, a shared wallet or
+   originator, and merely being another `noSend` action do not establish
+   membership. Unrelated work continues through the ordinary persistence path.
+   A shared BEEF graph avoids retaining repeated ancestry. The signed
+   transaction is the canonical source for output scripts; format 2 carries
+   script digests for validation rather than duplicating scripts.
 3. If confirmed funding runs low, the wallet extends its reservation pool using
    an EWMA estimate and geometrically increasing runway. Forwarded staged change
    needs no reservation or extension.
-4. `sendWith`, or a normal action created while the workspace is open, validates
-   and atomically persists every staged action. Only the requested transactions
-   are sent; earlier actions retain their `nosend` status.
+4. `sendWith` that names a workspace transaction, or a normal action that
+   explicitly depends on a staged output, validates and atomically persists
+   every member action. An unrelated normal action neither joins nor commits
+   the workspace. Only the requested transactions are sent; earlier actions
+   retain their `nosend` status.
 5. Broadcast occurs after the storage transaction. Delayed mode returns after the
    batch is durably queued; immediate mode uses the existing aggregate broadcaster
    and review results.
@@ -67,12 +74,18 @@ input fee and enough value to recover an economically viable first change output
 so a low basket minimum cannot repeatedly select inputs that satisfy the nominal
 deficit but cost too much to use.
 
-Extensions add at most 64 outputs per storage call, but there is no cumulative
-reservation, workspace-size, action-count, or spend-chain limit. Additional
-bounded calls continue for as long as the workspace needs confirmed funding.
-They use the same exact, least-over, then largest-under selection policy as
-normal funding. Retry targets are incremental shortfalls: the planner credits
-the value and count of every unconsumed reserved output before asking for more.
+Extensions add at most 64 outputs per storage call. Built-in providers also
+enforce and advertise a cumulative maximum of 256 persisted output reservations
+per workspace, including caller-selected persisted inputs and confirmed inputs
+already consumed by uncommitted member transactions. This is a provider resource
+bound, not a transaction or consensus input limit; staged outputs do not consume
+additional persisted reservations. Set `StorageProviderOptions.actionBatchMaxReservedOutputs`
+(or the matching `SetupWalletKnexArgs` option when using
+`Setup.createStorageKnex`) to another positive integer, or to `-1` for
+operator-selected unlimited operation. The provider advertises the effective value. Extensions use the same
+exact, least-over, then largest-under selection policy as normal funding. Retry
+targets are incremental shortfalls: the planner credits the value and count of
+every unconsumed reserved output before asking for more.
 Confirmed inputs already used by staged transactions remain reserved until
 commit but are not credited as available funding. Proactive EWMA requests
 likewise subtract the unconsumed pool, initialize from the first complete
@@ -80,9 +93,14 @@ sample, and increase geometric runway only when the provider fulfills both the
 requested count and value. Empty or partial extensions therefore cannot
 compound a target against unchanged wallet state.
 Leases last 15 minutes with a 60-minute hard lifetime. Long-running workspaces
-renew near 80% of the lease; commit may atomically reacquire an expired reservation
-when no conflicting spend or reservation occurred. Commit, abort, wallet
-destruction, expiry cleanup, and the one-minute monitor task release unused state.
+renew near 80% of the lease. A client and provider advertising `resume` can
+atomically reacquire only the exact persisted outpoints already held by that
+workspace after soft expiry; a conflicting spend or reservation fails that
+connected workflow without capturing unrelated actions. Lifecycle failures use
+`WERR_ACTION_BATCH_STATE` with a machine-readable state rather than message-text
+matching. Version-1 commit retains its compatible expired-input reacquisition
+path. Commit, abort, wallet destruction, expiry cleanup, and the one-minute
+monitor task release unused state.
 
 ## Atomic commit and payload transport
 
@@ -193,15 +211,15 @@ pnpm --filter @bsv/wallet-toolbox bench:action-batch
 On the same Apple Silicon host with Node.js v25.9.0, a representative cold
 250-action, 1 KiB-script run reduced planning/signing/validation from
 19,117.03 ms in legacy mode to 10,907.93 ms in batch mode (42.9%, or 1.75x).
-Including atomic commit, total local time was 19,163.87 ms versus 11,462.13 ms
-(40.2% lower), while storage calls fell from 501 to 2 and database transactions
-from 252 to 3. At 100 ms storage RTT those calls represent 50,100 ms versus
-200 ms of control-path latency, a 99.6% reduction.
+Including atomic commit, total local time was 11,131.49 ms versus 5,795.95 ms
+(47.9% lower), while storage calls and database transactions fell from 750 to
+2 and from 750 to 3, respectively. At 100 ms storage RTT those calls represent
+75,000 ms versus 200 ms of control-path latency, a 99.7% reduction.
 
-A generic single 4 MiB zero-filled script took 1,258.13 ms through the legacy
-path and 208.60 ms through format 2, including upload and atomic commit: 83.4%
-less local time. Its instrumented requests fell from 13,982,465 bytes to 8,064
-bytes. The one 4,195,234-byte logical pack compressed to 5,233 bytes and was
+A generic single 4 MiB zero-filled script took 1,160.86 ms through the legacy
+path and 288.20 ms through format 2, including upload and atomic commit: 75.2%
+less local time. Its instrumented requests fell from 13,982,465 bytes to 8,067
+bytes. The one 4,195,234-byte logical pack compressed to 5,236 bytes and was
 uploaded in one call. This synthetic compression ratio represents highly
 repetitive data; incompressible data falls back to identity encoding without
 expansion. Absolute times remain host- and database-dependent.
@@ -210,8 +228,8 @@ It records planning, signing and validation, storage RPCs, database transactions
 request bytes, commit and broadcast time, CPU, and incremental peak heap. Physical
 SQLite runs compare 1, 10, 50, and 250 action chains at 1 KiB and exercise each
 larger script size with a real action, including the 4 MiB upload path. Its
-complete model covers dependent, independent, explicit-input, and two-step
-signing workloads at every action count; 1 KiB, 64 KiB, 1 MiB, and 4 MiB
+complete model covers dependent, isolated-root fallback, explicit-input, and
+two-step signing workloads at every action count; 1 KiB, 64 KiB, 1 MiB, and 4 MiB
 scripts; and 25, 100, and 250 ms storage RTT. The measured cases deliberately
 include both many-small-action and few-large-action shapes so transport tuning
 is not fitted to one contract or graph. Production rollout should additionally

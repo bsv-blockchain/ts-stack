@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.4",
+      "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Allows immediate actions to chain wallet-managed change from transactions awaiting background broadcast and preserves remote storage endpoint discovery after production minification.",
-      "migration": "No consumer migration is required. Delayed-broadcast semantics are unchanged; an immediate child recursively includes its delayed parent BEEF when needed, and getStores() now reports each remote provider's existing endpointUrl without relying on its constructor name."
+      "summary": "Isolates action batches by explicit transaction-graph membership, adds bounded exact-input lease resume, and carries structured lifecycle errors across local and remote storage.",
+      "migration": "No consumer migration is required. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.4",
+      "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
-      "migration": "No browser consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
+      "summary": "Carries the lockstep browser build with explicit action-batch isolation and bounded lease recovery.",
+      "migration": "No browser consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.4",
+      "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build that can fund immediate actions from delayed change and report remote storage endpoints after production minification.",
-      "migration": "No mobile consumer migration is required. Immediate child broadcasts include queued parent transaction and proof data when needed, and getStores() now preserves the configured remote endpoint URL."
+      "summary": "Carries the lockstep mobile build with explicit action-batch isolation and bounded lease recovery.",
+      "migration": "No mobile consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
     },
     {
       "name": "create-bsv-app",

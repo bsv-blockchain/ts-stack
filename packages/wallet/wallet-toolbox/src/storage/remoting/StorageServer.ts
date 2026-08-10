@@ -90,6 +90,7 @@ const storageRpcMethods = new Set([
   'relinquishCertificate',
   'relinquishOutput',
   'renewActionBatch',
+  'resumeActionBatch',
   'setActive',
   'updateProvenTxReqWithNewProvenTx'
 ])
@@ -117,6 +118,7 @@ const authIdRpcMethods = new Set([
   'relinquishCertificate',
   'relinquishOutput',
   'renewActionBatch',
+  'resumeActionBatch',
   'setActive'
 ])
 
@@ -127,7 +129,8 @@ const actionBatchRpcMethods = new Set([
   'commitActionBatchByDigest',
   'extendActionBatch',
   'prepareActionBatchCommit',
-  'renewActionBatch'
+  'renewActionBatch',
+  'resumeActionBatch'
 ])
 
 const topLevelLimitArgument = new Map<string, number>([
