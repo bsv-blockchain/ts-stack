@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Keep mainnet and testnet ChainTracks usable from browser and webview wallets:
+  browser runtimes temporarily select the CORS-enabled legacy service while
+  Node runtimes retain Arcade/go-chaintracks v2. `Services.getHeight` now falls
+  back to WhatsOnChain if ChainTracks is unavailable and preserves the original
+  ChainTracks error when both providers fail.
 - Route `ttn` wallets through the isolated `teratestnet` overlay preset and
   enable the public TTN Arcade broadcaster/proof provider by default. TTN does
   not register the incompatible legacy ARC BEEF fallback. Other chain defaults
