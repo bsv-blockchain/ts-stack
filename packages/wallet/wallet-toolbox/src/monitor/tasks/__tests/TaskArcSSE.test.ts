@@ -311,6 +311,15 @@ describe('TaskArcadeSSE', () => {
       expect(monitor.storage.sp.updateOutput).not.toHaveBeenCalled()
     })
 
+    test('REJECTED with unclassified validator detail is terminal invalid', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined', {
+        extraInfo: 'validator policy rejection'
+      })
+      expect(log).toContain('=> invalid')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).not.toHaveBeenCalled()
+    })
+
     test('REJECTED conflict fails the request and quarantines local input copies without a UTXO provider', async () => {
       const { log, monitor } = await runWithStatus('REJECTED', 'unmined', {
         status: 466,
@@ -328,6 +337,17 @@ describe('TaskArcadeSSE', () => {
     ])('keeps retryable REJECTED evidence pending: %s', async (extra, _label) => {
       const { log, monitor } = await runWithStatus('REJECTED', 'unmined', extra)
       expect(log).toContain('awaiting resolution')
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('RECEIVED persists an intermediate status without changing the request', async () => {
+      const { log, monitor } = await runWithStatus('RECEIVED', 'sending')
+      expect(log).toContain('RECEIVED recorded; awaiting resolution')
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'sending' }),
+        undefined
+      )
       expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
     })
 
