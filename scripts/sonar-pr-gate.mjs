@@ -3,7 +3,8 @@ import { pathToFileURL } from 'node:url'
 const DEFAULT_BASE_URL = 'https://sonarcloud.io'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_POLL_MS = 15 * 1000
-const BLOCKING_ISSUE_STATUSES = 'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
+const BLOCKING_ISSUE_STATUSES = new Set(['OPEN', 'CONFIRMED', 'ACCEPTED', 'FALSE_POSITIVE'])
+const ISSUE_PAGE_SIZE = 500
 
 function requiredValue(argv, index, option) {
   const value = argv[index + 1]
@@ -83,6 +84,40 @@ function resultTotal(payload, label) {
   return total
 }
 
+function issueStatus(issue) {
+  if (typeof issue?.issueStatus === 'string') return issue.issueStatus
+  if (issue?.resolution === 'FALSE-POSITIVE') return 'FALSE_POSITIVE'
+  return issue?.status
+}
+
+async function countBlockingIssues(fetchImpl, baseUrl, common) {
+  let page = 1
+  let observed = 0
+  let blocking = 0
+
+  while (true) {
+    const payload = await requestJson(fetchImpl, baseUrl, '/api/issues/search', {
+      componentKeys: common.project,
+      issueStatuses: [...BLOCKING_ISSUE_STATUSES].join(','),
+      pullRequest: common.pullRequest,
+      ps: ISSUE_PAGE_SIZE,
+      p: page
+    })
+    const total = resultTotal(payload, 'issues')
+    const issues = payload?.issues
+    if (!Array.isArray(issues)) {
+      throw new Error('SonarCloud issues response did not contain an issues array')
+    }
+    blocking += issues.filter(issue => BLOCKING_ISSUE_STATUSES.has(issueStatus(issue))).length
+    observed += issues.length
+    if (observed >= total) return blocking
+    if (issues.length === 0) {
+      throw new Error('SonarCloud issues response ended before its reported total')
+    }
+    page++
+  }
+}
+
 function delay(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
@@ -120,30 +155,23 @@ export async function enforceSonarPullRequestGate(options, dependencies = {}) {
     await sleep(options.pollMs)
   }
 
-  const common = {
-    pullRequest: options.pullRequest
-  }
+  const common = { project: options.project, pullRequest: options.pullRequest }
   const [qualityGate, issues, hotspots] = await Promise.all([
     requestJson(fetchImpl, options.baseUrl, '/api/qualitygates/project_status', {
       projectKey: options.project,
-      ...common
+      pullRequest: common.pullRequest
     }),
-    requestJson(fetchImpl, options.baseUrl, '/api/issues/search', {
-      componentKeys: options.project,
-      issueStatuses: BLOCKING_ISSUE_STATUSES,
-      ps: 1,
-      ...common
-    }),
+    countBlockingIssues(fetchImpl, options.baseUrl, common),
     requestJson(fetchImpl, options.baseUrl, '/api/hotspots/search', {
       projectKey: options.project,
       status: 'TO_REVIEW',
       ps: 1,
-      ...common
+      pullRequest: common.pullRequest
     })
   ])
 
   const qualityGateStatus = qualityGate?.projectStatus?.status
-  const issueCount = resultTotal(issues, 'issues')
+  const issueCount = issues
   const hotspotCount = resultTotal(hotspots, 'hotspots')
   const failures = []
   if (qualityGateStatus !== 'OK') {

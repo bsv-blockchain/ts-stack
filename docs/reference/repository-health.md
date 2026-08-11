@@ -96,7 +96,10 @@ configured Sonar quality-gate verdict and zero new issue records in `OPEN`,
 `CONFIRMED`, `ACCEPTED`, or `FALSE_POSITIVE` state, plus zero unreviewed
 security hotspots. Including accepted and false-positive states prevents
 reclassification from being used as a merge bypass. The existing required
-`merge-gate` depends on this job.
+`merge-gate` depends on this job. The gate also validates every returned issue
+record client-side because SonarCloud pull-request searches can retain fixed
+records even when an active-status filter is supplied; closed fixed records do
+not count as new findings.
 
 In this repository, **quality gate passed** means that strict repository-owned
 check passed on the current head SHA as part of the full required CI set.
