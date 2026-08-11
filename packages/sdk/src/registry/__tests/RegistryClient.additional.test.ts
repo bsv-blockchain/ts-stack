@@ -725,6 +725,13 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
 // -------------------- registerDefinition: network preset used -------------------- //
 
 describe('RegistryClient.registerDefinition – network preset', () => {
+  it('uses the default resolver configuration when options are omitted', () => {
+    const wallet = buildWalletMock()
+
+    expect(() => new RegistryClient(wallet as WalletInterface)).not.toThrow()
+    expect(LookupResolver).toHaveBeenLastCalledWith({ networkPreset: undefined })
+  })
+
   it('passes testnet to TopicBroadcaster when wallet returns testnet', async () => {
     const wallet = buildWalletMock()
     ;(wallet.getNetwork as jest.Mock).mockResolvedValue({ network: 'testnet' })
