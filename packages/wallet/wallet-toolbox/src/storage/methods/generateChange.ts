@@ -101,6 +101,77 @@ function removeDustOutputs(changeOutputs: GenerateChangeSdkChangeOutput[], dustF
   }
 }
 
+interface LegacyChangeMigrationRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  targetNetCount: number
+  netChangeCount: () => number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+  allocateChangeInput: (
+    targetSatoshis: number,
+    exactSatoshis?: number
+  ) => Promise<GenerateChangeSdkChangeInput | undefined>
+  releaseChangeInput: (outputId: number) => Promise<void>
+  recordAllocatedInput: (candidate: GenerateChangeSdkChangeInput) => void
+}
+
+async function migrateLegacyChangeInputs(request: LegacyChangeMigrationRequest): Promise<void> {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length === 0) return
+  if (request.targetNetCount <= request.netChangeCount()) return
+
+  const migrationLimit = params.maxMigrationInputs === -1 ? Number.MAX_SAFE_INTEGER : (params.maxMigrationInputs ?? 0)
+  for (let migrated = 0; migrated < migrationLimit; migrated++) {
+    const marginalInputFee = request.feeTarget(1) - request.feeTarget()
+    const candidate = await request.allocateChangeInput(0)
+    if (candidate == null) break
+    if (candidate.satoshis >= params.changeInitialSatoshis || candidate.satoshis <= marginalInputFee) {
+      await request.releaseChangeInput(candidate.outputId)
+      break
+    }
+    request.recordAllocatedInput(candidate)
+  }
+}
+
+interface SurplusChangeShapingRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  targetNetCount: number
+  netChangeCount: () => number
+  maxChangeOutputs: number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+  rand: (min: number, max: number) => number
+}
+
+function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length !== 1) return
+  if (request.targetNetCount <= request.netChangeCount()) return
+
+  const originalSatoshis = result.changeOutputs[0].satoshis
+  const desiredOutputs = Math.min(
+    request.maxChangeOutputs,
+    Math.max(1, request.targetNetCount + result.allocatedChangeInputs.length)
+  )
+  for (let count = desiredOutputs; count > 1; count--) {
+    const addedOutputs = count - 1
+    const addedFee = request.feeTarget(0, addedOutputs) - request.feeTarget()
+    const distributable = originalSatoshis - addedFee
+    if (distributable < count * params.changeInitialSatoshis) continue
+    result.changeOutputs = Array.from({ length: count }, () => ({
+      satoshis: params.changeInitialSatoshis,
+      lockingScriptLength: params.changeLockingScriptLength
+    }))
+    distributeExcessFees(
+      result.changeOutputs,
+      params.changeInitialSatoshis,
+      distributable - count * params.changeInitialSatoshis,
+      request.rand
+    )
+    break
+  }
+}
+
 /**
  * Simplifications:
  *  - only support one change type with fixed length scripts.
@@ -509,22 +580,20 @@ async function generateChangeSdkCore(
      * or above the preferred value is not legacy migration material and is
      * immediately released.
      */
-    if (surplusPoolShaping && r.changeOutputs.length > 0 && targetNetCount > netChangeCount()) {
-      const migrationLimit =
-        params.maxMigrationInputs === -1 ? Number.MAX_SAFE_INTEGER : (params.maxMigrationInputs ?? 0)
-      for (let migrated = 0; migrated < migrationLimit; migrated++) {
-        const marginalInputFee = feeTarget(1) - feeTarget()
-        const candidate = await allocateChangeInput(0)
-        if (candidate == null) break
-        if (candidate.satoshis >= params.changeInitialSatoshis || candidate.satoshis <= marginalInputFee) {
-          await releaseChangeInput(candidate.outputId)
-          break
-        }
+    await migrateLegacyChangeInputs({
+      params,
+      result: r,
+      targetNetCount,
+      netChangeCount,
+      feeTarget,
+      allocateChangeInput,
+      releaseChangeInput,
+      recordAllocatedInput: candidate => {
         r.allocatedChangeInputs.push(candidate)
         allocatedFunding += candidate.satoshis
         feeExcessNow = feeExcess()
       }
-    }
+    })
 
     /**
      * Distribute the excess fees across the changeOutputs added.
@@ -539,28 +608,15 @@ async function generateChangeSdkCore(
      * output instead of gathering more inputs or refusing an otherwise valid
      * action.
      */
-    if (surplusPoolShaping && r.changeOutputs.length === 1 && targetNetCount > netChangeCount()) {
-      const original = r.changeOutputs[0]
-      const originalSatoshis = original.satoshis
-      const desiredOutputs = Math.min(maxChangeOutputs, Math.max(1, targetNetCount + r.allocatedChangeInputs.length))
-      for (let count = desiredOutputs; count > 1; count--) {
-        const addedOutputs = count - 1
-        const addedFee = feeTarget(0, addedOutputs) - feeTarget()
-        const distributable = originalSatoshis - addedFee
-        if (distributable < count * params.changeInitialSatoshis) continue
-        r.changeOutputs = Array.from({ length: count }, () => ({
-          satoshis: params.changeInitialSatoshis,
-          lockingScriptLength: params.changeLockingScriptLength
-        }))
-        distributeExcessFees(
-          r.changeOutputs,
-          params.changeInitialSatoshis,
-          distributable - count * params.changeInitialSatoshis,
-          rand
-        )
-        break
-      }
-    }
+    shapeSurplusChangeOutputs({
+      params,
+      result: r,
+      targetNetCount,
+      netChangeCount,
+      maxChangeOutputs,
+      feeTarget,
+      rand
+    })
 
     /**
      * Remove any change outputs that ended up below the dust floor after distribution.

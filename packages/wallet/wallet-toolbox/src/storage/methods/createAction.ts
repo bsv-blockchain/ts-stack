@@ -1074,16 +1074,19 @@ async function traceStorageStep<T>(
   )
 }
 
-function makeFundingParams(
-  storage: StorageProvider,
-  vargs: Validation.ValidCreateActionArgs,
-  xinputs: XValidCreateActionInput[],
-  xoutputs: XValidCreateActionOutput[],
-  changeBasket: TableOutputBasket,
-  feeModel: StorageFeeModel,
-  healthyChangeCount: number,
-  compatibilityFallback = false
-): GenerateChangeSdkParams {
+interface MakeFundingParamsArgs {
+  storage: StorageProvider
+  vargs: Validation.ValidCreateActionArgs
+  xinputs: XValidCreateActionInput[]
+  xoutputs: XValidCreateActionOutput[]
+  changeBasket: TableOutputBasket
+  feeModel: StorageFeeModel
+  healthyChangeCount: number
+  compatibilityFallback: boolean
+}
+
+function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams {
+  const { storage, vargs, xinputs, xoutputs, changeBasket, feeModel, healthyChangeCount, compatibilityFallback } = args
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   return {
     fixedInputs: xinputs.map(input => ({
@@ -1126,11 +1129,11 @@ async function buildFundingPlan(
   )
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   const healthyChangeCount = compatibilityFallback
-    // Preserve the legacy target-count input exactly, including noSendChange
-    // that is removed from the allocator below but still belongs to this tier.
-    ? candidates.filter(output => eligibleStatuses.includes(output.transactionStatus)).length
+    ? // Preserve the legacy target-count input exactly, including noSendChange
+      // that is removed from the allocator below but still belongs to this tier.
+      candidates.filter(output => eligibleStatuses.includes(output.transactionStatus)).length
     : candidates.filter(output => output.satoshis >= preferredSatoshis).length
-  const params = makeFundingParams(
+  const params = makeFundingParams({
     storage,
     vargs,
     xinputs,
@@ -1139,7 +1142,7 @@ async function buildFundingPlan(
     feeModel,
     healthyChangeCount,
     compatibilityFallback
-  )
+  })
   const noSendStatuses = await storage.findTransactionStatusesByIds(
     userId,
     noSendChangeIn.map(output => output.transactionId)
@@ -1230,20 +1233,31 @@ async function fundingPlanSerializedCost(
   }
 }
 
-async function prepareFundingPlanWithLiquidityPolicy(
+interface FundingTier {
+  policyTier: Exclude<PreparedFundingPlan['policyTier'], 'compatibility'>
+  statuses: TransactionStatus[]
+}
+
+const FUNDING_TIERS: FundingTier[] = [
+  { policyTier: 'completed', statuses: ['completed'] },
+  { policyTier: 'unproven', statuses: ['completed', 'unproven'] },
+  { policyTier: 'sending', statuses: ['completed', 'unproven', 'sending'] }
+]
+
+async function resolveFundingCandidates(
   storage: StorageProvider,
-  context: FundingPlanBaseContext,
+  userId: number,
+  basketId: number,
   parent?: TelemetrySpan,
   trx?: TrxToken
-): Promise<PreparedFundingPlan> {
-  const [userId, vargs, , , changeBasket] = context
+): Promise<ResolvedManagedChangeInputCandidate[]> {
   const rawCandidates = await traceStorageStep(
     storage,
     'wallet.storage.create_action.funding_candidates',
     parent,
     { 'funding.include_pending': true },
     async span => {
-      const outputs = await storage.findAvailableManagedChangeInputCandidates(userId, changeBasket.basketId, false, trx)
+      const outputs = await storage.findAvailableManagedChangeInputCandidates(userId, basketId, false, trx)
       span?.end({
         attributes: {
           'funding.candidate_count': outputs.length,
@@ -1263,64 +1277,88 @@ async function prepareFundingPlanWithLiquidityPolicy(
   const missingStatuses = await storage.findTransactionStatusesByIds(userId, missingStatusIds, trx)
   const candidates: ResolvedManagedChangeInputCandidate[] = rawCandidates.map(output => ({
     ...output,
-    transactionStatus: output.transactionStatus ?? missingStatuses.get(output.transactionId) as TransactionStatus
+    transactionStatus: output.transactionStatus ?? (missingStatuses.get(output.transactionId) as TransactionStatus)
   }))
   if (candidates.some(output => output.transactionStatus == null)) {
     throw new WERR_INTERNAL('managed change candidate is missing its source transaction status')
   }
+  return candidates
+}
 
-  const tiers: Array<{
-    policyTier: Exclude<PreparedFundingPlan['policyTier'], 'compatibility'>
-    statuses: TransactionStatus[]
-  }> = [
-    { policyTier: 'completed', statuses: ['completed'] },
-    { policyTier: 'unproven', statuses: ['completed', 'unproven'] },
-    { policyTier: 'sending', statuses: ['completed', 'unproven', 'sending'] }
-  ]
-  const successful: PreparedFundingPlan[] = []
-  let fundingError: unknown
-  for (const tier of tiers) {
-    let plan: PreparedFundingPlan | undefined
-    try {
-      plan = await buildFundingPlan(storage, context, candidates, tier.statuses, tier.policyTier, false, parent)
-    } catch (error) {
-      if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
-      fundingError = error
-      // Pool shaping is optional. Before widening ancestry to unproven or
-      // sending parents, retry the same status tier with the former funding
-      // shape. This is the one-way compatibility guarantee: a preferred
-      // minimum can never manufacture starvation or force a pending chain.
-      try {
-        plan = await buildFundingPlan(storage, context, candidates, tier.statuses, 'compatibility', true, parent)
-      } catch (compatibilityError) {
-        if (!(compatibilityError instanceof WERR_INSUFFICIENT_FUNDS)) throw compatibilityError
-        fundingError = compatibilityError
-      }
+async function buildFundingPlanForTier(
+  storage: StorageProvider,
+  context: FundingPlanBaseContext,
+  candidates: ResolvedManagedChangeInputCandidate[],
+  tier: FundingTier,
+  parent?: TelemetrySpan
+): Promise<{ plan?: PreparedFundingPlan; fundingError?: WERR_INSUFFICIENT_FUNDS }> {
+  try {
+    return {
+      plan: await buildFundingPlan(storage, context, candidates, tier.statuses, tier.policyTier, false, parent)
     }
+  } catch (error) {
+    if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+  }
+
+  // Pool shaping is optional. Before widening ancestry to unproven or sending
+  // parents, retry the same status tier with the former funding shape. This is
+  // the one-way compatibility guarantee: a preferred minimum can never
+  // manufacture starvation or force a pending chain.
+  try {
+    return {
+      plan: await buildFundingPlan(storage, context, candidates, tier.statuses, 'compatibility', true, parent)
+    }
+  } catch (error) {
+    if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+    return { fundingError: error }
+  }
+}
+
+function firstPlanNeedsNoPendingComparison(storage: StorageProvider, plan: PreparedFundingPlan): boolean {
+  const threshold = storage.managedChangePolicy.pendingComparisonInputs
+  return threshold === -1 || plan.selected.length <= threshold
+}
+
+async function chooseLowestSerializedFundingPlan(
+  storage: StorageProvider,
+  plans: PreparedFundingPlan[],
+  knownTxids: string[]
+): Promise<PreparedFundingPlan> {
+  let chosen = plans[0]
+  let chosenCost = await fundingPlanSerializedCost(storage, chosen, knownTxids)
+  for (const alternative of plans.slice(1)) {
+    const cost = await fundingPlanSerializedCost(storage, alternative, knownTxids)
+    if (cost < chosenCost) {
+      chosen = alternative
+      chosenCost = cost
+    }
+  }
+  return chosen
+}
+
+async function prepareFundingPlanWithLiquidityPolicy(
+  storage: StorageProvider,
+  context: FundingPlanBaseContext,
+  parent?: TelemetrySpan,
+  trx?: TrxToken
+): Promise<PreparedFundingPlan> {
+  const [userId, vargs, , , changeBasket] = context
+  const candidates = await resolveFundingCandidates(storage, userId, changeBasket.basketId, parent, trx)
+  const successful: PreparedFundingPlan[] = []
+  let fundingError: WERR_INSUFFICIENT_FUNDS | undefined
+  for (const tier of FUNDING_TIERS) {
+    const attempted = await buildFundingPlanForTier(storage, context, candidates, tier, parent)
+    fundingError = attempted.fundingError ?? fundingError
+    const plan = attempted.plan
     if (plan != null) {
       successful.push(plan)
-      if (
-        successful.length === 1 &&
-        (storage.managedChangePolicy.pendingComparisonInputs === -1 ||
-          plan.selected.length <= storage.managedChangePolicy.pendingComparisonInputs)
-      )
-        return plan
+      if (successful.length === 1 && firstPlanNeedsNoPendingComparison(storage, plan)) return plan
     }
   }
 
   if (successful.length > 0) {
-    const baseline = successful[0]
-    if (successful.length === 1) return baseline
-    let chosen = baseline
-    let chosenCost = await fundingPlanSerializedCost(storage, baseline, vargs.options.knownTxids)
-    for (const alternative of successful.slice(1)) {
-      const cost = await fundingPlanSerializedCost(storage, alternative, vargs.options.knownTxids)
-      if (cost < chosenCost) {
-        chosen = alternative
-        chosenCost = cost
-      }
-    }
-    return chosen
+    if (successful.length === 1) return successful[0]
+    return await chooseLowestSerializedFundingPlan(storage, successful, vargs.options.knownTxids)
   }
 
   if (fundingError != null) throw fundingError
