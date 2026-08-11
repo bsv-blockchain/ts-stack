@@ -8,6 +8,12 @@ const makeWallet = (): WalletInterface =>
   }) as unknown as WalletInterface
 
 describe('DIDClient', () => {
+  it('accepts the TerraTestNet overlay preset', () => {
+    const client = new DIDClient({ wallet: makeWallet(), networkPreset: 'teratestnet' })
+
+    expect((client as any).networkPreset).toBe('teratestnet')
+  })
+
   it('rejects a revoke request without an identifier before calling the wallet', async () => {
     const wallet = makeWallet()
     const client = new DIDClient({ wallet })

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-discovery-services",
-  "version": "2.1.6",
+  "version": "2.2.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -94,7 +94,7 @@
     "mongodb": "^7.5.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.4.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

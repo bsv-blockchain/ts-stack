@@ -50,7 +50,7 @@ All critical configuration is supplied through environment variables. Create a `
 | `HOSTING_URL` | `https://my.overlay.network` | Public URL where your node is reachable. |
 | `ADMIN_TOKEN` | `at-least-32-random-characters` | Random token of at least 32 characters required to access the admin API. |
 | `WALLET_STORAGE_URL` | `https://store-us-1.bsvb.tech` | Wallet storage endpoint where advertisement tokens will be kept, and from where funds will be drawn. |
-| `NETWORK` | `main` or `test` | BSV Blockchain network your node operates on. |
+| `NETWORK` | `main`, `test`, or `ttn` | BSV Blockchain network your node operates on. TTN uses the public TTN Arcade endpoint by default and Arcade-backed ChainTracks. |
 | `ARC_API_KEY` | — | Your ARC key for transaction broadcasting. |
 | `MONGO_URL` | `mongodb://root:example@localhost:27017` | MongoDB connection string. |
 | `KNEX_URL` | `mysql://user:pass@localhost:3306/appdb` | MySQL connection string used by Knex. |

@@ -69,6 +69,13 @@ without Node `Buffer` or filesystem dependencies.
 Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
 Direct Teranode P2P is not included in browser/mobile artifacts.
 
+TTN wallets also register
+`https://arcade-v2-ttn-us-1.bsvblockchain.tech` as their first broadcast and
+Merkle-proof provider. Mainnet and testnet Arcade broadcasting remains opt-in.
+Pass an explicit `arcadeUrl` to override the TTN endpoint or an empty string to
+disable it. TTN overlay lookups use the separate `teratestnet` resolver preset
+and never fall back to testnet discovery.
+
 ### Broadcast rejection and monitor reconciliation
 
 When Arcade is configured, Wallet Toolbox consumes Arcade's status code and

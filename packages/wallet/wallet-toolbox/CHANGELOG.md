@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Route `ttn` wallets through the isolated `teratestnet` overlay preset and
+  enable the public TTN Arcade broadcaster/proof provider by default. TTN does
+  not register the incompatible legacy ARC BEEF fallback. Other chain defaults
+  are unchanged, and an empty Arcade URL explicitly disables Arcade.
 - Reconcile Arcade broadcast outcomes as durable wallet state. Retryable
   locktime and parent conditions remain pending, while validator failures fail
   the request and explicit missing-input or conflict evidence atomically fails
@@ -30,12 +34,12 @@ attention to changes that materially alter behavior or extend functionality.
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
 - Keep the resumable lifecycle and fail-safe reconciliation cost bounded: the
-  retained platform contract measures 1,557,293 raw / 366,794 gzip / 287,373
-  Brotli bytes with Vite and 1,215,725 raw / 333,345 gzip / 268,550 Brotli
+  retained platform contract measures 1,557,683 raw / 366,927 gzip / 287,337
+  Brotli bytes with Vite and 1,215,983 raw / 333,466 gzip / 268,497 Brotli
   bytes with esbuild. Browser ceilings advance only to the next 1,000-byte
-  boundary, each by at most 0.70%. Mobile measures 1,617,036 Metro bytes and
-  3,270,524 raw Hermes bytes; only the Hermes raw ceiling advances, by less
-  than 0.55%, while every compressed and Metro ceiling remains unchanged.
+  boundary, each by at most 0.70%. Mobile measures 1,617,544 Metro bytes and
+  3,271,146 raw Hermes bytes; only the Hermes raw ceiling advances, by less
+  than 0.60%, while every compressed and Metro ceiling remains unchanged.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

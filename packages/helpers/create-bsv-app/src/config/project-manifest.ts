@@ -87,7 +87,7 @@ export function readValidManifest(dir: string): ProjectManifest | null {
   const ok =
     (m.version === 1 || m.version === 2) &&
     typeof m.name === 'string' &&
-    (m.network === 'main' || m.network === 'test') &&
+    (m.network === 'main' || m.network === 'test' || m.network === 'ttn') &&
     stackOk &&
     typeof m.bsvDir === 'string' &&
     validBsvDir(m.bsvDir) &&

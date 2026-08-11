@@ -9,6 +9,10 @@
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/resourceLimits.ts"]
     },
     {
+      "canonicalSource": "infra/uhrp-server-basic/src/utils/network.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/utils/network.ts"]
+    },
+    {
       "canonicalSource": "packages/wallet/wallet-toolbox/src/storage/remoting/KnexPaymentReplayStore.ts",
       "synchronizedSources": ["infra/wallet-infra/src/KnexPaymentReplayStore.ts"]
     }

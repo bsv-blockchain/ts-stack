@@ -1,4 +1,4 @@
-import { Transaction, Script, PrivateKey, WalletInterface, KeyDeriver, PushDrop, TaggedBEEF, Utils, Beef, CreateActionInput, SignActionSpend, LookupResolver, LookupResolverConfig } from '@bsv/sdk'
+import { Transaction, Script, PrivateKey, WalletInterface, KeyDeriver, PushDrop, TaggedBEEF, Utils, Beef, CreateActionInput, SignActionSpend, LookupResolver, LookupResolverConfig, type LookupNetworkPreset } from '@bsv/sdk'
 import { Advertisement, AdvertisementData, Advertiser } from '@bsv/overlay'
 import { Wallet, WalletSigner, WalletStorageManager, StorageClient, Services } from '@bsv/wallet-toolbox-client'
 import { isAdvertisableURI } from './utils/isAdvertisableURI.js'
@@ -17,14 +17,14 @@ export class WalletAdvertiser implements Advertiser {
 
   /**
    * Constructs a new WalletAdvertiser instance.
-   * @param chain - The blockchain (main or test) where this advertiser is advertising
+   * @param chain - The blockchain (main, test, or TTN) where this advertiser is advertising
    * @param privateKey - The private key used for signing transactions.
    * @param storageURL - The URL of the UTXO storage server for the Wallet.
    * @param advertisableURI - The advertisable URI where services are made available.
    * @param lookupResolverConfig — If provided, overrides the resolver config used for lookups. Otherwise defaults to the network preset associated with the wallet's network.
    */
   constructor(
-    public chain: 'main' | 'test',
+    public chain: 'main' | 'test' | 'ttn',
     public privateKey: string,
     public storageURL: string,
     public advertisableURI: string,
@@ -42,6 +42,10 @@ export class WalletAdvertiser implements Advertiser {
     this.storageManager = storageManager
     this.wallet = wallet
     this.identityKey = keyDeriver.identityKey
+    let networkPreset: LookupNetworkPreset = 'mainnet'
+    if (chain === 'test') networkPreset = 'testnet'
+    if (chain === 'ttn') networkPreset = 'teratestnet'
+    this.lookupResolverConfig ??= { networkPreset }
   }
 
   /**
@@ -117,12 +121,7 @@ export class WalletAdvertiser implements Advertiser {
       throw new Error('Initialize the Advertiser using init() before use.')
     }
     let resolver: LookupResolver
-    if (typeof this.lookupResolverConfig === 'object') {
-      resolver = new LookupResolver(this.lookupResolverConfig)
-    } else {
-      const { network } = await this.wallet.getNetwork({})
-      resolver = new LookupResolver({ networkPreset: network })
-    }
+    resolver = new LookupResolver(this.lookupResolverConfig)
     const advertisements: Advertisement[] = []
     let lookupAnswer
     try {

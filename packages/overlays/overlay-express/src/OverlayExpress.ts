@@ -21,6 +21,7 @@ import {
   OverlayBroadcastFacilitator,
   HTTPSOverlayBroadcastFacilitator,
   DEFAULT_TESTNET_SLAP_TRACKERS,
+  DEFAULT_TTN_SLAP_TRACKERS,
   DEFAULT_SLAP_TRACKERS,
   Utils,
   Beef,
@@ -118,6 +119,7 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
  */
 export type SyncConfigurationEntry = string[] | 'SHIP' | false
 export type SyncConfigurationMap = Record<string, SyncConfigurationEntry>
+export type OverlayNetwork = 'main' | 'test' | 'ttn'
 
 export interface EngineConfig {
   chainTracker?: ChainTracker | 'scripts only'
@@ -179,7 +181,7 @@ export interface HealthReport {
     name: string
     advertisableFQDN: string
     port: number
-    network: 'main' | 'test'
+    network: OverlayNetwork
     startedAt?: string
     uptimeMs: number
     topicManagerCount: number
@@ -311,12 +313,12 @@ export default class OverlayExpress {
   // MongoDB client retained for health checks
   mongoClient?: MongoClient
 
-  // Network ('main' or 'test')
-  network: 'main' | 'test' = 'main'
+  // Network ('main', 'test', or TerraTestNet)
+  network: OverlayNetwork = 'main'
 
   // If no custom ChainTracker is configured, default is a WhatsOnChain instance
   // (We keep a property for it, so we can pass it to Engine)
-  chainTracker: ChainTracker | 'scripts only' = new WhatsOnChain(this.network)
+  chainTracker: ChainTracker | 'scripts only' = new WhatsOnChain('main')
 
   // The Overlay Engine
   engine?: Engine
@@ -616,13 +618,24 @@ export default class OverlayExpress {
   }
 
   /**
-   * Configures the BSV Blockchain network to be used ('main' or 'test').
-   * By default, it re-initializes chainTracker as a WhatsOnChain for that network.
-   * @param network - The network ('main' or 'test')
+   * Configures the BSV Blockchain network to be used.
+   * Mainnet/testnet use WhatsOnChain by default. TTN requires an explicit
+   * ChainTracks provider because WhatsOnChain does not serve TerraTestNet.
+   * @param network - The network ('main', 'test', or 'ttn')
    */
-  configureNetwork(network: 'main' | 'test'): void {
+  configureNetwork(network: OverlayNetwork): void {
     this.network = network
-    this.chainTracker = new WhatsOnChain(this.network)
+    this.chainTracker =
+      network === 'ttn'
+        ? {
+            isValidRootForHeight: async () => {
+              throw new Error('TTN requires configureChaintracks() or configureChainTracker()')
+            },
+            currentHeight: async () => {
+              throw new Error('TTN requires configureChaintracks() or configureChainTracker()')
+            }
+          }
+        : new WhatsOnChain(network)
     this.logger.log(chalk.blue(`Network set to ${network}`))
   }
 
@@ -631,9 +644,13 @@ export default class OverlayExpress {
    * If 'scripts only' is used, it implies no full SPV chain tracking in the Engine.
    * @param chainTracker - An instance of ChainTracker or 'scripts only'
    */
-  configureChainTracker(
-    chainTracker: ChainTracker | 'scripts only' = new WhatsOnChain(this.network)
-  ): void {
+  configureChainTracker(chainTracker?: ChainTracker | 'scripts only'): void {
+    if (chainTracker === undefined) {
+      if (this.network === 'ttn') {
+        throw new Error('TTN requires an explicit ChainTracker')
+      }
+      chainTracker = new WhatsOnChain(this.network)
+    }
     this.chainTracker = chainTracker
     this.logger.log(chalk.blue('ChainTracker has been configured.'))
   }
@@ -971,9 +988,7 @@ export default class OverlayExpress {
       storage,
       this.engineConfig.chainTracker ?? this.chainTracker,
       `https://${this.advertisableFQDN}`,
-      this.network === 'test'
-        ? (this.engineConfig.shipTrackers ?? DEFAULT_TESTNET_SLAP_TRACKERS)
-        : this.engineConfig.shipTrackers,
+      this.engineConfig.shipTrackers ?? this.defaultDiscoveryTrackers(),
       this.resolveSlapTrackers(),
       broadcaster ?? this.engineConfig.broadcaster,
       advertiser,
@@ -1055,7 +1070,7 @@ export default class OverlayExpress {
       this.arcadeProvider = undefined
     }
 
-    if (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) {
+    if (this.network !== 'ttn' && typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) {
       const arcUrl = this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com'
       providers.push({
         name: 'ARC',
@@ -1127,6 +1142,8 @@ export default class OverlayExpress {
       return configured
     }
 
+    if (this.network === 'ttn') return undefined
+
     return async (blockHeight: number) => {
       const response = await fetch(
         `https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`,
@@ -1155,14 +1172,20 @@ export default class OverlayExpress {
   /** Resolve the SLAP trackers from config or network defaults. */
   private resolveSlapTrackers(): string[] | undefined {
     if (Array.isArray(this.engineConfig.slapTrackers)) return this.engineConfig.slapTrackers
-    return this.network === 'test' ? DEFAULT_TESTNET_SLAP_TRACKERS : DEFAULT_SLAP_TRACKERS
+    return this.defaultDiscoveryTrackers()
+  }
+
+  private defaultDiscoveryTrackers(): string[] {
+    if (this.network === 'test') return DEFAULT_TESTNET_SLAP_TRACKERS
+    if (this.network === 'ttn') return DEFAULT_TTN_SLAP_TRACKERS
+    return DEFAULT_SLAP_TRACKERS
   }
 
   /** Build the WalletAdvertiser (or use user-provided one). */
   private async buildAdvertiser(): Promise<Advertiser | undefined> {
     if (this.engineConfig.advertiser !== undefined) return this.engineConfig.advertiser
     const storageBase =
-      this.network === 'test'
+      this.network !== 'main'
         ? 'https://staging-storage.babbage.systems'
         : 'https://storage.babbage.systems'
     try {

@@ -183,7 +183,7 @@ The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and 
 | `--capabilities <a,b>`                     | Comma-separated generated capability ids.                                   |
 | `--bsv-dir <path>`                         | Capability helper directory; defaults to `src/bsv`.                         |
 | `--package-manager <npm\|pnpm\|yarn\|bun>` | Generator and install package manager.                                      |
-| `--network <main\|test>`                   | Generated BSV network default.                                              |
+| `--network <main\|test\|ttn>`              | Generated BSV network default.                                              |
 | `--install` / `--skip-install`             | Enable or skip dependency installation; enabled by default.                 |
 | `--glue` / `--no-glue`                     | Enable or skip automatic generated app wiring.                              |
 | `--force`                                  | In add mode, overwrite existing capability utility files.                   |

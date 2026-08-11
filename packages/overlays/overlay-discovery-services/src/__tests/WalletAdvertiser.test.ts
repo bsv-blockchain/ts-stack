@@ -82,6 +82,19 @@ describe('WalletAdvertiser', () => {
         )
       }).not.toThrow()
     })
+
+    it('constructs a TTN advertiser with TerraTestNet lookup routing', () => {
+      const ttnAdvertiser = new WalletAdvertiser(
+        'ttn',
+        testPrivateKeyHex,
+        'https://staging-storage.babbage.systems',
+        'https://staging-overlay.babbage.systems'
+      )
+      expect(ttnAdvertiser.chain).toBe('ttn')
+      expect(ttnAdvertiser.lookupResolverConfig).toEqual({
+        networkPreset: 'teratestnet'
+      })
+    })
   })
 
   describe('init', () => {

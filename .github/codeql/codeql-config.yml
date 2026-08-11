@@ -18,4 +18,5 @@ paths-ignore:
   - packages/overlays/overlay-express/src/security/edgePolicy.ts
   - packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts
   - infra/uhrp-server-cloud-bucket/src/resourceLimits.ts
+  - infra/uhrp-server-cloud-bucket/src/utils/network.ts
   - infra/wallet-infra/src/KnexPaymentReplayStore.ts

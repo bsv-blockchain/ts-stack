@@ -104,6 +104,15 @@ describe('resolveConfig', () => {
     expect(c.network).toBe('main')
   })
 
+  test('preserves TerraTestNet as an explicit network', () => {
+    const c = resolveConfig({
+      name: 'x',
+      stack: { backend: { framework: 'express' } },
+      network: 'ttn'
+    })
+    expect(c.network).toBe('ttn')
+  })
+
   test('formatConfigError prefixes ConfigError messages', () => {
     expect(formatConfigError(new ConfigError('bad'))).toBe('Invalid config: bad')
   })

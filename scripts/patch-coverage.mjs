@@ -39,7 +39,9 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // is a CLI that reads `process.argv` and branches on it, and excluding it by
   // shape would quietly drop real code out of this gate.
   /packages\/overlays\/topics\/src\/index\.ts$/,
-  /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/
+  /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/,
+  /packages\/helpers\/simple\/src\/core\/types\.ts$/,
+  /packages\/wallet\/btms\/src\/types\.ts$/
 ]
 
 function normalizedPath(value) {
