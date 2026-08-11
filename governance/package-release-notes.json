@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-10",
+  "lastReviewed": "2026-08-11",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -196,8 +196,8 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Adds isolated TTN overlay routing and default Arcade support, isolates and resumes action batches, and introduces progressive managed-change liquidity: useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration (including explicitly funded actions), settled-first and measured-BEEF planning, last-resort pending funding, sync-visible SQL metadata, delayed permission persistence, and read-only Monitor reporting.",
-      "migration": "Mainnet, testnet, STN, TSTN, and mock service defaults remain compatible; TTN receives its isolated resolver and Arcade default. No consumer code or BRC-100 migration is required for liquidity changes. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom values remain authoritative and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback add no new funding refusal. Operators may tune every work limit, including explicit -1 unlimited modes."
+      "summary": "Adds isolated TTN overlay routing and default Arcade support, isolates and resumes action batches, introduces progressive managed-change liquidity, and keeps browser-hosted wallets on a CORS-reachable ChainTracks default with a WhatsOnChain height fallback.",
+      "migration": "Mainnet and testnet browser/webview runtimes temporarily use the CORS-enabled legacy ChainTracks service; Node runtimes retain Arcade/go-chaintracks v2. TTN receives its isolated resolver and Arcade default. No consumer code or BRC-100 migration is required for liquidity changes. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom values remain authoritative and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback add no new funding refusal. Operators may tune every work limit, including explicit -1 unlimited modes."
     },
     {
       "name": "@bsv/wallet-toolbox-client",

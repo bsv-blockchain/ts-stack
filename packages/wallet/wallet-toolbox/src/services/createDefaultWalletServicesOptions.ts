@@ -31,7 +31,7 @@ function configuredChaintracksClient(chain: Chain, serviceUrl: string): Chaintra
  * subject to CORS enforcement that Node-style runtimes do not apply.
  */
 function isBrowserRuntime(): boolean {
-  return typeof window !== 'undefined' && typeof window.document !== 'undefined'
+  return typeof window !== 'undefined' && window.document !== undefined
 }
 
 /**

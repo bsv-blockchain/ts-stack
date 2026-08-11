@@ -672,7 +672,7 @@ export class Services implements WalletServices {
     }
     try {
       return await this.invokeChaintracksWithRetry(method, 'current_height')
-    } catch (eu: unknown) {
+    } catch (error_: unknown) {
       // Chaintracks is otherwise this method's single point of failure, and a
       // wallet UI that cannot read the present height is broadly unusable
       // (observed live 2026-08-11: a CORS-blocked chaintracks fetch in a
@@ -682,7 +682,7 @@ export class Services implements WalletServices {
       try {
         return (await this.whatsonchain.getChainInfo()).blocks
       } catch {
-        throw eu
+        throw error_
       }
     }
   }
