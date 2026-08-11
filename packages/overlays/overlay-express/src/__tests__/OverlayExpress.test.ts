@@ -385,11 +385,15 @@ describe('OverlayExpress', () => {
     it('sets TTN without silently constructing a WhatsOnChain tracker', async () => {
       overlayExpress.configureNetwork('ttn')
       expect(overlayExpress.network).toBe('ttn')
-      await expect(
-        overlayExpress.chainTracker === 'scripts only'
-          ? Promise.resolve()
-          : overlayExpress.chainTracker.currentHeight()
-      ).rejects.toThrow('TTN requires configureChaintracks() or configureChainTracker()')
+      const chainTracker = overlayExpress.chainTracker as ChainTracker
+      await expect(chainTracker.isValidRootForHeight('mock-root', 1)).rejects.toThrow(
+        'TTN requires configureChaintracks() or configureChainTracker()'
+      )
+      await expect(chainTracker.currentHeight()).rejects.toThrow(
+        'TTN requires configureChaintracks() or configureChainTracker()'
+      )
+      expect((overlayExpress as any).buildTopicAnchorHeaderResolver()).toBeUndefined()
+      expect((overlayExpress as any).defaultDiscoveryTrackers()).toBeDefined()
     })
 
     it('should reinitialize chainTracker for network', () => {
@@ -418,6 +422,14 @@ describe('OverlayExpress', () => {
       expect(overlayExpress.chainTracker).toBeDefined()
       expect(overlayExpress.arcadeUrl).toBe('https://arcade.example')
       expect(overlayExpress.reorgStreamUrl).toContain('chaintracks.example')
+    })
+
+    it('requires an explicit tracker for TTN', () => {
+      overlayExpress.configureNetwork('ttn')
+
+      expect(() => overlayExpress.configureChainTracker()).toThrow(
+        'TTN requires an explicit ChainTracker'
+      )
     })
   })
 
