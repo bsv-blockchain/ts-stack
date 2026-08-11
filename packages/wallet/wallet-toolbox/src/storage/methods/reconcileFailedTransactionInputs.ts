@@ -130,14 +130,11 @@ export async function markConfirmedStaleReqInputs (
         return
       }
       const classification = await classifyOutputUtxo(services, output)
-      verdicts.set(
-        key,
-        classification.verdict === 'unknown'
-          ? 'inconclusive'
-          : classification.verdict === 'unspent'
-            ? 'utxo'
-            : 'stale'
-      )
+      let verdict: 'inconclusive' | 'stale' | 'utxo'
+      if (classification.verdict === 'unknown') verdict = 'inconclusive'
+      else if (classification.verdict === 'unspent') verdict = 'utxo'
+      else verdict = 'stale'
+      verdicts.set(key, verdict)
     }
   )
 
