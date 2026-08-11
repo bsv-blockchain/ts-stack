@@ -101,6 +101,133 @@ function removeDustOutputs(changeOutputs: GenerateChangeSdkChangeOutput[], dustF
   }
 }
 
+interface LegacyChangeMigrationRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  targetNetCount: number
+  netChangeCount: () => number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+  allocateChangeInput: (
+    targetSatoshis: number,
+    exactSatoshis?: number
+  ) => Promise<GenerateChangeSdkChangeInput | undefined>
+  releaseChangeInput: (outputId: number) => Promise<void>
+  recordAllocatedInput: (candidate: GenerateChangeSdkChangeInput) => void
+}
+
+async function migrateLegacyChangeInputs(request: LegacyChangeMigrationRequest): Promise<void> {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length === 0) return
+  if (request.targetNetCount <= request.netChangeCount()) return
+
+  const migrationLimit = params.maxMigrationInputs === -1 ? Number.MAX_SAFE_INTEGER : (params.maxMigrationInputs ?? 0)
+  for (let migrated = 0; migrated < migrationLimit; migrated++) {
+    const marginalInputFee = request.feeTarget(1) - request.feeTarget()
+    const candidate = await request.allocateChangeInput(0)
+    if (candidate == null) break
+    if (candidate.satoshis >= params.changeInitialSatoshis || candidate.satoshis <= marginalInputFee) {
+      await request.releaseChangeInput(candidate.outputId)
+      break
+    }
+    request.recordAllocatedInput(candidate)
+  }
+}
+
+interface SurplusChangeShapingRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  targetNetCount: number
+  netChangeCount: () => number
+  maxChangeOutputs: number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+  rand: (min: number, max: number) => number
+}
+
+interface SurplusChangeMaterializationRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  dustFloor: number
+  feeExcess: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+}
+
+interface ChangeRecaptureRequest extends SurplusChangeMaterializationRequest {
+  releaseAllocatedChangeInputs: () => Promise<void>
+  funding: () => number
+  spending: () => number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+}
+
+/**
+ * Materialize the first managed-change output from surplus that is already in
+ * the transaction. This is especially important for explicit/fixed inputs:
+ * their value can fully fund an action before the allocator loop runs, but the
+ * shaping policy must still capture the remainder without gathering another
+ * wallet-managed input.
+ */
+function materializeSurplusChangeOutput(request: SurplusChangeMaterializationRequest): void {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length > 0) return
+
+  const availableAfterOutputFee = request.feeExcess(0, 1)
+  if (availableAfterOutputFee < request.dustFloor) return
+  result.changeOutputs.push({
+    satoshis: Math.min(availableAfterOutputFee, Math.max(request.dustFloor, params.changeFirstSatoshis)),
+    lockingScriptLength: params.changeLockingScriptLength
+  })
+  request.feeExcess()
+}
+
+/**
+ * Preserve the historical compatibility retry when another input can make a
+ * viable change output, except when surplus-only shaping has nothing economic
+ * to return. In that case the bounded remainder stays in the miner fee instead
+ * of manufacturing change from an additional wallet input.
+ */
+async function requireViableChangeOrRetainBoundedFee(request: ChangeRecaptureRequest): Promise<void> {
+  const { params, result } = request
+  const feeExcessNow = request.feeExcess()
+  if (result.changeOutputs.length > 0 || feeExcessNow <= 0) return
+
+  const hasOnlyUnreturnableShapingSurplus =
+    params.surplusPoolShaping === true && request.feeExcess(0, 1) < request.dustFloor
+  if (hasOnlyUnreturnableShapingSurplus) return
+
+  const minimumChange = Math.max(request.dustFloor, params.changeFirstSatoshis)
+  const totalSatoshisNeeded = request.spending() + request.feeTarget(0, 1) + minimumChange
+  const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - request.funding())
+  await request.releaseAllocatedChangeInputs()
+  throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
+}
+
+function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length !== 1) return
+  if (request.targetNetCount <= request.netChangeCount()) return
+
+  const originalSatoshis = result.changeOutputs[0].satoshis
+  const desiredOutputs = Math.min(
+    request.maxChangeOutputs,
+    Math.max(1, request.targetNetCount + result.allocatedChangeInputs.length)
+  )
+  for (let count = desiredOutputs; count > 1; count--) {
+    const addedOutputs = count - 1
+    const addedFee = request.feeTarget(0, addedOutputs) - request.feeTarget()
+    const distributable = originalSatoshis - addedFee
+    if (distributable < count * params.changeInitialSatoshis) continue
+    result.changeOutputs = Array.from({ length: count }, () => ({
+      satoshis: params.changeInitialSatoshis,
+      lockingScriptLength: params.changeLockingScriptLength
+    }))
+    distributeExcessFees(
+      result.changeOutputs,
+      params.changeInitialSatoshis,
+      distributable - count * params.changeInitialSatoshis,
+      request.rand
+    )
+    break
+  }
+}
+
 /**
  * Simplifications:
  *  - only support one change type with fixed length scripts.
@@ -229,7 +356,11 @@ async function generateChangeSdkCore(
      * Applies the per-transaction limit so that the UTXO pool grows
      * gradually rather than all at once.
      */
-    const maxChangeOutputs = params.maxChangeOutputs ?? maxChangeOutputsPerTransaction
+    const maxChangeOutputs =
+      params.maxChangeOutputs === -1
+        ? Number.MAX_SAFE_INTEGER
+        : (params.maxChangeOutputs ?? maxChangeOutputsPerTransaction)
+    const surplusPoolShaping = params.surplusPoolShaping === true
 
     const randomVals = [...(params.randomVals || [])]
     const nextRandomVal = (): number => {
@@ -294,7 +425,8 @@ async function generateChangeSdkCore(
     const size = (addedChangeInputs?: number, addedChangeOutputs?: number): number => {
       const inputCount = fixedInputs.length + r.allocatedChangeInputs.length + (addedChangeInputs || 0)
       const outputCount = fixedOutputs.length + r.changeOutputs.length + (addedChangeOutputs || 0)
-      return 4 +
+      return (
+        4 +
         varUintSize(inputCount) +
         fixedInputSize +
         (r.allocatedChangeInputs.length + (addedChangeInputs || 0)) * changeInputSize +
@@ -302,6 +434,7 @@ async function generateChangeSdkCore(
         fixedOutputSize +
         (r.changeOutputs.length + (addedChangeOutputs || 0)) * changeOutputSize +
         4
+      )
     }
 
     /**
@@ -344,6 +477,7 @@ async function generateChangeSdkCore(
     }
 
     const addOutputToBalanceNewInput = (): boolean => {
+      if (surplusPoolShaping) return false
       if (!hasTargetNetCount) return false
       // Also respect the absolute cap on change output count.
       if (r.changeOutputs.length >= maxChangeOutputs) return false
@@ -362,6 +496,7 @@ async function generateChangeSdkCore(
     }
 
     const addDesiredChangeOutputs = (): void => {
+      if (surplusPoolShaping) return
       // They may be removed if it turns out we can't fund them. Respect the
       // per-transaction cap and ensure each output meets the dust floor.
       while (
@@ -388,7 +523,12 @@ async function generateChangeSdkCore(
         const canAdd = (ao === 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs
         if (!canAdd) return
         const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
-        const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
+        // Account for the exact serialized fee of the output before assigning
+        // its value. Otherwise the output consumes the whole pre-output
+        // excess, leaves the plan short by its own marginal fee, and can make
+        // an otherwise fundable small-remainder transaction look starved.
+        const outputFunding = surplusPoolShaping ? feeExcess(0, 1) : feeExcess()
+        const satoshis = Math.min(outputFunding, Math.max(dustFloor, cap))
         if (satoshis >= dustFloor) {
           r.changeOutputs.push({ satoshis, lockingScriptLength: params.changeLockingScriptLength })
         }
@@ -469,6 +609,14 @@ async function generateChangeSdkCore(
     }
 
     /**
+     * The action may already be funded entirely by explicit/fixed inputs. In
+     * that case the allocator loop never runs, so capture the existing surplus
+     * here before the no-change compatibility guard. This operation cannot
+     * allocate an input; bounded legacy migration remains a separate step.
+     */
+    materializeSurplusChangeOutput({ params, result: r, dustFloor, feeExcess })
+
+    /**
      * Trigger an account funding event if we don't have enough to cover this transaction.
      */
     if (feeExcess() < 0) {
@@ -480,19 +628,65 @@ async function generateChangeSdkCore(
 
     /**
      * If needed, seek funding to avoid overspending on fees without a change output to recapture it.
+     * An economically unreturnable shaping remainder stays in the miner fee;
+     * gathering another input solely to manufacture change would violate
+     * surplus-only shaping and make the action less efficient.
      */
-    if (r.changeOutputs.length === 0 && feeExcessNow > 0) {
-      const minimumChange = Math.max(dustFloor, params.changeFirstSatoshis)
-      const totalSatoshisNeeded = spending() + feeTarget(0, 1) + minimumChange
-      const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - funding())
-      await releaseAllocatedChangeInputs()
-      throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
-    }
+    await requireViableChangeOrRetainBoundedFee({
+      params,
+      result: r,
+      dustFloor,
+      feeExcess,
+      feeTarget,
+      funding,
+      spending,
+      releaseAllocatedChangeInputs
+    })
+
+    /**
+     * Progressively retire economically useful legacy fragments without ever
+     * making them necessary for the requested action. The target of zero asks
+     * canonical allocators for their smallest remaining output. A candidate at
+     * or above the preferred value is not legacy migration material and is
+     * immediately released.
+     */
+    await migrateLegacyChangeInputs({
+      params,
+      result: r,
+      targetNetCount,
+      netChangeCount,
+      feeTarget,
+      allocateChangeInput,
+      releaseChangeInput,
+      recordAllocatedInput: candidate => {
+        r.allocatedChangeInputs.push(candidate)
+        allocatedFunding += candidate.satoshis
+        feeExcessNow = feeExcess()
+      }
+    })
 
     /**
      * Distribute the excess fees across the changeOutputs added.
      */
     feeExcessNow = distributeExcessFees(r.changeOutputs, params.changeInitialSatoshis, feeExcessNow, rand)
+
+    /**
+     * Pool growth is funded only from the surplus already present in the
+     * transaction. Splitting one change output increases the serialized fee;
+     * that exact delta is deducted before assigning the new outputs. If the
+     * preferred minimum cannot be met, the transaction retains one smaller
+     * output instead of gathering more inputs or refusing an otherwise valid
+     * action.
+     */
+    shapeSurplusChangeOutputs({
+      params,
+      result: r,
+      targetNetCount,
+      netChangeCount,
+      maxChangeOutputs,
+      feeTarget,
+      rand
+    })
 
     /**
      * Remove any change outputs that ended up below the dust floor after distribution.
@@ -538,7 +732,17 @@ export function validateGenerateChangeSdkResult(
     ok = false
   }
   const feeRequired = Math.ceil(((r.size || 0) / 1000) * (r.satsPerKb || 0))
-  if (feeRequired !== r.fee) {
+  const minSpendTxSize = transactionSize([params.changeUnlockingScriptLength], [params.changeLockingScriptLength])
+  const dustFloor = Math.max(1, Math.ceil((minSpendTxSize / 1000) * (r.satsPerKb || 0)) * 2)
+  const feeWithChangeOutput = Math.ceil(
+    (((r.size || 0) + transactionOutputSize(params.changeLockingScriptLength)) / 1000) * (r.satsPerKb || 0)
+  )
+  const isBoundedUnreturnableShapingSurplus =
+    params.surplusPoolShaping === true &&
+    r.changeOutputs.length === 0 &&
+    r.fee > feeRequired &&
+    r.fee - feeWithChangeOutput < dustFloor
+  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus) {
     log += `required fee error ${feeRequired} !== ${r.fee};`
     ok = false
   }
@@ -594,13 +798,27 @@ export interface GenerateChangeSdkParams {
 
   /**
    * Maximum number of change outputs to create in this transaction.
-   * Defaults to `maxChangeOutputsPerTransaction` (8).
+   * Defaults to `maxChangeOutputsPerTransaction` (8). Set to -1 only when an
+   * operator deliberately wants the basket target to be the sole bound.
    *
    * Callers may override this to allow more outputs in special cases (e.g.
    * consolidation transactions) or fewer outputs when a compact transaction
    * is preferred.
    */
   maxChangeOutputs?: number
+
+  /**
+   * When true, targetNetCount shapes only genuine post-funding surplus. The
+   * planner will not add inputs merely to reach the desired pool count.
+   */
+  surplusPoolShaping?: boolean
+
+  /**
+   * Soft bound on undersized, fee-positive inputs consumed after compulsory
+   * funding to migrate an old wallet gradually. Set to -1 for an intentionally
+   * unbounded migration pass. Ignored unless surplusPoolShaping is true.
+   */
+  maxMigrationInputs?: number
 
   randomVals?: number[]
   noLogging?: boolean
@@ -662,6 +880,12 @@ export function validateGenerateChangeSdkParams(
   if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', "'sat/kb'")
 
   Validation.validateOptionalInteger(params.targetNetCount, 'targetNetCount')
+  if (params.maxChangeOutputs !== -1) {
+    Validation.validateOptionalInteger(params.maxChangeOutputs, 'maxChangeOutputs', 1)
+  }
+  if (params.maxMigrationInputs !== -1) {
+    Validation.validateOptionalInteger(params.maxMigrationInputs, 'maxMigrationInputs', 0)
+  }
 
   Validation.validateSatoshis(params.changeFirstSatoshis, 'changeFirstSatoshis', 1)
   Validation.validateSatoshis(params.changeInitialSatoshis, 'changeInitialSatoshis', 1)

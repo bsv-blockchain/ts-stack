@@ -323,16 +323,23 @@ async function queryReqReview(context: MonitorAdminContext, query: Record<string
   }
 }
 
-function normalizeReviewMode(value: unknown): 'all' | 'change' {
-  return value === 'change' ? 'change' : 'all'
+export type UtxoReviewMode = 'all' | 'change' | 'liquidity'
+
+export function normalizeReviewMode(value: unknown): UtxoReviewMode {
+  if (value === 'change' || value === 'liquidity') return value
+  return 'all'
 }
 
-function getReviewUtxosTask(context: MonitorAdminContext): AdminUtxoReviewTask {
+function getReviewUtxosTask(context: MonitorAdminContext): AdminUtxoReviewTask & {
+  reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
+} {
   const monitor = context.daemon.setup?.monitor
   if (monitor == null) throw new Error('Monitor is not available.')
 
   const task = [...monitor._tasks, ...monitor._otherTasks].find(item => item.name === 'ReviewUtxos') as
-    | Partial<AdminUtxoReviewTask>
+    | (Partial<AdminUtxoReviewTask> & {
+        reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
+      })
     | undefined
 
   if (task?.reviewPageByIdentityKey == null) {
@@ -340,7 +347,8 @@ function getReviewUtxosTask(context: MonitorAdminContext): AdminUtxoReviewTask {
   }
 
   return {
-    reviewPageByIdentityKey: task.reviewPageByIdentityKey.bind(task)
+    reviewPageByIdentityKey: task.reviewPageByIdentityKey.bind(task),
+    reviewManagedChangeByIdentityKey: task.reviewManagedChangeByIdentityKey?.bind(task)
   }
 }
 
@@ -421,7 +429,7 @@ async function reviewUtxosByIdentityKey(
   context: MonitorAdminContext,
   requestedBy: string,
   userInput: string,
-  mode: 'all' | 'change',
+  mode: UtxoReviewMode,
   release: boolean,
   pageLimit: number,
   offset: number
@@ -429,7 +437,30 @@ async function reviewUtxosByIdentityKey(
   const storage = await getStorage(context)
   const task = getReviewUtxosTask(context)
   const identityKey = await resolveIdentityKeyFromInput(context, userInput)
-  return await runAdminUtxoReview({ storage, task, requestedBy, identityKey, mode, release, pageLimit, offset })
+
+  if (mode !== 'liquidity') {
+    return await runAdminUtxoReview({ storage, task, requestedBy, identityKey, mode, release, pageLimit, offset })
+  }
+  if (release) throw new Error('Managed-change liquidity review is read only.')
+  const log = await task.reviewManagedChangeByIdentityKey?.(identityKey)
+  if (log == null) throw new Error('Managed-change liquidity review is not available in this monitor runtime.')
+
+  await storage.insertMonitorEvent({
+    created_at: new Date(),
+    updated_at: new Date(),
+    id: 0,
+    event: 'AdminReviewUtxos',
+    details: JSON.stringify({ requestedBy, identityKey, mode, release: false, log })
+  })
+
+  return {
+    requestedBy,
+    identityKey,
+    mode,
+    release: false,
+    complete: true,
+    log
+  }
 }
 
 async function getReqDetail(context: MonitorAdminContext, provenTxReqId: number) {

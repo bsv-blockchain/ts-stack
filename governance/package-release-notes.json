@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-10",
+  "lastReviewed": "2026-08-11",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Routes TTN wallets through the isolated teratestnet preset and public Arcade provider, isolates/resumes bounded action batches, keeps browser ChainTracks CORS-reachable, proactively reconciles missed Arcade terminal verdicts, and makes invalid-change review tri-state, paged, and fail safe without an explorer.",
-      "migration": "Mainnet/testnet browser and webview runtimes temporarily use the legacy CORS-enabled ChainTracks service; Node runtimes retain Arcade/go-chaintracks v2, and getHeight falls back to WhatsOnChain on supported networks. TTN now uses https://arcade-v2-ttn-us-1.bsvblockchain.tech unless callers override or disable it. Unrelated actions remain outside open workspaces; providers may advertise resume support and a reservation limit, default 256. Direct invalid-change release now throws machine-checkable WERR_UTXO_REVIEW_INCONCLUSIVE and changes nothing when any verdict is unknown. Monitor Admin scans in bounded pages and, after explicit confirmation, releases only confirmed-spent outputs while retaining/reporting unknowns. A scheduled monitor pass applies durable Arcade terminal status missed by SSE; unknown provider results never mutate state."
+      "summary": "Adds isolated TTN routing and default Arcade support, isolated resumable action batches, progressive managed-change liquidity, browser-safe ChainTracks defaults, proactive Arcade terminal reconciliation, and paged tri-state invalid-change review.",
+      "migration": "Mainnet/testnet browser and webview runtimes temporarily use the legacy CORS-enabled ChainTracks service; Node retains Arcade/go-chaintracks v2, and getHeight falls back to WhatsOnChain on supported networks. TTN receives its isolated resolver and Arcade default. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference through future authorized actions; custom values remain authoritative. Direct invalid-change release throws machine-checkable WERR_UTXO_REVIEW_INCONCLUSIVE and changes nothing when any verdict is unknown. Monitor Admin reviews bounded pages and may explicitly release only confirmed-spent outputs while retaining/reporting unknowns. A scheduled Monitor pass applies durable Arcade terminal status missed by SSE; unknown provider results never mutate state."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Carries the lockstep browser build with isolated TTN/Arcade routing, bounded action-batch recovery, a CORS-reachable mainnet/testnet ChainTracks default, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
-      "migration": "Mainnet/testnet browser and webview runtimes temporarily select the legacy CORS-enabled ChainTracks service and getHeight can fall back to WhatsOnChain; Node behavior is unaffected. TTN wallets receive isolated resolver and Arcade defaults. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
+      "summary": "Carries the lockstep browser build with isolated TTN/Arcade routing, resumable action batches, progressive IndexedDB managed-change liquidity, a CORS-reachable ChainTracks default, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
+      "migration": "Mainnet/testnet browser and webview runtimes temporarily select the legacy CORS-enabled ChainTracks service and getHeight can fall back to WhatsOnChain; Node behavior is unaffected. TTN wallets receive isolated resolver and Arcade defaults. Exact untouched IndexedDB defaults advance from 32 to 5,000 satoshis through ordinary authorized actions; custom values and remote-storage wire contracts remain unchanged. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Carries the lockstep mobile build with isolated TTN/Arcade routing, bounded action-batch recovery, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
-      "migration": "Existing native mobile consumers are unchanged; webview runtimes follow the browser ChainTracks selection. TTN wallets receive isolated resolver and Arcade defaults. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
+      "summary": "Carries the lockstep mobile build with isolated TTN/Arcade routing, resumable action batches, progressive managed-change liquidity, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
+      "migration": "Existing native mobile consumers are unchanged; webview runtimes follow the browser ChainTracks selection. TTN wallets receive isolated resolver and Arcade defaults. Wallets progressively adopt useful change values through future authorized actions; custom values, BRC-100 methods, and remote-storage wire contracts remain unchanged. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
     },
     {
       "name": "create-bsv-app",

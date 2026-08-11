@@ -25,11 +25,12 @@ can resume a soft-expired workspace using its exact persisted inputs.
 `endpointURL` after production bundlers minify class names, so backup selection
 and make-primary flows remain stable.
 Immediate browser actions can chain wallet-managed change from a delayed
-parent; the child broadcast includes the parent BEEF so background delivery
-cannot temporarily strand the wallet balance.
-Durable permission grants finish broadcasting their internal token transaction
-before the waiting browser request resumes, keeping the grant's funding change
-available to the following wallet action.
+parent only after completed and unproven liquidity is exhausted or exact
+serialized-cost comparison proves that a pathological settled plan is larger.
+Pending funds are never hidden. IndexedDB wallets migrate exact untouched
+144-output / 32-satoshi defaults to a progressive 5,000-satoshi preference.
+Durable permission tokens retain delayed broadcast so permission approval does
+not inherit network latency.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
 Browser authentication accepts one verified matching UMP token as an existing

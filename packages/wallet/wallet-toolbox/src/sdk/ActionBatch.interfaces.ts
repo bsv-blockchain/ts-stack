@@ -67,6 +67,11 @@ export interface BeginActionBatchResult {
   commissionSatoshis: number
   commissionPubKeyHex?: string
   availableChangeCount: number
+  /** Internal planner policy; absent on older providers, which use defaults. */
+  managedChangePolicy?: {
+    maxOutputsPerAction: number
+    migrationInputsPerAction: number
+  }
   reservedOutputs: ActionBatchFundingOutput[]
   explicitOutputs: ActionBatchFundingOutput[]
   inputBeef?: number[] | Uint8Array
@@ -76,7 +81,7 @@ export interface ExtendActionBatchArgs {
   batchId: string
   targetSatoshis: number
   requestedOutputs: number
-  explicitOutpoints: Array<{ txid: string, vout: number }>
+  explicitOutpoints: Array<{ txid: string; vout: number }>
   includeSourceTransactions: boolean
 }
 
@@ -94,7 +99,7 @@ export interface RenewActionBatchResult {
 export interface ResumeActionBatchArgs {
   batchId: string
   /** Exact persisted outputs still held by the client workspace. */
-  outpoints: Array<{ txid: string, vout: number }>
+  outpoints: Array<{ txid: string; vout: number }>
 }
 
 export interface ResumeActionBatchResult extends RenewActionBatchResult {}

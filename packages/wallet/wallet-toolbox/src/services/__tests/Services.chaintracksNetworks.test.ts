@@ -58,3 +58,66 @@ describe('ChainTracks network defaults', () => {
     expect(() => new Services('mock')).toThrow("Use MockServices for 'mock' chain")
   })
 })
+
+describe('browser-runtime ChainTracks defaults (CORS-reachable service contract)', () => {
+  // The Go Chaintracks deployments serve no Access-Control-Allow-Origin and
+  // 404 OPTIONS preflights (verified live 2026-08-11), so a browser/webview
+  // wallet given that default loses getHeight/headers/root validation
+  // wholesale ("browser … clients must not be silently blocked by CORS",
+  // AGENTS.md). These cells pin the browser-context default to the legacy
+  // CORS-enabled service until the v2 deployments serve CORS.
+  const g = globalThis as { window?: unknown }
+
+  afterEach(() => {
+    delete g.window
+  })
+
+  test.each(['main', 'test'] as const)(
+    '%s under a browser runtime defaults to the legacy CORS-enabled Chaintracks service',
+    chain => {
+      g.window = { document: {} }
+      const client = createDefaultWalletServicesOptions(chain).chaintracks
+      expect(client).toBeInstanceOf(ChaintracksServiceClient)
+      expect(client).not.toBeInstanceOf(GoChaintracksServiceClient)
+      expect((client as ChaintracksServiceClient).serviceUrl).toBe(
+        `https://${chain}net-chaintracks.babbage.systems`
+      )
+    }
+  )
+
+  test('a window WITHOUT a document (a Node global shim) is not a browser runtime', () => {
+    g.window = {}
+    expect(createDefaultWalletServicesOptions('main').chaintracks).toBeInstanceOf(GoChaintracksServiceClient)
+  })
+})
+
+describe('Services.getHeight — WhatsOnChain belt behind the chaintracks single point of failure', () => {
+  test('a failing chaintracks falls back to WhatsOnChain chain info', async () => {
+    const services = new Services('main')
+    services.options.chaintracks = {
+      currentHeight: async () => {
+        throw new Error('Load failed') // the CORS-blocked browser fetch shape
+      }
+    } as unknown as typeof services.options.chaintracks
+    ;(services as unknown as { whatsonchain: { getChainInfo: () => Promise<{ blocks: number }> } }).whatsonchain = {
+      getChainInfo: async () => ({ blocks: 900_123 })
+    }
+    await expect(services.getHeight()).resolves.toBe(900_123)
+  })
+
+  test('when the belt ALSO fails, the ORIGINAL chaintracks error is rethrown', async () => {
+    const services = new Services('main')
+    const original = new Error('chaintracks unreachable')
+    services.options.chaintracks = {
+      currentHeight: async () => {
+        throw original
+      }
+    } as unknown as typeof services.options.chaintracks
+    ;(services as unknown as { whatsonchain: { getChainInfo: () => Promise<{ blocks: number }> } }).whatsonchain = {
+      getChainInfo: async () => {
+        throw new Error('woc down too')
+      }
+    }
+    await expect(services.getHeight()).rejects.toBe(original)
+  })
+})

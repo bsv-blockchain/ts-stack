@@ -1556,7 +1556,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .where('ab.hardExpiresAt', '>', now)
       })
       .whereIn('t.status', statuses)
-      .select('o.outputId', 'o.transactionId', 'o.satoshis', 'o.txid', 'o.vout')
+      .select(
+        'o.outputId',
+        'o.transactionId',
+        'o.satoshis',
+        'o.txid',
+        'o.vout',
+        't.status as transactionStatus'
+      )
   }
 
   override async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {

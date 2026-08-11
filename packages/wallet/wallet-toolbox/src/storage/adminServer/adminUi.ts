@@ -388,6 +388,7 @@ export function renderAdminPage(): string {
             <select id="utxoMode">
               <option value="all">all invalid UTXOs</option>
               <option value="change">change only</option>
+              <option value="liquidity">managed-change liquidity (read only)</option>
             </select>
           </label>
           <label>Action
@@ -898,8 +899,9 @@ export function renderAdminPage(): string {
         throw new Error('Enter or select an identityKey first.')
       }
       byId('utxoIdentityKey').value = identityKey
-      const mode = byId('utxoMode').value === 'change' ? 'change' : 'all'
-      const release = byId('utxoAction').value === 'release'
+      const selectedMode = byId('utxoMode').value
+      const mode = selectedMode === 'change' || selectedMode === 'liquidity' ? selectedMode : 'all'
+      const release = mode !== 'liquidity' && byId('utxoAction').value === 'release'
       if (release && !window.confirm('Release only outputs conclusively confirmed spent? This changes wallet state.')) {
         return
       }

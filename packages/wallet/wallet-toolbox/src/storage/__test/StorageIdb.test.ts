@@ -27,7 +27,7 @@ describe('StorageIdb tests', () => {
     try {
       const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
       const db = storage.db
-      expect(r).toBe('3')
+      expect(r).toBe('4')
       expect(db).toBeTruthy()
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('userId_basketId')).toBe(true)
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('txid_vout_userId')).toBe(true)
@@ -56,7 +56,7 @@ describe('StorageIdb tests', () => {
 
     try {
       const upgraded = await storage.initDB('version 2 upgrade test', '42'.repeat(32))
-      expect(upgraded.version).toBe(3)
+      expect(upgraded.version).toBe(4)
       expect(upgraded.transaction('outputs').objectStore('outputs')
         .indexNames.contains('userId_basketId')).toBe(true)
       expect(upgraded.transaction('outputs').objectStore('outputs')
@@ -105,6 +105,44 @@ describe('StorageIdb tests', () => {
       await expect(storage.countChangeInputs(userId, basketId, true)).resolves.toBe(1)
     } finally {
       await resetStorage(storage)
+    }
+  })
+
+  test('migrates only untouched legacy managed-change defaults', async () => {
+    const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
+    const storage = new StorageIdb(options)
+    storage.dbName = `storageIdbManagedChangeUpgrade-${randomUUID()}`
+    await storage.migrate('managed change migration', '42'.repeat(32))
+    const userId = await insertUser(storage)
+    const customMinimumUserId = await insertUser(storage, '03'.repeat(33))
+    const customTargetUserId = await insertUser(storage, '04'.repeat(33))
+    const now = new Date()
+    const insert = async (basketUserId: number, name: string, target: number, minimum: number): Promise<number> => await storage.insertOutputBasket({
+      basketId: 0,
+      userId: basketUserId,
+      name,
+      numberOfDesiredUTXOs: target,
+      minimumDesiredUTXOValue: minimum,
+      isDeleted: false,
+      created_at: now,
+      updated_at: now
+    })
+    const untouchedId = await insert(userId, 'default', 144, 32)
+    const customizedMinimumId = await insert(customMinimumUserId, 'default', 144, 64)
+    const customizedTargetId = await insert(customTargetUserId, 'default', 100, 32)
+    await storage.destroy()
+
+    const reopened = new StorageIdb(options)
+    reopened.dbName = storage.dbName
+    try {
+      await reopened.migrate('managed change migration', '42'.repeat(32))
+      const baskets = await reopened.findOutputBaskets({ partial: {} })
+      const byId = new Map(baskets.map(basket => [basket.basketId, basket]))
+      expect(byId.get(untouchedId)?.minimumDesiredUTXOValue).toBe(5_000)
+      expect(byId.get(customizedMinimumId)?.minimumDesiredUTXOValue).toBe(64)
+      expect(byId.get(customizedTargetId)?.minimumDesiredUTXOValue).toBe(32)
+    } finally {
+      await resetStorage(reopened)
     }
   })
 

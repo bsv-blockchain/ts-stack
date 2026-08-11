@@ -6,7 +6,7 @@ import {
   StorageCreateTransactionSdkOutput,
   StorageProvidedBy
 } from '../../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { randomBytesBase64, verifyTruthy } from '../../utility/utilityHelpers'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { beefForTxids } from '../../utility/beefForTxids'
@@ -17,6 +17,7 @@ import {
   maxPossibleSatoshis
 } from '../../storage/methods/generateChange'
 import { randomizeOutputVouts, repeatableRandom, selectCanonicalChange } from '../../storage/methods/actionPlanning'
+import { validateManagedChangePolicy } from '../../storage/methods/managedChangePolicy'
 
 export interface ActionBatchPlannedAction {
   dcr: StorageCreateActionResult
@@ -224,6 +225,8 @@ async function planFunding(
   const allocated = new Map<number, PlannerOutput>()
   const noSend = [...noSendChange]
   const changeBasket = state.begin.changeBasket
+  const policy = validateManagedChangePolicy(state.begin.managedChangePolicy)
+  const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   const params = {
     fixedInputs: explicit.map((output, index) => ({
       satoshis: output.satoshis,
@@ -239,11 +242,14 @@ async function planFunding(
         : [])
     ],
     feeModel: state.begin.feeModel,
-    changeInitialSatoshis: Math.max(1, changeBasket.minimumDesiredUTXOValue),
-    changeFirstSatoshis: Math.max(1, Math.round(changeBasket.minimumDesiredUTXOValue / 4)),
+    changeInitialSatoshis: preferredSatoshis,
+    changeFirstSatoshis: preferredSatoshis,
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
     targetNetCount: changeBasket.numberOfDesiredUTXOs - state.estimatedChangeCount,
+    maxChangeOutputs: policy.maxOutputsPerAction,
+    surplusPoolShaping: true,
+    maxMigrationInputs: policy.migrationInputsPerAction,
     randomVals: args.randomVals
   }
   const allocate = async (
@@ -266,7 +272,26 @@ async function planFunding(
     allocated.delete(outputId)
     if (noSendChange.includes(output)) noSend.push(output)
   }
-  const result = await generateChangeSdk(params, allocate, release, args.logger)
+  let result
+  try {
+    result = await generateChangeSdk(params, allocate, release, args.logger)
+  } catch (error) {
+    if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+    // Match legacy createAction's one-way availability guarantee. A workspace
+    // must not fail solely because the preferred pool shape cannot be made
+    // from its already reserved inputs.
+    result = await generateChangeSdk(
+      {
+        ...params,
+        changeFirstSatoshis: 1,
+        surplusPoolShaping: false,
+        maxMigrationInputs: 0
+      },
+      allocate,
+      release,
+      args.logger
+    )
+  }
   return {
     allocated: result.allocatedChangeInputs.map(input => verifyTruthy(allocated.get(input.outputId))),
     changeSatoshis: result.changeOutputs.map(output => output.satoshis),

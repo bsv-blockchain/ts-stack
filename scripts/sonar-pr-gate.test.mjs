@@ -14,7 +14,7 @@ function jsonResponse(payload) {
   })
 }
 
-function sonarFetch({ revisions = [REVISION], quality = 'OK', issues = 0, hotspots = 0 }) {
+function sonarFetch({ revisions = [REVISION], quality = 'OK', issues = [], hotspots = 0 }) {
   let analysisRequest = 0
   const calls = []
   const fetchImpl = async input => {
@@ -31,7 +31,7 @@ function sonarFetch({ revisions = [REVISION], quality = 'OK', issues = 0, hotspo
       return jsonResponse({ projectStatus: { status: quality } })
     }
     if (url.pathname === '/api/issues/search') {
-      return jsonResponse({ paging: { total: issues } })
+      return jsonResponse({ paging: { total: issues.length }, issues })
     }
     if (url.pathname === '/api/hotspots/search') {
       return jsonResponse({ paging: { total: hotspots } })
@@ -141,16 +141,37 @@ test('the gate waits for the exact PR head before evaluating findings', async ()
 })
 
 test('a passing Sonar quality gate cannot hide a new issue finding', async () => {
-  const { fetchImpl, calls } = sonarFetch({ quality: 'OK', issues: 2 })
+  const { fetchImpl, calls } = sonarFetch({
+    quality: 'OK',
+    issues: [
+      { issueStatus: 'OPEN' },
+      { issueStatus: 'ACCEPTED' },
+      { issueStatus: 'FALSE_POSITIVE' }
+    ]
+  })
   await assert.rejects(
     enforceSonarPullRequestGate(options(), { fetchImpl, log: () => {} }),
-    /2 new issue finding\(s\), expected 0/
+    /3 new issue finding\(s\), expected 0/
   )
   const issueRequest = calls.find(url => url.pathname === '/api/issues/search')
   assert.equal(
     issueRequest.searchParams.get('issueStatuses'),
     'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
   )
+})
+
+test('the gate ignores fixed records returned despite the active-status filter', async () => {
+  const { fetchImpl } = sonarFetch({
+    issues: [
+      { issueStatus: 'FIXED', status: 'CLOSED', resolution: 'FIXED' },
+      { status: 'CLOSED', resolution: 'FIXED' }
+    ]
+  })
+  const result = await enforceSonarPullRequestGate(options(), {
+    fetchImpl,
+    log: () => {}
+  })
+  assert.equal(result.issueCount, 0)
 })
 
 test('a passing Sonar quality gate cannot hide unreviewed hotspots', async () => {

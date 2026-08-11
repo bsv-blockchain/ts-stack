@@ -25,14 +25,45 @@ function configuredChaintracksClient(chain: Chain, serviceUrl: string): Chaintra
 }
 
 /**
+ * True when running under a browser-style runtime — a real browser tab, or
+ * the embedded webview a desktop wallet shell hosts its wallet logic in
+ * (Metanet Client / User Wallet are Tauri WKWebViews) — where `fetch` is
+ * subject to CORS enforcement that Node-style runtimes do not apply.
+ */
+function isBrowserRuntime(): boolean {
+  return typeof window !== 'undefined' && window.document !== undefined
+}
+
+/**
  * Returns the credential-free default ChainTracks client for a supported
  * public network, or an operator-configured client for stn/tstn.
+ *
+ * BROWSER RUNTIMES get the legacy CORS-enabled Chaintracks service for
+ * main/test. The Go Chaintracks deployments (`arcade-v2-*.bsvblockchain.tech`)
+ * currently serve no `Access-Control-Allow-Origin` header and answer OPTIONS
+ * preflights with 404 (verified live 2026-08-11), so every fetch from a
+ * browser-hosted wallet is CORS-blocked (WebKit surfaces it as
+ * `TypeError: Load failed`) and the wallet loses `getHeight`, headers and
+ * merkle-root validation wholesale. The repository service contract
+ * (AGENTS.md: "browser, mobile, and unknown-domain clients must not be
+ * silently blocked by CORS") requires a default that browsers can actually
+ * reach. Once the Go deployments serve CORS (and a browser-run conformance
+ * check proves it), this branch can be removed and browsers can share the v2
+ * default. Node runtimes are unchanged.
  */
 export function createDefaultChaintracksClient(chain: Exclude<Chain, 'mock'>): ChaintracksClientApi {
   switch (chain) {
     case 'main':
     case 'test':
+      if (isBrowserRuntime()) {
+        return new ChaintracksServiceClient(chain, `https://${chain}net-chaintracks.babbage.systems`)
+      }
+      return new GoChaintracksServiceClient(chain, arcadeDefaultUrl(chain)!, {
+        apiPrefix: '/chaintracks/v2'
+      })
     case 'ttn':
+      // No legacy CORS-enabled deployment exists for ttn — browser callers
+      // inherit the v2 endpoint until it serves CORS.
       return new GoChaintracksServiceClient(chain, arcadeDefaultUrl(chain)!, {
         apiPrefix: '/chaintracks/v2'
       })

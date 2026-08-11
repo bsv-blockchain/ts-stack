@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Keep mainnet and testnet ChainTracks usable from browser and webview wallets:
+  browser runtimes temporarily select the CORS-enabled legacy service while
+  Node runtimes retain Arcade/go-chaintracks v2. `Services.getHeight` now falls
+  back to WhatsOnChain if ChainTracks is unavailable and preserves the original
+  ChainTracks error when both providers fail.
 - Route `ttn` wallets through the isolated `teratestnet` overlay preset and
   enable the public TTN Arcade broadcaster/proof provider by default. TTN does
   not register the incompatible legacy ARC BEEF fallback. Other chain defaults
@@ -33,32 +38,42 @@ attention to changes that materially alter behavior or extend functionality.
   The
   Arcade SSE cursor advances only after both event storage work and cursor
   persistence succeed; either failure leaves the event queued for ordered retry.
+- Replace 32-satoshi default-basket fragments with a progressive liquidity
+  policy targeting 144 useful 5,000-satoshi outputs. New actions create at most
+  eight outputs from real surplus and migrate at most four fee-positive legacy
+  fragments, while a same-tier compatibility plan guarantees that optional
+  shaping cannot refuse an action the former planner could fund. Explicitly
+  funded actions materialize change from their existing surplus without
+  gathering pool inputs, and SQLite policy migrations use sync-compatible UTC
+  ISO timestamps.
+- Prefer completed, then unproven, then sending parents. Plans above 16 inputs
+  compare exact transaction-plus-BEEF bytes before accepting pending ancestry;
+  pending change remains an unconditional last-resort funding source. Align
+  action-batch reservation/planning and add a read-only Monitor liquidity
+  report. All work limits are configurable and accept `-1` for explicit
+  operator-selected unlimited behavior.
+- Restore delayed broadcast for durable permission-token persistence. Permission
+  grants no longer inherit network-broadcast latency; the managed-change policy
+  handles queued ancestry without hiding it or preferring it over settled funds.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`
   membership, so unrelated immediate actions and `noSend` roots cannot be
   captured by or commit a workspace. Add an exact-input resume protocol for
   expired leases, structured lifecycle errors, and a provider-enforced
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
-- Keep the resumable lifecycle and fail-safe reconciliation cost bounded: the
-  retained platform contract measures 1,557,683 raw / 366,927 gzip / 287,337
-  Brotli bytes with Vite and 1,215,983 raw / 333,466 gzip / 268,497 Brotli
-  bytes with esbuild. Browser ceilings advance only to the next 1,000-byte
-  boundary, each by at most 0.70%. Mobile measures 1,617,544 Metro bytes and
-  3,271,146 raw Hermes bytes; only the Hermes raw ceiling advances, by less
-  than 0.60%, while every compressed and Metro ceiling remains unchanged.
+- Keep the combined action-batch, managed-liquidity, browser-fallback, and
+  fail-safe reconciliation browser/mobile cost bounded by exact packed-artifact
+  contracts. Local verification measures 1,557,683 raw / 366,927 gzip / 287,337
+  Brotli bytes with Vite, 1,215,983 raw / 333,466 gzip / 268,497 Brotli bytes
+  with esbuild, 1,617,544 raw Metro bytes, and 3,271,146 raw / 1,302,110 gzip /
+  1,025,812 Brotli Hermes bytes. Reviewed raw ceilings are 1,561,000 Vite bytes,
+  1,220,000 esbuild bytes, 1,710,000 Metro bytes, and 3,275,000 Hermes bytes;
+  compressed ceilings remain independently governed.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,
   so the name check left remote stores with `endpointURL: undefined` while
   sync still worked; clients that select a backup by URL (make primary) failed.
-- Allow immediate actions to chain wallet-managed change from transactions
-  awaiting background broadcast when settled change is insufficient. The child
-  broadcast recursively includes the delayed parent BEEF, preventing a large
-  funding output from making the wallet appear temporarily unfunded while
-  preserving settled-change preference and delayed-broadcast semantics.
-- Finish broadcasting durable permission-token grants before resuming the
-  waiting application request, preventing the grant transaction from briefly
-  reserving the wallet's funding inputs out from under the resumed action.
 - Let Storage Server operators select an explicit listener host while retaining
   the historical omitted-host behavior for existing callers. The official
   Wallet Infrastructure image uses this to bind direct-mode traffic on IPv4

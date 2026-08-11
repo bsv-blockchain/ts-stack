@@ -1,4 +1,4 @@
-import { alignLeft, alignRight, asNumber, toAdminStatsLog } from '../adminServer'
+import { alignLeft, alignRight, asNumber, normalizeReviewMode, toAdminStatsLog } from '../adminServer'
 import { renderAdminPage } from '../adminUi'
 
 describe('storage admin diagnostic formatting', () => {
@@ -29,9 +29,16 @@ describe('storage admin diagnostic formatting', () => {
 
     expect(page).toContain('<option value="scan">scan only</option>')
     expect(page).toContain('<option value="release">release confirmed-spent outputs</option>')
-    expect(page).toContain("const release = byId('utxoAction').value === 'release'")
+    expect(page).toContain("const release = mode !== 'liquidity' && byId('utxoAction').value === 'release'")
     expect(page).toContain('Release only outputs conclusively confirmed spent?')
     expect(page).toContain('JSON.stringify({ identityKey, mode, release, pageLimit: 20, offset })')
     expect(page).toContain('if (result.complete || result.nextOffset == null) break')
+  })
+
+  test('exposes a read-only managed-change liquidity review mode', () => {
+    expect(normalizeReviewMode('liquidity')).toBe('liquidity')
+    expect(normalizeReviewMode('change')).toBe('change')
+    expect(normalizeReviewMode('unknown')).toBe('all')
+    expect(renderAdminPage()).toContain('<option value="liquidity">managed-change liquidity (read only)</option>')
   })
 })

@@ -1,12 +1,32 @@
+import { LockingScript, PushDrop } from '@bsv/sdk'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
 
 describe('WalletPermissionsManager permission settlement', () => {
-  it('finishes broadcasting grouped permission tokens before the grant returns', async () => {
-    let finishBroadcast: (() => void) | undefined
-    const broadcastFinished = new Promise<void>(resolve => {
-      finishBroadcast = resolve
-    })
-    const createAction = jest.fn(async () => await broadcastFinished)
+  afterEach(() => jest.restoreAllMocks())
+
+  it('queues a single durable permission token without inheriting broadcast latency', async () => {
+    const createAction = jest.fn(async () => ({ txid: 'single-permission-token' }))
+    const manager = Object.create(WalletPermissionsManager.prototype) as WalletPermissionsManager
+    const internals = manager as any
+    internals.adminOriginator = 'admin.com'
+    internals.underlying = {}
+    internals.createAction = createAction
+    internals.buildPushdropFields = jest.fn().mockResolvedValue([])
+    internals.buildTagsForRequest = jest.fn().mockReturnValue([])
+    jest.spyOn(PushDrop.prototype, 'lock').mockResolvedValue(LockingScript.fromHex('51'))
+
+    await internals.createPermissionOnChain({ type: 'basket', originator: 'todo.example', basket: 'todo tokens' }, 0)
+
+    expect(createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { acceptDelayedBroadcast: true }
+      }),
+      'admin.com'
+    )
+  })
+
+  it('queues grouped permission tokens without inheriting network-broadcast latency', async () => {
+    const createAction = jest.fn(async () => ({ txid: 'permission-token-transaction' }))
     const manager = Object.create(WalletPermissionsManager.prototype) as WalletPermissionsManager
     const internals = manager as any
     internals.adminOriginator = 'admin.com'
@@ -22,32 +42,22 @@ describe('WalletPermissionsManager permission settlement', () => {
       }
     }))
 
-    let settled = false
-    const grant = internals
-      .createPermissionTokensBestEffort(
-        [
-          {
-            request: { type: 'basket', originator: 'todo.example', basket: 'todo tokens' },
-            expiry: 0
-          }
-        ],
-        true
-      )
-      .then(() => {
-        settled = true
-      })
+    const granted = await internals.createPermissionTokensBestEffort(
+      [
+        {
+          request: { type: 'basket', originator: 'todo.example', basket: 'todo tokens' },
+          expiry: 0
+        }
+      ],
+      true
+    )
 
-    await new Promise(resolve => setImmediate(resolve))
-    expect(settled).toBe(false)
+    expect(granted).toHaveLength(1)
     expect(createAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: { acceptDelayedBroadcast: false }
+        options: { acceptDelayedBroadcast: true }
       }),
       expect.any(String)
     )
-
-    finishBroadcast?.()
-    await grant
-    expect(settled).toBe(true)
   })
 })
