@@ -5,7 +5,9 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
- * Use the reviewByIdentityKey method to review the utxos of a specific user by their identityKey.
+ * Use the reviewByIdentityKey method to scan the UTXOs of a specific user by
+ * identity key. The scan is read-only unless the caller explicitly requests
+ * release, and release remains blocked if any provider result is inconclusive.
  *
  * The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
  */
@@ -21,7 +23,7 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     public triggerMsecs = 0,
     public userLimit = 10,
     public userOffset = 0,
-    public tags: string[] = ['release', 'all']
+    public tags: string[] = ['all']
   ) {
     super(monitor, TaskReviewUtxos.taskName)
   }
@@ -37,8 +39,12 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     return 'TaskReviewUtxos is disabled; use reviewByIdentityKey instead.\n'
   }
 
-  async reviewByIdentityKey (identityKey: string, mode: 'all' | 'change' = 'all'): Promise<string> {
-    const tags = ['release', ...(mode === 'all' ? ['all'] : [])]
+  async reviewByIdentityKey (
+    identityKey: string,
+    mode: 'all' | 'change' = 'all',
+    release = false
+  ): Promise<string> {
+    const tags = [...(release ? ['release'] : []), ...(mode === 'all' ? ['all'] : [])]
     const vargs: Validation.ValidListOutputsArgs = {
       basket: specOpInvalidChange,
       tags,
@@ -78,7 +84,7 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     total: number,
     tags: string[]
   ): string {
-    const action = tags.includes('release') ? 'updated to unspendable' : 'found'
+    const action = tags.includes('release') ? 'confirmed spent and updated to unspendable' : 'confirmed spent'
     const target = tags.includes('all') ? 'spendable utxos' : 'spendable change utxos'
     let log = `userId ${user.userId}: ${totalOutputs} ${target} ${action}, total ${total}, ${user.identityKey}\n`
     for (const output of outputs) {

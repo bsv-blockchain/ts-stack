@@ -45,6 +45,7 @@ import { WalletError } from '../sdk/WalletError'
 import { doubleSha256BE, sha256Hash, wait } from '../utility/utilityHelpers'
 import { TableOutput } from '../storage/schema/tables/TableOutput'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
+import { classifyOutputUtxo, requireConclusiveUtxo } from './classifyOutputUtxo'
 
 export class Services implements WalletServices {
   static readonly getStatusForTxidsBatchLimit = 20
@@ -364,15 +365,7 @@ export class Services implements WalletServices {
   }
 
   async isUtxo(output: TableOutput): Promise<boolean> {
-    if (output.lockingScript == null) {
-      throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
-    }
-    const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
-    const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
-    if (or.status !== 'success' || or.isUtxo == null) {
-      throw or.error ?? new WERR_INVALID_OPERATION('No UTXO provider returned a conclusive result.')
-    }
-    return or.isUtxo
+    return requireConclusiveUtxo(await classifyOutputUtxo(this, output))
   }
 
   async getUtxoStatus(

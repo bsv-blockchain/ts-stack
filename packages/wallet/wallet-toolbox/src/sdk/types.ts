@@ -158,9 +158,10 @@ export const specOpWalletManagedUtxos = '284570a6213a74ba861c38b1cf790e1e400d9cf
 /**
  * `listOutputs` special operation basket name value.
  *
- * Returns currently spendable wallet change outputs that fail to validate as unspent transaction outputs.
+ * Returns currently spendable wallet change outputs conclusively confirmed spent.
+ * The operation rejects if any candidate cannot be classified conclusively.
  *
- * Optional tag value 'release'. If present, updates invalid change outputs to not spendable.
+ * Optional tag value 'release'. If present, atomically updates only confirmed-spent change outputs to not spendable after rechecking current ownership and allocation state.
  *
  * Optional tag value 'all'. If present, processes all spendable true outputs, independent of baskets, but basket must be defined.
  */

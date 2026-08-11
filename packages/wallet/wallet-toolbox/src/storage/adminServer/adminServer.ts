@@ -6,6 +6,7 @@ import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
 import { formatUnknownForLog as formatAdminValue } from '../../utility/formatUnknown'
 import { renderAdminPage } from './adminUi'
+import { runAdminUtxoReview } from './reviewUtxos'
 import path from 'node:path'
 import {
   bodyParserErrorHandler,
@@ -327,13 +328,13 @@ function normalizeReviewMode (value: unknown): 'all' | 'change' {
 }
 
 function getReviewUtxosTask (context: MonitorAdminContext): {
-  reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change') => Promise<string>
+  reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change', release?: boolean) => Promise<string>
 } {
   const monitor = context.daemon.setup?.monitor
   if (monitor == null) throw new Error('Monitor is not available.')
 
   const task = [...monitor._tasks, ...monitor._otherTasks].find(item => item.name === 'ReviewUtxos') as
-    | { reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change') => Promise<string> }
+    | { reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change', release?: boolean) => Promise<string> }
     | undefined
 
   if ((task?.reviewByIdentityKey) == null) {
@@ -422,27 +423,13 @@ async function reviewUtxosByIdentityKey (
   context: MonitorAdminContext,
   requestedBy: string,
   userInput: string,
-  mode: 'all' | 'change'
+  mode: 'all' | 'change',
+  release: boolean
 ) {
   const storage = await getStorage(context)
   const task = getReviewUtxosTask(context)
   const identityKey = await resolveIdentityKeyFromInput(context, userInput)
-  const log = await task.reviewByIdentityKey(identityKey, mode)
-
-  await storage.insertMonitorEvent({
-    created_at: new Date(),
-    updated_at: new Date(),
-    id: 0,
-    event: 'AdminReviewUtxos',
-    details: JSON.stringify({ requestedBy, identityKey, mode, log })
-  })
-
-  return {
-    requestedBy,
-    identityKey,
-    mode,
-    log
-  }
+  return await runAdminUtxoReview({ storage, task, requestedBy, identityKey, mode, release })
 }
 
 async function getReqDetail (context: MonitorAdminContext, provenTxReqId: number) {
@@ -657,7 +644,8 @@ export class AdminServer {
       const userInput = typeof req.body?.identityKey === 'string' ? req.body.identityKey.trim() : ''
       if (!userInput) throw new Error('identityKey or userId is required.')
       const mode = normalizeReviewMode(req.body?.mode)
-      res.json(await reviewUtxosByIdentityKey(this.context, req.auth.identityKey, userInput, mode))
+      const release = req.body?.release === true
+      res.json(await reviewUtxosByIdentityKey(this.context, req.auth.identityKey, userInput, mode, release))
     })
 
     this.app.get('/admin/api/proven-tx-reqs/review', async (req: any, res: any) => {

@@ -30,6 +30,7 @@ import { MockChainStorage } from './MockChainStorage'
 import { MockChainTracker } from './MockChainTracker'
 import { MockMiner } from './MockMiner'
 import { computeMerklePath } from './merkleTree'
+import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 
 const mockFiatRatesByUsd: Record<FiatCurrencyCode, number> = {
   USD: 1,
@@ -394,12 +395,7 @@ export class MockServices implements WalletServices {
   }
 
   async isUtxo (output: TableOutput): Promise<boolean> {
-    if (output.lockingScript == null) {
-      throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
-    }
-    const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
-    const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
-    return or.isUtxo === true
+    return requireConclusiveUtxo(await classifyOutputUtxo(this, output))
   }
 
   async getBsvExchangeRate (): Promise<number> {

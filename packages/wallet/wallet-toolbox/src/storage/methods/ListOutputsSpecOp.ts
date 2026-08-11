@@ -9,7 +9,13 @@ import {
   specOpWalletManagedUtxos
 } from '../../sdk/types'
 import { verifyId, verifyInteger, verifyOne } from '../../utility/utilityHelpers'
-import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import {
+  classifyOutputUtxo,
+  mapWithConcurrency,
+  type OutputUtxoClassification,
+  UTXO_PROVIDER_MAX_CONCURRENCY
+} from '../../services/classifyOutputUtxo'
 
 export interface ListOutputsSpecOp {
   name: string
@@ -55,25 +61,43 @@ export interface ListOutputsSpecOp {
   tagsParamsCount?: number
 }
 
-const INVALID_CHANGE_MAX_CONCURRENCY = 12
+const INVALID_CHANGE_MAX_AUDIT_PROVIDERS = 8
+const INVALID_CHANGE_MAX_PROVIDER_NAME_LENGTH = 128
 
-async function runWithConcurrency<T>(
-  values: T[],
-  maxConcurrency: number,
-  worker: (value: T) => Promise<void>
-): Promise<void> {
-  const active: Array<Promise<void>> = []
-  for (const value of values) {
-    const task = worker(value).finally(() => {
-      const i = active.indexOf(task)
-      if (i >= 0) active.splice(i, 1)
-    })
-    active.push(task)
-    if (active.length >= maxConcurrency) {
-      await Promise.race(active)
-    }
-  }
-  await Promise.all(active)
+interface InvalidChangeClassification {
+  output: TableOutput
+  status: OutputUtxoClassification
+}
+
+function invalidChangeAuditDetails(
+  classifications: InvalidChangeClassification[],
+  released: number,
+  userId: number | undefined,
+  reason: 'inconclusive-provider-result' | 'provider-confirmed-spent'
+): string {
+  const allProviders = [
+    ...new Set(
+      classifications.map(result =>
+        result.status.provider.slice(0, INVALID_CHANGE_MAX_PROVIDER_NAME_LENGTH)
+      )
+    )
+  ]
+  const providers = allProviders.slice(0, INVALID_CHANGE_MAX_AUDIT_PROVIDERS)
+  const confirmedSpent = classifications.filter(result => result.status.verdict === 'spent')
+  return JSON.stringify({
+    operation: 'specOpInvalidChange',
+    reason,
+    userId,
+    checked: classifications.length,
+    confirmedUnspent: classifications.filter(result => result.status.verdict === 'unspent').length,
+    confirmedSpent: confirmedSpent.length,
+    unknown: classifications.filter(result => result.status.verdict === 'unknown').length,
+    confirmedSpentSatoshis: confirmedSpent.reduce((sum, result) => sum + result.output.satoshis, 0),
+    released,
+    providers,
+    providerCount: allProviders.length,
+    providersTruncated: allProviders.length > providers.length
+  })
 }
 
 const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
@@ -115,30 +139,91 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         specOpTags: string[],
         outputs: TableOutput[]
       ): Promise<TableOutput[]> => {
-        if (specOpTags.includes('release')) {
-          await s.reviewStatus({ agedLimit: new Date(0) })
-        }
-        const invalidOutputIds = new Set<number>()
         const services = s.getServices()
-        await runWithConcurrency(outputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
-          if (!o.basketId) return // only care about outputs assigned to baskets.
-          await s.validateOutputScript(o)
-          let ok: boolean | undefined = false
-          if (o.lockingScript != null && o.lockingScript.length > 0) {
-            ok = await services.isUtxo(o)
-          } else {
-            ok = undefined
+        const candidates = outputs.filter(output => output.basketId != null)
+        const classifications = await mapWithConcurrency(candidates, UTXO_PROVIDER_MAX_CONCURRENCY, async output => {
+          try {
+            await s.validateOutputScript(output)
+          } catch (error: unknown) {
+            return {
+              output,
+              status: {
+                verdict: 'unknown' as const,
+                provider: '<script-validation-error>',
+                error
+              }
+            }
           }
-          if (ok === false) {
-            invalidOutputIds.add(o.outputId)
+          return {
+            output,
+            status: await classifyOutputUtxo(services, output)
           }
         })
-        const filteredOutputs = outputs.filter(o => invalidOutputIds.has(o.outputId))
-        if (specOpTags.includes('release')) {
-          await runWithConcurrency(filteredOutputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
-            await s.updateOutput(o.outputId, { spendable: false })
-            o.spendable = false
+        const unknown = classifications.filter(result => result.status.verdict === 'unknown')
+        const release = specOpTags.includes('release')
+        if (unknown.length > 0) {
+          if (release) {
+            const now = new Date()
+            await s.insertMonitorEvent({
+              created_at: now,
+              updated_at: now,
+              id: 0,
+              event: 'InvalidChangeReleaseBlocked',
+              details: invalidChangeAuditDetails(
+                classifications,
+                0,
+                auth.userId,
+                'inconclusive-provider-result'
+              )
+            })
+          }
+          throw new WERR_INVALID_OPERATION(
+            `UTXO review was inconclusive for ${unknown.length} of ${classifications.length} candidates; no outputs were changed.`
+          )
+        }
+
+        const filteredOutputs = classifications
+          .filter(result => result.status.verdict === 'spent')
+          .map(result => result.output)
+        if (release) {
+          const releasedOutputIds = new Set<number>()
+          await s.transaction(async trx => {
+            for (const output of filteredOutputs) {
+              const current = await s.findOutputById(output.outputId, trx, true)
+              if (current == null || current.userId !== auth.userId) {
+                throw new WERR_INVALID_PARAMETER('outputId', `owned by user ${auth.userId}`)
+              }
+              if (current.spendable !== true || current.spentBy != null) {
+                throw new WERR_INVALID_OPERATION(
+                  `Output ${output.outputId} changed state during UTXO review; no outputs were changed.`
+                )
+              }
+              const updated = await s.updateOutput(output.outputId, { spendable: false }, trx)
+              if (updated !== 1) {
+                throw new WERR_INVALID_PARAMETER('outputId', `updated exactly once: ${output.outputId}`)
+              }
+              releasedOutputIds.add(output.outputId)
+            }
+            const now = new Date()
+            await s.insertMonitorEvent(
+              {
+                created_at: now,
+                updated_at: now,
+                id: 0,
+                event: 'InvalidChangeRelease',
+                details: invalidChangeAuditDetails(
+                  classifications,
+                  releasedOutputIds.size,
+                  auth.userId,
+                  'provider-confirmed-spent'
+                )
+              },
+              trx
+            )
           })
+          for (const output of filteredOutputs) {
+            if (releasedOutputIds.has(output.outputId)) output.spendable = false
+          }
         }
         return filteredOutputs
       }

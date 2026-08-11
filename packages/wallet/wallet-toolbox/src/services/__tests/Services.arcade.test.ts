@@ -80,7 +80,7 @@ describe('Services Arcade wiring', () => {
     })
 
     await expect(services.isUtxo({ lockingScript: [0], txid: '11'.repeat(32), vout: 0 } as any)).rejects.toThrow(
-      'No UTXO provider returned a conclusive result'
+      'UTXO provider <noservices> did not return a conclusive result'
     )
   })
 

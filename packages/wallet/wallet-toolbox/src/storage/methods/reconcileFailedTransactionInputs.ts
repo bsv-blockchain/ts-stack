@@ -1,9 +1,14 @@
-import { Transaction, Utils, WalletLoggerInterface } from '@bsv/sdk'
+import { Transaction, WalletLoggerInterface } from '@bsv/sdk'
 import * as sdk from '../../sdk'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
 import { TableOutput } from '../schema/tables'
 import { verifyId } from '../../utility/utilityHelpers'
+import {
+  classifyOutputUtxo,
+  mapWithConcurrency,
+  UTXO_PROVIDER_MAX_CONCURRENCY
+} from '../../services/classifyOutputUtxo'
 
 export interface FailedInputReconciliationResult {
   checked: number
@@ -107,8 +112,10 @@ export async function markConfirmedStaleReqInputs (
     if (!uniqueInputs.has(key)) uniqueInputs.set(key, localInput)
   }
 
-  await Promise.all(
-    [...uniqueInputs.values()].map(async ({ output, outpoint }) => {
+  await mapWithConcurrency(
+    [...uniqueInputs.values()],
+    UTXO_PROVIDER_MAX_CONCURRENCY,
+    async ({ output, outpoint }) => {
       const key = `${outpoint.txid}.${outpoint.vout}`
       if (output.lockingScript == null) {
         try {
@@ -122,18 +129,16 @@ export async function markConfirmedStaleReqInputs (
         verdicts.set(key, 'inconclusive')
         return
       }
-      try {
-        const hash = services.hashOutputScript(Utils.toHex(output.lockingScript))
-        const status = await services.getUtxoStatus(hash, undefined, key)
-        if (status.status !== 'success' || status.isUtxo == null) {
-          verdicts.set(key, 'inconclusive')
-        } else {
-          verdicts.set(key, status.isUtxo ? 'utxo' : 'stale')
-        }
-      } catch {
-        verdicts.set(key, 'inconclusive')
-      }
-    })
+      const classification = await classifyOutputUtxo(services, output)
+      verdicts.set(
+        key,
+        classification.verdict === 'unknown'
+          ? 'inconclusive'
+          : classification.verdict === 'unspent'
+            ? 'utxo'
+            : 'stale'
+      )
+    }
   )
 
   const staleOutpoints = new Set<string>()

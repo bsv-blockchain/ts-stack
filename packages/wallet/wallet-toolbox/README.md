@@ -88,6 +88,18 @@ Merkle proof validated by the configured chain tracker. Arcade SSE events are
 acknowledged in order only after their storage update and cursor persistence
 succeed, so a transient storage failure is retried instead of skipped.
 
+Invalid-change review applies the same positive-evidence rule. It first
+classifies the complete candidate set with bounded concurrency. Only an
+explicit successful `isUtxo: false` result is considered spent; a provider
+error, rate limit, missing provider, missing script, or malformed response is
+unknown and blocks the entire release before any output changes. Confirmed
+spent outputs are rechecked for ownership and allocation state, then released
+atomically with a bounded audit event recording counts, value, and providers;
+a concurrent state change aborts the whole transaction.
+The Monitor Admin UTXO tool scans by default and requires a separately confirmed
+release action. These safeguards also cover direct wallet and remote-storage
+calls, not only the monitor UI.
+
 Core ChainTracks factories accept a final source-options argument when an
 application must override the defaults. Set `disableChaintracks`, `disableCdn`,
 or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an

@@ -26,3 +26,16 @@ those rows must remain as history only; they must not be treated as funding cand
 left as phantom UTXOs in raw storage accounting. `reviewStatus` repeats the same repair for
 legacy rows and only restores inputs or neutralizes generated outputs when the failed
 transaction has no active ProvenTxReq that could still reconcile.
+
+## Invalid-change review
+
+Invalid-change review never treats provider absence or failure as spent
+evidence. It classifies the complete candidate set as confirmed unspent,
+confirmed spent, or unknown with bounded concurrency. Any unknown result blocks
+a requested release before output state changes. Otherwise, the confirmed-spent
+subset is rechecked inside one storage transaction. Any row no longer owned by
+the authenticated user, no longer spendable, or currently allocated aborts the
+whole release.
+The transaction also records a bounded `InvalidChangeRelease` audit event;
+blocked destructive attempts record `InvalidChangeReleaseBlocked` without
+changing outputs.

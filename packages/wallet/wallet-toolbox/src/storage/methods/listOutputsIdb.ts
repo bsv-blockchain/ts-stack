@@ -122,7 +122,7 @@ async function loadIdbOutputs(
       ...(specOp?.managedChangeOnly ? managedChangeOutputFields : {})
     },
     txStatus: ['completed', 'unproven', 'nosend', 'sending'] as TransactionStatus[],
-    noScript: true,
+    noScript: specOp?.includeOutputScripts !== true,
     orderDescending
   }
   const pageManagedChange =
@@ -266,6 +266,7 @@ export async function listOutputsIdb(
         specOpTags,
         outputs
       )
+      result.totalOutputs = outputs.length
     }
     if (specOp.resultFromOutputs != null) {
       return specOp.resultFromOutputs(storage, auth, vargs, specOpTags, outputs)

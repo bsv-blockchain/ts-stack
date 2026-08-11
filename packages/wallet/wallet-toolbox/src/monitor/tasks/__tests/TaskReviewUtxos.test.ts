@@ -41,7 +41,7 @@ function makeMonitor (users: any[], outputsByUserId: Record<number, any[]>) {
 }
 
 describe('TaskReviewUtxos', () => {
-  test('0 reviewByIdentityKey reviews all invalid utxos for the matching user', async () => {
+  test('0 reviewByIdentityKey scans all invalid utxos without releasing by default', async () => {
     const users = [makeUser(1), makeUser(2)]
     const m = makeMonitor(users, {
       1: [makeOutput('tx1.0', 50, false)],
@@ -56,18 +56,18 @@ describe('TaskReviewUtxos', () => {
       { userId: 1, identityKey: 'key-1' },
       expect.objectContaining({
         basket: specOpInvalidChange,
-        tags: ['release', 'all'],
+        tags: ['all'],
         tagQueryMode: 'all',
         limit: 0,
         offset: 0
       })
     )
     expect(m.logEvent).not.toHaveBeenCalled()
-    expect(log).toContain('userId 1: 1 spendable utxos updated to unspendable')
+    expect(log).toContain('userId 1: 1 spendable utxos confirmed spent')
     expect(log).toContain('tx1.0 50 now spent')
   })
 
-  test('1 reviewByIdentityKey limits review to invalid change utxos when mode is change', async () => {
+  test('1 reviewByIdentityKey limits a read-only review to invalid change utxos', async () => {
     const users = [makeUser(1)]
     const m = makeMonitor(users, { 1: [makeOutput('tx1.0', 50, false)] })
     const task = new TaskReviewUtxos(m.monitor as any)
@@ -77,12 +77,26 @@ describe('TaskReviewUtxos', () => {
     expect(m.listOutputs).toHaveBeenCalledWith(
       { userId: 1, identityKey: 'key-1' },
       expect.objectContaining({
-        tags: ['release']
+        tags: []
       })
     )
   })
 
-  test('2 reviewByIdentityKey returns no-findings summary when the user has no invalid utxos', async () => {
+  test('2 reviewByIdentityKey requires an explicit release argument before changing state', async () => {
+    const users = [makeUser(1)]
+    const m = makeMonitor(users, { 1: [makeOutput('tx1.0', 50, false)] })
+    const task = new TaskReviewUtxos(m.monitor as any)
+
+    const log = await task.reviewByIdentityKey('key-1', 'all', true)
+
+    expect(m.listOutputs).toHaveBeenCalledWith(
+      { userId: 1, identityKey: 'key-1' },
+      expect.objectContaining({ tags: ['release', 'all'] })
+    )
+    expect(log).toContain('confirmed spent and updated to unspendable')
+  })
+
+  test('3 reviewByIdentityKey returns no-findings summary when the user has no invalid utxos', async () => {
     const users = [makeUser(1)]
     const m = makeMonitor(users, {})
     const task = new TaskReviewUtxos(m.monitor as any)
@@ -92,7 +106,7 @@ describe('TaskReviewUtxos', () => {
     expect(log).toBe('userId 1: no invalid utxos found, key-1\n')
   })
 
-  test('3 reviewByIdentityKey reports when the identity key does not exist', async () => {
+  test('4 reviewByIdentityKey reports when the identity key does not exist', async () => {
     const m = makeMonitor([], {})
     const task = new TaskReviewUtxos(m.monitor as any)
 
@@ -102,7 +116,7 @@ describe('TaskReviewUtxos', () => {
     expect(log).toBe('identityKey missing-key was not found\n')
   })
 
-  test('4 trigger and runTask are stubbed out', async () => {
+  test('5 trigger and runTask are stubbed out', async () => {
     const m = makeMonitor([], {})
     const task = new TaskReviewUtxos(m.monitor as any)
 

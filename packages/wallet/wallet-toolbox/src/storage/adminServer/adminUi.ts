@@ -390,7 +390,13 @@ export function renderAdminPage (): string {
               <option value="change">change only</option>
             </select>
           </label>
-          <button id="runUtxoReview" class="primary">Run Review</button>
+          <label>Action
+            <select id="utxoAction">
+              <option value="scan">scan only</option>
+              <option value="release">release confirmed-spent outputs</option>
+            </select>
+          </label>
+          <button id="runUtxoReview" class="primary">Run UTXO Check</button>
         </div>
         <div class="toolbar">
           <button id="loadUtxoUsers">Load Recently Active Users</button>
@@ -893,13 +899,17 @@ export function renderAdminPage (): string {
       }
       byId('utxoIdentityKey').value = identityKey
       const mode = byId('utxoMode').value === 'change' ? 'change' : 'all'
+      const release = byId('utxoAction').value === 'release'
+      if (release && !window.confirm('Release only outputs conclusively confirmed spent? This changes wallet state.')) {
+        return
+      }
       setButtonPending('runUtxoReview', true, 'Running...')
       byId('utxoReviewLog').textContent = 'Running review...'
       try {
         const result = await api('/admin/api/review-utxos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityKey, mode })
+          body: JSON.stringify({ identityKey, mode, release })
         })
         byId('utxoReviewLog').textContent = result.log || ''
         setNotice('Authenticated as ' + result.requestedBy)

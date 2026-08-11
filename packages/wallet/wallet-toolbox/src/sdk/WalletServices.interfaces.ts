@@ -127,7 +127,8 @@ export interface WalletServices {
    * and ensures that the output's outpoint matches an unspent use of that script.
    *
    * @param output
-   * @returns true if the output appears to currently be spendable.
+   * @returns true if the output is conclusively unspent, or false if it is conclusively spent.
+   * @throws when no provider returns a successful explicit verdict.
    */
   isUtxo: (output: TableOutput) => Promise<boolean>
 

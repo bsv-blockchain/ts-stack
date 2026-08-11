@@ -15,22 +15,27 @@ attention to changes that materially alter behavior or extend functionality.
   the configured chain tracker may repair it. Arcade also participates in the
   shared transaction-status service so double-spend review remains conservative
   on networks with no explorer. Inconclusive or absent UTXO providers no longer
-  masquerade as a spent-output verdict. The Arcade SSE cursor now advances only
-  after both event storage work and cursor persistence succeed; either failure
-  leaves the event queued for ordered retry.
+  masquerade as a spent-output verdict in invalid-change release, stale-input
+  reconciliation, proof recovery, or storage diagnostics. Invalid-change review
+  classifies the complete batch with bounded concurrency, blocks release when
+  any result is unknown, and atomically updates only ownership-rechecked outputs
+  positively confirmed spent while recording bounded audit evidence. Monitor
+  Admin now scans by default and requires explicit confirmation to release. The
+  Arcade SSE cursor advances only after both event storage work and cursor
+  persistence succeed; either failure leaves the event queued for ordered retry.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`
   membership, so unrelated immediate actions and `noSend` roots cannot be
   captured by or commit a workspace. Add an exact-input resume protocol for
   expired leases, structured lifecycle errors, and a provider-enforced
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
-- Keep the resumable lifecycle's browser cost bounded: the retained platform
-  contract measures 1,548,179 raw / 364,550 gzip / 285,697 Brotli bytes with
-  Vite and 1,209,217 raw / 331,318 gzip / 267,001 Brotli bytes with esbuild;
-  every browser ceiling remains unchanged. Mobile measures 1,609,633 Metro
-  bytes and 3,253,366 raw Hermes bytes; only the Hermes raw ceiling advances,
-  by less than 0.15%, while every compressed and Metro ceiling remains
-  unchanged.
+- Keep the resumable lifecycle and fail-safe reconciliation cost bounded: the
+  retained platform contract measures 1,557,293 raw / 366,794 gzip / 287,373
+  Brotli bytes with Vite and 1,215,725 raw / 333,345 gzip / 268,550 Brotli
+  bytes with esbuild. Browser ceilings advance only to the next 1,000-byte
+  boundary, each by at most 0.70%. Mobile measures 1,617,036 Metro bytes and
+  3,270,524 raw Hermes bytes; only the Hermes raw ceiling advances, by less
+  than 0.55%, while every compressed and Metro ceiling remains unchanged.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

@@ -201,9 +201,15 @@ describe('proof completion fan-out', () => {
         }, trx)
       )
       activeStorage.setServices({
-        isUtxo: async () => {
+        hashOutputScript: () => 'aa'.repeat(32),
+        getUtxoStatus: async () => {
           expect(transactionActive).toBe(false)
-          return true
+          return {
+            name: 'mock',
+            status: 'success',
+            details: [],
+            isUtxo: true
+          }
         }
       } as unknown as WalletServices)
 
