@@ -190,7 +190,7 @@ export class IdentityClient {
     if (tx !== undefined) {
       // Submit the transaction to an overlay
       const broadcaster = new TopicBroadcaster(['tm_identity'], {
-        networkPreset: (await this.wallet.getNetwork({})).network
+        networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network
       })
       return await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
     }
@@ -329,7 +329,7 @@ export class IdentityClient {
   async revokeCertificateRevelation(serialNumber: Base64String): Promise<void> {
     // 1. Find existing UTXO
     const lookupResolver = new LookupResolver({
-      networkPreset: (await this.wallet.getNetwork({})).network
+      networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network
     })
     const result = await lookupResolver.query({
       service: 'ls_identity',
@@ -343,7 +343,7 @@ export class IdentityClient {
     }
 
     const topicBroadcaster = new SHIPBroadcaster(['tm_identity'], {
-      networkPreset: (await this.wallet.getNetwork({})).network,
+      networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network,
       requireAcknowledgmentFromAllHostsForTopics: [],
       requireAcknowledgmentFromAnyHostForTopics: [],
       requireAcknowledgmentFromSpecificHostsForTopics: { tm_identity: [] }

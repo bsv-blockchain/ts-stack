@@ -66,9 +66,9 @@ export function createDefaultWalletServicesOptions(
     deploymentId?: string,
     chaintracks?: ChaintracksClientApi,
     /**
-     * Optional Arcade endpoint. When provided (or when a default exists for the chain via
-     * `arcadeDefaultUrl`), Arcade is registered as the primary broadcaster ahead of ARC.
-     * Pass an empty string to explicitly disable the per-chain default.
+     * Optional Arcade endpoint. TTN uses its public Arcade endpoint by default; other
+     * chains remain opt-in. Arcade is registered as the primary broadcaster ahead of ARC.
+     * Pass an empty string to explicitly disable the TTN default.
      */
     arcadeUrl?: string,
     /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
@@ -137,12 +137,10 @@ export function createDefaultWalletServicesOptions(
     bitailsApiKey
   }
 
-  // Arcade (bsv-blockchain/arcade) primary broadcaster.
-  // Opt-in: enabled only when an explicit `arcadeUrl` is provided. Callers can pass
-  // `arcadeDefaultUrl(chain)` to use the known per-chain endpoint. Kept opt-in (rather
-  // than defaulted on) so existing consumers' broadcaster set is unchanged until the
-  // Arcade path has been validated end-to-end; flipping the default is a one-line change.
-  const resolvedArcadeUrl = arcadeUrl
+  // Arcade (bsv-blockchain/arcade) primary broadcaster. TTN has no compatible
+  // public ARC fallback, so it defaults to the known TTN Arcade endpoint. Existing
+  // mainnet/testnet provider sets remain opt-in and therefore unchanged.
+  const resolvedArcadeUrl = arcadeUrl ?? (chain === 'ttn' ? arcadeDefaultUrl(chain) : undefined)
   if (resolvedArcadeUrl != null && resolvedArcadeUrl !== '') {
     o.arcadeUrl = resolvedArcadeUrl
     o.arcadeConfig = {

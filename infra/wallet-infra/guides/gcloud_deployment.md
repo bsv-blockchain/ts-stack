@@ -174,7 +174,7 @@ Before deploying, create an env.yaml file in your local directory to store envir
 
 ```yaml
 NODE_ENV: "production"
-BSV_NETWORK: "main" # main | test
+BSV_NETWORK: "main" # main | test | ttn
 ENABLE_NGINX: "true"
 HTTP_PORT: "8080"
 SERVER_PRIVATE_KEY: "<PRIVATE_KEY_HEX_STRING>"

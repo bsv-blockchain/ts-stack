@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Added the `teratestnet` overlay preset with
+  `https://staging-messagebox.babbage.systems` as its network-specific default
+  Message Box host.
+
 ### Changed
 
 ### Deprecated

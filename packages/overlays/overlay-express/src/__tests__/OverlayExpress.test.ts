@@ -382,6 +382,16 @@ describe('OverlayExpress', () => {
       expect(overlayExpress.network).toBe('test')
     })
 
+    it('sets TTN without silently constructing a WhatsOnChain tracker', async () => {
+      overlayExpress.configureNetwork('ttn')
+      expect(overlayExpress.network).toBe('ttn')
+      await expect(
+        overlayExpress.chainTracker === 'scripts only'
+          ? Promise.resolve()
+          : overlayExpress.chainTracker.currentHeight()
+      ).rejects.toThrow('TTN requires configureChaintracks() or configureChainTracker()')
+    })
+
     it('should reinitialize chainTracker for network', () => {
       overlayExpress.configureNetwork('test')
       expect(overlayExpress.chainTracker).toBeDefined()

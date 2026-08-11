@@ -39,7 +39,8 @@ import {
   InternalizeOutput,
   Random,
   OriginatorDomainNameStringUnder250Bytes,
-  Beef
+  Beef,
+  type LookupNetworkPreset
 } from '@bsv/sdk'
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import * as Logger from './Utils/logger.js'
@@ -77,6 +78,7 @@ import {
 
 const DEFAULT_MAINNET_HOST = 'https://message-box-us-1.bsvb.tech'
 const DEFAULT_TESTNET_HOST = DEFAULT_MAINNET_HOST
+const DEFAULT_TTN_HOST = 'https://staging-messagebox.babbage.systems'
 
 /** Build status + description for a batch send result. */
 function buildBatchSendResult(
@@ -202,7 +204,7 @@ export class MessageBoxClient {
   private myIdentityKey?: string
   private readonly joinedRooms: Set<string> = new Set()
   private readonly lookupResolver: LookupResolver
-  private readonly networkPreset: 'local' | 'mainnet' | 'testnet'
+  private readonly networkPreset: LookupNetworkPreset
   private initialized = false
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
@@ -210,10 +212,10 @@ export class MessageBoxClient {
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
-   * @param {string} [options.host] - The base URL of the MessageBox server. If omitted, defaults to mainnet/testnet hosts.
+   * @param {string} [options.host] - The base URL of the MessageBox server. If omitted, defaults to the selected network's host.
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
-   * @param {'local' | 'mainnet' | 'testnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
+   * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -240,7 +242,12 @@ export class MessageBoxClient {
       originator = undefined
     } = options
 
-    const defaultHost = networkPreset === 'testnet' ? DEFAULT_TESTNET_HOST : DEFAULT_MAINNET_HOST
+    const defaultHost =
+      networkPreset === 'teratestnet'
+        ? DEFAULT_TTN_HOST
+        : networkPreset === 'testnet'
+          ? DEFAULT_TESTNET_HOST
+          : DEFAULT_MAINNET_HOST
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator

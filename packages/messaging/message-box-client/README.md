@@ -43,6 +43,19 @@ await messages.acknowledgeMessage({
 })
 ```
 
+TerraTestNet clients select the isolated overlay network and staging Message
+Box together:
+
+```ts
+const stagingMessages = new MessageBoxClient({
+  walletClient: wallet,
+  networkPreset: 'teratestnet'
+})
+```
+
+This defaults the transport host to
+`https://staging-messagebox.babbage.systems`; pass `host` to override it.
+
 `listMessages()` preserves its historical fetch-all behavior by following
 bounded server pages. Limit aggregate client memory when appropriate:
 

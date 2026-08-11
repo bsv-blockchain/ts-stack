@@ -1,11 +1,11 @@
-import { LookupResolver } from '../overlay-tools/index.js'
+import { LookupResolver, type LookupNetworkPreset } from '../overlay-tools/index.js'
 import * as StorageUtils from './StorageUtils.js'
 import PushDrop from '../script/templates/PushDrop.js'
 import Transaction from '../transaction/Transaction.js'
 import { Hash, Utils } from '../primitives/index.js'
 
 export interface DownloaderConfig {
-  networkPreset: 'mainnet' | 'testnet' | 'local'
+  networkPreset: LookupNetworkPreset
 }
 
 export interface DownloadResult {
@@ -14,7 +14,7 @@ export interface DownloadResult {
 }
 
 export class StorageDownloader {
-  private readonly networkPreset?: 'mainnet' | 'testnet' | 'local' = 'mainnet'
+  private readonly networkPreset?: LookupNetworkPreset = 'mainnet'
   private readonly lookupResolver: LookupResolver
 
   constructor(config?: DownloaderConfig) {

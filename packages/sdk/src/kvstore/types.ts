@@ -2,7 +2,7 @@ import { Beef } from '../transaction/Beef.js'
 import { PubKeyHex, WalletProtocol } from '../wallet/Wallet.interfaces.js'
 import { WalletInterface } from '../wallet/index.js'
 // Type-only import — erased at runtime, so it introduces no module cycle with overlay-tools.
-import type { LookupResolver } from '../overlay-tools/index.js'
+import type { LookupNetworkPreset, LookupResolver } from '../overlay-tools/index.js'
 
 /**
  * Configuration interface for GlobalKVStore operations.
@@ -24,7 +24,7 @@ export interface KVStoreConfig {
   /** Wallet interface for operations */
   wallet?: WalletInterface
   /** Network preset for overlay services */
-  networkPreset?: 'mainnet' | 'testnet' | 'local'
+  networkPreset?: LookupNetworkPreset
   /**
    * A pre-built lookup resolver to use for all overlay queries — both reads and
    * write-host (SHIP) discovery. When provided, it takes precedence and

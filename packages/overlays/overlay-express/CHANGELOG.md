@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Added the `ttn` runtime network, TTN SHIP/SLAP roots, and explicit
+  ChainTracks requirements for TerraTestNet nodes using Arcade propagation.
 - Added `configureEdgePolicy` for public/allowlisted browser access, bounded
   JSON and binary bodies, concurrency, Node HTTP timeouts, and configurable
   CSP/browser response headers.

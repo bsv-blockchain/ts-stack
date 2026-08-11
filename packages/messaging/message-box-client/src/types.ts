@@ -11,7 +11,8 @@ import {
   OutputTagStringUnder300Bytes,
   PositiveIntegerOrZero,
   PubKeyHex,
-  WalletInterface
+  WalletInterface,
+  type LookupNetworkPreset
 } from '@bsv/sdk'
 
 /**
@@ -40,7 +41,7 @@ export interface MessageBoxClientOptions {
    * Overlay network preset for routing resolution.
    * @default 'local'
    */
-  networkPreset?: 'local' | 'mainnet' | 'testnet'
+  networkPreset?: LookupNetworkPreset
 
   /**
    * Originator of the message box client.

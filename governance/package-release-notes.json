@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-06",
+  "lastReviewed": "2026-08-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -98,8 +98,8 @@
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.2.2",
       "releaseType": "minor",
-      "summary": "Follows bounded Message Box server pagination while preserving historical fetch-all behavior and adds offset/skip, total-limit, page-size, and optional page-ceiling controls.",
-      "migration": "Existing listMessages and listMessagesLite calls continue to fetch all available messages. Applications that need an aggregate memory ceiling should set limit and/or maxPages; no additional BRC-105 approval callback is required because AuthFetch uses wallet permissions."
+      "summary": "Adds first-class TerraTestNet overlay routing and selects the staging Message Box host when the teratestnet preset is used.",
+      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet; they may still provide host to override the staging Message Box default."
     },
     {
       "name": "@bsv/overlay",
@@ -111,16 +111,16 @@
     {
       "name": "@bsv/overlay-discovery-services",
       "publishedVersion": "2.1.1",
-      "releaseType": "patch",
-      "summary": "Hardens discovery URI, registry and lookup validation, preserves the historical lookup error class, and reduces production duplication.",
-      "migration": "No consumer migration is required; discovery records and public network behavior are unchanged."
+      "releaseType": "minor",
+      "summary": "Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services.",
+      "migration": "Existing mainnet and testnet advertisers are unchanged. TTN operators pass chain ttn and provision the staging storage and overlay endpoints before advertising."
     },
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.5.0",
-      "releaseType": "patch",
-      "summary": "Preserves forward-compatible browser preflights by adding every well-formed requested header to the known protocol defaults unless the operator configures a strict header allowlist.",
-      "migration": "No consumer migration is required. Omit OVERLAY_CORS_ALLOWED_HEADERS for additive compatibility, or set an exact comma-separated list to retain a strict browser request-header policy. Origin modes, authentication, authorization, and endpoint validation are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds a TerraTestNet runtime mode with TTN discovery roots, wallet advertising, and explicit ChainTracks requirements while retaining Arcade-first propagation.",
+      "migration": "Existing mainnet and testnet servers are unchanged. TTN servers call configureNetwork('ttn'), configureArcade with the TTN endpoint, and configureChaintracks or configureChainTracker before engine initialization."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -146,9 +146,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.3.1",
-      "releaseType": "patch",
-      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
-      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
+      "releaseType": "minor",
+      "summary": "Adds the teratestnet overlay preset, an isolated TTN SHIP/SLAP root, and explicit resolver selection for identity and registry clients.",
+      "migration": "Existing mainnet, testnet, and local routing is unchanged. TTN consumers select teratestnet explicitly because BRC-100 getNetwork continues to report testnet for all test-family chains."
     },
     {
       "name": "@bsv/simple",
@@ -195,23 +195,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Isolates action batches by explicit transaction-graph membership, adds bounded exact-input lease resume, and carries structured lifecycle errors across local and remote storage.",
-      "migration": "No consumer migration is required. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation."
+      "releaseType": "minor",
+      "summary": "Routes TTN wallet overlay operations through the isolated teratestnet preset and enables the public TTN Arcade broadcaster and proof provider by default.",
+      "migration": "Mainnet, testnet, STN, TSTN, and mock defaults are unchanged. TTN now uses https://arcade-v2-ttn-us-1.bsvblockchain.tech unless callers pass an explicit Arcade URL or an empty string to disable it."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No browser consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "releaseType": "minor",
+      "summary": "Carries the lockstep browser build with isolated TTN overlay routing and the default public TTN Arcade provider.",
+      "migration": "Existing browser consumers are unchanged. Browser wallets configured for chain ttn receive the TTN resolver and Arcade defaults automatically."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No mobile consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "releaseType": "minor",
+      "summary": "Carries the lockstep mobile build with isolated TTN overlay routing and the default public TTN Arcade provider.",
+      "migration": "Existing mobile consumers are unchanged. Mobile wallets configured for chain ttn receive the TTN resolver and Arcade defaults automatically."
     },
     {
       "name": "create-bsv-app",

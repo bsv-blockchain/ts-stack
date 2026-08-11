@@ -758,6 +758,16 @@ describe('MessageBoxClient', () => {
     expect((client as any).host).toBe('https://message-box-us-1.bsvb.tech')
   })
 
+  it('uses the staging Message Box and TTN resolver preset for TerraTestNet', () => {
+    const client = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      networkPreset: 'teratestnet'
+    })
+
+    expect((client as any).host).toBe('https://staging-messagebox.babbage.systems')
+    expect((client as any).networkPreset).toBe('teratestnet')
+  })
+
   it('Calls init() to set up a default host when missing', async () => {
     const client = new MessageBoxClient({ walletClient: mockWalletClient })
 

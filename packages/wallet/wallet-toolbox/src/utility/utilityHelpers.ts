@@ -37,14 +37,15 @@ export function toWalletNetwork(chain: Chain): WalletNetwork {
  * Maps a Chain to a network preset suitable for LookupResolver / SHIPBroadcaster.
  * Unlike `toWalletNetwork`, this returns `'local'` for `mock` chain.
  */
-export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'local' {
+export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'teratestnet' | 'local' {
   switch (chain) {
     case 'main':
       return 'mainnet'
     case 'test':
       return 'testnet'
-    case 'stn':
     case 'ttn':
+      return 'teratestnet'
+    case 'stn':
     case 'tstn':
     case 'mock':
       return 'local'
