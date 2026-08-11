@@ -252,17 +252,19 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       /(?:utxo|input).*(?:spent|missing|conflict)|missing[- ]inputs?|already spent/.test(detail)
     const classifiedValidatorFailure = event.status != null && event.status >= 460 && event.status <= 475
     const terminal = inputConflict || classifiedValidatorFailure || extraInfo !== ''
+    let reason = 'Arcade supplied no durable rejection evidence'
+    if (inputConflict) {
+      reason = 'Arcade supplied confirmed missing-input/conflict evidence'
+    } else if (classifiedValidatorFailure) {
+      reason = `Arcade supplied terminal validator code ${String(event.status)}`
+    } else if (extraInfo !== '') {
+      reason = 'Arcade supplied a terminal validator rejection reason'
+    }
     return {
       terminal,
       inputConflict,
       reqStatus: event.status === 466 || inputConflict ? 'doubleSpend' : 'invalid',
-      reason: inputConflict
-        ? 'Arcade supplied confirmed missing-input/conflict evidence'
-        : classifiedValidatorFailure
-          ? `Arcade supplied terminal validator code ${String(event.status)}`
-          : extraInfo !== ''
-            ? 'Arcade supplied a terminal validator rejection reason'
-            : 'Arcade supplied no durable rejection evidence'
+      reason
     }
   }
 
