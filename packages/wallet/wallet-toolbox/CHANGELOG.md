@@ -26,13 +26,15 @@ attention to changes that materially alter behavior or extend functionality.
   expired leases, structured lifecycle errors, and a provider-enforced
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
-- Keep the resumable lifecycle's browser cost bounded: the retained platform
-  contract measures 1,548,179 raw / 364,550 gzip / 285,697 Brotli bytes with
-  Vite and 1,209,217 raw / 331,318 gzip / 267,001 Brotli bytes with esbuild;
-  every browser ceiling remains unchanged. Mobile measures 1,609,633 Metro
-  bytes and 3,253,366 raw Hermes bytes; only the Hermes raw ceiling advances,
-  by less than 0.15%, while every compressed and Metro ceiling remains
-  unchanged.
+- Keep the combined action-batch and managed-liquidity browser/mobile cost
+  bounded and measured from exact packed artifacts. The browser contract now
+  measures 1,557,196 raw / 365,526 gzip / 287,329 Brotli bytes with Vite and
+  1,216,272 raw / 334,453 gzip / 268,547 Brotli bytes with esbuild. Linux CI
+  observed 1,558,352 Vite raw bytes; the reviewed ceilings advance by at most
+  1.0% and retain narrow headroom. Mobile measures 1,616,960 Metro bytes and
+  3,266,887 raw Hermes bytes locally; Linux CI observed 3,271,396 raw Hermes
+  bytes. The Metro and compressed-mobile ceilings remain unchanged, while the
+  Hermes raw ceiling advances by 0.61% from the pre-liquidity-policy value.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,
