@@ -1,4 +1,12 @@
-import { Beef, OriginatorDomainNameStringUnder250Bytes, Random, Script, TelemetrySpan, Utils, Validation } from '@bsv/sdk'
+import {
+  Beef,
+  OriginatorDomainNameStringUnder250Bytes,
+  Random,
+  Script,
+  TelemetrySpan,
+  Utils,
+  Validation
+} from '@bsv/sdk'
 import {
   generateChangeSdk,
   GenerateChangeSdkChangeInput,
@@ -118,7 +126,7 @@ async function createActionCore(
    * - Create result inputs with source locking scripts
    * - Create result outputs with new locking scripts.
    * - Create and return result.
-  */
+   */
 
   const userId = auth.userId!
   const validated = await traceStorageStep(
@@ -162,7 +170,7 @@ async function createActionCore(
   const feeModel = validateStorageFeeModel(storage.feeModel)
   logger?.log(`validated fee model ${JSON.stringify(feeModel)}`)
 
-  const initialFundingPlan = await prepareFundingPlanWithSendingFallback(
+  const initialFundingPlan = await prepareFundingPlanWithLiquidityPolicy(
     storage,
     [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel],
     parent
@@ -196,14 +204,7 @@ async function createActionCore(
           'action.storage_beef_bytes': storageBeefBytes.length
         },
         async span => {
-          const transaction = await createNewTxRecord(
-            storage,
-            userId,
-            vargs,
-            storageBeefBytes,
-            initialSatoshis,
-            trx
-          )
+          const transaction = await createNewTxRecord(storage, userId, vargs, storageBeefBytes, initialSatoshis, trx)
           span?.end({ attributes: { 'action.transaction_record_created': true } })
           return transaction
         }
@@ -229,7 +230,8 @@ async function createActionCore(
         logger?.log('adjusted change outputs to max possible')
       }
 
-      const satoshis = funded.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
+      const satoshis =
+        funded.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
         funded.allocatedChange.reduce((sum, output) => sum + output.satoshis, 0)
       if (satoshis !== initialSatoshis) {
         await storage.updateTransaction(newTx.transactionId, { satoshis }, trx)
@@ -551,13 +553,16 @@ async function persistNewOutput(
   o.outputId = await storage.insertOutput(o, trx)
   for (const tagName of new Set(tags)) {
     const tag = txTags[tagName]
-    await storage.insertOutputTagMap({
-      outputId: verifyId(o.outputId),
-      outputTagId: verifyId(tag.outputTagId),
-      created_at: new Date(),
-      updated_at: new Date(),
-      isDeleted: false
-    }, trx)
+    await storage.insertOutputTagMap(
+      {
+        outputId: verifyId(o.outputId),
+        outputTagId: verifyId(tag.outputTagId),
+        created_at: new Date(),
+        updated_at: new Date(),
+        isDeleted: false
+      },
+      trx
+    )
   }
   return describeNewOutput(o, tags, txBaskets)
 }
@@ -587,17 +592,20 @@ async function createNewOutputs(
     const lockingScript = asArray(xo.lockingScript)
     if (xo.purpose === 'service-charge') {
       const now = new Date()
-      await storage.insertCommission({
-        userId,
-        transactionId: ctx.transactionId,
-        lockingScript,
-        satoshis: xo.satoshis,
-        isRedeemed: false,
-        keyOffset: verifyTruthy(xo.keyOffset),
-        created_at: now,
-        updated_at: now,
-        commissionId: 0
-      }, trx)
+      await storage.insertCommission(
+        {
+          userId,
+          transactionId: ctx.transactionId,
+          lockingScript,
+          satoshis: xo.satoshis,
+          isRedeemed: false,
+          keyOffset: verifyTruthy(xo.keyOffset),
+          created_at: now,
+          updated_at: now,
+          commissionId: 0
+        },
+        trx
+      )
       const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
       o.lockingScript = lockingScript
       o.providedBy = 'storage'
@@ -634,14 +642,18 @@ async function createNewOutputs(
   // one multi-row statement. Tagged rows retain the established id-dependent
   // insertion path below.
   const untagged = newOutputs.filter(output => output.tags.length === 0)
-  await storage.insertOutputs(untagged.map(output => output.o), trx)
+  await storage.insertOutputs(
+    untagged.map(output => output.o),
+    trx
+  )
 
   const outputs: StorageCreateTransactionSdkOutput[] = []
   const changeVouts: number[] = []
   for (const { o, tags } of newOutputs) {
-    const { changeVout, ro } = tags.length === 0
-      ? describeNewOutput(o, tags, txBaskets)
-      : await persistNewOutput(storage, o, tags, txTags, txBaskets, trx)
+    const { changeVout, ro } =
+      tags.length === 0
+        ? describeNewOutput(o, tags, txBaskets)
+        : await persistNewOutput(storage, o, tags, txTags, txBaskets, trx)
     if (changeVout !== undefined) changeVouts.push(changeVout)
     outputs.push(ro)
   }
@@ -986,27 +998,35 @@ async function validateNoSendChange(
   return r
 }
 
+type ResolvedManagedChangeInputCandidate = ManagedChangeInputCandidate & {
+  transactionStatus: TransactionStatus
+}
+
 interface PreparedFundingPlan {
   params: GenerateChangeSdkParams
   result: GenerateChangeSdkResult
-  selected: ManagedChangeInputCandidate[]
+  selected: ResolvedManagedChangeInputCandidate[]
   availableChangeCount: number
-  excludeSending: boolean
+  eligibleStatuses: TransactionStatus[]
+  policyTier: 'completed' | 'unproven' | 'sending' | 'compatibility'
+  compatibilityFallback: boolean
 }
 
 type FundingClaimRequest = readonly [
   userId: number,
   basketId: number,
-  excludeSending: boolean,
+  eligibleStatuses: TransactionStatus[],
   transactionId: number,
   noSendChangeIn: TableOutput[],
   plan: PreparedFundingPlan,
   trx?: TrxToken
 ]
 
-function fundingPlanSatoshis (plan: PreparedFundingPlan): number {
-  return plan.result.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
+function fundingPlanSatoshis(plan: PreparedFundingPlan): number {
+  return (
+    plan.result.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
     plan.selected.reduce((sum, output) => sum + output.satoshis, 0)
+  )
 }
 
 type FundingPlanBaseContext = readonly [
@@ -1019,34 +1039,27 @@ type FundingPlanBaseContext = readonly [
   feeModel: StorageFeeModel
 ]
 
-type FundingPlanContext = readonly [
-  ...FundingPlanBaseContext,
-  excludeSending: boolean,
-  parent?: TelemetrySpan,
-  trx?: TrxToken
-]
-
 type FundingClaim =
   | {
-    outputs: TableOutput[]
-    sourceTransactionCount: number
-    hydratedScriptCount: number
-    scriptSourceTransactionCount: number
-    conflict?: undefined
-  }
-  | { outputs?: undefined, conflict: 'candidate' | 'noSendChange' }
+      outputs: TableOutput[]
+      sourceTransactionCount: number
+      hydratedScriptCount: number
+      scriptSourceTransactionCount: number
+      conflict?: undefined
+    }
+  | { outputs?: undefined; conflict: 'candidate' | 'noSendChange' }
 
 type LockedFundingClaim =
-  | { outputs: TableOutput[], sourceTransactionCount: number, conflict?: undefined }
-  | { outputs?: undefined, sourceTransactionCount?: undefined, conflict: 'candidate' | 'noSendChange' }
+  | { outputs: TableOutput[]; sourceTransactionCount: number; conflict?: undefined }
+  | { outputs?: undefined; sourceTransactionCount?: undefined; conflict: 'candidate' | 'noSendChange' }
 
 class FundingClaimConflict extends Error {
-  constructor (readonly conflict: 'candidate' | 'noSendChange') {
+  constructor(readonly conflict: 'candidate' | 'noSendChange') {
     super('createAction funding claim changed concurrently')
   }
 }
 
-async function traceStorageStep<T> (
+async function traceStorageStep<T>(
   storage: StorageProvider,
   name: string,
   parent: TelemetrySpan | undefined,
@@ -1061,14 +1074,20 @@ async function traceStorageStep<T> (
   )
 }
 
-function makeFundingParams (
-  vargs: Validation.ValidCreateActionArgs,
-  xinputs: XValidCreateActionInput[],
-  xoutputs: XValidCreateActionOutput[],
-  changeBasket: TableOutputBasket,
-  feeModel: StorageFeeModel,
-  availableChangeCount: number
-): GenerateChangeSdkParams {
+interface MakeFundingParamsArgs {
+  storage: StorageProvider
+  vargs: Validation.ValidCreateActionArgs
+  xinputs: XValidCreateActionInput[]
+  xoutputs: XValidCreateActionOutput[]
+  changeBasket: TableOutputBasket
+  feeModel: StorageFeeModel
+  healthyChangeCount: number
+  compatibilityFallback: boolean
+}
+
+function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams {
+  const { storage, vargs, xinputs, xoutputs, changeBasket, feeModel, healthyChangeCount, compatibilityFallback } = args
+  const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   return {
     fixedInputs: xinputs.map(input => ({
       satoshis: input.satoshis,
@@ -1079,46 +1098,64 @@ function makeFundingParams (
       lockingScriptLength: output.lockingScript.length / 2
     })),
     feeModel,
-    changeInitialSatoshis: Math.max(1, changeBasket.minimumDesiredUTXOValue),
-    changeFirstSatoshis: Math.max(1, Math.round(changeBasket.minimumDesiredUTXOValue / 4)),
+    changeInitialSatoshis: preferredSatoshis,
+    // The final compatibility shape uses the allocator's economic floor. This
+    // remains at least as permissive as every historical basket preference,
+    // including an exact 144/32 basket that has just migrated to 144/5000.
+    changeFirstSatoshis: compatibilityFallback ? 1 : preferredSatoshis,
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
-    targetNetCount: changeBasket.numberOfDesiredUTXOs - availableChangeCount,
+    targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
+    maxChangeOutputs: storage.managedChangePolicy.maxOutputsPerAction,
+    surplusPoolShaping: !compatibilityFallback,
+    maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals
   }
 }
 
-async function prepareFundingPlan (
+async function buildFundingPlan(
   storage: StorageProvider,
-  context: FundingPlanContext
+  context: FundingPlanBaseContext,
+  candidates: ResolvedManagedChangeInputCandidate[],
+  eligibleStatuses: TransactionStatus[],
+  policyTier: PreparedFundingPlan['policyTier'],
+  compatibilityFallback: boolean,
+  parent?: TelemetrySpan
 ): Promise<PreparedFundingPlan> {
-  const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, excludeSending, parent, trx] = context
-  const candidates = await traceStorageStep(
-    storage,
-    'wallet.storage.create_action.funding_candidates',
-    parent,
-    { 'funding.exclude_sending': excludeSending },
-    async span => {
-      const outputs = await storage.findAvailableManagedChangeInputCandidates(
-        userId,
-        changeBasket.basketId,
-        excludeSending,
-        trx
-      )
-      span?.end({
-        attributes: {
-          'funding.candidate_count': outputs.length,
-          'funding.candidate_satoshis': outputs.reduce((sum, output) => sum + output.satoshis, 0)
-        }
-      })
-      return outputs
-    }
-  )
+  const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel] = context
   const noSendIds = new Set(noSendChangeIn.map(output => output.outputId))
-  const available = candidates.filter(output => !noSendIds.has(output.outputId))
-  // Preserve the legacy target-net-count input: noSendChange was included in
-  // countChangeInputs before it was consumed by the allocator.
-  const params = makeFundingParams(vargs, xinputs, xoutputs, changeBasket, feeModel, candidates.length)
+  const available = candidates.filter(
+    output => !noSendIds.has(output.outputId) && eligibleStatuses.includes(output.transactionStatus)
+  )
+  const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
+  const healthyChangeCount = compatibilityFallback
+    ? // Preserve the legacy target-count input exactly, including noSendChange
+      // that is removed from the allocator below but still belongs to this tier.
+      candidates.filter(output => eligibleStatuses.includes(output.transactionStatus)).length
+    : candidates.filter(output => output.satoshis >= preferredSatoshis).length
+  const params = makeFundingParams({
+    storage,
+    vargs,
+    xinputs,
+    xoutputs,
+    changeBasket,
+    feeModel,
+    healthyChangeCount,
+    compatibilityFallback
+  })
+  const noSendStatuses = await storage.findTransactionStatusesByIds(
+    userId,
+    noSendChangeIn.map(output => output.transactionId)
+  )
+  const plannedNoSend: ResolvedManagedChangeInputCandidate[] = noSendChangeIn.map(output => ({
+    outputId: output.outputId,
+    transactionId: output.transactionId,
+    satoshis: output.satoshis,
+    txid: output.txid,
+    vout: output.vout,
+    transactionStatus: noSendStatuses.get(output.transactionId) ?? 'nosend'
+  }))
+  const claimStatuses = [...new Set([...eligibleStatuses, ...plannedNoSend.map(output => output.transactionStatus)])]
 
   return await traceStorageStep(
     storage,
@@ -1126,18 +1163,20 @@ async function prepareFundingPlan (
     parent,
     {
       'funding.candidate_count': available.length,
-      'funding.no_send_change_count': noSendChangeIn.length
+      'funding.no_send_change_count': noSendChangeIn.length,
+      'funding.policy_tier': policyTier,
+      'funding.compatibility_fallback': compatibilityFallback
     },
     async span => {
-      const allocated = new Map<number, ManagedChangeInputCandidate>()
+      const allocated = new Map<number, ResolvedManagedChangeInputCandidate>()
       const availableSelector = new CanonicalChangeSelector(available)
-      const noSend = [...noSendChangeIn]
-      const noSendById = new Map(noSendChangeIn.map(output => [output.outputId, output]))
+      const noSend = [...plannedNoSend]
+      const noSendById = new Map(plannedNoSend.map(output => [output.outputId, output]))
       const allocate = async (
         targetSatoshis: number,
         exactSatoshis?: number
       ): Promise<GenerateChangeSdkChangeInput | undefined> => {
-        let output: ManagedChangeInputCandidate | undefined = noSend.pop()
+        let output: ResolvedManagedChangeInputCandidate | undefined = noSend.pop()
         output ??= availableSelector.take(targetSatoshis, exactSatoshis)
         if (output == null) return undefined
         allocated.set(output.outputId, output)
@@ -1166,82 +1205,216 @@ async function prepareFundingPlan (
         result,
         selected,
         availableChangeCount: candidates.length,
-        excludeSending
+        eligibleStatuses: claimStatuses,
+        policyTier,
+        compatibilityFallback
       }
     }
   )
 }
 
-async function prepareFundingPlanWithSendingFallback (
+async function fundingPlanSerializedCost(
+  storage: StorageProvider,
+  plan: PreparedFundingPlan,
+  knownTxids: string[]
+): Promise<number> {
+  const txids = [...new Set(plan.selected.map(candidate => verifyTruthy(candidate.txid)))]
+  if (txids.length === 0) return plan.result.size
+  try {
+    const beef = await storage.getBeefForTransactions(txids, {
+      knownTxids,
+      ignoreStorage: false,
+      ignoreServices: true,
+      ignoreNewProven: false
+    })
+    return plan.result.size + beef.toUint8Array().length
+  } catch {
+    return Number.MAX_SAFE_INTEGER
+  }
+}
+
+interface FundingTier {
+  policyTier: Exclude<PreparedFundingPlan['policyTier'], 'compatibility'>
+  statuses: TransactionStatus[]
+}
+
+const FUNDING_TIERS: FundingTier[] = [
+  { policyTier: 'completed', statuses: ['completed'] },
+  { policyTier: 'unproven', statuses: ['completed', 'unproven'] },
+  { policyTier: 'sending', statuses: ['completed', 'unproven', 'sending'] }
+]
+
+async function resolveFundingCandidates(
+  storage: StorageProvider,
+  userId: number,
+  basketId: number,
+  parent?: TelemetrySpan,
+  trx?: TrxToken
+): Promise<ResolvedManagedChangeInputCandidate[]> {
+  const rawCandidates = await traceStorageStep(
+    storage,
+    'wallet.storage.create_action.funding_candidates',
+    parent,
+    { 'funding.include_pending': true },
+    async span => {
+      const outputs = await storage.findAvailableManagedChangeInputCandidates(userId, basketId, false, trx)
+      span?.end({
+        attributes: {
+          'funding.candidate_count': outputs.length,
+          'funding.candidate_satoshis': outputs.reduce((sum, output) => sum + output.satoshis, 0),
+          'funding.completed_candidate_count': outputs.filter(output => output.transactionStatus === 'completed')
+            .length,
+          'funding.unproven_candidate_count': outputs.filter(output => output.transactionStatus === 'unproven').length,
+          'funding.sending_candidate_count': outputs.filter(output => output.transactionStatus === 'sending').length
+        }
+      })
+      return outputs
+    }
+  )
+  const missingStatusIds = rawCandidates
+    .filter(output => output.transactionStatus == null)
+    .map(output => output.transactionId)
+  const missingStatuses = await storage.findTransactionStatusesByIds(userId, missingStatusIds, trx)
+  const candidates: ResolvedManagedChangeInputCandidate[] = rawCandidates.map(output => ({
+    ...output,
+    transactionStatus: output.transactionStatus ?? (missingStatuses.get(output.transactionId) as TransactionStatus)
+  }))
+  if (candidates.some(output => output.transactionStatus == null)) {
+    throw new WERR_INTERNAL('managed change candidate is missing its source transaction status')
+  }
+  return candidates
+}
+
+async function buildFundingPlanForTier(
+  storage: StorageProvider,
+  context: FundingPlanBaseContext,
+  candidates: ResolvedManagedChangeInputCandidate[],
+  tier: FundingTier,
+  parent?: TelemetrySpan
+): Promise<{ plan?: PreparedFundingPlan; fundingError?: WERR_INSUFFICIENT_FUNDS }> {
+  try {
+    return {
+      plan: await buildFundingPlan(storage, context, candidates, tier.statuses, tier.policyTier, false, parent)
+    }
+  } catch (error) {
+    if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+  }
+
+  // Pool shaping is optional. Before widening ancestry to unproven or sending
+  // parents, retry the same status tier with the former funding shape. This is
+  // the one-way compatibility guarantee: a preferred minimum can never
+  // manufacture starvation or force a pending chain.
+  try {
+    return {
+      plan: await buildFundingPlan(storage, context, candidates, tier.statuses, 'compatibility', true, parent)
+    }
+  } catch (error) {
+    if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
+    return { fundingError: error }
+  }
+}
+
+function firstPlanNeedsNoPendingComparison(storage: StorageProvider, plan: PreparedFundingPlan): boolean {
+  const threshold = storage.managedChangePolicy.pendingComparisonInputs
+  return threshold === -1 || plan.selected.length <= threshold
+}
+
+async function chooseLowestSerializedFundingPlan(
+  storage: StorageProvider,
+  plans: PreparedFundingPlan[],
+  knownTxids: string[]
+): Promise<PreparedFundingPlan> {
+  let chosen = plans[0]
+  let chosenCost = await fundingPlanSerializedCost(storage, chosen, knownTxids)
+  for (const alternative of plans.slice(1)) {
+    const cost = await fundingPlanSerializedCost(storage, alternative, knownTxids)
+    if (cost < chosenCost) {
+      chosen = alternative
+      chosenCost = cost
+    }
+  }
+  return chosen
+}
+
+async function prepareFundingPlanWithLiquidityPolicy(
   storage: StorageProvider,
   context: FundingPlanBaseContext,
   parent?: TelemetrySpan,
   trx?: TrxToken
 ): Promise<PreparedFundingPlan> {
-  const excludeSending = !context[1].isDelayed
-  try {
-    return await prepareFundingPlan(storage, [...context, excludeSending, parent, trx])
-  } catch (error) {
-    if (!excludeSending || !(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
-    // A transaction waiting for background broadcast already has a complete
-    // raw transaction and input BEEF in storage. Its wallet-managed change is
-    // safe to chain: the immediate broadcast path recursively merges that
-    // ancestor into the child BEEF. Prefer settled change, then admit queued
-    // change only when excluding it would report an underfunded wallet.
-    return await prepareFundingPlan(storage, [...context, false, parent, trx])
+  const [userId, vargs, , , changeBasket] = context
+  const candidates = await resolveFundingCandidates(storage, userId, changeBasket.basketId, parent, trx)
+  const successful: PreparedFundingPlan[] = []
+  let fundingError: WERR_INSUFFICIENT_FUNDS | undefined
+  for (const tier of FUNDING_TIERS) {
+    const attempted = await buildFundingPlanForTier(storage, context, candidates, tier, parent)
+    fundingError = attempted.fundingError ?? fundingError
+    const plan = attempted.plan
+    if (plan != null) {
+      successful.push(plan)
+      if (successful.length === 1 && firstPlanNeedsNoPendingComparison(storage, plan)) return plan
+    }
   }
+
+  if (successful.length > 0) {
+    if (successful.length === 1) return successful[0]
+    return await chooseLowestSerializedFundingPlan(storage, successful, vargs.options.knownTxids)
+  }
+
+  if (fundingError != null) throw fundingError
+  throw new WERR_INTERNAL('funding policy produced neither a plan nor an error')
 }
 
-async function claimFundingPlan (
-  storage: StorageProvider,
-  request: FundingClaimRequest
-): Promise<FundingClaim> {
-  const [userId, basketId, excludeSending, transactionId, noSendChangeIn, plan, trx] = request
+async function claimFundingPlan(storage: StorageProvider, request: FundingClaimRequest): Promise<FundingClaim> {
+  const [userId, basketId, eligibleStatuses, transactionId, noSendChangeIn, plan, trx] = request
   if (plan.selected.length === 0) {
     return { outputs: [], sourceTransactionCount: 0, hydratedScriptCount: 0, scriptSourceTransactionCount: 0 }
   }
   const noSendIds = new Set(noSendChangeIn.map(output => output.outputId))
-  const statuses: TransactionStatus[] = ['completed', 'unproven']
-  if (!excludeSending) statuses.push('sending')
-
-  const claim: LockedFundingClaim = await storage.transaction<LockedFundingClaim>(async claimTrx => {
-    const currentById = await storage.findFundingOutputsForUpdate(
-      userId,
-      plan.selected.map(output => output.outputId),
-      statuses,
-      claimTrx
-    )
-    const transactionIds = [...new Set(Object.values(currentById).map(output => output.transactionId))]
-    const claimed: TableOutput[] = []
-    for (const planned of plan.selected) {
-      const current = currentById[planned.outputId]
-      if (
-        current?.outputId !== planned.outputId ||
-        current?.satoshis !== planned.satoshis ||
-        current?.basketId !== basketId ||
-        !isAutoSpendableChangeOutput(current) ||
-        current?.txid !== planned.txid ||
-        current?.vout !== planned.vout
-      ) {
-        return { conflict: noSendIds.has(planned.outputId) ? 'noSendChange' : 'candidate' } as const
-      }
-      claimed.push(current)
-    }
-    const updated = await storage.markChangeInputsSpent(claimed.map(output => output.outputId), transactionId, claimTrx)
-    if (updated !== claimed.length) {
-      throw new FundingClaimConflict(
-        claimed.some(output => noSendIds.has(output.outputId)) ? 'noSendChange' : 'candidate'
+  const claim: LockedFundingClaim = await storage
+    .transaction<LockedFundingClaim>(async claimTrx => {
+      const currentById = await storage.findFundingOutputsForUpdate(
+        userId,
+        plan.selected.map(output => output.outputId),
+        eligibleStatuses,
+        claimTrx
       )
-    }
-    for (const output of claimed) {
-      output.spendable = false
-      output.spentBy = transactionId
-    }
-    return { outputs: claimed, sourceTransactionCount: transactionIds.length }
-  }, trx).catch(error => {
-    if (error instanceof FundingClaimConflict) return { conflict: error.conflict } as const
-    throw error
-  })
+      const transactionIds = [...new Set(Object.values(currentById).map(output => output.transactionId))]
+      const claimed: TableOutput[] = []
+      for (const planned of plan.selected) {
+        const current = currentById[planned.outputId]
+        if (
+          current?.outputId !== planned.outputId ||
+          current?.satoshis !== planned.satoshis ||
+          current?.basketId !== basketId ||
+          !isAutoSpendableChangeOutput(current) ||
+          current?.txid !== planned.txid ||
+          current?.vout !== planned.vout
+        ) {
+          return { conflict: noSendIds.has(planned.outputId) ? 'noSendChange' : 'candidate' } as const
+        }
+        claimed.push(current)
+      }
+      const updated = await storage.markChangeInputsSpent(
+        claimed.map(output => output.outputId),
+        transactionId,
+        claimTrx
+      )
+      if (updated !== claimed.length) {
+        throw new FundingClaimConflict(
+          claimed.some(output => noSendIds.has(output.outputId)) ? 'noSendChange' : 'candidate'
+        )
+      }
+      for (const output of claimed) {
+        output.spendable = false
+        output.spentBy = transactionId
+      }
+      return { outputs: claimed, sourceTransactionCount: transactionIds.length }
+    }, trx)
+    .catch(error => {
+      if (error instanceof FundingClaimConflict) return { conflict: error.conflict } as const
+      throw error
+    })
   if (claim.outputs == null) return claim
   const hydration = await hydrateFundingInputScripts(storage, claim.outputs, trx)
   return {
@@ -1251,16 +1424,20 @@ async function claimFundingPlan (
   }
 }
 
-async function hydrateFundingInputScripts (
+async function hydrateFundingInputScripts(
   storage: StorageProvider,
   outputs: TableOutput[],
   trx?: TrxToken
-): Promise<{ hydratedScriptCount: number, scriptSourceTransactionCount: number }> {
-  const missing = outputs.filter(output =>
-    output.lockingScript?.length !== output.scriptLength &&
-    output.scriptLength != null && output.scriptLength > 0 &&
-    output.scriptOffset != null && output.scriptOffset > 0 &&
-    output.txid != null && output.txid !== ''
+): Promise<{ hydratedScriptCount: number; scriptSourceTransactionCount: number }> {
+  const missing = outputs.filter(
+    output =>
+      output.lockingScript?.length !== output.scriptLength &&
+      output.scriptLength != null &&
+      output.scriptLength > 0 &&
+      output.scriptOffset != null &&
+      output.scriptOffset > 0 &&
+      output.txid != null &&
+      output.txid !== ''
   )
   if (missing.length === 0) return { hydratedScriptCount: 0, scriptSourceTransactionCount: 0 }
 
@@ -1328,7 +1505,7 @@ async function fundNewTransactionSdk(
         const claim = await claimFundingPlan(storage, [
           userId,
           ctx.changeBasket.basketId,
-          plan.excludeSending,
+          plan.eligibleStatuses,
           ctx.transactionId,
           ctx.noSendChangeIn,
           plan,
@@ -1350,17 +1527,9 @@ async function fundNewTransactionSdk(
           throw new WERR_INVALID_PARAMETER('noSendChange', 'outputs that remain spendable during action planning')
         }
         retryCount++
-        plan = await prepareFundingPlanWithSendingFallback(
+        plan = await prepareFundingPlanWithLiquidityPolicy(
           storage,
-          [
-            userId,
-            vargs,
-            ctx.xinputs,
-            ctx.xoutputs,
-            ctx.changeBasket,
-            ctx.noSendChangeIn,
-            ctx.feeModel
-          ],
+          [userId, vargs, ctx.xinputs, ctx.xoutputs, ctx.changeBasket, ctx.noSendChangeIn, ctx.feeModel],
           parent,
           trx
         )
@@ -1467,7 +1636,7 @@ function trimInputBeef(beef: Beef, vargs: Validation.ValidCreateActionArgs): Uin
   return beef.toUint8Array()
 }
 
-function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
+function makeKnownTxidLookup(knownTxids: string[]): (txid: string) => boolean {
   let lookups = 0
   let indexed: Set<string> | undefined
   return txid => {
@@ -1488,7 +1657,7 @@ interface AllocatedChangeBeefPrefetchResult {
   txids: string[]
 }
 
-function missingAllocatedChangeTxids (
+function missingAllocatedChangeTxids(
   allocatedChange: Array<{ txid?: string }>,
   beef: Beef,
   knownTxids: string[]
@@ -1503,7 +1672,7 @@ function missingAllocatedChangeTxids (
   )
 }
 
-function startAllocatedChangeBeefPrefetch (
+function startAllocatedChangeBeefPrefetch(
   storage: StorageProvider,
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: ManagedChangeInputCandidate[],
@@ -1547,7 +1716,7 @@ function startAllocatedChangeBeefPrefetch (
   )
 }
 
-function sameTxids (left: readonly string[], right: readonly string[]): boolean {
+function sameTxids(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) return false
   const expected = new Set(left)
   return right.every(txid => expected.has(txid))

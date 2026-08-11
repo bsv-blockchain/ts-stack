@@ -1,4 +1,5 @@
-import { alignLeft, alignRight, asNumber, toAdminStatsLog } from '../adminServer'
+import { alignLeft, alignRight, asNumber, normalizeReviewMode, toAdminStatsLog } from '../adminServer'
+import { renderAdminPage } from '../adminUi'
 
 describe('storage admin diagnostic formatting', () => {
   test('normalizes numeric and structured values without default object coercion', () => {
@@ -21,5 +22,12 @@ describe('storage admin diagnostic formatting', () => {
     expect(log).toContain('2026-07-28T00:00:00.000Z')
     expect(log).toContain('{"service":"monitor"}')
     expect(log).toContain('users')
+  })
+
+  test('exposes a read-only managed-change liquidity review mode', () => {
+    expect(normalizeReviewMode('liquidity')).toBe('liquidity')
+    expect(normalizeReviewMode('change')).toBe('change')
+    expect(normalizeReviewMode('unknown')).toBe('all')
+    expect(renderAdminPage()).toContain('<option value="liquidity">managed-change liquidity (read only)</option>')
   })
 })

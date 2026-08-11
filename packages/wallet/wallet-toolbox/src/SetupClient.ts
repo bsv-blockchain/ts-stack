@@ -25,6 +25,7 @@ import { Wallet } from './Wallet'
 import { Chain } from './sdk/types'
 import { randomBytesHex } from './utility/utilityHelpers'
 import { StorageClient } from './storage/remoting/StorageClient'
+import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
 
 /**
  * The 'Setup` class provides static setup functions to construct BRC-100 compatible
@@ -284,6 +285,7 @@ export abstract class SetupClient {
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
       feeModel: { model: 'sat/kb', value: 100 },
+      managedChangePolicy: args.managedChangePolicy,
       scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
@@ -297,6 +299,8 @@ export abstract class SetupClient {
  */
 export interface SetupWalletIdbArgs extends SetupClientWalletArgs {
   databaseName: string
+  /** Optional operator tuning for wallet-managed liquidity shaping. */
+  managedChangePolicy?: ManagedChangePolicyOptions
 }
 
 /**

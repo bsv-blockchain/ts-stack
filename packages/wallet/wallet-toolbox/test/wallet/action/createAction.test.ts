@@ -100,7 +100,7 @@ describe('createAction test', () => {
       }
 
       const cr = await wallet.createAction(createArgs)
-      expect(cr.txid).toBe('4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+      expect(cr.txid).toBe('14f715d111f2ddc1783fad0213509a6626fd73fa55f58b4132d3438e26fd2c5d')
     }
   })
 

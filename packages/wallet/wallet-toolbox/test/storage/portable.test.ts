@@ -113,6 +113,39 @@ describe('BRC-38/39 portable wallet data', () => {
     await expect(importBRC38(target, document, { mode: 'restore' })).rejects.toThrow(/empty target storage/)
   })
 
+  test('normalizes an exact legacy managed-change default during BRC-38 restore', async () => {
+    const document = minimalDocument()
+    document.tables.outputBaskets.push(
+      {
+        created_at: iso,
+        updated_at: iso,
+        basketId: 1,
+        userId: document.user.userId,
+        name: 'default',
+        numberOfDesiredUTXOs: 144,
+        minimumDesiredUTXOValue: 32,
+        isDeleted: false
+      },
+      {
+        created_at: iso,
+        updated_at: iso,
+        basketId: 2,
+        userId: document.user.userId,
+        name: 'custom legacy-shaped basket',
+        numberOfDesiredUTXOs: 144,
+        minimumDesiredUTXOValue: 32,
+        isDeleted: false
+      }
+    )
+    const target = await createEmptyStorage('portable_restore_managed_change')
+
+    await importBRC38(target, document, { mode: 'restore' })
+
+    const baskets = await target.findOutputBaskets({ partial: { userId: document.user.userId as number } })
+    expect(baskets.find(basket => basket.name === 'default')?.minimumDesiredUTXOValue).toBe(5_000)
+    expect(baskets.find(basket => basket.name === 'custom legacy-shaped basket')?.minimumDesiredUTXOValue).toBe(32)
+  })
+
   test('merges BRC-38 into non-empty SQLite storage with ID and sync-map remapping', async () => {
     const rootKeyHex = '3'.repeat(64)
     const source = await createPortableSource('portable_merge_source', rootKeyHex)

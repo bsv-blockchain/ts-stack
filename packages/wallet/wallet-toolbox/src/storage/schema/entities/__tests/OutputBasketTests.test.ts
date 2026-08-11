@@ -149,6 +149,33 @@ describe('OutputBasket class method tests', () => {
     expect(updatedRecord[0].isDeleted).toBe(false)
   })
 
+  test('sync cannot reintroduce the exact legacy 32-satoshi default', async () => {
+    const ctx = ctxs[0]
+    const current = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0]
+    expect(current).toBeDefined()
+    const entity = new EntityOutputBasket({ ...current, minimumDesiredUTXOValue: 5_000 })
+    const incoming: TableOutputBasket = {
+      ...current,
+      updated_at: new Date(current.updated_at.getTime() + 1_000),
+      numberOfDesiredUTXOs: 144,
+      minimumDesiredUTXOValue: 32
+    }
+
+    await expect(entity.mergeExisting(ctx.activeStorage, undefined, incoming, createSyncMap())).resolves.toBe(true)
+
+    expect(entity.minimumDesiredUTXOValue).toBe(5_000)
+    const stored = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { basketId: current.basketId }
+      })
+    )[0]
+    expect(stored.minimumDesiredUTXOValue).toBe(5_000)
+  })
+
   test('equals identifies matching entities with and without SyncMap', async () => {
     const ctx = ctxs[0]
 

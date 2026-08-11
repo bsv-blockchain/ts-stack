@@ -127,6 +127,28 @@ function readNonNegativeInteger(name: string, fallback: number): number {
   return value
 }
 
+function readManagedChangeLimit(
+  name: string,
+  fallback: number,
+  minimum: number
+): number {
+  const raw = process.env[name]
+  if (raw == null || raw.trim() === '') return fallback
+  if (raw === '-1') return -1
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(
+      `${name} must be ${minimum === 0 ? 'a non-negative' : 'a positive'} integer or -1`
+    )
+  }
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(
+      `${name} must be ${minimum === 0 ? 'a non-negative' : 'a positive'} safe integer or -1`
+    )
+  }
+  return value
+}
+
 function readPort(name: string, fallback: number): number {
   const value = readPositiveInteger(name, fallback)
   if (value > 65_535) throw new Error(`${name} must be between 1 and 65535`)
@@ -592,13 +614,35 @@ async function setupWalletStorageAndMonitor(): Promise<WalletRuntimeContext> {
     const rootKey = PrivateKey.fromHex(SERVER_PRIVATE_KEY)
     const storageIdentityKey = rootKey.toPublicKey().toString()
 
-    const activeStorage = new StorageKnex({
+    // Keep this object separate from the constructor call so the coordinated
+    // image can still compile against the previously published toolbox during
+    // source review. The protected release refreshes the lock to the package
+    // candidate that consumes managedChangePolicy before publishing the image.
+    const storageOptions = {
       chain,
       knex,
       commissionSatoshis,
       commissionPubKeyHex: COMMISSION_PUBLIC_KEY || undefined,
-      feeModel: JSON.parse(decodeJsonSetting('FEE_MODEL', String(FEE_MODEL)))
-    })
+      feeModel: JSON.parse(decodeJsonSetting('FEE_MODEL', String(FEE_MODEL))),
+      managedChangePolicy: {
+        maxOutputsPerAction: readManagedChangeLimit(
+          'WALLET_STORAGE_MANAGED_CHANGE_MAX_OUTPUTS_PER_ACTION',
+          8,
+          1
+        ),
+        migrationInputsPerAction: readManagedChangeLimit(
+          'WALLET_STORAGE_MANAGED_CHANGE_MIGRATION_INPUTS_PER_ACTION',
+          4,
+          0
+        ),
+        pendingComparisonInputs: readManagedChangeLimit(
+          'WALLET_STORAGE_MANAGED_CHANGE_PENDING_COMPARISON_INPUTS',
+          16,
+          1
+        )
+      }
+    }
+    const activeStorage = new StorageKnex(storageOptions)
 
     await activeStorage.migrate(databaseName, storageIdentityKey)
     const settings = await activeStorage.makeAvailable()

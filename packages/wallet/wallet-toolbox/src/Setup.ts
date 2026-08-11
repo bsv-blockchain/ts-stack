@@ -28,6 +28,7 @@ import { Wallet } from './Wallet'
 import { StorageClient } from './storage/remoting/StorageClient'
 import { StorageKnex } from './storage/StorageKnex'
 import { WalletStorageProvider } from './sdk/WalletStorage.interfaces'
+import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
 
 // To rely on your own headers service, uncomment the following line:
 // import { BHServiceClient } from './services/chaintracker'
@@ -391,6 +392,7 @@ DEV_KEYS = '{
       commissionPubKeyHex: undefined,
       feeModel: { model: 'sat/kb', value: 100 },
       actionBatchMaxReservedOutputs: args.actionBatchMaxReservedOutputs,
+      managedChangePolicy: args.managedChangePolicy,
       scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
@@ -490,6 +492,8 @@ export interface SetupWalletArgs {
    * storage validation. This does not alter the BRC-100 interface.
    */
   scriptVerifier?: SpendVerifierInterface
+  /** Optional operator tuning for wallet-managed liquidity shaping. */
+  managedChangePolicy?: ManagedChangePolicyOptions
 }
 
 /**

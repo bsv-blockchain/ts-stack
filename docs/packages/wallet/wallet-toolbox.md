@@ -25,14 +25,15 @@ workspaces can resume an expired soft lease by reacquiring only their exact
 persisted inputs under the provider's advertised reservation bound.
 
 Immediate actions may use wallet-managed change from a transaction awaiting
-background broadcast. The child broadcast recursively carries the delayed
-parent BEEF, preventing queued work from temporarily hiding most of the
-wallet's spendable balance.
+background broadcast, but only after completed and unproven liquidity is
+exhausted or an over-16-input settled plan is larger by exact serialized
+transaction-plus-BEEF cost. Queued funds are never hidden.
 
-Durable permission grants finish broadcasting their internal token transaction
-before the waiting application request resumes. A broadcast failure rejects the
-grant, so the application can surface the existing error and safely retry
-without planning against temporarily reserved funding inputs.
+Durable permission grants retain delayed broadcast, avoiding network latency in
+the permission path. New and existing wallets progressively target 144 useful
+5,000-satoshi change outputs, create no more than eight outputs per action, and
+migrate no more than four fee-positive legacy fragments per action. Optional
+shaping cannot make a formerly fundable action fail.
 
 Completed `createAction` and `signAction` results expose Atomic BEEF as a
 numeric array at the public wallet boundary. The historical shape survives
@@ -208,3 +209,4 @@ See `packages/wallet/wallet-toolbox-examples/src/p2pkh.ts`, `brc29.ts`, `pushdro
 - [Wallet domain overview](./index.md)
 - [Wallet toolbox examples](./wallet-toolbox-examples.md)
 - [Conformance vectors](../../conformance/vectors.md#wallet-brc-100)
+- [Managed-change liquidity policy](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/managed-change-liquidity.md)
