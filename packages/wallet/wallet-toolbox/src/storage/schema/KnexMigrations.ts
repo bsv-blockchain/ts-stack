@@ -156,6 +156,10 @@ export class KnexMigrations implements MigrationSource<string> {
       async up(knex) {
         // Only the exact historical defaults identify an untouched basket.
         // Operator-selected non-default values remain authoritative.
+        // SQLite sync predicates compare ISO timestamp text, while MySQL uses
+        // native timestamp values. Preserve that provider-specific contract so
+        // the migrated row remains visible to incremental sync immediately.
+        const updatedAt = (await determineDBType(knex)) === 'SQLite' ? new Date().toISOString() : knex.fn.now(3)
         await knex('output_baskets')
           .where({
             name: 'default',
@@ -164,7 +168,7 @@ export class KnexMigrations implements MigrationSource<string> {
           })
           .update({
             minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
-            updated_at: knex.fn.now()
+            updated_at: updatedAt
           })
       },
       async down() {

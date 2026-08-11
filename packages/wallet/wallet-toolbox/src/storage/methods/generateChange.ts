@@ -143,6 +143,33 @@ interface SurplusChangeShapingRequest {
   rand: (min: number, max: number) => number
 }
 
+interface SurplusChangeMaterializationRequest {
+  params: GenerateChangeSdkParams
+  result: GenerateChangeSdkResult
+  dustFloor: number
+  feeExcess: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+}
+
+/**
+ * Materialize the first managed-change output from surplus that is already in
+ * the transaction. This is especially important for explicit/fixed inputs:
+ * their value can fully fund an action before the allocator loop runs, but the
+ * shaping policy must still capture the remainder without gathering another
+ * wallet-managed input.
+ */
+function materializeSurplusChangeOutput(request: SurplusChangeMaterializationRequest): void {
+  const { params, result } = request
+  if (!params.surplusPoolShaping || result.changeOutputs.length > 0) return
+
+  const availableAfterOutputFee = request.feeExcess(0, 1)
+  if (availableAfterOutputFee < request.dustFloor) return
+  result.changeOutputs.push({
+    satoshis: Math.min(availableAfterOutputFee, Math.max(request.dustFloor, params.changeFirstSatoshis)),
+    lockingScriptLength: params.changeLockingScriptLength
+  })
+  request.feeExcess()
+}
+
 function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
   const { params, result } = request
   if (!params.surplusPoolShaping || result.changeOutputs.length !== 1) return
@@ -553,6 +580,14 @@ async function generateChangeSdkCore(
     }
 
     /**
+     * The action may already be funded entirely by explicit/fixed inputs. In
+     * that case the allocator loop never runs, so capture the existing surplus
+     * here before the no-change compatibility guard. This operation cannot
+     * allocate an input; bounded legacy migration remains a separate step.
+     */
+    materializeSurplusChangeOutput({ params, result: r, dustFloor, feeExcess })
+
+    /**
      * Trigger an account funding event if we don't have enough to cover this transaction.
      */
     if (feeExcess() < 0) {
@@ -566,11 +601,18 @@ async function generateChangeSdkCore(
      * If needed, seek funding to avoid overspending on fees without a change output to recapture it.
      */
     if (r.changeOutputs.length === 0 && feeExcessNow > 0) {
-      const minimumChange = Math.max(dustFloor, params.changeFirstSatoshis)
-      const totalSatoshisNeeded = spending() + feeTarget(0, 1) + minimumChange
-      const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - funding())
-      await releaseAllocatedChangeInputs()
-      throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
+      const hasOnlyUnreturnableShapingSurplus = surplusPoolShaping && feeExcess(0, 1) < dustFloor
+      if (!hasOnlyUnreturnableShapingSurplus) {
+        const minimumChange = Math.max(dustFloor, params.changeFirstSatoshis)
+        const totalSatoshisNeeded = spending() + feeTarget(0, 1) + minimumChange
+        const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - funding())
+        await releaseAllocatedChangeInputs()
+        throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
+      }
+      // The remaining value cannot pay both the marginal output fee and the
+      // economic dust floor. Leave that bounded remainder in the miner fee;
+      // gathering another input solely to manufacture change would violate
+      // surplus-only shaping and make the action less efficient.
     }
 
     /**
@@ -662,7 +704,17 @@ export function validateGenerateChangeSdkResult(
     ok = false
   }
   const feeRequired = Math.ceil(((r.size || 0) / 1000) * (r.satsPerKb || 0))
-  if (feeRequired !== r.fee) {
+  const minSpendTxSize = transactionSize([params.changeUnlockingScriptLength], [params.changeLockingScriptLength])
+  const dustFloor = Math.max(1, Math.ceil((minSpendTxSize / 1000) * (r.satsPerKb || 0)) * 2)
+  const feeWithChangeOutput = Math.ceil(
+    (((r.size || 0) + transactionOutputSize(params.changeLockingScriptLength)) / 1000) * (r.satsPerKb || 0)
+  )
+  const isBoundedUnreturnableShapingSurplus =
+    params.surplusPoolShaping === true &&
+    r.changeOutputs.length === 0 &&
+    r.fee > feeRequired &&
+    r.fee - feeWithChangeOutput < dustFloor
+  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus) {
     log += `required fee error ${feeRequired} !== ${r.fee};`
     ok = false
   }

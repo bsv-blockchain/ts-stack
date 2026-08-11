@@ -10,7 +10,10 @@ attention to changes that materially alter behavior or extend functionality.
   policy targeting 144 useful 5,000-satoshi outputs. New actions create at most
   eight outputs from real surplus and migrate at most four fee-positive legacy
   fragments, while a same-tier compatibility plan guarantees that optional
-  shaping cannot refuse an action the former planner could fund.
+  shaping cannot refuse an action the former planner could fund. Explicitly
+  funded actions materialize change from their existing surplus without
+  gathering pool inputs, and SQLite policy migrations use sync-compatible UTC
+  ISO timestamps.
 - Prefer completed, then unproven, then sending parents. Plans above 16 inputs
   compare exact transaction-plus-BEEF bytes before accepting pending ancestry;
   pending change remains an unconditional last-resort funding source. Align

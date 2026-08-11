@@ -477,7 +477,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Isolates and resumes action batches, then adds progressive managed-change liquidity: 144 useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration, settled-first parent selection, exact BEEF-cost comparison for pathological plans, last-resort pending funding, delayed permission persistence, and read-only Monitor reporting.
+- Release note: Isolates and resumes action batches, then adds progressive managed-change liquidity: 144 useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration (including actions already funded by explicit inputs), settled-first parent selection, exact BEEF-cost comparison for pathological plans, last-resort pending funding, sync-visible SQL metadata, delayed permission persistence, and read-only Monitor reporting.
 - Migration: No consumer code or BRC-100 migration is required. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom basket values remain unchanged and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback ensure the policy adds no new funding refusal. Operators may tune all work limits, including explicit -1 unlimited modes.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |

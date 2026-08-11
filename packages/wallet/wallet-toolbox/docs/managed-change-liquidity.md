@@ -97,6 +97,16 @@ exhausted.
 
 ## Progressive pool shaping
 
+Explicit or fixed inputs can already cover the requested outputs and fee. In
+that case the planner materializes the first change output directly from that
+existing surplus before considering optional fragment migration. It does not
+call the managed-change allocator merely to create pool outputs. This keeps
+consolidations and externally funded actions on the same shaping policy while
+preserving the invariant that pool growth never gathers compulsory inputs.
+When the surplus cannot pay both the marginal output fee and the economic dust
+floor, the bounded remainder stays in the transaction fee instead of causing a
+compatibility retry to gather another input solely to manufacture change.
+
 After compulsory funding succeeds, the planner may consume up to four
 undersized outputs. A fragment is skipped when spending it would cost at least
 its value. Optional migration never supplies a missing satoshi for the caller's
@@ -137,7 +147,10 @@ only from real surplus.
 
 The SQL data migration is intentionally one-way. Rolling code back does not
 rewrite a migrated preference to 32 or fragment funds. Older code can still
-read and honor the 5,000-satoshi basket value.
+read and honor the 5,000-satoshi basket value. SQLite writes the migrated
+row's timestamp in UTC ISO form, matching incremental-sync query values and
+keeping that metadata immediately sync-visible. MySQL retains its native
+millisecond timestamp expression.
 
 ## Operator configuration
 

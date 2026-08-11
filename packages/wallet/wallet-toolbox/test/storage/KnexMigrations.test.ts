@@ -227,11 +227,17 @@ describe('KnexMigrations tests', () => {
       ])
       const source = new KnexMigrations('test', 'managed change migration test', '1'.repeat(64), 1000)
       const migration = await source.getMigration(MANAGED_CHANGE_POLICY_MIGRATION)
+      const incrementalSyncSince = new Date().toISOString()
 
       await migration.up(knex)
 
       const rows = await knex('output_baskets').orderBy('userId')
       expect(rows.map(row => Number(row.minimumDesiredUTXOValue))).toEqual([5_000, 64, 32, 32])
+      expect(rows[0].updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      await expect(knex('output_baskets')
+        .where('updated_at', '>=', incrementalSyncSince)
+        .orderBy('userId'))
+        .resolves.toMatchObject([{ userId: 1, minimumDesiredUTXOValue: 5_000 }])
       await migration.down?.(knex)
       const afterDown = await knex('output_baskets').orderBy('userId')
       expect(afterDown.map(row => Number(row.minimumDesiredUTXOValue))).toEqual([5_000, 64, 32, 32])

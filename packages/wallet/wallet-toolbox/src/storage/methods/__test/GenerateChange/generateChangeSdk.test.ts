@@ -1379,6 +1379,105 @@ describe('generateChange tests', () => {
     expectTransactionSize(params, r)
   })
 
+  test('10j fixed-input surplus is shaped without gathering wallet inputs', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 7_000, unlockingScriptLength: 107 }],
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 0
+    }
+    const storage = generateChangeSdkMakeStorage(
+      Array.from({ length: 10 }, (_, index) => ({ satoshis: 10_000, outputId: index + 1 }))
+    )
+    const allocateChangeInput = jest.fn(storage.allocateChangeInput)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, storage.releaseChangeInput)
+
+    expect(allocateChangeInput).not.toHaveBeenCalled()
+    expect(r.allocatedChangeInputs).toHaveLength(0)
+    expect(r.changeOutputs).toEqual([{ satoshis: 5_999, lockingScriptLength: 25 }])
+    expectTransactionSize(params, r)
+  })
+
+  test('10k fixed-input surplus keeps optional fragment retirement within its migration budget', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 7_000, unlockingScriptLength: 107 }],
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 4
+    }
+    const storage = generateChangeSdkMakeStorage(
+      Array.from({ length: 10 }, (_, index) => ({ satoshis: 1_000, outputId: index + 1 }))
+    )
+    const allocateChangeInput = jest.fn(storage.allocateChangeInput)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, storage.releaseChangeInput)
+
+    expect(allocateChangeInput).toHaveBeenCalledTimes(4)
+    expect(r.allocatedChangeInputs).toHaveLength(4)
+    expect(r.allocatedChangeInputs.every(input => input.satoshis < 5_000)).toBe(true)
+    expectTransactionSize(params, r)
+  })
+
+  test('10l large fixed-input surplus receives bounded multi-output shaping', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 100_000, unlockingScriptLength: 107 }],
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 0
+    }
+    const storage = generateChangeSdkMakeStorage([{ satoshis: 50_000, outputId: 1 }])
+    const allocateChangeInput = jest.fn(storage.allocateChangeInput)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, storage.releaseChangeInput)
+
+    expect(allocateChangeInput).not.toHaveBeenCalled()
+    expect(r.allocatedChangeInputs).toHaveLength(0)
+    expect(r.changeOutputs).toHaveLength(8)
+    expect(r.changeOutputs.every(output => output.satoshis >= 5_000)).toBe(true)
+    expectTransactionSize(params, r)
+  })
+
+  test('10m sub-dust fixed-input surplus never gathers another input solely to manufacture change', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 1_000, unlockingScriptLength: 107 }],
+      fixedOutputs: [{ satoshis: 900, lockingScriptLength: 25 }],
+      feeModel: { model: 'sat/kb', value: 200 },
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 0
+    }
+    const storage = generateChangeSdkMakeStorage([{ satoshis: 10_000, outputId: 1 }])
+    const allocateChangeInput = jest.fn(storage.allocateChangeInput)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, storage.releaseChangeInput)
+
+    expect(allocateChangeInput).not.toHaveBeenCalled()
+    expect(r.allocatedChangeInputs).toHaveLength(0)
+    expect(r.changeOutputs).toHaveLength(0)
+    expect(r.fee).toBe(100)
+    expectTransactionSize(params, r)
+  })
+
   test('11 emits correlated allocation and generate-change spans without values', async () => {
     const events: any[] = []
     const telemetry = new Telemetry({
