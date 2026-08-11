@@ -61,7 +61,7 @@ await client.revokeDID({ serialNumber: 'serial-123' })
 const client = new DIDClient({
   overlayTopic: 'tm_did',          // default
   overlayService: 'ls_did',        // default
-  networkPreset: 'mainnet',        // 'mainnet' | 'testnet' | 'local'
+  networkPreset: 'mainnet',        // 'mainnet' | 'testnet' | 'teratestnet' | 'local'
   wallet: myWallet,                // optional, defaults to new WalletClient()
   acceptDelayedBroadcast: false,   // default
 })

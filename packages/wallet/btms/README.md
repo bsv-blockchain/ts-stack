@@ -114,11 +114,11 @@ const btms = new BTMS(config?: BTMSConfig)
 
 **Configuration Options:**
 
-| Option          | Type                                | Default          | Description                                            |
-| --------------- | ----------------------------------- | ---------------- | ------------------------------------------------------ |
-| `wallet`        | `WalletInterface`                   | `WalletClient()` | Wallet for signing transactions                        |
-| `networkPreset` | `'local' \| 'mainnet' \| 'testnet'` | `'mainnet'`      | Network for overlay services                           |
-| `comms`         | `CommsLayer`                        | `undefined`      | Optional communications layer (e.g., MessageBoxClient) |
+| Option          | Type                                                 | Default          | Description                                            |
+| --------------- | ---------------------------------------------------- | ---------------- | ------------------------------------------------------ |
+| `wallet`        | `WalletInterface`                                    | `WalletClient()` | Wallet for signing transactions                        |
+| `networkPreset` | `'local' \| 'mainnet' \| 'testnet' \| 'teratestnet'` | `'mainnet'`      | Network for overlay services                           |
+| `comms`         | `CommsLayer`                                         | `undefined`      | Optional communications layer (e.g., MessageBoxClient) |
 
 #### Methods
 

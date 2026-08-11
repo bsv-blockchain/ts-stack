@@ -1,4 +1,4 @@
-import { SecurityLevel, WalletProtocol } from '@bsv/sdk'
+import { SecurityLevel, WalletProtocol, type LookupNetworkPreset } from '@bsv/sdk'
 
 // ============================================================================
 // Common Types
@@ -218,7 +218,7 @@ export interface CertificateData {
 
 export interface OverlayConfig {
   topics: string[]
-  network?: 'mainnet' | 'testnet' | 'local'
+  network?: LookupNetworkPreset
   requireAckFromAllHosts?: 'all' | 'any' | string[]
   requireAckFromAnyHost?: 'all' | 'any' | string[]
   slapTrackers?: string[]

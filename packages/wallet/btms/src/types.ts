@@ -12,7 +12,8 @@ import type {
   PubKeyHex,
   TXIDHexString,
   HexString,
-  CommsLayer
+  CommsLayer,
+  LookupNetworkPreset
 } from '@bsv/sdk'
 
 // ---------------------------------------------------------------------------
@@ -449,7 +450,7 @@ export interface BTMSConfig {
   /** Wallet interface for signing transactions (default: new WalletClient()) */
   wallet?: WalletInterface
   /** Network preset for overlay services (default: 'mainnet') */
-  networkPreset?: 'local' | 'mainnet' | 'testnet'
+  networkPreset?: LookupNetworkPreset
   /** Optional communications layer for token messaging (e.g., MessageBoxClient) */
   comms?: CommsLayer
 }

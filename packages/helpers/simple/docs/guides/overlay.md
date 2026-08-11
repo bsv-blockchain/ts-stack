@@ -29,7 +29,7 @@ const overlay = await Overlay.create({
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `topics` | `string[]` | *required* | Topics to broadcast to (must start with `tm_`) |
-| `network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, or `'local'` |
+| `network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'` |
 | `slapTrackers` | `string[]` | SDK default | Custom SLAP tracker URLs |
 | `hostOverrides` | `Record<string, string[]>` | — | Override hosts for specific topics |
 | `additionalHosts` | `Record<string, string[]>` | — | Add extra hosts for specific topics |

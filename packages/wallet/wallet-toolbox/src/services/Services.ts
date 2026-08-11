@@ -173,9 +173,11 @@ export class Services implements WalletServices {
       // prettier-ignore
       this.postBeefServices.add({ name: 'GorillaPoolArcBeef', service: this.arcGorillaPool.postBeef.bind(this.arcGorillaPool) })
     }
-    // prettier-ignore
-    this.postBeefServices
-      .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
+    if (this.options.arcUrl != null && this.options.arcUrl !== '') {
+      // prettier-ignore
+      this.postBeefServices
+        .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
+    }
     if (hasBitails && this.bitails != null) {
       this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
     }

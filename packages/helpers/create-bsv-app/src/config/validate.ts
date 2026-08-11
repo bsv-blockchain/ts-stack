@@ -151,7 +151,7 @@ export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}
   const glue = raw.glue !== false
   const install = raw.install !== false
   const packageManager = resolvePackageManager(raw)
-  const network: Network = raw.network === 'main' ? 'main' : 'test'
+  const network: Network = raw.network === 'main' || raw.network === 'ttn' ? raw.network : 'test'
 
   return {
     mode,

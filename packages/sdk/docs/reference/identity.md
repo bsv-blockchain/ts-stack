@@ -38,6 +38,7 @@ export interface IdentityClientOptions {
     keyID: string;
     tokenAmount: number;
     outputIndex: number;
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
 }
 ```
 
@@ -130,7 +131,7 @@ IdentityClient lets you discover who others are, and let the world know who you 
 
 ```ts
 export class IdentityClient {
-    constructor(wallet?: WalletInterface, private readonly options = DEFAULT_IDENTITY_CLIENT_OPTIONS, private readonly originator?: OriginatorDomainNameStringUnder250Bytes) 
+    constructor(wallet?: WalletInterface, options?: Partial<IdentityClientOptions>, private readonly originator?: OriginatorDomainNameStringUnder250Bytes)
     async publiclyRevealAttributes(certificate: WalletCertificate, fieldsToReveal: CertificateFieldNameUnder50Bytes[]): Promise<BroadcastResponse | BroadcastFailure> 
     async resolveByIdentityKey(args: DiscoverByIdentityKeyArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 
     async resolveByAttributes(args: DiscoverByAttributesArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 

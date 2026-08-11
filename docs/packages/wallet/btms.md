@@ -4,9 +4,9 @@ title: '@bsv/btms'
 kind: package
 domain: wallet
 npm: '@bsv/btms'
-version: '1.1.4'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.2.0'
+last_updated: '2026-08-10'
+last_verified: '2026-08-10'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'protocol']
@@ -75,7 +75,9 @@ for (const asset of assets) {
 - **Ownership proof** — `proveOwnership()`, `verifyOwnership()` for collateral and escrow operations
 - **Token encoding** — `BTMSToken.decode()` for extracting token data from locking scripts
 - **Asset validation** — `isValidAssetId()`, `isIssuance()` for token identification and verification
-- **Configuration** — Wallet integration via `WalletInterface`, network preset selection, optional comms layer
+- **Configuration** — Wallet integration via `WalletInterface`, explicit
+  `mainnet`, `testnet`, `teratestnet`, or `local` routing, and an optional comms
+  layer
 
 ## Common patterns
 

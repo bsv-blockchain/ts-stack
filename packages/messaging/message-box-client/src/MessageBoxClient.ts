@@ -78,7 +78,6 @@ import {
 
 const DEFAULT_MAINNET_HOST = 'https://message-box-us-1.bsvb.tech'
 const DEFAULT_TESTNET_HOST = DEFAULT_MAINNET_HOST
-const DEFAULT_TTN_HOST = 'https://staging-messagebox.babbage.systems'
 
 /** Build status + description for a batch send result. */
 function buildBatchSendResult(
@@ -212,7 +211,7 @@ export class MessageBoxClient {
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
-   * @param {string} [options.host] - The base URL of the MessageBox server. If omitted, defaults to the selected network's host.
+   * @param {string} [options.host] - The base URL of the MessageBox server. Required for TerraTestNet until a dedicated TTN deployment is available.
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
    * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
@@ -242,10 +241,14 @@ export class MessageBoxClient {
       originator = undefined
     } = options
 
+    if (networkPreset === 'teratestnet' && host == null) {
+      throw new Error(
+        'MessageBoxClient requires an explicit host for TerraTestNet until a dedicated TTN Message Box deployment is available.'
+      )
+    }
+
     let defaultHost = DEFAULT_MAINNET_HOST
-    if (networkPreset === 'teratestnet') {
-      defaultHost = DEFAULT_TTN_HOST
-    } else if (networkPreset === 'testnet') {
+    if (networkPreset === 'testnet') {
       defaultHost = DEFAULT_TESTNET_HOST
     }
 

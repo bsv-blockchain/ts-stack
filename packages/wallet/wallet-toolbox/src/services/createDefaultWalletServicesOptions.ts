@@ -120,7 +120,9 @@ export function createDefaultWalletServicesOptions(
     exchangeratesapiKey: undefined,
     chaintracksFiatExchangeRatesUrl,
     chaintracks,
-    arcUrl: arcDefaultUrl(chain),
+    // Arcade uses EF at /tx. Legacy ARC uses BEEF at /v1/tx and has no
+    // compatible public TTN endpoint, so do not install it as a TTN fallback.
+    arcUrl: chain === 'ttn' ? '' : arcDefaultUrl(chain),
     arcConfig: {
       apiKey: taalArcApiKey ?? undefined,
       deploymentId,
@@ -184,7 +186,7 @@ export function arcDefaultUrl(chain: Chain): string {
     case 'stn':
       return stnArcadeUrl() ?? ''
     case 'ttn':
-      return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/'
+      return ''
     case 'tstn':
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL ('' when unset).
       return tstnArcadeUrl() ?? ''

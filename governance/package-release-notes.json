@@ -55,9 +55,9 @@
     {
       "name": "@bsv/btms",
       "publishedVersion": "1.1.1",
-      "releaseType": "patch",
-      "summary": "Adds strict package contracts and hardens untrusted-key accounting and token-manager maintainability.",
-      "migration": "No consumer migration is required; token and lookup wire contracts are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet as an explicit overlay-network preset alongside the existing token-manager hardening and package contracts.",
+      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/btms-permission-module",
@@ -76,9 +76,9 @@
     {
       "name": "@bsv/did-client",
       "publishedVersion": "1.2.1",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; DID client APIs, encodings, and supported imports are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet as an explicit DID overlay-network preset and retains the governed package-quality contract.",
+      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/fund-wallet",
@@ -98,8 +98,8 @@
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.2.2",
       "releaseType": "minor",
-      "summary": "Adds first-class TerraTestNet overlay routing and selects the staging Message Box host when the teratestnet preset is used.",
-      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet; they may still provide host to override the staging Message Box default."
+      "summary": "Adds first-class TerraTestNet overlay routing while requiring an explicit TTN Message Box host until a dedicated deployment is available.",
+      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet and must provide the dedicated TTN host explicitly."
     },
     {
       "name": "@bsv/overlay",
@@ -153,9 +153,9 @@
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
-      "releaseType": "patch",
-      "summary": "Adds strict browser and server package contracts and hardens wallet construction, naming clarity, output handling, and error behavior.",
-      "migration": "No consumer migration is required; the browser and server entry points remain compatible."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet to the public Overlay configuration while retaining strict browser and server package contracts.",
+      "migration": "Existing overlay configurations are unchanged. TTN consumers select network teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/templates",
@@ -216,9 +216,9 @@
     {
       "name": "create-bsv-app",
       "publishedVersion": "1.0.2",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; generated application structure and CLI behavior are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TTN to the CLI, browser configurator, configuration model, and persisted project-manifest network choices.",
+      "migration": "Existing mainnet and testnet scaffolds are unchanged. New TTN projects pass --network ttn or select TerraTestNet in the configurator."
     }
   ]
 }

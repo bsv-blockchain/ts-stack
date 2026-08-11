@@ -3,10 +3,10 @@ id: pkg-did-client
 title: '@bsv/did-client'
 kind: package
 domain: helpers
-version: '1.2.3'
+version: '1.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-10'
+last_verified: '2026-08-10'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/did-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client'
@@ -56,7 +56,8 @@ if (createResult.status === 'success') {
 - **Revoke DIDs** — Spend DID token to mark as revoked
 - **Find DIDs** — Query overlay lookup service by serial number or outpoint
 - **Broadcast** — Publish DIDs to SHIP/SLAP overlay network for discoverability
-- **Configuration** — Custom overlay topics and lookup services
+- **Configuration** — Custom overlay topics, lookup services, and explicit
+  `mainnet`, `testnet`, `teratestnet`, or `local` routing
 - **Pagination** — Filter by date range, limit, skip
 
 ## Common patterns

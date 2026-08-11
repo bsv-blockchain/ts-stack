@@ -3,10 +3,10 @@ id: pkg-simple
 title: '@bsv/simple'
 kind: package
 domain: helpers
-version: '0.4.8'
+version: '0.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-10'
+last_verified: '2026-08-10'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/simple'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple'
@@ -124,7 +124,8 @@ await serverWallet.receiveDirectPayment({
 - **Identity key** — Compressed public key hex (66 chars) for P2P messaging
 - **BRC-29 derivation** — Automatic hierarchical key derivation without exposing private keys
 - **MessageBox** — P2P payment and message transport via a Message Box server
-- **Overlay** — SHIP/SLAP network for broadcast and lookup services
+- **Overlay** — SHIP/SLAP broadcast and lookup with explicit `teratestnet`
+  routing alongside mainnet, testnet, and local presets
 - **Verifiable Credentials** — W3C format for attestations with revocation support
 
 ## When to use this

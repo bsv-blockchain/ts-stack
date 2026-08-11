@@ -758,13 +758,24 @@ describe('MessageBoxClient', () => {
     expect((client as any).host).toBe('https://message-box-us-1.bsvb.tech')
   })
 
-  it('uses the staging Message Box and TTN resolver preset for TerraTestNet', () => {
+  it('requires an explicit TTN Message Box host', () => {
+    expect(
+      () =>
+        new MessageBoxClient({
+          walletClient: mockWalletClient,
+          networkPreset: 'teratestnet'
+        })
+    ).toThrow('requires an explicit host for TerraTestNet')
+  })
+
+  it('uses an explicit Message Box host and TTN resolver preset for TerraTestNet', () => {
     const client = new MessageBoxClient({
       walletClient: mockWalletClient,
+      host: 'https://messagebox.ttn.example',
       networkPreset: 'teratestnet'
     })
 
-    expect((client as any).host).toBe('https://staging-messagebox.babbage.systems')
+    expect((client as any).host).toBe('https://messagebox.ttn.example')
     expect((client as any).networkPreset).toBe('teratestnet')
   })
 

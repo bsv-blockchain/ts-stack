@@ -13,7 +13,8 @@ import {
   Utils,
   WalletClient,
   WalletInterface,
-  WalletProtocol
+  WalletProtocol,
+  type LookupNetworkPreset
 } from '@bsv/sdk'
 import { DIDRecord, DIDQuery } from './types/index.js'
 
@@ -28,7 +29,7 @@ export interface DIDClientOptions {
   overlayTopic?: string
   overlayService?: string
   wallet?: WalletInterface
-  networkPreset?: 'mainnet' | 'testnet' | 'local'
+  networkPreset?: LookupNetworkPreset
   acceptDelayedBroadcast?: boolean
 }
 
@@ -39,7 +40,7 @@ export class DIDClient {
   private readonly overlayTopic: string
   private readonly overlayService: string
   private readonly wallet: WalletInterface
-  private readonly networkPreset: 'mainnet' | 'testnet' | 'local' | undefined
+  private readonly networkPreset: LookupNetworkPreset | undefined
   private readonly acceptDelayedBroadcast: boolean
 
   constructor(opts: DIDClientOptions = {}) {

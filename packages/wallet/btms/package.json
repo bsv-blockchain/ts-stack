@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -73,7 +73,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.4.0"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

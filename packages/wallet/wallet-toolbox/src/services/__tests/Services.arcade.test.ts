@@ -46,6 +46,7 @@ describe('Services Arcade wiring', () => {
     const services = new Services(options)
     expect(services.arcade).toBeInstanceOf(Arcade)
     expect(services.postBeefServices.services[0].name).toBe('ArcadeBeef')
+    expect(services.postBeefServices.services.some(s => s.name === 'TaalArcBeef')).toBe(false)
   })
 
   test('TTN Arcade can be explicitly disabled', () => {

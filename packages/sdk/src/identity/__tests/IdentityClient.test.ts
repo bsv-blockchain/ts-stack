@@ -225,6 +225,13 @@ describe('IdentityClient', () => {
         ['tm_identity'],
         expect.objectContaining({ networkPreset: 'teratestnet' })
       )
+      expect((client as any).options).toEqual({
+        protocolID: [1, 'identity'],
+        keyID: '1',
+        tokenAmount: 1,
+        outputIndex: 0,
+        networkPreset: 'teratestnet'
+      })
     })
   })
 

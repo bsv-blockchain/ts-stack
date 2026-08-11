@@ -7,8 +7,9 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox (unreleased)
 
 - Route `ttn` wallets through the isolated `teratestnet` overlay preset and
-  enable the public TTN Arcade broadcaster/proof provider by default. Other
-  chain defaults are unchanged, and an empty Arcade URL explicitly disables it.
+  enable the public TTN Arcade broadcaster/proof provider by default. TTN does
+  not register the incompatible legacy ARC BEEF fallback. Other chain defaults
+  are unchanged, and an empty Arcade URL explicitly disables Arcade.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`
   membership, so unrelated immediate actions and `noSend` roots cannot be
   captured by or commit a workspace. Add an exact-input resume protocol for
