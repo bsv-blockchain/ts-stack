@@ -209,7 +209,7 @@ test('packed consumers use the exact transitive workspace runtime closure', () =
       '@bsv/registry-only': '^1.0.0'
     },
     peerDependencies: {
-      '@bsv/peer': '^1.0.0'
+      '@bsv/external-peer': '^1.0.0'
     }
   }
   const manifests = new Map([
@@ -224,12 +224,19 @@ test('packed consumers use the exact transitive workspace runtime closure', () =
       '@bsv/b',
       {
         name: '@bsv/b',
-        dependencies: { '@bsv/a': 'workspace:^' }
+        dependencies: { '@bsv/a': 'workspace:^' },
+        peerDependencies: { '@bsv/peer': '^1.0.0' }
+      }
+    ],
+    [
+      '@bsv/peer',
+      {
+        name: '@bsv/peer'
       }
     ]
   ])
 
-  assert.deepEqual(workspaceRuntimeClosure(root, manifests), ['@bsv/a', '@bsv/b'])
+  assert.deepEqual(workspaceRuntimeClosure(root, manifests), ['@bsv/a', '@bsv/b', '@bsv/peer'])
   assert.throws(
     () =>
       workspaceRuntimeClosure(

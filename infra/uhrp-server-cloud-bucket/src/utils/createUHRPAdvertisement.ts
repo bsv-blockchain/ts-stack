@@ -1,8 +1,9 @@
 import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, SHIPBroadcaster } from "@bsv/sdk"
 import { Setup } from "@bsv/wallet-toolbox"
+import { uhrpNetwork } from "./network"
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
-const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
+const { chain, lookupPreset } = uhrpNetwork()
 const WALLET_STORAGE_URL = process.env.WALLET_STORAGE_URL as string
 
 export interface AdvertisementParams {
@@ -50,7 +51,7 @@ export default async function createUHRPAdvertisement({
   ]
 
   const wallet = await Setup.createWalletClientNoEnv({
-    chain: BSV_NETWORK === 'mainnet' ? 'main' : 'test',
+    chain,
     rootKeyHex: SERVER_PRIVATE_KEY,
     storageUrl: WALLET_STORAGE_URL
   })
@@ -82,7 +83,8 @@ export default async function createUHRPAdvertisement({
   const transaction = Transaction.fromAtomicBEEF(createResult.tx!)
   const txid = transaction.id('hex')
   const broadcaster = new SHIPBroadcaster(['tm_uhrp'], {
-    networkPreset: BSV_NETWORK
+    // Keep the service buildable against the last published SDK during the coordinated release.
+    networkPreset: lookupPreset as 'mainnet' | 'testnet'
   })
   await broadcaster.broadcast(transaction)
 

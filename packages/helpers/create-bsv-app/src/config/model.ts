@@ -2,7 +2,7 @@
 export type FrontendFramework = 'react'
 export type BackendFramework = 'express'
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
-export type Network = 'main' | 'test'
+export type Network = 'main' | 'test' | 'ttn'
 export type Mode = 'new' | 'add'
 export type Layout = 'frontend-only' | 'backend-only' | 'monorepo' | 'none'
 

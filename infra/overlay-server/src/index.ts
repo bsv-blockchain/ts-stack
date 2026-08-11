@@ -91,18 +91,22 @@ const numberEnv = (name: string): number | undefined => {
   return parsed
 }
 
-const networkEnv = (): 'main' | 'test' => {
+const networkEnv = (): 'main' | 'test' | 'ttn' => {
   const network = requireEnv('NETWORK')
-  if (network !== 'main' && network !== 'test') {
-    throw new TypeError(`NETWORK must be "main" or "test", got: ${network}`)
+  if (network !== 'main' && network !== 'test' && network !== 'ttn') {
+    throw new TypeError(`NETWORK must be "main", "test", or "ttn", got: ${network}`)
   }
   return network
 }
 
 const requirePropagationProvider = (
+  network: 'main' | 'test' | 'ttn',
   arcApiKey: string | undefined,
   arcadeUrl: string | undefined
 ): void => {
+  if (network === 'ttn' && arcadeUrl === undefined) {
+    throw new TypeError('TTN requires ARCADE_URL; ARC is not a TerraTestNet broadcaster')
+  }
   if (arcApiKey === undefined && arcadeUrl === undefined) {
     throw new TypeError(
       'Configure at least one transaction propagation provider: ARC_API_KEY or ARCADE_URL'
@@ -182,7 +186,7 @@ const main = async () => {
   const WALLET_STORAGE_URL = requireEnv('WALLET_STORAGE_URL')
   const ARC_API_KEY = optionalEnv('ARC_API_KEY')
   const ARC_CALLBACK_TOKEN = optionalEnv('ARC_CALLBACK_TOKEN')
-  const ARCADE_URL = optionalEnv('ARCADE_URL')
+  const configuredArcadeUrl = optionalEnv('ARCADE_URL')
   const ARCADE_API_KEY = optionalEnv('ARCADE_API_KEY')
   const ARCADE_DEPLOYMENT_ID = optionalEnv('ARCADE_DEPLOYMENT_ID')
   const CHAINTRACKS_URL = optionalEnv('CHAINTRACKS_URL')
@@ -192,7 +196,10 @@ const main = async () => {
   const ADMIN_TOKEN = optionalSecretEnv('ADMIN_TOKEN', 32) // random token generated if unset
 
   const NETWORK = networkEnv()
-  requirePropagationProvider(ARC_API_KEY, ARCADE_URL)
+  const ARCADE_URL =
+    configuredArcadeUrl ??
+    (NETWORK === 'ttn' ? 'https://arcade-v2-ttn-us-1.bsvblockchain.tech' : undefined)
+  requirePropagationProvider(NETWORK, ARC_API_KEY, ARCADE_URL)
 
   // We'll make a new server for our overlay node.
   const server = new OverlayExpress(
@@ -212,7 +219,12 @@ const main = async () => {
   const providerServer = server as OverlayProviderConfigMethods
   server.configureLogger(overlayLogger as unknown as typeof console)
 
-  const wa = new WalletAdvertiser(NETWORK, SERVER_PRIVATE_KEY, WALLET_STORAGE_URL, HOSTING_URL)
+  const wa = new WalletAdvertiser(
+    NETWORK as 'main' | 'test',
+    SERVER_PRIVATE_KEY,
+    WALLET_STORAGE_URL,
+    HOSTING_URL
+  )
 
   await wa.init()
 
@@ -221,7 +233,8 @@ const main = async () => {
     throwOnBroadcastFailure: boolEnv('THROW_ON_BROADCAST_FAIL', true)
   })
 
-  server.configureNetwork(NETWORK)
+  // Runtime support is supplied by the package releases produced from this change.
+  server.configureNetwork(NETWORK as 'main' | 'test')
 
   if (ARC_CALLBACK_TOKEN !== undefined) {
     server.configureArcCallbackToken(ARC_CALLBACK_TOKEN)

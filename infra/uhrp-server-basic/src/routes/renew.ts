@@ -6,8 +6,9 @@ import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
+import { uhrpNetwork } from '../utils/network'
 
-const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
+const { lookupPreset } = uhrpNetwork()
 
 interface RenewRequest extends Request {
   auth: {
@@ -223,7 +224,8 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     }
 
     const broadcaster = new SHIPBroadcaster(['tm_uhrp'], {
-      networkPreset: BSV_NETWORK
+      // Keep the service buildable against the last published SDK during the coordinated release.
+      networkPreset: lookupPreset as 'mainnet' | 'testnet'
     })
 
     await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))

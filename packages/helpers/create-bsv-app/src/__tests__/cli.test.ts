@@ -93,7 +93,7 @@ describe('parseArgs', () => {
 
   test('rejects unknown options, invalid enum values, and extra positionals', () => {
     expect(() => parseArgs(['--wat'])).toThrow(/unknown option/i)
-    expect(() => parseArgs(['--network', 'regtest'])).toThrow(/main or test/i)
+    expect(() => parseArgs(['--network', 'regtest'])).toThrow(/main, test, or ttn/i)
     expect(() => parseArgs(['one', 'two'])).toThrow(/unexpected argument/i)
   })
 
@@ -114,6 +114,11 @@ describe('parseArgs', () => {
   test('--network main sets draft.network=main', () => {
     const a = parseArgs(['--network', 'main'])
     expect(a.draft.network).toBe('main')
+  })
+
+  test('--network ttn sets draft.network=ttn', () => {
+    const a = parseArgs(['--network', 'ttn'])
+    expect(a.draft.network).toBe('ttn')
   })
 
   test('positional arg sets dir', () => {

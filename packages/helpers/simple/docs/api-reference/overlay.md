@@ -17,7 +17,7 @@ Create a new overlay instance.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `config.topics` | `string[]` | *required* | Topics to broadcast to (must start with `tm_`) |
-| `config.network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, or `'local'` |
+| `config.network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'` |
 | `config.slapTrackers` | `string[]` | SDK default | Custom SLAP tracker URLs |
 | `config.hostOverrides` | `Record<string, string[]>` | — | Override hosts for specific topics |
 | `config.additionalHosts` | `Record<string, string[]>` | — | Add extra hosts for specific topics |

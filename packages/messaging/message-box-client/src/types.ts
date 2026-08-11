@@ -11,7 +11,8 @@ import {
   OutputTagStringUnder300Bytes,
   PositiveIntegerOrZero,
   PubKeyHex,
-  WalletInterface
+  WalletInterface,
+  type LookupNetworkPreset
 } from '@bsv/sdk'
 
 /**
@@ -26,7 +27,8 @@ export interface MessageBoxClientOptions {
 
   /**
    * Base URL of the MessageBox server.
-   * @default 'https://message-box-us-1.bsvb.tech'
+   * Required when networkPreset is 'teratestnet'.
+   * @default 'https://message-box-us-1.bsvb.tech' for mainnet and testnet
    */
   host?: string
 
@@ -38,9 +40,9 @@ export interface MessageBoxClientOptions {
 
   /**
    * Overlay network preset for routing resolution.
-   * @default 'local'
+   * @default 'mainnet'
    */
-  networkPreset?: 'local' | 'mainnet' | 'testnet'
+  networkPreset?: LookupNetworkPreset
 
   /**
    * Originator of the message box client.

@@ -104,7 +104,7 @@ Refer to the inline comments in `.env.example` and update the fields as appropri
 | Secret | What it's for | Example |
 | -- | -- | -- |
 | **ADMIN_TOKEN** | Token required for communication between the storage-server service and the notifier service | `super‑secret‑admin‑token` |
-| **BSV_NETWORK** | Which Bitcoin SV network the server talks to | `testnet` or `mainnet`|
+| **BSV_NETWORK** | Which Bitcoin SV network the server talks to | `mainnet`, `testnet`, or `ttn`/`teratestnet`|
 | **GOOGLE_PROJECT_ID** | Your GCP project ID | `my‑gcp‑project` |
 | **GCP_BUCKET_NAME** | The name for the Storage Bucket that will be created during setup | `my-uhrp-bucket` |
 | **GCR_HOST** | Hostname used within Google Cloud's Artifact Registry for your selected region | `us-west1-docker.pkg.dev` |

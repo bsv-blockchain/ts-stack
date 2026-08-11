@@ -112,6 +112,11 @@ const main = async () => {
     scanDepth: 3
   })
 
+  // TerraTestNet nodes additionally select TTN. WhatsOnChain does not serve
+  // this network, so configureChaintracks() (or an explicit ChainTracker) is
+  // required before engine initialization.
+  // server.configureNetwork('ttn')
+
   // Lastly, configure the engine and start the server!
   await server.configureEngine()
   await server.start()

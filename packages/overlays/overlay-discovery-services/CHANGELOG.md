@@ -10,7 +10,9 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+
+- Support `ttn` WalletAdvertiser instances with chain-isolated TerraTestNet
+  lookup routing and TTN wallet services.
 
 ### Changed
 - Preserve the historical plain `Error` contract for malformed lookup queries

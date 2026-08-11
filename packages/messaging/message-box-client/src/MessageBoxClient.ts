@@ -39,7 +39,8 @@ import {
   InternalizeOutput,
   Random,
   OriginatorDomainNameStringUnder250Bytes,
-  Beef
+  Beef,
+  type LookupNetworkPreset
 } from '@bsv/sdk'
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import * as Logger from './Utils/logger.js'
@@ -202,7 +203,7 @@ export class MessageBoxClient {
   private myIdentityKey?: string
   private readonly joinedRooms: Set<string> = new Set()
   private readonly lookupResolver: LookupResolver
-  private readonly networkPreset: 'local' | 'mainnet' | 'testnet'
+  private readonly networkPreset: LookupNetworkPreset
   private initialized = false
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
@@ -210,10 +211,10 @@ export class MessageBoxClient {
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
-   * @param {string} [options.host] - The base URL of the MessageBox server. If omitted, defaults to mainnet/testnet hosts.
+   * @param {string} [options.host] - The base URL of the MessageBox server. Required for TerraTestNet until a dedicated TTN deployment is available.
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
-   * @param {'local' | 'mainnet' | 'testnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
+   * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -240,7 +241,16 @@ export class MessageBoxClient {
       originator = undefined
     } = options
 
-    const defaultHost = networkPreset === 'testnet' ? DEFAULT_TESTNET_HOST : DEFAULT_MAINNET_HOST
+    if (networkPreset === 'teratestnet' && host == null) {
+      throw new Error(
+        'MessageBoxClient requires an explicit host for TerraTestNet until a dedicated TTN Message Box deployment is available.'
+      )
+    }
+
+    let defaultHost = DEFAULT_MAINNET_HOST
+    if (networkPreset === 'testnet') {
+      defaultHost = DEFAULT_TESTNET_HOST
+    }
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator

@@ -5,7 +5,7 @@ import {
   Broadcaster
 } from '../transaction/index.js'
 import * as Utils from '../primitives/utils.js'
-import LookupResolver from './LookupResolver.js'
+import LookupResolver, { type LookupNetworkPreset } from './LookupResolver.js'
 import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 
 /**
@@ -62,9 +62,10 @@ export interface SHIPBroadcasterConfig {
    * The network preset to use, unless other options override it.
    * - mainnet: use mainnet resolver and HTTPS facilitator
    * - testnet: use testnet resolver and HTTPS facilitator
+   * - teratestnet: use TerraTestNet resolver and HTTPS facilitator
    * - local: directly send to localhost:8080 and a facilitator that permits plain HTTP
    */
-  networkPreset?: 'mainnet' | 'testnet' | 'local'
+  networkPreset?: LookupNetworkPreset
   /** The facilitator used to make requests to Overlay Services hosts. */
   facilitator?: OverlayBroadcastFacilitator
   /** The resolver used to locate suitable hosts with SHIP */
@@ -140,7 +141,7 @@ export default class TopicBroadcaster implements Broadcaster {
     string,
     TopicAcknowledgmentRequirement
   >
-  private readonly networkPreset: 'mainnet' | 'testnet' | 'local'
+  private readonly networkPreset: LookupNetworkPreset
 
   // Cache for findInterestedHosts to avoid repeated SHIP tracker lookups
   private interestedHostsCache: { hosts: Record<string, Set<string>>; expiresAt: number } | null =

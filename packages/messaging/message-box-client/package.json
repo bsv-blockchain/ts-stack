@@ -1,6 +1,6 @@
 {
   "name": "@bsv/message-box-client",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -88,7 +88,7 @@
     "@bsv/authsocket-client": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.4.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

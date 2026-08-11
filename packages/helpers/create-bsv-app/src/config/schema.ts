@@ -171,6 +171,7 @@ export const configSchema: ConfigSchema = [
         default: 'test',
         options: [
           { value: 'test', label: 'Testnet' },
+          { value: 'ttn', label: 'TerraTestNet' },
           { value: 'main', label: 'Mainnet' }
         ],
         when: { mode: 'new', starter: capabilityStarterIds() }

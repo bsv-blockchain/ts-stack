@@ -92,7 +92,7 @@ Important optional configuration:
 | `ROUTING_PREFIX`                                  | Empty                                   |
 | `ENABLE_WEBSOCKETS`                               | `true`                                  |
 | `WALLET_STORAGE_URL`                              | Wallet storage service URL              |
-| `BSV_NETWORK`                                     | `mainnet`; use `testnet` for test chain |
+| `BSV_NETWORK`                                     | `mainnet`; use `testnet` for testnet or `ttn`/`teratestnet` for TerraTestNet |
 | `ENABLE_FIREBASE`                                 | Firebase disabled unless `true`         |
 | `LOGGING_ENABLED`                                 | Verbose logs when `true`                |
 | `TRUST_PROXY_HOPS`                                | Exact trusted proxy hops, 0–10          |

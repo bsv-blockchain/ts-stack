@@ -1,7 +1,8 @@
 import LookupResolver, {
   HTTPSOverlayLookupFacilitator,
   DEFAULT_SLAP_TRACKERS,
-  DEFAULT_TESTNET_SLAP_TRACKERS
+  DEFAULT_TESTNET_SLAP_TRACKERS,
+  DEFAULT_TTN_SLAP_TRACKERS
 } from '../LookupResolver'
 import { getOverlayHostReputationTracker, HostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
@@ -76,6 +77,16 @@ describe('LookupResolver – additional coverage', () => {
       const r = new LookupResolver({ facilitator: mockFacilitator, networkPreset: 'testnet' })
       expect((r as any).slapTrackers).toEqual(DEFAULT_TESTNET_SLAP_TRACKERS)
       expect((r as any).networkPreset).toBe('testnet')
+    })
+
+    it('uses an isolated TTN root for the teratestnet preset', () => {
+      const r = new LookupResolver({
+        facilitator: mockFacilitator,
+        networkPreset: 'teratestnet'
+      })
+      expect((r as any).slapTrackers).toEqual(DEFAULT_TTN_SLAP_TRACKERS)
+      expect((r as any).slapTrackers).not.toEqual(DEFAULT_TESTNET_SLAP_TRACKERS)
+      expect((r as any).networkPreset).toBe('teratestnet')
     })
 
     it('uses localhost for local preset in ls_slap query', async () => {

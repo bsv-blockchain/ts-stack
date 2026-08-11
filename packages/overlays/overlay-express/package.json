@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -105,7 +105,7 @@
     "uuid": "^14.0.1"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.4.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

@@ -37,7 +37,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface DownloaderConfig {
-    networkPreset: "mainnet" | "testnet" | "local";
+    networkPreset: "mainnet" | "testnet" | "teratestnet" | "local";
 }
 ```
 

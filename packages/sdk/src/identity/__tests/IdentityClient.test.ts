@@ -2,6 +2,7 @@ import { WalletCertificate, WalletInterface } from '../../wallet/index'
 import { IdentityClient } from '../IdentityClient'
 import { Certificate } from '../../auth/certificates/index.js'
 import { KNOWN_IDENTITY_TYPES, defaultIdentity } from '../types/index.js'
+import { TopicBroadcaster } from '../../overlay-tools/index.js'
 
 // ----- Mocks for external dependencies -----
 jest.mock('../../script', () => {
@@ -200,6 +201,37 @@ describe('IdentityClient', () => {
 
       // Validate that createAction was called.
       expect(walletMock.createAction).toHaveBeenCalled()
+    })
+
+    it('uses an explicit TerraTestNet preset instead of the wallet network', async () => {
+      const certificate = {
+        fields: { name: 'Alice' },
+        type: 'xCert',
+        serialNumber: '12345',
+        subject: 'abcdef1234567890',
+        certifier: 'CertifierX',
+        revocationOutpoint: 'outpoint1',
+        signature: 'signature1'
+      } as any as WalletCertificate
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+      const client = new IdentityClient(walletMock as WalletInterface, {
+        networkPreset: 'teratestnet'
+      })
+
+      await client.publiclyRevealAttributes(certificate, ['name'])
+
+      expect(walletMock.getNetwork).not.toHaveBeenCalled()
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_identity'],
+        expect.objectContaining({ networkPreset: 'teratestnet' })
+      )
+      expect((client as any).options).toEqual({
+        protocolID: [1, 'identity'],
+        keyID: '1',
+        tokenAmount: 1,
+        outputIndex: 0,
+        networkPreset: 'teratestnet'
+      })
     })
   })
 

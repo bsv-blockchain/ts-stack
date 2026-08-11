@@ -10,6 +10,7 @@ import { db } from "../db/knex";
 import { User, AuthMethodEntity, PaymentEntity } from "../types";
 import { Curve, Random, RPuzzle, Utils } from '@bsv/sdk'
 import { log } from "../logger";
+import { parsePublicWalletChain } from "../config/network";
 
 function insertedIdFromResult(insertResult: unknown): number | undefined {
     const candidate = Array.isArray(insertResult) ? insertResult[0] : insertResult;
@@ -287,7 +288,7 @@ export class UserService {
             const lockingScript = rPuzzle.lock(r!)
 
             const wallet = await Setup.createWalletClientNoEnv({
-                chain: BSV_NETWORK === 'testnet' ? 'test' : 'main',
+                chain: parsePublicWalletChain(BSV_NETWORK),
                 rootKeyHex: SERVER_PRIVATE_KEY as string,
                 storageUrl: STORAGE_URL as string
             });
