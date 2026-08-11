@@ -66,6 +66,12 @@ export class IdentityStorageManager {
     return new RegExp(fuzzyPattern, 'i')
   }
 
+  private getExactCaseInsensitiveRegex (input: string): RegExp {
+    const escapedInput = this.normalizeSearchInput(input)
+      .replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+    return new RegExp(`^${escapedInput}$`, 'i')
+  }
+
   async findByAttribute (attributes: IdentityAttributes, certifiers?: string[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (attributes === undefined || Object.keys(attributes).length === 0) {
@@ -94,7 +100,7 @@ export class IdentityStorageManager {
         .filter(([, value]) => this.normalizeSearchInput(value).length > 0)
         .map(([key, value]) => ({
           [`certificate.fields.${key}`]: key === 'userName'
-            ? this.normalizeSearchInput(value)
+            ? this.getExactCaseInsensitiveRegex(value)
             : this.getFuzzyRegex(value)
         }))
 

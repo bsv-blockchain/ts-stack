@@ -40,7 +40,7 @@ describe('IdentityStorageManager fuzzy attribute lookup', () => {
     await storage.storeRecord(
       'brayden-record',
       0,
-      certificateWithFields('brayden-serial', { userName: 'braydenjlangley' })
+      certificateWithFields('brayden-serial', { userName: 'BraydenJLangley' })
     )
     await storage.storeRecord(
       'project-babbage-decoy',
@@ -69,5 +69,12 @@ describe('IdentityStorageManager fuzzy attribute lookup', () => {
     await expect(storage.findByAttribute({ any: 'BRAYDEN' })).resolves.toEqual([
       { txid: 'brayden-record', outputIndex: 0 }
     ])
+  })
+
+  it('matches a username exactly without requiring the stored capitalization', async () => {
+    await expect(storage.findByAttribute({ userName: 'braydenjlangley' })).resolves.toEqual([
+      { txid: 'brayden-record', outputIndex: 0 }
+    ])
+    await expect(storage.findByAttribute({ userName: 'brayden' })).resolves.toEqual([])
   })
 })
