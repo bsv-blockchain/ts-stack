@@ -9,6 +9,7 @@ import {
 } from '../../src/storage/methods/attemptToPostReqsToNetwork'
 import { Beef } from '@bsv/sdk'
 import { EntityProvenTxReq } from '../../src/storage/schema/entities'
+import { quarantineReqInputs } from '../../src/storage/methods/reconcileFailedTransactionInputs'
 
 setLogging(false)
 
@@ -29,9 +30,9 @@ setLogging(false)
  * restore for confirmed-spent inputs.
  *
  * Test scenarios:
- *   1. Input confirmed-spent on chain (services.isUtxo → false) →
+ *   1. Input confirmed-spent on chain (getUtxoStatus.isUtxo → false) →
  *      basket entry transitions to spendable=false.
- *   2. Input still unspent on chain (services.isUtxo → true) →
+ *   2. Input still unspent on chain (getUtxoStatus.isUtxo → true) →
  *      basket entry remains spendable=true (preserves transient-
  *      failure recovery semantics).
  *   3. Service error mid-check → input is left as-is (eviction is
@@ -155,10 +156,27 @@ describe('markStaleInputsAsSpent', () => {
     }
   }
 
-  /** Mock WalletServices that returns a configured isUtxo result. */
-  function mockServices (isUtxoFn: (output: any) => boolean | Promise<boolean>): sdk.WalletServices {
+  /** Mock WalletServices that returns a configured, explicit UTXO verdict. */
+  function mockServices (isUtxoFn: (outpoint: string) => boolean | Promise<boolean>): sdk.WalletServices {
     return {
-      isUtxo: async (output: any) => isUtxoFn(output)
+      hashOutputScript: () => 'ff'.repeat(32),
+      getUtxoStatus: async (_hash: string, _format: undefined, outpoint: string) => ({
+        name: 'mock',
+        status: 'success' as const,
+        details: [],
+        isUtxo: await isUtxoFn(outpoint)
+      })
+    } as unknown as sdk.WalletServices
+  }
+
+  function mockInconclusiveServices (): sdk.WalletServices {
+    return {
+      hashOutputScript: () => 'ff'.repeat(32),
+      getUtxoStatus: async () => ({
+        name: '<noservices>',
+        status: 'error' as const,
+        details: []
+      })
     } as unknown as sdk.WalletServices
   }
 
@@ -222,6 +240,91 @@ describe('markStaleInputsAsSpent', () => {
 
       const after = verifyOne(await storage.findOutputs({ partial: { outputId: seed.consumedOutputId } }))
       expect(after.spendable).toBe(true)
+    }
+  })
+
+  test('leaves input untouched when no UTXO provider is configured', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const ar = makeAggregateResult(seed.failedReq)
+
+      const result = await markStaleInputsAsSpent(
+        ar,
+        storage as StorageKnex,
+        mockInconclusiveServices(),
+        undefined
+      )
+
+      expect(result.checked).toBe(0)
+      expect(result.staleConfirmed).toBe(0)
+      const after = verifyOne(await storage.findOutputs({ partial: { outputId: seed.consumedOutputId } }))
+      expect(after.spendable).toBe(true)
+    }
+  })
+
+  test('leaves input untouched when its locking script cannot be restored', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const ar = makeAggregateResult(seed.failedReq)
+      const outputs = await storage.findOutputsByOutpoints(seed.userId, [seed.consumedOutpoint])
+      for (const output of Object.values(outputs)) output.lockingScript = undefined
+      jest.spyOn(storage, 'findOutputsByOutpoints').mockResolvedValue(outputs)
+      jest.spyOn(storage, 'validateOutputScript').mockRejectedValue(new Error('raw transaction unavailable'))
+
+      const result = await markStaleInputsAsSpent(ar, storage as StorageKnex, mockServices(() => false), undefined)
+
+      expect(result).toEqual({ checked: 0, staleConfirmed: 0, staleOutpoints: [] })
+    }
+  })
+
+  test('leaves input untouched when script validation remains inconclusive', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const ar = makeAggregateResult(seed.failedReq)
+      const outputs = await storage.findOutputsByOutpoints(seed.userId, [seed.consumedOutpoint])
+      for (const output of Object.values(outputs)) output.lockingScript = undefined
+      jest.spyOn(storage, 'findOutputsByOutpoints').mockResolvedValue(outputs)
+      jest.spyOn(storage, 'validateOutputScript').mockResolvedValue(undefined)
+
+      const result = await markStaleInputsAsSpent(ar, storage as StorageKnex, mockServices(() => false), undefined)
+
+      expect(result).toEqual({ checked: 0, staleConfirmed: 0, staleOutpoints: [] })
+      expect(storage.validateOutputScript).toHaveBeenCalled()
+    }
+  })
+
+  test('Arcade input-conflict quarantine covers every local user copy without WoC', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const firstOutput = verifyOne(
+        await storage.findOutputs({ partial: { outputId: seed.consumedOutputId } })
+      )
+      const secondUser = await _tu.insertTestUser(storage)
+      const { tx: secondFunding } = await _tu.insertTestTransaction(storage, secondUser, false, {
+        status: 'completed',
+        txid: seed.consumedOutpoint.txid
+      })
+      await _tu.insertTestTransaction(storage, secondUser, false, {
+        status: 'failed',
+        txid: seed.failedReq.txid,
+        rawTx: seed.failedReq.rawTx
+      })
+      const secondOutput = await _tu.insertTestOutput(storage, secondFunding, 0, 1000, undefined, false, {
+        txid: seed.consumedOutpoint.txid,
+        lockingScript: firstOutput.lockingScript,
+        spendable: true,
+        spentBy: undefined
+      })
+
+      const result = await quarantineReqInputs(seed.failedReq, storage)
+
+      expect(result.checked).toBe(2)
+      expect(result.staleConfirmed).toBe(2)
+      expect(result.staleOutpoints).toEqual([`${seed.consumedOutpoint.txid}.0`])
+      const firstAfter = verifyOne(await storage.findOutputs({ partial: { outputId: seed.consumedOutputId } }))
+      const secondAfter = verifyOne(await storage.findOutputs({ partial: { outputId: secondOutput.outputId } }))
+      expect(firstAfter.spendable).toBe(false)
+      expect(secondAfter.spendable).toBe(false)
     }
   })
 
@@ -298,15 +401,12 @@ describe('markStaleInputsAsSpent', () => {
       const failedReq = new EntityProvenTxReq(refreshed)
       const ar = makeAggregateResult(failedReq)
 
-      // services.isUtxo: stale → false, live → true. External outpoint
+      // getUtxoStatus: stale → false, live → true. External outpoint
       // never reaches services because it's not in the user's basket.
-      const services = mockServices((output: any) => {
-        const txidHex = typeof output.txid === 'string'
-          ? output.txid
-          : Buffer.from(output.txid).toString('hex')
-        if (txidHex === fundingTxid) return false
-        if (txidHex === liveFundingTxid) return true
-        throw new Error(`unexpected isUtxo lookup for ${txidHex}`)
+      const services = mockServices((outpoint: string) => {
+        if (outpoint === `${fundingTxid}.0`) return false
+        if (outpoint === `${liveFundingTxid}.0`) return true
+        throw new Error(`unexpected UTXO lookup for ${outpoint}`)
       })
 
       const result = await markStaleInputsAsSpent(ar, storage as StorageKnex, services, undefined)
@@ -327,7 +427,7 @@ describe('markStaleInputsAsSpent', () => {
       const seed = await seedDoubleSpendScenario(storage)
       // Aggregate status that some broadcasters return for the same
       // on-chain reality as ARC's doubleSpend. Confirms the helper's
-      // decision is based on services.isUtxo, not on aggregate-status
+      // decision is based on a conclusive UTXO verdict, not on aggregate-status
       // classification.
       const ar = makeAggregateResult(seed.failedReq)
       ar.status = 'invalidTx'
@@ -454,7 +554,13 @@ describe('markStaleInputsAsSpent', () => {
 
     function mockServicesForIntegration (isUtxoFn: () => boolean | Promise<boolean>): sdk.WalletServices {
       return {
-        isUtxo: async () => isUtxoFn(),
+        hashOutputScript: () => 'x'.repeat(64),
+        getUtxoStatus: async () => ({
+          name: 'mock',
+          status: 'success' as const,
+          details: [],
+          isUtxo: await isUtxoFn()
+        }),
         // confirmDoubleSpend uses these — return "unknown" so it does
         // NOT flip back to 'success' (that would skip our fix).
         getStatusForTxids: async () => ({
@@ -463,7 +569,6 @@ describe('markStaleInputsAsSpent', () => {
           results: [{ txid: 'x'.repeat(64), status: 'unknown' as const }]
         }),
         // gatherCompetingTxids uses these — return empty.
-        hashOutputScript: () => 'x'.repeat(64),
         getScriptHashHistory: async () => ({ status: 'success' as const, history: [], name: 'mock', error: undefined as never })
       } as unknown as sdk.WalletServices
     }

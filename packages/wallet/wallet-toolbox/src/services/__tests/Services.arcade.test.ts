@@ -90,6 +90,34 @@ describe('Services Arcade wiring', () => {
     // Arcade is also a getMerklePath provider (proof acquisition), ahead of WhatsOnChain.
     expect(services.getMerklePathServices.services[0].name).toBe('Arcade')
     expect(services.getMerklePathServices.services.some(s => s.name === 'WhatsOnChain')).toBe(true)
+    // Existing explorer status remains first; Arcade is the independent
+    // fallback and is the only status provider on explorer-free networks.
+    expect(services.getStatusForTxidsServices.services.map(s => s.name)).toEqual(['WhatsOnChain', 'Arcade'])
+  })
+
+  test('isUtxo rejects an inconclusive provider result instead of treating it as spent', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    jest.spyOn(services, 'getUtxoStatus').mockResolvedValue({
+      name: '<noservices>',
+      status: 'error',
+      details: []
+    })
+
+    await expect(services.isUtxo({ lockingScript: [0], txid: '11'.repeat(32), vout: 0 } as any)).rejects.toThrow(
+      'UTXO provider <noservices> did not return a conclusive result'
+    )
+  })
+
+  test('isUtxo returns a conclusive provider verdict', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    jest.spyOn(services, 'getUtxoStatus').mockResolvedValue({
+      name: 'test-provider',
+      status: 'success',
+      details: [],
+      isUtxo: true
+    })
+
+    await expect(services.isUtxo({ lockingScript: [0], txid: '22'.repeat(32), vout: 1 } as any)).resolves.toBe(true)
   })
 
   test('explicit empty-string arcadeUrl keeps Arcade disabled', () => {
@@ -105,5 +133,71 @@ describe('Services Arcade wiring', () => {
       '' // arcadeUrl explicitly empty
     )
     expect(options.arcadeUrl).toBeUndefined()
+  })
+
+  test('continues past explorer unknown so Arcade can surface a durable rejection', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    const explorer = jest.fn(async (txids: string[]) => ({
+      name: 'explorer',
+      status: 'success' as const,
+      results: txids.map(txid => ({ txid, status: 'unknown' as const, depth: undefined }))
+    }))
+    const arcade = jest.fn(async (txids: string[]) => ({
+      name: 'arcade',
+      status: 'success' as const,
+      results: txids.map(txid => ({
+        txid,
+        status: 'unknown' as const,
+        depth: undefined,
+        terminal: true,
+        inputConflict: true,
+        providerStatus: 'SEEN_IN_ORPHAN_MEMPOOL'
+      }))
+    }))
+    services.getStatusForTxidsServices.services = [
+      { name: 'explorer', service: explorer },
+      { name: 'arcade', service: arcade }
+    ]
+    services.getStatusForTxidsServices.reset()
+
+    const result = await services.getStatusForTxids(['loser'])
+
+    expect(explorer).toHaveBeenCalledWith(['loser'])
+    expect(arcade).toHaveBeenCalledWith(['loser'])
+    expect(result.results[0]).toMatchObject({ terminal: true, inputConflict: true })
+  })
+
+  test('a mined observation overrides stale terminal lifecycle evidence', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    services.getStatusForTxidsServices.services = [
+      {
+        name: 'arcade',
+        service: async (txids: string[]) => ({
+          name: 'arcade',
+          status: 'success' as const,
+          results: txids.map(txid => ({
+            txid,
+            status: 'unknown' as const,
+            depth: undefined,
+            terminal: true,
+            inputConflict: true
+          }))
+        })
+      },
+      {
+        name: 'explorer',
+        service: async (txids: string[]) => ({
+          name: 'explorer',
+          status: 'success' as const,
+          results: txids.map(txid => ({ txid, status: 'mined' as const, depth: 1 }))
+        })
+      }
+    ]
+    services.getStatusForTxidsServices.reset()
+
+    await expect(services.getStatusForTxids(['txid'])).resolves.toMatchObject({
+      status: 'success',
+      results: [{ txid: 'txid', status: 'mined', depth: 1 }]
+    })
   })
 })

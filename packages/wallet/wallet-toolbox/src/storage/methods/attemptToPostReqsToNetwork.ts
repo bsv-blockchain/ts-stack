@@ -4,6 +4,7 @@ import { EntityProvenTxReq } from '../schema/entities'
 import * as sdk from '../../sdk'
 import { ReqHistoryNote } from '../../sdk'
 import { wait } from '../../utility/utilityHelpers'
+import { markConfirmedStaleReqInputs } from './reconcileFailedTransactionInputs'
 
 /**
  * Attempt to post one or more `ProvenTxReq` with status 'unsent'
@@ -452,107 +453,7 @@ export async function markStaleInputsAsSpent (
   trx?: sdk.TrxToken,
   logger?: WalletLoggerInterface
 ): Promise<{ checked: number; staleConfirmed: number; staleOutpoints: string[] }> {
-  const result = { checked: 0, staleConfirmed: 0, staleOutpoints: [] as string[] }
-  const req = ar.vreq.req
-
-  // Resolve the user owning the failing tx so we only touch THIS user's
-  // basket entries. Multiple txids share a userId; first is sufficient.
-  const txIds = req.notify.transactionIds
-  if (txIds == null || txIds.length === 0) return result
-  const txRecord = (await storage.findTransactions({
-    partial: { transactionId: txIds[0] },
-    noRawTx: true,
-    trx
-  }))[0]
-  if (txRecord == null) return result
-  const userId = txRecord.userId
-
-  // Walk the failed tx's inputs to find which user-owned UTXOs were
-  // consumed and need on-chain verification.
-  const tx = Transaction.fromBinary(req.rawTx)
-  const outpoints = tx.inputs
-    .map(i => ({ txid: i.sourceTXID ?? '', vout: i.sourceOutputIndex ?? 0 }))
-    .filter(o => o.txid !== '')
-  if (outpoints.length === 0) return result
-
-  const byOutpoint = await storage.findOutputsByOutpoints(userId, outpoints, trx)
-
-  // Two-phase processing:
-  //   Phase 1 (parallel, read-only): validateOutputScript + services.isUtxo
-  //     run concurrently across all outpoints. Both are network-bound on
-  //     the slow path; serializing them produces O(N) wall-time for no
-  //     correctness benefit. validateOutputScript only lazily fills the
-  //     in-memory lockingScript from a known-valid tx (no shared state
-  //     to race). services.isUtxo is provider HTTP — independent calls.
-  //     Per-provider rate limiters that 429 some calls fall into the
-  //     existing service-error branch and preserve retry semantics for
-  //     those inputs; the surviving inputs still get correct treatment.
-  //   Phase 2 (serial, in-trx writes): drain the per-input classification
-  //     into result.checked / staleConfirmed accumulators and the
-  //     storage.updateOutput writes, in iteration order. Storage writes
-  //     stay serialized inside the trx — no change in transactional
-  //     semantics from the pre-parallel version.
-  type CheckResult =
-    | { kind: 'skipped' }
-    | { kind: 'service-error'; localOutput: typeof byOutpoint[keyof typeof byOutpoint] }
-    | { kind: 'still-utxo'; localOutput: typeof byOutpoint[keyof typeof byOutpoint] }
-    | {
-        kind: 'stale'
-        localOutput: typeof byOutpoint[keyof typeof byOutpoint]
-        outpoint: { txid: string; vout: number }
-      }
-
-  const checks: CheckResult[] = await Promise.all(
-    outpoints.map(async (outpoint): Promise<CheckResult> => {
-      const localOutput = byOutpoint[`${outpoint.txid}.${outpoint.vout}`]
-      if (localOutput == null) return { kind: 'skipped' }
-
-      // services.isUtxo requires the lockingScript; load it lazily.
-      if (localOutput.lockingScript == null) {
-        try {
-          await storage.validateOutputScript(localOutput, trx)
-        } catch {
-          return { kind: 'skipped' }
-        }
-      }
-
-      let isStillUtxo: boolean
-      try {
-        isStillUtxo = await services.isUtxo(localOutput)
-      } catch {
-        // Service error — preserve current behavior (keep spendable=true).
-        // Eviction requires positive evidence of stale state.
-        return { kind: 'service-error', localOutput }
-      }
-
-      return isStillUtxo
-        ? { kind: 'still-utxo', localOutput }
-        : { kind: 'stale', localOutput, outpoint }
-    })
-  )
-
-  for (const c of checks) {
-    if (c.kind === 'skipped') continue
-    result.checked++
-    if (c.kind === 'stale') {
-      // Authoritative on-chain evidence the input is spent. Override
-      // the optimistic restore from updateTransactionStatus(failed).
-      await storage.updateOutput(
-        c.localOutput.outputId!,
-        { spendable: false },
-        trx
-      )
-      result.staleConfirmed++
-      result.staleOutpoints.push(`${c.outpoint.txid}.${c.outpoint.vout}`)
-    }
-  }
-
-  if (result.staleConfirmed > 0) {
-    logger?.log(
-      `markStaleInputsAsSpent: ${result.staleConfirmed} of ${result.checked} input(s) confirmed-spent on chain for txid=${req.txid}`
-    )
-  }
-  return result
+  return await markConfirmedStaleReqInputs(ar.vreq.req, storage, services, trx, logger)
 }
 
 type AggregateStatus = 'success' | 'doubleSpend' | 'invalidTx' | 'serviceError'

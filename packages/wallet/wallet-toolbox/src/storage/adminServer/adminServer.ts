@@ -6,6 +6,7 @@ import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
 import { formatUnknownForLog as formatAdminValue } from '../../utility/formatUnknown'
 import { renderAdminPage } from './adminUi'
+import { runAdminUtxoReview, type AdminUtxoReviewTask } from './reviewUtxos'
 import path from 'node:path'
 import {
   bodyParserErrorHandler,
@@ -58,12 +59,12 @@ interface ReqRow {
   inputBeefHex?: string
 }
 
-export function asNumber (value: unknown, fallback: number): number {
+export function asNumber(value: unknown, fallback: number): number {
   const parsed = Number.parseInt(formatAdminValue(value), 10)
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
-function toHex (value?: number[] | Buffer): string | undefined {
+function toHex(value?: number[] | Buffer): string | undefined {
   if (value == null) return undefined
   if (Buffer.isBuffer(value)) return value.toString('hex')
   return Buffer.from(value).toString('hex')
@@ -142,7 +143,7 @@ export interface AdminStatsLike {
   txUnfailTotal?: unknown
 }
 
-function prettyJson (value?: string): string | undefined {
+function prettyJson(value?: string): string | undefined {
   if (!value) return undefined
   try {
     return JSON.stringify(JSON.parse(value), null, 2)
@@ -151,17 +152,17 @@ function prettyJson (value?: string): string | undefined {
   }
 }
 
-export function alignLeft (value: unknown, width: number): string {
+export function alignLeft(value: unknown, width: number): string {
   const text = formatAdminValue(value)
   return text.length > width ? `${text.slice(0, width - 1)}…` : text.padEnd(width)
 }
 
-export function alignRight (value: unknown, width: number): string {
+export function alignRight(value: unknown, width: number): string {
   const text = formatAdminValue(value)
   return text.length > width ? `…${text.slice(-width + 1)}` : text.padStart(width)
 }
 
-export function toAdminStatsLog (stats: AdminStatsLike): string {
+export function toAdminStatsLog(stats: AdminStatsLike): string {
   const row = (label: string, day: unknown, week: unknown, month: unknown, total: unknown) =>
     `  ${alignLeft(label, 13)} ${alignRight(day ?? '', 18)} ${alignRight(week ?? '', 18)} ${alignRight(month ?? '', 18)} ${alignRight(total ?? '', 18)}\n`
 
@@ -211,12 +212,12 @@ export function toAdminStatsLog (stats: AdminStatsLike): string {
   return log
 }
 
-function formatSatoshis (value: unknown): string {
+function formatSatoshis(value: unknown): string {
   const n = typeof value === 'number' ? value : Number(value ?? 0)
   return Format.satoshis(Number.isFinite(n) ? n : 0)
 }
 
-function parseJson (value?: string): unknown {
+function parseJson(value?: string): unknown {
   if (!value) return undefined
   try {
     return JSON.parse(value)
@@ -225,7 +226,7 @@ function parseJson (value?: string): unknown {
   }
 }
 
-function decodeRawTx (rawTx?: number[]) {
+function decodeRawTx(rawTx?: number[]) {
   if (rawTx == null) return undefined
   const tx = Transaction.fromBinary(rawTx)
   return {
@@ -247,20 +248,20 @@ function decodeRawTx (rawTx?: number[]) {
   }
 }
 
-async function getStorage (context: MonitorAdminContext) {
+async function getStorage(context: MonitorAdminContext) {
   const storage = context.daemon.setup?.storageProvider
   if (storage == null) throw new Error('Monitor storage provider is not available.')
   return storage
 }
 
-async function getKnex (context: MonitorAdminContext) {
+async function getKnex(context: MonitorAdminContext) {
   const storage = await getStorage(context)
   const knex = (storage as any).knex
   if (!knex) throw new Error('Joined admin review requires StorageKnex / MySQL.')
   return knex
 }
 
-async function queryReqReview (context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryReqReview(context: MonitorAdminContext, query: Record<string, unknown>) {
   const knex = await getKnex(context)
   const status = typeof query.status === 'string' && query.status.trim() ? query.status.trim() : undefined
   const txid = typeof query.txid === 'string' && query.txid.trim() ? query.txid.trim() : undefined
@@ -324,36 +325,34 @@ async function queryReqReview (context: MonitorAdminContext, query: Record<strin
 
 export type UtxoReviewMode = 'all' | 'change' | 'liquidity'
 
-export function normalizeReviewMode (value: unknown): UtxoReviewMode {
+export function normalizeReviewMode(value: unknown): UtxoReviewMode {
   if (value === 'change' || value === 'liquidity') return value
   return 'all'
 }
 
-function getReviewUtxosTask (context: MonitorAdminContext): {
-  reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change') => Promise<string>
+function getReviewUtxosTask(context: MonitorAdminContext): AdminUtxoReviewTask & {
   reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
 } {
   const monitor = context.daemon.setup?.monitor
   if (monitor == null) throw new Error('Monitor is not available.')
 
   const task = [...monitor._tasks, ...monitor._otherTasks].find(item => item.name === 'ReviewUtxos') as
-    | {
-      reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change') => Promise<string>
-      reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
-    }
+    | (Partial<AdminUtxoReviewTask> & {
+        reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
+      })
     | undefined
 
-  if ((task?.reviewByIdentityKey) == null) {
+  if (task?.reviewPageByIdentityKey == null) {
     throw new Error('ReviewUtxos task is not available in this monitor runtime.')
   }
 
   return {
-    reviewByIdentityKey: task.reviewByIdentityKey.bind(task),
+    reviewPageByIdentityKey: task.reviewPageByIdentityKey.bind(task),
     reviewManagedChangeByIdentityKey: task.reviewManagedChangeByIdentityKey?.bind(task)
   }
 }
 
-async function queryUsers (context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryUsers(context: MonitorAdminContext, query: Record<string, unknown>) {
   const storage = await getStorage(context)
   const search = typeof query.search === 'string' ? query.search.trim() : ''
   const limit = Math.min(Math.max(asNumber(query.limit, 50), 1), 200)
@@ -361,8 +360,8 @@ async function queryUsers (context: MonitorAdminContext, query: Record<string, u
 
   const filtered = search
     ? users.filter(
-      user => user.identityKey.includes(search) || (user.userId !== undefined && String(user.userId).includes(search))
-    )
+        user => user.identityKey.includes(search) || (user.userId !== undefined && String(user.userId).includes(search))
+      )
     : users
 
   return {
@@ -375,7 +374,7 @@ async function queryUsers (context: MonitorAdminContext, query: Record<string, u
   }
 }
 
-async function resolveIdentityKeyFromInput (context: MonitorAdminContext, userInput: string): Promise<string> {
+async function resolveIdentityKeyFromInput(context: MonitorAdminContext, userInput: string): Promise<string> {
   const value = userInput.trim()
   if (!value) throw new Error('identityKey or userId is required.')
 
@@ -391,7 +390,7 @@ async function resolveIdentityKeyFromInput (context: MonitorAdminContext, userIn
   return value
 }
 
-async function queryMonitorCallHistory (context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryMonitorCallHistory(context: MonitorAdminContext, query: Record<string, unknown>) {
   const storage = await getStorage(context)
   const limit = Math.min(Math.max(asNumber(query.limit, 120), 1), 120)
   const offset = Math.max(asNumber(query.offset, 0), 0)
@@ -426,18 +425,24 @@ async function queryMonitorCallHistory (context: MonitorAdminContext, query: Rec
   }
 }
 
-async function reviewUtxosByIdentityKey (
+async function reviewUtxosByIdentityKey(
   context: MonitorAdminContext,
   requestedBy: string,
   userInput: string,
-  mode: UtxoReviewMode
+  mode: UtxoReviewMode,
+  release: boolean,
+  pageLimit: number,
+  offset: number
 ) {
   const storage = await getStorage(context)
   const task = getReviewUtxosTask(context)
   const identityKey = await resolveIdentityKeyFromInput(context, userInput)
-  const log = mode === 'liquidity'
-    ? await task.reviewManagedChangeByIdentityKey?.(identityKey)
-    : await task.reviewByIdentityKey(identityKey, mode)
+
+  if (mode !== 'liquidity') {
+    return await runAdminUtxoReview({ storage, task, requestedBy, identityKey, mode, release, pageLimit, offset })
+  }
+  if (release) throw new Error('Managed-change liquidity review is read only.')
+  const log = await task.reviewManagedChangeByIdentityKey?.(identityKey)
   if (log == null) throw new Error('Managed-change liquidity review is not available in this monitor runtime.')
 
   await storage.insertMonitorEvent({
@@ -445,18 +450,20 @@ async function reviewUtxosByIdentityKey (
     updated_at: new Date(),
     id: 0,
     event: 'AdminReviewUtxos',
-    details: JSON.stringify({ requestedBy, identityKey, mode, log })
+    details: JSON.stringify({ requestedBy, identityKey, mode, release: false, log })
   })
 
   return {
     requestedBy,
     identityKey,
     mode,
+    release: false,
+    complete: true,
     log
   }
 }
 
-async function getReqDetail (context: MonitorAdminContext, provenTxReqId: number) {
+async function getReqDetail(context: MonitorAdminContext, provenTxReqId: number) {
   const storage = await getStorage(context)
   const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId } }))[0]
   if (!req) throw new Error(`ProvenTxReq ${provenTxReqId} not found`)
@@ -480,7 +487,7 @@ async function getReqDetail (context: MonitorAdminContext, provenTxReqId: number
   }
 }
 
-async function rebroadcastReq (
+async function rebroadcastReq(
   context: MonitorAdminContext,
   provenTxReqId: number,
   provider: string,
@@ -530,32 +537,39 @@ export class AdminServer {
   private readonly app: any
   private server: any
 
-  constructor (private readonly context: MonitorAdminContext) {
+  constructor(private readonly context: MonitorAdminContext) {
     this.app = express()
     this.setupRoutes()
   }
 
-  private getSdkBundlePath (): string {
+  private getSdkBundlePath(): string {
     const sdkMainPath = require.resolve('@bsv/sdk')
     return path.resolve(path.dirname(sdkMainPath), '../umd/bundle.js')
   }
 
-  private setupRoutes (): void {
+  private setupRoutes(): void {
     this.app.disable('x-powered-by')
-    this.app.use(securityHeaders({
-      environmentPrefix: 'WALLET_ADMIN',
-      contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-      ...this.context.config.adminSecurityHeaders
-    }))
-    this.app.use(corsPolicy({
-      environmentPrefix: 'WALLET_ADMIN',
-      allowedOrigins: this.context.config.adminAllowedOrigins,
-      methods: ['GET', 'POST', 'OPTIONS']
-    }))
+    this.app.use(
+      securityHeaders({
+        environmentPrefix: 'WALLET_ADMIN',
+        contentSecurityPolicy:
+          "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        ...this.context.config.adminSecurityHeaders
+      })
+    )
+    this.app.use(
+      corsPolicy({
+        environmentPrefix: 'WALLET_ADMIN',
+        allowedOrigins: this.context.config.adminAllowedOrigins,
+        methods: ['GET', 'POST', 'OPTIONS']
+      })
+    )
     this.app.use(concurrencyLimit('WALLET_ADMIN', 50))
-    this.app.use(express.json({
-      limit: readBodyLimitBytes('WALLET_ADMIN', 1024 * 1024)
-    }))
+    this.app.use(
+      express.json({
+        limit: readBodyLimitBytes('WALLET_ADMIN', 1024 * 1024)
+      })
+    )
     this.app.use(bodyParserErrorHandler)
 
     this.app.get('/healthz', (_req: any, res: any) => {
@@ -570,7 +584,7 @@ export class AdminServer {
       res.type('text/html').send(renderAdminPage())
     })
 
-    if ((this.context.authWallet == null) || this.context.config.adminIdentityKeys.length === 0) {
+    if (this.context.authWallet == null || this.context.config.adminIdentityKeys.length === 0) {
       this.app.use((_req: any, res: any) => {
         res
           .status(503)
@@ -668,7 +682,12 @@ export class AdminServer {
       const userInput = typeof req.body?.identityKey === 'string' ? req.body.identityKey.trim() : ''
       if (!userInput) throw new Error('identityKey or userId is required.')
       const mode = normalizeReviewMode(req.body?.mode)
-      res.json(await reviewUtxosByIdentityKey(this.context, req.auth.identityKey, userInput, mode))
+      const release = req.body?.release === true
+      const pageLimit = Math.min(Math.max(asNumber(req.body?.pageLimit, 20), 1), 250)
+      const offset = Math.max(asNumber(req.body?.offset, 0), 0)
+      res.json(
+        await reviewUtxosByIdentityKey(this.context, req.auth.identityKey, userInput, mode, release, pageLimit, offset)
+      )
     })
 
     this.app.get('/admin/api/proven-tx-reqs/review', async (req: any, res: any) => {
@@ -706,7 +725,7 @@ export class AdminServer {
     })
   }
 
-  private requireAdmin (req: any, res: any, next: any): void {
+  private requireAdmin(req: any, res: any, next: any): void {
     const identityKey = req.auth?.identityKey
     if (!identityKey || !this.context.config.adminIdentityKeys.includes(identityKey)) {
       res.status(403).json({
@@ -720,7 +739,7 @@ export class AdminServer {
     next()
   }
 
-  start (): void {
+  start(): void {
     this.server = this.app.listen(this.context.config.adminPort, this.context.config.adminHost, () => {
       console.log(
         `Monitor admin listening at http://${this.context.config.adminHost}:${this.context.config.adminPort}/admin`
@@ -735,7 +754,7 @@ export class AdminServer {
     })
   }
 
-  async close (): Promise<void> {
+  async close(): Promise<void> {
     if (!this.server) return
     await new Promise<void>(resolve => this.server.close(() => resolve()))
     this.server = undefined

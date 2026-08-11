@@ -16,6 +16,15 @@ export interface ArcSSEEvent {
   txid: string
   txStatus: string
   timestamp: string
+  /** Transport cursor attached by ArcSSEClient; not part of Arcade's JSON payload. */
+  eventId?: string
+  /** ARC rejection code supplied by Arcade for classifiable REJECTED events. */
+  status?: number
+  /** Arcade's validator or network rejection detail. */
+  extraInfo?: string
+  blockHash?: string
+  blockHeight?: number
+  merklePath?: string
 }
 
 export interface ArcSSEClientOptions {
@@ -25,14 +34,14 @@ export interface ArcSSEClientOptions {
   callbackToken: string
   /** Server-level API key for Authorization header (from ArcConfig.apiKey) */
   arcApiKey?: string
-  /** Called for each status event received */
-  onEvent: (event: ArcSSEEvent) => void
+  /** Called for each status event received; resolution acknowledges durable processing. */
+  onEvent: (event: ArcSSEEvent) => void | Promise<void>
   /** Called when a connection error occurs */
   onError?: (error: Error) => void
   /** Initial lastEventId for catchup */
   lastEventId?: string
-  /** Called whenever lastEventId changes, for persistence to storage */
-  onLastEventIdChanged?: (lastEventId: string) => void
+  /** Called after event processing and before lastEventId advances. */
+  onLastEventIdChanged?: (lastEventId: string) => void | Promise<void>
   /** The react-native-sse EventSource class — passed in to avoid import from wallet-toolbox */
   EventSourceClass: any
 }
@@ -92,19 +101,39 @@ export class ArcSSEClient {
     })
 
     this.es.addEventListener('status', (event: any) => {
+      let data: ArcSSEEvent
       try {
-        const data: ArcSSEEvent = JSON.parse(event.data)
-        console.log(`${TAG} event: txid=${data.txid} status=${data.txStatus}`)
-
-        if (typeof event.lastEventId === 'string' && event.lastEventId !== '') {
-          this._lastEventId = event.lastEventId
-          this.options.onLastEventIdChanged?.(event.lastEventId)
-        }
-
-        this.options.onEvent(data)
+        data = JSON.parse(event.data)
       } catch {
         console.log(`${TAG} malformed event: ${String(event.data).substring(0, 200)}`)
+        return
       }
+
+      console.log(`${TAG} event: txid=${data.txid} status=${data.txStatus}`)
+      const receivedEventId = typeof event.lastEventId === 'string' && event.lastEventId !== ''
+        ? event.lastEventId
+        : undefined
+      data.eventId = receivedEventId
+      let processing: void | Promise<void>
+      try {
+        processing = this.options.onEvent(data)
+      } catch (error) {
+        const e = error instanceof Error ? error : new Error(String(error))
+        console.log(`${TAG} event processing failed: ${e.message}`)
+        this.options.onError?.(e)
+        return
+      }
+      void Promise.resolve(processing)
+        .then(async () => {
+          if (receivedEventId == null) return
+          await this.options.onLastEventIdChanged?.(receivedEventId)
+          this._lastEventId = receivedEventId
+        })
+        .catch(error => {
+          const e = error instanceof Error ? error : new Error(String(error))
+          console.log(`${TAG} event processing failed: ${e.message}`)
+          this.options.onError?.(e)
+        })
     })
 
     this.es.addEventListener('error', (event: any) => {

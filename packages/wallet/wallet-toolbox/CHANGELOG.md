@@ -15,6 +15,29 @@ attention to changes that materially alter behavior or extend functionality.
   enable the public TTN Arcade broadcaster/proof provider by default. TTN does
   not register the incompatible legacy ARC BEEF fallback. Other chain defaults
   are unchanged, and an empty Arcade URL explicitly disables Arcade.
+- Reconcile Arcade broadcast outcomes as durable wallet state. Retryable
+  locktime and parent conditions remain pending, while validator failures fail
+  the request and explicit missing-input or conflict evidence atomically fails
+  every local transaction copy and quarantines its wallet-owned inputs without
+  depending on WhatsOnChain. Cached accepted/seen labels can no longer revive a
+  terminal conflict; only a mined event whose Merkle proof validates through
+  the configured chain tracker may repair it. Arcade also participates in the
+  shared transaction-status service so double-spend review remains conservative
+  on networks with no explorer. A scheduled paged pass also reconciles aged
+  pending requests from durable Arcade lifecycle state, including orphan-mempool
+  losers whose SSE event was missed; mined/known evidence wins over rejection.
+  Inconclusive or absent UTXO providers no longer
+  masquerade as a spent-output verdict in invalid-change release, stale-input
+  reconciliation, proof recovery, or storage diagnostics. Invalid-change review
+  returns conclusive read-only findings plus unknown diagnostics. Direct release
+  blocks atomically with machine-readable `WERR_UTXO_REVIEW_INCONCLUSIVE` when
+  any result is unknown. Monitor Admin uses bounded, five-second-deadline pages
+  and can explicitly release the confirmed-spent subset while retaining unknowns;
+  every mutation rechecks ownership/allocation under lock and records audit
+  evidence. Monitor Admin scans by default and requires explicit confirmation.
+  The
+  Arcade SSE cursor advances only after both event storage work and cursor
+  persistence succeed; either failure leaves the event queued for ordered retry.
 - Replace 32-satoshi default-basket fragments with a progressive liquidity
   policy targeting 144 useful 5,000-satoshi outputs. New actions create at most
   eight outputs from real surplus and migrate at most four fee-positive legacy
@@ -38,16 +61,14 @@ attention to changes that materially alter behavior or extend functionality.
   expired leases, structured lifecycle errors, and a provider-enforced
   cumulative reservation limit that defaults to 256 outputs and can be
   configured, including `-1` for operator-selected unlimited operation.
-- Keep the combined action-batch and managed-liquidity browser/mobile cost
-  bounded and measured from exact packed artifacts. The browser contract now
-  measures 1,557,196 raw / 365,526 gzip / 287,329 Brotli bytes with Vite and
-  1,216,272 raw / 334,453 gzip / 268,547 Brotli bytes with esbuild. Linux CI
-  observed 1,558,352 Vite raw bytes and 1,218,452 esbuild raw bytes; the
-  reviewed ceilings advance by at most 1.0% and retain narrow headroom. Mobile
-  measures 1,616,960 Metro bytes and
-  3,266,887 raw Hermes bytes locally; Linux CI observed 3,271,396 raw Hermes
-  bytes. The Metro and compressed-mobile ceilings remain unchanged, while the
-  Hermes raw ceiling advances by 0.61% from the pre-liquidity-policy value.
+- Keep the combined action-batch, managed-liquidity, browser-fallback, and
+  fail-safe reconciliation browser/mobile cost bounded by exact packed-artifact
+  contracts. Local verification measures 1,557,683 raw / 366,927 gzip / 287,337
+  Brotli bytes with Vite, 1,215,983 raw / 333,466 gzip / 268,497 Brotli bytes
+  with esbuild, 1,617,544 raw Metro bytes, and 3,271,146 raw / 1,302,110 gzip /
+  1,025,812 Brotli Hermes bytes. Reviewed raw ceilings are 1,561,000 Vite bytes,
+  1,220,000 esbuild bytes, 1,710,000 Metro bytes, and 3,275,000 Hermes bytes;
+  compressed ceilings remain independently governed.
 - Fix `WalletStorageManager.getStoreEndpointURL` / `getStores().endpointURL` to
   duck-type provider `endpointUrl` instead of matching
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,

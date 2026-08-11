@@ -47,9 +47,13 @@ The toolbox publishes three npm packages from this repo:
 
 ### ChainTracks sources and networks
 
-Wallet services do not require a WhatsOnChain key for ChainTracks. Mainnet,
-testnet, and TerraTestNet use the public Arcade/go-chaintracks v2 HTTP and SSE
-surfaces by default. Bulk batches still pass through local serialization, hash,
+Wallet services do not require a WhatsOnChain key for ChainTracks. Node
+runtimes on mainnet, testnet, and TerraTestNet use the public
+Arcade/go-chaintracks v2 HTTP and SSE surfaces by default. Browser and webview
+runtimes on mainnet/testnet temporarily select the legacy CORS-enabled service
+until the v2 edge serves CORS and OPTIONS; `Services.getHeight` also falls back
+to WhatsOnChain on those networks if ChainTracks is unavailable. Bulk batches
+still pass through local serialization, hash,
 continuity, and genesis checks; providers are tried in priority order; and a
 synchronized tracker can continue serving its last-good checked data during a
 provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
@@ -64,8 +68,9 @@ go-chaintracks client; existing legacy v1 URLs and explicit clients remain
 compatible. Browser and mobile distributions expose the same fetch/SSE client
 without Node `Buffer` or filesystem dependencies.
 
-Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
-Direct Teranode P2P is not included in browser/mobile artifacts.
+Arcade is the HTTPS/SSE gateway for Teranode-backed header data. Its v2 edge
+must allow browser origins and OPTIONS before browser defaults can use it;
+direct Teranode P2P is not included in browser/mobile artifacts.
 
 TTN wallets also register
 `https://arcade-v2-ttn-us-1.bsvblockchain.tech` as their first broadcast and
@@ -73,6 +78,41 @@ Merkle-proof provider. Mainnet and testnet Arcade broadcasting remains opt-in.
 Pass an explicit `arcadeUrl` to override the TTN endpoint or an empty string to
 disable it. TTN overlay lookups use the separate `teratestnet` resolver preset
 and never fall back to testnet discovery.
+
+### Broadcast rejection and monitor reconciliation
+
+When Arcade is configured, Wallet Toolbox consumes Arcade's status code and
+validator detail instead of treating every `REJECTED` event alike. Retryable
+parent and locktime conditions stay pending. Terminal validator failures fail
+the request, and explicit missing-input or conflict evidence also quarantines
+every wallet-owned copy of the consumed input in the same storage transaction.
+That quarantine uses Arcade's positive rejection evidence and does not require
+WhatsOnChain or another UTXO explorer.
+
+Arcade is also registered as a transaction-status provider, so monitor review
+continues on networks without WhatsOnChain. A scheduled bounded pass revisits
+aged pending requests and applies durable Arcade lifecycle verdicts that may
+have arrived while SSE was disconnected, including `SEEN_IN_ORPHAN_MEMPOOL`.
+Mined/known evidence takes precedence over a stale rejection. Provider absence
+and provider errors are treated as inconclusive, never as proof that an output
+was spent.
+After an input conflict has been recorded, a later cached accepted/seen label
+cannot restore the failed transaction; recovery requires a mined status and a
+Merkle proof validated by the configured chain tracker. Arcade SSE events are
+acknowledged in order only after their storage update and cursor persistence
+succeed, so a transient storage failure is retried instead of skipped.
+
+Invalid-change review applies the same positive-evidence rule. Only an
+explicit successful `isUtxo: false` result is considered spent; a provider
+error, rate limit, timeout, missing provider, missing script, or malformed
+response is unknown. Read-only scans return the conclusive picture plus the
+unknown count. Direct destructive release remains all-or-nothing: any unknown
+throws `WERR_UTXO_REVIEW_INCONCLUSIVE` before mutation. The authenticated
+Monitor Admin tool instead uses 20-output pages (four provider calls in flight,
+five-second per-output review deadline) and may explicitly release the
+positively spent subset while retaining and reporting unknowns. Each confirmed
+spent output is rechecked for ownership and allocation state under the write
+lock, and every release or blocked release records bounded audit evidence.
 
 Core ChainTracks factories accept a final source-options argument when an
 application must override the defaults. Set `disableChaintracks`, `disableCdn`,

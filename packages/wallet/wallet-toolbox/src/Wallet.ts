@@ -1256,14 +1256,15 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   /**
    * Uses `listOutputs` special operation to review the spendability via `Services` of
-   * outputs currently considered spendable. Returns the outputs that fail to verify.
+   * outputs currently considered spendable. Returns only outputs conclusively
+   * confirmed spent. Rejects the review if any provider result is inconclusive.
    *
    * Ignores the `limit` and `offset` properties.
    *
    * @param all Defaults to false. If false, only change outputs ('default' basket) are reviewed. If true, all spendable outputs are reviewed.
-   * @param release Defaults to false. If true, sets outputs that fail to verify to un-spendable (spendable: false)
+   * @param release Defaults to false. If true, atomically sets conclusively spent outputs to un-spendable (spendable: false). No outputs change if any candidate is inconclusive.
    * @param optionalArgs Optional. Additional tags will constrain the outputs processed.
-   * @returns outputs which are/where considered spendable but currently fail to verify as spendable.
+   * @returns outputs previously considered spendable but conclusively confirmed spent.
    */
   async reviewSpendableOutputs(
     all = false,

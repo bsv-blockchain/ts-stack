@@ -147,7 +147,7 @@ describe('ArcSSEClient', () => {
       expect(events[0]).toEqual(payload)
     })
 
-    test('updates lastEventId and calls onLastEventIdChanged', () => {
+    test('updates lastEventId only after processing and persistence complete', async () => {
       const { client, lastEventIds } = makeClient()
       client.connect()
       const es = FakeEventSource.instances[0]
@@ -155,8 +155,43 @@ describe('ArcSSEClient', () => {
         data: JSON.stringify({ txid: 'bbbb', txStatus: 'SEEN_ON_NETWORK', timestamp: '' }),
         lastEventId: '99'
       })
+      expect(client.lastEventId).toBeUndefined()
+      await new Promise(resolve => setTimeout(resolve, 0))
       expect(client.lastEventId).toBe('99')
       expect(lastEventIds).toEqual(['99'])
+    })
+
+    test('does not advance lastEventId when durable event processing fails', async () => {
+      const processingError = new Error('storage unavailable')
+      const { client, errors, lastEventIds } = makeClient({
+        onEvent: async () => await Promise.reject(processingError)
+      })
+      client.connect()
+      FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+        lastEventId: '100'
+      })
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(client.lastEventId).toBeUndefined()
+      expect(lastEventIds).toEqual([])
+      expect(errors).toEqual([processingError])
+    })
+
+    test('reports a synchronous processing failure without acknowledging the event', () => {
+      const { client, errors, lastEventIds } = makeClient({
+        onEvent: () => { throw new Error('synchronous storage failure') }
+      })
+      client.connect()
+
+      expect(() => FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+        lastEventId: '101'
+      })).not.toThrow()
+
+      expect(client.lastEventId).toBeUndefined()
+      expect(lastEventIds).toEqual([])
+      expect(errors.map(error => error.message)).toEqual(['synchronous storage failure'])
     })
 
     test('does not update lastEventId when event has no lastEventId', () => {
@@ -292,7 +327,7 @@ describe('ArcSSEClient', () => {
       expect(client.lastEventId).toBe('start')
     })
 
-    test('advances as events are received', () => {
+    test('advances as events are durably processed', async () => {
       const { client } = makeClient()
       client.connect()
       const es = FakeEventSource.instances[0]
@@ -304,6 +339,7 @@ describe('ArcSSEClient', () => {
         data: JSON.stringify({ txid: 'y', txStatus: 'MINED', timestamp: '' }),
         lastEventId: '2'
       })
+      await new Promise(resolve => setTimeout(resolve, 0))
       expect(client.lastEventId).toBe('2')
     })
   })

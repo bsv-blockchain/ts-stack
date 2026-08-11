@@ -2,6 +2,18 @@ import { TableProvenTxReq } from '../../storage/schema/tables'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
+function hasDurableInputConflict (req: TableProvenTxReq): boolean {
+  try {
+    const history = JSON.parse(req.history) as { notes?: Array<Record<string, unknown>> }
+    return history.notes?.some(note =>
+      note.inputConflict === true || note.what === 'arcSSEInputQuarantine'
+    ) === true
+  } catch {
+    // Malformed legacy history must never weaken a terminal decision.
+    return true
+  }
+}
+
 interface ReviewDoubleSpendsCheckpoint {
   reviewLimit: number
   minAgeMinutes: number
@@ -94,14 +106,16 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
 
     for (const req of reqs) {
       const gsr = await this.monitor.services.getStatusForTxids([req.txid])
-      const status = gsr.results[0]?.status
+      const status = gsr.status === 'success' ? gsr.results[0]?.status : undefined
+      const durableInputConflict = hasDurableInputConflict(req)
       reviewed.push(req)
-      if (status === 'unknown') {
+      const canUnfail = status === 'mined' || (status === 'known' && !durableInputConflict)
+      if (!canUnfail) {
         lastRetainedDoubleSpendIndex = reviewed.length - 1
         retainedDoubleSpendCount += 1
       } else {
         unfails.push(req.provenTxReqId)
-        log += `unfail ${req.provenTxReqId} ${req.txid} status:${status}\n`
+        log += `unfail ${req.provenTxReqId} ${req.txid} status:${status} durableInputConflict:${String(durableInputConflict)}\n`
       }
     }
 

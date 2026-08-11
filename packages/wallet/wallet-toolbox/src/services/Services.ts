@@ -45,6 +45,7 @@ import { WalletError } from '../sdk/WalletError'
 import { doubleSha256BE, sha256Hash, wait } from '../utility/utilityHelpers'
 import { TableOutput } from '../storage/schema/tables/TableOutput'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
+import { classifyOutputUtxo, requireConclusiveUtxo } from './classifyOutputUtxo'
 
 export class Services implements WalletServices {
   static readonly getStatusForTxidsBatchLimit = 20
@@ -151,6 +152,17 @@ export class Services implements WalletServices {
       // prettier-ignore
       this.getStatusForTxidsServices
         .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
+    }
+    if (this.arcade != null) {
+      // Arcade's lifecycle store keeps status reconciliation available when
+      // the explorer is disabled or unavailable. Keep the existing explorer
+      // first when configured because a successful `unknown` is a valid,
+      // conservative answer and the shared collection does not merge partial
+      // results from multiple providers.
+      this.getStatusForTxidsServices.add({
+        name: 'Arcade',
+        service: this.arcade.getStatusForTxids.bind(this.arcade)
+      })
     }
 
     this.getScriptHashHistoryServices = new ServiceCollection<GetScriptHashHistoryService>('getScriptHashHistory')
@@ -292,32 +304,59 @@ export class Services implements WalletServices {
     const services = this.getStatusForTxidsServices
     if (useNext === true) services.next()
 
-    let r0: GetStatusForTxidsResult = {
+    let fallback: GetStatusForTxidsResult = {
       name: '<noservices>',
       status: 'error',
       error: new WERR_INTERNAL('No services available.'),
       results: []
     }
+    const resultsByTxid = new Map<string, GetStatusForTxidsResult['results'][number]>()
+    const unresolved = new Set(txids)
+    const providerNames: string[] = []
+    let successfulProvider = false
+
+    const rank = (result: GetStatusForTxidsResult['results'][number]): number => {
+      if (result.status === 'mined') return 4
+      if (result.status === 'known') return 3
+      if (result.terminal === true) return 2
+      return 1
+    }
 
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
-        const r = await this.getStatusForTxidsBatched(stc, txids)
+        const requestedTxids = [...unresolved]
+        if (requestedTxids.length === 0) break
+        const r = await this.getStatusForTxidsBatched(stc, requestedTxids)
         if (r.status === 'success') {
           services.addServiceCallSuccess(stc)
-          r0 = r
-          break
+          successfulProvider = true
+          providerNames.push(r.name)
+          for (const result of r.results) {
+            const current = resultsByTxid.get(result.txid)
+            if (current == null || rank(result) > rank(current)) resultsByTxid.set(result.txid, result)
+            if (result.status === 'mined' || result.status === 'known') unresolved.delete(result.txid)
+          }
+          services.next()
+          continue
         }
+        fallback = r
         if (r.error != null) services.addServiceCallError(stc, r.error)
         else services.addServiceCallFailure(stc)
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
+        fallback = { name: stc.providerName, status: 'error', error: e, results: [] }
         services.addServiceCallError(stc, e)
       }
       services.next()
     }
 
-    return r0
+    if (!successfulProvider) return fallback
+    return {
+      name: [...new Set(providerNames)].join(','),
+      status: 'success',
+      results: txids.map(txid => resultsByTxid.get(txid) ?? { txid, status: 'unknown', depth: undefined })
+    }
   }
 
   private async getStatusForTxidsBatched(
@@ -355,12 +394,7 @@ export class Services implements WalletServices {
   }
 
   async isUtxo(output: TableOutput): Promise<boolean> {
-    if (output.lockingScript == null) {
-      throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
-    }
-    const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
-    const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
-    return or.isUtxo === true
+    return requireConclusiveUtxo(await classifyOutputUtxo(this, output))
   }
 
   async getUtxoStatus(

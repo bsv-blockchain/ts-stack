@@ -1,7 +1,7 @@
 import { TaskArcadeSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 import { EntityProvenTx } from '../../../storage/schema/entities'
-import { TaskUnFail } from '../TaskUnFail'
+import { Utils } from '@bsv/sdk'
 
 // ── Fake EventSource ─────────────────────────────────────────────────────────
 
@@ -36,12 +36,14 @@ class FakeEventSource {
 /** Build a minimal TableProvenTxReq API object that EntityProvenTxReq can parse */
 function makeReqApi(status: string, txid = 'txid1'): any {
   const now = new Date()
+  const sourceTxid = '11'.repeat(32)
+  const rawTx = `0100000001${sourceTxid}0000000000ffffffff0101000000000000000000000000`
   return {
     provenTxReqId: 1,
     created_at: now,
     updated_at: now,
     txid,
-    rawTx: [1, 2, 3],
+    rawTx: Utils.toArray(rawTx, 'hex'),
     status,
     history: JSON.stringify({}),
     notify: JSON.stringify({ transactionIds: [1] }),
@@ -51,9 +53,24 @@ function makeReqApi(status: string, txid = 'txid1'): any {
 }
 
 function makeStorageWithReqs(reqApis: any[]): any {
+  const sourceTxid = '11'.repeat(32)
   const sp = {
+    isStorageProvider: jest.fn().mockReturnValue(true),
     updateProvenTxReqDynamics: jest.fn().mockResolvedValue(undefined),
     updateTransactionsStatus: jest.fn().mockResolvedValue(undefined),
+    updateOutput: jest.fn().mockResolvedValue(undefined),
+    findTransactions: jest.fn().mockResolvedValue([{ transactionId: 1, userId: 7, txid: reqApis[0]?.txid }]),
+    findOutputsByOutpoints: jest.fn().mockResolvedValue({
+      [`${sourceTxid}.0`]: {
+        outputId: 9,
+        userId: 7,
+        transactionId: 99,
+        txid: sourceTxid,
+        vout: 0,
+        spendable: true
+      }
+    }),
+    transaction: jest.fn(async (fn: any) => await fn(undefined)),
     updateProvenTxReqWithNewProvenTx: jest.fn().mockResolvedValue({
       status: 'completed',
       history: '{}',
@@ -230,7 +247,11 @@ describe('TaskArcadeSSE', () => {
   // ── SSE status → ProvenTxReq transitions ──────────────────────────────
 
   describe('SSE status → ProvenTxReq transitions', () => {
-    async function runWithStatus(txStatus: string, reqStatus: string): Promise<{ log: string; monitor: any }> {
+    async function runWithStatus(
+      txStatus: string,
+      reqStatus: string,
+      extra: Partial<ArcSSEEvent> = {}
+    ): Promise<{ log: string; monitor: any }> {
       FakeEventSource.instances = []
       const reqApi = makeReqApi(reqStatus)
       const storage = makeStorageWithReqs([reqApi])
@@ -238,7 +259,7 @@ describe('TaskArcadeSSE', () => {
       const task = new TaskArcadeSSE(monitor)
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
-        data: JSON.stringify({ txid: reqApi.txid, txStatus, timestamp: '' })
+        data: JSON.stringify({ txid: reqApi.txid, txStatus, timestamp: '', ...extra })
       })
       const log = await task.runTask()
       return { log, monitor }
@@ -269,6 +290,13 @@ describe('TaskArcadeSSE', () => {
       expect(log).toContain('=> doubleSpend')
     })
 
+    test('SEEN_IN_ORPHAN_MEMPOOL sets req to doubleSpend and quarantines its inputs', async () => {
+      const { log, monitor } = await runWithStatus('SEEN_IN_ORPHAN_MEMPOOL', 'unmined')
+      expect(log).toContain('=> doubleSpend')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).toHaveBeenCalledWith(9, { spendable: false }, undefined)
+    })
+
     test('REJECTED records the event without releasing wallet inputs', async () => {
       const { log, monitor } = await runWithStatus('REJECTED', 'unmined')
       expect(log).toContain('rejection recorded; awaiting resolution')
@@ -280,28 +308,74 @@ describe('TaskArcadeSSE', () => {
       expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
     })
 
-    test('SEEN_MULTIPLE_NODES recovers a req previously marked invalid', async () => {
-      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
-      const { log, monitor } = await runWithStatus('SEEN_MULTIPLE_NODES', 'invalid')
-      expect(log).toContain('=> unmined')
-      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
-      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
-        undefined
-      )
+    test('REJECTED with a permanent validator code fails the request and releases reusable inputs', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined', {
+        status: 465,
+        extraInfo: 'fee too low'
+      })
+      expect(log).toContain('=> invalid')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).not.toHaveBeenCalled()
     })
 
-    test('MINED recovers an invalid req before fetching its proof', async () => {
-      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
-      const { log, monitor } = await runWithStatus('MINED', 'invalid')
-      expect(log).not.toContain('already terminal')
-      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
+    test('REJECTED with unclassified validator detail is terminal invalid', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined', {
+        extraInfo: 'validator policy rejection'
+      })
+      expect(log).toContain('=> invalid')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).not.toHaveBeenCalled()
+    })
+
+    test('REJECTED conflict fails the request and quarantines local input copies without a UTXO provider', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined', {
+        status: 466,
+        extraInfo: 'UTXO_SPENT: input already spent'
+      })
+      expect(log).toContain('=> doubleSpend')
+      expect(log).toContain('quarantined 1 local input copy/copies')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).toHaveBeenCalledWith(9, { spendable: false }, undefined)
+    })
+
+    test.each([
+      [{ status: 476, extraInfo: 'transaction not final' }, 'not final'],
+      [{ extraInfo: 'parent rejected abc' }, 'parent']
+    ])('keeps retryable REJECTED evidence pending: %s', async (extra, _label) => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined', extra)
+      expect(log).toContain('awaiting resolution')
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('RECEIVED persists an intermediate status without changing the request', async () => {
+      const { log, monitor } = await runWithStatus('RECEIVED', 'sending')
+      expect(log).toContain('RECEIVED recorded; awaiting resolution')
       expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
         1,
-        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
+        expect.objectContaining({ status: 'sending' }),
         undefined
       )
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('SEEN_MULTIPLE_NODES cannot recover a req previously marked invalid', async () => {
+      const { log, monitor } = await runWithStatus('SEEN_MULTIPLE_NODES', 'invalid')
+      expect(log).toContain('already terminal: invalid')
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('MINED may recover an invalid req only through the validated proof path', async () => {
+      const { log, monitor } = await runWithStatus('MINED', 'invalid')
+      expect(log).not.toContain('already terminal')
+      expect(monitor.services.getMerklePath).toHaveBeenCalledWith('txid1')
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('MINED may recover a doubleSpend req only through the validated proof path', async () => {
+      const { log, monitor } = await runWithStatus('MINED', 'doubleSpend')
+      expect(log).not.toContain('already terminal')
+      expect(monitor.services.getMerklePath).toHaveBeenCalledWith('txid1')
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
     })
 
     test('unknown status produces unhandled log entry', async () => {
@@ -310,9 +384,7 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('does not process already-terminal reqs', async () => {
-      // A positive network event may recover invalid; the other terminal
-      // statuses remain immutable.
-      const terminalStatuses = ['completed', 'doubleSpend']
+      const terminalStatuses = ['completed']
       for (const s of terminalStatuses) {
         const { log } = await runWithStatus('MINED', s)
         expect(log).toContain(`already terminal: ${s}`)
@@ -394,7 +466,53 @@ describe('TaskArcadeSSE', () => {
         data: JSON.stringify({ txid: 'eeee', txStatus: 'MINED', timestamp: '' }),
         lastEventId: '55'
       })
+      expect(saveLastSSEEventId).not.toHaveBeenCalled()
+      await task.runTask()
+      await new Promise(resolve => setTimeout(resolve, 0))
       expect(saveLastSSEEventId).toHaveBeenCalledWith('55')
+    })
+
+    test('does not checkpoint a storage failure and retries the event', async () => {
+      const saveLastSSEEventId = jest.fn().mockResolvedValue(undefined)
+      const storage = makeEmptyStorage()
+      storage.findProvenTxReqs
+        .mockRejectedValueOnce(new Error('temporary database error'))
+        .mockResolvedValue([])
+      const task = new TaskArcadeSSE(makeMonitor({ storageOverride: storage, saveLastSSEEventId }))
+      await task.asyncSetup()
+      FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: 'ffff', txStatus: 'REJECTED', timestamp: '', status: 466 }),
+        lastEventId: '56'
+      })
+
+      await expect(task.runTask()).rejects.toThrow('temporary database error')
+      expect(task.trigger(Date.now()).run).toBe(true)
+      expect(saveLastSSEEventId).not.toHaveBeenCalled()
+
+      await expect(task.runTask()).resolves.toContain('No matching ProvenTxReq')
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(task.trigger(Date.now()).run).toBe(false)
+      expect(saveLastSSEEventId).toHaveBeenCalledWith('56')
+    })
+
+    test('retries the event when cursor persistence fails', async () => {
+      const saveLastSSEEventId = jest.fn()
+        .mockRejectedValueOnce(new Error('cursor store unavailable'))
+        .mockResolvedValue(undefined)
+      const task = new TaskArcadeSSE(makeMonitor({ saveLastSSEEventId }))
+      await task.asyncSetup()
+      FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: 'ffff', txStatus: 'REJECTED', timestamp: '' }),
+        lastEventId: '57'
+      })
+
+      await expect(task.runTask()).rejects.toThrow('cursor store unavailable')
+      expect(task.trigger(Date.now()).run).toBe(true)
+
+      await expect(task.runTask()).resolves.toContain('No matching ProvenTxReq')
+      expect(task.trigger(Date.now()).run).toBe(false)
+      expect(saveLastSSEEventId).toHaveBeenCalledTimes(2)
+      expect(saveLastSSEEventId).toHaveBeenLastCalledWith('57')
     })
   })
 })

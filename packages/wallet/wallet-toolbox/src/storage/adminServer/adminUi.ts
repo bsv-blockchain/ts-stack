@@ -391,7 +391,13 @@ export function renderAdminPage(): string {
               <option value="liquidity">managed-change liquidity (read only)</option>
             </select>
           </label>
-          <button id="runUtxoReview" class="primary">Run Review</button>
+          <label>Action
+            <select id="utxoAction">
+              <option value="scan">scan only</option>
+              <option value="release">release confirmed-spent outputs</option>
+            </select>
+          </label>
+          <button id="runUtxoReview" class="primary">Run UTXO Check</button>
         </div>
         <div class="toolbar">
           <button id="loadUtxoUsers">Load Recently Active Users</button>
@@ -895,16 +901,31 @@ export function renderAdminPage(): string {
       byId('utxoIdentityKey').value = identityKey
       const selectedMode = byId('utxoMode').value
       const mode = selectedMode === 'change' || selectedMode === 'liquidity' ? selectedMode : 'all'
+      const release = mode !== 'liquidity' && byId('utxoAction').value === 'release'
+      if (release && !window.confirm('Release only outputs conclusively confirmed spent? This changes wallet state.')) {
+        return
+      }
       setButtonPending('runUtxoReview', true, 'Running...')
       byId('utxoReviewLog').textContent = 'Running review...'
       try {
-        const result = await api('/admin/api/review-utxos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityKey, mode })
-        })
-        byId('utxoReviewLog').textContent = result.log || ''
-        setNotice('Authenticated as ' + result.requestedBy)
+        const logs = []
+        let offset = 0
+        let page = 0
+        let result
+        for (;;) {
+          result = await api('/admin/api/review-utxos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identityKey, mode, release, pageLimit: 20, offset })
+          })
+          logs.push(result.log || '')
+          byId('utxoReviewLog').textContent = logs.join('')
+          page++
+          if (result.complete || result.nextOffset == null) break
+          if (page >= 1000) throw new Error('UTXO review exceeded 1,000 pages; inspect monitor events before resuming.')
+          offset = Number(result.nextOffset)
+        }
+        setNotice('Authenticated as ' + result.requestedBy + '; completed ' + page + ' page(s)')
       } finally {
         setButtonPending('runUtxoReview', false)
       }

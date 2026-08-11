@@ -106,6 +106,83 @@ describe('Arcade broadcaster', () => {
     })
   })
 
+  describe('shared transaction status provider', () => {
+    test('maps only network-observed Arcade states to known or mined', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClientSequence(
+        [
+          { ok: true, status: 200, statusText: 'OK', data: { txid: 'accepted', txStatus: 'ACCEPTED_BY_NETWORK' } },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: 'mined', txStatus: 'MINED' } },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: 'rejected', txStatus: 'REJECTED' } },
+          { ok: false, status: 404, statusText: 'Not Found', data: { error: 'not found' } }
+        ],
+        captured
+      )
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([
+        'accepted',
+        'mined',
+        'rejected',
+        'missing'
+      ])
+
+      expect(result.status).toBe('success')
+      expect(result.results).toEqual([
+        { txid: 'accepted', status: 'known', depth: 0 },
+        { txid: 'mined', status: 'mined', depth: 1 },
+        { txid: 'rejected', status: 'unknown', depth: undefined, providerStatus: 'REJECTED' },
+        { txid: 'missing', status: 'unknown', depth: undefined }
+      ])
+      expect(captured.map(request => request.url)).toEqual([
+        'https://arcade.example/tx/accepted',
+        'https://arcade.example/tx/mined',
+        'https://arcade.example/tx/rejected',
+        'https://arcade.example/tx/missing'
+      ])
+    })
+
+    test('surfaces an orphan-mempool verdict as durable input-conflict evidence', async () => {
+      const http = mockHttpClient(
+        {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: {
+            status: 200,
+            txid: 'loser',
+            txStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
+            extraInfo: 'input conflict',
+            competingTxs: ['winner']
+          }
+        },
+        []
+      )
+
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids(['loser'])
+
+      expect(result.results[0]).toMatchObject({
+        txid: 'loser',
+        status: 'unknown',
+        terminal: true,
+        inputConflict: true,
+        providerStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
+        competingTxs: ['winner']
+      })
+    })
+
+    test('returns an inconclusive provider result on transport or server failure', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient(
+        { ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } },
+        captured
+      )
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids(['txid'])
+
+      expect(result.status).toBe('error')
+      expect(result.results).toEqual([{ txid: 'txid', status: 'unknown', depth: undefined }])
+      expect(result.error).toBeDefined()
+    })
+  })
+
   describe('response classification', () => {
     test('202 RECEIVED is a success (not a double spend), with clean data text', async () => {
       const captured: CapturedRequest[] = []

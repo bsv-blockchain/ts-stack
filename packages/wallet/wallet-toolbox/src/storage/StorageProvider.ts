@@ -76,8 +76,9 @@ import {
 } from '../sdk/WERR_errors'
 import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
-import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
+import { asArray } from '../utility/utilityHelpers.noBuffer'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
+import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -1295,9 +1296,20 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       for (const output of outputs) {
         const outputId = verifyId(output.outputId)
         await this.validateOutputScript(output)
+        if (output.lockingScript == null) {
+          verdicts.set(outputId, undefined)
+          continue
+        }
+        const classification = await classifyOutputUtxo(services, output)
+        // Proof recovery must not turn provider absence into a spent verdict.
+        // Leave the output's current state unchanged when no UTXO service can
+        // answer conclusively; the validated proof still repairs transaction
+        // and consumed-input state.
         verdicts.set(
           outputId,
-          output.lockingScript == null ? undefined : await services.isUtxo(output)
+          classification.verdict === 'unknown'
+            ? undefined
+            : classification.verdict === 'unspent'
         )
       }
     }
@@ -1548,24 +1560,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
       for (const o of outputs) {
         if (!o.spendable) continue
-        const isUtxo = await this.checkOutputIsUtxo(o, services)
+        await this.validateOutputScript(o)
+        const isUtxo = requireConclusiveUtxo(await classifyOutputUtxo(services, o))
         if (!isUtxo) invalidSpendableOutputs.push(o)
       }
     }
     return { invalidSpendableOutputs }
-  }
-
-  private async checkOutputIsUtxo(
-    o: TableOutput,
-    services: {
-      hashOutputScript: (s: string) => string
-      getUtxoStatus: (hash: string, fmt: undefined, outpoint: string) => Promise<{ isUtxo?: boolean }>
-    }
-  ): Promise<boolean> {
-    if (o.lockingScript == null || o.lockingScript.length === 0) return false
-    const hash = services.hashOutputScript(asString(o.lockingScript))
-    const r = await services.getUtxoStatus(hash, undefined, `${o.txid ?? ''}.${o.vout ?? ''}`)
-    return r.isUtxo === true
   }
 
   async updateProvenTxReqDynamics(

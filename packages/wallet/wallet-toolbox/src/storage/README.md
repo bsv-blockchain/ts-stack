@@ -26,3 +26,19 @@ those rows must remain as history only; they must not be treated as funding cand
 left as phantom UTXOs in raw storage accounting. `reviewStatus` repeats the same repair for
 legacy rows and only restores inputs or neutralizes generated outputs when the failed
 transaction has no active ProvenTxReq that could still reconcile.
+
+## Invalid-change review
+
+Invalid-change review never treats provider absence, timeout, or failure as
+spent evidence. It classifies candidates as confirmed unspent, confirmed spent,
+or unknown with bounded concurrency. Read-only review returns conclusive spent
+rows without throwing on unknown. Direct destructive release remains atomic:
+any unknown throws `WERR_UTXO_REVIEW_INCONCLUSIVE` before output state changes.
+The authenticated Monitor Admin path is explicitly different: it reviews 20
+rows per request and can release only the positively spent subset while
+retaining and reporting unknowns, allowing a heavy wallet to make progress
+without one permanently unavailable outpoint blocking all cleanup. Every row
+is re-read under the write lock; an ownership, spendability, or allocation race
+aborts that page. `InvalidChangeRelease`, `InvalidChangeConclusiveRelease`, and
+`InvalidChangeReleaseBlocked` events retain bounded counts, values, and provider
+evidence.

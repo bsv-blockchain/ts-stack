@@ -14,7 +14,8 @@ import {
   WERR_BAD_REQUEST,
   WERR_UNAUTHORIZED,
   WERR_NOT_ACTIVE,
-  WERR_INVALID_PUBLIC_KEY
+  WERR_INVALID_PUBLIC_KEY,
+  WERR_UTXO_REVIEW_INCONCLUSIVE
 } from '../WERR_errors'
 
 // Mock WalletStorage interface
@@ -72,12 +73,12 @@ describe('WalletError tests', () => {
       readonly state = 'expired'
       readonly batchId = 'cross-copy-batch'
 
-      constructor () {
+      constructor() {
         super('Action batch cannot continue because it is expired.')
         this.name = 'WERR_ACTION_BATCH_STATE'
       }
 
-      toJson (): string {
+      toJson(): string {
         return JSON.stringify({
           isError: true,
           name: this.name,
@@ -88,9 +89,7 @@ describe('WalletError tests', () => {
       }
     }
 
-    const recovered = WalletErrorFromJson(JSON.parse(
-      WalletError.unknownToJson(new WERRActionBatchStateCopy())
-    ))
+    const recovered = WalletErrorFromJson(JSON.parse(WalletError.unknownToJson(new WERRActionBatchStateCopy())))
     expect(recovered).toMatchObject({
       name: 'WERR_ACTION_BATCH_STATE',
       state: 'expired',
@@ -358,6 +357,19 @@ describe('WalletError tests', () => {
       status: 'error',
       code: 'WERR_TEST',
       description: 'Test description'
+    })
+  })
+
+  test('26 - inconclusive UTXO review survives JSON transport with machine-readable counts', () => {
+    const original = new WERR_UTXO_REVIEW_INCONCLUSIVE(12, 3, 2)
+    const recovered = WalletErrorFromJson(JSON.parse(original.toJson()))
+
+    expect(recovered).toBeInstanceOf(WERR_UTXO_REVIEW_INCONCLUSIVE)
+    expect(recovered).toMatchObject({
+      name: 'WERR_UTXO_REVIEW_INCONCLUSIVE',
+      checked: 12,
+      confirmedSpent: 3,
+      unknown: 2
     })
   })
 })

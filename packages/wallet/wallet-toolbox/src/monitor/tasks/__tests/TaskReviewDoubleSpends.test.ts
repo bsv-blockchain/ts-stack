@@ -1,6 +1,6 @@
 import { TaskReviewDoubleSpends } from '../TaskReviewDoubleSpends'
 
-function makeReq (provenTxReqId: number, txid: string, updatedAt: Date): any {
+function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, durableInputConflict = false): any {
   const now = new Date()
   return {
     provenTxReqId,
@@ -8,7 +8,9 @@ function makeReq (provenTxReqId: number, txid: string, updatedAt: Date): any {
     updated_at: updatedAt,
     txid,
     status: 'doubleSpend',
-    history: '{}',
+    history: durableInputConflict
+      ? JSON.stringify({ notes: [{ what: 'arcSSETerminalRejection', inputConflict: true }] })
+      : '{}',
     notify: '{}',
     attempts: 0,
     notified: false
@@ -18,7 +20,8 @@ function makeReq (provenTxReqId: number, txid: string, updatedAt: Date): any {
 function makeMonitor (
   statusByTxid: Record<string, string>,
   reqs: any[],
-  monitorEvents: Array<{ details?: string }> = []
+  monitorEvents: Array<{ details?: string }> = [],
+  providerStatus: 'success' | 'error' = 'success'
 ) {
   const updateProvenTxReq = jest.fn().mockResolvedValue(undefined)
   const findProvenTxReqs = jest.fn(async ({ paged }: any) => reqs.slice(paged.offset, paged.offset + paged.limit))
@@ -34,6 +37,7 @@ function makeMonitor (
       },
       services: {
         getStatusForTxids: jest.fn(async (txids: string[]) => ({
+          status: providerStatus,
           results: txids.map(txid => ({ txid, status: statusByTxid[txid] ?? 'unknown' }))
         }))
       },
@@ -59,7 +63,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(1, 'tx1', new Date('2026-01-01T10:30:00.000Z')),
       makeReq(2, 'tx2', new Date('2026-01-01T10:40:00.000Z'))
     ]
-    const m = makeMonitor({ tx1: 'success', tx2: 'unknown' }, reqs)
+    const m = makeMonitor({ tx1: 'known', tx2: 'unknown' }, reqs)
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60, 60)
 
     const log = await task.runTask()
@@ -74,7 +78,7 @@ describe('TaskReviewDoubleSpends', () => {
     expect(log).toContain('"unfails":1')
     expect(log).toContain('"resumeOffset":0')
     expect(log).toContain('"expectedProvenTxReqId":2')
-    expect(log).toContain('unfail 1 tx1 status:success')
+    expect(log).toContain('unfail 1 tx1 status:known')
     expect(task.triggerNextMsecs).toBe(0)
   })
 
@@ -86,7 +90,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(2, 'tx2', new Date('2026-01-01T10:35:00.000Z')),
       makeReq(3, 'tx3', new Date('2026-01-01T10:40:00.000Z'))
     ]
-    const m = makeMonitor({ tx1: 'success', tx2: 'unknown', tx3: 'unknown' }, reqs)
+    const m = makeMonitor({ tx1: 'known', tx2: 'unknown', tx3: 'unknown' }, reqs)
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60, 60)
 
     const log = await task.runTask()
@@ -118,7 +122,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(1, 'tx1', new Date('2026-01-01T10:30:00.000Z')),
       makeReq(2, 'tx2', new Date('2026-01-01T10:40:00.000Z'))
     ]
-    const m = makeMonitor({ tx1: 'success', tx2: 'unknown' }, reqs)
+    const m = makeMonitor({ tx1: 'known', tx2: 'unknown' }, reqs)
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60, 60)
 
     await task.runTask()
@@ -134,7 +138,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(2, 'tx2', new Date('2026-01-01T10:05:00.000Z')),
       makeReq(3, 'tx3', new Date('2026-01-01T10:10:00.000Z'))
     ]
-    const m = makeMonitor({ tx2: 'unknown', tx3: 'success' }, reqs, [
+    const m = makeMonitor({ tx2: 'unknown', tx3: 'known' }, reqs, [
       { details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 2 }) }
     ])
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60)
@@ -162,7 +166,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(10, 'tx10', new Date('2026-01-01T10:00:00.000Z')),
       makeReq(11, 'tx11', new Date('2026-01-01T10:05:00.000Z'))
     ]
-    const m = makeMonitor({ tx10: 'unknown', tx11: 'success' }, reqs, [
+    const m = makeMonitor({ tx10: 'unknown', tx11: 'known' }, reqs, [
       { details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 99 }) }
     ])
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60)
@@ -180,5 +184,56 @@ describe('TaskReviewDoubleSpends', () => {
     expect(m.updateProvenTxReq).toHaveBeenCalledWith([11], { status: 'unfail' })
     expect(log).toContain('"resumeOffset":0')
     expect(log).toContain('"expectedProvenTxReqId":10')
+  })
+
+  test('4 retains double spends when every status provider is unavailable', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'))]
+    const m = makeMonitor({}, reqs, [], 'error')
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+
+    const log = await task.runTask()
+
+    expect(m.updateProvenTxReq).not.toHaveBeenCalled()
+    expect(log).toContain('"unfails":0')
+  })
+
+  test('5 does not let an Arcade known label override durable input-conflict evidence', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'), true)]
+    const m = makeMonitor({ tx1: 'known' }, reqs)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+
+    await task.runTask()
+
+    expect(m.updateProvenTxReq).not.toHaveBeenCalled()
+  })
+
+  test('5a treats malformed legacy history as a durable conflict', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const req = makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'))
+    req.history = '{malformed'
+    const m = makeMonitor({ tx1: 'known' }, [req])
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+
+    await task.runTask()
+
+    expect(m.updateProvenTxReq).not.toHaveBeenCalled()
+  })
+
+  test('6 allows a mined observation to send durable conflicts through validated proof recovery', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'), true)]
+    const m = makeMonitor({ tx1: 'mined' }, reqs)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+
+    const log = await task.runTask()
+
+    expect(m.updateProvenTxReq).toHaveBeenCalledWith([1], { status: 'unfail' })
+    expect(log).toContain('status:mined durableInputConflict:true')
   })
 })

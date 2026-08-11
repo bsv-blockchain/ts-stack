@@ -10,6 +10,7 @@ import {
 } from '../../sdk/types'
 import { verifyId, verifyInteger, verifyOne } from '../../utility/utilityHelpers'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { reviewUtxoOutputs } from './reviewUtxoOutputs'
 
 export interface ListOutputsSpecOp {
   name: string
@@ -55,27 +56,6 @@ export interface ListOutputsSpecOp {
   tagsParamsCount?: number
 }
 
-const INVALID_CHANGE_MAX_CONCURRENCY = 12
-
-async function runWithConcurrency<T>(
-  values: T[],
-  maxConcurrency: number,
-  worker: (value: T) => Promise<void>
-): Promise<void> {
-  const active: Array<Promise<void>> = []
-  for (const value of values) {
-    const task = worker(value).finally(() => {
-      const i = active.indexOf(task)
-      if (i >= 0) active.splice(i, 1)
-    })
-    active.push(task)
-    if (active.length >= maxConcurrency) {
-      await Promise.race(active)
-    }
-  }
-  await Promise.all(active)
-}
-
 const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
   return {
     [specOpWalletBalance]: {
@@ -115,32 +95,9 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         specOpTags: string[],
         outputs: TableOutput[]
       ): Promise<TableOutput[]> => {
-        if (specOpTags.includes('release')) {
-          await s.reviewStatus({ agedLimit: new Date(0) })
-        }
-        const invalidOutputIds = new Set<number>()
-        const services = s.getServices()
-        await runWithConcurrency(outputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
-          if (!o.basketId) return // only care about outputs assigned to baskets.
-          await s.validateOutputScript(o)
-          let ok: boolean | undefined = false
-          if (o.lockingScript != null && o.lockingScript.length > 0) {
-            ok = await services.isUtxo(o)
-          } else {
-            ok = undefined
-          }
-          if (ok === false) {
-            invalidOutputIds.add(o.outputId)
-          }
-        })
-        const filteredOutputs = outputs.filter(o => invalidOutputIds.has(o.outputId))
-        if (specOpTags.includes('release')) {
-          await runWithConcurrency(filteredOutputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
-            await s.updateOutput(o.outputId, { spendable: false })
-            o.spendable = false
-          })
-        }
-        return filteredOutputs
+        const release = specOpTags.includes('release')
+        const review = await reviewUtxoOutputs(s, auth, outputs, release ? 'atomic' : 'none')
+        return review.confirmedSpentOutputs
       }
     },
     [specOpSetWalletChangeParams]: {
