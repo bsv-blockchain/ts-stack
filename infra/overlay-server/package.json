@@ -1,7 +1,7 @@
 {
   "name": "@bsv/overlay-express-examples",
   "private": true,
-  "version": "2.1.30",
+  "version": "2.1.31",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -39,10 +39,10 @@
   },
   "dependencies": {
     "@bsv/overlay": "^2.3.0",
-    "@bsv/overlay-discovery-services": "^2.1.6",
-    "@bsv/overlay-express": "^2.5.1",
+    "@bsv/overlay-discovery-services": "^2.2.0",
+    "@bsv/overlay-express": "^2.6.0",
     "@bsv/overlay-topics": "^1.6.8",
-    "@bsv/sdk": "^2.3.2",
+    "@bsv/sdk": "^2.4.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
