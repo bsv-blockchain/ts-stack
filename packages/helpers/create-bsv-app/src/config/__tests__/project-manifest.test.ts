@@ -93,6 +93,12 @@ describe('manifest ops', () => {
     expect(readValidManifest(dir)).toEqual(m)
   })
 
+  test('readValidManifest accepts TerraTestNet', () => {
+    const m = manifestFromConfig({ ...config, network: 'ttn' })
+    writeProjectManifest(dir, m)
+    expect(readValidManifest(dir)).toEqual(m)
+  })
+
   test('readValidManifest throws on malformed file (capabilities not array)', () => {
     writeFileSync(
       join(dir, 'bsv-scaffold.json'),

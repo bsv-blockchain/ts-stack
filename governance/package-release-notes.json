@@ -55,9 +55,9 @@
     {
       "name": "@bsv/btms",
       "publishedVersion": "1.1.1",
-      "releaseType": "patch",
-      "summary": "Adds strict package contracts and hardens untrusted-key accounting and token-manager maintainability.",
-      "migration": "No consumer migration is required; token and lookup wire contracts are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet as an explicit overlay-network preset alongside the existing token-manager hardening and package contracts.",
+      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/btms-permission-module",
@@ -76,9 +76,9 @@
     {
       "name": "@bsv/did-client",
       "publishedVersion": "1.2.1",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; DID client APIs, encodings, and supported imports are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet as an explicit DID overlay-network preset and retains the governed package-quality contract.",
+      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/fund-wallet",
@@ -98,8 +98,8 @@
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.2.2",
       "releaseType": "minor",
-      "summary": "Follows bounded Message Box server pagination while preserving historical fetch-all behavior and adds offset/skip, total-limit, page-size, and optional page-ceiling controls.",
-      "migration": "Existing listMessages and listMessagesLite calls continue to fetch all available messages. Applications that need an aggregate memory ceiling should set limit and/or maxPages; no additional BRC-105 approval callback is required because AuthFetch uses wallet permissions."
+      "summary": "Adds first-class TerraTestNet overlay routing while requiring an explicit TTN Message Box host until a dedicated deployment is available.",
+      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet and must provide the dedicated TTN host explicitly."
     },
     {
       "name": "@bsv/overlay",
@@ -111,16 +111,16 @@
     {
       "name": "@bsv/overlay-discovery-services",
       "publishedVersion": "2.1.1",
-      "releaseType": "patch",
-      "summary": "Hardens discovery URI, registry and lookup validation, preserves the historical lookup error class, and reduces production duplication.",
-      "migration": "No consumer migration is required; discovery records and public network behavior are unchanged."
+      "releaseType": "minor",
+      "summary": "Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services.",
+      "migration": "Existing mainnet and testnet advertisers are unchanged. TTN operators pass chain ttn and provision the staging storage and overlay endpoints before advertising."
     },
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.5.0",
-      "releaseType": "patch",
-      "summary": "Preserves forward-compatible browser preflights by adding every well-formed requested header to the known protocol defaults unless the operator configures a strict header allowlist.",
-      "migration": "No consumer migration is required. Omit OVERLAY_CORS_ALLOWED_HEADERS for additive compatibility, or set an exact comma-separated list to retain a strict browser request-header policy. Origin modes, authentication, authorization, and endpoint validation are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds a TerraTestNet runtime mode with TTN discovery roots, wallet advertising, and explicit ChainTracks requirements while retaining Arcade-first propagation.",
+      "migration": "Existing mainnet and testnet servers are unchanged. TTN servers call configureNetwork('ttn'), configureArcade with the TTN endpoint, and configureChaintracks or configureChainTracker before engine initialization."
     },
     {
       "name": "@bsv/overlay-topics",
@@ -146,16 +146,16 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.3.1",
-      "releaseType": "patch",
-      "summary": "Binds HTTPWalletWire's default browser fetch client to its global receiver so WalletClient auto-discovery can connect to Cicada on port 3301 instead of silently falling through after an Illegal invocation error.",
-      "migration": "No consumer migration is required. Existing HTTPWalletWire constructor calls, injected HTTP clients, Wallet Wire messages, and substrate selection order remain compatible."
+      "releaseType": "minor",
+      "summary": "Adds the teratestnet overlay preset, an isolated TTN SHIP/SLAP root, and explicit resolver selection for identity and registry clients.",
+      "migration": "Existing mainnet, testnet, and local routing is unchanged. TTN consumers select teratestnet explicitly because BRC-100 getNetwork continues to report testnet for all test-family chains."
     },
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
-      "releaseType": "patch",
-      "summary": "Adds strict browser and server package contracts and hardens wallet construction, naming clarity, output handling, and error behavior.",
-      "migration": "No consumer migration is required; the browser and server entry points remain compatible."
+      "releaseType": "minor",
+      "summary": "Adds TerraTestNet to the public Overlay configuration while retaining strict browser and server package contracts.",
+      "migration": "Existing overlay configurations are unchanged. TTN consumers select network teratestnet and use @bsv/sdk 2.4 or later."
     },
     {
       "name": "@bsv/templates",
@@ -195,30 +195,30 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Isolates and resumes action batches, then adds progressive managed-change liquidity: 144 useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration (including actions already funded by explicit inputs), settled-first parent selection, exact BEEF-cost comparison for pathological plans, last-resort pending funding, sync-visible SQL metadata, delayed permission persistence, and read-only Monitor reporting.",
-      "migration": "No consumer code or BRC-100 migration is required. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom basket values remain unchanged and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback ensure the policy adds no new funding refusal. Operators may tune all work limits, including explicit -1 unlimited modes."
+      "releaseType": "minor",
+      "summary": "Adds isolated TTN overlay routing and default Arcade support, isolates and resumes action batches, and introduces progressive managed-change liquidity: useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration (including explicitly funded actions), settled-first and measured-BEEF planning, last-resort pending funding, sync-visible SQL metadata, delayed permission persistence, and read-only Monitor reporting.",
+      "migration": "Mainnet, testnet, STN, TSTN, and mock service defaults remain compatible; TTN receives its isolated resolver and Arcade default. No consumer code or BRC-100 migration is required for liquidity changes. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom values remain authoritative and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback add no new funding refusal. Operators may tune every work limit, including explicit -1 unlimited modes."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with isolated resumable action batches and progressive IndexedDB managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
-      "migration": "No browser consumer code migration is required. Exact untouched IndexedDB defaults advance from 32 to 5,000 satoshis and then migrate progressively through ordinary authorized actions; custom basket values and remote-storage wire contracts remain unchanged."
+      "releaseType": "minor",
+      "summary": "Carries the lockstep browser build with isolated TTN routing, default TTN Arcade support, isolated resumable action batches, progressive IndexedDB managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
+      "migration": "No browser consumer code migration is required. TTN wallets receive the isolated resolver and Arcade defaults. Exact untouched IndexedDB defaults advance from 32 to 5,000 satoshis and migrate progressively through ordinary authorized actions; custom basket values and remote-storage wire contracts remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
-      "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with isolated resumable action batches, progressive managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
-      "migration": "No mobile consumer code migration is required. Wallets progressively adopt useful change values through future authorized actions; custom basket values, BRC-100 methods, and remote-storage wire contracts remain unchanged."
+      "releaseType": "minor",
+      "summary": "Carries the lockstep mobile build with isolated TTN routing, default TTN Arcade support, isolated resumable action batches, progressive managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
+      "migration": "No mobile consumer code migration is required. TTN wallets receive the isolated resolver and Arcade defaults. Wallets progressively adopt useful change values through future authorized actions; custom basket values, BRC-100 methods, and remote-storage wire contracts remain unchanged."
     },
     {
       "name": "create-bsv-app",
       "publishedVersion": "1.0.2",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; generated application structure and CLI behavior are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds TTN to the CLI, browser configurator, configuration model, and persisted project-manifest network choices.",
+      "migration": "Existing mainnet and testnet scaffolds are unchanged. New TTN projects pass --network ttn or select TerraTestNet in the configurator."
     }
   ]
 }

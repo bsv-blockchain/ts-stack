@@ -3,9 +3,9 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.0.4'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.1.0'
+last_updated: '2026-08-10'
+last_verified: '2026-08-10'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/create-bsv-app'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app'
@@ -31,6 +31,8 @@ npm run dev
 The CLI can also create `react`, `express`, or catalogue starters and supports
 interactive, flag, JSON configuration, and local browser-UI inputs. Generated
 projects record the resolved starter and layout in `bsv-scaffold.json`.
+Select TerraTestNet with `--network ttn` or the browser configurator; the
+choice is preserved in generated configuration and `bsv-scaffold.json`.
 
 Use `--skip-install` when CI or another tool owns dependency installation.
 Review generated authentication and nonce-store configuration before

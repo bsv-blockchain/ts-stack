@@ -40,6 +40,30 @@ describe('Services Arcade wiring', () => {
     expect(services.postBeefServices.services.some(s => s.name === 'ArcadeBeef')).toBe(false)
   })
 
+  test('TTN enables its public Arcade provider by default', () => {
+    const options = createDefaultWalletServicesOptions('ttn')
+    expect(options.arcadeUrl).toBe(ARCADE_URL)
+    const services = new Services(options)
+    expect(services.arcade).toBeInstanceOf(Arcade)
+    expect(services.postBeefServices.services[0].name).toBe('ArcadeBeef')
+    expect(services.postBeefServices.services.some(s => s.name === 'TaalArcBeef')).toBe(false)
+  })
+
+  test('TTN Arcade can be explicitly disabled', () => {
+    const options = createDefaultWalletServicesOptions(
+      'ttn',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ''
+    )
+    expect(options.arcadeUrl).toBeUndefined()
+  })
+
   test('arcadeUrl provided → Arcade registered FIRST in postBeefServices', () => {
     const options = createDefaultWalletServicesOptions(
       'test',

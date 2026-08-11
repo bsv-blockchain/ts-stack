@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Route `ttn` wallets through the isolated `teratestnet` overlay preset and
+  enable the public TTN Arcade broadcaster/proof provider by default. TTN does
+  not register the incompatible legacy ARC BEEF fallback. Other chain defaults
+  are unchanged, and an empty Arcade URL explicitly disables Arcade.
 - Replace 32-satoshi default-basket fragments with a progressive liquidity
   policy targeting 144 useful 5,000-satoshi outputs. New actions create at most
   eight outputs from real surplus and migrate at most four fee-positive legacy

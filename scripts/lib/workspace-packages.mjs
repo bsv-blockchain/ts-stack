@@ -13,9 +13,20 @@ function workspaceRuntimeDependencies(manifest) {
   return dependencies
 }
 
+function governedWorkspacePeers(manifest, manifestsByName) {
+  return Object.keys(manifest.peerDependencies ?? {}).filter(name => manifestsByName.has(name))
+}
+
+function governedWorkspaceRuntimeDependencies(manifest, manifestsByName) {
+  return [
+    ...workspaceRuntimeDependencies(manifest),
+    ...governedWorkspacePeers(manifest, manifestsByName)
+  ]
+}
+
 export function workspaceRuntimeClosure(rootManifest, manifestsByName) {
   const selected = new Set()
-  const queue = workspaceRuntimeDependencies(rootManifest)
+  const queue = governedWorkspaceRuntimeDependencies(rootManifest, manifestsByName)
   while (queue.length > 0) {
     const name = queue.shift()
     if (name === rootManifest.name || selected.has(name)) continue
@@ -24,7 +35,7 @@ export function workspaceRuntimeClosure(rootManifest, manifestsByName) {
       throw new Error(`${rootManifest.name} references unknown workspace dependency ${name}`)
     }
     selected.add(name)
-    queue.push(...workspaceRuntimeDependencies(manifest))
+    queue.push(...governedWorkspaceRuntimeDependencies(manifest, manifestsByName))
   }
   return [...selected].sort((left, right) => left.localeCompare(right))
 }

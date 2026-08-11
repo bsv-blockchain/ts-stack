@@ -43,7 +43,9 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // SetupWallet is declarations only, while the mobile storage entry point is
   // a pure re-export barrel. Neither emits executable statements for LCOV.
   /packages\/wallet\/wallet-toolbox\/src\/SetupWallet\.ts$/,
-  /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/
+  /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/,
+  /packages\/helpers\/simple\/src\/core\/types\.ts$/,
+  /packages\/wallet\/btms\/src\/types\.ts$/
 ]
 
 function normalizedPath(value) {

@@ -1,4 +1,5 @@
-import { WalletProtocol } from "../../wallet/index.js"
+import { WalletProtocol } from '../../wallet/index.js'
+import type { LookupNetworkPreset } from '../../overlay-tools/index.js'
 
 export const defaultIdentity: DisplayableIdentity = {
   name: 'Unknown Identity',
@@ -15,6 +16,8 @@ export interface IdentityClientOptions {
   keyID: string
   tokenAmount: number
   outputIndex: number
+  /** Override wallet-reported testnet routing for overlays such as TerraTestNet. */
+  networkPreset?: LookupNetworkPreset
 }
 export const DEFAULT_IDENTITY_CLIENT_OPTIONS: IdentityClientOptions = {
   protocolID: [1, 'identity'],

@@ -41,7 +41,7 @@ Options:
   --bsv-dir <path>             Set the generated BSV module directory
   --capabilities <names>       Add comma-separated BSV capabilities
   --package-manager <name>     Use npm, pnpm, yarn, or bun
-  --network <main|test>        Select the BSV network
+  --network <main|test|ttn>    Select the BSV network
   --yes                        Accept defaults without prompting
   --force                      Overwrite conflicting generated files
   --ui                         Open the browser-based configurator
@@ -95,7 +95,8 @@ const VALUE_FLAGS: Record<string, ValueFlagHandler> = {
     args.draft.packageManager = v as PackageManager
   },
   '--network': (args, v) => {
-    if (v !== 'main' && v !== 'test') throw new ConfigError('--network must be main or test')
+    if (v !== 'main' && v !== 'test' && v !== 'ttn')
+      throw new ConfigError('--network must be main, test, or ttn')
     args.draft.network = v
   }
 }

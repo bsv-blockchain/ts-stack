@@ -2,6 +2,7 @@ import {
   DEFAULT_IDENTITY_CLIENT_OPTIONS,
   defaultIdentity,
   DisplayableIdentity,
+  IdentityClientOptions,
   KNOWN_IDENTITY_TYPES
 } from './types/index.js'
 import {
@@ -102,11 +103,13 @@ function normalizeOpts(
 export class IdentityClient {
   private readonly wallet: WalletInterface
   private readonly contactsManager: ContactsManager
+  private readonly options: IdentityClientOptions
   constructor(
     wallet?: WalletInterface,
-    private readonly options = DEFAULT_IDENTITY_CLIENT_OPTIONS,
+    options: Partial<IdentityClientOptions> = {},
     private readonly originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
+    this.options = { ...DEFAULT_IDENTITY_CLIENT_OPTIONS, ...options }
     this.wallet = wallet ?? new WalletClient()
     this.contactsManager = new ContactsManager(this.wallet, this.originator)
   }
@@ -190,7 +193,7 @@ export class IdentityClient {
     if (tx !== undefined) {
       // Submit the transaction to an overlay
       const broadcaster = new TopicBroadcaster(['tm_identity'], {
-        networkPreset: (await this.wallet.getNetwork({})).network
+        networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network
       })
       return await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
     }
@@ -329,7 +332,7 @@ export class IdentityClient {
   async revokeCertificateRevelation(serialNumber: Base64String): Promise<void> {
     // 1. Find existing UTXO
     const lookupResolver = new LookupResolver({
-      networkPreset: (await this.wallet.getNetwork({})).network
+      networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network
     })
     const result = await lookupResolver.query({
       service: 'ls_identity',
@@ -343,7 +346,7 @@ export class IdentityClient {
     }
 
     const topicBroadcaster = new SHIPBroadcaster(['tm_identity'], {
-      networkPreset: (await this.wallet.getNetwork({})).network,
+      networkPreset: this.options.networkPreset ?? (await this.wallet.getNetwork({})).network,
       requireAcknowledgmentFromAllHostsForTopics: [],
       requireAcknowledgmentFromAnyHostForTopics: [],
       requireAcknowledgmentFromSpecificHostsForTopics: { tm_identity: [] }

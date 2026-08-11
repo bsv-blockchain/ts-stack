@@ -25,6 +25,7 @@ Quick reference material for API details and protocol indices.
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification
 - **[Package API, declarations, and migrations](./package-api-migrations.md)** — Generated entry points, declaration targets, source candidates, release notes, and migration guidance for all 30 public packages
 - **[Release and operations guide](./release-operations.md)** — Scope, preflight, publication, deployment, failure handling, and rollback
+- **[TerraTestNet rollout gate](./ttn-rollout.md)** — Coordinated package, image, infrastructure, isolation, validation, and rollback prerequisites
 - **[Service operations contract](./service-operations.md)** — Generated health, readiness, state, migration, backup, and workload-hardening contracts
 - **[Repository health controls](./repository-health.md)** — Machine-readable project, package, documentation, test, and exception governance
 - **[Test quality governance](./test-quality-governance.md)** — Required, manual, live, property, mutation, and conformance test ownership

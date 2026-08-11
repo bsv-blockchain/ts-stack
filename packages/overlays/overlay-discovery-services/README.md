@@ -44,6 +44,10 @@ await advertiser.createAdvertisements([
 const peers = await advertiser.findAllAdvertisements('SHIP')
 ```
 
+For TerraTestNet, pass `ttn` as the chain and a TTN wallet-storage URL. Unless
+overridden with `lookupResolverConfig`, the advertiser uses the isolated
+`teratestnet` resolver preset and TTN Arcade-backed wallet services.
+
 ## Quick start (overlay operator)
 
 Mount the SHIP/SLAP topic managers and lookup services on your overlay node so peers can publish and discover advertisements through your endpoint:

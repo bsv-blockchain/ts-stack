@@ -96,7 +96,7 @@ Configuration options for the Lookup resolver.
 
 ```ts
 export interface LookupResolverConfig {
-    networkPreset?: "mainnet" | "testnet" | "local";
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
     facilitator?: OverlayLookupFacilitator;
     slapTrackers?: string[];
     hostOverrides?: Record<string, string[]>;
@@ -152,7 +152,7 @@ The network preset to use, unless other options override it.
 - local: directly query from localhost:8080 and a facilitator that permits plain HTTP
 
 ```ts
-networkPreset?: "mainnet" | "testnet" | "local"
+networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local"
 ```
 
 #### Property reputationStorage
@@ -233,7 +233,7 @@ Configuration options for the SHIP broadcaster.
 
 ```ts
 export interface SHIPBroadcasterConfig {
-    networkPreset?: "mainnet" | "testnet" | "local";
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
     facilitator?: OverlayBroadcastFacilitator;
     resolver?: LookupResolver;
     requireAcknowledgmentFromAllHostsForTopics?: "all" | "any" | string[];
@@ -261,7 +261,7 @@ The network preset to use, unless other options override it.
 - local: directly send to localhost:8080 and a facilitator that permits plain HTTP
 
 ```ts
-networkPreset?: "mainnet" | "testnet" | "local"
+networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local"
 ```
 
 #### Property requireAcknowledgmentFromAllHostsForTopics

@@ -47,6 +47,7 @@ import {
 } from './security/edgePolicy.js'
 import { calculateConfiguredRequestPrice } from './config/pricing.js'
 import { readMessageBoxResourceConfig } from './config/resources.js'
+import { parsePublicWalletChain } from './config/network.js'
 import { KnexPaymentReplayStore } from './security/KnexPaymentReplayStore.js'
 ;(global.self as any) = { crypto }
 
@@ -122,7 +123,7 @@ export async function initializeWallet(): Promise<void> {
   }
 
   _wallet = await Setup.createWalletClientNoEnv({
-    chain: BSV_NETWORK === 'testnet' ? 'test' : 'main',
+    chain: parsePublicWalletChain(BSV_NETWORK),
     rootKeyHex: SERVER_PRIVATE_KEY,
     storageUrl: WALLET_STORAGE_URL
   })

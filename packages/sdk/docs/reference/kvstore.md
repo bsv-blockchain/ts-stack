@@ -48,7 +48,7 @@ export interface KVStoreConfig {
     topics?: string[];
     originator?: string;
     wallet?: WalletInterface;
-    networkPreset?: "mainnet" | "testnet" | "local";
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
     acceptDelayedBroadcast?: boolean;
     overlayBroadcast?: boolean;
     tokenSetDescription?: string;
@@ -72,7 +72,7 @@ acceptDelayedBroadcast?: boolean
 Network preset for overlay services
 
 ```ts
-networkPreset?: "mainnet" | "testnet" | "local"
+networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local"
 ```
 
 #### Property originator

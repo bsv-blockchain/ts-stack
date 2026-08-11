@@ -353,7 +353,7 @@ interface IncomingPayment {
 ```typescript
 interface OverlayConfig {
   topics: string[]
-  network?: 'mainnet' | 'testnet' | 'local'
+  network?: 'mainnet' | 'testnet' | 'teratestnet' | 'local'
   requireAckFromAllHosts?: 'all' | 'any' | string[]
   requireAckFromAnyHost?: 'all' | 'any' | string[]
   slapTrackers?: string[]

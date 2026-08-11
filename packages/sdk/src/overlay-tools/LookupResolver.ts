@@ -167,6 +167,15 @@ export const DEFAULT_TESTNET_SLAP_TRACKERS: string[] = [
   'https://testnet-users.bapp.dev'
 ]
 
+/** Default TerraTestNet SLAP trackers. */
+export const DEFAULT_TTN_SLAP_TRACKERS: string[] = [
+  // Canonical staging root; kept separate from testnet to prevent cross-chain discovery.
+  'https://staging-overlay.babbage.systems'
+]
+
+/** Public overlay network presets understood by lookup and SHIP routing. */
+export type LookupNetworkPreset = 'mainnet' | 'testnet' | 'teratestnet' | 'local'
+
 const MAX_TRACKER_WAIT_TIME = 5000
 const DEFAULT_LOOKUP_TIMEOUT = 2000
 const DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS = 60_000
@@ -302,9 +311,10 @@ export interface LookupResolverConfig {
    * The network preset to use, unless other options override it.
    * - mainnet: use mainnet SLAP trackers and HTTPS facilitator
    * - testnet: use testnet SLAP trackers and HTTPS facilitator
+   * - teratestnet: use TerraTestNet SLAP trackers and HTTPS facilitator
    * - local: directly query from localhost:8080 and a facilitator that permits plain HTTP
    */
-  networkPreset?: 'mainnet' | 'testnet' | 'local'
+  networkPreset?: LookupNetworkPreset
   /** The facilitator used to make requests to Overlay Services hosts. */
   facilitator?: OverlayLookupFacilitator
   /** The list of SLAP trackers queried to resolve Overlay Services hosts for a given lookup service. */
@@ -717,7 +727,7 @@ export default class LookupResolver {
   private readonly slapTrackers: string[]
   private readonly hostOverrides: Record<string, string[]>
   private readonly additionalHosts: Record<string, string[]>
-  private readonly networkPreset: 'mainnet' | 'testnet' | 'local'
+  private readonly networkPreset: LookupNetworkPreset
   private readonly hostReputation: HostReputationTracker
   private readonly telemetry: Telemetry
 
@@ -743,9 +753,7 @@ export default class LookupResolver {
     this.facilitator =
       config.facilitator ??
       new HTTPSOverlayLookupFacilitator(undefined, this.networkPreset === 'local')
-    this.slapTrackers =
-      config.slapTrackers ??
-      (this.networkPreset === 'mainnet' ? DEFAULT_SLAP_TRACKERS : DEFAULT_TESTNET_SLAP_TRACKERS)
+    this.slapTrackers = config.slapTrackers ?? this.defaultSlapTrackers()
     const hostOverrides = config.hostOverrides ?? {}
     this.assertValidOverrideServices(hostOverrides)
     this.hostOverrides = hostOverrides
@@ -776,6 +784,19 @@ export default class LookupResolver {
     this.txMemo = new Map()
     this.advertisedBy = new Map()
     this.lastUnreachableNotificationAt = new Map()
+  }
+
+  private defaultSlapTrackers(): string[] {
+    switch (this.networkPreset) {
+      case 'mainnet':
+        return DEFAULT_SLAP_TRACKERS
+      case 'testnet':
+        return DEFAULT_TESTNET_SLAP_TRACKERS
+      case 'teratestnet':
+        return DEFAULT_TTN_SLAP_TRACKERS
+      case 'local':
+        return []
+    }
   }
 
   /**

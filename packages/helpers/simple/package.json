@@ -1,6 +1,6 @@
 {
   "name": "@bsv/simple",
-  "version": "0.4.8",
+  "version": "0.5.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -115,7 +115,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.4.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

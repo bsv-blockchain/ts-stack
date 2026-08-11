@@ -216,6 +216,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add the `teratestnet` lookup/SHIP preset, isolated TTN SLAP roots, and
+  explicit identity/registry overlay routing without changing BRC-100's
+  mainnet/testnet wallet-network response.
 - Add `Mnemonic.toEntropy()` to recover and checksum-validate the entropy encoded
   by a BIP-39 mnemonic without deriving its seed.
 - Add optional caller labels to AuthFetch BRC-105 payment actions while retaining

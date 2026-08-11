@@ -92,9 +92,9 @@ lock the standalone image build to the currently published Wallet Toolbox
 2.6.5 while the package and image are reviewed together. The variables above
 are parsed and validated in that build, but the 2.6.5 runtime does not consume
 the policy object. They become effective only after the protected release
-publishes Wallet Toolbox 2.6.6, version synchronization refreshes the
+publishes Wallet Toolbox 2.7.0, version synchronization refreshes the
 standalone package and lock, and an official image is built from that synced
-commit. Verify the image's package provenance reports 2.6.6 or newer before
+commit. Verify the image's package provenance reports 2.7.0 or newer before
 depending on these settings operationally.
 
 Funding always prefers completed parents, then unproven parents, then sending

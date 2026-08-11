@@ -13,7 +13,7 @@
 
 import { RegistryClient, deserializeWalletProtocol } from '../RegistryClient'
 import { WalletInterface } from '../../wallet/index.js'
-import { TopicBroadcaster } from '../../overlay-tools/index.js'
+import { LookupResolver, TopicBroadcaster } from '../../overlay-tools/index.js'
 import { PushDrop } from '../../script/index.js'
 import {
   DefinitionData,
@@ -725,6 +725,13 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
 // -------------------- registerDefinition: network preset used -------------------- //
 
 describe('RegistryClient.registerDefinition – network preset', () => {
+  it('uses the default resolver configuration when options are omitted', () => {
+    const wallet = buildWalletMock()
+
+    expect(() => new RegistryClient(wallet as WalletInterface)).not.toThrow()
+    expect(LookupResolver).toHaveBeenLastCalledWith({ networkPreset: undefined })
+  })
+
   it('passes testnet to TopicBroadcaster when wallet returns testnet', async () => {
     const wallet = buildWalletMock()
     ;(wallet.getNetwork as jest.Mock).mockResolvedValue({ network: 'testnet' })
@@ -742,6 +749,31 @@ describe('RegistryClient.registerDefinition – network preset', () => {
     expect(TopicBroadcaster).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ networkPreset: 'testnet' })
+    )
+  })
+
+  it('uses an explicit TerraTestNet preset for lookup and broadcast routing', async () => {
+    const wallet = buildWalletMock()
+    const client = new RegistryClient(
+      wallet as WalletInterface,
+      { networkPreset: 'teratestnet' },
+      TEST_ORIGINATOR
+    )
+
+    await client.registerDefinition({
+      definitionType: 'basket',
+      basketID: 'ttn-basket',
+      name: 'TTN Basket',
+      iconURL: 'u',
+      description: 'd',
+      documentationURL: 'doc'
+    })
+
+    expect(LookupResolver).toHaveBeenCalledWith({ networkPreset: 'teratestnet' })
+    expect(wallet.getNetwork).not.toHaveBeenCalled()
+    expect(TopicBroadcaster).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ networkPreset: 'teratestnet' })
     )
   })
 })

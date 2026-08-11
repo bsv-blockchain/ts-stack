@@ -99,7 +99,7 @@ type UtxoVerificationResult = {
  */
 export class BTMS {
   private readonly wallet: WalletInterface
-  private readonly networkPreset: 'local' | 'mainnet' | 'testnet'
+  private readonly networkPreset: NonNullable<BTMSConfig['networkPreset']>
   private readonly comms?: CommsLayer
   private tokenTemplate: BTMSToken
   private cachedIdentityKey?: PubKeyHex

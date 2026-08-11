@@ -14,7 +14,8 @@ import {
 } from '../transaction/index.js'
 import {
   LookupResolver,
-  TopicBroadcaster
+  TopicBroadcaster,
+  type LookupNetworkPreset
 } from '../overlay-tools/index.js'
 import { PushDrop, LockingScript } from '../script/index.js'
 import {
@@ -45,18 +46,24 @@ const REGISTRANT_KEY_ID = '1'
  * canonical references for baskets, protocols, and certificate types.
  */
 export class RegistryClient {
-  private network: 'mainnet' | 'testnet' | undefined
+  private network: LookupNetworkPreset | undefined
   private readonly resolver: LookupResolver
+  private readonly networkPreset: LookupNetworkPreset | undefined
   private cachedIdentityKey: PubKeyHex | undefined
   private readonly acceptDelayedBroadcast: boolean
 
   constructor (
     private readonly wallet: WalletInterface = new WalletClient(),
-    options: { acceptDelayedBroadcast?: boolean, resolver?: LookupResolver } = {},
+    options: {
+      acceptDelayedBroadcast?: boolean
+      resolver?: LookupResolver
+      networkPreset?: LookupNetworkPreset
+    } = {},
     private readonly originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
     this.acceptDelayedBroadcast = options.acceptDelayedBroadcast ?? false
-    this.resolver = options.resolver ?? new LookupResolver()
+    this.networkPreset = options.networkPreset
+    this.resolver = options.resolver ?? new LookupResolver({ networkPreset: options.networkPreset })
   }
 
   /**
@@ -72,8 +79,8 @@ export class RegistryClient {
    * Gets the network, initializing and caching it on first call.
    * @returns The network type ('mainnet' or 'testnet').
    */
-  private async getNetwork (): Promise<'mainnet' | 'testnet'> {
-    this.network ??= (await this.wallet.getNetwork({})).network
+  private async getNetwork (): Promise<LookupNetworkPreset> {
+    this.network ??= this.networkPreset ?? (await this.wallet.getNetwork({})).network
     return this.network
   }
 

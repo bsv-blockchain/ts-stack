@@ -43,6 +43,20 @@ await messages.acknowledgeMessage({
 })
 ```
 
+TerraTestNet clients select the isolated overlay network and provide the
+dedicated TTN Message Box deployment explicitly:
+
+```ts
+const ttnMessages = new MessageBoxClient({
+  walletClient: wallet,
+  host: 'https://messagebox.ttn.example',
+  networkPreset: 'teratestnet'
+})
+```
+
+The explicit host is required until the dedicated TTN Message Box service has
+been deployed. This prevents TTN clients from silently using a testnet service.
+
 `listMessages()` preserves its historical fetch-all behavior by following
 bounded server pages. Limit aggregate client memory when appropriate:
 

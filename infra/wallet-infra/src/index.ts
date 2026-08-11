@@ -42,7 +42,7 @@ interface CjsSdk {
   }
   KeyDeriver: new (rootKey: unknown) => WalletKeyDeriver
   LookupResolver: new (options: {
-    networkPreset: 'local' | 'mainnet' | 'testnet'
+    networkPreset: 'local' | 'mainnet' | 'testnet' | 'teratestnet'
   }) => WalletLookupResolver
 }
 
@@ -361,22 +361,23 @@ function readWalletLoggerLevel(): WalletLoggerLevel | undefined {
 type WalletChain = 'main' | 'test' | 'ttn' | 'tstn' | 'mock'
 
 function readWalletChain(): WalletChain {
-  const allowedChains: WalletChain[] = ['main', 'test', 'ttn', 'tstn', 'mock']
-  if (
-    typeof BSV_NETWORK === 'string' &&
-    allowedChains.includes(BSV_NETWORK as WalletChain)
-  ) {
-    return BSV_NETWORK as WalletChain
+  switch (BSV_NETWORK.trim().toLowerCase()) {
+    case 'main':
+    case 'mainnet':
+      return 'main'
+    case 'test':
+    case 'testnet':
+      return 'test'
+    case 'ttn':
+    case 'teratestnet':
+      return 'ttn'
+    case 'tstn':
+      return 'tstn'
+    case 'mock':
+      return 'mock'
+    default:
+      throw new TypeError(`Unsupported BSV_NETWORK: ${BSV_NETWORK}`)
   }
-  log.warn(
-    {
-      operation: 'chain.select',
-      bsv_network: BSV_NETWORK,
-      fallback_chain: 'main'
-    },
-    'Invalid BSV_NETWORK value provided, falling back to main'
-  )
-  return 'main'
 }
 
 function configuredServiceOptions(chain: Exclude<WalletChain, 'mock'>) {
@@ -461,9 +462,10 @@ async function createServicesAndMonitorOptions(
 
 function walletNetworkPreset(
   chain: WalletChain
-): 'local' | 'mainnet' | 'testnet' {
+): 'local' | 'mainnet' | 'testnet' | 'teratestnet' {
   if (chain === 'main') return 'mainnet'
   if (chain === 'test') return 'testnet'
+  if (chain === 'ttn') return 'teratestnet'
   return 'local'
 }
 
