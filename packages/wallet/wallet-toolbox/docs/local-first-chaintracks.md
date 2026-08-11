@@ -85,7 +85,10 @@ const tracker = new LocalChainTracker({
 })
 
 await tracker.synchronize()
-walletServices.chainTracker = tracker
+const walletServices = new Services({
+  ...Services.createDefaultOptions(chain),
+  chainTracker: tracker
+})
 ```
 
 `checkConsistency()` compares all available views at a common height and derives

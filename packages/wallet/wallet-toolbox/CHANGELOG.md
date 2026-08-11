@@ -17,9 +17,11 @@ attention to changes that materially alter behavior or extend functionality.
   ingestion now enforce each header's declared proof-of-work target, and local
   consistency checks detect both quorum-confirmed divergence and a
   quorum-confirmed stuck height before optional recovery. The reviewed platform
-  ceilings advance to 1,596,000 Vite bytes, 1,245,000 esbuild bytes, and
-  3,343,000 Hermes bytes; their matching gzip/Brotli ceilings are
-  375,000/295,000, 343,000/275,000, and 1,351,000/1,050,000 bytes.
+  service seam also accepts a composed SDK `chainTracker` directly while
+  retaining the existing client-wrapping default. The reviewed platform
+  ceilings advance to 1,596,000 Vite bytes, 1,246,000 esbuild bytes, and
+  3,344,000 Hermes bytes; their matching gzip/Brotli ceilings are
+  376,000/295,000, 342,000/275,000, and 1,351,000/1,050,000 bytes.
 - Age proactive pending-transaction review from immutable request creation
   time, so repeated proof polling cannot keep a rejected transaction below the
   reconciliation threshold forever. A descendant of a locally terminal parent

@@ -229,8 +229,12 @@ export class Services implements WalletServices {
   }
 
   async getChainTracker(): Promise<ChainTracker> {
+    if (this.options.chainTracker != null) return this.options.chainTracker
     if (this.options.chaintracks == null) {
-      throw new WERR_INVALID_PARAMETER('options.chaintracks', "valid to enable 'getChainTracker' service.")
+      throw new WERR_INVALID_PARAMETER(
+        'options.chainTracker or options.chaintracks',
+        "valid to enable 'getChainTracker' service."
+      )
     }
     return new ChaintracksChainTracker(this.chain, this.options.chaintracks, {
       telemetry: this.options.telemetry

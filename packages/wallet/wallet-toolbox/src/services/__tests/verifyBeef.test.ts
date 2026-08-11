@@ -53,6 +53,17 @@ describe('verifyBeef tests', () => {
     expect(ok).toBe(true)
   })
 
+  test('returns an explicitly composed SDK chain tracker without wrapping it', async () => {
+    const chainTracker = {
+      currentHeight: jest.fn(async () => 900000),
+      isValidRootForHeight: jest.fn(async () => true)
+    }
+    const options = { ...Services.createDefaultOptions('main'), chainTracker }
+    const services = new Services(options)
+
+    await expect(services.getChainTracker()).resolves.toBe(chainTracker)
+  })
+
   test('1_', async () => {
     if (_tu.noEnv('main')) return
     const { env: _env, storage, services } = await _tu.createMainReviewSetup()

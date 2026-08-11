@@ -196,8 +196,8 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.7.0",
       "releaseType": "minor",
-      "summary": "Adds local-first ChainTracks management, proof-of-work enforcement for bulk and live ingestion, typed persistent bulk-header caches, concurrent-miss coalescing, bounded fetch deadlines and bodies, download budgets, and cache/download observability while retaining the pending-transaction reconciliation corrections.",
-      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are now rejected. Applications may opt into BulkFileDataCacheApi for packaged or persistent checkpoints and LocalChainTracker for explicit local-primary, remote-only, consistency, clearing, and recovery controls."
+      "summary": "Adds local-first ChainTracks management, a direct composed ChainTracker service seam, proof-of-work enforcement for bulk and live ingestion, typed persistent bulk-header caches, concurrent-miss coalescing, bounded fetch deadlines and bodies, download budgets, and cache/download observability while retaining the pending-transaction reconciliation corrections.",
+      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are now rejected. Applications may opt into BulkFileDataCacheApi for packaged or persistent checkpoints, LocalChainTracker for explicit local-primary, remote-only, consistency, clearing, and recovery controls, and WalletServicesOptions.chainTracker to install the composed verifier directly."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
