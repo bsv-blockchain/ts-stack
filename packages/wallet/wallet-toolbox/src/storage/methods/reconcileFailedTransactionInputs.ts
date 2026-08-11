@@ -21,6 +21,23 @@ interface LocalInput {
   outpoint: { txid: string; vout: number }
 }
 
+async function quarantineLocalInputs (
+  localInputs: LocalInput[],
+  storage: StorageProvider,
+  trx?: sdk.TrxToken
+): Promise<FailedInputReconciliationResult> {
+  const staleOutpoints = new Set<string>()
+  for (const { output, outpoint } of localInputs) {
+    await storage.updateOutput(verifyId(output.outputId), { spendable: false }, trx)
+    staleOutpoints.add(`${outpoint.txid}.${outpoint.vout}`)
+  }
+  return {
+    checked: localInputs.length,
+    staleConfirmed: localInputs.length,
+    staleOutpoints: [...staleOutpoints]
+  }
+}
+
 async function findLocalInputs (
   req: EntityProvenTxReq,
   storage: StorageProvider,
@@ -72,19 +89,35 @@ export async function quarantineReqInputs (
   logger?: WalletLoggerInterface
 ): Promise<FailedInputReconciliationResult> {
   const localInputs = await findLocalInputs(req, storage, trx)
-  const staleOutpoints = new Set<string>()
-  for (const { output, outpoint } of localInputs) {
-    await storage.updateOutput(verifyId(output.outputId), { spendable: false }, trx)
-    staleOutpoints.add(`${outpoint.txid}.${outpoint.vout}`)
-  }
-  const result = {
-    checked: localInputs.length,
-    staleConfirmed: localInputs.length,
-    staleOutpoints: [...staleOutpoints]
-  }
+  const result = await quarantineLocalInputs(localInputs, storage, trx)
   if (result.staleConfirmed > 0) {
     logger?.log(
       `quarantineReqInputs: ${result.staleConfirmed} local input copy/copies quarantined for txid=${req.txid}`
+    )
+  }
+  return result
+}
+
+/**
+ * Keep only inputs created by a locally terminal parent unavailable after the
+ * failed-child transition releases its allocations. Other inputs may still be
+ * valid UTXOs and must remain reusable.
+ */
+export async function quarantineReqInputsFromFailedParents (
+  req: EntityProvenTxReq,
+  failedParentTxids: string[],
+  storage: StorageProvider,
+  trx?: sdk.TrxToken,
+  logger?: WalletLoggerInterface
+): Promise<FailedInputReconciliationResult> {
+  const failedParents = new Set(failedParentTxids)
+  const localInputs = (await findLocalInputs(req, storage, trx)).filter(({ outpoint }) =>
+    failedParents.has(outpoint.txid)
+  )
+  const result = await quarantineLocalInputs(localInputs, storage, trx)
+  if (result.staleConfirmed > 0) {
+    logger?.log(
+      `quarantineReqInputsFromFailedParents: ${result.staleConfirmed} local parent output copy/copies quarantined for txid=${req.txid}`
     )
   }
   return result

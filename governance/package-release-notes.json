@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.6.5",
-      "releaseType": "minor",
-      "summary": "Adds isolated TTN routing and default Arcade support, isolated resumable action batches, progressive managed-change liquidity, browser-safe ChainTracks defaults, proactive Arcade terminal reconciliation, and paged tri-state invalid-change review.",
-      "migration": "Mainnet/testnet browser and webview runtimes temporarily use the legacy CORS-enabled ChainTracks service; Node retains Arcade/go-chaintracks v2, and getHeight falls back to WhatsOnChain on supported networks. TTN receives its isolated resolver and Arcade default. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference through future authorized actions; custom values remain authoritative. Direct invalid-change release throws machine-checkable WERR_UTXO_REVIEW_INCONCLUSIVE and changes nothing when any verdict is unknown. Monitor Admin reviews bounded pages and may explicitly release only confirmed-spent outputs while retaining/reporting unknowns. A scheduled Monitor pass applies durable Arcade terminal status missed by SSE; unknown provider results never mutate state."
+      "publishedVersion": "2.7.0",
+      "releaseType": "patch",
+      "summary": "Makes proactive pending-transaction reconciliation age requests from immutable creation time and retires descendants of locally terminal parents without sacrificing unrelated valid inputs.",
+      "migration": "No consumer migration is required. Proof polling and lifecycle diagnostics may continue updating pending rows, but can no longer postpone the scheduled terminal review. A child whose local parent is invalid or double-spent is failed atomically; failed-parent outputs stay quarantined while independent inputs remain reusable."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.6.5",
-      "releaseType": "minor",
-      "summary": "Carries the lockstep browser build with isolated TTN/Arcade routing, resumable action batches, progressive IndexedDB managed-change liquidity, a CORS-reachable ChainTracks default, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
-      "migration": "Mainnet/testnet browser and webview runtimes temporarily select the legacy CORS-enabled ChainTracks service and getHeight can fall back to WhatsOnChain; Node behavior is unaffected. TTN wallets receive isolated resolver and Arcade defaults. Exact untouched IndexedDB defaults advance from 32 to 5,000 satoshis through ordinary authorized actions; custom values and remote-storage wire contracts remain unchanged. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
+      "publishedVersion": "2.7.0",
+      "releaseType": "patch",
+      "summary": "Carries the lockstep browser build with the Wallet Toolbox creation-age and failed-parent pending-reconciliation correction.",
+      "migration": "No consumer migration is required. Browser exports, runtime defaults, and wire contracts are unchanged; local browser storage using the Monitor receives the same safe pending-chain cleanup behavior."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.6.5",
-      "releaseType": "minor",
-      "summary": "Carries the lockstep mobile build with isolated TTN/Arcade routing, resumable action batches, progressive managed-change liquidity, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
-      "migration": "Existing native mobile consumers are unchanged; webview runtimes follow the browser ChainTracks selection. TTN wallets receive isolated resolver and Arcade defaults. Wallets progressively adopt useful change values through future authorized actions; custom values, BRC-100 methods, and remote-storage wire contracts remain unchanged. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
+      "publishedVersion": "2.7.0",
+      "releaseType": "patch",
+      "summary": "Carries the lockstep mobile build with the Wallet Toolbox creation-age and failed-parent pending-reconciliation correction.",
+      "migration": "No consumer migration is required. React Native exports, runtime defaults, remote-storage behavior, and wire contracts are unchanged; shared reconciliation behavior remains aligned with the parent package."
     },
     {
       "name": "create-bsv-app",
