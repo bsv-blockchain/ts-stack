@@ -150,6 +150,13 @@ interface SurplusChangeMaterializationRequest {
   feeExcess: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
 }
 
+interface ChangeRecaptureRequest extends SurplusChangeMaterializationRequest {
+  releaseAllocatedChangeInputs: () => Promise<void>
+  funding: () => number
+  spending: () => number
+  feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
+}
+
 /**
  * Materialize the first managed-change output from surplus that is already in
  * the transaction. This is especially important for explicit/fixed inputs:
@@ -168,6 +175,28 @@ function materializeSurplusChangeOutput(request: SurplusChangeMaterializationReq
     lockingScriptLength: params.changeLockingScriptLength
   })
   request.feeExcess()
+}
+
+/**
+ * Preserve the historical compatibility retry when another input can make a
+ * viable change output, except when surplus-only shaping has nothing economic
+ * to return. In that case the bounded remainder stays in the miner fee instead
+ * of manufacturing change from an additional wallet input.
+ */
+async function requireViableChangeOrRetainBoundedFee(request: ChangeRecaptureRequest): Promise<void> {
+  const { params, result } = request
+  const feeExcessNow = request.feeExcess()
+  if (result.changeOutputs.length > 0 || feeExcessNow <= 0) return
+
+  const hasOnlyUnreturnableShapingSurplus =
+    params.surplusPoolShaping === true && request.feeExcess(0, 1) < request.dustFloor
+  if (hasOnlyUnreturnableShapingSurplus) return
+
+  const minimumChange = Math.max(request.dustFloor, params.changeFirstSatoshis)
+  const totalSatoshisNeeded = request.spending() + request.feeTarget(0, 1) + minimumChange
+  const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - request.funding())
+  await request.releaseAllocatedChangeInputs()
+  throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
 }
 
 function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
@@ -599,21 +628,20 @@ async function generateChangeSdkCore(
 
     /**
      * If needed, seek funding to avoid overspending on fees without a change output to recapture it.
+     * An economically unreturnable shaping remainder stays in the miner fee;
+     * gathering another input solely to manufacture change would violate
+     * surplus-only shaping and make the action less efficient.
      */
-    if (r.changeOutputs.length === 0 && feeExcessNow > 0) {
-      const hasOnlyUnreturnableShapingSurplus = surplusPoolShaping && feeExcess(0, 1) < dustFloor
-      if (!hasOnlyUnreturnableShapingSurplus) {
-        const minimumChange = Math.max(dustFloor, params.changeFirstSatoshis)
-        const totalSatoshisNeeded = spending() + feeTarget(0, 1) + minimumChange
-        const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - funding())
-        await releaseAllocatedChangeInputs()
-        throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
-      }
-      // The remaining value cannot pay both the marginal output fee and the
-      // economic dust floor. Leave that bounded remainder in the miner fee;
-      // gathering another input solely to manufacture change would violate
-      // surplus-only shaping and make the action less efficient.
-    }
+    await requireViableChangeOrRetainBoundedFee({
+      params,
+      result: r,
+      dustFloor,
+      feeExcess,
+      feeTarget,
+      funding,
+      spending,
+      releaseAllocatedChangeInputs
+    })
 
     /**
      * Progressively retire economically useful legacy fragments without ever
