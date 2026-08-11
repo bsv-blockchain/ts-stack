@@ -670,7 +670,21 @@ export class Services implements WalletServices {
       const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
       return await chaintracks.currentHeight()
     }
-    return await this.invokeChaintracksWithRetry(method, 'current_height')
+    try {
+      return await this.invokeChaintracksWithRetry(method, 'current_height')
+    } catch (eu: unknown) {
+      // Chaintracks is otherwise this method's single point of failure, and a
+      // wallet UI that cannot read the present height is broadly unusable
+      // (observed live 2026-08-11: a CORS-blocked chaintracks fetch in a
+      // webview-hosted wallet). Mirror `hashToHeader`'s existing belt: fall
+      // back to WhatsOnChain, and rethrow the ORIGINAL chaintracks error when
+      // the fallback cannot answer either.
+      try {
+        return (await this.whatsonchain.getChainInfo()).blocks
+      } catch {
+        throw eu
+      }
+    }
   }
 
   async hashToHeader(hash: string): Promise<BlockHeader> {
