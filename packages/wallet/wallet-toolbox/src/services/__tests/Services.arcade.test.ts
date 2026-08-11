@@ -66,6 +66,22 @@ describe('Services Arcade wiring', () => {
     // Arcade is also a getMerklePath provider (proof acquisition), ahead of WhatsOnChain.
     expect(services.getMerklePathServices.services[0].name).toBe('Arcade')
     expect(services.getMerklePathServices.services.some(s => s.name === 'WhatsOnChain')).toBe(true)
+    // Existing explorer status remains first; Arcade is the independent
+    // fallback and is the only status provider on explorer-free networks.
+    expect(services.getStatusForTxidsServices.services.map(s => s.name)).toEqual(['WhatsOnChain', 'Arcade'])
+  })
+
+  test('isUtxo rejects an inconclusive provider result instead of treating it as spent', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    jest.spyOn(services, 'getUtxoStatus').mockResolvedValue({
+      name: '<noservices>',
+      status: 'error',
+      details: []
+    })
+
+    await expect(services.isUtxo({ lockingScript: [0], txid: '11'.repeat(32), vout: 0 } as any)).rejects.toThrow(
+      'No UTXO provider returned a conclusive result'
+    )
   })
 
   test('explicit empty-string arcadeUrl keeps Arcade disabled', () => {

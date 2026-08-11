@@ -69,6 +69,25 @@ without Node `Buffer` or filesystem dependencies.
 Arcade is the browser-safe HTTPS/SSE gateway for Teranode-backed header data.
 Direct Teranode P2P is not included in browser/mobile artifacts.
 
+### Broadcast rejection and monitor reconciliation
+
+When Arcade is configured, Wallet Toolbox consumes Arcade's status code and
+validator detail instead of treating every `REJECTED` event alike. Retryable
+parent and locktime conditions stay pending. Terminal validator failures fail
+the request, and explicit missing-input or conflict evidence also quarantines
+every wallet-owned copy of the consumed input in the same storage transaction.
+That quarantine uses Arcade's positive rejection evidence and does not require
+WhatsOnChain or another UTXO explorer.
+
+Arcade is also registered as a transaction-status provider, so monitor review
+continues on networks without WhatsOnChain. Provider absence and provider
+errors are treated as inconclusive, never as proof that an output was spent.
+After an input conflict has been recorded, a later cached accepted/seen label
+cannot restore the failed transaction; recovery requires a mined status and a
+Merkle proof validated by the configured chain tracker. Arcade SSE events are
+acknowledged in order only after their storage update and cursor persistence
+succeed, so a transient storage failure is retried instead of skipped.
+
 Core ChainTracks factories accept a final source-options argument when an
 application must override the defaults. Set `disableChaintracks`, `disableCdn`,
 or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an

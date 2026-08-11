@@ -63,7 +63,7 @@ describe('tstn network wiring', () => {
     expect(noWoc(services.getMerklePathServices.services)).toBe(true)
     expect(services.getRawTxServices.services).toHaveLength(0)
     expect(services.getUtxoStatusServices.services).toHaveLength(0)
-    expect(services.getStatusForTxidsServices.services).toHaveLength(0)
+    expect(services.getStatusForTxidsServices.services.map(service => service.name)).toEqual(['Arcade'])
     expect(services.getScriptHashHistoryServices.services).toHaveLength(0)
   })
 })

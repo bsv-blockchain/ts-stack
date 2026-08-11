@@ -6,6 +6,18 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Reconcile Arcade broadcast outcomes as durable wallet state. Retryable
+  locktime and parent conditions remain pending, while validator failures fail
+  the request and explicit missing-input or conflict evidence atomically fails
+  every local transaction copy and quarantines its wallet-owned inputs without
+  depending on WhatsOnChain. Cached accepted/seen labels can no longer revive a
+  terminal conflict; only a mined event whose Merkle proof validates through
+  the configured chain tracker may repair it. Arcade also participates in the
+  shared transaction-status service so double-spend review remains conservative
+  on networks with no explorer. Inconclusive or absent UTXO providers no longer
+  masquerade as a spent-output verdict. The Arcade SSE cursor now advances only
+  after both event storage work and cursor persistence succeed; either failure
+  leaves the event queued for ordered retry.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`
   membership, so unrelated immediate actions and `noSend` roots cannot be
   captured by or commit a workspace. Add an exact-input resume protocol for

@@ -152,6 +152,17 @@ export class Services implements WalletServices {
       this.getStatusForTxidsServices
         .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
     }
+    if (this.arcade != null) {
+      // Arcade's lifecycle store keeps status reconciliation available when
+      // the explorer is disabled or unavailable. Keep the existing explorer
+      // first when configured because a successful `unknown` is a valid,
+      // conservative answer and the shared collection does not merge partial
+      // results from multiple providers.
+      this.getStatusForTxidsServices.add({
+        name: 'Arcade',
+        service: this.arcade.getStatusForTxids.bind(this.arcade)
+      })
+    }
 
     this.getScriptHashHistoryServices = new ServiceCollection<GetScriptHashHistoryService>('getScriptHashHistory')
     if (hasWhatsOnChain) {
@@ -358,7 +369,10 @@ export class Services implements WalletServices {
     }
     const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
     const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
-    return or.isUtxo === true
+    if (or.status !== 'success' || or.isUtxo == null) {
+      throw or.error ?? new WERR_INVALID_OPERATION('No UTXO provider returned a conclusive result.')
+    }
+    return or.isUtxo
   }
 
   async getUtxoStatus(

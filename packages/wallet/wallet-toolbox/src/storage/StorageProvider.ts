@@ -1277,10 +1277,19 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       for (const output of outputs) {
         const outputId = verifyId(output.outputId)
         await this.validateOutputScript(output)
-        verdicts.set(
-          outputId,
-          output.lockingScript == null ? undefined : await services.isUtxo(output)
-        )
+        if (output.lockingScript == null) {
+          verdicts.set(outputId, undefined)
+          continue
+        }
+        try {
+          verdicts.set(outputId, await services.isUtxo(output))
+        } catch {
+          // Proof recovery must not turn provider absence into a spent verdict.
+          // Leave the output's current state unchanged when no UTXO service can
+          // answer conclusively; the validated proof still repairs transaction
+          // and consumed-input state.
+          verdicts.set(outputId, undefined)
+        }
       }
     }
     return verdicts

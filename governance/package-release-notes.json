@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Isolates action batches by explicit transaction-graph membership, adds bounded exact-input lease resume, and carries structured lifecycle errors across local and remote storage.",
-      "migration": "No consumer migration is required. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation."
+      "summary": "Isolates action batches by explicit transaction-graph membership, adds bounded exact-input lease resume, and makes Arcade rejection and proof reconciliation durable even when no explorer is configured.",
+      "migration": "No consumer migration is required. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation. Arcade operators should preserve SSE status codes and extraInfo so terminal input conflicts can be quarantined immediately."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No browser consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "summary": "Carries the lockstep browser build with explicit action-batch isolation, bounded lease recovery, and conservative Arcade rejection reconciliation.",
+      "migration": "No browser consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path. Explorer-free Arcade status and proof recovery is automatic when Arcade is configured."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No mobile consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "summary": "Carries the lockstep mobile build with explicit action-batch isolation, bounded lease recovery, and conservative Arcade rejection reconciliation.",
+      "migration": "No mobile consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path. Explorer-free Arcade status and proof recovery is automatic when Arcade is configured."
     },
     {
       "name": "create-bsv-app",

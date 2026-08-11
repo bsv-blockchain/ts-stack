@@ -11,6 +11,7 @@ import {
 } from '@bsv/sdk'
 import {
   GetMerklePathResult,
+  GetStatusForTxidsResult,
   PostBeefResult,
   PostTxResultForTxid,
   PostTxResultForTxidError,
@@ -19,6 +20,7 @@ import {
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { ReqHistoryNote } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 // Shared wire-contract types only (no behavior coupling): Arcade is ARC-compatible on the
 // configuration and `getTxData` response shape, so it reuses those interfaces.
 import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
@@ -359,6 +361,53 @@ export class Arcade {
     const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/tx/${txid}`, requestOptions)
 
     return response.data
+  }
+
+  /**
+   * Adapt Arcade's lifecycle endpoint to the shared transaction-status
+   * provider contract. This lets monitor reconciliation remain operational
+   * when an explorer such as WhatsOnChain is absent. Only network-observed
+   * states count as known; RECEIVED/PENDING_RETRY and terminal rejection
+   * states remain unknown, while MINED/IMMUTABLE are authoritative mined
+   * observations whose proof is validated separately.
+   */
+  async getStatusForTxids (txids: string[]): Promise<GetStatusForTxidsResult> {
+    const r: GetStatusForTxidsResult = {
+      name: this.name,
+      status: 'success',
+      results: []
+    }
+    let firstError: WalletError | undefined
+    r.results = await Promise.all(
+      txids.map(async txid => {
+        try {
+          const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/tx/${txid}`, {
+            method: 'GET',
+            headers: this.requestHeaders()
+          })
+          if (Number(response.status) === 404) return { txid, status: 'unknown' as const, depth: undefined }
+          if (!response.ok || Number(response.status) !== 200) {
+            throw new WERR_INVALID_OPERATION(`Arcade transaction status response ${String(response.status)}`)
+          }
+          const status = response.data.txStatus
+          if (status === 'MINED' || status === 'IMMUTABLE') {
+            return { txid, status: 'mined' as const, depth: 1 }
+          }
+          if (status === 'ACCEPTED_BY_NETWORK' || status === 'SEEN_ON_NETWORK' || status === 'SEEN_MULTIPLE_NODES') {
+            return { txid, status: 'known' as const, depth: 0 }
+          }
+          return { txid, status: 'unknown' as const, depth: undefined }
+        } catch (error_: unknown) {
+          firstError ??= WalletError.fromUnknown(error_)
+          return { txid, status: 'unknown' as const, depth: undefined }
+        }
+      })
+    )
+    if (firstError != null) {
+      r.status = 'error'
+      r.error = firstError
+    }
+    return r
   }
 
   /**
