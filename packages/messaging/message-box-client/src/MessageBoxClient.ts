@@ -242,12 +242,12 @@ export class MessageBoxClient {
       originator = undefined
     } = options
 
-    const defaultHost =
-      networkPreset === 'teratestnet'
-        ? DEFAULT_TTN_HOST
-        : networkPreset === 'testnet'
-          ? DEFAULT_TESTNET_HOST
-          : DEFAULT_MAINNET_HOST
+    let defaultHost = DEFAULT_MAINNET_HOST
+    if (networkPreset === 'teratestnet') {
+      defaultHost = DEFAULT_TTN_HOST
+    } else if (networkPreset === 'testnet') {
+      defaultHost = DEFAULT_TESTNET_HOST
+    }
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator

@@ -1,4 +1,4 @@
-import { Transaction, Script, PrivateKey, WalletInterface, KeyDeriver, PushDrop, TaggedBEEF, Utils, Beef, CreateActionInput, SignActionSpend, LookupResolver, LookupResolverConfig } from '@bsv/sdk'
+import { Transaction, Script, PrivateKey, WalletInterface, KeyDeriver, PushDrop, TaggedBEEF, Utils, Beef, CreateActionInput, SignActionSpend, LookupResolver, LookupResolverConfig, type LookupNetworkPreset } from '@bsv/sdk'
 import { Advertisement, AdvertisementData, Advertiser } from '@bsv/overlay'
 import { Wallet, WalletSigner, WalletStorageManager, StorageClient, Services } from '@bsv/wallet-toolbox-client'
 import { isAdvertisableURI } from './utils/isAdvertisableURI.js'
@@ -42,10 +42,10 @@ export class WalletAdvertiser implements Advertiser {
     this.storageManager = storageManager
     this.wallet = wallet
     this.identityKey = keyDeriver.identityKey
-    this.lookupResolverConfig ??= {
-      networkPreset:
-        chain === 'main' ? 'mainnet' : chain === 'test' ? 'testnet' : 'teratestnet'
-    }
+    let networkPreset: LookupNetworkPreset = 'mainnet'
+    if (chain === 'test') networkPreset = 'testnet'
+    if (chain === 'ttn') networkPreset = 'teratestnet'
+    this.lookupResolverConfig ??= { networkPreset }
   }
 
   /**

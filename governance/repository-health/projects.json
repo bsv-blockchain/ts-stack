@@ -165,6 +165,14 @@
       "reviewPolicy": "Review and analyze the canonical UHRP resource limits, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
     },
     {
+      "path": "infra/uhrp-server-cloud-bucket/src/utils/network.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": ["infra/uhrp-server-basic/src/utils/network.ts"],
+      "generator": "scripts/sync-service-runtime-copies.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical UHRP network mapping, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
       "path": "infra/wallet-infra/src/KnexPaymentReplayStore.ts",
       "owner": "ts-stack-maintainers",
       "sourceInputs": [
