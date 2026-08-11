@@ -13,6 +13,7 @@ import {
   WERR_NOT_ACTIVE,
   WERR_NOT_IMPLEMENTED,
   WERR_REVIEW_ACTIONS,
+  WERR_UTXO_REVIEW_INCONCLUSIVE,
   WERR_UNAUTHORIZED
 } from './WERR_errors'
 
@@ -25,7 +26,7 @@ import {
  * @param json
  * @returns a WalletError derived error object, typically for re-throw.
  */
-export function WalletErrorFromJson (json: object): WalletError {
+export function WalletErrorFromJson(json: object): WalletError {
   let e: WalletError
   const obj = json as any
   switch (obj.name) {
@@ -41,6 +42,10 @@ export function WalletErrorFromJson (json: object): WalletError {
       break
     case 'WERR_INVALID_OPERATION':
       e = new WERR_INVALID_OPERATION(obj.message)
+      break
+    case 'WERR_UTXO_REVIEW_INCONCLUSIVE':
+      e = new WERR_UTXO_REVIEW_INCONCLUSIVE(obj.checked, obj.confirmedSpent, obj.unknown)
+      e.message = obj.message
       break
     case 'WERR_BROADCAST_UNAVAILABLE':
       e = new WERR_BROADCAST_UNAVAILABLE(obj.message)
@@ -76,7 +81,10 @@ export function WalletErrorFromJson (json: object): WalletError {
       e = new WERR_REVIEW_ACTIONS(obj.reviewActionResults, obj.sendWithResults, obj.txid, obj.tx, obj.noSendChange)
       break
     default:
-      e = new WalletError((typeof obj.name === 'string' && obj.name !== '' ? obj.name : 'WERR_UNKNOWN'), (typeof obj.message === 'string' ? obj.message : ''))
+      e = new WalletError(
+        typeof obj.name === 'string' && obj.name !== '' ? obj.name : 'WERR_UNKNOWN',
+        typeof obj.message === 'string' ? obj.message : ''
+      )
       break
   }
   return e

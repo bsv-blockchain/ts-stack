@@ -1,7 +1,7 @@
 import { TaskReviewUtxos } from '../TaskReviewUtxos'
 import { specOpInvalidChange } from '../../../sdk'
 
-function makeUser (userId: number, identityKey = `key-${userId}`): any {
+function makeUser(userId: number, identityKey = `key-${userId}`): any {
   const now = new Date()
   return {
     created_at: now,
@@ -12,11 +12,11 @@ function makeUser (userId: number, identityKey = `key-${userId}`): any {
   }
 }
 
-function makeOutput (outpoint: string, satoshis: number, spendable: boolean): any {
+function makeOutput(outpoint: string, satoshis: number, spendable: boolean): any {
   return { outpoint, satoshis, spendable }
 }
 
-function makeMonitor (users: any[], outputsByUserId: Record<number, any[]>) {
+function makeMonitor(users: any[], outputsByUserId: Record<number, any[]>) {
   const findUsers = jest.fn().mockResolvedValue(users)
   const listOutputs = jest.fn(async (auth: any) => {
     const outputs = outputsByUserId[auth.userId] ?? []
@@ -114,6 +114,67 @@ describe('TaskReviewUtxos', () => {
 
     expect(m.listOutputs).not.toHaveBeenCalled()
     expect(log).toBe('identityKey missing-key was not found\n')
+  })
+
+  test('4a paged operator review reports unknowns and a continuation without timing out on the whole wallet', async () => {
+    const user = makeUser(1, 'key-1')
+    const outputs = [
+      {
+        outputId: 1,
+        userId: 1,
+        basketId: 2,
+        transactionId: 1,
+        txid: '11'.repeat(32),
+        vout: 0,
+        satoshis: 50,
+        spendable: true,
+        lockingScript: [0]
+      },
+      {
+        outputId: 2,
+        userId: 1,
+        basketId: 2,
+        transactionId: 2,
+        txid: '22'.repeat(32),
+        vout: 0,
+        satoshis: 60,
+        spendable: true,
+        lockingScript: [0]
+      }
+    ]
+    const sp = {
+      findUsers: jest.fn().mockResolvedValue([user]),
+      findOutputBaskets: jest.fn().mockResolvedValue([{ basketId: 2 }]),
+      findOutputs: jest.fn().mockResolvedValue(outputs),
+      getServices: () => ({
+        hashOutputScript: () => 'aa'.repeat(32),
+        getUtxoStatus: async (_hash: string, _format: undefined, outpoint: string) =>
+          outpoint.startsWith('11')
+            ? { name: 'mock', status: 'success', details: [], isUtxo: false }
+            : { name: 'mock', status: 'error', details: [] }
+      }),
+      validateOutputScript: jest.fn().mockResolvedValue(undefined)
+    }
+    const monitor = {
+      storage: {
+        runAsStorageProvider: jest.fn(async (scope: (provider: any) => Promise<any>) => await scope(sp))
+      }
+    }
+    const task = new TaskReviewUtxos(monitor as any)
+
+    const result = await task.reviewPageByIdentityKey('key-1', 'all', false, 2, 0)
+
+    expect(sp.findOutputs).toHaveBeenCalledWith(expect.objectContaining({ paged: { limit: 2, offset: 0 } }))
+    expect(result).toMatchObject({
+      checked: 2,
+      confirmedSpent: 1,
+      unknown: 1,
+      released: 0,
+      complete: false,
+      nextOffset: 2
+    })
+    expect(result.log).toContain('1 unknown')
+    expect(result.log).toContain('continue at offset 2')
   })
 
   test('5 trigger and runTask are stubbed out', async () => {

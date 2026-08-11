@@ -1,4 +1,5 @@
 import type { TableMonitorEvent } from '../schema/tables/TableMonitorEvent'
+import type { TaskReviewUtxosPageResult } from '../../monitor/tasks/TaskReviewUtxos'
 
 const MAX_ADMIN_AUDIT_TEXT_LENGTH = 4_096
 
@@ -14,7 +15,13 @@ export interface AdminUtxoReviewStorage {
 }
 
 export interface AdminUtxoReviewTask {
-  reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change', release?: boolean) => Promise<string>
+  reviewPageByIdentityKey: (
+    identityKey: string,
+    mode: 'all' | 'change',
+    release: boolean,
+    pageLimit: number,
+    offset: number
+  ) => Promise<TaskReviewUtxosPageResult>
 }
 
 export interface AdminUtxoReviewRequest {
@@ -24,6 +31,8 @@ export interface AdminUtxoReviewRequest {
   identityKey: string
   mode: 'all' | 'change'
   release: boolean
+  pageLimit: number
+  offset: number
 }
 
 function event(when: Date, details: Record<string, unknown>): TableMonitorEvent {
@@ -41,21 +50,19 @@ function event(when: Date, details: Record<string, unknown>): TableMonitorEvent 
  * evidence. Audit writes deliberately bracket the task so provider failures
  * and blocked releases remain observable.
  */
-export async function runAdminUtxoReview(request: AdminUtxoReviewRequest): Promise<{
-  requestedBy: string
-  identityKey: string
-  mode: 'all' | 'change'
-  release: boolean
-  log: string
-}> {
-  const { storage, task, requestedBy, identityKey, mode, release } = request
+export async function runAdminUtxoReview(request: AdminUtxoReviewRequest): Promise<
+  {
+    requestedBy: string
+  } & TaskReviewUtxosPageResult
+> {
+  const { storage, task, requestedBy, identityKey, mode, release, pageLimit, offset } = request
   const startedAt = new Date()
-  const common = { requestedBy, identityKey, mode, release }
+  const common = { requestedBy, identityKey, mode, release, pageLimit, offset }
   await storage.insertMonitorEvent(event(startedAt, { ...common, phase: 'started' }))
 
-  let log: string
+  let page: TaskReviewUtxosPageResult
   try {
-    log = await task.reviewByIdentityKey(identityKey, mode, release)
+    page = await task.reviewPageByIdentityKey(identityKey, mode, release, pageLimit, offset)
   } catch (error: unknown) {
     const failure = boundedAuditText(error instanceof Error ? error.message : String(error))
     await storage.insertMonitorEvent(
@@ -70,15 +77,22 @@ export async function runAdminUtxoReview(request: AdminUtxoReviewRequest): Promi
     throw error
   }
 
-  const completion = boundedAuditText(log)
+  const completion = boundedAuditText(page.log)
   await storage.insertMonitorEvent(
     event(new Date(), {
       ...common,
       phase: 'completed',
       startedAt: startedAt.toISOString(),
+      complete: page.complete,
+      nextOffset: page.nextOffset,
+      checked: page.checked,
+      confirmedSpent: page.confirmedSpent,
+      confirmedUnspent: page.confirmedUnspent,
+      unknown: page.unknown,
+      released: page.released,
       log: completion.text,
       logTruncated: completion.truncated
     })
   )
-  return { ...common, log }
+  return { requestedBy, ...page }
 }

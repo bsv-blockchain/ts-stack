@@ -33,6 +33,32 @@ export class WERR_INVALID_OPERATION extends WalletError {
   }
 }
 
+/**
+ * A destructive UTXO review could not obtain a conclusive verdict for every
+ * candidate. Consumers can match this name and retry later without parsing the
+ * human-readable message.
+ */
+export class WERR_UTXO_REVIEW_INCONCLUSIVE extends WalletError {
+  constructor(
+    public checked: number,
+    public confirmedSpent: number,
+    public unknown: number
+  ) {
+    super(
+      'WERR_UTXO_REVIEW_INCONCLUSIVE',
+      `UTXO review was inconclusive for ${unknown} of ${checked} candidates; no outputs were changed.`
+    )
+  }
+
+  override toJson(): string {
+    const obj = JSON.parse(super.toJson())
+    obj.checked = this.checked
+    obj.confirmedSpent = this.confirmedSpent
+    obj.unknown = this.unknown
+    return JSON.stringify(obj)
+  }
+}
+
 export type ActionBatchErrorState =
   'missing' | 'expired' | 'hard-expired' | 'inactive' | 'conflicted' | 'aborted' | 'committed'
 

@@ -31,6 +31,7 @@ describe('storage admin diagnostic formatting', () => {
     expect(page).toContain('<option value="release">release confirmed-spent outputs</option>')
     expect(page).toContain("const release = byId('utxoAction').value === 'release'")
     expect(page).toContain('Release only outputs conclusively confirmed spent?')
-    expect(page).toContain('JSON.stringify({ identityKey, mode, release })')
+    expect(page).toContain('JSON.stringify({ identityKey, mode, release, pageLimit: 20, offset })')
+    expect(page).toContain('if (result.complete || result.nextOffset == null) break')
   })
 })

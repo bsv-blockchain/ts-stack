@@ -29,13 +29,16 @@ transaction has no active ProvenTxReq that could still reconcile.
 
 ## Invalid-change review
 
-Invalid-change review never treats provider absence or failure as spent
-evidence. It classifies the complete candidate set as confirmed unspent,
-confirmed spent, or unknown with bounded concurrency. Any unknown result blocks
-a requested release before output state changes. Otherwise, the confirmed-spent
-subset is rechecked inside one storage transaction. Any row no longer owned by
-the authenticated user, no longer spendable, or currently allocated aborts the
-whole release.
-The transaction also records a bounded `InvalidChangeRelease` audit event;
-blocked destructive attempts record `InvalidChangeReleaseBlocked` without
-changing outputs.
+Invalid-change review never treats provider absence, timeout, or failure as
+spent evidence. It classifies candidates as confirmed unspent, confirmed spent,
+or unknown with bounded concurrency. Read-only review returns conclusive spent
+rows without throwing on unknown. Direct destructive release remains atomic:
+any unknown throws `WERR_UTXO_REVIEW_INCONCLUSIVE` before output state changes.
+The authenticated Monitor Admin path is explicitly different: it reviews 20
+rows per request and can release only the positively spent subset while
+retaining and reporting unknowns, allowing a heavy wallet to make progress
+without one permanently unavailable outpoint blocking all cleanup. Every row
+is re-read under the write lock; an ownership, spendability, or allocation race
+aborts that page. `InvalidChangeRelease`, `InvalidChangeConclusiveRelease`, and
+`InvalidChangeReleaseBlocked` events retain bounded counts, values, and provider
+evidence.

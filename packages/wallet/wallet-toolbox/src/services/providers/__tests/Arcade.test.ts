@@ -129,7 +129,7 @@ describe('Arcade broadcaster', () => {
       expect(result.results).toEqual([
         { txid: 'accepted', status: 'known', depth: 0 },
         { txid: 'mined', status: 'mined', depth: 1 },
-        { txid: 'rejected', status: 'unknown', depth: undefined },
+        { txid: 'rejected', status: 'unknown', depth: undefined, providerStatus: 'REJECTED' },
         { txid: 'missing', status: 'unknown', depth: undefined }
       ])
       expect(captured.map(request => request.url)).toEqual([
@@ -138,6 +138,35 @@ describe('Arcade broadcaster', () => {
         'https://arcade.example/tx/rejected',
         'https://arcade.example/tx/missing'
       ])
+    })
+
+    test('surfaces an orphan-mempool verdict as durable input-conflict evidence', async () => {
+      const http = mockHttpClient(
+        {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: {
+            status: 200,
+            txid: 'loser',
+            txStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
+            extraInfo: 'input conflict',
+            competingTxs: ['winner']
+          }
+        },
+        []
+      )
+
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids(['loser'])
+
+      expect(result.results[0]).toMatchObject({
+        txid: 'loser',
+        status: 'unknown',
+        terminal: true,
+        inputConflict: true,
+        providerStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
+        competingTxs: ['winner']
+      })
     })
 
     test('returns an inconclusive provider result on transport or server failure', async () => {

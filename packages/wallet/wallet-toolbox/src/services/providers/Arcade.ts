@@ -24,6 +24,7 @@ import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 // Shared wire-contract types only (no behavior coupling): Arcade is ARC-compatible on the
 // configuration and `getTxData` response shape, so it reuses those interfaces.
 import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
+import { classifyArcadeRejection } from './arcadeStatus'
 
 function defaultDeploymentId(): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
@@ -208,11 +209,7 @@ export class Arcade {
     }
   }
 
-  private applyPostRawTxCatch(
-    result: PostTxResultForTxid,
-    error_: unknown,
-    notes: ArcadePostNoteContext
-  ): void {
+  private applyPostRawTxCatch(result: PostTxResultForTxid, error_: unknown, notes: ArcadePostNoteContext): void {
     const error = WalletError.fromUnknown(error_)
     result.status = 'error'
     result.serviceError = true
@@ -371,7 +368,7 @@ export class Arcade {
    * states remain unknown, while MINED/IMMUTABLE are authoritative mined
    * observations whose proof is validated separately.
    */
-  async getStatusForTxids (txids: string[]): Promise<GetStatusForTxidsResult> {
+  async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> {
     const r: GetStatusForTxidsResult = {
       name: this.name,
       status: 'success',
@@ -396,7 +393,22 @@ export class Arcade {
           if (status === 'ACCEPTED_BY_NETWORK' || status === 'SEEN_ON_NETWORK' || status === 'SEEN_MULTIPLE_NODES') {
             return { txid, status: 'known' as const, depth: 0 }
           }
-          return { txid, status: 'unknown' as const, depth: undefined }
+          const classification = classifyArcadeRejection(response.data)
+          return {
+            txid,
+            status: 'unknown' as const,
+            depth: undefined,
+            providerStatus: status,
+            ...(classification.terminal
+              ? {
+                  terminal: true,
+                  inputConflict: classification.inputConflict,
+                  statusCode: response.data.status,
+                  description: (response.data.extraInfo || classification.reason).slice(0, 512),
+                  competingTxs: (response.data.competingTxs ?? []).slice(0, 24)
+                }
+              : {})
+          }
         } catch (error_: unknown) {
           firstError ??= WalletError.fromUnknown(error_)
           return { txid, status: 'unknown' as const, depth: undefined }

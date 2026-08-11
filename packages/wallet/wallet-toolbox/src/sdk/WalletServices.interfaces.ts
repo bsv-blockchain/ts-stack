@@ -365,6 +365,18 @@ export interface StatusForTxidResult {
    * 'unknown' if depth === undefined, txid may be old an purged or never processed.
    */
   status: 'mined' | 'known' | 'unknown'
+  /** Provider supplied a durable terminal lifecycle verdict for this txid. */
+  terminal?: boolean
+  /** The terminal verdict proves this transaction lost an input conflict. */
+  inputConflict?: boolean
+  /** Provider-native lifecycle status retained for reconciliation/audit. */
+  providerStatus?: string
+  /** Provider-native status code when supplied. */
+  statusCode?: number
+  /** Bounded provider detail suitable for durable diagnostics. */
+  description?: string
+  /** Competing transaction ids reported by the provider. */
+  competingTxs?: string[]
 }
 
 /**

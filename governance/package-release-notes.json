@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Routes TTN wallet overlay operations through the isolated teratestnet preset, enables the public TTN Arcade provider, isolates action batches with bounded lease resume, and makes Arcade rejection plus invalid-change reconciliation fail safe without an explorer.",
-      "migration": "Mainnet, testnet, STN, TSTN, and mock defaults are unchanged. TTN now uses https://arcade-v2-ttn-us-1.bsvblockchain.tech unless callers pass an explicit Arcade URL or an empty string to disable it. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation. Arcade operators should preserve SSE status codes and extraInfo so terminal input conflicts can be quarantined immediately. Invalid-change review rejects an inconclusive batch without changing outputs; Monitor Admin scans by default and operators must explicitly select release for outputs positively confirmed spent."
+      "summary": "Routes TTN wallets through the isolated teratestnet preset and public Arcade provider, isolates/resumes bounded action batches, keeps browser ChainTracks CORS-reachable, proactively reconciles missed Arcade terminal verdicts, and makes invalid-change review tri-state, paged, and fail safe without an explorer.",
+      "migration": "Mainnet/testnet browser and webview runtimes temporarily use the legacy CORS-enabled ChainTracks service; Node runtimes retain Arcade/go-chaintracks v2, and getHeight falls back to WhatsOnChain on supported networks. TTN now uses https://arcade-v2-ttn-us-1.bsvblockchain.tech unless callers override or disable it. Unrelated actions remain outside open workspaces; providers may advertise resume support and a reservation limit, default 256. Direct invalid-change release now throws machine-checkable WERR_UTXO_REVIEW_INCONCLUSIVE and changes nothing when any verdict is unknown. Monitor Admin scans in bounded pages and, after explicit confirmation, releases only confirmed-spent outputs while retaining/reporting unknowns. A scheduled monitor pass applies durable Arcade terminal status missed by SSE; unknown provider results never mutate state."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Carries the lockstep browser build with isolated TTN routing and its default public Arcade provider, explicit action-batch isolation, bounded lease recovery, conservative Arcade rejection reconciliation, and fail-safe invalid-change review.",
-      "migration": "Existing browser consumers are unchanged. Browser wallets configured for chain ttn receive the TTN resolver and Arcade defaults automatically. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path. Explorer-free Arcade status and proof recovery is automatic when Arcade is configured. Inconclusive invalid-change reviews reject without changing outputs."
+      "summary": "Carries the lockstep browser build with isolated TTN/Arcade routing, bounded action-batch recovery, a CORS-reachable mainnet/testnet ChainTracks default, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
+      "migration": "Mainnet/testnet browser and webview runtimes temporarily select the legacy CORS-enabled ChainTracks service and getHeight can fall back to WhatsOnChain; Node behavior is unaffected. TTN wallets receive isolated resolver and Arcade defaults. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
       "releaseType": "minor",
-      "summary": "Carries the lockstep mobile build with isolated TTN routing and its default public Arcade provider, explicit action-batch isolation, bounded lease recovery, conservative Arcade rejection reconciliation, and fail-safe invalid-change review.",
-      "migration": "Existing mobile consumers are unchanged. Mobile wallets configured for chain ttn receive the TTN resolver and Arcade defaults automatically. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path. Explorer-free Arcade status and proof recovery is automatic when Arcade is configured. Inconclusive invalid-change reviews reject without changing outputs."
+      "summary": "Carries the lockstep mobile build with isolated TTN/Arcade routing, bounded action-batch recovery, proactive Arcade rejection reconciliation, and paged tri-state UTXO review.",
+      "migration": "Existing native mobile consumers are unchanged; webview runtimes follow the browser ChainTracks selection. TTN wallets receive isolated resolver and Arcade defaults. Direct inconclusive release throws WERR_UTXO_REVIEW_INCONCLUSIVE without mutation; authenticated Monitor Admin can explicitly release conclusive spent subsets page by page."
     },
     {
       "name": "create-bsv-app",

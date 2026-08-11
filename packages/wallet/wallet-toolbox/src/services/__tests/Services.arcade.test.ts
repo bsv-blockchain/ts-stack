@@ -134,4 +134,70 @@ describe('Services Arcade wiring', () => {
     )
     expect(options.arcadeUrl).toBeUndefined()
   })
+
+  test('continues past explorer unknown so Arcade can surface a durable rejection', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    const explorer = jest.fn(async (txids: string[]) => ({
+      name: 'explorer',
+      status: 'success' as const,
+      results: txids.map(txid => ({ txid, status: 'unknown' as const, depth: undefined }))
+    }))
+    const arcade = jest.fn(async (txids: string[]) => ({
+      name: 'arcade',
+      status: 'success' as const,
+      results: txids.map(txid => ({
+        txid,
+        status: 'unknown' as const,
+        depth: undefined,
+        terminal: true,
+        inputConflict: true,
+        providerStatus: 'SEEN_IN_ORPHAN_MEMPOOL'
+      }))
+    }))
+    services.getStatusForTxidsServices.services = [
+      { name: 'explorer', service: explorer },
+      { name: 'arcade', service: arcade }
+    ]
+    services.getStatusForTxidsServices.reset()
+
+    const result = await services.getStatusForTxids(['loser'])
+
+    expect(explorer).toHaveBeenCalledWith(['loser'])
+    expect(arcade).toHaveBeenCalledWith(['loser'])
+    expect(result.results[0]).toMatchObject({ terminal: true, inputConflict: true })
+  })
+
+  test('a mined observation overrides stale terminal lifecycle evidence', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    services.getStatusForTxidsServices.services = [
+      {
+        name: 'arcade',
+        service: async (txids: string[]) => ({
+          name: 'arcade',
+          status: 'success' as const,
+          results: txids.map(txid => ({
+            txid,
+            status: 'unknown' as const,
+            depth: undefined,
+            terminal: true,
+            inputConflict: true
+          }))
+        })
+      },
+      {
+        name: 'explorer',
+        service: async (txids: string[]) => ({
+          name: 'explorer',
+          status: 'success' as const,
+          results: txids.map(txid => ({ txid, status: 'mined' as const, depth: 1 }))
+        })
+      }
+    ]
+    services.getStatusForTxidsServices.reset()
+
+    await expect(services.getStatusForTxids(['txid'])).resolves.toMatchObject({
+      status: 'success',
+      results: [{ txid: 'txid', status: 'mined', depth: 1 }]
+    })
+  })
 })

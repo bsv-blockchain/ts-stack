@@ -18,13 +18,19 @@ attention to changes that materially alter behavior or extend functionality.
   terminal conflict; only a mined event whose Merkle proof validates through
   the configured chain tracker may repair it. Arcade also participates in the
   shared transaction-status service so double-spend review remains conservative
-  on networks with no explorer. Inconclusive or absent UTXO providers no longer
+  on networks with no explorer. A scheduled paged pass also reconciles aged
+  pending requests from durable Arcade lifecycle state, including orphan-mempool
+  losers whose SSE event was missed; mined/known evidence wins over rejection.
+  Inconclusive or absent UTXO providers no longer
   masquerade as a spent-output verdict in invalid-change release, stale-input
   reconciliation, proof recovery, or storage diagnostics. Invalid-change review
-  classifies the complete batch with bounded concurrency, blocks release when
-  any result is unknown, and atomically updates only ownership-rechecked outputs
-  positively confirmed spent while recording bounded audit evidence. Monitor
-  Admin now scans by default and requires explicit confirmation to release. The
+  returns conclusive read-only findings plus unknown diagnostics. Direct release
+  blocks atomically with machine-readable `WERR_UTXO_REVIEW_INCONCLUSIVE` when
+  any result is unknown. Monitor Admin uses bounded, five-second-deadline pages
+  and can explicitly release the confirmed-spent subset while retaining unknowns;
+  every mutation rechecks ownership/allocation under lock and records audit
+  evidence. Monitor Admin scans by default and requires explicit confirmation.
+  The
   Arcade SSE cursor advances only after both event storage work and cursor
   persistence succeed; either failure leaves the event queued for ordered retry.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`

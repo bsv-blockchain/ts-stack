@@ -1,4 +1,4 @@
-export function renderAdminPage (): string {
+export function renderAdminPage(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -906,13 +906,24 @@ export function renderAdminPage (): string {
       setButtonPending('runUtxoReview', true, 'Running...')
       byId('utxoReviewLog').textContent = 'Running review...'
       try {
-        const result = await api('/admin/api/review-utxos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityKey, mode, release })
-        })
-        byId('utxoReviewLog').textContent = result.log || ''
-        setNotice('Authenticated as ' + result.requestedBy)
+        const logs = []
+        let offset = 0
+        let page = 0
+        let result
+        for (;;) {
+          result = await api('/admin/api/review-utxos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identityKey, mode, release, pageLimit: 20, offset })
+          })
+          logs.push(result.log || '')
+          byId('utxoReviewLog').textContent = logs.join('')
+          page++
+          if (result.complete || result.nextOffset == null) break
+          if (page >= 1000) throw new Error('UTXO review exceeded 1,000 pages; inspect monitor events before resuming.')
+          offset = Number(result.nextOffset)
+        }
+        setNotice('Authenticated as ' + result.requestedBy + '; completed ' + page + ' page(s)')
       } finally {
         setButtonPending('runUtxoReview', false)
       }

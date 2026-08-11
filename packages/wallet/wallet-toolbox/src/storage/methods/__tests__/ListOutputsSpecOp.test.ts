@@ -17,8 +17,8 @@ function makeOutput(outputId: number): any {
 
 function makeInvalidChangeHarness(getUtxoStatus: (outpoint: string) => Promise<any>, outputs: any[]): any {
   const current = new Map(outputs.map(output => [output.outputId, { ...output }]))
-  const getUtxoStatusMock = jest.fn(async (_hash: string, _format: undefined, outpoint: string) =>
-    await getUtxoStatus(outpoint)
+  const getUtxoStatusMock = jest.fn(
+    async (_hash: string, _format: undefined, outpoint: string) => await getUtxoStatus(outpoint)
   )
   const updateOutput = jest.fn(async (outputId: number, update: any) => {
     const output = current.get(outputId)
@@ -150,6 +150,7 @@ describe('getListOutputsSpecOp', () => {
     expect(JSON.parse(event.details)).toEqual({
       operation: 'specOpInvalidChange',
       reason: 'provider-confirmed-spent',
+      releaseMode: 'atomic',
       userId: 7,
       checked: 2,
       confirmedUnspent: 1,
@@ -157,6 +158,7 @@ describe('getListOutputsSpecOp', () => {
       unknown: 0,
       confirmedSpentSatoshis: outputs[0].satoshis,
       released: 1,
+      releasedSatoshis: outputs[0].satoshis,
       providers: ['mock'],
       providerCount: 1,
       providersTruncated: false
@@ -219,16 +221,14 @@ describe('getListOutputsSpecOp', () => {
     expect(details.providers.every((provider: string) => provider.length <= 128)).toBe(true)
   })
 
-  it('rejects an inconclusive read-only scan instead of reporting a false healthy result', async () => {
+  it('returns the conclusive read-only picture without treating unknown as spent', async () => {
     const outputs = [makeOutput(60)]
     const harness = makeInvalidChangeHarness(
       async () => ({ name: '<noservices>', status: 'error', details: [] }),
       outputs
     )
 
-    await expect(filterInvalidChange(harness.storage, outputs, [])).rejects.toThrow(
-      '1 of 1 candidates; no outputs were changed'
-    )
+    await expect(filterInvalidChange(harness.storage, outputs, [])).resolves.toEqual([])
     expect(harness.transaction).not.toHaveBeenCalled()
     expect(harness.updateOutput).not.toHaveBeenCalled()
     expect(harness.insertMonitorEvent).not.toHaveBeenCalled()

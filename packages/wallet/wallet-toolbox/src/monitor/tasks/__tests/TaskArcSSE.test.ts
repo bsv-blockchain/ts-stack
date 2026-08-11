@@ -290,6 +290,13 @@ describe('TaskArcadeSSE', () => {
       expect(log).toContain('=> doubleSpend')
     })
 
+    test('SEEN_IN_ORPHAN_MEMPOOL sets req to doubleSpend and quarantines its inputs', async () => {
+      const { log, monitor } = await runWithStatus('SEEN_IN_ORPHAN_MEMPOOL', 'unmined')
+      expect(log).toContain('=> doubleSpend')
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'failed', undefined)
+      expect(monitor.storage.sp.updateOutput).toHaveBeenCalledWith(9, { spendable: false }, undefined)
+    })
+
     test('REJECTED records the event without releasing wallet inputs', async () => {
       const { log, monitor } = await runWithStatus('REJECTED', 'unmined')
       expect(log).toContain('rejection recorded; awaiting resolution')

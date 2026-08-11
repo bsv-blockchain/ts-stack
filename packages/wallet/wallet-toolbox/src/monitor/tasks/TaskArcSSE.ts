@@ -6,6 +6,10 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
 import { quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
+import {
+  classifyArcadeRejection,
+  type ArcadeRejectionClassification
+} from '../../services/providers/arcadeStatus'
 
 interface ArcadeStatusNote extends ReqHistoryNote {
   when: string
@@ -14,13 +18,6 @@ interface ArcadeStatusNote extends ReqHistoryNote {
   arcTimestamp?: string
   statusCode?: number
   extraInfo?: string
-}
-
-interface RejectionClassification {
-  terminal: boolean
-  inputConflict: boolean
-  reqStatus: 'invalid' | 'doubleSpend'
-  reason: string
 }
 
 /**
@@ -32,13 +29,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   static readonly taskName = 'ArcadeSSE'
 
   sseClient: ArcSSEClient | null = null
-  private readonly pendingEvents: Array<{ event: ArcSSEEvent, acknowledge: () => void }> = []
+  private readonly pendingEvents: Array<{ event: ArcSSEEvent; acknowledge: () => void }> = []
 
-  constructor (monitor: Monitor) {
+  constructor(monitor: Monitor) {
     super(monitor, TaskArcadeSSE.taskName)
   }
 
-  override async asyncSetup (): Promise<void> {
+  override async asyncSetup(): Promise<void> {
     const callbackToken = this.monitor.options.callbackToken
     if (callbackToken == null || callbackToken === '') {
       await this.logSetupEvent('no callbackToken configured; SSE disabled')
@@ -74,9 +71,10 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       arcApiKey: arcadeApiKey,
       lastEventId,
       EventSourceClass,
-      onEvent: async event => await new Promise<void>(acknowledge => {
-        this.pendingEvents.push({ event, acknowledge })
-      }),
+      onEvent: async event =>
+        await new Promise<void>(acknowledge => {
+          this.pendingEvents.push({ event, acknowledge })
+        }),
       onError: err => {
         void this.logSetupEvent(`SSE error: ${err.message}`)
       }
@@ -85,7 +83,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     this.sseClient.connect()
   }
 
-  private async logSetupEvent (details: string): Promise<void> {
+  private async logSetupEvent(details: string): Promise<void> {
     try {
       await this.monitor.logEvent(this.name, details)
     } catch {
@@ -93,11 +91,11 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     }
   }
 
-  trigger (_nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
     return { run: this.pendingEvents.length > 0 }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     const eventCount = this.pendingEvents.length
     if (eventCount === 0) return ''
 
@@ -121,12 +119,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return log
   }
 
-  async fetchNow (): Promise<number> {
+  async fetchNow(): Promise<number> {
     if (this.sseClient == null) return 0
     return await this.sseClient.fetchEvents()
   }
 
-  private async processStatusEvent (event: ArcSSEEvent): Promise<string> {
+  private async processStatusEvent(event: ArcSSEEvent): Promise<string> {
     let log = `SSE: txid=${event.txid} status=${event.txStatus}\n`
 
     const reqs = await this.storage.findProvenTxReqs({
@@ -166,12 +164,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return log
   }
 
-  private canRecoverTerminalRequest (req: EntityProvenTxReq, event: ArcSSEEvent): boolean {
+  private canRecoverTerminalRequest(req: EntityProvenTxReq, event: ArcSSEEvent): boolean {
     const confirmedStatuses = ['MINED', 'IMMUTABLE']
     return (req.status === 'invalid' || req.status === 'doubleSpend') && confirmedStatuses.includes(event.txStatus)
   }
 
-  private async applyStatusEvent (req: EntityProvenTxReq, event: ArcSSEEvent, note: ArcadeStatusNote): Promise<string> {
+  private async applyStatusEvent(req: EntityProvenTxReq, event: ArcSSEEvent, note: ArcadeStatusNote): Promise<string> {
     switch (event.txStatus) {
       case 'SENT_TO_NETWORK':
       case 'ACCEPTED_BY_NETWORK':
@@ -182,7 +180,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       case 'IMMUTABLE':
         return await this.applyMinedStatus(req, note)
       case 'DOUBLE_SPEND_ATTEMPTED':
-        return await this.applyDoubleSpendStatus(req, note)
+      case 'SEEN_IN_ORPHAN_MEMPOOL':
+        return await this.applyDoubleSpendStatus(req, event, note)
       case 'REJECTED':
         return await this.applyRejectedStatus(req, event, note)
       case 'RECEIVED':
@@ -197,7 +196,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     }
   }
 
-  private async applyAcceptedStatus (req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
+  private async applyAcceptedStatus(req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
     if (!['unsent', 'sending', 'callback'].includes(req.status)) return ''
 
     if (req.notify.transactionIds != null) {
@@ -213,62 +212,25 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return `  req ${req.id} => unmined\n`
   }
 
-  private async applyMinedStatus (req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
+  private async applyMinedStatus(req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
     req.addHistoryNote(note)
     await req.updateStorageDynamicProperties(this.storage)
     return await this.fetchProofFromServices(req)
   }
 
-  private async applyDoubleSpendStatus (req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
-    return await this.applyTerminalFailure(req, note, {
-      terminal: true,
-      inputConflict: true,
-      reqStatus: 'doubleSpend',
-      reason: 'Arcade reported DOUBLE_SPEND_ATTEMPTED'
-    })
+  private async applyDoubleSpendStatus(
+    req: EntityProvenTxReq,
+    event: ArcSSEEvent,
+    note: ArcadeStatusNote
+  ): Promise<string> {
+    return await this.applyTerminalFailure(req, note, classifyArcadeRejection(event))
   }
 
-  private classifyRejection (event: ArcSSEEvent): RejectionClassification {
-    const extraInfo = event.extraInfo?.trim() ?? ''
-    const detail = extraInfo.toLowerCase()
-    const retryable =
-      event.status === 476 ||
-      detail.startsWith('parent rejected') ||
-      detail.includes('not final') ||
-      detail.includes('non-final')
-    if (retryable) {
-      return {
-        terminal: false,
-        inputConflict: false,
-        reqStatus: 'invalid',
-        reason:
-          event.status === 476 ? 'transaction is not final' : 'Arcade reported a retryable parent/locktime condition'
-      }
-    }
-
-    const inputConflict =
-      event.status === 462 ||
-      event.status === 466 ||
-      /(?:utxo|input).*(?:spent|missing|conflict)|missing[- ]inputs?|already spent/.test(detail)
-    const classifiedValidatorFailure = event.status != null && event.status >= 460 && event.status <= 475
-    const terminal = inputConflict || classifiedValidatorFailure || extraInfo !== ''
-    let reason = 'Arcade supplied no durable rejection evidence'
-    if (inputConflict) {
-      reason = 'Arcade supplied confirmed missing-input/conflict evidence'
-    } else if (classifiedValidatorFailure) {
-      reason = `Arcade supplied terminal validator code ${String(event.status)}`
-    } else if (extraInfo !== '') {
-      reason = 'Arcade supplied a terminal validator rejection reason'
-    }
-    return {
-      terminal,
-      inputConflict,
-      reqStatus: event.status === 466 || inputConflict ? 'doubleSpend' : 'invalid',
-      reason
-    }
+  private classifyRejection(event: ArcSSEEvent): ArcadeRejectionClassification {
+    return classifyArcadeRejection(event)
   }
 
-  private async applyRejectedStatus (
+  private async applyRejectedStatus(
     req: EntityProvenTxReq,
     event: ArcSSEEvent,
     note: ArcadeStatusNote
@@ -286,10 +248,10 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return await this.applyTerminalFailure(req, note, classification)
   }
 
-  private async applyTerminalFailure (
+  private async applyTerminalFailure(
     req: EntityProvenTxReq,
     note: ArcadeStatusNote,
-    classification: RejectionClassification
+    classification: ArcadeRejectionClassification
   ): Promise<string> {
     let quarantined = { checked: 0, staleConfirmed: 0, staleOutpoints: [] as string[] }
     await this.storage.runAsStorageProvider(async sp => {
@@ -325,18 +287,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
    * Arcade is first when configured, but the shared provider path validates the
    * proof against the wallet chaintracker before a ProvenTx is persisted.
    */
-  private async fetchProofFromServices (req: EntityProvenTxReq): Promise<string> {
+  private async fetchProofFromServices(req: EntityProvenTxReq): Promise<string> {
     const txid = req.txid
     let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from configured services\n`
 
     try {
       const proof = await this.monitor.services.getMerklePath(txid)
-      const ptx = await EntityProvenTx.fromReq(
-        req,
-        proof,
-        false,
-        this.monitor.options.maxRebroadcastAttempts ?? 0
-      )
+      const ptx = await EntityProvenTx.fromReq(req, proof, false, this.monitor.options.maxRebroadcastAttempts ?? 0)
       if (ptx == null) {
         log += `    No validated merkle proof available from ${proof.name ?? 'configured services'}\n`
         return log
@@ -387,6 +344,6 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   }
 }
 
-function stringifyError (error: unknown): string {
+function stringifyError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }

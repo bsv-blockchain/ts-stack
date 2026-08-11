@@ -1,9 +1,35 @@
 import { runAdminUtxoReview } from '../reviewUtxos'
 
-function makeHarness(reviewByIdentityKey: jest.Mock) {
+function makePage(log: string, overrides: Record<string, unknown> = {}): any {
+  return {
+    found: true,
+    userId: 7,
+    identityKey: 'customer',
+    mode: 'all',
+    release: false,
+    offset: 0,
+    pageLimit: 100,
+    sourceScanned: 1,
+    complete: true,
+    checked: 1,
+    confirmedUnspent: 1,
+    confirmedSpent: 0,
+    unknown: 0,
+    confirmedSpentSatoshis: 0,
+    released: 0,
+    releasedSatoshis: 0,
+    providers: ['mock'],
+    providerCount: 1,
+    providersTruncated: false,
+    log,
+    ...overrides
+  }
+}
+
+function makeHarness(reviewPageByIdentityKey: jest.Mock) {
   return {
     storage: { insertMonitorEvent: jest.fn().mockResolvedValue(1) },
-    task: { reviewByIdentityKey }
+    task: { reviewPageByIdentityKey }
   }
 }
 
@@ -13,7 +39,7 @@ function eventDetails(insertMonitorEvent: jest.Mock, index: number): any {
 
 describe('runAdminUtxoReview', () => {
   test('passes an explicit scan-only request and records start/completion evidence', async () => {
-    const harness = makeHarness(jest.fn().mockResolvedValue('scan log'))
+    const harness = makeHarness(jest.fn().mockResolvedValue(makePage('scan log')))
 
     await expect(
       runAdminUtxoReview({
@@ -21,9 +47,11 @@ describe('runAdminUtxoReview', () => {
         requestedBy: 'operator',
         identityKey: 'customer',
         mode: 'all',
-        release: false
+        release: false,
+        pageLimit: 100,
+        offset: 0
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       requestedBy: 'operator',
       identityKey: 'customer',
       mode: 'all',
@@ -31,7 +59,7 @@ describe('runAdminUtxoReview', () => {
       log: 'scan log'
     })
 
-    expect(harness.task.reviewByIdentityKey).toHaveBeenCalledWith('customer', 'all', false)
+    expect(harness.task.reviewPageByIdentityKey).toHaveBeenCalledWith('customer', 'all', false, 100, 0)
     expect(harness.storage.insertMonitorEvent).toHaveBeenCalledTimes(2)
     expect(eventDetails(harness.storage.insertMonitorEvent, 0)).toMatchObject({
       phase: 'started',
@@ -54,11 +82,13 @@ describe('runAdminUtxoReview', () => {
         requestedBy: 'operator',
         identityKey: 'customer',
         mode: 'change',
-        release: true
+        release: true,
+        pageLimit: 100,
+        offset: 0
       })
     ).rejects.toBe(error)
 
-    expect(harness.task.reviewByIdentityKey).toHaveBeenCalledWith('customer', 'change', true)
+    expect(harness.task.reviewPageByIdentityKey).toHaveBeenCalledWith('customer', 'change', true, 100, 0)
     expect(harness.storage.insertMonitorEvent).toHaveBeenCalledTimes(2)
     expect(eventDetails(harness.storage.insertMonitorEvent, 1)).toMatchObject({
       phase: 'failed',
@@ -69,7 +99,7 @@ describe('runAdminUtxoReview', () => {
 
   test('bounds durable log evidence without truncating the API result', async () => {
     const log = 'x'.repeat(5_000)
-    const harness = makeHarness(jest.fn().mockResolvedValue(log))
+    const harness = makeHarness(jest.fn().mockResolvedValue(makePage(log)))
 
     await expect(
       runAdminUtxoReview({
@@ -77,7 +107,9 @@ describe('runAdminUtxoReview', () => {
         requestedBy: 'operator',
         identityKey: 'customer',
         mode: 'all',
-        release: false
+        release: false,
+        pageLimit: 100,
+        offset: 0
       })
     ).resolves.toMatchObject({ log })
 
