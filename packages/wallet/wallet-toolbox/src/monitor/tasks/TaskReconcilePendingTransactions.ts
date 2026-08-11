@@ -1,7 +1,13 @@
+import { Transaction } from '@bsv/sdk'
 import { StatusForTxidResult } from '../../sdk/WalletServices.interfaces'
 import { EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
-import { quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
+import {
+  quarantineReqInputs,
+  quarantineReqInputsFromFailedParents
+} from '../../storage/methods/reconcileFailedTransactionInputs'
+import { StorageProvider } from '../../storage/StorageProvider'
+import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
@@ -18,6 +24,10 @@ interface ReconcilePendingCheckpoint {
   resumeOffset?: number
   expectedProvenTxReqId?: number
   reviewLog?: string
+}
+
+interface AppliedTerminalVerdict {
+  result: StatusForTxidResult
 }
 
 /**
@@ -83,9 +93,12 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
 
   async runTask(): Promise<string> {
     const checkpoint = await this.getCheckpoint()
-    const updatedBefore = new Date(Date.now() - this.minAgeMinutes * 60 * 1000)
+    // Proof checks and lifecycle events legitimately refresh updated_at while a
+    // request remains pending. Use the immutable creation time so that routine
+    // monitoring cannot postpone reconciliation forever.
+    const createdBefore = new Date(Date.now() - this.minAgeMinutes * 60 * 1000)
     const reqs = await this.findReqsToReview(checkpoint)
-    const eligible = reqs.filter(req => req.updated_at <= updatedBefore)
+    const eligible = reqs.filter(req => req.created_at <= createdBefore)
     const provider =
       eligible.length === 0 ? undefined : await this.monitor.services.getStatusForTxids(eligible.map(req => req.txid))
     const results = new Map(provider?.results.map(result => [result.txid, result]) ?? [])
@@ -96,20 +109,25 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     const retained: TableProvenTxReq[] = []
     for (const req of reqs) {
       const result = results.get(req.txid)
-      if (req.updated_at > updatedBefore || provider?.status !== 'success' || result?.terminal !== true) {
+      if (req.created_at > createdBefore) {
         retained.push(req)
         continue
       }
-      const applied = await this.applyTerminalVerdict(req, result, provider.name)
+      const applied = await this.applyTerminalVerdict(
+        req,
+        provider?.status === 'success' ? result : undefined,
+        provider?.status === 'success' ? provider.name : undefined,
+        createdBefore
+      )
       if (!applied) {
         retained.push(req)
         continue
       }
       reconciled++
-      if (result.inputConflict === true) inputConflicts++
+      if (applied.result.inputConflict === true) inputConflicts++
       reviewLog +=
-        `reconciled ${req.provenTxReqId} ${req.txid} ${result.providerStatus ?? 'terminal'} ` +
-        `=> ${result.inputConflict === true ? 'doubleSpend' : 'invalid'}\n`
+        `reconciled ${req.provenTxReqId} ${req.txid} ${applied.result.providerStatus ?? 'terminal'} ` +
+        `=> ${applied.result.inputConflict === true ? 'doubleSpend' : 'invalid'}\n`
     }
 
     const fullPage = reqs.length >= this.reviewLimit
@@ -162,15 +180,28 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
 
   private async applyTerminalVerdict(
     reqApi: TableProvenTxReq,
-    result: StatusForTxidResult,
-    provider: string
-  ): Promise<boolean> {
-    let applied = false
+    providerResult: StatusForTxidResult | undefined,
+    providerName: string | undefined,
+    createdBefore: Date
+  ): Promise<AppliedTerminalVerdict | undefined> {
+    let applied: AppliedTerminalVerdict | undefined
     await this.storage.runAsStorageProvider(async sp => {
       await sp.transaction(async trx => {
         const req = new EntityProvenTxReq(reqApi)
         await req.refreshFromStorage(sp, trx)
         if (!REVIEW_STATUSES.includes(req.status as (typeof REVIEW_STATUSES)[number])) return
+        if (req.created_at > createdBefore) return
+
+        const failedParentTxids = await this.findFailedLocalParentTxids(req, sp, trx)
+        const result =
+          providerResult?.terminal === true
+            ? providerResult
+            : providerResult?.status === 'known' || providerResult?.status === 'mined'
+              ? undefined
+              : this.failedParentVerdict(req.txid, failedParentTxids)
+        if (result == null) return
+        const provider =
+          providerResult?.terminal === true ? (providerName ?? 'transaction-status-provider') : 'local-storage'
 
         req.status = result.inputConflict === true ? 'doubleSpend' : 'invalid'
         req.addHistoryNote({
@@ -197,13 +228,59 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
             ...(quarantined.staleOutpoints.length > 0 ? { outpoints: quarantined.staleOutpoints.join(',') } : {})
           })
           await req.updateStorageDynamicProperties(sp, trx)
+        } else if (failedParentTxids.length > 0) {
+          const quarantined = await quarantineReqInputsFromFailedParents(req, failedParentTxids, sp, trx)
+          req.addHistoryNote({
+            when: new Date().toISOString(),
+            what: 'proactiveFailedParentQuarantine',
+            checked: quarantined.checked,
+            confirmed: quarantined.staleConfirmed,
+            parentTxids: failedParentTxids.join(','),
+            ...(quarantined.staleOutpoints.length > 0 ? { outpoints: quarantined.staleOutpoints.join(',') } : {})
+          })
+          await req.updateStorageDynamicProperties(sp, trx)
         }
-        applied = true
+        applied = { result }
       })
     })
     if (applied) {
-      this.monitor.callOnTransactionStatusChanged(reqApi.txid, result.providerStatus ?? 'REJECTED')
+      this.monitor.callOnTransactionStatusChanged(reqApi.txid, applied.result.providerStatus ?? 'REJECTED')
     }
     return applied
+  }
+
+  private async findFailedLocalParentTxids(
+    req: EntityProvenTxReq,
+    storage: StorageProvider,
+    trx: TrxToken
+  ): Promise<string[]> {
+    const parentTxids = [
+      ...new Set(
+        Transaction.fromBinary(req.rawTx)
+          .inputs.map(input => input.sourceTXID)
+          .filter((txid): txid is string => txid != null && txid !== '')
+      )
+    ]
+    const failed: string[] = []
+    for (const txid of parentTxids) {
+      const parentReqs = await storage.findProvenTxReqs({ partial: { txid }, trx })
+      if (parentReqs.some(parent => parent.status === 'invalid' || parent.status === 'doubleSpend')) {
+        failed.push(txid)
+      }
+    }
+    return failed
+  }
+
+  private failedParentVerdict(txid: string, failedParentTxids: string[]): StatusForTxidResult | undefined {
+    if (failedParentTxids.length === 0) return undefined
+    return {
+      txid,
+      status: 'unknown',
+      depth: undefined,
+      terminal: true,
+      inputConflict: false,
+      providerStatus: 'LOCAL_PARENT_FAILED',
+      description: `Local parent request is terminal: ${failedParentTxids.join(',')}`.slice(0, 512)
+    }
   }
 }

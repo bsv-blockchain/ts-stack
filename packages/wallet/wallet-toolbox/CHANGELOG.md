@@ -6,6 +6,15 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Age proactive pending-transaction review from immutable request creation
+  time, so repeated proof polling cannot keep a rejected transaction below the
+  reconciliation threshold forever. A descendant of a locally terminal parent
+  now fails from that durable storage evidence; failed-parent outputs remain
+  quarantined while unrelated inputs are released for reuse. The shared change
+  adds about 1.1 kB to the Vite browser artifact and 3.8 kB to Hermes bytecode;
+  the reviewed raw ceilings advance to 1,585,000 and 3,322,000 bytes while all
+  compressed ceilings remain unchanged; the esbuild raw ceiling advances to
+  1,238,000 bytes.
 - Keep mainnet and testnet ChainTracks usable from browser and webview wallets:
   browser runtimes temporarily select the CORS-enabled legacy service while
   Node runtimes retain Arcade/go-chaintracks v2. `Services.getHeight` now falls

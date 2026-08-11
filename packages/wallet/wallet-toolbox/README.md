@@ -91,11 +91,15 @@ WhatsOnChain or another UTXO explorer.
 
 Arcade is also registered as a transaction-status provider, so monitor review
 continues on networks without WhatsOnChain. A scheduled bounded pass revisits
-aged pending requests and applies durable Arcade lifecycle verdicts that may
-have arrived while SSE was disconnected, including `SEEN_IN_ORPHAN_MEMPOOL`.
-Mined/known evidence takes precedence over a stale rejection. Provider absence
-and provider errors are treated as inconclusive, never as proof that an output
-was spent.
+pending requests after their immutable creation-age threshold and applies
+durable Arcade lifecycle verdicts that may have arrived while SSE was
+disconnected, including `SEEN_IN_ORPHAN_MEMPOOL`. Routine proof checks may
+refresh diagnostic timestamps without postponing that review. A descendant of
+a locally terminal parent is also failed from that storage evidence; the failed
+parent output remains quarantined while unrelated inputs are released for
+reuse. Mined/known evidence takes precedence over a stale rejection. Provider
+absence and provider errors are treated as inconclusive, never as proof that an
+output was spent.
 After an input conflict has been recorded, a later cached accepted/seen label
 cannot restore the failed transaction; recovery requires a mined status and a
 Merkle proof validated by the configured chain tracker. Arcade SSE events are
