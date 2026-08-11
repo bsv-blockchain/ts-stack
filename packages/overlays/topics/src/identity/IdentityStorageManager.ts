@@ -83,11 +83,12 @@ export class IdentityStorageManager {
       if (anySearch.length === 0) return []
       if (anySearch.length < 2) return []
 
-      if (anySearch.length > 2) {
-        query.$and.push({ $text: { $search: anySearch } })
-      } else {
-        query.$and.push({ searchableAttributes: this.getFuzzyRegex(anySearch) })
-      }
+      // MongoDB text search is token-based rather than fuzzy. In particular, it
+      // splits email addresses at punctuation (so an exact email can match
+      // unrelated records through a token such as "com") and it cannot match a
+      // prefix such as "brayden" inside "braydenjlangley". Apply the same
+      // escaped, case-insensitive substring semantics used by named attributes.
+      query.$and.push({ searchableAttributes: this.getFuzzyRegex(anySearch) })
     } else {
       const attributeQueries = Object.entries(attributes)
         .filter(([, value]) => this.normalizeSearchInput(value).length > 0)
