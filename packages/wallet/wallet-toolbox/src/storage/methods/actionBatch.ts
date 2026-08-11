@@ -1,8 +1,4 @@
-import {
-  Beef,
-  Script,
-  Validation
-} from '@bsv/sdk'
+import { Beef, Script, Validation } from '@bsv/sdk'
 import {
   AbortActionBatchResult,
   ActionBatchCommitAction,
@@ -67,15 +63,14 @@ const INITIAL_EXTRA_OUTPUTS = 3
 export const ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS = 64
 export const ACTION_BATCH_MAX_RESERVED_OUTPUTS = 256
 
-function isValidOutpoint (outpoint: { txid: string, vout: number }): boolean {
+function isValidOutpoint(outpoint: { txid: string; vout: number }): boolean {
   // Storage keys and canonical transaction IDs are lowercase. Rejecting an
   // alternate spelling here is preferable to validating it and then silently
   // missing the case-sensitive lookup below.
-  return /^[0-9a-f]{64}$/.test(outpoint.txid) &&
-    Number.isSafeInteger(outpoint.vout) && outpoint.vout >= 0
+  return /^[0-9a-f]{64}$/.test(outpoint.txid) && Number.isSafeInteger(outpoint.vout) && outpoint.vout >= 0
 }
 
-export function getActionBatchCapabilities (
+export function getActionBatchCapabilities(
   maxReservedOutputs = ACTION_BATCH_MAX_RESERVED_OUTPUTS,
   supportsResume = false
 ): StorageCapabilities {
@@ -106,13 +101,15 @@ export function getActionBatchCapabilities (
   }
 }
 
-function activeExpiry (batch: TableActionBatch, now = new Date()): boolean {
-  return batch.status !== 'active' && batch.status !== 'prepared' ||
+function activeExpiry(batch: TableActionBatch, now = new Date()): boolean {
+  return (
+    (batch.status !== 'active' && batch.status !== 'prepared') ||
     batch.expiresAt.getTime() <= now.getTime() ||
     batch.hardExpiresAt.getTime() <= now.getTime()
+  )
 }
 
-function actionBatchErrorState (
+function actionBatchErrorState(
   batch: TableActionBatch | undefined,
   now = new Date()
 ): ActionBatchErrorState | undefined {
@@ -125,12 +122,14 @@ function actionBatchErrorState (
   return undefined
 }
 
-function canExpire (batch: TableActionBatch, now = new Date()): boolean {
-  return (batch.status === 'active' || batch.status === 'prepared') &&
+function canExpire(batch: TableActionBatch, now = new Date()): boolean {
+  return (
+    (batch.status === 'active' || batch.status === 'prepared') &&
     (batch.expiresAt.getTime() <= now.getTime() || batch.hardExpiresAt.getTime() <= now.getTime())
+  )
 }
 
-async function releaseBatchState (
+async function releaseBatchState(
   storage: StorageProvider,
   batch: TableActionBatch,
   status: 'aborted' | 'committed' | 'expired',
@@ -138,14 +137,18 @@ async function releaseBatchState (
 ): Promise<void> {
   await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
   await storage.deleteActionBatchBlobRecords(batch.actionBatchId, trx)
-  await storage.updateActionBatch(batch.actionBatchId, {
-    status,
-    manifest: undefined,
-    uploadDigests: undefined
-  }, trx)
+  await storage.updateActionBatch(
+    batch.actionBatchId,
+    {
+      status,
+      manifest: undefined,
+      uploadDigests: undefined
+    },
+    trx
+  )
 }
 
-export async function cleanupExpiredActionBatches (storage: StorageProvider): Promise<number> {
+export async function cleanupExpiredActionBatches(storage: StorageProvider): Promise<number> {
   const now = new Date()
   const expired = await storage.findExpiredActionBatches(now)
   let released = 0
@@ -160,23 +163,29 @@ export async function cleanupExpiredActionBatches (storage: StorageProvider): Pr
   return released
 }
 
-function sourceOutputFromBeef (
+function sourceOutputFromBeef(
   beef: Beef,
-  outpoint: { txid: string, vout: number }
-): { satoshis: number, lockingScript: Script } | undefined {
+  outpoint: { txid: string; vout: number }
+): { satoshis: number; lockingScript: Script } | undefined {
   const tx = beef.findTxid(outpoint.txid)?.tx
   const output = tx?.outputs[outpoint.vout]
   if (output == null) return undefined
-  return { satoshis: Validation.validateSatoshis(output.satoshis, 'source output satoshis'), lockingScript: output.lockingScript }
+  return {
+    satoshis: Validation.validateSatoshis(output.satoshis, 'source output satoshis'),
+    lockingScript: output.lockingScript
+  }
 }
 
-async function resolveExplicitOutputs (
+async function resolveExplicitOutputs(
   storage: StorageProvider,
   userId: number,
   args: Validation.ValidCreateActionArgs,
   allowDeferredProofs: boolean
-): Promise<{ outputs: TableOutput[], inputSatoshis: number }> {
-  const byOutpoint = await storage.findOutputsByOutpoints(userId, args.inputs.map(input => input.outpoint))
+): Promise<{ outputs: TableOutput[]; inputSatoshis: number }> {
+  const byOutpoint = await storage.findOutputsByOutpoints(
+    userId,
+    args.inputs.map(input => input.outpoint)
+  )
   const beef = args.inputBEEF == null ? new Beef() : Beef.fromBinary(args.inputBEEF)
   const outputs: TableOutput[] = []
   let inputSatoshis = 0
@@ -198,11 +207,11 @@ async function resolveExplicitOutputs (
   return { outputs, inputSatoshis }
 }
 
-async function resolveNoSendChangeOutputs (
+async function resolveNoSendChangeOutputs(
   storage: StorageProvider,
   userId: number,
   args: Validation.ValidCreateActionArgs
-): Promise<{ outputs: TableOutput[], inputSatoshis: number }> {
+): Promise<{ outputs: TableOutput[]; inputSatoshis: number }> {
   const outpoints = args.options.noSendChange
   const byOutpoint = await storage.findOutputsByOutpoints(userId, outpoints)
   const outputs: TableOutput[] = []
@@ -220,7 +229,7 @@ async function resolveNoSendChangeOutputs (
   return { outputs, inputSatoshis }
 }
 
-function estimateFirstActionTarget (
+function estimateFirstActionTarget(
   storage: StorageProvider,
   args: Validation.ValidCreateActionArgs,
   inputSatoshis: number,
@@ -232,12 +241,28 @@ function estimateFirstActionTarget (
   if (storage.commissionSatoshis > 0) outputLengths.push(25)
   outputLengths.push(25)
   const fee = validateStorageFeeModel(storage.feeModel).value ?? 0
-  const minFee = Math.ceil(transactionSize([...inputLengths, 107], outputLengths) * fee / 1000)
+  const minFee = Math.ceil((transactionSize([...inputLengths, 107], outputLengths) * fee) / 1000)
   return Math.max(1, outputSatoshis + minFee - inputSatoshis)
 }
 
-function chooseReservationPool (
-  candidates: TableOutput[],
+type ReservationCandidate = TableOutput & { transactionStatus: TransactionStatus }
+
+function selectReservationChange<T extends ReservationCandidate>(
+  candidates: T[],
+  targetSatoshis: number
+): T | undefined {
+  for (const status of ['completed', 'unproven', 'sending'] as const) {
+    const selected = selectCanonicalChange(
+      candidates.filter(candidate => candidate.transactionStatus === status),
+      targetSatoshis
+    )
+    if (selected != null) return selected
+  }
+  return undefined
+}
+
+function chooseReservationPool<T extends ReservationCandidate>(
+  candidates: T[],
   targetSatoshis: number,
   limit: number,
   extras: number,
@@ -246,20 +271,16 @@ function chooseReservationPool (
     firstChangeCost: number
     marginalInputFee: number
   }
-): TableOutput[] {
-  const remaining = candidates
-    .filter(output => output.satoshis > planningCosts.marginalInputFee)
-  const chosen: TableOutput[] = []
+): T[] {
+  const remaining = candidates.filter(output => output.satoshis > planningCosts.marginalInputFee)
+  const chosen: T[] = []
   // A reservation is useful to generateChangeSdk only after it also covers
   // the marginal funding-input fee and leaves an economically viable first
   // change output. Without this buffer, a tiny target repeatedly selects dust
   // that satisfies the nominal deficit but can never close the real plan.
   let deficit = targetSatoshis + planningCosts.firstChangeCost
   while (deficit > 0 && chosen.length < limit) {
-    const output = selectCanonicalChange(
-      remaining,
-      deficit + planningCosts.marginalInputFee
-    )
+    const output = selectReservationChange(remaining, deficit + planningCosts.marginalInputFee)
     if (output == null) break
     chosen.push(output)
     remaining.splice(remaining.indexOf(output), 1)
@@ -267,7 +288,7 @@ function chooseReservationPool (
   }
   const desiredCount = fillLimit ? limit : Math.min(limit, chosen.length + extras)
   while (remaining.length > 0 && chosen.length < desiredCount) {
-    const output = selectCanonicalChange(remaining, targetSatoshis)
+    const output = selectReservationChange(remaining, targetSatoshis)
     if (output == null) break
     chosen.push(output)
     remaining.splice(remaining.indexOf(output), 1)
@@ -275,27 +296,32 @@ function chooseReservationPool (
   return chosen
 }
 
-function reservationPlanningCosts (
+function reservationOutput(candidate: ReservationCandidate): TableOutput {
+  const { transactionStatus: _transactionStatus, ...output } = candidate
+  return output
+}
+
+function reservationPlanningCosts(
   storage: StorageProvider,
-  basket: TableOutputBasket
-): { firstChangeCost: number, marginalInputFee: number } {
+  _basket: TableOutputBasket
+): { firstChangeCost: number; marginalInputFee: number } {
   const satsPerKb = validateStorageFeeModel(storage.feeModel).value ?? 0
   const minimumSpendSize = transactionSize([107], [25])
-  const minimumSpendFee = Math.ceil(minimumSpendSize * satsPerKb / 1000)
+  const minimumSpendFee = Math.ceil((minimumSpendSize * satsPerKb) / 1000)
   const dustFloor = Math.max(1, minimumSpendFee * 2)
   const marginalInputSize = transactionSize([107], []) - transactionSize([], [])
   const marginalOutputSize = transactionSize([], [25]) - transactionSize([], [])
-  const desiredFirstChange = Math.max(
-    dustFloor,
-    Math.max(1, Math.round(basket.minimumDesiredUTXOValue / 4))
-  )
+  // Reserving inputs is compulsory-funding work, not pool shaping. Requiring
+  // the preferred liquidity value here could consume reservation capacity or
+  // reject a batch solely to manufacture optional change.
+  const desiredFirstChange = dustFloor
   return {
-    firstChangeCost: desiredFirstChange + Math.ceil(marginalOutputSize * satsPerKb / 1000),
-    marginalInputFee: Math.ceil(marginalInputSize * satsPerKb / 1000)
+    firstChangeCost: desiredFirstChange + Math.ceil((marginalOutputSize * satsPerKb) / 1000),
+    marginalInputFee: Math.ceil((marginalInputSize * satsPerKb) / 1000)
   }
 }
 
-async function reserveOutputs (
+async function reserveOutputs(
   storage: StorageProvider,
   batch: TableActionBatch,
   outputs: TableOutput[],
@@ -308,35 +334,38 @@ async function reserveOutputs (
       if (output.txid == null) throw new WERR_INVALID_OPERATION('action batch output is missing its txid')
       return { txid: output.txid, vout: output.vout }
     })
-    const current = await storage.findOutputsByOutpointsForUpdate(
-      batch.userId,
-      outpoints,
-      transaction
-    )
+    const current = await storage.findOutputsByOutpointsForUpdate(batch.userId, outpoints, transaction)
     for (const output of unique) {
       const stored = output.txid == null ? undefined : current[`${output.txid}.${output.vout}`]
       if (stored == null || !stored.spendable || stored.spentBy != null) {
         throw new WERR_INVALID_OPERATION('one or more action batch outputs are no longer spendable')
       }
     }
-    const conflicts = await storage.findReservedActionBatchOutputIds(unique.map(output => output.outputId), transaction)
-    if (conflicts.length > 0) throw new WERR_INVALID_OPERATION('one or more action batch outputs were concurrently reserved')
-    await storage.reserveActionBatchOutputs(unique.map(output => ({
-      actionBatchId: batch.actionBatchId,
-      outputId: output.outputId,
-      created_at: now,
-      updated_at: now
-    })), transaction)
+    const conflicts = await storage.findReservedActionBatchOutputIds(
+      unique.map(output => output.outputId),
+      transaction
+    )
+    if (conflicts.length > 0)
+      throw new WERR_INVALID_OPERATION('one or more action batch outputs were concurrently reserved')
+    await storage.reserveActionBatchOutputs(
+      unique.map(output => ({
+        actionBatchId: batch.actionBatchId,
+        outputId: output.outputId,
+        created_at: now,
+        updated_at: now
+      })),
+      transaction
+    )
   }
   if (trx != null) await reserve(trx)
   else await storage.transaction(reserve)
 }
 
-async function makeFundingResult (
+async function makeFundingResult(
   storage: StorageProvider,
   args: Validation.ValidCreateActionArgs,
   outputs: TableOutput[]
-): Promise<{ outputs: ActionBatchFundingOutput[], beef?: Uint8Array }> {
+): Promise<{ outputs: ActionBatchFundingOutput[]; beef?: Uint8Array }> {
   const beef = new Beef()
   const result: ActionBatchFundingOutput[] = []
   for (const output of outputs) {
@@ -346,17 +375,19 @@ async function makeFundingResult (
       copy.sourceTransaction = await storage.getRawTxOfKnownValidTransaction(output.txid)
     }
     if (output.txid != null && beef.findTxid(output.txid) == null) {
-      beef.mergeBeef(await storage.getBeefForTransaction(output.txid, {
-        knownTxids: args.options.knownTxids,
-        ignoreServices: true
-      }))
+      beef.mergeBeef(
+        await storage.getBeefForTransaction(output.txid, {
+          knownTxids: args.options.knownTxids,
+          ignoreServices: true
+        })
+      )
     }
     result.push(copy)
   }
   return { outputs: result, beef: beef.toUint8Array() }
 }
 
-function newBatch (userId: number, batchId: string): TableActionBatch {
+function newBatch(userId: number, batchId: string): TableActionBatch {
   const now = new Date()
   return {
     actionBatchId: 0,
@@ -370,61 +401,63 @@ function newBatch (userId: number, batchId: string): TableActionBatch {
   }
 }
 
-export async function beginActionBatch (
+export async function beginActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   args: BeginActionBatchArgs
 ): Promise<BeginActionBatchResult> {
   const userId = verifyId(auth.userId)
   await cleanupExpiredActionBatches(storage)
-  if (await storage.findActionBatch(userId, args.batchId) != null) {
+  if ((await storage.findActionBatch(userId, args.batchId)) != null) {
     throw new WERR_INVALID_PARAMETER('batchId', 'unique')
   }
   const outputScriptLengths = args.firstActionOutputScriptLengths
-  if (outputScriptLengths != null && (
-    outputScriptLengths.length !== args.firstAction.outputs.length ||
-    outputScriptLengths.some(length => !Number.isSafeInteger(length) || length < 0) ||
-    args.firstAction.outputs.some((output, index) =>
-      output.lockingScript.length > 0 &&
-      output.lockingScript.length / 2 !== outputScriptLengths[index]
-    )
-  )) {
+  if (
+    outputScriptLengths != null &&
+    (outputScriptLengths.length !== args.firstAction.outputs.length ||
+      outputScriptLengths.some(length => !Number.isSafeInteger(length) || length < 0) ||
+      args.firstAction.outputs.some(
+        (output, index) =>
+          output.lockingScript.length > 0 && output.lockingScript.length / 2 !== outputScriptLengths[index]
+      ))
+  ) {
     throw new WERR_INVALID_PARAMETER(
       'firstActionOutputScriptLengths',
       'valid byte lengths aligned with firstAction outputs'
     )
   }
   const changeBasket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
-  const explicit = await resolveExplicitOutputs(
-    storage,
-    userId,
-    args.firstAction,
-    outputScriptLengths != null
-  )
+  const explicit = await resolveExplicitOutputs(storage, userId, args.firstAction, outputScriptLengths != null)
   const noSendChange = await resolveNoSendChangeOutputs(storage, userId, args.firstAction)
   const fixedOutputIds = new Set([...explicit.outputs, ...noSendChange.outputs].map(output => output.outputId))
-  const available = (await storage.findAvailableManagedChangeInputs(
-    userId, changeBasket.basketId, !args.firstAction.isDelayed
-  )).filter(output => !fixedOutputIds.has(output.outputId))
+  const availableOutputs = (
+    await storage.findAvailableManagedChangeInputs(userId, changeBasket.basketId, false)
+  ).filter(output => !fixedOutputIds.has(output.outputId))
+  const availableStatuses = await storage.findTransactionStatusesByIds(
+    userId,
+    availableOutputs.map(output => output.transactionId)
+  )
+  const available: ReservationCandidate[] = availableOutputs.map(output => ({
+    ...output,
+    // An orphaned/missing status is never promoted ahead of known settled
+    // ancestry. Retain it only in the final last-resort reservation tier.
+    transactionStatus: availableStatuses.get(output.transactionId) ?? 'sending'
+  }))
   const target = estimateFirstActionTarget(
     storage,
     args.firstAction,
     explicit.inputSatoshis + noSendChange.inputSatoshis,
     outputScriptLengths
   )
-  const fixedOutputs = [...new Map(
-    [...explicit.outputs, ...noSendChange.outputs].map(output => [output.outputId, output])
-  ).values()]
+  const fixedOutputs = [
+    ...new Map([...explicit.outputs, ...noSendChange.outputs].map(output => [output.outputId, output])).values()
+  ]
   const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
   if (maxReservedOutputs >= 0 && fixedOutputs.length > maxReservedOutputs) {
-    throw new WERR_INVALID_PARAMETER(
-      'firstAction',
-      `no more than ${maxReservedOutputs} persisted inputs`
-    )
+    throw new WERR_INVALID_PARAMETER('firstAction', `no more than ${maxReservedOutputs} persisted inputs`)
   }
-  const initialCapacity = maxReservedOutputs < 0
-    ? INITIAL_RESERVATION_LIMIT
-    : Math.min(INITIAL_RESERVATION_LIMIT, maxReservedOutputs)
+  const initialCapacity =
+    maxReservedOutputs < 0 ? INITIAL_RESERVATION_LIMIT : Math.min(INITIAL_RESERVATION_LIMIT, maxReservedOutputs)
   const requiredCapacity = Math.max(0, initialCapacity - fixedOutputs.length)
   const funding = chooseReservationPool(
     available,
@@ -434,14 +467,15 @@ export async function beginActionBatch (
     false,
     reservationPlanningCosts(storage, changeBasket)
   )
+  const fundingOutputs = funding.map(reservationOutput)
   const batch = newBatch(userId, args.batchId)
   await storage.transaction(async trx => {
     await storage.insertActionBatch(batch, trx)
-    await reserveOutputs(storage, batch, [...fixedOutputs, ...funding], trx)
+    await reserveOutputs(storage, batch, [...fixedOutputs, ...fundingOutputs], trx)
   })
   let fundingResult: Awaited<ReturnType<typeof makeFundingResult>>
   try {
-    fundingResult = await makeFundingResult(storage, args.firstAction, [...funding, ...fixedOutputs])
+    fundingResult = await makeFundingResult(storage, args.firstAction, [...fundingOutputs, ...fixedOutputs])
   } catch (error) {
     await storage.transaction(async trx => await releaseBatchState(storage, batch, 'aborted', trx))
     throw error
@@ -455,21 +489,29 @@ export async function beginActionBatch (
     feeModel: validateStorageFeeModel(storage.feeModel),
     commissionSatoshis: storage.commissionSatoshis,
     commissionPubKeyHex: storage.commissionPubKeyHex,
-    availableChangeCount: available.length,
-    reservedOutputs: fundingResult.outputs.filter(output => funding.some(candidate => candidate.outputId === output.outputId)),
+    availableChangeCount: available.filter(
+      output => output.satoshis >= Math.max(1, changeBasket.minimumDesiredUTXOValue)
+    ).length,
+    managedChangePolicy: {
+      maxOutputsPerAction: storage.managedChangePolicy.maxOutputsPerAction,
+      migrationInputsPerAction: storage.managedChangePolicy.migrationInputsPerAction
+    },
+    reservedOutputs: fundingResult.outputs.filter(output =>
+      fundingOutputs.some(candidate => candidate.outputId === output.outputId)
+    ),
     explicitOutputs: fundingResult.outputs.filter(output => explicitIds.has(output.outputId)),
     inputBeef: fundingResult.beef
   }
 }
 
-function requireLiveBatch (batch: TableActionBatch | undefined, batchId?: string): TableActionBatch {
+function requireLiveBatch(batch: TableActionBatch | undefined, batchId?: string): TableActionBatch {
   const state = actionBatchErrorState(batch)
   if (state != null) throw new WERR_ACTION_BATCH_STATE(state, batchId ?? batch?.batchId)
   if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', batchId)
   return batch
 }
 
-export async function extendActionBatch (
+export async function extendActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   args: ExtendActionBatchArgs
@@ -486,27 +528,30 @@ export async function extendActionBatch (
     throw new WERR_INVALID_PARAMETER('targetSatoshis', 'non-negative safe integer')
   }
   const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
-  if ((maxReservedOutputs >= 0 && args.explicitOutpoints.length > maxReservedOutputs) ||
+  if (
+    (maxReservedOutputs >= 0 && args.explicitOutpoints.length > maxReservedOutputs) ||
     new Set(args.explicitOutpoints.map(outpoint => `${outpoint.txid}.${outpoint.vout}`)).size !==
       args.explicitOutpoints.length ||
-    args.explicitOutpoints.some(outpoint => !isValidOutpoint(outpoint))) {
+    args.explicitOutpoints.some(outpoint => !isValidOutpoint(outpoint))
+  ) {
     throw new WERR_INVALID_PARAMETER(
       'explicitOutpoints',
       `at most ${maxReservedOutputs < 0 ? 'the configured request capacity' : maxReservedOutputs} valid outpoints`
     )
   }
-  const remainingCapacity = maxReservedOutputs < 0
-    ? Number.MAX_SAFE_INTEGER
-    : maxReservedOutputs - alreadyReserved.length
+  const remainingCapacity =
+    maxReservedOutputs < 0 ? Number.MAX_SAFE_INTEGER : maxReservedOutputs - alreadyReserved.length
   if (remainingCapacity <= 0 && (args.requestedOutputs > 0 || args.explicitOutpoints.length > 0)) {
-    throw new WERR_INVALID_OPERATION(
-      `action batch already holds the maximum of ${maxReservedOutputs} outputs`
-    )
+    throw new WERR_INVALID_OPERATION(`action batch already holds the maximum of ${maxReservedOutputs} outputs`)
   }
   const explicitByOutpoint = await storage.findOutputsByOutpoints(userId, args.explicitOutpoints)
-  const explicit = [...new Map(Object.values(explicitByOutpoint)
-    .filter(output => !alreadyReserved.includes(output.outputId))
-    .map(output => [output.outputId, output])).values()]
+  const explicit = [
+    ...new Map(
+      Object.values(explicitByOutpoint)
+        .filter(output => !alreadyReserved.includes(output.outputId))
+        .map(output => [output.outputId, output])
+    ).values()
+  ]
   if (explicit.length > remainingCapacity) {
     throw new WERR_INVALID_PARAMETER(
       'explicitOutpoints',
@@ -514,8 +559,17 @@ export async function extendActionBatch (
     )
   }
   const explicitIds = new Set(explicit.map(output => output.outputId))
-  const available = (await storage.findAvailableManagedChangeInputs(userId, basket.basketId, false))
-    .filter(output => !explicitIds.has(output.outputId))
+  const availableOutputs = (await storage.findAvailableManagedChangeInputs(userId, basket.basketId, false)).filter(
+    output => !explicitIds.has(output.outputId)
+  )
+  const availableStatuses = await storage.findTransactionStatusesByIds(
+    userId,
+    availableOutputs.map(output => output.transactionId)
+  )
+  const available: ReservationCandidate[] = availableOutputs.map(output => ({
+    ...output,
+    transactionStatus: availableStatuses.get(output.transactionId) ?? 'sending'
+  }))
   const requestedCount = Math.min(
     args.requestedOutputs,
     ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS,
@@ -529,53 +583,63 @@ export async function extendActionBatch (
     true,
     reservationPlanningCosts(storage, basket)
   )
+  const fundingOutputs = funding.map(reservationOutput)
   const fundingShape = argsToFundingShape(args.includeSourceTransactions)
-  const fundingResult = await makeFundingResult(storage, fundingShape, [...funding, ...explicit])
-  const expiresAt = new Date(Math.min(
-    batch.hardExpiresAt.getTime(),
-    Date.now() + ACTION_BATCH_LEASE_MS
-  ))
+  const fundingResult = await makeFundingResult(storage, fundingShape, [...fundingOutputs, ...explicit])
+  const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
   await storage.transaction(async trx => {
-    const current = requireLiveBatch(
-      await storage.findActionBatchForUpdate(userId, args.batchId, trx),
-      args.batchId
-    )
-    const additions = [...new Map(
-      [...funding, ...explicit].map(output => [output.outputId, output])
-    ).values()]
+    const current = requireLiveBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx), args.batchId)
+    const additions = [...new Map([...fundingOutputs, ...explicit].map(output => [output.outputId, output])).values()]
     const currentReserved = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
     const newAdditions = additions.filter(output => !currentReserved.has(output.outputId))
     if (maxReservedOutputs >= 0 && currentReserved.size + newAdditions.length > maxReservedOutputs) {
-      throw new WERR_INVALID_OPERATION(
-        `action batch cannot reserve more than ${maxReservedOutputs} outputs`
-      )
+      throw new WERR_INVALID_OPERATION(`action batch cannot reserve more than ${maxReservedOutputs} outputs`)
     }
     await reserveOutputs(storage, current, newAdditions, trx)
     await storage.updateActionBatch(current.actionBatchId, { expiresAt }, trx)
   })
   return {
     expiresAt: expiresAt.toISOString(),
-    reservedOutputs: fundingResult.outputs.filter(output => funding.some(candidate => candidate.outputId === output.outputId)),
-    explicitOutputs: fundingResult.outputs.filter(output => explicit.some(candidate => candidate.outputId === output.outputId)),
+    reservedOutputs: fundingResult.outputs.filter(output =>
+      fundingOutputs.some(candidate => candidate.outputId === output.outputId)
+    ),
+    explicitOutputs: fundingResult.outputs.filter(output =>
+      explicit.some(candidate => candidate.outputId === output.outputId)
+    ),
     inputBeef: fundingResult.beef
   }
 }
 
-function argsToFundingShape (includeSourceTransactions: boolean): Validation.ValidCreateActionArgs {
+function argsToFundingShape(includeSourceTransactions: boolean): Validation.ValidCreateActionArgs {
   return {
-    inputs: [], outputs: [], labels: [], description: 'action batch extension', version: 1, lockTime: 0,
+    inputs: [],
+    outputs: [],
+    labels: [],
+    description: 'action batch extension',
+    version: 1,
+    lockTime: 0,
     options: {
-      acceptDelayedBroadcast: true, returnTXIDOnly: false, noSend: true, sendWith: [], signAndProcess: true,
-      knownTxids: [], noSendChange: [], randomizeOutputs: true
+      acceptDelayedBroadcast: true,
+      returnTXIDOnly: false,
+      noSend: true,
+      sendWith: [],
+      signAndProcess: true,
+      knownTxids: [],
+      noSendChange: [],
+      randomizeOutputs: true
     },
-    isSendWith: false, isNewTx: true, isRemixChange: false, isNoSend: true, isDelayed: true,
+    isSendWith: false,
+    isNewTx: true,
+    isRemixChange: false,
+    isNoSend: true,
+    isDelayed: true,
     isTestWerrReviewActions: false,
     isSignAction: includeSourceTransactions,
     includeAllSourceTransactions: includeSourceTransactions
   }
 }
 
-export async function renewActionBatch (
+export async function renewActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   batchId: string
@@ -589,12 +653,14 @@ export async function renewActionBatch (
   })
 }
 
-function validateResumeOutpoints (storage: StorageProvider, args: ResumeActionBatchArgs): void {
+function validateResumeOutpoints(storage: StorageProvider, args: ResumeActionBatchArgs): void {
   const unique = new Set(args.outpoints.map(outpoint => `${outpoint.txid}.${outpoint.vout}`))
   const maxReservedOutputs = storage.actionBatchMaxReservedOutputs
-  if ((maxReservedOutputs >= 0 && args.outpoints.length > maxReservedOutputs) ||
+  if (
+    (maxReservedOutputs >= 0 && args.outpoints.length > maxReservedOutputs) ||
     unique.size !== args.outpoints.length ||
-    args.outpoints.some(outpoint => !isValidOutpoint(outpoint))) {
+    args.outpoints.some(outpoint => !isValidOutpoint(outpoint))
+  ) {
     throw new WERR_INVALID_PARAMETER(
       'outpoints',
       `at most ${maxReservedOutputs < 0 ? 'the configured request capacity' : maxReservedOutputs} unique valid outpoints`
@@ -607,7 +673,7 @@ function validateResumeOutpoints (storage: StorageProvider, args: ResumeActionBa
  * workspace. This is deliberately explicit: another action may not become a
  * member merely because it happens to use the same Wallet instance.
  */
-export async function resumeActionBatch (
+export async function resumeActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   args: ResumeActionBatchArgs
@@ -623,15 +689,15 @@ export async function resumeActionBatch (
     }
     if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', args.batchId)
 
-    const expiresAt = new Date(Math.min(
-      batch.hardExpiresAt.getTime(),
-      Date.now() + ACTION_BATCH_LEASE_MS
-    ))
+    const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
     if (state == null) {
       const reserved = new Set(await storage.findActionBatchOutputIds(batch.actionBatchId, trx))
       const current = await storage.findOutputsByOutpointsForUpdate(userId, args.outpoints, trx)
-      if (Object.values(current).some(output => !reserved.has(output.outputId)) ||
-        Object.keys(current).length !== args.outpoints.length || reserved.size !== args.outpoints.length) {
+      if (
+        Object.values(current).some(output => !reserved.has(output.outputId)) ||
+        Object.keys(current).length !== args.outpoints.length ||
+        reserved.size !== args.outpoints.length
+      ) {
         throw new WERR_ACTION_BATCH_STATE('conflicted', args.batchId)
       }
       await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
@@ -651,24 +717,31 @@ export async function resumeActionBatch (
     )
     if (conflicts.length > 0) throw new WERR_ACTION_BATCH_STATE('conflicted', args.batchId)
     const now = new Date()
-    await storage.reserveActionBatchOutputs(exactOutputs.map(output => ({
-      actionBatchId: batch.actionBatchId,
-      outputId: output.outputId,
-      created_at: now,
-      updated_at: now
-    })), trx)
-    await storage.updateActionBatch(batch.actionBatchId, {
-      status: 'active',
-      expiresAt,
-      manifest: undefined,
-      manifestDigest: undefined,
-      uploadDigests: undefined
-    }, trx)
+    await storage.reserveActionBatchOutputs(
+      exactOutputs.map(output => ({
+        actionBatchId: batch.actionBatchId,
+        outputId: output.outputId,
+        created_at: now,
+        updated_at: now
+      })),
+      trx
+    )
+    await storage.updateActionBatch(
+      batch.actionBatchId,
+      {
+        status: 'active',
+        expiresAt,
+        manifest: undefined,
+        manifestDigest: undefined,
+        uploadDigests: undefined
+      },
+      trx
+    )
     return { expiresAt: expiresAt.toISOString() }
   })
 }
 
-async function reacquireManifestInputs (
+async function reacquireManifestInputs(
   storage: StorageProvider,
   userId: number,
   batch: TableActionBatch,
@@ -679,13 +752,21 @@ async function reacquireManifestInputs (
     throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
   }
   const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
-  const outpoints = [...new Map(validated.actions.flatMap(({ action }) => action.plan.inputs)
-    .filter(input => !stagedTxids.has(input.sourceTxid))
-    .map(input => [`${input.sourceTxid}.${input.sourceVout}`, {
-      txid: input.sourceTxid,
-      vout: input.sourceVout,
-      providedBy: input.providedBy
-    }])).values()]
+  const outpoints = [
+    ...new Map(
+      validated.actions
+        .flatMap(({ action }) => action.plan.inputs)
+        .filter(input => !stagedTxids.has(input.sourceTxid))
+        .map(input => [
+          `${input.sourceTxid}.${input.sourceVout}`,
+          {
+            txid: input.sourceTxid,
+            vout: input.sourceVout,
+            providedBy: input.providedBy
+          }
+        ])
+    ).values()
+  ]
 
   const stored = await storage.findOutputsByOutpointsForUpdate(userId, outpoints, trx)
   await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
@@ -704,30 +785,40 @@ async function reacquireManifestInputs (
     }
     outputs.push(output)
   }
-  const conflicts = await storage.findReservedActionBatchOutputIds(outputs.map(output => output.outputId), trx)
+  const conflicts = await storage.findReservedActionBatchOutputIds(
+    outputs.map(output => output.outputId),
+    trx
+  )
   if (conflicts.length > 0) {
     throw new WERR_INVALID_OPERATION('one or more expired action batch inputs were reserved elsewhere')
   }
   const now = new Date()
-  await storage.reserveActionBatchOutputs(outputs.map(output => ({
-    actionBatchId: batch.actionBatchId,
-    outputId: output.outputId,
-    created_at: now,
-    updated_at: now
-  })), trx)
-  await storage.updateActionBatch(batch.actionBatchId, {
-    status: 'active',
-    expiresAt: new Date(Math.min(batch.hardExpiresAt.getTime(), now.getTime() + ACTION_BATCH_LEASE_MS))
-  }, trx)
+  await storage.reserveActionBatchOutputs(
+    outputs.map(output => ({
+      actionBatchId: batch.actionBatchId,
+      outputId: output.outputId,
+      created_at: now,
+      updated_at: now
+    })),
+    trx
+  )
+  await storage.updateActionBatch(
+    batch.actionBatchId,
+    {
+      status: 'active',
+      expiresAt: new Date(Math.min(batch.hardExpiresAt.getTime(), now.getTime() + ACTION_BATCH_LEASE_MS))
+    },
+    trx
+  )
 }
 
-function transactionStatuses (action: ActionBatchCommitAction): { tx: TransactionStatus, req: ProvenTxReqStatus } {
+function transactionStatuses(action: ActionBatchCommitAction): { tx: TransactionStatus; req: ProvenTxReqStatus } {
   if (action.metadata.isNoSend) return { tx: 'nosend', req: 'nosend' }
   if (action.metadata.isDelayed) return { tx: 'unprocessed', req: 'unsent' }
   return { tx: 'unprocessed', req: 'unprocessed' }
 }
 
-async function persistLabels (
+async function persistLabels(
   storage: StorageProvider,
   transactionId: number,
   labels: string[],
@@ -741,7 +832,7 @@ async function persistLabels (
   }
 }
 
-function outputBasketId (
+function outputBasketId(
   isChange: boolean,
   basket: string | undefined,
   baskets: Record<string, TableOutputBasket>
@@ -750,7 +841,7 @@ function outputBasketId (
   return basket == null ? undefined : baskets[basket].basketId
 }
 
-async function persistOutputTags (
+async function persistOutputTags(
   storage: StorageProvider,
   outputId: number,
   tagNames: string[],
@@ -763,7 +854,7 @@ async function persistOutputTags (
   }
 }
 
-async function persistOutputCommission (
+async function persistOutputCommission(
   storage: StorageProvider,
   row: TableOutput,
   action: ActionBatchCommitAction,
@@ -787,7 +878,7 @@ async function persistOutputCommission (
   await storage.insertCommission(commission, trx)
 }
 
-async function persistOutputs (
+async function persistOutputs(
   storage: StorageProvider,
   userId: number,
   transactionId: number,
@@ -802,12 +893,14 @@ async function persistOutputs (
   for (const planned of action.plan.outputs) {
     const output = tx.outputs[planned.vout]
     const isChange = planned.providedBy === 'storage' && planned.purpose === 'change'
-    const isCommission = planned.providedBy === 'storage' &&
+    const isCommission =
+      planned.providedBy === 'storage' &&
       (planned.purpose === 'storage-commission' || planned.purpose === 'service-charge')
     const offset = offsets.outputs[planned.vout]
-    const lockingScript = offset.length <= storage.getSettings().maxOutputScript || isCommission
-      ? output.lockingScript.toBinary()
-      : undefined
+    const lockingScript =
+      offset.length <= storage.getSettings().maxOutputScript || isCommission
+        ? output.lockingScript.toBinary()
+        : undefined
     const now = new Date()
     const row: TableOutput = {
       outputId: 0,
@@ -840,7 +933,7 @@ async function persistOutputs (
   return rows
 }
 
-async function persistAction (
+async function persistAction(
   ...[
     storage,
     userId,
@@ -896,51 +989,44 @@ async function persistAction (
     let output = stagedByOutpoint.get(outpoint)
     output ??= storedByOutpoint[outpoint]
     if (output == null) continue
-    if (output.spentBy != null || !output.spendable) throw new WERR_INVALID_OPERATION(`input ${outpoint} is no longer spendable`)
+    if (output.spentBy != null || !output.spendable)
+      throw new WERR_INVALID_OPERATION(`input ${outpoint} is no longer spendable`)
     if (!stagedByOutpoint.has(outpoint) && !reservedOutputIds.has(output.outputId)) {
       throw new WERR_INVALID_OPERATION(`input ${outpoint} was not reserved by this action batch`)
     }
-    await storage.updateOutput(output.outputId, {
-      spendable: false,
-      spentBy: transaction.transactionId,
-      spendingDescription: action.metadata.inputs[input.vin]?.inputDescription
-    }, trx)
+    await storage.updateOutput(
+      output.outputId,
+      {
+        spendable: false,
+        spentBy: transaction.transactionId,
+        spendingDescription: action.metadata.inputs[input.vin]?.inputDescription
+      },
+      trx
+    )
     output.spendable = false
     output.spentBy = transaction.transactionId
   }
 
-  const outputRows = await persistOutputs(
-    storage,
-    userId,
-    transaction.transactionId,
-    validated,
-    baskets,
-    tags,
-    trx
-  )
+  const outputRows = await persistOutputs(storage, userId, transaction.transactionId, validated, baskets, tags, trx)
   for (const output of outputRows) stagedByOutpoint.set(`${action.txid}.${output.vout}`, output)
 
-  const req = EntityProvenTxReq.fromTxid(
-    action.txid,
-    rawTx,
-    validated.externalInputBeef
-  )
+  const req = EntityProvenTxReq.fromTxid(action.txid, rawTx, validated.externalInputBeef)
   req.status = statuses.req
   req.addNotifyTransactionId(transaction.transactionId)
   return await req.insertOrMerge(storage, trx)
 }
 
-async function persistManifestAtomically (
+async function persistManifestAtomically(
   storage: StorageProvider,
   userId: number,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
-  validated: { actions: ValidatedBatchAction[], dependencyBeef: Uint8Array, beef: Beef }
+  validated: { actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array; beef: Beef }
 ): Promise<{
-    batch: TableActionBatch
-    alreadyCommitted: boolean
-    share?: GetReqsAndBeefResult
-  }> {
+  batch: TableActionBatch
+  alreadyCommitted: boolean
+  share?: GetReqsAndBeefResult
+}> {
   return await storage.transaction(async trx => {
     const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
     if (current == null) throw new WERR_ACTION_BATCH_STATE('missing', batch.batchId)
@@ -965,39 +1051,34 @@ async function persistManifestAtomically (
     }
     const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
     const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
-    const inputOutpoints = [...new Map(validated.actions.flatMap(({ action }) => action.plan.inputs)
-      .filter(input => !stagedTxids.has(input.sourceTxid))
-      .map(input => [`${input.sourceTxid}.${input.sourceVout}`, {
-        txid: input.sourceTxid,
-        vout: input.sourceVout
-      }])).values()]
-    const storedByOutpoint = await storage.findOutputsByOutpointsForUpdate(
-      userId,
-      inputOutpoints,
-      trx
-    )
+    const inputOutpoints = [
+      ...new Map(
+        validated.actions
+          .flatMap(({ action }) => action.plan.inputs)
+          .filter(input => !stagedTxids.has(input.sourceTxid))
+          .map(input => [
+            `${input.sourceTxid}.${input.sourceVout}`,
+            {
+              txid: input.sourceTxid,
+              vout: input.sourceVout
+            }
+          ])
+      ).values()
+    ]
+    const storedByOutpoint = await storage.findOutputsByOutpointsForUpdate(userId, inputOutpoints, trx)
     const allBasketNames = validated.actions.flatMap(({ action }) =>
-      action.plan.outputs.flatMap(output => output.basket == null ? [] : [output.basket])
+      action.plan.outputs.flatMap(output => (output.basket == null ? [] : [output.basket]))
     )
-    if (validated.actions.some(({ action }) =>
-      action.plan.outputs.some(output => output.purpose === 'change')
-    )) allBasketNames.push('default')
-    const baskets = await storage.findOrInsertOutputBasketsBulk(
-      userId,
-      [...new Set(allBasketNames)],
-      trx
-    )
+    if (validated.actions.some(({ action }) => action.plan.outputs.some(output => output.purpose === 'change')))
+      allBasketNames.push('default')
+    const baskets = await storage.findOrInsertOutputBasketsBulk(userId, [...new Set(allBasketNames)], trx)
     const tags = await storage.findOrInsertOutputTagsBulk(
       userId,
-      [...new Set(validated.actions.flatMap(({ action }) =>
-        action.plan.outputs.flatMap(output => output.tags)
-      ))],
+      [...new Set(validated.actions.flatMap(({ action }) => action.plan.outputs.flatMap(output => output.tags)))],
       trx
     )
     const labelNames = [...new Set(validated.actions.flatMap(({ action }) => action.metadata.labels))]
-    const labelsByName = new Map(Object.entries(
-      await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)
-    ))
+    const labelsByName = new Map(Object.entries(await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)))
     const stagedByOutpoint = new Map<string, TableOutput>()
     const reqsByTxid = new Map<string, EntityProvenTxReq>()
     for (const action of validated.actions) {
@@ -1017,10 +1098,14 @@ async function persistManifestAtomically (
     }
     await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
     await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)
-    await storage.updateActionBatch(current.actionBatchId, {
-      status: 'committed',
-      manifestDigest: manifest.digest
-    }, trx)
+    await storage.updateActionBatch(
+      current.actionBatchId,
+      {
+        status: 'committed',
+        manifestDigest: manifest.digest
+      },
+      trx
+    )
     current.status = 'committed'
     current.manifestDigest = manifest.digest
     const details = manifest.sendWith.map(txid => {
@@ -1049,7 +1134,7 @@ async function persistManifestAtomically (
   })
 }
 
-async function completeCommittedBatch (
+async function completeCommittedBatch(
   storage: StorageProvider,
   userId: number,
   batch: TableActionBatch,
@@ -1069,13 +1154,7 @@ async function completeCommittedBatch (
       log: saved.log
     }
   }
-  const { swr, ndr } = await shareReqsWithWorld(
-    storage,
-    userId,
-    manifest.sendWith,
-    manifest.isDelayed,
-    share
-  )
+  const { swr, ndr } = await shareReqsWithWorld(storage, userId, manifest.sendWith, manifest.isDelayed, share)
   const result: CommitActionBatchResult = {
     batchId: manifest.batchId,
     manifestDigest: manifest.digest,
@@ -1088,7 +1167,7 @@ async function completeCommittedBatch (
   return result
 }
 
-async function commitActionBatchOnce (
+async function commitActionBatchOnce(
   storage: StorageProvider,
   userId: number,
   manifest: ActionBatchManifest
@@ -1096,7 +1175,8 @@ async function commitActionBatchOnce (
   const batch = await storage.findActionBatch(userId, manifest.batchId)
   if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', manifest.batchId)
   if (batch.status === 'committed') {
-    if (batch.manifestDigest !== manifest.digest) throw new WERR_INVALID_OPERATION('batch committed with another manifest')
+    if (batch.manifestDigest !== manifest.digest)
+      throw new WERR_INVALID_OPERATION('batch committed with another manifest')
     return await completeCommittedBatch(storage, userId, batch, manifest, true)
   }
   if (batch.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', manifest.batchId)
@@ -1127,7 +1207,7 @@ interface ActiveBatchCommit {
 
 const activeBatchCommits = new WeakMap<StorageProvider, Map<string, ActiveBatchCommit>>()
 
-export async function commitActionBatch (
+export async function commitActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   manifest: ActionBatchManifest
@@ -1149,13 +1229,14 @@ export async function commitActionBatch (
     }
     return await active.promise
   }
-  const promise = commitActionBatchOnce(storage, userId, manifest)
-    .finally(() => { commits?.delete(key) })
+  const promise = commitActionBatchOnce(storage, userId, manifest).finally(() => {
+    commits?.delete(key)
+  })
   commits.set(key, { digest: manifest.digest, promise })
   return await promise
 }
 
-export async function commitActionBatchByDigest (
+export async function commitActionBatchByDigest(
   storage: StorageProvider,
   auth: AuthId,
   args: CommitActionBatchByDigestArgs
@@ -1166,14 +1247,18 @@ export async function commitActionBatchByDigest (
     throw new WERR_INVALID_OPERATION('prepared action batch manifest was not found')
   }
   const manifest = JSON.parse(batch.manifest) as ActionBatchManifest
-  if (manifest.format !== 2 || manifest.batchId !== args.batchId || manifest.digest !== args.digest ||
-    !verifyActionBatchManifestDigest(manifest)) {
+  if (
+    manifest.format !== 2 ||
+    manifest.batchId !== args.batchId ||
+    manifest.digest !== args.digest ||
+    !verifyActionBatchManifestDigest(manifest)
+  ) {
     throw new WERR_INVALID_OPERATION('prepared action batch manifest is invalid')
   }
   return await commitActionBatch(storage, auth, manifest)
 }
 
-export async function abortActionBatch (
+export async function abortActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   batchId: string

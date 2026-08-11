@@ -83,18 +83,18 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      expect(rl1.log).toBe(`transactions:3
-  txid:30bdac0f5c6491f130820517802ff57e20e5a50c08b5c65e6976627fb82ae930 version:1 lockTime:0 sats:-4 status:nosend 
+      expect(rl1.log).toBe(`transactions:2
+  txid:0bf6453843c29d6df1b9e0549587c696d2aaa8340f18be056c4711d853b8369a version:1 lockTime:0 sats:-4 status:nosend${' '}
      outgoing:true desc:'Funding transaction' labels:['funding transaction for createaction','this is an extra long test 
      label that should be truncated at 80 chars when it is...']
   inputs: 1
-    0: sourceTXID:a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26.2 sats:913 
-       lock:(50)76a914f7238871139f4926cbd592a03a737981e558245d88ac 
-       unlock:(214)483045022100cfef1f6d781af99a1de14efd6f24f2a14234a26097012f27121eb36f4e330c1d0220... seq:4294967295
+    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995${' '}
+       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac${' '}
+       unlock:(214)483045022100f8ea8705c0c6253032481f194f5ccb43d3b751650c51d603b7ee19f910abf37b0220... seq:4294967295
   outputs: 2
     0: sats:3 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' 
        desc:'Funding Output' tags:['funding transaction output','test tag']
-    1: sats:909 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+    1: sats:991 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
     }
   })
 
@@ -174,20 +174,20 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      expect(rl1.log).toBe(`transactions:3
-  txid:b3848f2cabf5887ec679ca60347a29f6ecad425fda738700265c2f9d22c18ab5 version:1 lockTime:0 sats:-12 status:nosend 
+      expect(rl1.log).toBe(`transactions:2
+  txid:a03789724ac10b32365b84cbcbee24ec5ef0a1a8d465112603a4e2219f4c952e version:1 lockTime:0 sats:-12 status:nosend${' '}
      outgoing:true desc:'Funding transaction with multiple outputs' labels:['funding transaction for createaction','this 
      is the extra label']
   inputs: 1
-    0: sourceTXID:a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26.2 sats:913 
-       lock:(50)76a914f7238871139f4926cbd592a03a737981e558245d88ac 
-       unlock:(212)473044022079020cc8ea5ee6b3610806286e41567147d4b4b07d16bc1341311e00ce7647b0022034... seq:4294967295
+    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995${' '}
+       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac${' '}
+       unlock:(214)483045022100ffa66a41bf8c3f7ffc9699c067ab0248ba7de3835afd48739af4107d1d8dea030220... seq:4294967295
   outputs: 3
     0: sats:5 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' 
        desc:'Funding output' tags:['funding transaction for createaction','test tag']
     1: sats:6 lock:(48)76a914fedcba9876543210fedcba9876543210fedcba88ac index:1 spendable:true basket:'extra basket' 
        desc:'Extra Output' tags:['extra transaction output','extra test tag']
-    2: sats:901 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:2 spendable:true basket:'default'`)
+    2: sats:983 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:2 spendable:true basket:'default'`)
     }
   })
 
@@ -330,16 +330,16 @@ describe('createAction2 nosend transactions', () => {
         .replace(/,'reference \n\s+[0-9a-f]+'/, '')
         .replace(/[ \t]+$/gm, '')
       expect(stableLog).toBe(`transactions:2
-  txid:471c15662c437ce5765d467eabfdd67adfea5c569b2da520b2d8a09fbb868370 version:1 lockTime:0 sats:-5 status:nosend
+  txid:d6e2d06ad92ba812da1bc89e493f620f95234d4947997b396cd4a50ba9ef4c1b version:1 lockTime:0 sats:-5 status:nosend
      outgoing:true desc:'Check knownTxids and returnTXIDOnly' labels:['custom options test']
   inputs: 1
-    0: sourceTXID:63a159d422ba29db52b728b05c30cd181300984bf1ea4dc2354f1d1870fbe016.1 sats:996
-       lock:(50)76a914fbc3ac7e96362b6f0d7bedc217568901488e5ad788ac
-       unlock:(212)47304402201d0f8f1802d33937454e372bc6978ddbad22c95a4442a6c14b23d06f60f96f7d02205e... seq:4294967295
+    0: sourceTXID:63dc5420a3e898dd16163c48ed6c338e6a59832b7c3bf9d9d227725ca5bffdf1.17 sats:1001
+       lock:(50)76a9141a32c1c07dd4f9c632ce6b43dd28c8b27a37d81588ac
+       unlock:(214)4830450221009b7a811b7aa80ec95cffba3f37c8689e61d5939a9ae7eb8a969cb5f4ff7436040220... seq:4294967295
   outputs: 2
     0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly
        false test'
-    1: sats:991 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+    1: sats:996 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
     }
   })
 

@@ -74,6 +74,10 @@ import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNA
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './methods/managedChange'
 import { selectCanonicalChange } from './methods/actionPlanning'
+import {
+  DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+  isLegacyManagedChangeBasketDefault
+} from './methods/managedChangePolicy'
 
 export interface StorageIdbOptions extends StorageProviderOptions {}
 
@@ -121,6 +125,7 @@ async function scanCursor<T extends { updated_at: Date }>(
 export class StorageIdb extends StorageProvider implements WalletStorageProvider {
   dbName: string
   db?: IDBPDatabase<StorageIdbSchema>
+  private managedChangeDefaultsMigrated = false
 
   constructor(options: StorageIdbOptions) {
     super(options)
@@ -164,6 +169,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async verifyDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     if (this.db != null) return this.db
     this.db = await this.initDB(storageName, storageIdentityKey)
+    await this.migrateManagedChangeDefaults(this.db)
     this._settings = (await this.db.getAll('settings'))[0]
     this.whenLastAccess = new Date()
     return this.db
@@ -207,7 +213,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 3, {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 4, {
       upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
@@ -237,6 +243,25 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       }
     })
     return db
+  }
+
+  private async migrateManagedChangeDefaults (db: IDBPDatabase<StorageIdbSchema>): Promise<void> {
+    if (this.managedChangeDefaultsMigrated) return
+    const trx = db.transaction('output_baskets', 'readwrite')
+    let cursor = await trx.store.openCursor()
+    while (cursor != null) {
+      const basket = cursor.value
+      if (isLegacyManagedChangeBasketDefault(basket)) {
+        await cursor.update({
+          ...basket,
+          minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+          updated_at: new Date()
+        })
+      }
+      cursor = await cursor.continue()
+    }
+    await trx.done
+    this.managedChangeDefaultsMigrated = true
   }
 
   //
@@ -1225,6 +1250,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     this.db = undefined
     this._settings = undefined
+    this.managedChangeDefaultsMigrated = false
   }
 
   allStores: string[] = [

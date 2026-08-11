@@ -108,7 +108,7 @@ describe('StorageClient tests', () => {
     }
 
     const cr = await wallet.createAction(createArgs)
-    expect(cr.txid).toBe('4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+    expect(cr.txid).toBe('14f715d111f2ddc1783fad0213509a6626fd73fa55f58b4132d3438e26fd2c5d')
     const sent = await wallet.createAction({
       description: 'commit repeatable action batch',
       options: { sendWith: [cr.txid!] }
@@ -382,6 +382,12 @@ describe('StorageClient tests', () => {
     })
     expect(spendable.filter(output => output.satoshis < 100).length).toBeGreaterThanOrEqual(50)
     expect(spendable.some(output => output.satoshis >= 1000)).toBe(true)
+    // Keep this as an extension-path fixture rather than allowing one large
+    // seed to carry the whole workspace. The remaining fragmented pool is
+    // still sufficient, but must be acquired progressively over Wallet Wire.
+    for (const output of spendable.filter(output => output.satoshis >= 1000)) {
+      await server.setup.activeStorage.updateOutput(output.outputId, { spendable: false })
+    }
 
     client.wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
     const extend = jest.spyOn(client.storage, 'extendActionBatch')
@@ -407,7 +413,7 @@ describe('StorageClient tests', () => {
       description: 'commit remote fragmented batch sequence',
       options: { sendWith: txids, acceptDelayedBroadcast: false }
     })
-    expect(committed.sendWithResults).toHaveLength(16)
+    expect(committed.sendWithResults).toHaveLength(txids.length)
   })
 })
 

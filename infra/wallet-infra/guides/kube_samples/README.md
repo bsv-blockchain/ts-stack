@@ -39,6 +39,16 @@ multi-user provider should set
 leader, and supply matching Arcade URL/callback-token configuration when SSE
 status delivery is enabled.
 
+The ConfigMap retains the standard managed-change work budgets: at most eight
+new change outputs and four fee-positive legacy migration inputs per action,
+with exact pending-plan comparison beginning above 16 settled inputs. These are
+CPU, fee, transaction-size, and BEEF-ancestry work bounds rather than balance
+or spendability limits. Operators can tune the three
+`WALLET_STORAGE_MANAGED_CHANGE_*` values after measuring action input counts,
+serialized BEEF size, fee, and broadcast outcomes. Every setting accepts `-1`,
+but an unlimited value can make one request consume substantially more CPU and
+memory and should not be combined casually with increased API concurrency.
+
 The optional monitor operator service is disabled in this sample. If enabled,
 run it only on the singleton `all` or `monitor` pod, mount its private key and
 allowed identity keys from the secret manager, use a port distinct from the

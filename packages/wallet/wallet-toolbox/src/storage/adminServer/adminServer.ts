@@ -322,18 +322,25 @@ async function queryReqReview (context: MonitorAdminContext, query: Record<strin
   }
 }
 
-function normalizeReviewMode (value: unknown): 'all' | 'change' {
-  return value === 'change' ? 'change' : 'all'
+export type UtxoReviewMode = 'all' | 'change' | 'liquidity'
+
+export function normalizeReviewMode (value: unknown): UtxoReviewMode {
+  if (value === 'change' || value === 'liquidity') return value
+  return 'all'
 }
 
 function getReviewUtxosTask (context: MonitorAdminContext): {
   reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change') => Promise<string>
+  reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
 } {
   const monitor = context.daemon.setup?.monitor
   if (monitor == null) throw new Error('Monitor is not available.')
 
   const task = [...monitor._tasks, ...monitor._otherTasks].find(item => item.name === 'ReviewUtxos') as
-    | { reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change') => Promise<string> }
+    | {
+      reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change') => Promise<string>
+      reviewManagedChangeByIdentityKey?: (identityKey: string) => Promise<string>
+    }
     | undefined
 
   if ((task?.reviewByIdentityKey) == null) {
@@ -341,7 +348,8 @@ function getReviewUtxosTask (context: MonitorAdminContext): {
   }
 
   return {
-    reviewByIdentityKey: task.reviewByIdentityKey.bind(task)
+    reviewByIdentityKey: task.reviewByIdentityKey.bind(task),
+    reviewManagedChangeByIdentityKey: task.reviewManagedChangeByIdentityKey?.bind(task)
   }
 }
 
@@ -422,12 +430,15 @@ async function reviewUtxosByIdentityKey (
   context: MonitorAdminContext,
   requestedBy: string,
   userInput: string,
-  mode: 'all' | 'change'
+  mode: UtxoReviewMode
 ) {
   const storage = await getStorage(context)
   const task = getReviewUtxosTask(context)
   const identityKey = await resolveIdentityKeyFromInput(context, userInput)
-  const log = await task.reviewByIdentityKey(identityKey, mode)
+  const log = mode === 'liquidity'
+    ? await task.reviewManagedChangeByIdentityKey?.(identityKey)
+    : await task.reviewByIdentityKey(identityKey, mode)
+  if (log == null) throw new Error('Managed-change liquidity review is not available in this monitor runtime.')
 
   await storage.insertMonitorEvent({
     created_at: new Date(),

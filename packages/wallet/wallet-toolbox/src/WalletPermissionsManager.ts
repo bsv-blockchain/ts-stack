@@ -3065,10 +3065,10 @@ export class WalletPermissionsManager implements WalletInterface {
           }
         ],
         options: {
-          // The application request resumes as soon as this durable grant
-          // returns. Finish broadcasting first so the grant transaction's
-          // funding change is reusable by that request.
-          acceptDelayedBroadcast: false
+          // Permission persistence must not inherit network-broadcast latency.
+          // The managed-change planner keeps the queued output available as a
+          // last-resort funding source for the resumed request.
+          acceptDelayedBroadcast: true
         }
       },
       this.adminOriginator
@@ -3167,14 +3167,11 @@ export class WalletPermissionsManager implements WalletInterface {
         8,
         async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
       )
-      // Grouped callers resume immediately after this method returns. Delayed
-      // broadcast can leave the grant transaction's funding inputs reserved
-      // while the resumed request is being planned.
       await this.createAction(
         {
           description: `Grant ${built.length} permissions`,
           outputs: built.map(b => b.output),
-          options: { acceptDelayedBroadcast: false }
+          options: { acceptDelayedBroadcast: true }
         },
         this.adminOriginator
       )

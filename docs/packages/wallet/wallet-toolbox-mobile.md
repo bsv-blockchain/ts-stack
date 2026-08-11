@@ -25,11 +25,12 @@ can resume a soft-expired workspace using its exact persisted inputs.
 `endpointURL` after production bundlers minify class names, so backup selection
 and make-primary flows remain stable.
 Immediate mobile actions can chain wallet-managed change from a delayed parent;
-the child broadcast includes the parent BEEF so background delivery cannot
-temporarily strand the wallet balance.
-Durable permission grants finish broadcasting their internal token transaction
-before the waiting mobile request resumes, keeping the grant's funding change
-available to the following wallet action.
+the wallet first exhausts completed and unproven liquidity and uses exact
+serialized-cost comparison only for pathological settled plans. Pending funds
+are never hidden. New and migrated wallets progressively prefer useful
+5,000-satoshi liquidity units without gathering inputs merely to create them.
+Durable permission tokens retain delayed broadcast so permission approval does
+not inherit network latency.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
 Mobile authentication accepts one verified matching UMP token as an existing

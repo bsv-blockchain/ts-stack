@@ -7,14 +7,20 @@ import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './manage
 export type ManagedChangeInputCandidate = Pick<
   TableOutput,
   'outputId' | 'transactionId' | 'satoshis' | 'txid' | 'vout'
->
+> & {
+  /**
+   * Additive ancestry metadata. Older custom providers may omit it; the
+   * planner resolves a missing value through the provider's transaction API.
+   */
+  transactionStatus?: TransactionStatus
+}
 
 /**
  * Return the exact set of wallet-managed outputs currently eligible for
  * automatic funding. Keeping this predicate shared prevents the planner,
  * allocator, action-batch reservations, and availability count from drifting.
  */
-export async function availableManagedChange (
+export async function availableManagedChange(
   storage: StorageProvider,
   userId: number,
   basketId: number,
@@ -23,13 +29,20 @@ export async function availableManagedChange (
 ): Promise<TableOutput[]> {
   const statuses: TransactionStatus[] = ['completed', 'unproven']
   if (!excludeSending) statuses.push('sending')
-  const outputs = (await storage.findOutputs({
-    partial: { userId, basketId, spendable: true, ...managedChangeOutputFields },
-    txStatus: statuses,
-    noScript: true,
-    trx
-  })).filter(isAutoSpendableChangeOutput)
+  const outputs = (
+    await storage.findOutputs({
+      partial: { userId, basketId, spendable: true, ...managedChangeOutputFields },
+      txStatus: statuses,
+      noScript: true,
+      trx
+    })
+  ).filter(isAutoSpendableChangeOutput)
   if (outputs.length === 0) return outputs
-  const reserved = new Set(await storage.findReservedActionBatchOutputIds(outputs.map(output => output.outputId), trx))
+  const reserved = new Set(
+    await storage.findReservedActionBatchOutputIds(
+      outputs.map(output => output.outputId),
+      trx
+    )
+  )
   return outputs.filter(output => !reserved.has(output.outputId))
 }

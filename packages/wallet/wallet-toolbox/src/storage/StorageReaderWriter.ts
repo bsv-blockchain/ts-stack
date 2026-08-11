@@ -28,6 +28,10 @@ import {
   TrxToken
 } from '../sdk/WalletStorage.interfaces'
 import { createSyncMap } from './schema/entities/EntityBase'
+import {
+  DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+  DEFAULT_MANAGED_CHANGE_TARGET_UTXOS
+} from './methods/managedChangePolicy'
 
 export abstract class StorageReaderWriter extends StorageReader {
   abstract dropAllData (): Promise<void>
@@ -173,8 +177,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           basketId: 0,
           userId: user.userId,
           name: 'default',
-          numberOfDesiredUTXOs: 144,
-          minimumDesiredUTXOValue: 32,
+          numberOfDesiredUTXOs: DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
+          minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
           isDeleted: false
         })
         break

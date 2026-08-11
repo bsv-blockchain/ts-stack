@@ -1,4 +1,4 @@
-export function renderAdminPage (): string {
+export function renderAdminPage(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -388,6 +388,7 @@ export function renderAdminPage (): string {
             <select id="utxoMode">
               <option value="all">all invalid UTXOs</option>
               <option value="change">change only</option>
+              <option value="liquidity">managed-change liquidity (read only)</option>
             </select>
           </label>
           <button id="runUtxoReview" class="primary">Run Review</button>
@@ -892,7 +893,8 @@ export function renderAdminPage (): string {
         throw new Error('Enter or select an identityKey first.')
       }
       byId('utxoIdentityKey').value = identityKey
-      const mode = byId('utxoMode').value === 'change' ? 'change' : 'all'
+      const selectedMode = byId('utxoMode').value
+      const mode = selectedMode === 'change' || selectedMode === 'liquidity' ? selectedMode : 'all'
       setButtonPending('runUtxoReview', true, 'Running...')
       byId('utxoReviewLog').textContent = 'Running review...'
       try {
