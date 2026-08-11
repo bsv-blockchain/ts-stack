@@ -177,6 +177,64 @@ describe('TaskReviewUtxos', () => {
     expect(result.log).toContain('continue at offset 2')
   })
 
+  test('4b paged review returns structured diagnostics when the identity is unknown', async () => {
+    const sp = { findUsers: jest.fn().mockResolvedValue([]) }
+    const monitor = {
+      storage: {
+        runAsStorageProvider: jest.fn(async (scope: (provider: any) => Promise<any>) => await scope(sp))
+      }
+    }
+    const task = new TaskReviewUtxos(monitor as any)
+
+    const result = await task.reviewPageByIdentityKey('missing-key')
+
+    expect(result).toMatchObject({
+      found: false,
+      identityKey: 'missing-key',
+      mode: 'all',
+      release: false,
+      offset: 0,
+      pageLimit: 20,
+      sourceScanned: 0,
+      complete: true,
+      checked: 0,
+      unknown: 0
+    })
+    expect(result.log).toBe('identityKey missing-key was not found\n')
+  })
+
+  test('4c paged change review safely returns an empty page when the default basket is absent', async () => {
+    const user = makeUser(1, 'key-1')
+    const sp = {
+      findUsers: jest.fn().mockResolvedValue([user]),
+      findOutputBaskets: jest.fn().mockResolvedValue([]),
+      findOutputs: jest.fn()
+    }
+    const monitor = {
+      storage: {
+        runAsStorageProvider: jest.fn(async (scope: (provider: any) => Promise<any>) => await scope(sp))
+      }
+    }
+    const task = new TaskReviewUtxos(monitor as any)
+
+    const result = await task.reviewPageByIdentityKey('key-1', 'change', true, 999.9, -5.2)
+
+    expect(sp.findOutputBaskets).toHaveBeenCalledWith({ partial: { userId: 1, name: 'default' } })
+    expect(sp.findOutputs).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      found: true,
+      userId: 1,
+      mode: 'change',
+      release: true,
+      offset: 0,
+      pageLimit: 250,
+      sourceScanned: 0,
+      complete: true,
+      released: 0
+    })
+    expect(result.log).toBe('userId 1: no invalid utxos found, key-1\n')
+  })
+
   test('5 trigger and runTask are stubbed out', async () => {
     const m = makeMonitor([], {})
     const task = new TaskReviewUtxos(m.monitor as any)

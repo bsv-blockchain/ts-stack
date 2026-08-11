@@ -173,4 +173,132 @@ describe('TaskReconcilePendingTransactions', () => {
     expect(harness.sp.updateTransactionsStatus).not.toHaveBeenCalled()
     expect(harness.sp.updateOutput).not.toHaveBeenCalled()
   })
+
+  test('honors the quick trigger interval and disables a zero interval', () => {
+    const harness = makeMonitor([], { name: 'arcade', status: 'success', results: [] })
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 100, 60, 50)
+
+    expect(task.trigger(49)).toEqual({ run: false })
+    expect(task.trigger(51)).toEqual({ run: true })
+    task.triggerNextMsecs = 0
+    expect(task.trigger(1_000)).toEqual({ run: false })
+  })
+
+  test('resumes after the checkpointed request and advances a fully reconciled page', async () => {
+    const first = makeReq()
+    const second = { ...makeReq(), provenTxReqId: 2, txid: '44'.repeat(32) }
+    const harness = makeMonitor([first, second], {
+      name: 'arcade',
+      status: 'success',
+      results: [
+        {
+          txid: second.txid,
+          status: 'unknown',
+          terminal: true,
+          inputConflict: false
+        }
+      ]
+    })
+    harness.sp.findMonitorEvents.mockResolvedValue([
+      {
+        details: JSON.stringify({ resumeOffset: 0, expectedProvenTxReqId: first.provenTxReqId })
+      }
+    ])
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 1, 60, 50)
+
+    const result = JSON.parse(await task.runTask())
+
+    expect(harness.findProvenTxReqs).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ paged: { limit: 1, offset: 0 } })
+    )
+    expect(harness.findProvenTxReqs).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ paged: { limit: 1, offset: 1 } })
+    )
+    expect(result).toMatchObject({ reconciled: 1, retained: 0, cycleComplete: false, resumeOffset: 1 })
+    expect(task.triggerNextMsecs).toBe(50)
+    expect(harness.monitor.callOnTransactionStatusChanged).toHaveBeenCalledWith(second.txid, 'REJECTED')
+  })
+
+  test('restarts a moved checkpoint and retains the page with an expected request id', async () => {
+    const first = makeReq()
+    const second = { ...makeReq(), provenTxReqId: 2, txid: '44'.repeat(32) }
+    const harness = makeMonitor([first, second], {
+      name: 'arcade',
+      status: 'error',
+      results: []
+    })
+    harness.sp.findMonitorEvents.mockResolvedValue([
+      {
+        details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 999 })
+      }
+    ])
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 1, 60, 50)
+
+    const result = JSON.parse(await task.runTask())
+
+    expect(harness.findProvenTxReqs).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ paged: { limit: 1, offset: 0 } })
+    )
+    expect(result).toMatchObject({ reconciled: 0, retained: 1, resumeOffset: 0, expectedProvenTxReqId: 1 })
+  })
+
+  test('ignores unusable checkpoints and stops at the latest completed cycle', async () => {
+    const req = makeReq()
+    const harness = makeMonitor([req], { name: 'arcade', status: 'success', results: [] })
+    harness.sp.findMonitorEvents.mockResolvedValue([
+      {},
+      { details: '{not-json' },
+      { details: JSON.stringify({ reviewed: 1 }) },
+      { details: JSON.stringify({ cycleComplete: true, resumeOffset: 50 }) }
+    ])
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 100, 60, 50)
+
+    await task.runTask()
+
+    expect(harness.findProvenTxReqs).toHaveBeenCalledWith(
+      expect.objectContaining({ paged: { limit: 100, offset: 0 } })
+    )
+  })
+
+  test('skips provider polling for a fresh request and uses the normal interval after a short page', async () => {
+    const req = makeReq('unmined', new Date('2026-08-11T11:30:01.000Z'))
+    const harness = makeMonitor([req], { name: 'arcade', status: 'success', results: [] })
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 2, 60, 50)
+
+    const result = JSON.parse(await task.runTask())
+
+    expect(harness.monitor.services.getStatusForTxids).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ reviewed: 0, reconciled: 0, retained: 1, cycleComplete: true })
+    expect(task.triggerNextMsecs).toBe(1_000)
+  })
+
+  test('handles a terminal verdict with no notified transactions or stale local inputs', async () => {
+    const req = { ...makeReq(), notify: JSON.stringify({}) }
+    const harness = makeMonitor([req], {
+      name: 'arcade',
+      status: 'success',
+      results: [
+        {
+          txid: req.txid,
+          status: 'unknown',
+          terminal: true,
+          inputConflict: true,
+          providerStatus: 'DOUBLE_SPEND_ATTEMPTED',
+          statusCode: 409,
+          description: 'a competing transaction won'
+        }
+      ]
+    })
+    harness.sp.findOutputsByOutpoints.mockResolvedValue({})
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 0, 100, 60, 1)
+
+    await task.runTask()
+
+    expect(harness.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    expect(harness.sp.updateOutput).not.toHaveBeenCalled()
+    expect(harness.monitor.callOnTransactionStatusChanged).toHaveBeenCalledWith(req.txid, 'DOUBLE_SPEND_ATTEMPTED')
+  })
 })
