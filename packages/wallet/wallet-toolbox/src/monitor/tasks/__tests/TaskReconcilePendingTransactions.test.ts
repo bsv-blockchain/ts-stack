@@ -180,6 +180,32 @@ describe('TaskReconcilePendingTransactions', () => {
     expect(harness.sp.updateOutput).not.toHaveBeenCalled()
   })
 
+  test('rechecks immutable creation age under lock before applying a terminal verdict', async () => {
+    const req = makeReq()
+    const harness = makeMonitor([req], {
+      name: 'arcade',
+      status: 'success',
+      results: [
+        {
+          txid: req.txid,
+          status: 'unknown',
+          depth: undefined,
+          terminal: true,
+          inputConflict: false,
+          providerStatus: 'REJECTED'
+        }
+      ]
+    })
+    harness.current.get(1).created_at = new Date('2026-08-11T11:30:01.000Z')
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 0, 100, 60, 1)
+
+    await task.runTask()
+
+    expect(harness.current.get(1).status).toBe('unmined')
+    expect(harness.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    expect(harness.monitor.callOnTransactionStatusChanged).not.toHaveBeenCalled()
+  })
+
   test('honors the quick trigger interval and disables a zero interval', () => {
     const harness = makeMonitor([], { name: 'arcade', status: 'success', results: [] })
     const task = new TaskReconcilePendingTransactions(harness.monitor as any, 1_000, 100, 60, 50)
@@ -333,7 +359,7 @@ describe('TaskReconcilePendingTransactions', () => {
         ...makeReq('invalid'),
         provenTxReqId: 2,
         txid: failedParentTxid,
-        status: 'invalid'
+        status: providerTerminal ? 'doubleSpend' : 'invalid'
       })
       harness.sp.findOutputsByOutpoints.mockResolvedValue({
         [`${failedParentTxid}.0`]: {
@@ -399,7 +425,6 @@ describe('TaskReconcilePendingTransactions', () => {
   test('handles a terminal verdict with no notified transactions or stale local inputs', async () => {
     const req = { ...makeReq(), notify: JSON.stringify({}) }
     const harness = makeMonitor([req], {
-      name: 'arcade',
       status: 'success',
       results: [
         {
@@ -421,5 +446,30 @@ describe('TaskReconcilePendingTransactions', () => {
     expect(harness.sp.updateTransactionsStatus).not.toHaveBeenCalled()
     expect(harness.sp.updateOutput).not.toHaveBeenCalled()
     expect(harness.monitor.callOnTransactionStatusChanged).toHaveBeenCalledWith(req.txid, 'DOUBLE_SPEND_ATTEMPTED')
+  })
+
+  test('records a failed local parent even when no matching parent output copy remains', async () => {
+    const failedParentTxid = 'aa'.repeat(32)
+    const rawTx = `0100000001${failedParentTxid}0000000000ffffffff0101000000000000000000000000`
+    const req = { ...makeReq(), rawTx: Utils.toArray(rawTx, 'hex') }
+    const harness = makeMonitor([req], {
+      name: 'arcade',
+      status: 'error',
+      results: []
+    })
+    harness.current.set(2, {
+      ...makeReq('invalid'),
+      provenTxReqId: 2,
+      txid: failedParentTxid,
+      status: 'invalid'
+    })
+    harness.sp.findOutputsByOutpoints.mockResolvedValue({})
+    const task = new TaskReconcilePendingTransactions(harness.monitor as any, 0, 100, 60, 1)
+
+    const result = JSON.parse(await task.runTask())
+
+    expect(harness.current.get(1).status).toBe('invalid')
+    expect(harness.sp.updateOutput).not.toHaveBeenCalled()
+    expect(result.reviewLog).toContain('LOCAL_PARENT_FAILED => invalid')
   })
 })
