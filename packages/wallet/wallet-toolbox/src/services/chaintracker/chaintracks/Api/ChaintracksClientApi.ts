@@ -38,6 +38,20 @@ export interface ChaintracksInfoApi {
   packages: ChaintracksPackageInfoApi[]
   /** Last observed source state. Additive and omitted by older services. */
   sources?: ChaintracksSourceStatusApi[]
+  /** Local bulk-header retrieval counters. Additive and omitted by older services. */
+  bulkData?: ChaintracksBulkDataStatsApi
+}
+
+/** @public */
+export interface ChaintracksBulkDataStatsApi {
+  memoryHits: number
+  storageHits: number
+  persistentCacheHits: number
+  persistentCacheMisses: number
+  persistentCacheRejects: number
+  coalescedLoads: number
+  downloads: number
+  downloadedBytes: number
 }
 
 /** @public */

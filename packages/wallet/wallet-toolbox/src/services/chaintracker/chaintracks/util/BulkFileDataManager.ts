@@ -4,7 +4,7 @@ import { BlockHeader, Chain, WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID
 import { Hash } from '@bsv/sdk'
 import { asArray, asString, asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
 import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from './BulkHeaderFile'
-import { isKnownValidBulkHeaderFile, validBulkHeaderFiles } from './validBulkHeaderFilesByFileHash'
+import { validBulkHeaderFiles } from './validBulkHeaderFilesByFileHash'
 import { HeightRange } from './HeightRange'
 import {
   addWork,
@@ -19,6 +19,7 @@ import { ChaintracksStorageBulkFileApi } from '../Api/ChaintracksStorageApi'
 import { ChaintracksFetch } from './ChaintracksFetch'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
 import { SingleWriterMultiReaderLock } from './SingleWriterMultiReaderLock'
+import type { BulkFileDataCacheApi, BulkFileDownloadBudgetApi } from '../Api/BulkFileDataCacheApi'
 
 export interface BulkFileDataManagerOptions {
   chain: Chain
@@ -26,6 +27,22 @@ export interface BulkFileDataManagerOptions {
   maxRetained?: number
   fetch?: ChaintracksFetchApi
   fromKnownSourceUrl?: string
+  /** Persistent cache consulted before any remote bulk-file download. */
+  cache?: BulkFileDataCacheApi
+  /** Optional process-local or shared reservation budget for remote bytes. */
+  downloadBudget?: BulkFileDownloadBudgetApi
+}
+
+/** @public */
+export interface BulkFileDataManagerStats {
+  memoryHits: number
+  storageHits: number
+  persistentCacheHits: number
+  persistentCacheMisses: number
+  persistentCacheRejects: number
+  coalescedLoads: number
+  downloads: number
+  downloadedBytes: number
 }
 
 /**
@@ -53,13 +70,26 @@ export class BulkFileDataManager {
   private bfds: BulkFileData[] = []
   private fileHashToIndex: Record<string, number> = {}
   private readonly lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
+  private readonly inFlightLoads = new Map<string, Promise<Uint8Array>>()
   private storage?: ChaintracksStorageBulkFileApi
+  private readonly stats: BulkFileDataManagerStats = {
+    memoryHits: 0,
+    storageHits: 0,
+    persistentCacheHits: 0,
+    persistentCacheMisses: 0,
+    persistentCacheRejects: 0,
+    coalescedLoads: 0,
+    downloads: 0,
+    downloadedBytes: 0
+  }
 
   readonly chain: Chain
   readonly maxPerFile: number
   readonly fetch?: ChaintracksFetchApi
   readonly maxRetained?: number
   readonly fromKnownSourceUrl?: string
+  readonly cache?: BulkFileDataCacheApi
+  readonly downloadBudget?: BulkFileDownloadBudgetApi
 
   constructor(options: BulkFileDataManagerOptions | Chain) {
     const resolvedOptions = typeof options === 'object' ? options : BulkFileDataManager.createDefaultOptions(options)
@@ -68,8 +98,14 @@ export class BulkFileDataManager {
     this.maxRetained = resolvedOptions.maxRetained
     this.fromKnownSourceUrl = resolvedOptions.fromKnownSourceUrl
     this.fetch = resolvedOptions.fetch
+    this.cache = resolvedOptions.cache
+    this.downloadBudget = resolvedOptions.downloadBudget
 
     this.deleteBulkFilesNoLock()
+  }
+
+  getStats(): BulkFileDataManagerStats {
+    return { ...this.stats }
   }
 
   async deleteBulkFiles(): Promise<void> {
@@ -85,7 +121,7 @@ export class BulkFileDataManager {
       const filtered = vbhfs.filter(f => f.sourceUrl === this.fromKnownSourceUrl)
       const files = selectBulkHeaderFiles(filtered, this.chain, this.maxPerFile)
       for (const file of files) {
-        this.add({ ...file, fileHash: file.fileHash!, mru: Date.now() })
+        this.add({ ...file, fileHash: file.fileHash!, validated: false, mru: Date.now() })
       }
     }
   }
@@ -215,10 +251,15 @@ export class BulkFileDataManager {
       const vbf: BulkFileData = await this.validateFileInfo(file)
       if (hbf != null) {
         // We have a matching file by firstHeight but count and fileHash differ
+        await this.ensureData(vbf)
         await this.update(vbf, hbf, r)
       } else if (isBdfIncremental(vbf) && lbf != null && isBdfIncremental(lbf)) {
         await this.mergeIncremental(lbf, vbf, r)
       } else {
+        // A storage-backed record must never be created with metadata only:
+        // subsequent reads prefer its fileId and correctly fail closed when
+        // data is absent. Validate and materialize it before insertion.
+        if (this.storage != null) await this.ensureData(vbf)
         const added = await this.add(vbf)
         r.inserted.push(added)
       }
@@ -360,18 +401,12 @@ export class BulkFileDataManager {
     if (offset > fileLength - 1) return undefined
     length = length || bfd.count * 80 - offset
     length = Math.min(length, fileLength - offset)
-    let data: Uint8Array | undefined
-    if (bfd.data != null) {
-      data = bfd.data.slice(offset, offset + length)
-    } else if (bfd.fileId && this.storage != null) {
-      data = await this.storage.getBulkFileData(bfd.fileId, offset, length)
-    }
-    if (data == null) {
-      await this.ensureData(bfd)
-      if (bfd.data != null) data = bfd.data.slice(offset, offset + length)
-    }
-    if (data == null) return undefined
-    return data
+    // Never serve a partial storage read before validating the complete
+    // immutable object. Metadata and advisory validation state may have crossed
+    // a storage boundary, and neither can establish the digest, linkage, or
+    // proof-of-work of an isolated 80-byte slice.
+    const data = await this.ensureData(bfd)
+    return data.slice(offset, offset + length)
   }
 
   async findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined> {
@@ -453,9 +488,17 @@ export class BulkFileDataManager {
       throw new WERR_INVALID_PARAMETER('data', 'defined when sourceUrl and fileId are undefined')
     }
 
-    const bfd: BulkFileData = { ...file, fileHash: file.fileHash, mru: Date.now() }
-
-    if (!bfd.validated) {
+    // `validated` may have crossed a storage or network boundary. Never trust
+    // that flag. Data supplied with the metadata is verified immediately;
+    // remotely or persistently backed data remains lazy and is verified by
+    // `loadAndValidateData` before its first use.
+    const bfd: BulkFileData = {
+      ...file,
+      fileHash: file.fileHash,
+      validated: false,
+      mru: Date.now()
+    }
+    if (bfd.data != null) {
       await this.validateBfdData(bfd, file.fileHash)
       bfd.validated = true
     }
@@ -478,9 +521,7 @@ export class BulkFileDataManager {
       throw new WERR_INVALID_PARAMETER('file.fileHash', `expected ${expectedFileHash} but got ${bfd.fileHash}`)
     }
 
-    if (!isKnownValidBulkHeaderFile(bfd)) {
-      this.validateBfdHeaders(bfd)
-    }
+    this.validateBfdHeaders(bfd)
   }
 
   private validateBfdHeaders(bfd: BulkFileData): void {
@@ -765,39 +806,96 @@ export class BulkFileDataManager {
    * @returns
    */
   private async ensureData(bfd: BulkFileData): Promise<Uint8Array> {
-    if (bfd.data != null) return bfd.data
+    if (bfd.data != null) {
+      this.stats.memoryHits++
+      bfd.mru = Date.now()
+      return bfd.data
+    }
 
+    const key = `${bfd.fileHash}:${bfd.fileName}`
+    const existing = this.inFlightLoads.get(key)
+    if (existing != null) {
+      this.stats.coalescedLoads++
+      const data = await existing
+      bfd.data = data
+      bfd.mru = Date.now()
+      this.ensureMaxRetained()
+      return data
+    }
+
+    const load = this.loadAndValidateData(bfd)
+    this.inFlightLoads.set(key, load)
+    try {
+      const data = await load
+      bfd.data = data
+      bfd.validated = true
+      bfd.mru = Date.now()
+      this.ensureMaxRetained()
+      return data
+    } finally {
+      if (this.inFlightLoads.get(key) === load) this.inFlightLoads.delete(key)
+    }
+  }
+
+  private async loadAndValidateData(bfd: BulkFileData): Promise<Uint8Array> {
     if (this.storage != null && bfd.fileId) {
-      bfd.data = await this.storage.getBulkFileData(bfd.fileId)
-      if (bfd.data == null) throw new WERR_INVALID_PARAMETER('fileId', `valid, data not found for fileId ${bfd.fileId}`)
-    }
-
-    if (bfd.data == null && this.fetch != null && bfd.sourceUrl) {
-      const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
-
-      try {
-        bfd.data = await this.fetch.download(url)
-      } catch (firstAttemptErr) {
-        // First download attempt failed (e.g. transient network error); retry once.
-        console.debug(`BulkFileDataManager: first download attempt failed for ${url}, retrying`, firstAttemptErr)
-        bfd.data = await this.fetch.download(url)
+      const stored = await this.storage.getBulkFileData(bfd.fileId)
+      if (stored == null) {
+        throw new WERR_INVALID_PARAMETER('fileId', `valid, data not found for fileId ${bfd.fileId}`)
       }
-      if (!bfd.data) throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
+      this.validateRetrievedData(bfd, stored)
+      this.stats.storageHits++
+      return stored
     }
 
-    if (bfd.data == null)
-      throw new WERR_INVALID_PARAMETER('data', `defined. Unable to retrieve data for ${bfd.fileName}`)
+    if (this.cache != null) {
+      const cached = await this.cache.get(bfd)
+      if (cached != null) {
+        try {
+          this.validateRetrievedData(bfd, cached)
+          this.stats.persistentCacheHits++
+          return cached
+        } catch (error) {
+          this.stats.persistentCacheRejects++
+          await this.cache.delete?.(bfd)
+          this.log(`Rejected corrupt bulk-header cache entry ${bfd.fileName}: ${String(error)}`)
+        }
+      } else {
+        this.stats.persistentCacheMisses++
+      }
+    }
 
-    bfd.mru = Date.now()
+    if (this.fetch != null && bfd.sourceUrl) {
+      const expectedBytes = bfd.count * 80
+      await this.downloadBudget?.consume(expectedBytes)
+      const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
+      const downloaded = await this.fetch.download(url, expectedBytes)
+      if (downloaded == null) {
+        throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
+      }
+      this.validateRetrievedData(bfd, downloaded)
+      this.stats.downloads++
+      this.stats.downloadedBytes += downloaded.length
+      await this.cache?.set(bfd, downloaded)
+      return downloaded
+    }
 
-    // Validate retrieved data.
-    const fileHash = asString(Hash.sha256(asArray(bfd.data)), 'base64')
+    throw new WERR_INVALID_PARAMETER('data', `defined. Unable to retrieve data for ${bfd.fileName}`)
+  }
+
+  private validateRetrievedData(bfd: BulkFileData, data: Uint8Array): void {
+    if (data.length !== bfd.count * 80) {
+      throw new WERR_INVALID_PARAMETER(
+        'file.data',
+        `bulk file ${bfd.fileName} data length ${data.length} does not match expected count ${bfd.count}`
+      )
+    }
+    const fileHash = asString(Hash.sha256(asArray(data)), 'base64')
     if (fileHash !== bfd.fileHash) {
       throw new WERR_INVALID_PARAMETER('fileHash', `a match for retrieved data for ${bfd.fileName}`)
     }
-
-    this.ensureMaxRetained()
-    return bfd.data
+    const candidate = { ...bfd, data }
+    this.validateBfdHeaders(candidate)
   }
 
   private ensureMaxRetained(): void {

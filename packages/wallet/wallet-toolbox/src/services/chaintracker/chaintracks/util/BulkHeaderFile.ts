@@ -51,7 +51,8 @@ export interface BulkHeaderFileInfo {
   data?: Uint8Array // optional, used for validation
 
   /**
-   * true iff these properties should be considered pre-validated, including a valid required fileHash of data (when not undefined).
+   * Advisory process-local validation state. Never trust this value after it
+   * crosses a network or storage boundary; revalidate the object bytes.
    */
   validated?: boolean
   /**
@@ -79,7 +80,7 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
   sourceUrl?: string
   validated?: boolean
 
-  constructor (info: BulkHeaderFileInfo) {
+  constructor(info: BulkHeaderFileInfo) {
     this.chain = info.chain
     this.count = info.count
     this.data = info.data
@@ -95,13 +96,13 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
     this.validated = info.validated
   }
 
-  abstract readDataFromFile (length: number, offset: number): Promise<Uint8Array | undefined>
+  abstract readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined>
 
-  get heightRange (): HeightRange {
+  get heightRange(): HeightRange {
     return new HeightRange(this.firstHeight, this.firstHeight + this.count - 1)
   }
 
-  async ensureData (): Promise<Uint8Array> {
+  async ensureData(): Promise<Uint8Array> {
     if (this.data == null) throw new WERR_INVALID_OPERATION('data is undefined and no ensureData() override')
     return this.data
   }
@@ -110,16 +111,16 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
    * Whenever reloading data from a backing store, validated fileHash must be re-verified
    * @returns the sha256 hash of the file's data as base64 string.
    */
-  async computeFileHash (): Promise<string> {
+  async computeFileHash(): Promise<string> {
     if (this.data == null) throw new WERR_INVALID_OPERATION('requires defined data')
     return asString(Hash.sha256(asArray(this.data)), 'base64')
   }
 
-  async releaseData (): Promise<void> {
+  async releaseData(): Promise<void> {
     this.data = undefined
   }
 
-  toCdnInfo (): BulkHeaderFileInfo {
+  toCdnInfo(): BulkHeaderFileInfo {
     return {
       count: this.count,
       fileHash: this.fileHash,
@@ -132,7 +133,7 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
     }
   }
 
-  toStorageInfo (): BulkHeaderFileInfo {
+  toStorageInfo(): BulkHeaderFileInfo {
     return {
       count: this.count,
       fileHash: this.fileHash,
@@ -151,7 +152,7 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
 }
 
 export class BulkHeaderFileFs extends BulkHeaderFile {
-  constructor (
+  constructor(
     info: BulkHeaderFileInfo,
     public fs: ChaintracksFsApi,
     public rootFolder: string
@@ -159,7 +160,7 @@ export class BulkHeaderFileFs extends BulkHeaderFile {
     super(info)
   }
 
-  override async readDataFromFile (length: number, offset: number): Promise<Uint8Array | undefined> {
+  override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> {
     if (this.data != null) {
       return this.data.slice(offset, offset + length)
     }
@@ -172,20 +173,22 @@ export class BulkHeaderFileFs extends BulkHeaderFile {
     }
   }
 
-  override async ensureData (): Promise<Uint8Array> {
+  override async ensureData(): Promise<Uint8Array> {
     if (this.data != null) return this.data
     this.data = await this.readDataFromFile(this.count * 80, 0)
     if (this.data == null) throw new WERR_INVALID_OPERATION(`failed to read data for ${this.fileName}`)
     if (this.validated) {
       const hash = await this.computeFileHash()
-      if (hash !== this.fileHash) { throw new WERR_INVALID_OPERATION(`BACKING FILE DATA CORRUPTION: invalid fileHash for ${this.fileName}`) }
+      if (hash !== this.fileHash) {
+        throw new WERR_INVALID_OPERATION(`BACKING FILE DATA CORRUPTION: invalid fileHash for ${this.fileName}`)
+      }
     }
     return this.data
   }
 }
 
 export class BulkHeaderFileStorage extends BulkHeaderFile {
-  constructor (
+  constructor(
     info: BulkHeaderFileInfo,
     public storage: ChaintracksStorageBase,
     public fetch?: ChaintracksFetchApi
@@ -193,21 +196,23 @@ export class BulkHeaderFileStorage extends BulkHeaderFile {
     super(info)
   }
 
-  override async readDataFromFile (length: number, offset: number): Promise<Uint8Array | undefined> {
+  override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> {
     return (await this.ensureData()).slice(offset, offset + length)
   }
 
-  override async ensureData (): Promise<Uint8Array> {
+  override async ensureData(): Promise<Uint8Array> {
     if (this.data != null) return this.data
-    if (!this.sourceUrl || (this.fetch == null)) {
+    if (!this.sourceUrl || this.fetch == null) {
       throw new WERR_INVALID_PARAMETER('sourceUrl and fetch', 'defined. Or data must be defined.')
     }
     const url = this.fetch.pathJoin(this.sourceUrl, this.fileName)
-    this.data = await this.fetch.download(url)
+    this.data = await this.fetch.download(url, this.count * 80)
     if (!this.data) throw new WERR_INVALID_OPERATION(`failed to download data from ${url}`)
     if (this.validated) {
       const hash = await this.computeFileHash()
-      if (hash !== this.fileHash) { throw new WERR_INVALID_OPERATION(`BACKING DOWNLOAD DATA CORRUPTION: invalid fileHash for ${this.fileName}`) }
+      if (hash !== this.fileHash) {
+        throw new WERR_INVALID_OPERATION(`BACKING DOWNLOAD DATA CORRUPTION: invalid fileHash for ${this.fileName}`)
+      }
     }
     return this.data
   }
@@ -236,7 +241,7 @@ export interface BulkHeaderFilesInfo {
 }
 
 export abstract class BulkHeaderFiles implements BulkHeaderFilesInfo {
-  constructor (
+  constructor(
     public rootFolder: string,
     public jsonFilename: string,
     public files: BulkHeaderFileInfo[],

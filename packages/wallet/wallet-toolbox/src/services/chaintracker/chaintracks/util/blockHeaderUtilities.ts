@@ -6,7 +6,6 @@ import { Chain } from '../../../../sdk/types'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
 import { BulkHeaderFileInfo } from './BulkHeaderFile'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
-import { isKnownValidBulkHeaderFile } from './validBulkHeaderFilesByFileHash'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 
@@ -46,7 +45,7 @@ export async function validateBulkFileData(
 
   if (vbf.data == null && vbf.sourceUrl && fetch != null) {
     const url = fetch.pathJoin(vbf.sourceUrl, vbf.fileName)
-    vbf.data = await fetch.download(url)
+    vbf.data = await fetch.download(url, vbf.count * 80)
   }
 
   if (vbf.data == null) throw new WERR_INVALID_OPERATION(`bulk file ${vbf.fileName} data is unavailable`)
@@ -67,13 +66,11 @@ export async function validateBulkFileData(
     throw new WERR_INVALID_PARAMETER('bf.fileHash', `expected ${bf.fileHash} but got ${vbf.fileHash}`)
   }
 
-  if (!isKnownValidBulkHeaderFile(vbf)) {
-    const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(vbf.data, prevHash, 0, undefined, prevChainWork)
-    vbf.lastHash = lastHeaderHash
-    vbf.lastChainWork = lastChainWork!
-    if (vbf.firstHeight === 0) {
-      validateGenesisHeader(vbf.data, vbf.chain!)
-    }
+  const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(vbf.data, prevHash, 0, undefined, prevChainWork)
+  vbf.lastHash = lastHeaderHash
+  vbf.lastChainWork = lastChainWork!
+  if (vbf.firstHeight === 0) {
+    validateGenesisHeader(vbf.data, vbf.chain!)
   }
   vbf.validated = true
 
@@ -117,6 +114,7 @@ export function validateBufferOfHeaders(
     }
     lastHeaderHash = asString(doubleSha256BE(header))
     validateAgainstDirtyHashes(lastHeaderHash)
+    validateConsensusProofOfWork(lastHeaderHash, h.bits)
     if (lastChainWork) {
       lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits))
     }
@@ -350,21 +348,65 @@ export function validateHeaderFormat(header: BlockHeader): void {
 }
 
 /**
- * Ensures that a header has a valid proof-of-work
- * Requires chain is 'main'
+ * Ensures that a header has a valid proof-of-work target and hash.
  *
  * @param header The header to validate
  *
  * @returns true if the header is valid
  */
-export function validateHeaderDifficulty(hash: Buffer, bits: number) {
+export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number) {
   const hashBN = new BigNumber(asArray(hash))
-
-  const target = convertBitsToTarget(bits)
+  const target = validateCompactTarget(bits)
 
   if (hashBN.lte(target)) return true
 
   throw new Error('Block hash is not less than specified target.')
+}
+
+const proofOfWorkExceptions = new Map([
+  // The historical STN genesis header is a network-defined bootstrap
+  // checkpoint whose hash does not satisfy its encoded target. No later
+  // header receives this exception.
+  ['6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594', 0x1d00ffff]
+])
+
+function validateConsensusProofOfWork(hash: string, bits: number): true {
+  if (proofOfWorkExceptions.get(hash) === bits) return true
+  validateHeaderDifficulty(asArray(hash, 'hex'), bits)
+  return true
+}
+
+function validateCompactTarget(bits: number): BigNumber {
+  if (!Number.isSafeInteger(bits) || bits < 0 || bits > 0xffffffff) {
+    throw new Error('Block target encoding is invalid.')
+  }
+  const size = bits >>> 24
+  const word = bits & 0x007fffff
+  const negative = word !== 0 && (bits & 0x00800000) !== 0
+  const overflow =
+    word !== 0 && (size > 34 || (word > 0xff && size > 33) || (word > 0xffff && size > 32))
+  if (word === 0 || negative || overflow) {
+    throw new Error('Block target encoding is invalid.')
+  }
+
+  const target = convertBitsToTarget(bits)
+  const proofOfWorkLimit = convertBitsToTarget(0x1d00ffff)
+  if (target.gt(proofOfWorkLimit)) {
+    throw new Error('Block target exceeds the proof-of-work limit.')
+  }
+  return target
+}
+
+/**
+ * Ensures that a structured header's computed hash satisfies its declared
+ * proof-of-work target.
+ *
+ * @param header Header whose format and hash have already been checked.
+ * @returns true if the header has valid proof-of-work.
+ * @publicbody
+ */
+export function validateHeaderProofOfWork(header: BlockHeader): true {
+  return validateConsensusProofOfWork(header.hash, header.bits)
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -51,6 +51,7 @@
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1",
     "pino": "^10.3.1"
   },
   "devDependencies": {

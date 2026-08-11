@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -64,7 +64,7 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.cjs,package.json,tsconfig*.json}\"",
     "lint": "oxlint src test benchmarks examples operator --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageKnex,Services,Setup,WalletPermissionsManager,WalletSettingsManager,sdk --entry-exports \"./out/src/sdk=WalletError|WERR_BAD_REQUEST|WERR_INTERNAL|WERR_INVALID_PARAMETER|WERR_UNAUTHORIZED\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageKnex,Services,Setup,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,BulkFileDataCacheFs,sdk --entry-exports \"./out/src/sdk=WalletError|WERR_BAD_REQUEST|WERR_INTERNAL|WERR_INVALID_PARAMETER|WERR_UNAUTHORIZED\"",
     "typecheck": "tsc --build --pretty false && tsc --project examples/tsconfig.json --pretty false && tsc --project operator/tsconfig.json --noEmit --pretty false",
     "build": "tsc --build",
     "prepublishOnly": "pnpm build",

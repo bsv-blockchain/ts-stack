@@ -4,10 +4,10 @@
  * RESTful API with path parameters matching go-chaintracks v2 API
  */
 
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import { Chaintracks } from '@bsv/wallet-toolbox'
 import { log } from './logger'
-import { parseHeaderRange } from './resourceLimits'
+import { parseHeaderHeight, parseHeaderRange } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -201,10 +201,14 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   })
 
   // GET /v2/header/height/:height - Get header by height
-  router.get('/header/height/:height', async (req: Request, res: Response) => {
+  router.get('/header/height/:height', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const height = Number.parseInt(firstParam(req.params.height) ?? '', 10)
-      if (Number.isNaN(height) || height < 0) {
+      if ((firstParam(req.params.height) ?? '').endsWith('.bin')) return next()
+      let height: number
+      try {
+        height = parseHeaderHeight(firstParam(req.params.height))
+      } catch (err) {
+        if (!(err instanceof RangeError)) throw err
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
       }
 
@@ -230,9 +234,10 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   })
 
   // GET /v2/header/hash/:hash - Get header by hash
-  router.get('/header/hash/:hash', async (req: Request, res: Response) => {
+  router.get('/header/hash/:hash', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const hash = firstParam(req.params.hash)
+      if ((hash ?? '').endsWith('.bin')) return next()
       if (!hash || !/^[a-fA-F0-9]{64}$/.test(hash)) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid hash parameter'))
       }
@@ -312,9 +317,12 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/height/:height.bin - Get header by height as 80-byte binary
   router.get('/header/height/:height.bin', async (req: Request, res: Response) => {
     try {
-      const heightStr = (firstParam(req.params.height) ?? '').replace('.bin', '')
-      const height = Number.parseInt(heightStr, 10)
-      if (Number.isNaN(height) || height < 0) {
+      const heightStr = (firstParam(req.params.height) ?? '').replace(/\.bin$/, '')
+      let height: number
+      try {
+        height = parseHeaderHeight(heightStr)
+      } catch (err) {
+        if (!(err instanceof RangeError)) throw err
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
       }
 

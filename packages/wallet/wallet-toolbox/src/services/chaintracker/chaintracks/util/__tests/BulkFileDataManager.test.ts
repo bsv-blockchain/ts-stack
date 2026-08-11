@@ -64,7 +64,7 @@ describe('BulkFileDataManager tests', () => {
     }
   })
 
-  async function test0Body (manager: BulkFileDataManager) {
+  async function test0Body(manager: BulkFileDataManager) {
     // Verify the default options and minimum expected files from default CDN
     expect(manager.chain).toBe(chain)
     expect(manager.maxPerFile).toBe(100000)
@@ -106,7 +106,7 @@ describe('BulkFileDataManager tests', () => {
     await storage.destroy()
   })
 
-  async function test1Body (manager: BulkFileDataManager, minCount: number) {
+  async function test1Body(manager: BulkFileDataManager, minCount: number) {
     // Verify header retrieval from different heights and data caching
     expect(countDatas(manager)).toBe(minCount)
     let h0 = await manager.findHeaderForHeightOrUndefined(0)
@@ -192,8 +192,8 @@ describe('BulkFileDataManager tests', () => {
     }
   })
 
-  async function test4Body (manager: BulkFileDataManager, maxCount: number) {
-    expect(countDatas(manager)).toBe(2)
+  async function test4Body(manager: BulkFileDataManager, maxCount: number, initialCount: number) {
+    expect(countDatas(manager)).toBe(initialCount)
     const range = await manager.getHeightRange()
     expect(range.maxHeight).toBe(349)
 
@@ -221,20 +221,20 @@ describe('BulkFileDataManager tests', () => {
   test('4 add two incremental chunks overwrite by CDN', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
 
-    await test4Body(manager, 3)
+    await test4Body(manager, 3, 0)
   })
 
   test('4a add two incremental chunks overwrite by CDN', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
     const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_4a', true)
 
-    await test4Body(manager, 2)
+    await test4Body(manager, 2, 2)
 
     await storage.destroy()
   })
 
-  async function test5Body (manager: BulkFileDataManager, maxCount: number) {
-    expect(countDatas(manager)).toBe(2)
+  async function test5Body(manager: BulkFileDataManager, maxCount: number, initialCount: number) {
+    expect(countDatas(manager)).toBe(initialCount)
     await updateFromLocalServer(manager, server379!)
     await manager.ReValidate()
     expect(countDatas(manager)).toBe(2)
@@ -255,14 +255,14 @@ describe('BulkFileDataManager tests', () => {
   test('5 add CDN incremental CDN incremental', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
 
-    await test5Body(manager, 3)
+    await test5Body(manager, 3, 0)
   })
 
   test('5a add CDN incremental CDN incremental', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
     const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_5a', true)
 
-    await test5Body(manager, 2)
+    await test5Body(manager, 2, 2)
 
     await storage.destroy()
   })
@@ -304,9 +304,9 @@ describe('BulkFileDataManager tests', () => {
     const incompleteFile = makeBulkFile(0, 99, 'incremental')
     incompleteFile.lastHash = undefined
     missingLastHashManager['bfds'] = [incompleteFile] as any
-    await expect(
-      missingLastHashManager.mergeIncrementalBlockHeaders(headers0_99.slice(99))
-    ).rejects.toThrow('lastHash is not defined for the last bulk file incremental')
+    await expect(missingLastHashManager.mergeIncrementalBlockHeaders(headers0_99.slice(99))).rejects.toThrow(
+      'lastHash is not defined for the last bulk file incremental'
+    )
   })
 
   test('7 validates last-file update transitions', async () => {
@@ -314,37 +314,33 @@ describe('BulkFileDataManager tests', () => {
     const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
     manager['bfds'] = [cdn] as any
 
-    await expect(
-      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental'), cdn as any)
-    ).rejects.toThrow('incremental file to update an existing incremental file')
+    await expect(manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental'), cdn as any)).rejects.toThrow(
+      'incremental file to update an existing incremental file'
+    )
 
     const incremental = makeBulkFile(0, 10, 'incremental')
     manager['bfds'] = [incremental] as any
     await expect(
-      manager['resolveUpdatePlan'](
-        makeBulkFile(0, 11, 'incremental') as any,
-        incremental as any
-      )
+      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental') as any, incremental as any)
     ).resolves.toEqual({ index: 0, truncate: undefined })
 
     manager['bfds'] = [cdn] as any
     await expect(
-      manager['resolveUpdatePlan'](
-        makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example'),
-        cdn as any
-      )
+      manager['resolveUpdatePlan'](makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example'), cdn as any)
     ).rejects.toThrow('CDN update must have more headers')
 
     manager['bfds'] = [incremental] as any
     const partialCdn = makeBulkFile(0, 5, 'mainNet_0.headers', 'https://cdn.example')
-    await expect(
-      manager['resolveUpdatePlan'](partialCdn as any, incremental as any)
-    ).resolves.toEqual({ index: 0, truncate: incremental })
+    await expect(manager['resolveUpdatePlan'](partialCdn as any, incremental as any)).resolves.toEqual({
+      index: 0,
+      truncate: incremental
+    })
 
     const replacementCdn = makeBulkFile(0, 12, 'mainNet_0.headers', 'https://cdn.example')
-    await expect(
-      manager['resolveUpdatePlan'](replacementCdn as any, incremental as any)
-    ).resolves.toEqual({ index: 0, truncate: undefined })
+    await expect(manager['resolveUpdatePlan'](replacementCdn as any, incremental as any)).resolves.toEqual({
+      index: 0,
+      truncate: undefined
+    })
   })
 
   test('8 validates penultimate-file update transitions', async () => {
@@ -370,23 +366,17 @@ describe('BulkFileDataManager tests', () => {
     ).rejects.toThrow('CDN file update with more headers')
 
     manager['bfds'] = [cdn, incremental] as any
+    await expect(manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental') as any, cdn as any)).rejects.toThrow(
+      'CDN file update with more headers'
+    )
     await expect(
-      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental') as any, cdn as any)
-    ).rejects.toThrow('CDN file update with more headers')
-    await expect(
-      manager['resolveUpdatePlan'](
-        makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example') as any,
-        cdn as any
-      )
+      manager['resolveUpdatePlan'](makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example') as any, cdn as any)
     ).rejects.toThrow('CDN file update with more headers')
 
     const trailingCdn = makeBulkFile(10, 10, 'mainNet_1.headers', 'https://cdn.example')
     manager['bfds'] = [cdn, trailingCdn] as any
     await expect(
-      manager['resolveUpdatePlan'](
-        makeBulkFile(0, 11, 'mainNet_0.headers', 'https://cdn.example') as any,
-        cdn as any
-      )
+      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'mainNet_0.headers', 'https://cdn.example') as any, cdn as any)
     ).rejects.toThrow('CDN file update followed by an incremental file')
   })
 
@@ -399,9 +389,7 @@ describe('BulkFileDataManager tests', () => {
 
     const truncateUpdate = makeBulkFile(0, 15, 'mainNet_0.headers', 'https://cdn.example')
     truncateUpdate.fileId = 99
-    await expect(
-      manager['resolveUpdatePlan'](truncateUpdate as any, cdn as any)
-    ).resolves.toEqual({
+    await expect(manager['resolveUpdatePlan'](truncateUpdate as any, cdn as any)).resolves.toEqual({
       index: 0,
       truncate: incremental,
       replaced: cdn
@@ -409,16 +397,14 @@ describe('BulkFileDataManager tests', () => {
     expect(truncateUpdate.fileId).toBe(99)
 
     const dropUpdate = makeBulkFile(0, 20, 'mainNet_0.headers', 'https://cdn.example')
-    await expect(
-      manager['resolveUpdatePlan'](dropUpdate as any, cdn as any)
-    ).resolves.toEqual({
+    await expect(manager['resolveUpdatePlan'](dropUpdate as any, cdn as any)).resolves.toEqual({
       index: 0,
       drop: incremental
     })
     expect(dropUpdate.fileId).toBe(7)
   })
 
-  async function setupStorageKnex (
+  async function setupStorageKnex(
     manager: BulkFileDataManager,
     filename: string,
     deleteSqliteFile: boolean
@@ -443,7 +429,7 @@ describe('BulkFileDataManager tests', () => {
     return storage
   }
 
-  async function setupManagerOnLocalServer (server: LocalCdnServer) {
+  async function setupManagerOnLocalServer(server: LocalCdnServer) {
     const options = BulkFileDataManager.createDefaultOptions(chain)
     options.fromKnownSourceUrl = undefined
     const manager = new BulkFileDataManager(options)
@@ -452,7 +438,7 @@ describe('BulkFileDataManager tests', () => {
   }
 })
 
-function createEmptyManager (): BulkFileDataManager {
+function createEmptyManager(): BulkFileDataManager {
   return new BulkFileDataManager({
     chain: 'main',
     maxPerFile: 100,
@@ -460,7 +446,7 @@ function createEmptyManager (): BulkFileDataManager {
   })
 }
 
-function makeBulkFile (
+function makeBulkFile(
   firstHeight: number,
   count: number,
   fileName: string,
@@ -483,11 +469,11 @@ function makeBulkFile (
   }
 }
 
-async function updateFromLocalServer (manager: BulkFileDataManager, server: LocalCdnServer) {
+async function updateFromLocalServer(manager: BulkFileDataManager, server: LocalCdnServer) {
   await manager.updateFromUrl(`http://localhost:${server.port}/blockheaders`)
 }
 
-function countDatas (manager: BulkFileDataManager): number {
+function countDatas(manager: BulkFileDataManager): number {
   let count = 0
   for (const file of manager['bfds'] as BulkHeaderFileInfo[]) {
     if (file.data != null) count += 1

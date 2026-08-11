@@ -34,6 +34,8 @@ const requiredExports =
   profile === 'browser'
     ? [
         'Services',
+        'FixedWindowBulkFileDownloadBudget',
+        'LocalChainTracker',
         'SetupClient',
         'StorageClient',
         'StorageIdb',
@@ -45,6 +47,8 @@ const requiredExports =
       ]
     : [
         'ArcSSEClient',
+        'FixedWindowBulkFileDownloadBudget',
+        'LocalChainTracker',
         'Services',
         'StorageClient',
         'Wallet',

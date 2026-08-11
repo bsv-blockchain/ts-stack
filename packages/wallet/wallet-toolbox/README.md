@@ -68,6 +68,16 @@ go-chaintracks client; existing legacy v1 URLs and explicit clients remain
 compatible. Browser and mobile distributions expose the same fetch/SSE client
 without Node `Buffer` or filesystem dependencies.
 
+Browser, mobile, and Node applications can instead make a persisted local
+ChainTracks instance their primary SDK `ChainTracker`. Immutable checkpoint
+assets are read through `BulkFileDataCacheApi` before any network request;
+downloaded objects are length-, SHA-256-, linkage-, chain-work-, genesis-, and
+proof-of-work-validated before use. `LocalChainTracker` reserves remote clients
+for explicit remote-only mode, local exceptions, and quorum-backed consistency
+or recovery checks. See
+[Local-first ChainTracks](./docs/local-first-chaintracks.md) for packaging,
+background synchronization, migration, and advanced-settings requirements.
+
 Arcade is the HTTPS/SSE gateway for Teranode-backed header data. Its v2 edge
 must allow browser origins and OPTIONS before browser defaults can use it;
 direct Teranode P2P is not included in browser/mobile artifacts.
@@ -121,8 +131,9 @@ lock, and every release or blocked release records bounded audit evidence.
 Core ChainTracks factories accept a final source-options argument when an
 application must override the defaults. Set `disableChaintracks`, `disableCdn`,
 or `disableWhatsOnChain` to `true` to opt out of an automatic source, or pass an
-explicit `chaintracks` client to retain an existing deployment topology. All
-earlier positional arguments remain unchanged.
+explicit `chaintracks` client to retain an existing deployment topology. The
+same options accept a `bulkFileCache` and `bulkFileDownloadBudget`; all earlier
+positional arguments remain unchanged.
 
 ## Getting Started
 

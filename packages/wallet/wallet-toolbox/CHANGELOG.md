@@ -6,6 +6,20 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Add a local-first ChainTracks control plane for browser, mobile, and Node
+  wallets, including explicit local-primary/remote-only mode, independently
+  sourced consistency checks, quorum-backed exceptional fallback, local-clear
+  hooks, and opt-in divergence recovery. Add a portable packaged-checkpoint
+  cache contract and a Node filesystem implementation with validated reads and
+  atomic writes. Coalesce concurrent immutable-file misses, centralize bounded
+  fetch retries, enforce whole-response deadlines and byte ceilings, and expose
+  cache/download counters and an optional upstream-byte budget. Bulk and live
+  ingestion now enforce each header's declared proof-of-work target, and local
+  consistency checks detect both quorum-confirmed divergence and a
+  quorum-confirmed stuck height before optional recovery. The reviewed platform
+  ceilings advance to 1,596,000 Vite bytes, 1,245,000 esbuild bytes, and
+  3,343,000 Hermes bytes; their matching gzip/Brotli ceilings are
+  375,000/295,000, 343,000/275,000, and 1,351,000/1,050,000 bytes.
 - Age proactive pending-transaction review from immutable request creation
   time, so repeated proof polling cannot keep a rejected transaction below the
   reconciliation threshold forever. A descendant of a locally terminal parent

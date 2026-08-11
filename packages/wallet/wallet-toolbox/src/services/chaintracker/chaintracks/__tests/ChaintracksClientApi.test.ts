@@ -206,6 +206,26 @@ describe('ChaintracksClientApi deterministic contract', () => {
       await expect(client.addHeader(header)).resolves.toBeUndefined()
     }
   })
+
+  test('rejects a live header whose hash exceeds its declared proof-of-work target', async () => {
+    const invalidProof: BlockHeader = {
+      version: firstTip.version,
+      height: firstTip.height + 1,
+      previousHash: firstTip.hash,
+      merkleRoot: firstTip.merkleRoot,
+      time: firstTip.time + 1,
+      bits: 0x03000001,
+      nonce: firstTip.nonce,
+      hash: ''
+    }
+    invalidProof.hash = blockHash(invalidProof)
+
+    await expect(
+      (localChaintracks as unknown as { addLiveHeader(header: BlockHeader): Promise<unknown> }).addLiveHeader(
+        invalidProof
+      )
+    ).rejects.toThrow('Block hash is not less than specified target.')
+  })
 })
 
 class FixtureFetch {

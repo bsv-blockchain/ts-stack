@@ -7,7 +7,7 @@
 import { Router, Request, Response } from 'express'
 import { Chaintracks, Services } from '@bsv/wallet-toolbox'
 import { log } from './logger'
-import { parseHeaderRange } from './resourceLimits'
+import { parseHeaderHeight, parseHeaderRange } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -63,7 +63,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const height = await chaintracks.getPresentHeight()
       res.json(success(height))
     } catch (err) {
-      log.error({ operation: 'v1.get_present_height', outcome: 'error', err }, 'Failed to get present height')
+      log.error(
+        { operation: 'v1.get_present_height', outcome: 'error', err },
+        'Failed to get present height'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get present height'))
     }
   })
@@ -78,7 +81,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(hash))
     } catch (err) {
-      log.error({ operation: 'v1.find_chain_tip_hash', outcome: 'error', err }, 'Failed to get chain tip hash')
+      log.error(
+        { operation: 'v1.find_chain_tip_hash', outcome: 'error', err },
+        'Failed to get chain tip hash'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip hash'))
     }
   })
@@ -93,7 +99,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
-      log.error({ operation: 'v1.find_chain_tip_header', outcome: 'error', err }, 'Failed to get chain tip header')
+      log.error(
+        { operation: 'v1.find_chain_tip_header', outcome: 'error', err },
+        'Failed to get chain tip header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip header'))
     }
   })
@@ -101,9 +110,14 @@ export function createV1Routes(options: V1RoutesOptions): Router {
   // GET /findHeaderHexForHeight - Get header by height (query param)
   router.get('/findHeaderHexForHeight', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
+      let height: number
+      try {
+        height = parseHeaderHeight(req.query.height)
+      } catch (err) {
+        if (!(err instanceof RangeError)) throw err
+        return res
+          .status(400)
+          .json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
       }
 
       const currentHeight = await chaintracks.currentHeight()
@@ -119,7 +133,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
-      log.error({ operation: 'v1.find_header_for_height', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v1.find_header_for_height', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -129,7 +146,9 @@ export function createV1Routes(options: V1RoutesOptions): Router {
     try {
       const hash = req.query.hash as string
       if (!hash || !/^[a-fA-F0-9]{64}$/.test(hash)) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing hash parameter'))
+        return res
+          .status(400)
+          .json(error('ERR_INVALID_PARAMS', 'Invalid or missing hash parameter'))
       }
 
       const header = await chaintracks.findHeaderForBlockHash(hash)
@@ -146,7 +165,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(header))
     } catch (err) {
-      log.error({ operation: 'v1.find_header_for_block_hash', outcome: 'error', err }, 'Failed to get header')
+      log.error(
+        { operation: 'v1.find_header_for_block_hash', outcome: 'error', err },
+        'Failed to get header'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -196,7 +218,14 @@ export function createV1Routes(options: V1RoutesOptions): Router {
     try {
       const { version, previousHash, merkleRoot, time, bits, nonce } = req.body
 
-      if (version === undefined || !previousHash || !merkleRoot || time === undefined || bits === undefined || nonce === undefined) {
+      if (
+        version === undefined ||
+        !previousHash ||
+        !merkleRoot ||
+        time === undefined ||
+        bits === undefined ||
+        nonce === undefined
+      ) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Missing required header fields'))
       }
 
@@ -225,7 +254,10 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const rates = await services.getFiatExchangeRate('USD')
       res.json(success(rates))
     } catch (err) {
-      log.error({ operation: 'v1.get_fiat_exchange_rates', outcome: 'error', err }, 'Failed to get exchange rates')
+      log.error(
+        { operation: 'v1.get_fiat_exchange_rates', outcome: 'error', err },
+        'Failed to get exchange rates'
+      )
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get exchange rates'))
     }
   })

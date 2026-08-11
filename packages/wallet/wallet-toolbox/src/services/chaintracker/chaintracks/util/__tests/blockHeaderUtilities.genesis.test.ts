@@ -1,5 +1,12 @@
 import { Chain } from '../../../../../sdk/types'
-import { blockHash, genesisBuffer, genesisHeader, validateGenesisHeader } from '../blockHeaderUtilities'
+import {
+  blockHash,
+  genesisBuffer,
+  genesisHeader,
+  validateBufferOfHeaders,
+  validateGenesisHeader,
+  validateHeaderProofOfWork
+} from '../blockHeaderUtilities'
 
 describe('ChainTracks genesis headers', () => {
   const expected: Record<Exclude<Chain, 'mock'>, string> = {
@@ -18,6 +25,7 @@ describe('ChainTracks genesis headers', () => {
       expect(blockHash(bytes)).toBe(hash)
       expect(genesisHeader(chain).hash).toBe(hash)
       expect(() => validateGenesisHeader(Uint8Array.from(bytes), chain)).not.toThrow()
+      expect(() => validateHeaderProofOfWork(genesisHeader(chain))).not.toThrow()
     }
   )
 
@@ -25,5 +33,42 @@ describe('ChainTracks genesis headers', () => {
     expect(genesisBuffer('ttn')).not.toEqual(genesisBuffer('test'))
     expect(genesisBuffer('tstn')).not.toEqual(genesisBuffer('test'))
     expect(genesisBuffer('tstn')).not.toEqual(genesisBuffer('ttn'))
+  })
+
+  test('rejects a header whose hash exceeds its declared proof-of-work target', () => {
+    const header = { ...genesisHeader('main'), bits: 0x03000001 }
+    expect(() => validateHeaderProofOfWork(header)).toThrow('Block hash is not less than specified target.')
+  })
+
+  test('rejects negative, overflowing, and above-limit compact targets', () => {
+    const header = genesisHeader('main')
+    expect(() => validateHeaderProofOfWork({ ...header, bits: 0x1d80ffff })).toThrow(
+      'Block target encoding is invalid.'
+    )
+    expect(() => validateHeaderProofOfWork({ ...header, bits: 0x2300ffff })).toThrow(
+      'Block target encoding is invalid.'
+    )
+    expect(() => validateHeaderProofOfWork({ ...header, bits: 0x1d010000 })).toThrow(
+      'Block target exceeds the proof-of-work limit.'
+    )
+  })
+
+  test('limits the historical STN exception to its exact target declaration', () => {
+    const header = genesisHeader('stn')
+    expect(() => validateHeaderProofOfWork({ ...header, bits: 0x1d00fffe })).toThrow(
+      'Block hash is not less than specified target.'
+    )
+  })
+
+  test('validates proof-of-work while walking a bulk-header buffer', () => {
+    const bytes = Uint8Array.from(genesisBuffer('main'))
+    expect(() => validateBufferOfHeaders(bytes, '00'.repeat(32))).not.toThrow()
+    bytes[72] = 1
+    bytes[73] = 0
+    bytes[74] = 0
+    bytes[75] = 3
+    expect(() => validateBufferOfHeaders(bytes, '00'.repeat(32))).toThrow(
+      'Block hash is not less than specified target.'
+    )
   })
 })
