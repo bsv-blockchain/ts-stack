@@ -84,6 +84,18 @@ describe('Services Arcade wiring', () => {
     )
   })
 
+  test('isUtxo returns a conclusive provider verdict', async () => {
+    const services = new Services(createDefaultWalletServicesOptions('test'))
+    jest.spyOn(services, 'getUtxoStatus').mockResolvedValue({
+      name: 'test-provider',
+      status: 'success',
+      details: [],
+      isUtxo: true
+    })
+
+    await expect(services.isUtxo({ lockingScript: [0], txid: '22'.repeat(32), vout: 1 } as any)).resolves.toBe(true)
+  })
+
   test('explicit empty-string arcadeUrl keeps Arcade disabled', () => {
     const options = createDefaultWalletServicesOptions(
       'test',

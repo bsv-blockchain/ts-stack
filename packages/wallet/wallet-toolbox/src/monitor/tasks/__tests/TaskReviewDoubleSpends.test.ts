@@ -211,6 +211,19 @@ describe('TaskReviewDoubleSpends', () => {
     expect(m.updateProvenTxReq).not.toHaveBeenCalled()
   })
 
+  test('5a treats malformed legacy history as a durable conflict', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const req = makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'))
+    req.history = '{malformed'
+    const m = makeMonitor({ tx1: 'known' }, [req])
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+
+    await task.runTask()
+
+    expect(m.updateProvenTxReq).not.toHaveBeenCalled()
+  })
+
   test('6 allows a mined observation to send durable conflicts through validated proof recovery', async () => {
     const now = new Date('2026-01-01T12:00:00.000Z')
     jest.spyOn(Date, 'now').mockReturnValue(now.getTime())

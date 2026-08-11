@@ -262,6 +262,37 @@ describe('markStaleInputsAsSpent', () => {
     }
   })
 
+  test('leaves input untouched when its locking script cannot be restored', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const ar = makeAggregateResult(seed.failedReq)
+      const outputs = await storage.findOutputsByOutpoints(seed.userId, [seed.consumedOutpoint])
+      for (const output of Object.values(outputs)) output.lockingScript = undefined
+      jest.spyOn(storage, 'findOutputsByOutpoints').mockResolvedValue(outputs)
+      jest.spyOn(storage, 'validateOutputScript').mockRejectedValue(new Error('raw transaction unavailable'))
+
+      const result = await markStaleInputsAsSpent(ar, storage as StorageKnex, mockServices(() => false), undefined)
+
+      expect(result).toEqual({ checked: 0, staleConfirmed: 0, staleOutpoints: [] })
+    }
+  })
+
+  test('leaves input untouched when script validation remains inconclusive', async () => {
+    for (const storage of storages) {
+      const seed = await seedDoubleSpendScenario(storage)
+      const ar = makeAggregateResult(seed.failedReq)
+      const outputs = await storage.findOutputsByOutpoints(seed.userId, [seed.consumedOutpoint])
+      for (const output of Object.values(outputs)) output.lockingScript = undefined
+      jest.spyOn(storage, 'findOutputsByOutpoints').mockResolvedValue(outputs)
+      jest.spyOn(storage, 'validateOutputScript').mockResolvedValue(undefined)
+
+      const result = await markStaleInputsAsSpent(ar, storage as StorageKnex, mockServices(() => false), undefined)
+
+      expect(result).toEqual({ checked: 0, staleConfirmed: 0, staleOutpoints: [] })
+      expect(storage.validateOutputScript).toHaveBeenCalled()
+    }
+  })
+
   test('Arcade input-conflict quarantine covers every local user copy without WoC', async () => {
     for (const storage of storages) {
       const seed = await seedDoubleSpendScenario(storage)

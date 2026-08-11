@@ -178,6 +178,22 @@ describe('ArcSSEClient', () => {
       expect(errors).toEqual([processingError])
     })
 
+    test('reports a synchronous processing failure without acknowledging the event', () => {
+      const { client, errors, lastEventIds } = makeClient({
+        onEvent: () => { throw new Error('synchronous storage failure') }
+      })
+      client.connect()
+
+      expect(() => FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+        lastEventId: '101'
+      })).not.toThrow()
+
+      expect(client.lastEventId).toBeUndefined()
+      expect(lastEventIds).toEqual([])
+      expect(errors.map(error => error.message)).toEqual(['synchronous storage failure'])
+    })
+
     test('does not update lastEventId when event has no lastEventId', () => {
       const { client } = makeClient({ lastEventId: 'initial' })
       client.connect()
