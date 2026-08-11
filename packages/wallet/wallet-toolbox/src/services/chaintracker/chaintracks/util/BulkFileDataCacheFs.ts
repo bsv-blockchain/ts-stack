@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import type { BulkFileDataCacheApi } from '../Api/BulkFileDataCacheApi'
 import type { BulkHeaderFileInfo } from './BulkHeaderFile'
@@ -34,10 +35,7 @@ export class BulkFileDataCacheFs implements BulkFileDataCacheApi {
   async set(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void> {
     const destination = this.filePath(file)
     await fs.mkdir(this.rootFolder, { recursive: true })
-    const temporary = path.join(
-      this.rootFolder,
-      `.${file.fileName}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    )
+    const temporary = path.join(this.rootFolder, `.${file.fileName}.${process.pid}.${randomUUID()}.tmp`)
     let handle: fs.FileHandle | undefined
     try {
       handle = await fs.open(temporary, 'wx', 0o600)
