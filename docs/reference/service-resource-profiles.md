@@ -3,8 +3,8 @@ id: service-resource-profiles
 title: 'Service Resource Profiles, Scaling, and Message Box Economics'
 kind: reference
 version: '1.0.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+last_updated: '2026-08-10'
+last_verified: '2026-08-10'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, resource-safety, scaling, message-box, brc-105]
@@ -36,18 +36,18 @@ integers because disabling them can strand sockets or database waiters.
 The common service prefixes are `CHAINTRACKS`, `MESSAGE_BOX`, `OVERLAY`,
 `UHRP`, `WAB`, and `WALLET_STORAGE`.
 
-| Common control | Meaning |
-| --- | --- |
-| `<PREFIX>_MAX_BODY_BYTES` | Default materialized request body ceiling. JSON or binary routes may use a more specific prefix such as `UHRP_JSON` or `WALLET_STORAGE_BINARY`. |
-| `<PREFIX>_MAX_RESPONSE_BYTES` | Materialized response ceiling; a response above it receives `413 ERR_RESPONSE_TOO_LARGE`. |
-| `<PREFIX>_MAX_CONCURRENT_REQUESTS` | In-flight application requests per process; saturation receives `503 ERR_SERVER_BUSY`. |
-| `<PREFIX>_MAX_CONNECTIONS` | Open TCP/WebSocket connections per process. |
-| `<PREFIX>_REQUEST_TIMEOUT_MS` | Complete-request timeout. |
-| `<PREFIX>_HEADERS_TIMEOUT_MS` | Header receive timeout. |
-| `<PREFIX>_KEEP_ALIVE_TIMEOUT_MS` | Idle keep-alive timeout. |
-| `<PREFIX>_SOCKET_TIMEOUT_MS` | Socket inactivity timeout. |
-| `<PREFIX>_MAX_REQUESTS_PER_SOCKET` | Requests accepted before connection recycling. |
-| `<RATE_PREFIX>_MAX` / `_WINDOW_MS` | Route-class rate limit and window. Rate maxima accept `-1`/`unlimited`; windows remain finite. |
+| Common control                     | Meaning                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<PREFIX>_MAX_BODY_BYTES`          | Default materialized request body ceiling. JSON or binary routes may use a more specific prefix such as `UHRP_JSON` or `WALLET_STORAGE_BINARY`. |
+| `<PREFIX>_MAX_RESPONSE_BYTES`      | Materialized response ceiling; a response above it receives `413 ERR_RESPONSE_TOO_LARGE`.                                                       |
+| `<PREFIX>_MAX_CONCURRENT_REQUESTS` | In-flight application requests per process; saturation receives `503 ERR_SERVER_BUSY`.                                                          |
+| `<PREFIX>_MAX_CONNECTIONS`         | Open TCP/WebSocket connections per process.                                                                                                     |
+| `<PREFIX>_REQUEST_TIMEOUT_MS`      | Complete-request timeout.                                                                                                                       |
+| `<PREFIX>_HEADERS_TIMEOUT_MS`      | Header receive timeout.                                                                                                                         |
+| `<PREFIX>_KEEP_ALIVE_TIMEOUT_MS`   | Idle keep-alive timeout.                                                                                                                        |
+| `<PREFIX>_SOCKET_TIMEOUT_MS`       | Socket inactivity timeout.                                                                                                                      |
+| `<PREFIX>_MAX_REQUESTS_PER_SOCKET` | Requests accepted before connection recycling.                                                                                                  |
+| `<RATE_PREFIX>_MAX` / `_WINDOW_MS` | Route-class rate limit and window. Rate maxima accept `-1`/`unlimited`; windows remain finite.                                                  |
 
 Every API role exposes `/healthz` in addition to its existing health/readiness
 contract. Two or more initial slashes are normalized for compatibility, so
@@ -59,14 +59,14 @@ The table shows the dominant list/range maximum, response ceiling, and
 per-process request concurrency. Route-specific defaults follow in the next
 section.
 
-| Service | Small | Standard | High-throughput |
-| --- | --- | --- | --- |
-| Chaintracks | 500 headers, 1 MiB, 32 | 1,000 headers, 4 MiB, 64 | 5,000 headers, 32 MiB, 256 |
-| Message Box | 500 messages, 4 MiB, 8 | 1,000 messages, 8 MiB, 24 | 5,000 messages, 32 MiB, 96 |
-| Overlay Express | 500 lookup results, 4 MiB, 8 | 1,000 results, 8 MiB, 24 | 5,000 results, 32 MiB, 96 |
-| UHRP Basic / Cloud | 500 records, 1 MiB, 16 | 1,000 records, 4 MiB, 64 | 5,000 records, 16 MiB, 250 |
-| WAB | single-record APIs, 1 MiB, 64 | single-record APIs, 2 MiB, 128 | single-record APIs, 8 MiB, 256 |
-| Wallet Storage API | 500 RPC rows, 4 MiB, 8 | 1,000 rows, 8 MiB, 24 | 5,000 rows, 32 MiB, 96 |
+| Service            | Small                         | Standard                       | High-throughput                |
+| ------------------ | ----------------------------- | ------------------------------ | ------------------------------ |
+| Chaintracks        | 500 headers, 1 MiB, 32        | 1,000 headers, 4 MiB, 64       | 5,000 headers, 32 MiB, 256     |
+| Message Box        | 500 messages, 4 MiB, 8        | 1,000 messages, 8 MiB, 24      | 5,000 messages, 32 MiB, 96     |
+| Overlay Express    | 500 lookup results, 4 MiB, 8  | 1,000 results, 8 MiB, 24       | 5,000 results, 32 MiB, 96      |
+| UHRP Basic / Cloud | 500 records, 1 MiB, 16        | 1,000 records, 4 MiB, 64       | 5,000 records, 16 MiB, 250     |
+| WAB                | single-record APIs, 1 MiB, 64 | single-record APIs, 2 MiB, 128 | single-record APIs, 8 MiB, 256 |
+| Wallet Storage API | 500 RPC rows, 4 MiB, 8        | 1,000 rows, 8 MiB, 24          | 5,000 rows, 32 MiB, 96         |
 
 Start with 512 MiB for `small`, 1 GiB for `standard`, and 8 GiB for
 `high-throughput`. High-throughput is not a promise that every configured
@@ -75,15 +75,15 @@ concurrency when response sizes approach their byte ceiling.
 
 ## Service-specific controls
 
-| Service | Controls and defaults in `standard` |
-| --- | --- |
-| Chaintracks | `CHAINTRACKS_HEADERS_DEFAULT_LIMIT=1000`, `CHAINTRACKS_HEADERS_MAX_LIMIT=1000`; the static CDN streams files and has its own `CHAINTRACKS_CDN_*` connection policy. |
-| Message Box | `MAX_MESSAGE_BODY_BYTES=1048576`, `MAX_RECIPIENTS=100`, `LIST_DEFAULT_LIMIT=1000`, `LIST_MAX_LIMIT=1000`, `LIST_MAX_OFFSET=100000`, `LIST_MAX_RESPONSE_BYTES=8388608`, inbox/sender quotas of 10,000 messages and 1 GiB, `MAX_ACKNOWLEDGMENT_IDS=1000`, device/permission page maximum 100, notification fan-out 100, and `RETENTION_DAYS=30`. `MESSAGE_LIST_BATCH_SIZE` remains a compatibility fallback. |
-| Message Box maintenance/state | `AUTH_SESSION_TTL_MS=86400000`, `PAYMENT_REPLAY_TTL_DAYS=365`, `RETENTION_CLEANUP_INTERVAL_MS=900000`, `RETENTION_CLEANUP_BATCH_SIZE=1000`, `DB_POOL_MIN=0`, `DB_POOL_MAX=7`, and `DB_IDLE_TIMEOUT_MS=15000`. Auth sessions, quota locks, and payment replay records are shared in MySQL. |
-| Overlay Express | `OVERLAY_MAX_LOOKUP_RESULTS=1000`, `MAX_BASM_TXIDS=1000`, `MAX_BASM_ANCHOR_RANGE=1000`, admin default/max pages 50/200, `JANITOR_BATCH_SIZE=250`, and `JANITOR_MAX_REPORT_RESULTS=1000`. Janitor scans every record through a cursor while retaining only the configured report detail. |
-| UHRP Basic / Cloud | list default/max 200/1,000 and max offset 100,000; `MAX_FILE_BYTES=11000000000`, `MAX_RETENTION_MINUTES=525600`, JSON body 256 KiB, and upload body 64 MiB. Basic also bounds its MIME LRU at 10,000 entries. Downloads and uploads remain streamed. |
-| WAB | 256 KiB JSON, 2 MiB response, MySQL pool min/max 2/10, and separate pre-auth, authentication, user, deletion, faucet, and share rate policies. Account-deletion state is database-backed. |
-| Wallet Storage | RPC default/max rows 1,000/1,000, max request array items 1,000,000, 8 MiB RPC response, 8 MiB JSON, 8 MiB binary, and MySQL pool min/max 2/10 with configurable create/acquire/idle/reap/retry timeouts. Use `WALLET_INFRA_ROLE=api` for HTTP replicas and one `monitor` replica for background work. The optional monitor operator UI/API uses its own bounded `WALLET_ADMIN_*` edge policy and must remain on that singleton's private operator listener. |
+| Service                       | Controls and defaults in `standard`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chaintracks                   | `CHAINTRACKS_HEADERS_DEFAULT_LIMIT=1000`, `CHAINTRACKS_HEADERS_MAX_LIMIT=1000`; the static CDN streams files and has its own `CHAINTRACKS_CDN_*` connection policy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Message Box                   | `MAX_MESSAGE_BODY_BYTES=1048576`, `MAX_RECIPIENTS=100`, `LIST_DEFAULT_LIMIT=1000`, `LIST_MAX_LIMIT=1000`, `LIST_MAX_OFFSET=100000`, `LIST_MAX_RESPONSE_BYTES=8388608`, inbox/sender quotas of 10,000 messages and 1 GiB, `MAX_ACKNOWLEDGMENT_IDS=1000`, device/permission page maximum 100, notification fan-out 100, and `RETENTION_DAYS=30`. `MESSAGE_LIST_BATCH_SIZE` remains a compatibility fallback.                                                                                                                                                                                                                                                                |
+| Message Box maintenance/state | `AUTH_SESSION_TTL_MS=86400000`, `PAYMENT_REPLAY_TTL_DAYS=365`, `RETENTION_CLEANUP_INTERVAL_MS=900000`, `RETENTION_CLEANUP_BATCH_SIZE=1000`, `DB_POOL_MIN=0`, `DB_POOL_MAX=7`, and `DB_IDLE_TIMEOUT_MS=15000`. Auth sessions, quota locks, and payment replay records are shared in MySQL.                                                                                                                                                                                                                                                                                                                                                                                 |
+| Overlay Express               | `OVERLAY_MAX_LOOKUP_RESULTS=1000`, `MAX_BASM_TXIDS=1000`, `MAX_BASM_ANCHOR_RANGE=1000`, admin default/max pages 50/200, `JANITOR_BATCH_SIZE=250`, and `JANITOR_MAX_REPORT_RESULTS=1000`. Janitor scans every record through a cursor while retaining only the configured report detail.                                                                                                                                                                                                                                                                                                                                                                                   |
+| UHRP Basic / Cloud            | list default/max 200/1,000 and max offset 100,000; `MAX_FILE_BYTES=11000000000`, `MAX_RETENTION_MINUTES=525600`, JSON body 256 KiB, and upload body 64 MiB. Basic also bounds its MIME LRU at 10,000 entries. Downloads and uploads remain streamed.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| WAB                           | 256 KiB JSON, 2 MiB response, MySQL pool min/max 2/10, and separate pre-auth, authentication, user, deletion, faucet, and share rate policies. Account-deletion state is database-backed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Wallet Storage                | RPC default/max rows 1,000/1,000, max request array items 1,000,000, 8 MiB RPC response, 8 MiB JSON, 8 MiB binary, and MySQL pool min/max 2/10 with configurable create/acquire/idle/reap/retry timeouts. Managed-change shaping defaults to 8 new outputs, 4 fee-positive migration inputs, and exact pending comparison above 16 inputs per action; each `WALLET_STORAGE_MANAGED_CHANGE_*` work budget accepts `-1`. Use `WALLET_INFRA_ROLE=api` for HTTP replicas and one `monitor` replica for background work. The optional monitor operator UI/API uses its own bounded `WALLET_ADMIN_*` edge policy and must remain on that singleton's private operator listener. |
 
 All names above are appended to the service prefix where it is omitted in the
 table. For example, Message Box `MAX_RECIPIENTS` means
@@ -105,14 +105,14 @@ three-copy concurrency model consumes more than 80% of profile memory.
 
 The 2026-08-04 Apple arm64 run produced these `standard` results:
 
-| Service | Representative maximum page | Measured RSS increase | Three-copy concurrency model |
-| --- | ---: | ---: | ---: |
-| Chaintracks | 157 KiB | 1.2 MiB | 29 MiB |
-| Message Box | 2,001 KiB | 11.9 MiB | 141 MiB |
-| Overlay Express | 4,001 KiB | 22.3 MiB | 281 MiB |
-| UHRP Basic / Cloud | 1,001 KiB | 5.7 MiB | 188 MiB |
-| WAB | 2 KiB | 0.1 MiB | 0.8 MiB |
-| Wallet Storage | 4,001 KiB | 21.9 MiB | 281 MiB |
+| Service            | Representative maximum page | Measured RSS increase | Three-copy concurrency model |
+| ------------------ | --------------------------: | --------------------: | ---------------------------: |
+| Chaintracks        |                     157 KiB |               1.2 MiB |                       29 MiB |
+| Message Box        |                   2,001 KiB |              11.9 MiB |                      141 MiB |
+| Overlay Express    |                   4,001 KiB |              22.3 MiB |                      281 MiB |
+| UHRP Basic / Cloud |                   1,001 KiB |               5.7 MiB |                      188 MiB |
+| WAB                |                       2 KiB |               0.1 MiB |                      0.8 MiB |
+| Wallet Storage     |                   4,001 KiB |              21.9 MiB |                      281 MiB |
 
 The model uses fixed representative record sizes (160 B headers, 2 KiB
 messages, 4 KiB overlay/wallet rows, and 1 KiB UHRP metadata). Real records,
@@ -178,15 +178,15 @@ HTTP sends also bound push work with
 `MESSAGE_BOX_FCM_SEND_CONCURRENCY`; this prevents a valid multi-recipient send
 from multiplying recipient and device fan-out into an unbounded promise set.
 
-| Variable | Default satoshis | Meaning |
-| --- | ---: | --- |
-| `MESSAGE_BOX_PRICE_BASE_SATOSHIS` | 50 | Fixed authenticated request component. |
-| `MESSAGE_BOX_PRICE_PER_RECIPIENT_SATOSHIS` | 5 | Send fan-out component per recipient. |
-| `MESSAGE_BOX_PRICE_PER_KIB_SATOSHIS` | 5 | UTF-8 message body component, rounded up by KiB. |
-| `MESSAGE_BOX_PRICE_STORAGE_MIB_MONTH_SATOSHIS` | 1,000 | Retained payload component. |
-| `MESSAGE_BOX_PRICE_LIST_PAGE_SATOSHIS` | 5 | Listing page component in addition to the base. |
-| `MESSAGE_BOX_PRICE_UNLIMITED_RETENTION_MONTHS` | 12 | Up-front storage horizon when an operator explicitly configures unlimited retention. |
-| `MESSAGE_BOX_ROUTE_PRICES_JSON` | `{}` | Absolute route-to-satoshi overrides; `0` makes a protected route free. |
+| Variable                                       | Default satoshis | Meaning                                                                              |
+| ---------------------------------------------- | ---------------: | ------------------------------------------------------------------------------------ |
+| `MESSAGE_BOX_PRICE_BASE_SATOSHIS`              |               50 | Fixed authenticated request component.                                               |
+| `MESSAGE_BOX_PRICE_PER_RECIPIENT_SATOSHIS`     |                5 | Send fan-out component per recipient.                                                |
+| `MESSAGE_BOX_PRICE_PER_KIB_SATOSHIS`           |                5 | UTF-8 message body component, rounded up by KiB.                                     |
+| `MESSAGE_BOX_PRICE_STORAGE_MIB_MONTH_SATOSHIS` |            1,000 | Retained payload component.                                                          |
+| `MESSAGE_BOX_PRICE_LIST_PAGE_SATOSHIS`         |                5 | Listing page component in addition to the base.                                      |
+| `MESSAGE_BOX_PRICE_UNLIMITED_RETENTION_MONTHS` |               12 | Up-front storage horizon when an operator explicitly configures unlimited retention. |
+| `MESSAGE_BOX_ROUTE_PRICES_JSON`                |             `{}` | Absolute route-to-satoshi overrides; `0` makes a protected route free.               |
 
 Recipient-configured delivery fees remain separate from the operator charge.
 The operator price is paid and replay-checked before message fan-out; the send
@@ -215,11 +215,11 @@ convention: [BSV fee concepts](https://hub.bsvblockchain.org/bsv-skills-center/g
 The official images now accept the generic runtime settings needed to replace
 custom Babbage-derived images:
 
-| Workload | Upstream configuration now available |
-| --- | --- |
-| Message Box | Shared MySQL sessions/replay/quota locks, list/body/inbox/sender/retention limits, DB pool, Firebase and WebSocket controls, BRC-105 pricing, `/healthz`, and legacy `MESSAGE_LIST_BATCH_SIZE`. |
-| WAB | DB pool, granular rate/resource policy, shared database deletion flow, `/healthz`, and leading-double-slash compatibility. |
-| Wallet Storage | Raw or base64 JSON for `KNEX_DB_CONNECTION` and `FEE_MODEL`; raw or base64 admin keys; API/monitor role split; TAAL, WhatsOnChain, Bitails, Arcade, GorillaPool, and exchange-rate provider settings under `WALLET_STORAGE_*` with legacy aliases; logger level; DB/RPC/resource/payment controls. |
+| Workload       | Upstream configuration now available                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Message Box    | Shared MySQL sessions/replay/quota locks, list/body/inbox/sender/retention limits, DB pool, Firebase and WebSocket controls, BRC-105 pricing, `/healthz`, and legacy `MESSAGE_LIST_BATCH_SIZE`.                                                                                                                                                                                                |
+| WAB            | DB pool, granular rate/resource policy, shared database deletion flow, `/healthz`, and leading-double-slash compatibility.                                                                                                                                                                                                                                                                     |
+| Wallet Storage | Raw or base64 JSON for `KNEX_DB_CONNECTION` and `FEE_MODEL`; raw or base64 admin keys; API/monitor role split; TAAL, WhatsOnChain, Bitails, Arcade, GorillaPool, and exchange-rate provider settings under `WALLET_STORAGE_*` with legacy aliases; logger level; DB/RPC/resource/payment controls; progressive managed-change output, fragment-migration, and pending-comparison work budgets. |
 
 Secrets, DNS, certificates, ingress, replica counts, provider credentials, and
 cluster-specific shared rate limiting remain downstream. Migration should

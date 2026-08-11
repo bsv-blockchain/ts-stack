@@ -101,6 +101,58 @@ describe('action batch reservations', () => {
     expect(getActionBatchCapabilities(32, { resume: true }).actionBatch?.resume).toBe(true)
   })
 
+  test('begin advertises the effective managed-change shaping policy to the workspace planner', async () => {
+    ctx.activeStorage.managedChangePolicy.maxOutputsPerAction = 2
+    ctx.activeStorage.managedChangePolicy.migrationInputsPerAction = 1
+    ctx.activeStorage.managedChangePolicy.pendingComparisonInputs = -1
+
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'managed-change-policy',
+      firstAction: firstAction()
+    })
+
+    expect(begun.managedChangePolicy).toEqual({
+      maxOutputsPerAction: 2,
+      migrationInputsPerAction: 1
+    })
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('reservations prefer completed ancestry but retain sending liquidity as a last resort', async () => {
+    const basket = (await ctx.activeStorage.findOutputBaskets({
+      partial: { userId: ctx.userId, name: 'default' }
+    }))[0]
+    const available = (await ctx.activeStorage.findAvailableManagedChangeInputs(ctx.userId, basket.basketId, false))
+      .sort((a, b) => b.satoshis - a.satoshis)
+    const completed = available[0]
+    const sending = available.find(output => output.transactionId !== completed.transactionId)
+    expect(completed).toBeDefined()
+    expect(sending).toBeDefined()
+    for (const output of available) {
+      if (output.outputId !== completed.outputId && output.outputId !== sending!.outputId) {
+        await ctx.activeStorage.updateOutput(output.outputId, { spendable: false })
+      }
+    }
+    await ctx.activeStorage.updateTransaction(completed.transactionId, { status: 'completed' })
+    await ctx.activeStorage.updateTransaction(sending!.transactionId, { status: 'sending' })
+    setReservationLimit(ctx, 1)
+
+    const preferred = await ctx.storage.beginActionBatch({
+      batchId: 'completed-reservation-preference',
+      firstAction: firstAction()
+    })
+    expect(preferred.reservedOutputs.map(output => output.outputId)).toEqual([completed.outputId])
+    await ctx.storage.abortActionBatch(preferred.batchId)
+
+    await ctx.activeStorage.updateOutput(completed.outputId, { spendable: false })
+    const fallback = await ctx.storage.beginActionBatch({
+      batchId: 'sending-reservation-fallback',
+      firstAction: firstAction()
+    })
+    expect(fallback.reservedOutputs.map(output => output.outputId)).toEqual([sending!.outputId])
+    await ctx.storage.abortActionBatch(fallback.batchId)
+  })
+
   test.each([
     { limit: -1, expectedMaximum: 8 },
     { limit: 1, expectedMaximum: 1 },

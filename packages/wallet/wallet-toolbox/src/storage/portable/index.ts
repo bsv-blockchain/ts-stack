@@ -26,6 +26,7 @@ import {
 import { createSyncMap, SyncMap } from '../schema/entities/EntityBase'
 import * as sdk from '../../sdk'
 import { verifyOne, verifyOneOrNone, verifyTruthy } from '../../utility/utilityHelpers'
+import { upgradeLegacyManagedChangeBasketDefault } from '../methods/managedChangePolicy'
 
 type JsonPrimitive = string | number | boolean
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
@@ -425,7 +426,9 @@ async function restoreBRC38 (storage: StorageProvider, data: DecodedBRC38): Prom
   await storage.transaction(async trx => {
     await storage.insertUser({ ...data.user }, trx)
     for (const row of data.provenTxs) await storage.insertProvenTx({ ...row }, trx)
-    for (const row of data.outputBaskets) await storage.insertOutputBasket({ ...row }, trx)
+    for (const row of data.outputBaskets) {
+      await storage.insertOutputBasket(upgradeLegacyManagedChangeBasketDefault({ ...row }), trx)
+    }
     for (const row of data.outputTags) await storage.insertOutputTag({ ...row }, trx)
     for (const row of data.txLabels) await storage.insertTxLabel({ ...row }, trx)
     for (const row of data.transactions) await storage.insertTransaction({ ...row }, trx)

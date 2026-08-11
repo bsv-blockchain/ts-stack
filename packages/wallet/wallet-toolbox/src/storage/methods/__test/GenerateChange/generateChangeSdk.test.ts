@@ -1216,6 +1216,169 @@ describe('generateChange tests', () => {
     expectTransactionSize(params, r)
   })
 
+  test('10c surplus shaping never gathers inputs merely to reach the pool target', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 0
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [
+      { satoshis: 10_000, outputId: 1 },
+      { satoshis: 10_000, outputId: 2 }
+    ]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs.map(input => input.outputId)).toEqual([1])
+    expect(r.changeOutputs).toHaveLength(1)
+    expect(r.changeOutputs[0].satoshis).toBeGreaterThanOrEqual(5_000)
+    expectTransactionSize(params, r)
+  })
+
+  test('10d surplus shaping splits large liquidity into bounded independently useful outputs', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 0
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([
+      { satoshis: 100_000, outputId: 1 }
+    ])
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs).toHaveLength(1)
+    expect(r.changeOutputs).toHaveLength(8)
+    expect(r.changeOutputs.every(output => output.satoshis >= 5_000)).toBe(true)
+    expectTransactionSize(params, r)
+  })
+
+  test('10e a small remainder is retained when the preferred minimum cannot be met', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 4
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([{ satoshis: 2_000, outputId: 1 }])
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs).toHaveLength(1)
+    expect(r.changeOutputs).toHaveLength(1)
+    expect(r.changeOutputs[0].satoshis).toBeLessThan(5_000)
+    expectTransactionSize(params, r)
+  })
+
+  test('10f legacy fragments migrate gradually within the configured input budget', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 9_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 4
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [
+      { satoshis: 20_000, outputId: 1 },
+      ...Array.from({ length: 10 }, (_, index) => ({ satoshis: 1_000, outputId: index + 2 }))
+    ]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs).toHaveLength(5)
+    expect(r.allocatedChangeInputs.filter(input => input.satoshis < 5_000)).toHaveLength(4)
+    expect(r.changeOutputs.every(output => output.satoshis >= 5_000)).toBe(true)
+    expectTransactionSize(params, r)
+  })
+
+  test('10g migration rejects fragments whose value does not cover their marginal input fee', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 9_000, lockingScriptLength: 25 }],
+      feeModel: { model: 'sat/kb', value: 500 },
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 144,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 4
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([
+      { satoshis: 50, outputId: 2 },
+      { satoshis: 20_000, outputId: 1 }
+    ])
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs.map(input => input.outputId)).toEqual([1])
+    expectTransactionSize(params, r)
+  })
+
+  test('10h targetNetCount zero disables pool growth and migration', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 9_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 0,
+      maxChangeOutputs: 8,
+      surplusPoolShaping: true,
+      maxMigrationInputs: 4
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([
+      { satoshis: 1_000, outputId: 2 },
+      { satoshis: 20_000, outputId: 1 }
+    ])
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs.map(input => input.outputId)).toEqual([1])
+    expect(r.changeOutputs).toHaveLength(1)
+    expectTransactionSize(params, r)
+  })
+
+  test('10i explicit unlimited limits remain bounded by available value and inputs', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 1_000, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 5_000,
+      changeInitialSatoshis: 5_000,
+      targetNetCount: 3,
+      maxChangeOutputs: -1,
+      surplusPoolShaping: true,
+      maxMigrationInputs: -1
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([
+      { satoshis: 1_000, outputId: 2 },
+      { satoshis: 30_000, outputId: 1 }
+    ])
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.allocatedChangeInputs).toHaveLength(2)
+    expect(r.changeOutputs.length - r.allocatedChangeInputs.length).toBeLessThanOrEqual(3)
+    expectTransactionSize(params, r)
+  })
+
   test('11 emits correlated allocation and generate-change spans without values', async () => {
     const events: any[] = []
     const telemetry = new Telemetry({

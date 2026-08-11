@@ -1,6 +1,7 @@
 import { TrxToken } from '../../../sdk/WalletStorage.interfaces'
 import { verifyId, verifyOneOrNone } from '../../../utility/utilityHelpers'
 import { TableOutputBasket } from '../tables/TableOutputBasket'
+import { upgradeLegacyManagedChangeBasketDefault } from '../../methods/managedChangePolicy'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
 export class EntityOutputBasket extends EntityBase<TableOutputBasket> {
@@ -144,6 +145,7 @@ export class EntityOutputBasket extends EntityBase<TableOutputBasket> {
     this.userId = userId
     this.name ||= 'default'
     this.basketId = 0
+    this.api = upgradeLegacyManagedChangeBasketDefault(this.api)
     this.basketId = await storage.insertOutputBasket(this.toApi(), trx)
   }
 
@@ -158,8 +160,9 @@ export class EntityOutputBasket extends EntityBase<TableOutputBasket> {
     let wasMerged = false
     if (ei.updated_at > this.updated_at) {
       // basket name is its identity, should not change
-      this.minimumDesiredUTXOValue = ei.minimumDesiredUTXOValue
-      this.numberOfDesiredUTXOs = ei.numberOfDesiredUTXOs
+      const incoming = upgradeLegacyManagedChangeBasketDefault(ei)
+      this.minimumDesiredUTXOValue = incoming.minimumDesiredUTXOValue
+      this.numberOfDesiredUTXOs = incoming.numberOfDesiredUTXOs
       this.isDeleted = ei.isDeleted
       this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
       await storage.updateOutputBasket(this.id, this.toApi(), trx)

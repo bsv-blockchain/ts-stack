@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-06",
+  "lastReviewed": "2026-08-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Isolates action batches by explicit transaction-graph membership, adds bounded exact-input lease resume, and carries structured lifecycle errors across local and remote storage.",
-      "migration": "No consumer migration is required. Unrelated actions continue through the legacy path instead of joining or committing an open workspace. Providers may optionally advertise resume support and a maximum reservation count; built-in providers default to 256 outputs and operators can select another positive value or -1 for unlimited operation."
+      "summary": "Isolates and resumes action batches, then adds progressive managed-change liquidity: 144 useful 5,000-satoshi units, bounded surplus-only fanout and fragment migration, settled-first parent selection, exact BEEF-cost comparison for pathological plans, last-resort pending funding, delayed permission persistence, and read-only Monitor reporting.",
+      "migration": "No consumer code or BRC-100 migration is required. Exact untouched default baskets at 144 outputs / 32 satoshis advance to a 5,000-satoshi preference; custom basket values remain unchanged and funds migrate only through future authorized actions. Same-tier compatibility planning and retained pending fallback ensure the policy adds no new funding refusal. Operators may tune all work limits, including explicit -1 unlimited modes."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep browser build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No browser consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "summary": "Carries the lockstep browser build with isolated resumable action batches and progressive IndexedDB managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
+      "migration": "No browser consumer code migration is required. Exact untouched IndexedDB defaults advance from 32 to 5,000 satoshis and then migrate progressively through ordinary authorized actions; custom basket values and remote-storage wire contracts remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.6.5",
       "releaseType": "patch",
-      "summary": "Carries the lockstep mobile build with explicit action-batch isolation and bounded lease recovery.",
-      "migration": "No mobile consumer migration is required. Related noSend chains retain local batching; unrelated actions remain on their ordinary storage path."
+      "summary": "Carries the lockstep mobile build with isolated resumable action batches, progressive managed-change liquidity, settled-first ancestry, exact BEEF-cost comparison, and delayed permission persistence.",
+      "migration": "No mobile consumer code migration is required. Wallets progressively adopt useful change values through future authorized actions; custom basket values, BRC-100 methods, and remote-storage wire contracts remain unchanged."
     },
     {
       "name": "create-bsv-app",

@@ -39,7 +39,11 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // is a CLI that reads `process.argv` and branches on it, and excluding it by
   // shape would quietly drop real code out of this gate.
   /packages\/overlays\/topics\/src\/index\.ts$/,
-  /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/
+  /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/,
+  // SetupWallet is declarations only, while the mobile storage entry point is
+  // a pure re-export barrel. Neither emits executable statements for LCOV.
+  /packages\/wallet\/wallet-toolbox\/src\/SetupWallet\.ts$/,
+  /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/
 ]
 
 function normalizedPath(value) {

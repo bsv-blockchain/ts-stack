@@ -6,6 +6,20 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Replace 32-satoshi default-basket fragments with a progressive liquidity
+  policy targeting 144 useful 5,000-satoshi outputs. New actions create at most
+  eight outputs from real surplus and migrate at most four fee-positive legacy
+  fragments, while a same-tier compatibility plan guarantees that optional
+  shaping cannot refuse an action the former planner could fund.
+- Prefer completed, then unproven, then sending parents. Plans above 16 inputs
+  compare exact transaction-plus-BEEF bytes before accepting pending ancestry;
+  pending change remains an unconditional last-resort funding source. Align
+  action-batch reservation/planning and add a read-only Monitor liquidity
+  report. All work limits are configurable and accept `-1` for explicit
+  operator-selected unlimited behavior.
+- Restore delayed broadcast for durable permission-token persistence. Permission
+  grants no longer inherit network-broadcast latency; the managed-change policy
+  handles queued ancestry without hiding it or preferring it over settled funds.
 - Isolate each in-memory action batch by explicit staged-output or `sendWith`
   membership, so unrelated immediate actions and `noSend` roots cannot be
   captured by or commit a workspace. Add an exact-input resume protocol for
@@ -24,14 +38,6 @@ attention to changes that materially alter behavior or extend functionality.
   `constructor.name === 'StorageClient'`. Production minifiers rename classes,
   so the name check left remote stores with `endpointURL: undefined` while
   sync still worked; clients that select a backup by URL (make primary) failed.
-- Allow immediate actions to chain wallet-managed change from transactions
-  awaiting background broadcast when settled change is insufficient. The child
-  broadcast recursively includes the delayed parent BEEF, preventing a large
-  funding output from making the wallet appear temporarily unfunded while
-  preserving settled-change preference and delayed-broadcast semantics.
-- Finish broadcasting durable permission-token grants before resuming the
-  waiting application request, preventing the grant transaction from briefly
-  reserving the wallet's funding inputs out from under the resumed action.
 - Let Storage Server operators select an explicit listener host while retaining
   the historical omitted-host behavior for existing callers. The official
   Wallet Infrastructure image uses this to bind direct-mode traffic on IPv4

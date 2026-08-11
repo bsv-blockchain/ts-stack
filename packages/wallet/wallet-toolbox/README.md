@@ -26,18 +26,16 @@ BSV Desktop and BSV Browser are the BSV Association reference wallet application
 | **MockChain**      | In-memory blockchain for testing — mock mining, UTXO tracking, and merkle proof generation without a network                                     |
 | **Entropy**        | `EntropyCollector` gathers mouse/touch entropy for high-quality randomness in browser environments                                               |
 
-Durable permission grants finish broadcasting their internal token transaction
-before the waiting application request resumes. This keeps the grant atomic from
-the caller's perspective and makes its funding change immediately reusable by a
-following wallet action. If broadcasting is unavailable, the grant rejects and
-the application can safely surface the error and retry; ephemeral one-time grants
-remain off-chain.
+Durable permission grants queue their internal token transaction for delayed
+broadcast, so permission approval does not inherit network-broadcast latency.
+The funding planner prefers settled change and uses queued permission ancestry
+only as a last resort, keeping the application path fast without hiding funds.
 
-Immediate actions can fund from wallet-managed change created by a transaction
-that is still awaiting background broadcast when settled change is insufficient.
-The wallet prefers settled change, then recursively includes the delayed parent
-in the child BEEF only when needed, so queued work cannot temporarily strand the
-wallet's balance behind a large reserved input.
+Immediate actions prefer completed, then unproven, then sending change. A
+pathological settled plan is compared with pending alternatives by exact
+serialized BEEF plus transaction bytes; queued ancestry is used only when it is
+necessary or smaller. Pending change is never withheld, so queued
+work cannot strand the balance behind a large reserved input.
 
 ### Packages
 
@@ -128,6 +126,11 @@ See [Managed change, sweeping, and recovery](./docs/managed-change-policy.md)
 for the default-basket invariant, automatic funding policy, and supported
 `internalizeAction` repair paths.
 
+See [Managed-change liquidity policy](./docs/managed-change-liquidity.md) for
+the 144-output / 5,000-satoshi defaults, gradual legacy-wallet migration,
+pending-parent policy, exact BEEF comparison, operator tuning, action-batch
+alignment, monitoring, and rollout guidance.
+
 See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
@@ -145,7 +148,7 @@ The planner uses the same exact / least-over / largest-under selection policy
 as the historical allocator, but proves economic sufficiency before writing a
 transaction and claims every selected input in one database transaction. Knex
 storage automatically adds a composite funding-selection index on migration;
-IndexedDB schema version 3 adds corresponding user/basket and outpoint indexes
+IndexedDB schema version 4 adds corresponding user/basket and outpoint indexes
 and resolves transaction-status eligibility in one indexed pass.
 
 The retained fragmented-funding benchmark is runnable with:

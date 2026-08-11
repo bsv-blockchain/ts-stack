@@ -112,6 +112,12 @@ import {
   putActionBatchPack as putBatchPack
 } from './methods/actionBatchBlobs'
 import { availableManagedChange, ManagedChangeInputCandidate } from './methods/availableManagedChange'
+import {
+  ManagedChangePolicy,
+  ManagedChangePolicyOptions,
+  defaultManagedChangePolicy,
+  validateManagedChangePolicy
+} from './methods/managedChangePolicy'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -121,6 +127,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   commissionPubKeyHex?: PubKeyHex
   maxRecursionDepth?: number
   readonly actionBatchMaxReservedOutputs: number
+  readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: SpendVerifierInterface
 
   static defaultOptions(): {
@@ -128,12 +135,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     commissionSatoshis: number
     commissionPubKeyHex: undefined
     actionBatchMaxReservedOutputs: number
+    managedChangePolicy: ManagedChangePolicy
   } {
     const opts = {
       feeModel: { model: 'sat/kb' as const, value: 100 },
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
-      actionBatchMaxReservedOutputs: 256
+      actionBatchMaxReservedOutputs: 256,
+      managedChangePolicy: defaultManagedChangePolicy()
     }
     return opts
   }
@@ -161,6 +170,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       )
     }
     this.actionBatchMaxReservedOutputs = maxReservedOutputs
+    this.managedChangePolicy = validateManagedChangePolicy(options.managedChangePolicy)
     this.scriptVerifier = options.scriptVerifier
   }
 
@@ -215,13 +225,21 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     excludeSending: boolean,
     trx?: TrxToken
   ): Promise<ManagedChangeInputCandidate[]> {
-    return (await this.findAvailableManagedChangeInputs(userId, basketId, excludeSending, trx))
-      .map(({ outputId, transactionId, satoshis, txid, vout }) => ({
+    const outputs = await this.findAvailableManagedChangeInputs(userId, basketId, excludeSending, trx)
+    // Keep prototype-level/custom provider fallbacks working even when a
+    // minimal older implementation has not exposed the additive batch status
+    // lookup. createAction resolves missing metadata before tier planning.
+    const findStatuses = this.findTransactionStatusesByIds?.bind(this)
+    const statuses = findStatuses == null
+      ? new Map<number, TransactionStatus>()
+      : await findStatuses(userId, outputs.map(output => output.transactionId), trx)
+    return outputs.map(({ outputId, transactionId, satoshis, txid, vout }) => ({
         outputId,
         transactionId,
         satoshis,
         txid,
-        vout
+        vout,
+        transactionStatus: statuses.get(transactionId)
       }))
   }
 
@@ -1631,6 +1649,12 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * Defaults to 256; -1 disables this cumulative provider limit.
    */
   actionBatchMaxReservedOutputs?: number
+  /**
+   * Optional wallet-managed liquidity tuning. Values are soft shaping and
+   * comparison budgets; none can prevent an otherwise fundable action. Each
+   * limit accepts -1 for an explicit operator-selected unlimited mode.
+   */
+  managedChangePolicy?: ManagedChangePolicyOptions
 }
 
 export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel {

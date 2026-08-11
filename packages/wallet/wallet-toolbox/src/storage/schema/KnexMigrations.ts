@@ -5,11 +5,17 @@ import { Chain } from '../../sdk/types'
 import { StorageKnex } from '../StorageKnex'
 import { WalletError } from '../../sdk/WalletError'
 import { WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
+import {
+  DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+  DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
+  LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
+} from '../methods/managedChangePolicy'
 
 export const AUTH_SESSION_MIGRATION = '2026-07-14-001 add shared auth sessions'
 export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor created index'
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
+export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed change liquidity defaults'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -143,6 +149,27 @@ export class KnexMigrations implements MigrationSource<string> {
             'idx_outputs_funding_selection'
           )
         })
+      }
+    }
+
+    migrations[MANAGED_CHANGE_POLICY_MIGRATION] = {
+      async up(knex) {
+        // Only the exact historical defaults identify an untouched basket.
+        // Operator-selected non-default values remain authoritative.
+        await knex('output_baskets')
+          .where({
+            name: 'default',
+            numberOfDesiredUTXOs: DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
+            minimumDesiredUTXOValue: LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
+          })
+          .update({
+            minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+            updated_at: knex.fn.now()
+          })
+      },
+      async down() {
+        // Intentionally irreversible. Restoring 32-satoshi liquidity units on
+        // rollback would actively re-fragment wallets that already migrated.
       }
     }
 
@@ -494,8 +521,8 @@ export class KnexMigrations implements MigrationSource<string> {
           table.increments('basketId')
           table.integer('userId').unsigned().references('userId').inTable('users').notNullable()
           table.string('name', 300).notNullable()
-          table.integer('numberOfDesiredUTXOs', 6).defaultTo(6).notNullable()
-          table.integer('minimumDesiredUTXOValue', 15).defaultTo(10000).notNullable()
+          table.integer('numberOfDesiredUTXOs', 6).defaultTo(DEFAULT_MANAGED_CHANGE_TARGET_UTXOS).notNullable()
+          table.integer('minimumDesiredUTXOValue', 15).defaultTo(DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS).notNullable()
           table.boolean('isDeleted').notNullable().defaultTo(false)
           table.unique(['name', 'userId'])
         })

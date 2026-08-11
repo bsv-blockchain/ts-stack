@@ -3,6 +3,7 @@ import {
   AUTH_SESSION_MIGRATION,
   CREATE_ACTION_FUNDING_INDEX_MIGRATION,
   KnexMigrations,
+  MANAGED_CHANGE_POLICY_MIGRATION,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
   StorageKnex,
   wait
@@ -200,6 +201,40 @@ describe('KnexMigrations tests', () => {
       await expect(knex('sqlite_master')
         .where({ type: 'index', name: 'idx_outputs_funding_selection' })
         .first()).resolves.toBeUndefined()
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5a upgrades only exact untouched managed-change defaults', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratemanagedchange.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('output_baskets', table => {
+        table.increments('basketId')
+        table.integer('userId').notNullable()
+        table.string('name').notNullable()
+        table.integer('numberOfDesiredUTXOs').notNullable()
+        table.bigInteger('minimumDesiredUTXOValue').notNullable()
+        table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now())
+      })
+      await knex('output_baskets').insert([
+        { userId: 1, name: 'default', numberOfDesiredUTXOs: 144, minimumDesiredUTXOValue: 32 },
+        { userId: 2, name: 'default', numberOfDesiredUTXOs: 144, minimumDesiredUTXOValue: 64 },
+        { userId: 3, name: 'default', numberOfDesiredUTXOs: 100, minimumDesiredUTXOValue: 32 },
+        { userId: 4, name: 'application basket', numberOfDesiredUTXOs: 144, minimumDesiredUTXOValue: 32 }
+      ])
+      const source = new KnexMigrations('test', 'managed change migration test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(MANAGED_CHANGE_POLICY_MIGRATION)
+
+      await migration.up(knex)
+
+      const rows = await knex('output_baskets').orderBy('userId')
+      expect(rows.map(row => Number(row.minimumDesiredUTXOValue))).toEqual([5_000, 64, 32, 32])
+      await migration.down?.(knex)
+      const afterDown = await knex('output_baskets').orderBy('userId')
+      expect(afterDown.map(row => Number(row.minimumDesiredUTXOValue))).toEqual([5_000, 64, 32, 32])
     } finally {
       await knex.destroy()
     }

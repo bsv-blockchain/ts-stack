@@ -62,6 +62,45 @@ production-shaped rows under the real memory limit, reduce concurrency when
 needed, and migrate clients to bounded pages or the balance special operation
 before restoring the standard 1,000-row maximum.
 
+### Managed-change liquidity
+
+The official image applies Wallet Toolbox's progressive managed-change policy
+without requiring a custom build. New and exact untouched legacy default
+baskets target 144 independently useful outputs with a preferred value of
+5,000 satoshis. The value is a liquidity preference, not a dust limit: a valid
+smaller remainder is retained and no action is refused merely because its
+change cannot reach 5,000 satoshis.
+
+Three environment settings bound the optional work performed by one
+user-authorized action:
+
+| Setting                                                     | Default | Meaning                                                                                             |
+| ----------------------------------------------------------- | ------: | --------------------------------------------------------------------------------------------------- |
+| `WALLET_STORAGE_MANAGED_CHANGE_MAX_OUTPUTS_PER_ACTION`      |     `8` | Maximum fanout while shaping real surplus.                                                          |
+| `WALLET_STORAGE_MANAGED_CHANGE_MIGRATION_INPUTS_PER_ACTION` |     `4` | Maximum fee-positive legacy fragments consumed only to improve the pool.                            |
+| `WALLET_STORAGE_MANAGED_CHANGE_PENDING_COMPARISON_INPUTS`   |    `16` | Settled-input count that triggers exact transaction-plus-BEEF comparison with pending alternatives. |
+
+Each value accepts `-1`. For the first two settings, `-1` removes the
+per-action work bound while the available funds and basket target remain
+natural bounds. For pending comparison, `-1` disables the optional comparison;
+it does not hide pending funds when they are required to fund an action.
+Unlimited fanout or migration can create large transactions and ancestry
+payloads, so use it only after production-shaped measurement.
+
+Funding always prefers completed parents, then unproven parents, then sending
+parents. Each tier retains the former funding shape as a compatibility fallback
+before widening to less-preferred ancestry, so these preferences cannot add a
+new insufficient-funds result. Action-batch reservations follow the same
+ordering. The Monitor's read-only managed-change report makes pool health and
+last-resort pending liquidity observable without signing or consolidating on
+the user's behalf; select **managed-change liquidity (read only)** in the
+authenticated Monitor admin UI's UTXO review.
+
+See the Wallet Toolbox
+[managed-change liquidity guide](../../packages/wallet/wallet-toolbox/docs/managed-change-liquidity.md)
+for the complete algorithm, migration predicate, fee model, action-batch
+behavior, rollout checks, and direct-library configuration.
+
 ### Monitor task profile and Arcade events
 
 `WALLET_INFRA_ROLE=all` or `monitor` starts monitor work by default. Set
