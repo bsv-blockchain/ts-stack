@@ -37,8 +37,9 @@ attention to changes that materially alter behavior or extend functionality.
   bounded and measured from exact packed artifacts. The browser contract now
   measures 1,557,196 raw / 365,526 gzip / 287,329 Brotli bytes with Vite and
   1,216,272 raw / 334,453 gzip / 268,547 Brotli bytes with esbuild. Linux CI
-  observed 1,558,352 Vite raw bytes; the reviewed ceilings advance by at most
-  1.0% and retain narrow headroom. Mobile measures 1,616,960 Metro bytes and
+  observed 1,558,352 Vite raw bytes and 1,218,452 esbuild raw bytes; the
+  reviewed ceilings advance by at most 1.0% and retain narrow headroom. Mobile
+  measures 1,616,960 Metro bytes and
   3,266,887 raw Hermes bytes locally; Linux CI observed 3,271,396 raw Hermes
   bytes. The Metro and compressed-mobile ceilings remain unchanged, while the
   Hermes raw ceiling advances by 0.61% from the pre-liquidity-policy value.
