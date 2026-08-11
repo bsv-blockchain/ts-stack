@@ -46,6 +46,31 @@ describe('StorageProvider batch fallbacks', () => {
     expect(findAvailableManagedChangeInputs).toHaveBeenCalledWith(1, 2, true, trx)
   })
 
+  test('enriches projected funding candidates when a custom provider exposes status lookup', async () => {
+    const rows = [{
+      outputId: 11,
+      transactionId: 22,
+      satoshis: 33,
+      txid: '44'.repeat(32),
+      vout: 5
+    }] as TableOutput[]
+    const provider = {
+      findAvailableManagedChangeInputs: jest.fn(async () => rows),
+      findTransactionStatusesByIds: jest.fn(async () => new Map([[22, 'sending']]))
+    }
+
+    const result = await StorageProvider.prototype.findAvailableManagedChangeInputCandidates.call(
+      provider,
+      1,
+      2,
+      false,
+      trx
+    )
+
+    expect(result).toEqual([{ ...rows[0], transactionStatus: 'sending' }])
+    expect(provider.findTransactionStatusesByIds).toHaveBeenCalledWith(1, [22], trx)
+  })
+
   test('filters locked funding rows by owner, reservation, and source status', async () => {
     const eligible = { outputId: 1, userId: 7, transactionId: 11 }
     const reserved = { outputId: 2, userId: 7, transactionId: 12 }

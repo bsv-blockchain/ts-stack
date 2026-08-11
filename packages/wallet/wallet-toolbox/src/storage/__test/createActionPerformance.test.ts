@@ -179,6 +179,45 @@ describe('createAction funding performance', () => {
     expect(result.inputs[0].sourceTxid).toBe(candidates[2].txid)
   })
 
+  test('keeps the settled baseline when exact BEEF cost comparison cannot load proofs', async () => {
+    const candidates = await replaceFundingCandidatesAcrossSources([
+      { satoshis: 4_000, status: 'completed' },
+      { satoshis: 4_000, status: 'completed', source: 0 },
+      { satoshis: 11_000, status: 'sending', source: 1 }
+    ])
+    ctx.activeStorage.managedChangePolicy.pendingComparisonInputs = 1
+    jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
+      .mockRejectedValue(new Error('proof service unavailable'))
+
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(5_000)
+    )
+
+    expect(result.inputs).toHaveLength(2)
+    expect(result.inputs.every(input => input.sourceTxid === candidates[0].txid)).toBe(true)
+    expect(result.inputs.some(input => input.sourceTxid === candidates[2].txid)).toBe(false)
+  })
+
+  test('rejects a custom-provider candidate whose ancestry cannot be resolved', async () => {
+    await replaceFundingCandidates(1, 5_000)
+    const original = ctx.activeStorage.findAvailableManagedChangeInputCandidates.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'findAvailableManagedChangeInputCandidates')
+      .mockImplementation(async (...args) => (await original(...args)).map(candidate => ({
+        ...candidate,
+        transactionStatus: undefined
+      })))
+    jest.spyOn(ctx.activeStorage, 'findTransactionStatusesByIds').mockResolvedValue(new Map())
+
+    await expect(ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000)
+    )).rejects.toMatchObject({
+      code: 'WERR_INTERNAL',
+      message: expect.stringContaining('missing its source transaction status')
+    })
+  })
+
   test('operator can disable pending comparison without disabling last-resort pending funding', async () => {
     const candidates = await replaceFundingCandidatesAcrossSources([
       { satoshis: 4_000, status: 'completed' },
