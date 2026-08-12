@@ -50,9 +50,9 @@ interface WorkerFailure {
 /**
  * Bounded Node worker pool for complete bulk-header verification.
  *
- * Byte buffers transfer to the worker and back without cloning. Queue bounds
- * provide explicit admission control rather than allowing validation work to
- * consume unbounded memory.
+ * A bounded private copy transfers to the worker and back without structured
+ * cloning. This preserves the caller's source bytes if a worker crashes while
+ * queue bounds prevent validation copies from consuming unbounded memory.
  *
  * @public
  */
@@ -210,8 +210,5 @@ function positiveInteger(value: number, name: string): number {
 }
 
 function exactArrayBuffer(data: Uint8Array): ArrayBuffer {
-  if (data.buffer instanceof ArrayBuffer && data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
-    return data.buffer
-  }
   return data.slice().buffer as ArrayBuffer
 }

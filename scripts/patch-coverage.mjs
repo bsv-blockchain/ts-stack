@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 export const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 const EXCLUDED_SOURCE_PATTERNS = [
-  /(?:^|\/)__tests__(?:\/|$)/,
+  /(?:^|\/)__tests(?:__)?(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
   /(?:^|\/)benchmarks?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,

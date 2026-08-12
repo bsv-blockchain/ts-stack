@@ -42,6 +42,12 @@ test('patch coverage ignores tests and reports uncovered production branches', (
 diff --git a/packages/sdk/src/example.test.ts b/packages/sdk/src/example.test.ts
 +++ b/packages/sdk/src/example.test.ts
 @@ -1,0 +1,20 @@
+diff --git a/packages/sdk/src/__tests/fixtures/slow-worker.cjs b/packages/sdk/src/__tests/fixtures/slow-worker.cjs
++++ b/packages/sdk/src/__tests/fixtures/slow-worker.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
++++ b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
+@@ -0,0 +1,20 @@
 `)
   const coverage = mergeLcov([
     `SF:packages/sdk/src/example.ts

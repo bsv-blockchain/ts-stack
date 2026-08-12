@@ -164,6 +164,67 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     await expect(chaintracks.getPresentHeight()).resolves.toBe(420)
   })
 
+  test('reports availability entirely from local process state', () => {
+    const bulkData = { validation: { submitted: 3 }, cache: { hits: 2 } }
+    const storage = { log: () => {}, bulkManager: { getStats: () => bulkData } }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: storage as any,
+      bulkIngestors: [{ getPresentHeight: async () => 420 } as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    ;(chaintracks as any).available = true
+    ;(chaintracks as any).startupError = new Error('startup warning')
+    ;(chaintracks as any).lastPresentHeight = 420
+    ;(chaintracks as any).lastPresentHeightMsecs = 1_700_000_000_000
+    ;(chaintracks as any).presentHeightRefresh = Promise.resolve(421)
+    ;(chaintracks as any).mainLoopHeartbeatMsecs = 1_700_000_001_000
+    ;(chaintracks as any).sourceStatus.set('bulk:0', {
+      source: 'bulk:0',
+      role: 'bulk',
+      state: 'healthy',
+      consecutiveFailures: 0
+    })
+
+    const snapshot = chaintracks.getAvailabilitySnapshot()
+    expect(snapshot).toMatchObject({
+      available: true,
+      startupError: 'startup warning',
+      presentHeight: 420,
+      presentHeightUpdatedAt: '2023-11-14T22:13:20.000Z',
+      presentHeightRefreshInFlight: true,
+      mainLoopHeartbeatAt: '2023-11-14T22:13:21.000Z',
+      bulkData
+    })
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'bulk:0', state: 'healthy' })])
+    )
+
+    const cold = new Chaintracks({
+      chain: 'main',
+      storage: storage as any,
+      bulkIngestors: [{ getPresentHeight: async () => 420 } as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    const coldSnapshot = cold.getAvailabilitySnapshot()
+    expect(coldSnapshot).toMatchObject({
+      available: false,
+      startupError: undefined,
+      presentHeight: undefined,
+      presentHeightUpdatedAt: undefined,
+      presentHeightRefreshInFlight: false,
+      mainLoopHeartbeatAt: undefined,
+      bulkData
+    })
+    expect(coldSnapshot.sources).toHaveLength(2)
+  })
+
   test('uses a stale last-good height when providers fail and reports source exhaustion otherwise', async () => {
     const unavailable = { getPresentHeight: jest.fn(async () => undefined) }
     const emptyStorage = {
