@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.33",
+  "version": "1.1.34",
   "overrides": {
     "brace-expansion": "5.0.9",
     "gaxios": "7.3.0",
@@ -41,6 +41,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "description": "",
   "devDependencies": {
+    "@bsv/message-box-client": "^2.4.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
