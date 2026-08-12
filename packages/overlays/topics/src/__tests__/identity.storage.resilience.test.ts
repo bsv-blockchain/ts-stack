@@ -97,7 +97,7 @@ describe('IdentityStorageManager index resilience', () => {
     expect(calls).toBeGreaterThan(0)
 
     await storage.findByAttribute({ userName: 'deggen' })
-    expect((createIndex as jest.Mock).mock.calls.length).toBe(calls)
+    expect((createIndex as jest.Mock).mock.calls).toHaveLength(calls)
   })
 })
 
