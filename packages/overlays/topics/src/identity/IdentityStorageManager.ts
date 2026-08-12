@@ -1,4 +1,5 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { IdentityAttributes, IdentityRecord, UTXOReference } from './types.js'
 import { Base64String, Certificate, PubKeyHex } from '@bsv/sdk'
 
@@ -8,56 +9,25 @@ interface Query {
 
 export class IdentityStorageManager {
   private readonly records: Collection<IdentityRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('IdentityStorageManager', () => [
+    { label: 'txid_1_outputIndex_1', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    { label: 'certificate.serialNumber_1', collection: this.records, keys: { 'certificate.serialNumber': 1 } },
+    { label: 'certificate.subject_1', collection: this.records, keys: { 'certificate.subject': 1 } },
+    { label: 'certificate.certifier_1', collection: this.records, keys: { 'certificate.certifier': 1 } },
+    { label: 'certificate.subject_1_certificate.certifier_1', collection: this.records, keys: { 'certificate.subject': 1, 'certificate.certifier': 1 } },
+    { label: 'certificate.subject_1_certificate.type_1', collection: this.records, keys: { 'certificate.subject': 1, 'certificate.type': 1 } },
+    { label: 'certificate.fields.userName_1', collection: this.records, keys: { 'certificate.fields.userName': 1 } },
+    { label: 'certificate.fields.userName_1_certificate.certifier_1', collection: this.records, keys: { 'certificate.fields.userName': 1, 'certificate.certifier': 1 } },
+    { label: 'searchableAttributes_text', collection: this.records, keys: { searchableAttributes: 'text' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<IdentityRecord>('identityRecords')
   }
 
-  /**
-   * Index creation is best-effort: a collection that predates the unique
-   * (txid, outputIndex) index can hold duplicate rows, and the resulting E11000 must not
-   * take every read down with it. Each index is attempted independently, failures are
-   * logged, and a failed run is not cached — the next call retries, so a node recovers
-   * once the duplicates are cleaned up without needing a restart.
-   */
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      const specs: Array<[string, Parameters<Collection<IdentityRecord>['createIndex']>[0], { unique?: boolean }]> = [
-        ['txid_1_outputIndex_1', { txid: 1, outputIndex: 1 }, { unique: true }],
-        ['certificate.serialNumber_1', { 'certificate.serialNumber': 1 }, {}],
-        ['certificate.subject_1', { 'certificate.subject': 1 }, {}],
-        ['certificate.certifier_1', { 'certificate.certifier': 1 }, {}],
-        ['certificate.subject_1_certificate.certifier_1', { 'certificate.subject': 1, 'certificate.certifier': 1 }, {}],
-        ['certificate.subject_1_certificate.type_1', { 'certificate.subject': 1, 'certificate.type': 1 }, {}],
-        ['certificate.fields.userName_1', { 'certificate.fields.userName': 1 }, {}],
-        [
-          'certificate.fields.userName_1_certificate.certifier_1',
-          { 'certificate.fields.userName': 1, 'certificate.certifier': 1 },
-          {}
-        ],
-        ['searchableAttributes_text', { searchableAttributes: 'text' }, {}]
-      ]
-
-      const results = await Promise.all(
-        specs.map(async ([name, keys, options]) => {
-          try {
-            await this.records.createIndex(keys, options)
-            return true
-          } catch (error) {
-            console.error(
-              `IdentityStorageManager: failed to create index ${name} on identityRecords; continuing without it`,
-              error
-            )
-            return false
-          }
-        })
-      )
-
-      // Retry on the next call so a repaired collection recovers in place.
-      if (results.includes(false)) this.indexInit = undefined
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, certificate: Certificate): Promise<void> {

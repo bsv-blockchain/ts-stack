@@ -1,26 +1,31 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { DIDRecord } from './types.js'
 import { Base64String } from '@bsv/sdk'
 import { LookupFormula } from '@bsv/overlay'
 
 export class DIDStorageManager {
   private readonly records: Collection<DIDRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('DIDStorageManager', () => [
+    { label: 'searchableAttributes_text', collection: this.records, keys: { searchableAttributes: 'text' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<DIDRecord>('didRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({ searchableAttributes: 'text' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, serialNumber: Base64String): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, serialNumber, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { serialNumber }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

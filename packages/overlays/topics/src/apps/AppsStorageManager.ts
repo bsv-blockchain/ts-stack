@@ -1,30 +1,35 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { LookupFormula } from '@bsv/overlay'
 import { AppCatalogRecord, PublishedAppMetadata } from './types.js'
 
 export class AppsStorageManager {
   private readonly records: Collection<AppCatalogRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('AppsStorageManager', () => [
+    { label: 'metadataTextIndex', collection: this.records, keys: {
+        'metadata.name': 'text',
+        'metadata.description': 'text',
+        'metadata.tags': 'text',
+        'metadata.domain': 'text'
+      } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<AppCatalogRecord>('appsCatalogRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({
-        'metadata.name': 'text',
-        'metadata.description': 'text',
-        'metadata.tags': 'text',
-        'metadata.domain': 'text'
-      })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, metadata: PublishedAppMetadata): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, metadata, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { metadata }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

@@ -1,26 +1,25 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { KVStoreRecord } from './types.js'
 import { PubKeyHex, WalletProtocol } from '@bsv/sdk'
 
 export class KVStoreStorageManager {
   private readonly records: Collection<KVStoreRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('KVStoreStorageManager', () => [
+    { label: 'key_1', collection: this.records, keys: { key: 1 } },
+    { label: 'protocolID_1', collection: this.records, keys: { protocolID: 1 } },
+    { label: 'controller_1', collection: this.records, keys: { controller: 1 } },
+    { label: 'txid_1_outputIndex_1', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    { label: 'tags_1', collection: this.records, keys: { tags: 1 } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-        await Promise.all([
-          this.records.createIndex({ key: 1 }),
-          this.records.createIndex({ protocolID: 1 }),
-          this.records.createIndex({ controller: 1 }),
-          this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-          this.records.createIndex({ tags: 1 })
-        ])
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (
@@ -41,7 +40,7 @@ export class KVStoreStorageManager {
       tags: tags && tags.length > 0 ? tags : undefined,
       createdAt: new Date()
     }
-    await this.records.insertOne(record)
+    await this.records.updateOne({ txid, outputIndex }, { $set: record }, { upsert: true })
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

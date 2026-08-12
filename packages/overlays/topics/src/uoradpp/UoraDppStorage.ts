@@ -1,4 +1,5 @@
 import { Collection, Db, Filter } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { UoraDppQuery, UoraDppRecord } from './types.js'
 import { UTXOReference } from '../any/types.js'
 
@@ -17,35 +18,25 @@ const SELECTABLE = [
 
 export class UoraDppStorage {
   private readonly records: Collection<UoraDppRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('UoraDppStorage', () => [
+    { label: 'issuerIndex', collection: this.records, keys: { issuer: 1, createdAt: 1 }, options: { name: 'issuerIndex' } },
+    // `issuerKey` selects on its own, so it needs its own index. Without one
+    // every lookup by identity key was a collection scan and a sort.
+    { label: 'issuerKeyIndex', collection: this.records, keys: { issuerKey: 1, createdAt: 1 }, options: { name: 'issuerKeyIndex' } },
+    { label: 'subjectIndex', collection: this.records, keys: { subject: 1, createdAt: 1 }, options: { name: 'subjectIndex' } },
+    { label: 'attestationIdIndex', collection: this.records, keys: { attestationId: 1 }, options: { name: 'attestationIdIndex' } },
+    { label: 'digestIndex', collection: this.records, keys: { digest: 1 }, options: { name: 'digestIndex' } },
+    { label: 'anchoredByIndex', collection: this.records, keys: { anchoredBy: 1, createdAt: 1 }, options: { name: 'anchoredByIndex' } },
+    { label: 'outpointIndex', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { name: 'outpointIndex', unique: true } }
+  ])
 
   constructor(private readonly db: Db) {
     this.records = db.collection<UoraDppRecord>('uoraDppAnchors')
   }
 
   private async ensureIndexes(): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({ issuer: 1, createdAt: 1 }, { name: 'issuerIndex' })
-      // `issuerKey` selects on its own, so it needs its own index. Without one
-      // every lookup by identity key was a collection scan and a sort.
-      await this.records.createIndex({ issuerKey: 1, createdAt: 1 }, { name: 'issuerKeyIndex' })
-      await this.records.createIndex({ subject: 1, createdAt: 1 }, { name: 'subjectIndex' })
-      await this.records.createIndex({ attestationId: 1 }, { name: 'attestationIdIndex' })
-      await this.records.createIndex({ digest: 1 }, { name: 'digestIndex' })
-      await this.records.createIndex({ anchoredBy: 1, createdAt: 1 }, { name: 'anchoredByIndex' })
-      await this.records.createIndex(
-        { txid: 1, outputIndex: 1 },
-        { name: 'outpointIndex', unique: true }
-      )
-    })().catch(error => {
-      // A failed build must not be remembered as a finished one. Leaving the
-      // rejected promise in place made one unlucky moment disable the
-      // collection's reads and writes for the life of the process; clearing it
-      // lets the next caller try again.
-      this.indexInit = undefined
-      throw error
-    })
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   /**

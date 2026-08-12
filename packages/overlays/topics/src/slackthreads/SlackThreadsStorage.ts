@@ -1,24 +1,29 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { SlackThreadRecord, UTXOReference } from './types.js'
 
 export class SlackThreadsStorage {
   private readonly records: Collection<SlackThreadRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('SlackThreadsStorage', () => [
+    { label: 'threadHashIndex', collection: this.records, keys: { threadHash: 1 }, options: { name: 'threadHashIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<SlackThreadRecord>('slackThreadRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({ threadHash: 1 }, { name: 'threadHashIndex' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, threadHash: string): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, threadHash, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { threadHash }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

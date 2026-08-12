@@ -1,24 +1,29 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { HelloWorldRecord, UTXOReference } from './types.js'
 
 export class HelloWorldStorage {
   private readonly records: Collection<HelloWorldRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('HelloWorldStorage', () => [
+    { label: 'MessageTextIndex', collection: this.records, keys: { message: 'text' }, options: { name: 'MessageTextIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<HelloWorldRecord>('helloWorldRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-        await this.records.createIndex({ message: 'text' }, { name: 'MessageTextIndex' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, message: string): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, message, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { message }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {
