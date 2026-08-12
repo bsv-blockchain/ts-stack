@@ -46,6 +46,35 @@ describe('DurableFileBulkFileDownloadBudget', () => {
     await expect(budget.consume(1)).rejects.toThrow('Unable to read durable bulk-header download budget')
   })
 
+  test('rejects invalid configuration before touching durable state', () => {
+    expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: 0, stateFile })).toThrow(
+      /maxBytes parameter.*positive safe integer/
+    )
+    expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: Number.NaN, stateFile })).toThrow(
+      /maxBytes parameter.*positive safe integer/
+    )
+    expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: 1, stateFile, windowMsecs: 0 })).toThrow(
+      /windowMsecs parameter.*positive safe integer/
+    )
+    expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: 1, stateFile: ' ' })).toThrow(
+      /stateFile parameter.*non-empty path/
+    )
+  })
+
+  test.each([
+    ['null', null],
+    ['missing fields', {}],
+    [
+      'consumption beyond the persisted maximum',
+      { version: 1, maxBytes: 5, windowMsecs: 10, windowStartedAt: 0, consumedBytes: 6 }
+    ]
+  ])('fails closed for structurally invalid durable state: %s', async (_case, invalidState) => {
+    await fs.writeFile(stateFile, JSON.stringify(invalidState))
+    const budget = new DurableFileBulkFileDownloadBudget({ maxBytes: 100, stateFile })
+
+    await expect(budget.initialize()).rejects.toThrow('download budget state is invalid')
+  })
+
   test('starts a new durable window only after the configured interval', async () => {
     let now = 1000
     const budget = new DurableFileBulkFileDownloadBudget({

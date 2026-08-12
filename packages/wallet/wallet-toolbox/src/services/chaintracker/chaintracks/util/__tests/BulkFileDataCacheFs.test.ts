@@ -44,6 +44,29 @@ describe('BulkFileDataCacheFs', () => {
     await expect(fs.readFile(path.join(root, 'quarantine', quarantine[0]))).resolves.toEqual(Buffer.from(data))
   })
 
+  test('requires a canonical SHA-256 digest before filesystem access', async () => {
+    const cache = new BulkFileDataCacheFs(root)
+
+    await expect(cache.get({ ...file, fileHash: undefined })).rejects.toThrow('Missing bulk-header digest')
+    await expect(cache.get({ ...file, fileHash: Buffer.alloc(31).toString('base64') })).rejects.toThrow(
+      'Invalid bulk-header digest'
+    )
+    await expect(cache.get({ ...file, fileHash: file.fileHash!.replace(/=$/, '') })).rejects.toThrow(
+      'Invalid bulk-header digest'
+    )
+  })
+
+  test('quarantines only the rejected bytes observed by the validator', async () => {
+    const cache = new BulkFileDataCacheFs(root)
+    await cache.set(file, data)
+
+    await cache.quarantine(file, 'stale rejection', new Uint8Array(80).fill(7))
+    await expect(cache.get(file)).resolves.toEqual(data)
+
+    await cache.quarantine(file, 'confirmed rejection', data)
+    await expect(cache.get(file)).resolves.toBeUndefined()
+  })
+
   test('promotes a validated legacy file without removing the legacy copy', async () => {
     const legacy = path.join(root, 'legacy')
     const cacheRoot = path.join(root, 'cache')

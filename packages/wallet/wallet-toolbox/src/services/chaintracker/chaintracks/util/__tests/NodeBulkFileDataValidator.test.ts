@@ -9,6 +9,7 @@ import {
   type BulkFileDataValidatorWorkerPort,
   type BulkFileDataValidatorWorkerRequest
 } from '../BulkFileDataValidator.worker'
+import { InlineBulkFileDataValidator } from '../InlineBulkFileDataValidator'
 import { NodeBulkFileDataValidator } from '../NodeBulkFileDataValidator'
 
 function request(data: Uint8Array) {
@@ -76,6 +77,22 @@ describe('NodeBulkFileDataValidator', () => {
     await handler(workerRequest(19, data))
 
     expect(messages[0].message).toMatchObject({ id: 19, ok: true })
+  })
+
+  test('rejects final hash and chainwork mismatches with the original bytes', async () => {
+    const validator = new InlineBulkFileDataValidator()
+    const data = Uint8Array.from(genesisBuffer('main'))
+
+    await expect(validator.validate({ ...request(data), lastHash: 'ff'.repeat(32) })).rejects.toMatchObject({
+      name: 'BulkFileDataValidationError',
+      message: expect.stringContaining('file.lastHash'),
+      data
+    })
+    await expect(validator.validate({ ...request(data), lastChainWork: 'ff'.repeat(32) })).rejects.toMatchObject({
+      name: 'BulkFileDataValidationError',
+      message: expect.stringContaining('file.lastChainWork'),
+      data
+    })
   })
 
   test.each([

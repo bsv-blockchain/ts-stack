@@ -77,6 +77,25 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
   const data = Uint8Array.from(genesisBuffer('main'))
   const file = fixtureFile(data)
 
+  test('rejects invalid failed-load cooldown configuration', () => {
+    expect(
+      () =>
+        new BulkFileDataManager({
+          chain: 'main',
+          maxPerFile: 100,
+          failedLoadRetryMsecs: -1
+        })
+    ).toThrow(/failedLoadRetryMsecs parameter.*non-negative safe integer/)
+    expect(
+      () =>
+        new BulkFileDataManager({
+          chain: 'main',
+          maxPerFile: 100,
+          failedLoadRetryMsecs: Number.NaN
+        })
+    ).toThrow(/failedLoadRetryMsecs parameter.*non-negative safe integer/)
+  })
+
   test('coalesces concurrent misses and reuses the persisted object after restart', async () => {
     let resolveDownload!: (value: Uint8Array) => void
     const download = jest.fn(
@@ -179,6 +198,18 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
     expect(manager.getStats()).toMatchObject({ loadBackoffs: 1 })
   })
 
+  test('retries an immutable-object load after a zero-duration backoff expires', async () => {
+    const download = jest.fn(async () => {
+      throw new Error('still unavailable')
+    })
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache(), undefined, 0)
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('still unavailable')
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('still unavailable')
+    expect(download).toHaveBeenCalledTimes(2)
+    expect(manager.getStats()).toMatchObject({ loadBackoffs: 0 })
+  })
+
   test('releases the manager lock while an immutable snapshot waits for I/O', async () => {
     let resolveDownload!: (value: Uint8Array) => void
     const download = jest.fn(
@@ -228,5 +259,30 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
     await expect(manager.getDataFromFile(storageBacked, 0, 80)).rejects.toThrow('a match for retrieved data')
     expect(storageGet).toHaveBeenCalledWith(7)
     expect(download).not.toHaveBeenCalled()
+  })
+
+  test('rejects a descriptor that is not present in the current manager snapshot', async () => {
+    const manager = await managerWith(file, fixtureFetch(jest.fn(async () => data)), memoryCache())
+
+    await expect(manager.getDataFromFile({ ...file, firstHeight: 100 })).rejects.toThrow(
+      'a match for 100, 1 in the BulkFileDataManager'
+    )
+  })
+
+  test('fails closed when an indexed storage object disappears', async () => {
+    const storageBacked = { ...file, fileId: 7, sourceUrl: undefined }
+    const manager = await managerWith(storageBacked, fixtureFetch(jest.fn(async () => data)), memoryCache())
+    manager['storage'] = { getBulkFileData: jest.fn(async () => undefined) } as never
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('data not found for fileId 7')
+  })
+
+  test('fails closed when a remote immutable object disappears', async () => {
+    const download = jest.fn(async () => undefined as never)
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache())
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow(
+      `data not found for sourceUrl ${file.sourceUrl}/${file.fileName}`
+    )
   })
 })
