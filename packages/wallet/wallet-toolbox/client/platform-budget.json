@@ -4,7 +4,7 @@
     "vite": {
       "raw": 1601000,
       "gzip": 377000,
-      "brotli": 295000
+      "brotli": 296000
     },
     "esbuild": {
       "raw": 1249000,

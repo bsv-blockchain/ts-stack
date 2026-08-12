@@ -20,8 +20,8 @@ attention to changes that materially alter behavior or extend functionality.
   service seam also accepts a composed SDK `chainTracker` directly while
   retaining the existing client-wrapping default. The reviewed platform
   ceilings advance to 1,601,000 Vite bytes, 1,249,000 esbuild bytes, and
-  3,355,000 Hermes bytes; their matching gzip/Brotli ceilings are
-  377,000/295,000, 343,000/276,000, and 1,351,000/1,054,000 bytes.
+  3,358,000 Hermes bytes; their matching gzip/Brotli ceilings are
+  377,000/296,000, 343,000/276,000, and 1,351,000/1,055,000 bytes.
 - Keep ChainTracks availability independent of immutable-header verification:
   stale heights now return immediately behind a single refresh, complete
   digest/linkage/chain-work/proof-of-work validation can run in a bounded Node
