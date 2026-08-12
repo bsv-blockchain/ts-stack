@@ -859,7 +859,7 @@ async function main() {
       // Stop chaintracks
       log.info({ operation: 'shutdown.chaintracks' }, 'Stopping chaintracks')
       await chaintracks.destroy()
-      await (bulkFileDataValidator as { destroy?: () => Promise<void> }).destroy?.()
+      await (bulkFileDataValidator as { destroy?: () => Promise<void> } | undefined)?.destroy?.()
 
       log.info({ operation: 'shutdown', outcome: 'ok' }, 'All servers stopped successfully')
       process.exit(0)
