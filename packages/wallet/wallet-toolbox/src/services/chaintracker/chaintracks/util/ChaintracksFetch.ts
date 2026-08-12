@@ -148,7 +148,17 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       try {
         return await this.requestAttempt(url, init, kind, maxResponseBytes, controller)
       } catch (error) {
-        const fetchFailure = this.asFetchError(error, url, kind, controller.signal.aborted)
+        const timedOut = controller.signal.aborted
+        let fetchFailure: ChaintracksFetchError
+        if (error instanceof ChaintracksFetchError) fetchFailure = error
+        else {
+          fetchFailure = new ChaintracksFetchError(
+            `Failed to ${kind} from ${url}: ${timedOut ? 'request timed out' : String(error)}`,
+            url,
+            0,
+            timedOut ? 'Request Timeout' : 'Network Error'
+          )
+        }
         if (!fetchFailure.retryable || retry >= this.maxRetries) throw fetchFailure
         await wait(this.retryWaitMsecs(retry, fetchFailure.retryAfterMsecs))
       } finally {
@@ -170,16 +180,6 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       throw fetchError(url, response, kind)
     }
     return await this.readResponseBytes(url, response, kind, maxResponseBytes)
-  }
-
-  private asFetchError(error: unknown, url: string, kind: string, timedOut: boolean): ChaintracksFetchError {
-    if (error instanceof ChaintracksFetchError) return error
-    return new ChaintracksFetchError(
-      `Failed to ${kind} from ${url}: ${timedOut ? 'request timed out' : String(error)}`,
-      url,
-      0,
-      timedOut ? 'Request Timeout' : 'Network Error'
-    )
   }
 
   private async readResponseBytes(
