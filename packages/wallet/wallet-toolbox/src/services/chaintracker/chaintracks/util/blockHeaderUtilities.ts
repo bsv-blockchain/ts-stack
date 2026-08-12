@@ -370,10 +370,9 @@ const proofOfWorkExceptions = new Map([
   ['6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594', 0x1d00ffff]
 ])
 
-function validateConsensusProofOfWork(hash: string, bits: number): true {
-  if (proofOfWorkExceptions.get(hash) === bits) return true
+function validateConsensusProofOfWork(hash: string, bits: number): void {
+  if (proofOfWorkExceptions.get(hash) === bits) return
   validateHeaderDifficulty(asArray(hash, 'hex'), bits)
-  return true
 }
 
 function validateCompactTarget(bits: number): BigNumber {
@@ -383,8 +382,7 @@ function validateCompactTarget(bits: number): BigNumber {
   const size = bits >>> 24
   const word = bits & 0x007fffff
   const negative = word !== 0 && (bits & 0x00800000) !== 0
-  const overflow =
-    word !== 0 && (size > 34 || (word > 0xff && size > 33) || (word > 0xffff && size > 32))
+  const overflow = word !== 0 && (size > 34 || (word > 0xff && size > 33) || (word > 0xffff && size > 32))
   if (word === 0 || negative || overflow) {
     throw new Error('Block target encoding is invalid.')
   }
@@ -406,7 +404,8 @@ function validateCompactTarget(bits: number): BigNumber {
  * @publicbody
  */
 export function validateHeaderProofOfWork(header: BlockHeader): true {
-  return validateConsensusProofOfWork(header.hash, header.bits)
+  validateConsensusProofOfWork(header.hash, header.bits)
+  return true
 }
 
 /**

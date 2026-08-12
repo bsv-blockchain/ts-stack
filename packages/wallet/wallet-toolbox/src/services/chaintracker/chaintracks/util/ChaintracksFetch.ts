@@ -146,35 +146,40 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), this.timeoutMsecs)
       try {
-        const response = await fetch(url, { ...init, signal: controller.signal })
-        if (!response.ok) {
-          await response.body?.cancel().catch(() => undefined)
-          const error = fetchError(url, response, kind)
-          if (error.retryable && retry < this.maxRetries) {
-            await wait(this.retryWaitMsecs(retry, error.retryAfterMsecs))
-            continue
-          }
-          throw error
-        }
-        return await this.readResponseBytes(url, response, kind, maxResponseBytes)
+        return await this.requestAttempt(url, init, kind, maxResponseBytes, controller)
       } catch (error) {
-        if (error instanceof ChaintracksFetchError) throw error
-        const timedOut = controller.signal.aborted
-        const wrapped = new ChaintracksFetchError(
-          `Failed to ${kind} from ${url}: ${timedOut ? 'request timed out' : String(error)}`,
-          url,
-          0,
-          timedOut ? 'Request Timeout' : 'Network Error'
-        )
-        if (retry < this.maxRetries) {
-          await wait(this.retryWaitMsecs(retry))
-          continue
-        }
-        throw wrapped
+        const fetchFailure = this.asFetchError(error, url, kind, controller.signal.aborted)
+        if (!fetchFailure.retryable || retry >= this.maxRetries) throw fetchFailure
+        await wait(this.retryWaitMsecs(retry, fetchFailure.retryAfterMsecs))
       } finally {
         clearTimeout(timeout)
       }
     }
+  }
+
+  private async requestAttempt(
+    url: string,
+    init: RequestInit,
+    kind: string,
+    maxResponseBytes: number,
+    controller: AbortController
+  ): Promise<Uint8Array> {
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw fetchError(url, response, kind)
+    }
+    return await this.readResponseBytes(url, response, kind, maxResponseBytes)
+  }
+
+  private asFetchError(error: unknown, url: string, kind: string, timedOut: boolean): ChaintracksFetchError {
+    if (error instanceof ChaintracksFetchError) return error
+    return new ChaintracksFetchError(
+      `Failed to ${kind} from ${url}: ${timedOut ? 'request timed out' : String(error)}`,
+      url,
+      0,
+      timedOut ? 'Request Timeout' : 'Network Error'
+    )
   }
 
   private async readResponseBytes(

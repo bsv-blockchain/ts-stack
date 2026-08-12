@@ -77,8 +77,8 @@ export class LocalChainTracker implements ChainTracker {
   private readonly requiredConsistencyAgreement: number
   private readonly maxHeightLag: number
   private readonly autoRecover: boolean
-  private readonly recoverLocal?: LocalChainTrackerOptions['recoverLocal']
-  private readonly clearLocal?: LocalChainTrackerOptions['clearLocal']
+  private readonly recoverLocal: LocalChainTrackerOptions['recoverLocal']
+  private readonly clearLocal: LocalChainTrackerOptions['clearLocal']
   private readonly now: () => Date
   private status: LocalChainTrackerStatus
 
@@ -247,13 +247,11 @@ export class LocalChainTracker implements ChainTracker {
       )[0] ?? [undefined, 0]
 
       const enoughReferences = referenceAgreement >= this.requiredConsistencyAgreement
-      const consistency: LocalChainTrackerConsistency = !enoughReferences
-        ? 'insufficient-references'
-        : localHeader?.hash !== expectedHash
-          ? 'diverged'
-          : heightLag > this.maxHeightLag
-            ? 'lagging'
-            : 'agreed'
+      let consistency: LocalChainTrackerConsistency
+      if (!enoughReferences) consistency = 'insufficient-references'
+      else if (localHeader?.hash !== expectedHash) consistency = 'diverged'
+      else if (heightLag > this.maxHeightLag) consistency = 'lagging'
+      else consistency = 'agreed'
       this.status = {
         ...this.status,
         activeSource: 'local',
