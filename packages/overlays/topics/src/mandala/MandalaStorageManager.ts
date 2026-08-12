@@ -1,4 +1,5 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import {
   MandalaTokenRecord, MandalaLinkageRecord, UTXOReference, AssetAdminState, AdminHistoryEntry
 } from './types.js'
@@ -15,7 +16,20 @@ export class MandalaStorageManager {
   private readonly assetStates: Collection<AssetAdminState>
   private readonly adminHistory: Collection<AdminHistoryEntry>
   private readonly counters: Collection<{ _id: string, seq: number }>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('MandalaStorageManager', () => [
+    { label: 'mandalaTokens txid_1_outputIndex_1', collection: this.tokens, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    { label: 'mandalaTokens assetId_1', collection: this.tokens, keys: { assetId: 1 } },
+    { label: 'mandalaTokens identityKey_1', collection: this.tokens, keys: { identityKey: 1 } },
+    // Deliberately NO TTL index on linkage — retention is >= 5 years.
+    { label: 'mandalaLinkageRecords txid_1_outputIndex_1', collection: this.linkage, keys: { txid: 1, outputIndex: 1 } },
+    { label: 'mandalaLinkageRecords identityKey_1', collection: this.linkage, keys: { identityKey: 1 } },
+    { label: 'mandalaBalances identityKey_1', collection: this.balances, keys: { identityKey: 1 }, options: { unique: true } },
+    { label: 'mandalaMetadata txid_1_outputIndex_1', collection: this.metadata, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    { label: 'mandalaMetadata assetId_1', collection: this.metadata, keys: { assetId: 1 } },
+    { label: 'mandalaAssetStates assetId_1', collection: this.assetStates, keys: { assetId: 1 }, options: { unique: true } },
+    { label: 'mandalaAdminHistory assetId_1_height_1_offset_1_admitSeq_1', collection: this.adminHistory, keys: { assetId: 1, height: 1, offset: 1, admitSeq: 1 } }
+  ])
 
   constructor (private readonly db: Db) {
     this.tokens = db.collection<MandalaTokenRecord>('mandalaTokens')
@@ -28,32 +42,27 @@ export class MandalaStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await Promise.all([
-        this.tokens.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-        this.tokens.createIndex({ assetId: 1 }),
-        this.tokens.createIndex({ identityKey: 1 }),
-        // Deliberately NO TTL index on linkage — retention is >= 5 years.
-        this.linkage.createIndex({ txid: 1, outputIndex: 1 }),
-        this.linkage.createIndex({ identityKey: 1 }),
-        this.balances.createIndex({ identityKey: 1 }, { unique: true }),
-        this.metadata.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-        this.metadata.createIndex({ assetId: 1 }),
-        this.assetStates.createIndex({ assetId: 1 }, { unique: true }),
-        this.adminHistory.createIndex({ assetId: 1, height: 1, offset: 1, admitSeq: 1 })
-      ])
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
+  /** Upsert on the outpoint: the same admitted output can arrive twice (GASP sync,
+   * resubmission), and duplicate rows are what breaks the unique index build. */
   async storeToken (record: MandalaTokenRecord): Promise<void> {
     await this.ensureIndexes()
-    await this.tokens.insertOne(record)
+    await this.tokens.updateOne(
+      { txid: record.txid, outputIndex: record.outputIndex },
+      { $set: record },
+      { upsert: true }
+    )
   }
 
   async storeLinkage (record: MandalaLinkageRecord): Promise<void> {
     await this.ensureIndexes()
-    await this.linkage.insertOne(record)
+    await this.linkage.updateOne(
+      { txid: record.txid, outputIndex: record.outputIndex },
+      { $set: record },
+      { upsert: true }
+    )
   }
 
   async adjustBalance (identityKey: string, delta: number): Promise<void> {

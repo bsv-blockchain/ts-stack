@@ -796,6 +796,11 @@ describe('UoraDppStorage, when Mongo will not build an index', () => {
    * the bug: a rejected promise left in place made one unlucky moment disable
    * the collection's reads and writes for the life of the process, with every
    * later caller awaiting the same rejection.
+   *
+   * Reads no longer depend on the build succeeding at all — an index that cannot be
+   * built is logged and skipped, because a unique index over a collection that already
+   * holds violating rows can never be built, and that must not disable the lookup
+   * service (it disabled ls_identity on overlay-us-1 and overlay-ap-1 for weeks).
    */
   function dbThatFailsIndexes(failures: number): { db: Db; calls: () => number } {
     let attempts = 0
@@ -819,16 +824,18 @@ describe('UoraDppStorage, when Mongo will not build an index', () => {
     }
   }
 
-  it('does not remember a failed build, so the next caller tries again', async () => {
+  it('serves reads and does not remember a failed build, so the next caller tries again', async () => {
     const { db, calls } = dbThatFailsIndexes(1)
     const storage = new UoraDppStorage(db)
 
-    await expect(storage.find({ issuer: MAKER })).rejects.toThrow(/index build refused/)
-    expect(calls()).toBe(1)
-
-    // The retry is the whole point: had the rejection been kept, this would
-    // reject with the same error without touching Mongo again.
+    // A refused index build is skipped, not propagated to the caller.
     await expect(storage.find({ issuer: MAKER })).resolves.toEqual([])
-    expect(calls()).toBeGreaterThan(1)
+    const afterFirst = calls()
+    expect(afterFirst).toBeGreaterThan(0)
+
+    // The retry is the whole point: had the rejection been kept, no later call
+    // would touch Mongo again.
+    await expect(storage.find({ issuer: MAKER })).resolves.toEqual([])
+    expect(calls()).toBeGreaterThan(afterFirst)
   })
 })

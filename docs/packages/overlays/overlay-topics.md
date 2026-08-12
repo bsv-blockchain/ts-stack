@@ -4,7 +4,7 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.6.9'
+version: '1.6.10'
 last_updated: '2026-07-30'
 last_verified: '2026-07-30'
 review_cadence_days: 30
@@ -126,7 +126,11 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **Protocol-specific fields** — Each topic defines what fields it expects (e.g., DID requires [serialNumber, signature])
 - **Query types** — Each topic defines type-safe Query and Record types
 - **Lookup factories** — `create*LookupService(db)` functions are async and return configured services
-- **MongoDB indexing** — Services auto-create indices on frequently-queried fields
+- **MongoDB indexing** — Services auto-create indices on frequently-queried fields; a failed build is
+  logged and skipped so reads keep working, and retried on the next call
+- **`OVERLAY_INDEX_REPAIR`** — Opt-in. When a *unique* index cannot be built because the collection
+  already holds duplicate rows, setting this to `true` deletes the duplicates (oldest row per key is
+  kept) and rebuilds the index. It deletes rows, so it is off by default
 
 ## When to use this
 

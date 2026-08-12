@@ -1,4 +1,5 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { BTMSRecord } from './types.js'
 import { PubKeyHex } from '@bsv/sdk'
 
@@ -7,7 +8,12 @@ import { PubKeyHex } from '@bsv/sdk'
  */
 export class BTMSStorageManager {
   private readonly records: Collection<BTMSRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('BTMSStorageManager', () => [
+    { label: 'assetId_1', collection: this.records, keys: { assetId: 1 } },
+    { label: 'ownerKey_1', collection: this.records, keys: { ownerKey: 1 } },
+    { label: 'txid_1_outputIndex_1', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } }
+  ])
 
   /**
    * @param db A connected MongoDB database handle.
@@ -17,14 +23,7 @@ export class BTMSStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await Promise.all([
-        this.records.createIndex({ assetId: 1 }),
-        this.records.createIndex({ ownerKey: 1 }),
-        this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
-      ])
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   /**
@@ -48,7 +47,7 @@ export class BTMSStorageManager {
       metadata,
       createdAt: new Date()
     }
-    await this.records.insertOne(record)
+    await this.records.updateOne({ txid, outputIndex }, { $set: record }, { upsert: true })
   }
 
   /**

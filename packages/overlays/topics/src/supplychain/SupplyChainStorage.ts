@@ -1,24 +1,29 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { SupplyChainRecord, UTXOReference } from './types.js'
 
 export class SupplyChainStorage {
   private readonly records: Collection<SupplyChainRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('SupplyChainStorage', () => [
+    { label: 'offChainValuesIndex', collection: this.records, keys: { 'offChainValues.chainId': 1 }, options: { name: 'offChainValuesIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<SupplyChainRecord>('supplyChainRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({ 'offChainValues.chainId': 1 }, { name: 'offChainValuesIndex' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, offChainValues: Record<string, any>): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, offChainValues, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { offChainValues }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

@@ -1,4 +1,5 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { Bsv21TokenRecord, UTXOReference } from './types.js'
 
 /**
@@ -7,21 +8,19 @@ import { Bsv21TokenRecord, UTXOReference } from './types.js'
  */
 export class Bsv21StorageManager {
   private readonly tokens: Collection<Bsv21TokenRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('Bsv21StorageManager', () => [
+    { label: 'txid_1_outputIndex_1', collection: this.tokens, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    { label: 'tokenId_1', collection: this.tokens, keys: { tokenId: 1 } },
+    { label: 'ownerHash160_1', collection: this.tokens, keys: { ownerHash160: 1 } }
+  ])
 
   constructor (private readonly db: Db) {
     this.tokens = db.collection<Bsv21TokenRecord>('bsv21Tokens')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await Promise.all([
-        this.tokens.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-        this.tokens.createIndex({ tokenId: 1 }),
-        this.tokens.createIndex({ ownerHash160: 1 })
-      ])
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   /** Project a UTXO-reference cursor for a mongo filter (DRY for the finders). */
@@ -31,9 +30,15 @@ export class Bsv21StorageManager {
       .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
   }
 
+  /** Upsert on the outpoint: the same admitted output can arrive twice (GASP sync,
+   * resubmission), and duplicate rows are what breaks the unique index build. */
   async storeToken (record: Bsv21TokenRecord): Promise<void> {
     await this.ensureIndexes()
-    await this.tokens.insertOne(record)
+    await this.tokens.updateOne(
+      { txid: record.txid, outputIndex: record.outputIndex },
+      { $set: record },
+      { upsert: true }
+    )
   }
 
   async deleteToken (txid: string, outputIndex: number): Promise<void> {

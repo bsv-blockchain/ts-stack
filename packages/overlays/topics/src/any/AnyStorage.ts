@@ -1,29 +1,30 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { AnyRecord, UTXOReference } from './types.js'
 
 // Implements a Lookup StorageEngine for Any
 export class AnyStorage {
   private readonly records: Collection<AnyRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('AnyStorage', () => [
+    { label: 'txidIndex', collection: this.records, keys: { txid: 1 }, options: { name: 'txidIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<AnyRecord>('anyRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-        await this.records.createIndex({ txid: 1 }, { name: 'txidIndex' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({
-      txid,
-      outputIndex,
-      createdAt: new Date()
-    })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async spendRecord (txid: string, outputIndex: number, spendingTxid: string): Promise<void> {

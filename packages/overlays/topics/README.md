@@ -131,6 +131,19 @@ indexes, and test coverage before enabling a topic in production. In
 particular, configure explicit issuer policies for token protocols where the
 deployment requires restricted issuers.
 
+### Index initialization and `OVERLAY_INDEX_REPAIR`
+
+Storage managers build their indexes lazily on first use. A build failure is
+logged and skipped rather than propagated, so a lookup service keeps answering
+even when an index is missing, and the build is retried on the next call.
+
+A unique index cannot be built over a collection that already holds rows
+violating it, which is permanent until the data is repaired. Set
+`OVERLAY_INDEX_REPAIR=true` (or `1`) to have a failed unique build delete the
+duplicate rows — oldest row per key is kept, the rest are removed — and rebuild
+the index. **This deletes rows**, so it is off by default; run it deliberately,
+against a collection you have a backup of, and unset it afterwards.
+
 ## Development
 
 From the repository root:

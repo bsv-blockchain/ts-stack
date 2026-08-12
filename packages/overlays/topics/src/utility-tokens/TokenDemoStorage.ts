@@ -1,27 +1,30 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { TokenDemoRecord, TokenDemoDetails, UTXOReference } from './types.js'
 
 export class TokenDemoStorage {
   private readonly records: Collection<TokenDemoRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('TokenDemoStorage', () => [
+    { label: 'OutpointIndex', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { name: 'OutpointIndex' } },
+    { label: 'TokenIdTextIndex', collection: this.records, keys: { tokenId: 'hashed' }, options: { name: 'TokenIdTextIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<TokenDemoRecord>('TokenDemoRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await Promise.all([
-        this.records.createIndex({ txid: 1, outputIndex: 1 }, { name: 'OutpointIndex' }),
-        this.records.createIndex({ tokenId: 'hashed' }, { name: 'TokenIdTextIndex' })
-      ])
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, details: TokenDemoDetails): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, ...details, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { ...details }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {

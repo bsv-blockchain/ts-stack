@@ -1,24 +1,29 @@
 import { Collection, Db } from 'mongodb'
+import { CollectionIndexes } from '../shared/collectionIndexes.js'
 import { DesktopIntegrityRecord, UTXOReference } from './types.js'
 
 export class DesktopIntegrityStorage {
   private readonly records: Collection<DesktopIntegrityRecord>
-  private indexInit?: Promise<void>
+
+  private readonly indexes = new CollectionIndexes('DesktopIntegrityStorage', () => [
+    { label: 'fileHashIndex', collection: this.records, keys: { fileHash: 1 }, options: { name: 'fileHashIndex' } }
+  ])
 
   constructor (private readonly db: Db) {
     this.records = db.collection<DesktopIntegrityRecord>('desktopIntegrityRecords')
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
-      await this.records.createIndex({ fileHash: 1 }, { name: 'fileHashIndex' })
-    })()
-    return await this.indexInit
+    return await this.indexes.ensure()
   }
 
   async storeRecord (txid: string, outputIndex: number, fileHash: string): Promise<void> {
     await this.ensureIndexes()
-    await this.records.insertOne({ txid, outputIndex, fileHash, createdAt: new Date() })
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { fileHash }, $setOnInsert: { txid, outputIndex, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {
