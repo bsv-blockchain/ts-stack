@@ -176,6 +176,23 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
   }
 }
 
+async function indexLegacyBulkHeaderFiles(
+  bulkHeadersPath: string,
+  chain: ConfiguredChain
+): Promise<Map<string, string>> {
+  const fs = await import('node:fs/promises')
+  const manifestName = `${chain}NetBlockHeaders.json`
+  const headerName = new RegExp(String.raw`^${chain}Net_[0-9]+\.headers$`)
+  const entries = await fs.readdir(bulkHeadersPath, { withFileTypes: true })
+  return new Map(
+    entries
+      .filter(
+        entry => entry.isFile() && (entry.name === manifestName || headerName.test(entry.name))
+      )
+      .map(entry => [entry.name, path.join(bulkHeadersPath, entry.name)])
+  )
+}
+
 function resilientBulkRuntimeAvailable(): boolean {
   const runtime = WalletToolbox as unknown as {
     DurableFileBulkFileDownloadBudget?: unknown
@@ -322,6 +339,9 @@ async function main() {
   if (enableBulkHeadersCDN || bulkFileCacheEnabled) {
     await ensureBulkHeadersDir(bulkHeadersPath)
   }
+  const legacyBulkHeaderFiles = enableBulkHeadersCDN
+    ? await indexLegacyBulkHeaderFiles(bulkHeadersPath, chain)
+    : new Map<string, string>()
   if (enableBulkHeadersCDN) {
     log.info(
       {
@@ -723,10 +743,8 @@ async function main() {
           next()
           return
         }
-        if (
-          fileName !== `${chain}NetBlockHeaders.json` &&
-          !new RegExp(String.raw`^${chain}Net_[0-9]+\.headers$`).test(fileName)
-        ) {
+        const legacyFilePath = legacyBulkHeaderFiles.get(fileName)
+        if (legacyFilePath == null) {
           next()
           return
         }
@@ -735,7 +753,7 @@ async function main() {
           fileName.endsWith('.headers') ? 'application/octet-stream' : 'application/json'
         )
         res.setHeader('Cache-Control', 'public, max-age=3600')
-        res.sendFile(path.join(bulkHeadersPath, fileName), error => {
+        res.sendFile(legacyFilePath, error => {
           if (error != null) next(error)
         })
       }
