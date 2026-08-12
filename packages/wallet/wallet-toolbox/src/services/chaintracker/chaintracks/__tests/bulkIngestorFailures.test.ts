@@ -82,6 +82,65 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     )
   })
 
+  test('coalesces concurrent cold present-height callers into one provider refresh', async () => {
+    let resolveHeight!: (height: number) => void
+    const source = {
+      getPresentHeight: jest.fn(
+        async () =>
+          await new Promise<number>(resolve => {
+            resolveHeight = resolve
+          })
+      )
+    }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: { log: () => {} } as any,
+      bulkIngestors: [source as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+
+    const callers = Array.from({ length: 64 }, async () => await chaintracks.getPresentHeight())
+    await new Promise(resolve => setImmediate(resolve))
+    expect(source.getPresentHeight).toHaveBeenCalledTimes(1)
+    resolveHeight(654321)
+    await expect(Promise.all(callers)).resolves.toEqual(Array(64).fill(654321))
+  })
+
+  test('serves stale height immediately while one refresh runs in the background', async () => {
+    let resolveHeight!: (height: number) => void
+    const source = {
+      getPresentHeight: jest.fn(
+        async () =>
+          await new Promise<number>(resolve => {
+            resolveHeight = resolve
+          })
+      )
+    }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: { log: () => {} } as any,
+      bulkIngestors: [source as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    ;(chaintracks as any).lastPresentHeight = 88
+    ;(chaintracks as any).lastPresentHeightMsecs = 0
+
+    await expect(
+      Promise.all(Array.from({ length: 64 }, async () => await chaintracks.getPresentHeight()))
+    ).resolves.toEqual(Array(64).fill(88))
+    expect(source.getPresentHeight).toHaveBeenCalledTimes(1)
+
+    resolveHeight(89)
+    await new Promise(resolve => setImmediate(resolve))
+    await expect(chaintracks.getPresentHeight()).resolves.toBe(89)
+  })
+
   test('uses the locally validated height when every external provider is unavailable', async () => {
     const failed = {
       getPresentHeight: jest.fn(async () => {
@@ -103,6 +162,67 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     })
 
     await expect(chaintracks.getPresentHeight()).resolves.toBe(420)
+  })
+
+  test('reports availability entirely from local process state', () => {
+    const bulkData = { validation: { submitted: 3 }, cache: { hits: 2 } }
+    const storage = { log: () => {}, bulkManager: { getStats: () => bulkData } }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: storage as any,
+      bulkIngestors: [{ getPresentHeight: async () => 420 } as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    ;(chaintracks as any).available = true
+    ;(chaintracks as any).startupError = new Error('startup warning')
+    ;(chaintracks as any).lastPresentHeight = 420
+    ;(chaintracks as any).lastPresentHeightMsecs = 1_700_000_000_000
+    ;(chaintracks as any).presentHeightRefresh = Promise.resolve(421)
+    ;(chaintracks as any).mainLoopHeartbeatMsecs = 1_700_000_001_000
+    ;(chaintracks as any).sourceStatus.set('bulk:0', {
+      source: 'bulk:0',
+      role: 'bulk',
+      state: 'healthy',
+      consecutiveFailures: 0
+    })
+
+    const snapshot = chaintracks.getAvailabilitySnapshot()
+    expect(snapshot).toMatchObject({
+      available: true,
+      startupError: 'startup warning',
+      presentHeight: 420,
+      presentHeightUpdatedAt: '2023-11-14T22:13:20.000Z',
+      presentHeightRefreshInFlight: true,
+      mainLoopHeartbeatAt: '2023-11-14T22:13:21.000Z',
+      bulkData
+    })
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'bulk:0', state: 'healthy' })])
+    )
+
+    const cold = new Chaintracks({
+      chain: 'main',
+      storage: storage as any,
+      bulkIngestors: [{ getPresentHeight: async () => 420 } as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    const coldSnapshot = cold.getAvailabilitySnapshot()
+    expect(coldSnapshot).toMatchObject({
+      available: false,
+      startupError: undefined,
+      presentHeight: undefined,
+      presentHeightUpdatedAt: undefined,
+      presentHeightRefreshInFlight: false,
+      mainLoopHeartbeatAt: undefined,
+      bulkData
+    })
+    expect(coldSnapshot.sources).toHaveLength(2)
   })
 
   test('uses a stale last-good height when providers fail and reports source exhaustion otherwise', async () => {

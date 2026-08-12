@@ -52,6 +52,28 @@ export interface ChaintracksBulkDataStatsApi {
   coalescedLoads: number
   downloads: number
   downloadedBytes: number
+  loadBackoffs: number
+  /** Worker or portable validator statistics when the implementation exposes them. */
+  validation?: {
+    submitted: number
+    completed: number
+    failed: number
+    rejected: number
+    workerRestarts: number
+    inFlight: number
+    queued: number
+    maxQueueDepth: number
+    totalValidationMsecs: number
+    maxValidationMsecs: number
+  }
+  /** Durable download reservation state when configured. */
+  downloadBudget?: {
+    maxBytes: number
+    consumedBytes: number
+    remainingBytes: number
+    windowStartedAt: number
+    windowMsecs: number
+  }
 }
 
 /** @public */
@@ -62,6 +84,18 @@ export interface ChaintracksSourceStatusApi {
   lastSuccess?: string
   lastFailure?: string
   error?: string
+}
+
+/** Constant-time, local-only process state for probes and operators. @public */
+export interface ChaintracksAvailabilitySnapshotApi {
+  available: boolean
+  startupError?: string
+  presentHeight?: number
+  presentHeightUpdatedAt?: string
+  presentHeightRefreshInFlight: boolean
+  mainLoopHeartbeatAt?: string
+  sources: ChaintracksSourceStatusApi[]
+  bulkData: ChaintracksBulkDataStatsApi
 }
 
 /**

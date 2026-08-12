@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-11",
+  "lastReviewed": "2026-08-12",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.7.0",
+      "publishedVersion": "2.8.0",
       "releaseType": "minor",
-      "summary": "Adds local-first ChainTracks management, a direct composed ChainTracker service seam, proof-of-work enforcement for bulk and live ingestion, typed persistent bulk-header caches, concurrent-miss coalescing, bounded fetch deadlines and bodies, download budgets, and cache/download observability while retaining the pending-transaction reconciliation corrections.",
-      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are now rejected. Applications may opt into BulkFileDataCacheApi for packaged or persistent checkpoints, LocalChainTracker for explicit local-primary, remote-only, consistency, clearing, and recovery controls, and WalletServicesOptions.chainTracker to install the composed verifier directly."
+      "summary": "Adds local-first ChainTracks management, proof-of-work enforcement, stale-while-revalidate height refresh, bounded singleflight loads, an asynchronous validation seam with a bounded Node worker pool, content-addressed atomic caches with quarantine and legacy promotion, retry-aware durable download budgets, immutable read snapshots, negative load backoff, and cache, worker, budget, and availability observability while retaining the pending-transaction reconciliation corrections.",
+      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are rejected. Node services with large bulk files should inject NodeBulkFileDataValidator, use BulkFileDataCacheFs for content-addressed persistence, and use DurableFileBulkFileDownloadBudget on durable storage; browser and mobile consumers retain inline asynchronous validation."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.7.0",
+      "publishedVersion": "2.8.0",
       "releaseType": "minor",
-      "summary": "Carries the browser-safe local-first ChainTracks controller, local proof-of-work enforcement, checkpoint cache contract, download budget, bounded fetch behavior, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing browser exports, defaults, and wire contracts remain compatible; applications opt into the new local persistence and management APIs."
+      "summary": "Carries the browser-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
+      "migration": "No consumer migration is required. Existing browser exports, defaults, and wire contracts remain compatible; inline validation remains portable and applications opt into persistence and management adapters."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.7.0",
+      "publishedVersion": "2.8.0",
       "releaseType": "minor",
-      "summary": "Carries the mobile-safe local-first ChainTracks controller, local proof-of-work enforcement, checkpoint cache contract, download budget, bounded fetch behavior, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing React Native exports, remote-storage behavior, and wire contracts remain compatible; applications provide their platform cache or local-storage adapter to opt in."
+      "summary": "Carries the mobile-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
+      "migration": "No consumer migration is required. Existing React Native exports, remote-storage behavior, and wire contracts remain compatible; inline validation remains portable and applications provide their platform cache or local-storage adapter to opt in."
     },
     {
       "name": "create-bsv-app",

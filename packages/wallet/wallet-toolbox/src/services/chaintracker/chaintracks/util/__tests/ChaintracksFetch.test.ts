@@ -87,9 +87,7 @@ describe('ChaintracksFetch tests', () => {
   })
 
   test('enforces a stricter per-download response limit', async () => {
-    globalThis.fetch = jest.fn(
-      async () => new Response(new Uint8Array(9), { status: 200 })
-    ) as unknown as typeof fetch
+    globalThis.fetch = jest.fn(async () => new Response(new Uint8Array(9), { status: 200 })) as unknown as typeof fetch
 
     const fetch = new ChaintracksFetch({ maxResponseBytes: 1024, maxRetries: 0 })
     await expect(fetch.download('https://example.test/exact.headers', 8)).rejects.toMatchObject({
@@ -98,5 +96,22 @@ describe('ChaintracksFetch tests', () => {
       statusText: 'Response Too Large',
       retryable: false
     } satisfies Partial<ChaintracksFetchError>)
+  })
+
+  test('reserves every physical retry before issuing it', async () => {
+    const responses = [
+      new Response(null, { status: 503 }),
+      new Response(null, { status: 503 }),
+      new Response(new Uint8Array([1, 2, 3]), { status: 200 })
+    ]
+    globalThis.fetch = jest.fn(async () => responses.shift()!) as unknown as typeof fetch
+    const beforeRetry = jest.fn(async () => undefined)
+    const fetch = new ChaintracksFetch({ maxRetries: 2, retryMsecs: 1, random: () => 0 })
+
+    await expect(fetch.download('https://example.test/retrying.headers', 3, { beforeRetry })).resolves.toEqual(
+      new Uint8Array([1, 2, 3])
+    )
+    expect(beforeRetry).toHaveBeenNthCalledWith(1, 2)
+    expect(beforeRetry).toHaveBeenNthCalledWith(2, 3)
   })
 })

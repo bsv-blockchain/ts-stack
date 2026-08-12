@@ -23,6 +23,7 @@ import * as WalletToolbox from '@bsv/wallet-toolbox'
 import * as path from 'node:path'
 import * as express from 'express'
 import * as bodyParser from 'body-parser'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { rateLimit } from 'express-rate-limit'
 import { createV1Routes } from './v1-routes'
 import { createV2Routes } from './v2-routes'
@@ -42,6 +43,7 @@ import {
   securityHeaders
 } from './security/edgePolicy'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy'
+import { BulkHeaderSnapshotPublisher } from './BulkHeaderSnapshotPublisher'
 
 const tracer = trace.getTracer('chaintracks-server')
 
@@ -152,24 +154,6 @@ function createServices(chain: ConfiguredChain, chaintracks: Chaintracks): Servi
   return chain === 'stn' ? undefined : new Services(chain as Chain)
 }
 
-function createBulkFileCache(rootFolder: string): unknown {
-  const Cache = (
-    WalletToolbox as unknown as {
-      BulkFileDataCacheFs?: new (path: string) => unknown
-    }
-  ).BulkFileDataCacheFs
-  return Cache == null ? undefined : new Cache(rootFolder)
-}
-
-function createBulkFileDownloadBudget(maxBytes: number): unknown {
-  const Budget = (
-    WalletToolbox as unknown as {
-      FixedWindowBulkFileDownloadBudget?: new (options: { maxBytes: number }) => unknown
-    }
-  ).FixedWindowBulkFileDownloadBudget
-  return Budget == null ? undefined : new Budget({ maxBytes })
-}
-
 async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
   try {
     const fs = await import('node:fs/promises')
@@ -192,6 +176,89 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
   }
 }
 
+async function indexLegacyBulkHeaderFiles(
+  bulkHeadersPath: string,
+  chain: ConfiguredChain
+): Promise<Map<string, string>> {
+  const fs = await import('node:fs/promises')
+  const manifestName = `${chain}NetBlockHeaders.json`
+  const headerName = new RegExp(String.raw`^${chain}Net_[0-9]+\.headers$`)
+  const entries = await fs.readdir(bulkHeadersPath, { withFileTypes: true })
+  return new Map(
+    entries
+      .filter(
+        entry => entry.isFile() && (entry.name === manifestName || headerName.test(entry.name))
+      )
+      .map(entry => [entry.name, path.join(bulkHeadersPath, entry.name)])
+  )
+}
+
+function resilientBulkRuntimeAvailable(): boolean {
+  const runtime = WalletToolbox as unknown as {
+    DurableFileBulkFileDownloadBudget?: unknown
+    NodeBulkFileDataValidator?: unknown
+  }
+  return (
+    runtime.DurableFileBulkFileDownloadBudget != null && runtime.NodeBulkFileDataValidator != null
+  )
+}
+
+function createBulkFileCache(rootFolder: string, resilientRuntime: boolean): unknown {
+  const Cache = (
+    WalletToolbox as unknown as {
+      BulkFileDataCacheFs?: new (
+        options: string | { rootFolder: string; legacyRoots: string[] }
+      ) => unknown
+    }
+  ).BulkFileDataCacheFs
+  if (Cache == null) return undefined
+  return resilientRuntime
+    ? new Cache({ rootFolder: path.join(rootFolder, 'cache'), legacyRoots: [rootFolder] })
+    : new Cache(rootFolder)
+}
+
+function createBulkFileDownloadBudget(
+  maxBytes: number,
+  rootFolder: string,
+  resilientRuntime: boolean
+): unknown {
+  if (!resilientRuntime) {
+    const Budget = (
+      WalletToolbox as unknown as {
+        FixedWindowBulkFileDownloadBudget?: new (options: { maxBytes: number }) => unknown
+      }
+    ).FixedWindowBulkFileDownloadBudget
+    return Budget == null ? undefined : new Budget({ maxBytes })
+  }
+  const Budget = (
+    WalletToolbox as unknown as {
+      DurableFileBulkFileDownloadBudget?: new (options: {
+        maxBytes: number
+        stateFile: string
+      }) => unknown
+    }
+  ).DurableFileBulkFileDownloadBudget
+  if (Budget == null) throw new Error('The resilient bulk runtime is incomplete.')
+  return new Budget({
+    maxBytes,
+    stateFile: path.join(rootFolder, 'state', 'download-budget.json')
+  })
+}
+
+function createBulkFileDataValidator(resilientRuntime: boolean): unknown {
+  if (!resilientRuntime) return undefined
+  const Validator = (
+    WalletToolbox as unknown as {
+      NodeBulkFileDataValidator?: new (options: { maxWorkers: number; maxQueue: number }) => unknown
+    }
+  ).NodeBulkFileDataValidator
+  if (Validator == null) throw new Error('The resilient bulk runtime is incomplete.')
+  return new Validator({
+    maxWorkers: Number.parseInt(process.env.CHAINTRACKS_VALIDATION_WORKERS || '1', 10),
+    maxQueue: Number.parseInt(process.env.CHAINTRACKS_VALIDATION_QUEUE_MAX || '8', 10)
+  })
+}
+
 async function main() {
   const chain = resolveChain()
   const resourceProfile = readResourceProfile('CHAINTRACKS')
@@ -212,7 +279,13 @@ async function main() {
   const cdnHostUrl = process.env.CDN_HOST_URL || `http://localhost:${cdnPort}`
 
   const bulkHeadersPath = resolveBulkHeadersPath()
+  const bulkHeaderSnapshotPublisher = new BulkHeaderSnapshotPublisher({
+    rootFolder: bulkHeadersPath,
+    chain,
+    maxGenerations: 3
+  })
   const bulkFileCacheEnabled = process.env.CHAINTRACKS_BULK_FILE_CACHE !== 'false'
+  const resilientBulkRuntime = resilientBulkRuntimeAvailable()
   const upstreamDownloadMaxBytesPerHour = readResourceLimit(
     'CHAINTRACKS',
     'UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR',
@@ -225,8 +298,16 @@ async function main() {
   const bulkFileDownloadBudget =
     upstreamDownloadMaxBytesPerHour === -1
       ? undefined
-      : createBulkFileDownloadBudget(upstreamDownloadMaxBytesPerHour)
-  const bulkFileCache = bulkFileCacheEnabled ? createBulkFileCache(bulkHeadersPath) : undefined
+      : createBulkFileDownloadBudget(
+          upstreamDownloadMaxBytesPerHour,
+          bulkHeadersPath,
+          resilientBulkRuntime
+        )
+  await (bulkFileDownloadBudget as { initialize?: () => Promise<void> } | undefined)?.initialize?.()
+  const bulkFileCache = bulkFileCacheEnabled
+    ? createBulkFileCache(bulkHeadersPath, resilientBulkRuntime)
+    : undefined
+  const bulkFileDataValidator = createBulkFileDataValidator(resilientBulkRuntime)
 
   // The source URL is where clients can download headers from (the CDN HTTP endpoint)
   const bulkHeadersSourceUrl = enableBulkHeadersCDN ? cdnHostUrl : undefined
@@ -248,6 +329,9 @@ async function main() {
       bulk_headers_cdn_enabled: enableBulkHeadersCDN,
       bulk_file_cache_enabled: bulkFileCacheEnabled,
       bulk_file_cache_active: bulkFileCache != null,
+      resilient_bulk_runtime_active: resilientBulkRuntime,
+      bulk_file_validation_workers: process.env.CHAINTRACKS_VALIDATION_WORKERS || '1',
+      bulk_file_validation_queue_max: process.env.CHAINTRACKS_VALIDATION_QUEUE_MAX || '8',
       upstream_download_max_bytes_per_hour: upstreamDownloadMaxBytesPerHour
     },
     'Starting ChaintracksService with custom configuration'
@@ -255,6 +339,9 @@ async function main() {
   if (enableBulkHeadersCDN || bulkFileCacheEnabled) {
     await ensureBulkHeadersDir(bulkHeadersPath)
   }
+  const legacyBulkHeaderFiles = enableBulkHeadersCDN
+    ? await indexLegacyBulkHeaderFiles(bulkHeadersPath, chain)
+    : new Map<string, string>()
   if (enableBulkHeadersCDN) {
     log.info(
       {
@@ -297,7 +384,8 @@ async function main() {
       disableCdn: sourceCdnUrl === '',
       disableWhatsOnChain: process.env.CHAINTRACKS_DISABLE_WHATSONCHAIN === 'true',
       bulkFileCache,
-      bulkFileDownloadBudget
+      bulkFileDownloadBudget,
+      bulkFileDataValidator
     }
   )
 
@@ -305,7 +393,7 @@ async function main() {
   const chaintracks = new Chaintracks(chaintracksOptions)
 
   // Track last exported height to trigger exports at 100k marks
-  let lastExportedHeight = 0
+  let lastExportedHeight = await bulkHeaderSnapshotPublisher.currentMaxHeight()
   let isExporting = false
 
   // Function to export bulk headers
@@ -334,9 +422,10 @@ async function main() {
 
       // Check if we've crossed a 100k boundary
       const currentMilestone = Math.floor(currentHeight / 100000)
-      const lastMilestone = Math.floor(lastExportedHeight / 100000)
+      const lastMilestone =
+        lastExportedHeight == null ? -1 : Math.floor(lastExportedHeight / 100000)
 
-      const shouldExport = currentMilestone > lastMilestone || lastExportedHeight === 0
+      const shouldExport = lastExportedHeight == null || currentMilestone > lastMilestone
       log.info(
         {
           operation: 'headers.export',
@@ -359,39 +448,28 @@ async function main() {
           'Exporting bulk headers'
         )
 
-        await chaintracks.exportBulkHeaders(
-          bulkHeadersPath,
-          ChaintracksFs,
-          bulkHeadersSourceUrl, // sourceUrl - sets rootFolder in the JSON metadata file
-          100000, // headersPerFile
-          undefined // maxHeight (export all available)
-        )
+        const snapshot = await bulkHeaderSnapshotPublisher.publish(async folder => {
+          await chaintracks.exportBulkHeaders(
+            folder,
+            ChaintracksFs,
+            bulkHeadersSourceUrl, // sourceUrl - sets rootFolder in the JSON metadata file
+            100000, // headersPerFile
+            undefined // maxHeight (export all available)
+          )
+        })
 
-        lastExportedHeight = currentHeight
+        lastExportedHeight = snapshot.maxHeight
         log.info(
           {
             operation: 'headers.export',
             outcome: 'ok',
-            bulk_headers_path: bulkHeadersPath,
+            bulk_headers_path: snapshot.folder,
+            generation: snapshot.generation,
+            file_count: snapshot.fileCount,
             download_url: `${bulkHeadersSourceUrl}/${chain}NetBlockHeaders.json`
           },
           'Bulk headers exported successfully'
         )
-
-        // List files to verify
-        const fs = await import('node:fs/promises')
-        try {
-          const files = await fs.readdir(bulkHeadersPath)
-          log.info(
-            { operation: 'headers.export', file_count: files.length, files },
-            'Listed exported files'
-          )
-        } catch (e) {
-          log.warn(
-            { operation: 'headers.export', outcome: 'error', err: e },
-            'Could not list files'
-          )
-        }
       } else {
         log.info(
           { operation: 'headers.export', outcome: 'skipped', reason: 'no_boundary_crossed' },
@@ -483,6 +561,58 @@ async function main() {
       methods: ['GET', 'POST', 'OPTIONS']
     })
   )
+
+  const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 })
+  eventLoopDelay.enable()
+  let eventLoopDelayMaxMsecs = 0
+  const eventLoopSampleInterval = setInterval(() => {
+    eventLoopDelayMaxMsecs = eventLoopDelay.max / 1_000_000
+    eventLoopDelay.reset()
+  }, 1000)
+  eventLoopSampleInterval.unref()
+
+  const healthHandler = (_req: express.Request, res: express.Response) => {
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({ status: 'ok', profile: resourceProfile, eventLoopDelayMaxMsecs })
+  }
+  const readinessHandler = async (_req: express.Request, res: express.Response) => {
+    res.setHeader('Cache-Control', 'no-store')
+    const snapshotProvider = (
+      chaintracks as unknown as {
+        getAvailabilitySnapshot?: () => {
+          available: boolean
+          startupError?: string
+          presentHeight?: number
+          [key: string]: unknown
+        }
+      }
+    ).getAvailabilitySnapshot
+    const snapshot =
+      snapshotProvider == null
+        ? {
+            available: await chaintracks.isListening(),
+            compatibilityMode: true,
+            resilientBulkRuntimeActive: false
+          }
+        : snapshotProvider.call(chaintracks)
+    const ready = snapshot.available && snapshot.startupError == null
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ok' : 'starting',
+      height: snapshot.presentHeight,
+      eventLoopDelayMaxMsecs,
+      snapshot
+    })
+  }
+
+  // Probes are local and constant-time, and intentionally bypass public
+  // admission middleware. The optional routed aliases preserve deployments
+  // that mount the API under a prefix.
+  app.get('/healthz', healthHandler)
+  app.get('/readyz', readinessHandler)
+  if (routingPrefix !== '') {
+    app.get(`${routingPrefix}/healthz`, healthHandler)
+    app.get(`${routingPrefix}/readyz`, readinessHandler)
+  }
   app.use(
     concurrencyLimit(
       'CHAINTRACKS',
@@ -512,12 +642,6 @@ async function main() {
     )
   )
 
-  const healthHandler = (_req: express.Request, res: express.Response) => {
-    res.setHeader('Cache-Control', 'no-store')
-    res.status(200).json({ status: 'ok', profile: resourceProfile })
-  }
-  app.get('/healthz', healthHandler)
-
   const apiRouter = express.Router()
   const historicalQueryLimit = rateLimit(
     rateLimitOptions('CHAINTRACKS_HISTORICAL_RATE_LIMIT', {
@@ -529,26 +653,20 @@ async function main() {
       })
     })
   )
-  apiRouter.use(['/findHeaderHexForHeight', '/getHeaders'], historicalQueryLimit)
-  apiRouter.use(['/v2/header/height', '/v2/headers'], historicalQueryLimit)
-  if (routingPrefix !== '') apiRouter.get('/healthz', healthHandler)
-
-  apiRouter.get('/readyz', async (_req: express.Request, res: express.Response) => {
-    res.setHeader('Cache-Control', 'no-store')
-    try {
-      const [listening, height, info] = await Promise.all([
-        chaintracks.isListening(),
-        chaintracks.getPresentHeight(),
-        chaintracks.getInfo()
-      ])
-      res
-        .status(listening ? 200 : 503)
-        .json({ status: listening ? 'ok' : 'starting', height, info })
-    } catch (error) {
-      log.warn({ operation: 'readiness', outcome: 'error', err: error }, 'Chaintracks is not ready')
-      res.status(503).json({ status: 'error', description: 'Chaintracks is not ready' })
-    }
-  })
+  const historicalConcurrencyLimit = concurrencyLimit(
+    'CHAINTRACKS_HISTORICAL',
+    profileValue(resourceProfile, { small: 2, standard: 8, highThroughput: 32 })
+  )
+  apiRouter.use(
+    ['/findHeaderHexForHeight', '/getHeaders'],
+    historicalConcurrencyLimit,
+    historicalQueryLimit
+  )
+  apiRouter.use(
+    ['/v2/header/height', '/v2/headers'],
+    historicalConcurrencyLimit,
+    historicalQueryLimit
+  )
 
   // Root endpoint
   apiRouter.get('/', (_req: express.Request, res: express.Response) => {
@@ -602,7 +720,7 @@ async function main() {
     // Serve static files from the bulk headers directory
     cdnApp.use(
       '/',
-      express.static(bulkHeadersPath, {
+      express.static(bulkHeaderSnapshotPublisher.activeFolder, {
         setHeaders: (res: any, filePath: string) => {
           // Set appropriate headers for bulk header files
           if (filePath.endsWith('.headers')) {
@@ -613,6 +731,32 @@ async function main() {
           res.setHeader('Cache-Control', 'public, max-age=3600')
         }
       })
+    )
+    // During the first migration boot, serve only the last legacy snapshot's
+    // flat public files. New cache, quarantine, generation, and state folders
+    // are never reachable through the CDN listener.
+    cdnApp.get(
+      '/:fileName',
+      (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        const fileName = req.params.fileName
+        if (typeof fileName !== 'string') {
+          next()
+          return
+        }
+        const legacyFilePath = legacyBulkHeaderFiles.get(fileName)
+        if (legacyFilePath == null) {
+          next()
+          return
+        }
+        res.setHeader(
+          'Content-Type',
+          fileName.endsWith('.headers') ? 'application/octet-stream' : 'application/json'
+        )
+        res.setHeader('Cache-Control', 'public, max-age=3600')
+        res.sendFile(legacyFilePath, error => {
+          if (error != null) next(error)
+        })
+      }
     )
 
     cdnServer = cdnApp.listen(cdnPort, () => {
@@ -702,6 +846,8 @@ async function main() {
           'Stopped periodic export timer'
         )
       }
+      clearInterval(eventLoopSampleInterval)
+      eventLoopDelay.disable()
 
       // Stop CDN server if running
       if (cdnServer) {
@@ -731,6 +877,7 @@ async function main() {
       // Stop chaintracks
       log.info({ operation: 'shutdown.chaintracks' }, 'Stopping chaintracks')
       await chaintracks.destroy()
+      await (bulkFileDataValidator as { destroy?: () => Promise<void> } | undefined)?.destroy?.()
 
       log.info({ operation: 'shutdown', outcome: 'ok' }, 'All servers stopped successfully')
       process.exit(0)

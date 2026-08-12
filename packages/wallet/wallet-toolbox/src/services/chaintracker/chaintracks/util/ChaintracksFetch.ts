@@ -1,5 +1,5 @@
 import { defaultHttpClient, HttpClient } from '@bsv/sdk'
-import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
+import { ChaintracksDownloadOptions, ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { wait } from '../../../../utility/utilityHelpers'
 
 const DEFAULT_MAX_RETRIES = 3
@@ -104,7 +104,7 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     this.random = options.random ?? Math.random
   }
 
-  async download(url: string, maxResponseBytes?: number): Promise<Uint8Array> {
+  async download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array> {
     const responseLimit =
       maxResponseBytes == null
         ? this.maxResponseBytes
@@ -119,7 +119,8 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
         headers: { Accept: 'application/octet-stream' }
       },
       'download',
-      responseLimit
+      responseLimit,
+      options
     )
   }
 
@@ -140,9 +141,11 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     url: string,
     init: RequestInit,
     kind: string,
-    maxResponseBytes: number
+    maxResponseBytes: number,
+    downloadOptions?: ChaintracksDownloadOptions
   ): Promise<Uint8Array> {
     for (let retry = 0; ; retry++) {
+      if (retry > 0) await downloadOptions?.beforeRetry?.(retry + 1)
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), this.timeoutMsecs)
       try {

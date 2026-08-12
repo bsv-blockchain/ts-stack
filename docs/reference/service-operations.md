@@ -3,8 +3,8 @@ id: service-operations
 title: 'Service Operations Contract'
 kind: reference
 version: '2.0.0'
-last_updated: '2026-08-05'
-last_verified: '2026-08-05'
+last_updated: '2026-08-12'
+last_verified: '2026-08-12'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, operations, observability, slo, recovery]
@@ -104,7 +104,7 @@ Incident handling follows this evidence-preserving sequence:
 ### chaintracks-server
 
 - Configuration: required `CHAIN`; optional
-  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `CHAINTRACKS_BULK_FILE_CACHE`, `CHAINTRACKS_DISABLE_WHATSONCHAIN`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS`, `CHAINTRACKS_UPSTREAM_API_PREFIX`, `CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR`, `CHAINTRACKS_UPSTREAM_MAX_HEADERS`, `CHAINTRACKS_UPSTREAM_URL`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `ROUTING_PREFIX`, `SOURCE_CDN_URL`, `STN_ARCADE_URL`, `STN_CHAINTRACKS_URL`, `TSTN_ARCADE_URL`, `TSTN_CHAINTRACKS_URL`, `TRUST_PROXY_HOPS`, `WHATSONCHAIN_API_KEY`; secret-bearing
+  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `CHAINTRACKS_BULK_FILE_CACHE`, `CHAINTRACKS_DISABLE_WHATSONCHAIN`, `CHAINTRACKS_HISTORICAL_MAX_CONCURRENT_REQUESTS`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS`, `CHAINTRACKS_UPSTREAM_API_PREFIX`, `CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR`, `CHAINTRACKS_UPSTREAM_MAX_HEADERS`, `CHAINTRACKS_UPSTREAM_URL`, `CHAINTRACKS_VALIDATION_QUEUE_MAX`, `CHAINTRACKS_VALIDATION_WORKERS`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `ROUTING_PREFIX`, `SOURCE_CDN_URL`, `STN_ARCADE_URL`, `STN_CHAINTRACKS_URL`, `TSTN_ARCADE_URL`, `TSTN_CHAINTRACKS_URL`, `TRUST_PROXY_HOPS`, `WHATSONCHAIN_API_KEY`; secret-bearing
   `OTEL_EXPORTER_OTLP_HEADERS`, `WHATSONCHAIN_API_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
@@ -117,15 +117,16 @@ Incident handling follows this evidence-preserving sequence:
 - Alerts:
 - header tip age or height stops advancing
 - all configured bulk/live sources are degraded or upstream retrieval repeatedly fails
-- persistent bulk-cache rejects or upstream download-budget exhaustion occurs
-- historical-route rate limiting remains saturated
+- persistent bulk-cache quarantine, validation-worker saturation, or upstream download-budget exhaustion occurs
+- historical-route rate or concurrency limiting remains saturated
+- event-loop delay remains above the operator alert threshold
 - API or CDN saturation exceeds its independent concurrency budget
-- State: Verified immutable bulk-header objects under BULK_HEADERS_PATH plus locally retained live headers; upstream headers are reproducible.
-- Migration/startup: No schema migration. Enable the persistent bulk cache, validate the retained header corpus, and confirm cache-hit/download-budget counters before rollout.
-- Backup/restore: Snapshot BULK_HEADERS_PATH or repopulate it from a verified source CDN.
+- State: Content-addressed verified bulk-header objects, quarantined rejects, atomic CDN generations, a durable per-attempt download-budget ledger, and locally retained live headers under BULK_HEADERS_PATH; upstream headers are reproducible.
+- Migration/startup: No database schema migration. Preserve BULK_HEADERS_PATH, deploy the matching resilient @bsv/wallet-toolbox release before the server lockfile reconciliation, allow validated legacy flat files to promote into the content-addressed cache, and confirm worker, quarantine, event-loop, cache-hit, and durable download-budget counters before rollout.
+- Backup/restore: Snapshot BULK_HEADERS_PATH, including cache objects, current CDN generation, quarantine evidence, and state/download-budget.json; immutable headers can otherwise be repopulated from a verified source CDN without resetting the active budget window.
 - RPO starting point: 24 hours when reproducible upstreams are healthy; otherwise match the operator's header-retention risk.
 - RTO starting point: 4 hours from a verified snapshot or reproducible upstream.
-- Restore validation: Verify header-chain continuity, tip agreement, bulk-object hashes, and both HTTP listeners.
+- Restore validation: Verify header-chain continuity, tip agreement, content-addressed object hashes, the atomic CDN current pointer, durable budget continuity, worker health, and both HTTP listeners.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT stop ingestion and export timers, drain API and CDN listeners, destroy Chaintracks state, and flush telemetry.
 - Scaling: Prefer one ingest leader; CDN readers may scale only against shared immutable storage.
 - Disruption: Preserve the ingest leader or use an explicit handoff during voluntary disruption.

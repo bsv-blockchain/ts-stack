@@ -1,6 +1,7 @@
 import { Hash } from '@bsv/sdk'
 import type { ChaintracksFetchApi } from '../../Api/ChaintracksFetchApi'
 import type { BulkFileDataCacheApi } from '../../Api/BulkFileDataCacheApi'
+import type { BulkFileDataValidatorApi } from '../../Api/BulkFileDataValidatorApi'
 import type { BulkHeaderFileInfo } from '../BulkHeaderFile'
 import { BulkFileDataManager } from '../BulkFileDataManager'
 import { asArray, asString } from '../../../../../utility/utilityHelpers.noBuffer'
@@ -32,15 +33,19 @@ function fixtureFetch(download: jest.Mock<Promise<Uint8Array>, [string]>): Chain
   }
 }
 
-function memoryCache(): BulkFileDataCacheApi & { values: Map<string, Uint8Array> } {
+function memoryCache(): BulkFileDataCacheApi & { values: Map<string, Uint8Array>; quarantined: Uint8Array[] } {
   const values = new Map<string, Uint8Array>()
+  const quarantined: Uint8Array[] = []
   return {
     values,
+    quarantined,
     get: async file => values.get(file.fileName),
     set: async (file, data) => {
       values.set(file.fileName, data)
     },
-    delete: async file => {
+    quarantine: async file => {
+      const value = values.get(file.fileName)
+      if (value != null) quarantined.push(value)
       values.delete(file.fileName)
     }
   }
@@ -50,7 +55,9 @@ async function managerWith(
   file: BulkHeaderFileInfo,
   fetch: ChaintracksFetchApi,
   cache: BulkFileDataCacheApi,
-  downloadBudget?: { consume(byteCount: number): void | Promise<void> }
+  downloadBudget?: { consume(byteCount: number): void | Promise<void> },
+  failedLoadRetryMsecs?: number,
+  validator?: BulkFileDataValidatorApi
 ): Promise<BulkFileDataManager> {
   const manager = new BulkFileDataManager({
     chain: 'main',
@@ -58,7 +65,9 @@ async function managerWith(
     maxRetained: 1,
     fetch,
     cache,
-    downloadBudget
+    downloadBudget,
+    failedLoadRetryMsecs,
+    validator
   })
   await manager.merge([file])
   return manager
@@ -67,6 +76,25 @@ async function managerWith(
 describe('BulkFileDataManager persistent cache and miss coalescing', () => {
   const data = Uint8Array.from(genesisBuffer('main'))
   const file = fixtureFile(data)
+
+  test('rejects invalid failed-load cooldown configuration', () => {
+    expect(
+      () =>
+        new BulkFileDataManager({
+          chain: 'main',
+          maxPerFile: 100,
+          failedLoadRetryMsecs: -1
+        })
+    ).toThrow(/failedLoadRetryMsecs parameter.*non-negative safe integer/)
+    expect(
+      () =>
+        new BulkFileDataManager({
+          chain: 'main',
+          maxPerFile: 100,
+          failedLoadRetryMsecs: Number.NaN
+        })
+    ).toThrow(/failedLoadRetryMsecs parameter.*non-negative safe integer/)
+  })
 
   test('coalesces concurrent misses and reuses the persisted object after restart', async () => {
     let resolveDownload!: (value: Uint8Array) => void
@@ -94,20 +122,39 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
     expect(restarted.getStats()).toMatchObject({ persistentCacheHits: 1, downloads: 0 })
   })
 
-  test('deletes a corrupt cache entry and replaces it only with validated bytes', async () => {
+  test('quarantines a corrupt cache entry and replaces it only with validated bytes', async () => {
     const cache = memoryCache()
     cache.values.set(file.fileName, new Uint8Array(79))
-    const deleteSpy = jest.spyOn(cache, 'delete')
+    const quarantineSpy = jest.spyOn(cache, 'quarantine')
     const setSpy = jest.spyOn(cache, 'set')
     const download = jest.fn(async () => data)
     const manager = await managerWith(file, fixtureFetch(download), cache)
 
     await expect(manager.findHeaderForHeightOrUndefined(0)).resolves.toBeDefined()
 
-    expect(deleteSpy).toHaveBeenCalledTimes(1)
+    expect(quarantineSpy).toHaveBeenCalledTimes(1)
+    expect(cache.quarantined).toHaveLength(1)
     expect(download).toHaveBeenCalledTimes(1)
     expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ fileName: file.fileName }), data)
     expect(manager.getStats()).toMatchObject({ persistentCacheRejects: 1, downloads: 1 })
+  })
+
+  test('preserves cached bytes and download budget when validation infrastructure fails', async () => {
+    const cache = memoryCache()
+    cache.values.set(file.fileName, data)
+    const quarantineSpy = jest.spyOn(cache, 'quarantine')
+    const download = jest.fn(async () => data)
+    const validator: BulkFileDataValidatorApi = {
+      validate: async () => {
+        throw new Error('validation worker unavailable')
+      }
+    }
+    const manager = await managerWith(file, fixtureFetch(download), cache, undefined, undefined, validator)
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('validation worker unavailable')
+    expect(quarantineSpy).not.toHaveBeenCalled()
+    expect(cache.values.get(file.fileName)).toBe(data)
+    expect(download).not.toHaveBeenCalled()
   })
 
   test('reserves the full immutable object before starting a remote download', async () => {
@@ -120,6 +167,67 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
     await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('download budget exhausted')
     expect(consume).toHaveBeenCalledWith(80)
     expect(download).not.toHaveBeenCalled()
+  })
+
+  test('charges the budget for the initial request and every physical retry', async () => {
+    const consume = jest.fn(async () => undefined)
+    const fetch = fixtureFetch(jest.fn(async () => data))
+    fetch.download = jest.fn(async (_url, _maxBytes, options) => {
+      await options?.beforeRetry?.(2)
+      await options?.beforeRetry?.(3)
+      return data
+    })
+    const manager = await managerWith(file, fetch, memoryCache(), { consume })
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).resolves.toBeDefined()
+    expect(consume).toHaveBeenCalledTimes(3)
+    expect(consume).toHaveBeenNthCalledWith(1, 80)
+    expect(consume).toHaveBeenNthCalledWith(2, 80)
+    expect(consume).toHaveBeenNthCalledWith(3, 80)
+  })
+
+  test('backs off repeated failed immutable-object loads instead of burning more data', async () => {
+    const download = jest.fn(async () => {
+      throw new Error('upstream unavailable')
+    })
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache(), undefined, 60_000)
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('upstream unavailable')
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('upstream unavailable')
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(manager.getStats()).toMatchObject({ loadBackoffs: 1 })
+  })
+
+  test('retries an immutable-object load after a zero-duration backoff expires', async () => {
+    const download = jest.fn(async () => {
+      throw new Error('still unavailable')
+    })
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache(), undefined, 0)
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('still unavailable')
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('still unavailable')
+    expect(download).toHaveBeenCalledTimes(2)
+    expect(manager.getStats()).toMatchObject({ loadBackoffs: 0 })
+  })
+
+  test('releases the manager lock while an immutable snapshot waits for I/O', async () => {
+    let resolveDownload!: (value: Uint8Array) => void
+    const download = jest.fn(
+      async () =>
+        await new Promise<Uint8Array>(resolve => {
+          resolveDownload = resolve
+        })
+    )
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache())
+    const read = manager.findHeaderForHeightOrUndefined(0)
+    await new Promise(resolve => setImmediate(resolve))
+
+    const writer = manager.deleteBulkFiles().then(() => 'writer' as const)
+    const timeout = new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 100))
+    await expect(Promise.race([writer, timeout])).resolves.toBe('writer')
+
+    resolveDownload(data)
+    await expect(read).resolves.toBeDefined()
   })
 
   test('does not trust a remote validated flag to bypass proof-of-work checks', async () => {
@@ -148,10 +256,33 @@ describe('BulkFileDataManager persistent cache and miss coalescing', () => {
     const manager = await managerWith(storageBacked, fixtureFetch(download), memoryCache())
     manager['storage'] = { getBulkFileData: storageGet } as never
 
-    await expect(manager.getDataFromFile(storageBacked, 0, 80)).rejects.toThrow(
-      'a match for retrieved data'
-    )
+    await expect(manager.getDataFromFile(storageBacked, 0, 80)).rejects.toThrow('a match for retrieved data')
     expect(storageGet).toHaveBeenCalledWith(7)
     expect(download).not.toHaveBeenCalled()
+  })
+
+  test('rejects a descriptor that is not present in the current manager snapshot', async () => {
+    const manager = await managerWith(file, fixtureFetch(jest.fn(async () => data)), memoryCache())
+
+    await expect(manager.getDataFromFile({ ...file, firstHeight: 100 })).rejects.toThrow(
+      'a match for 100, 1 in the BulkFileDataManager'
+    )
+  })
+
+  test('fails closed when an indexed storage object disappears', async () => {
+    const storageBacked = { ...file, fileId: 7, sourceUrl: undefined }
+    const manager = await managerWith(storageBacked, fixtureFetch(jest.fn(async () => data)), memoryCache())
+    manager['storage'] = { getBulkFileData: jest.fn(async () => undefined) } as never
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow('data not found for fileId 7')
+  })
+
+  test('fails closed when a remote immutable object disappears', async () => {
+    const download = jest.fn(async () => undefined as never)
+    const manager = await managerWith(file, fixtureFetch(download), memoryCache())
+
+    await expect(manager.findHeaderForHeightOrUndefined(0)).rejects.toThrow(
+      `data not found for sourceUrl ${file.sourceUrl}/${file.fileName}`
+    )
   })
 })
