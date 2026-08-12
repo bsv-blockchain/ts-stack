@@ -109,6 +109,15 @@ diff --git a/packages/helpers/simple/src/core/types.ts b/packages/helpers/simple
 diff --git a/packages/wallet/btms/src/types.ts b/packages/wallet/btms/src/types.ts
 +++ b/packages/wallet/btms/src/types.ts
 @@ -0,0 +1,12 @@
+diff --git a/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BulkFileDataCacheApi.ts b/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BulkFileDataCacheApi.ts
++++ b/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BulkFileDataCacheApi.ts
+@@ -0,0 +1,12 @@
+diff --git a/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/ChaintracksFetchApi.ts b/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/ChaintracksFetchApi.ts
++++ b/packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/ChaintracksFetchApi.ts
+@@ -0,0 +1,12 @@
+diff --git a/packages/wallet/wallet-toolbox/src/services/chaintracker/index.mobile.ts b/packages/wallet/wallet-toolbox/src/services/chaintracker/index.mobile.ts
++++ b/packages/wallet/wallet-toolbox/src/services/chaintracker/index.mobile.ts
+@@ -0,0 +1,12 @@
 diff --git a/packages/helpers/example/src/index.ts b/packages/helpers/example/src/index.ts
 +++ b/packages/helpers/example/src/index.ts
 @@ -0,0 +1 @@

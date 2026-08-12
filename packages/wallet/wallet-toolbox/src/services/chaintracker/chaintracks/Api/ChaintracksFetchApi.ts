@@ -1,4 +1,4 @@
-import { HttpClient } from '@bsv/sdk'
+import type { HttpClient } from '@bsv/sdk'
 
 /**
  * Provides a simplified interface based on the @bsv/sdk `HttpClient` class

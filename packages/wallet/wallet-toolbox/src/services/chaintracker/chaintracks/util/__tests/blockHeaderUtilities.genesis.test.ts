@@ -1,8 +1,11 @@
 import { Chain } from '../../../../../sdk/types'
+import type { ChaintracksFetchApi } from '../../Api/ChaintracksFetchApi'
+import type { BulkHeaderFileInfo } from '../BulkHeaderFile'
 import {
   blockHash,
   genesisBuffer,
   genesisHeader,
+  validateBulkFileData,
   validateBufferOfHeaders,
   validateGenesisHeader,
   validateHeaderProofOfWork
@@ -70,5 +73,33 @@ describe('ChainTracks genesis headers', () => {
     expect(() => validateBufferOfHeaders(bytes, '00'.repeat(32))).toThrow(
       'Block hash is not less than specified target.'
     )
+  })
+
+  test('downloads and fully validates a genesis bulk file', async () => {
+    const bytes = Uint8Array.from(genesisBuffer('main'))
+    const fetch = {
+      pathJoin: jest.fn(() => 'https://headers.example/mainNet_0.headers'),
+      download: jest.fn(async () => bytes)
+    } as unknown as ChaintracksFetchApi
+    const info: BulkHeaderFileInfo = {
+      chain: 'main',
+      count: 1,
+      fileHash: '',
+      fileName: 'mainNet_0.headers',
+      firstHeight: 0,
+      lastChainWork: '',
+      lastHash: '',
+      prevChainWork: '00'.repeat(32),
+      prevHash: '00'.repeat(32),
+      sourceUrl: 'https://headers.example'
+    }
+
+    await expect(validateBulkFileData(info, info.prevHash, info.prevChainWork, fetch)).resolves.toMatchObject({
+      data: bytes,
+      lastHash: expected.main,
+      validated: true
+    })
+    expect(fetch.pathJoin).toHaveBeenCalledWith(info.sourceUrl, info.fileName)
+    expect(fetch.download).toHaveBeenCalledWith('https://headers.example/mainNet_0.headers', 80)
   })
 })

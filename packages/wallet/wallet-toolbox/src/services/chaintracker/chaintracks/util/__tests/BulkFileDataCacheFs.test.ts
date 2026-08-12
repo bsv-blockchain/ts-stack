@@ -37,6 +37,7 @@ describe('BulkFileDataCacheFs', () => {
 
     await cache.delete(file)
     await expect(cache.get(file)).resolves.toBeUndefined()
+    await expect(cache.delete(file)).resolves.toBeUndefined()
   })
 
   test('rejects path traversal before filesystem access', async () => {
