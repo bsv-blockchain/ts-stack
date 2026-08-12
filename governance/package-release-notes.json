@@ -126,8 +126,8 @@
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.6.1",
       "releaseType": "patch",
-      "summary": "Keeps Mongo-backed lookups serving when an index build fails, retries index creation after a failed build instead of caching the rejection, and upserts outpoint-keyed records so repeated admission of the same output cannot create duplicate rows. Applies to every topic storage manager through a shared CollectionIndexes helper.",
-      "migration": "No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged. Operators of collections that already contain duplicate rows violating a unique index should remove the duplicates so the index can finish building; lookups now succeed either way, and the index is built on a later call without a restart."
+      "summary": "Keeps Mongo-backed lookups serving when an index build fails, retries index creation after a failed build instead of caching the rejection, and upserts outpoint-keyed records so repeated admission of the same output cannot create duplicate rows. Applies to every topic storage manager through a shared CollectionIndexes helper, which can also delete the duplicate rows behind an unbuildable unique index when OVERLAY_INDEX_REPAIR is set.",
+      "migration": "No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged, and index repair stays off unless OVERLAY_INDEX_REPAIR is set to true. Operators of collections that already contain duplicate rows violating a unique index either remove the duplicates themselves or set that variable for one run; lookups now succeed either way, and the index is built on a later call without a restart."
     },
     {
       "name": "@bsv/paymail",
