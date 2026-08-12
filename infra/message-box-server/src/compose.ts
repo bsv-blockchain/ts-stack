@@ -32,9 +32,9 @@ import {
   authenticatedWebSocketIdentity,
   isIdentityOwnedRoom,
   messageBoxFromRecipientRoom,
-  recipientSocketIds,
   WebSocketPolicyError
 } from './security/webSocketPolicy.js'
+import { WebSocketConnectionRegistry } from './security/webSocketConnections.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
@@ -46,8 +46,7 @@ type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 export type MessageBoxRouter = IRouter
 
 interface WebSocketState {
-  authenticatedSockets: Map<string, string>
-  connectedSockets: Map<string, AuthSocket>
+  connections: WebSocketConnectionRegistry
 }
 
 const webSocketState = new WeakMap<AuthSocketServer, WebSocketState>()
@@ -105,15 +104,35 @@ export async function closeMessageBoxWebSockets(io: AuthSocketServer | null): Pr
   if (typeof nativeClose === 'function') {
     await nativeClose.call(io)
   } else {
-    disconnectAuthenticatedSockets(state?.connectedSockets.values() ?? [])
+    disconnectAuthenticatedSockets(state?.connections.sockets() ?? [])
   }
-  state?.authenticatedSockets.clear()
-  state?.connectedSockets.clear()
+  state?.connections.clear()
   webSocketState.delete(io)
 }
 
 export function createMessageBoxApp(): Express {
   return express()
+}
+
+/**
+ * Build the authenticated WebSocket boundary without sharing HTTP sessions.
+ *
+ * AuthSocket creates one Peer per Socket.IO connection. Each Peer must retain
+ * the session negotiated by that exact connection: a shared identity-keyed
+ * session manager can otherwise select a different tab's nonce when several
+ * sockets authenticate as the same wallet.
+ */
+export function createMessageBoxWebSocketOptions(
+  ctx: MessageBoxContext
+): ConstructorParameters<typeof AuthSocketServer>[1] {
+  return {
+    wallet: ctx.wallet,
+    maxHttpBufferSize: readBodyLimitBytes('MESSAGE_BOX_WEBSOCKET', 1024 * 1024),
+    cors: {
+      origin: readCorsOriginSetting('MESSAGE_BOX'),
+      methods: ['GET', 'POST']
+    }
+  }
 }
 
 export function registerMessageBoxPreAuthRoutes(
@@ -189,28 +208,20 @@ export function attachMessageBoxWebSockets(
 
   Logger.log('[WEBSOCKET] Initializing WebSocket support...')
 
-  const io = new AuthSocketServer(httpServer, {
-    wallet: ctx.wallet,
-    sessionManager: ctx.sessionManager,
-    maxHttpBufferSize: readBodyLimitBytes('MESSAGE_BOX_WEBSOCKET', 1024 * 1024),
-    cors: {
-      origin: readCorsOriginSetting('MESSAGE_BOX'),
-      methods: ['GET', 'POST']
-    }
-  })
+  const io = new AuthSocketServer(httpServer, createMessageBoxWebSocketOptions(ctx))
 
-  // Map to store authenticated identity keys
-  const authenticatedSockets = new Map<string, string>()
-  const connectedSockets = new Map<string, AuthSocket>()
+  const connections = new WebSocketConnectionRegistry()
   const resources = readMessageBoxResourceConfig()
   const pricing = readMessageBoxPricingConfig()
-  webSocketState.set(io, { authenticatedSockets, connectedSockets })
+  webSocketState.set(io, { connections })
 
   io.on('connection', socket => {
     let activeSendEvents = 0
     let sendRateWindowStartedAt = Date.now()
     let sendEventsInWindow = 0
-    connectedSockets.set(socket.id, socket)
+    connections.register(socket, reason => {
+      Logger.log(`[WEBSOCKET] Disconnected: ${String(reason)}`)
+    })
     Logger.log('[WEBSOCKET] New connection established.')
 
     // Handle immediate authentication if identityKey is available
@@ -219,7 +230,7 @@ export function attachMessageBoxWebSockets(
         const identityKey = authenticatedWebSocketIdentity(socket.identityKey)
         Logger.log('[DEBUG] Parsed WebSocket Identity Key Successfully:', identityKey)
 
-        authenticatedSockets.set(socket.id, identityKey)
+        connections.authenticate(socket.id, identityKey)
         Logger.log('[WEBSOCKET] Identity key stored for socket ID:', socket.id)
 
         // Send confirmation immediately if identity key is provided on connection
@@ -239,7 +250,7 @@ export function attachMessageBoxWebSockets(
 
         try {
           const identityKey = authenticatedWebSocketIdentity(socket.identityKey, data?.identityKey)
-          authenticatedSockets.set(socket.id, identityKey)
+          connections.authenticate(socket.id, identityKey)
           identityKeyHandled = true
 
           Logger.log('[WEBSOCKET] BRC-103 peer authenticated for socket ID:', socket.id)
@@ -278,7 +289,7 @@ export function attachMessageBoxWebSockets(
 
         const { roomId, message } = data
 
-        if (!authenticatedSockets.has(socket.id)) {
+        if (!connections.isAuthenticated(socket.id)) {
           Logger.warn('[WEBSOCKET] Unauthorized attempt to send a message.')
           await socket.emit('paymentFailed', {
             reason: 'Unauthorized: WebSocket not authenticated'
@@ -365,7 +376,7 @@ export function attachMessageBoxWebSockets(
           } as unknown as Response
           await sendMessageRoute.func(
             {
-              auth: { identityKey: authenticatedSockets.get(socket.id) },
+              auth: { identityKey: connections.identityKey(socket.id) },
               body: {
                 message: {
                   messageId: message.messageId,
@@ -391,21 +402,15 @@ export function attachMessageBoxWebSockets(
             messageId: message.messageId
           })
 
-          const recipientSocketIdsForMessage = recipientSocketIds(
-            authenticatedSockets,
-            message.recipient
+          const recipientSockets = connections.recipientSockets(
+            message.recipient,
+            roomId,
+            resources.webSocketMaxRecipientConnections
           )
-          const boundedRecipientSocketIds =
-            resources.webSocketMaxRecipientConnections === -1
-              ? recipientSocketIdsForMessage
-              : recipientSocketIdsForMessage.slice(0, resources.webSocketMaxRecipientConnections)
-          const recipientSockets = boundedRecipientSocketIds
-            .map(socketId => connectedSockets.get(socketId))
-            .filter(recipientSocket => recipientSocket != null)
           await Promise.all(
             recipientSockets.map(async recipientSocket => {
               await recipientSocket.emit(`sendMessage-${roomId}`, {
-                sender: authenticatedSockets.get(socket.id),
+                sender: connections.identityKey(socket.id),
                 messageId: message.messageId,
                 body: message.body
               })
@@ -426,7 +431,7 @@ export function attachMessageBoxWebSockets(
 
     // Handle joining/leaving rooms
     socket.on('joinRoom', async (roomId: string) => {
-      if (!authenticatedSockets.has(socket.id)) {
+      if (!connections.isAuthenticated(socket.id)) {
         Logger.warn('[WEBSOCKET] Unauthorized attempt to join a room.')
         await socket.emit('joinFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
         return
@@ -438,19 +443,20 @@ export function attachMessageBoxWebSockets(
         return
       }
 
-      const identityKey = authenticatedSockets.get(socket.id)
+      const identityKey = connections.identityKey(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
         Logger.warn("[WEBSOCKET] Rejected an attempt to join another identity's room.")
         await socket.emit('joinFailed', { reason: 'Room is not owned by authenticated identity' })
         return
       }
 
+      connections.join(socket.id, roomId)
       Logger.log(`[WEBSOCKET] User ${socket.id} joined room ${roomId}`)
       await socket.emit('joinedRoom', { roomId })
     })
 
     socket.on('leaveRoom', async (roomId: string) => {
-      if (!authenticatedSockets.has(socket.id)) {
+      if (!connections.isAuthenticated(socket.id)) {
         Logger.warn('[WEBSOCKET] Unauthorized attempt to leave a room.')
         await socket.emit('leaveFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
         return
@@ -462,22 +468,16 @@ export function attachMessageBoxWebSockets(
         return
       }
 
-      const identityKey = authenticatedSockets.get(socket.id)
+      const identityKey = connections.identityKey(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
         Logger.warn("[WEBSOCKET] Rejected an attempt to leave another identity's room.")
         await socket.emit('leaveFailed', { reason: 'Room is not owned by authenticated identity' })
         return
       }
 
+      connections.leave(socket.id, roomId)
       Logger.log(`[WEBSOCKET] User ${socket.id} left room ${roomId}`)
       await socket.emit('leftRoom', { roomId })
-    })
-
-    // Clean up on disconnect
-    socket.on('disconnect', (reason: string) => {
-      Logger.log(`[WEBSOCKET] Disconnected: ${reason}`)
-      authenticatedSockets.delete(socket.id)
-      connectedSockets.delete(socket.id)
     })
   })
 

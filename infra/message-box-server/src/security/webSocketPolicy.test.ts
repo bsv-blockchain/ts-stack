@@ -3,7 +3,6 @@ import {
   authenticatedWebSocketIdentity,
   isIdentityOwnedRoom,
   messageBoxFromRecipientRoom,
-  recipientSocketIds,
   WebSocketPolicyError
 } from './webSocketPolicy.js'
 
@@ -47,19 +46,5 @@ describe('Message Box WebSocket policy', () => {
     expect(
       messageBoxFromRecipientRoom(authenticatedIdentity, `${otherIdentity}-payment_inbox`)
     ).toBeUndefined()
-  })
-
-  it('selects only sockets authenticated as the recipient', () => {
-    const sockets = new Map([
-      ['sender', otherIdentity],
-      ['recipient-1', authenticatedIdentity],
-      ['recipient-2', authenticatedIdentity],
-      ['unrelated', otherIdentity]
-    ])
-
-    expect(recipientSocketIds(sockets, authenticatedIdentity)).toEqual([
-      'recipient-1',
-      'recipient-2'
-    ])
   })
 })

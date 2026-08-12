@@ -1,6 +1,19 @@
-import { closeMessageBoxWebSockets, disconnectAuthenticatedSockets } from './compose.js'
+import {
+  closeMessageBoxWebSockets,
+  createMessageBoxWebSocketOptions,
+  disconnectAuthenticatedSockets
+} from './compose.js'
 
 describe('Message Box WebSocket lifecycle', () => {
+  it('isolates authenticated sessions to each WebSocket connection', () => {
+    const sessionManager = { getSession: jest.fn() }
+    const wallet = { getPublicKey: jest.fn() }
+    const options = createMessageBoxWebSocketOptions({ wallet, sessionManager } as never)
+
+    expect(options.wallet).toBe(wallet)
+    expect(options).not.toHaveProperty('sessionManager')
+  })
+
   it('uses the package-owned close lifecycle when it is available', async () => {
     const close = jest.fn(async () => {})
     const server = { close }

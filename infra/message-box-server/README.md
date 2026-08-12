@@ -140,6 +140,9 @@ npm audit --audit-level=high
 
 The separate client integration suite requires configured wallet, server,
 database, WebSocket, and overlay services and is intentionally opt-in.
+The server test suite also runs a self-contained three-user integration test
+with real Message Box clients, ProtoWallet identities, BRC-103 AuthSocket
+handshakes, encrypted shared-document messages, and disconnect/rejoin coverage.
 
 ## Database and readiness
 
@@ -166,9 +169,19 @@ npx --no-install knex --knexfile out/knexfile.js migrate:latest --env production
 The service uses `@bsv/authsocket`. The peer identity comes from the signed
 BRC-103 transport, never solely from a payload claim. A claim must match that
 identity; connections may join only identity-owned rooms; delivery
-notifications target only connections authenticated as the recipient.
+notifications target only active connections authenticated as the recipient
+and joined to the exact destination room. Raw Socket.IO disconnects remove the
+connection's identity and room state immediately. If the configured recipient
+connection ceiling is reached, the newest matching connections are selected so
+old tabs cannot exclude the currently joining client.
 WebSocket sends reuse the HTTP handler's validation, fee, permission,
 deduplication, and persistence behavior.
+
+Each WebSocket connection owns the BRC-103 session negotiated by its AuthSocket
+peer. The database-backed HTTP session manager is deliberately not shared with
+those connection-local peers: several tabs may authenticate as the same wallet,
+and an identity-keyed shared lookup must not select another tab's session nonce
+for acknowledgements or live delivery.
 
 The in-memory connection map is process-local. Horizontally scaled deployments
 need sticky routing or an authenticated shared broker.

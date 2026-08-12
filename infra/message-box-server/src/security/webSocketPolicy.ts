@@ -46,12 +46,3 @@ export function messageBoxFromRecipientRoom(
   if (!isIdentityOwnedRoom(recipient, roomId)) return undefined
   return roomId.slice(recipient.length + 1)
 }
-
-export function recipientSocketIds(
-  authenticatedSockets: ReadonlyMap<string, string>,
-  recipientIdentity: string
-): string[] {
-  return [...authenticatedSockets.entries()]
-    .filter(([, identityKey]) => identityKey === recipientIdentity)
-    .map(([socketId]) => socketId)
-}
