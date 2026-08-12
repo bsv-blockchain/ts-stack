@@ -303,13 +303,17 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 
 ### First Startup
 
-1. The server opens `BULK_HEADERS_PATH` and constructs the persistent cache.
-2. Each required object is loaded from retained storage before the network.
-3. A cache miss durably reserves each physical attempt, performs one coalesced
+1. The server binds constant-time `/healthz` and `/readyz` probes, then
+   explicitly starts and awaits ChainTracks synchronization. Readiness never
+   depends on a normal API request arriving first.
+2. The server opens `BULK_HEADERS_PATH` and constructs the persistent cache.
+3. Each required object is loaded from retained storage before the network.
+4. A cache miss durably reserves each physical attempt, performs one coalesced
    bounded download, and validates the complete object in a worker before an
    atomic content-addressed cache write.
-4. ChainTracks synchronizes validated headers to the current height.
-5. The optional CDN publishes and serves a complete immutable generation on
+5. ChainTracks synchronizes validated headers to the current height and only
+   then changes `/readyz` from `503` to `200`.
+6. The optional CDN publishes and serves a complete immutable generation on
    port 3012; a crash before the atomic pointer swap leaves the previous
    generation active.
 
@@ -325,12 +329,11 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 
 The resilient server path requires `@bsv/wallet-toolbox` 2.9.0 or later. The
 standalone image lock is reconciled only after that protected npm candidate is
-published. Until the lock contains that version, the server can start in an
-explicit compatibility mode for CI and release sequencing, but it uses the
-older in-process validator and process-local budget. Do not publish or deploy
-the Chaintracks Server 1.1.10 image until `package-lock.json` resolves the
-resilient Wallet Toolbox release and startup logs
-`resilient_bulk_runtime_active: true`.
+published. Chaintracks Server 1.1.12 is the first deployable image in this
+sequence: 1.1.10 preceded the protected lock reconciliation, and staging found
+that 1.1.11 could wait indefinitely for a normal API request before becoming
+ready. Confirm startup logs both `resilient_bulk_runtime_active: true` and a
+successful `readiness` operation before promotion.
 
 ### Becoming a CDN Source
 

@@ -56,8 +56,9 @@ const contracts = {
       SOURCE_CDN_URL: 'https://cdn.projectbabbage.com/blockheaders/'
     },
     invalidEnvironment: { CHAIN: 'invalid' },
-    liveness: '/getInfo',
-    readiness: '/getInfo',
+    liveness: '/healthz',
+    readiness: '/readyz',
+    probeCors: false,
     transaction: { method: 'GET', path: '/getInfo', status: 200 },
     migration: 'not-applicable'
   },
@@ -461,12 +462,12 @@ const exerciseRunningContainer = async (component, name, contract) => {
     path: contract.liveness,
     status: 200
   })
-  await assertPublicResponse(component, liveness)
+  if (contract.probeCors !== false) await assertPublicResponse(component, liveness)
   const readiness = await waitForEndpoint(name, contract.port, {
     path: contract.readiness,
     status: 200
   })
-  await assertPublicResponse(component, readiness)
+  if (contract.probeCors !== false) await assertPublicResponse(component, readiness)
   await assertComponentCors(component, name, contract)
   const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
   await assertPublicResponse(component, transaction)
@@ -477,6 +478,15 @@ const exerciseRunningContainer = async (component, name, contract) => {
 export const contractNames = () => Object.keys(contracts)
 
 export const contractEnvironment = component => ({ ...contracts[component]?.environment })
+
+export const contractProbePaths = component => {
+  const contract = contracts[component]
+  return {
+    liveness: contract?.liveness,
+    readiness: contract?.readiness,
+    transaction: contract?.transaction?.path
+  }
+}
 
 export const walletDependencyEnvironment = () => ({
   ...contracts['wallet-infra'].environment,
