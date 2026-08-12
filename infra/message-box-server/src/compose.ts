@@ -116,6 +116,27 @@ export function createMessageBoxApp(): Express {
   return express()
 }
 
+/**
+ * Build the authenticated WebSocket boundary without sharing HTTP sessions.
+ *
+ * AuthSocket creates one Peer per Socket.IO connection. Each Peer must retain
+ * the session negotiated by that exact connection: a shared identity-keyed
+ * session manager can otherwise select a different tab's nonce when several
+ * sockets authenticate as the same wallet.
+ */
+export function createMessageBoxWebSocketOptions(
+  ctx: MessageBoxContext
+): ConstructorParameters<typeof AuthSocketServer>[1] {
+  return {
+    wallet: ctx.wallet,
+    maxHttpBufferSize: readBodyLimitBytes('MESSAGE_BOX_WEBSOCKET', 1024 * 1024),
+    cors: {
+      origin: readCorsOriginSetting('MESSAGE_BOX'),
+      methods: ['GET', 'POST']
+    }
+  }
+}
+
 export function registerMessageBoxPreAuthRoutes(
   router: MessageBoxRouter,
   routingPrefix: string = ''
@@ -189,15 +210,7 @@ export function attachMessageBoxWebSockets(
 
   Logger.log('[WEBSOCKET] Initializing WebSocket support...')
 
-  const io = new AuthSocketServer(httpServer, {
-    wallet: ctx.wallet,
-    sessionManager: ctx.sessionManager,
-    maxHttpBufferSize: readBodyLimitBytes('MESSAGE_BOX_WEBSOCKET', 1024 * 1024),
-    cors: {
-      origin: readCorsOriginSetting('MESSAGE_BOX'),
-      methods: ['GET', 'POST']
-    }
-  })
+  const io = new AuthSocketServer(httpServer, createMessageBoxWebSocketOptions(ctx))
 
   // Map to store authenticated identity keys
   const authenticatedSockets = new Map<string, string>()

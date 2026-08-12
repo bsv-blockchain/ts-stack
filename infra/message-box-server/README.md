@@ -170,6 +170,12 @@ notifications target only connections authenticated as the recipient.
 WebSocket sends reuse the HTTP handler's validation, fee, permission,
 deduplication, and persistence behavior.
 
+Each WebSocket connection owns the BRC-103 session negotiated by its AuthSocket
+peer. The database-backed HTTP session manager is deliberately not shared with
+those connection-local peers: several tabs may authenticate as the same wallet,
+and an identity-keyed shared lookup must not select another tab's session nonce
+for acknowledgements or live delivery.
+
 The in-memory connection map is process-local. Horizontally scaled deployments
 need sticky routing or an authenticated shared broker.
 
