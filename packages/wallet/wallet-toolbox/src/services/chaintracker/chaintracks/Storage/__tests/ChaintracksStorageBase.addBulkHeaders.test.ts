@@ -30,6 +30,19 @@ function makeStorage(
 }
 
 describe('ChaintracksStorageBase.addBulkHeaders', () => {
+  it('routes historical reads through the managed cache and budget path', async () => {
+    const storage = makeStorage(new HeightRange(0, 9))
+    const data = new Uint8Array(10 * 80)
+    const read = jest.fn(async () => data)
+    const createReader = jest.fn(async () => ({ read }))
+    storage.bulkManager = { createReader } as any
+    const range = new HeightRange(0, 9)
+
+    await expect(storage.getBulkHeaders(range)).resolves.toBe(data)
+    expect(createReader).toHaveBeenCalledWith(range, 10 * 80)
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
   it('selects the most-work branch, ignores duplicate tips, and retains live headers', async () => {
     const mergeIncrementalBlockHeaders = jest.fn(async () => {})
     const storage = makeStorage(new HeightRange(0, -1), mergeIncrementalBlockHeaders)

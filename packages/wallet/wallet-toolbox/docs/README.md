@@ -12,6 +12,7 @@ The documentation is split into various pages, each covering a set of related fu
 - [Action batch planning](./action-batch-planning.md) — Session-local `noSend` planning and atomic storage commit.
 - [WAB Shamir](./wab-shamir.md) — Shamir 2-of-3 key recovery system with entropy collection and WAB server integration.
 - [Authentication observability](./authentication-observability.md) — Privacy-safe telemetry, WAB transport hardening, and account-continuity handling.
+- [Local-first ChainTracks](./local-first-chaintracks.md) — Packaged checkpoints, local persistence, background synchronization, fallback quorum, and recovery controls.
 
 ## Open API
 
@@ -47,38 +48,38 @@ const rootKeyHex = PrivateKey.fromRandom().toString()
 console.log(`MAKE A SECURE COPY OF YOUR WALLET PRIVATE ROOT KEY: ${rootKeyHex}`)
 
 const { wallet } = await Setup.createWalletSQLite({
-    filePath: './myTestWallet.sqlite',
-    databaseName: 'myTestWallet',
-    chain: 'test',
-    rootKeyHex
+  filePath: './myTestWallet.sqlite',
+  databaseName: 'myTestWallet',
+  chain: 'test',
+  rootKeyHex
 })
 
 // Obtain a Wallet Payment for your new wallet from a testnet funding faucet.
 // Update or replace the values in the following example object with your actual funding payment.
 // Note that the values below will not be accepted as they are not intended for your new wallet.
 const r = {
-    senderIdentityKey: '03ac2d10bdb0023f4145cc2eba2fcd2ad3070cb2107b0b48170c46a9440e4cc3fe',
-    vout: 0,
-    txid: '942f094cee517276182e5857369ea53d64763a327d433489312a9606db188dfb',
-    derivationPrefix: 'jSlU588BWkw=',
-    derivationSuffix: 'l37vv/Bn4Lw=',
-    atomicBEEF: '01010101942f094cee517...a914b29d56273f6c1df90cd8f383c8117680f2bdd05188ac00000000'
+  senderIdentityKey: '03ac2d10bdb0023f4145cc2eba2fcd2ad3070cb2107b0b48170c46a9440e4cc3fe',
+  vout: 0,
+  txid: '942f094cee517276182e5857369ea53d64763a327d433489312a9606db188dfb',
+  derivationPrefix: 'jSlU588BWkw=',
+  derivationSuffix: 'l37vv/Bn4Lw=',
+  atomicBEEF: '01010101942f094cee517...a914b29d56273f6c1df90cd8f383c8117680f2bdd05188ac00000000'
 }
 
 const args: InternalizeActionArgs = {
-    tx: Utils.toArray(r.atomicBEEF, 'hex'),
-    outputs: [
-        {
-            outputIndex: r.vout,
-            protocol: 'wallet payment',
-            paymentRemittance: {
-                derivationPrefix: r.derivationPrefix,
-                derivationSuffix: r.derivationSuffix,
-                senderIdentityKey: r.senderIdentityKey
-            }
-        }
-    ],
-    description: 'from faucet'
+  tx: Utils.toArray(r.atomicBEEF, 'hex'),
+  outputs: [
+    {
+      outputIndex: r.vout,
+      protocol: 'wallet payment',
+      paymentRemittance: {
+        derivationPrefix: r.derivationPrefix,
+        derivationSuffix: r.derivationSuffix,
+        senderIdentityKey: r.senderIdentityKey
+      }
+    }
+  ],
+  description: 'from faucet'
 }
 
 const rw = await wallet.internalizeAction(args)

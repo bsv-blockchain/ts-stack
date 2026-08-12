@@ -14,6 +14,7 @@ import { BulkIngestorChaintracks } from './Ingest/BulkIngestorChaintracks'
 import { LiveIngestorChaintracksSSE } from './Ingest/LiveIngestorChaintracksSSE'
 import { GoChaintracksServiceClient } from './GoChaintracksServiceClient'
 import { publicArcadeUrl } from '../../networkConfig'
+import type { BulkFileDataCacheApi, BulkFileDownloadBudgetApi } from './Api/BulkFileDataCacheApi'
 
 export interface ChaintracksSourceOptions {
   /** Preferred go-chaintracks or Arcade source. */
@@ -26,6 +27,10 @@ export interface ChaintracksSourceOptions {
   disableCdn?: boolean
   /** Disable the keyless WhatsOnChain fallback on mainnet/testnet. */
   disableWhatsOnChain?: boolean
+  /** Persistent checkpoint/cache storage used before any remote bulk download. */
+  bulkFileCache?: BulkFileDataCacheApi
+  /** Optional byte budget applied before remote bulk-file downloads. */
+  bulkFileDownloadBudget?: BulkFileDownloadBudgetApi
 }
 
 export type ChaintracksArgumentsTail = [
@@ -135,7 +140,9 @@ export function createDefaultBulkFileDataManager(params: ResolvedDefaultChaintra
     fetch: params.fetch,
     maxPerFile: params.maxPerFile,
     maxRetained: params.maxRetained,
-    fromKnownSourceUrl: params.cdnUrl
+    fromKnownSourceUrl: params.cdnUrl,
+    cache: params.sources.bulkFileCache,
+    downloadBudget: params.sources.bulkFileDownloadBudget
   }
   return new BulkFileDataManager(options)
 }

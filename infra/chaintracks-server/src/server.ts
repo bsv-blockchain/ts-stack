@@ -23,6 +23,7 @@ import * as WalletToolbox from '@bsv/wallet-toolbox'
 import * as path from 'node:path'
 import * as express from 'express'
 import * as bodyParser from 'body-parser'
+import { rateLimit } from 'express-rate-limit'
 import { createV1Routes } from './v1-routes'
 import { createV2Routes } from './v2-routes'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
@@ -35,10 +36,12 @@ import {
   initialDoubleSlashCompatibility,
   profileValue,
   readBodyLimitBytes,
+  readResourceLimit,
   readResourceProfile,
   responseSizeLimit,
   securityHeaders
 } from './security/edgePolicy'
+import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy'
 
 const tracer = trace.getTracer('chaintracks-server')
 
@@ -120,7 +123,7 @@ function resolveBulkHeadersPath(): string {
 
 function createServices(chain: ConfiguredChain, chaintracks: Chaintracks): Services | undefined {
   // Keep the standalone source buildable against the currently published
-  // toolbox while adopting the additive 2.6 factory immediately after the
+  // toolbox while adopting the additive 2.8 factory immediately after the
   // protected dependency-lock reconciliation.
   const factory = (
     WalletToolbox as unknown as {
@@ -144,9 +147,27 @@ function createServices(chain: ConfiguredChain, chaintracks: Chaintracks): Servi
       )
     )
   }
-  // 2.5 predates STN in the public Chain union. Other pre-2.6 deployments
+  // Older releases predate STN in the public Chain union. Those deployments
   // retain their exact Services construction until the lock is reconciled.
   return chain === 'stn' ? undefined : new Services(chain as Chain)
+}
+
+function createBulkFileCache(rootFolder: string): unknown {
+  const Cache = (
+    WalletToolbox as unknown as {
+      BulkFileDataCacheFs?: new (path: string) => unknown
+    }
+  ).BulkFileDataCacheFs
+  return Cache == null ? undefined : new Cache(rootFolder)
+}
+
+function createBulkFileDownloadBudget(maxBytes: number): unknown {
+  const Budget = (
+    WalletToolbox as unknown as {
+      FixedWindowBulkFileDownloadBudget?: new (options: { maxBytes: number }) => unknown
+    }
+  ).FixedWindowBulkFileDownloadBudget
+  return Budget == null ? undefined : new Budget({ maxBytes })
 }
 
 async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
@@ -173,6 +194,7 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
 
 async function main() {
   const chain = resolveChain()
+  const resourceProfile = readResourceProfile('CHAINTRACKS')
   const port = Number.parseInt(process.env.PORT || '3011', 10)
   const cdnPort = port + 1 // CDN runs on next port
   const whatsonchainApiKey = process.env.WHATSONCHAIN_API_KEY || ''
@@ -190,6 +212,21 @@ async function main() {
   const cdnHostUrl = process.env.CDN_HOST_URL || `http://localhost:${cdnPort}`
 
   const bulkHeadersPath = resolveBulkHeadersPath()
+  const bulkFileCacheEnabled = process.env.CHAINTRACKS_BULK_FILE_CACHE !== 'false'
+  const upstreamDownloadMaxBytesPerHour = readResourceLimit(
+    'CHAINTRACKS',
+    'UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR',
+    profileValue(resourceProfile, {
+      small: 128 * 1024 * 1024,
+      standard: 512 * 1024 * 1024,
+      highThroughput: 2 * 1024 * 1024 * 1024
+    })
+  )
+  const bulkFileDownloadBudget =
+    upstreamDownloadMaxBytesPerHour === -1
+      ? undefined
+      : createBulkFileDownloadBudget(upstreamDownloadMaxBytesPerHour)
+  const bulkFileCache = bulkFileCacheEnabled ? createBulkFileCache(bulkHeadersPath) : undefined
 
   // The source URL is where clients can download headers from (the CDN HTTP endpoint)
   const bulkHeadersSourceUrl = enableBulkHeadersCDN ? cdnHostUrl : undefined
@@ -208,10 +245,16 @@ async function main() {
       whatsonchain_fallback_enabled: chain === 'main' || chain === 'test',
       upstream_chaintracks_configured: upstreamChaintracks != null,
       routing_prefix: routingPrefix || '/',
-      bulk_headers_cdn_enabled: enableBulkHeadersCDN
+      bulk_headers_cdn_enabled: enableBulkHeadersCDN,
+      bulk_file_cache_enabled: bulkFileCacheEnabled,
+      bulk_file_cache_active: bulkFileCache != null,
+      upstream_download_max_bytes_per_hour: upstreamDownloadMaxBytesPerHour
     },
     'Starting ChaintracksService with custom configuration'
   )
+  if (enableBulkHeadersCDN || bulkFileCacheEnabled) {
+    await ensureBulkHeadersDir(bulkHeadersPath)
+  }
   if (enableBulkHeadersCDN) {
     log.info(
       {
@@ -222,15 +265,13 @@ async function main() {
       },
       'Bulk headers CDN configuration'
     )
-    await ensureBulkHeadersDir(bulkHeadersPath)
   }
 
   // Create custom Chaintracks options
   // This allows fine-tuning of storage, ingestors, and sync behavior
-  // When bulk headers CDN is enabled, configure the CDN ingestor to use the local filesystem first
   // The standalone image intentionally compiles against the currently
-  // published toolbox. The appended source argument is consumed by 2.6.0
-  // after the protected package release and lock reconciliation.
+  // published toolbox. Additive source options become active after the
+  // protected package release and dependency-lock reconciliation.
   const createOptions = createDefaultNoDbChaintracksOptions as unknown as (
     ...args: unknown[]
   ) => ReturnType<typeof createDefaultNoDbChaintracksOptions>
@@ -254,30 +295,11 @@ async function main() {
         10
       ),
       disableCdn: sourceCdnUrl === '',
-      disableWhatsOnChain: process.env.CHAINTRACKS_DISABLE_WHATSONCHAIN === 'true'
+      disableWhatsOnChain: process.env.CHAINTRACKS_DISABLE_WHATSONCHAIN === 'true',
+      bulkFileCache,
+      bulkFileDownloadBudget
     }
   )
-
-  // If bulk headers CDN is enabled, configure the CDN ingestor to use our local path
-  // This makes the ingestor check the local filesystem FIRST before fetching from remote CDN
-  //
-  // How it works:
-  // 1. On first startup: Ingestor checks bulkHeadersPath, finds no files, downloads from remote CDN (if configured)
-  // 2. exportBulkHeaders() exports all headers from in-memory storage to bulkHeadersPath filesystem
-  // 3. On subsequent restarts: Ingestor checks bulkHeadersPath, finds exported files, loads them WITHOUT downloading
-  //
-  // This creates a "self-hosting" CDN: once headers are downloaded and exported, the server serves them to others
-  if (enableBulkHeadersCDN && chaintracksOptions.bulkIngestors.length > 0) {
-    const cdnIngestor = chaintracksOptions.bulkIngestors[0] as any
-    if (cdnIngestor?.localCachePath !== undefined) {
-      // Override the local cache path to use our bulk headers export directory
-      cdnIngestor.localCachePath = bulkHeadersPath
-      log.info(
-        { operation: 'cdn.ingestor_configure', outcome: 'ok', local_cache_path: bulkHeadersPath },
-        'Configured CDN ingestor to use local path; filesystem checked first, then remote CDN'
-      )
-    }
-  }
 
   // Create Chaintracks instance with custom options
   const chaintracks = new Chaintracks(chaintracksOptions)
@@ -451,7 +473,7 @@ async function main() {
 
   // Create Express app with both v1 and v2 routes
   const app = express.default()
-  const resourceProfile = readResourceProfile('CHAINTRACKS')
+  configureTrustProxy(app)
   app.disable('x-powered-by')
   app.use(initialDoubleSlashCompatibility)
   app.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS' }))
@@ -497,6 +519,18 @@ async function main() {
   app.get('/healthz', healthHandler)
 
   const apiRouter = express.Router()
+  const historicalQueryLimit = rateLimit(
+    rateLimitOptions('CHAINTRACKS_HISTORICAL_RATE_LIMIT', {
+      windowMs: 60_000,
+      limit: profileValue(resourceProfile, {
+        small: 120,
+        standard: 600,
+        highThroughput: 3_000
+      })
+    })
+  )
+  apiRouter.use(['/findHeaderHexForHeight', '/getHeaders'], historicalQueryLimit)
+  apiRouter.use(['/v2/header/height', '/v2/headers'], historicalQueryLimit)
   if (routingPrefix !== '') apiRouter.get('/healthz', healthHandler)
 
   apiRouter.get('/readyz', async (_req: express.Request, res: express.Response) => {

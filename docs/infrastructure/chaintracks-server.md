@@ -29,13 +29,18 @@ The Chaintracks primitives and client interface are defined in `@bsv/wallet-tool
 
 On first start, Chaintracks must acquire all existing BSV block headers before serving SPV queries. The bootstrap sequence:
 
-1. **Retained/bundled files** — Previously validated local files remain the fastest and most independent bootstrap source.
+1. **Retained/bundled files** — Local immutable objects are consulted before
+   the network and revalidated for length, digest, linkage, chain work,
+   genesis, and proof of work before first use.
 2. **CDN bulk ingest** — `SOURCE_CDN_URL` supplies immutable bulk files. Set it to an empty string to disable this source without changing older deployments that rely on the default.
 3. **Arcade/go-chaintracks** — The server fetches bounded binary header batches and follows the reconnecting tip SSE stream. Public defaults exist for mainnet, testnet, and TerraTestNet; STN and Terra Scaling TestNet require an operator endpoint.
 4. **WhatsOnChain fallback** — Mainnet and testnet only. No key is required: anonymous requests are serialized below the documented three requests/second limit. A key can raise the allowance, but a rejected key is retried anonymously instead of making ChainTracks unavailable.
 
 Every remote batch still passes through ChainTracks' local serialization, hash,
-continuity, and genesis checks before storage. When every provider is
+continuity, genesis, chain-work, and proof-of-work checks before storage.
+Concurrent misses for one immutable object share one request; retry and body
+limits are enforced in one layer; a per-process remote-byte budget is reserved
+before download; and successful objects are atomically persisted. When every provider is
 temporarily unavailable, a synchronized process continues serving its
 last-good checked height and headers and exposes degraded source state from
 `getInfo`/`readyz`.
@@ -88,6 +93,11 @@ The v2 surface is exercised by the [`sync.chaintracks-v2-http`](../conformance/i
 PORT=3011                                  # HTTP listen port
 CHAIN=main                                 # main | test | stn | ttn | tstn
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
+CHAINTRACKS_BULK_FILE_CACHE=true             # set false only for ephemeral development
+CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS=60000
+CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
+TRUST_PROXY_HOPS=                            # opt in only behind trusted proxies
 CHAINTRACKS_UPSTREAM_URL=                  # optional override; "disabled" disables
 CHAINTRACKS_UPSTREAM_API_PREFIX=           # inferred as /chaintracks/v2 by default
 CHAINTRACKS_UPSTREAM_MAX_HEADERS=1000
@@ -115,8 +125,11 @@ Public browser access is enabled by default. Use
 caller set. Omit `CHAINTRACKS_CORS_ALLOWED_HEADERS` and
 `CHAINTRACKS_CDN_CORS_ALLOWED_HEADERS` for additive well-formed preflight
 header compatibility; set exact comma-separated lists only for a strict
-browser header allowlist. API JSON bodies are capped at 256 KiB, the optional bulk CDN has a
-separate concurrency/timeout policy, and all responses receive the shared
+browser header allowlist. Historical height and batch routes also have a
+separate process-local rate limit; horizontally scaled deployments must enforce
+the equivalent aggregate limit at a shared gateway. API JSON bodies are capped
+at 256 KiB, the optional bulk CDN has a separate concurrency/timeout policy,
+and all responses receive the shared
 security-header baseline. See
 [Public Service Edge Security](service-edge-security.md#chaintracks-server-and-reusable-chaintracksservice).
 

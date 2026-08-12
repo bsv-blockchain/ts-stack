@@ -5,7 +5,7 @@ import { LiveIngestorApi } from './Api/LiveIngestorApi'
 import { validateAgainstDirtyHashes } from './util/dirtyHashes'
 
 import { ChaintracksOptions, ChaintracksManagementApi } from './Api/ChaintracksApi'
-import { blockHash, validateHeaderFormat } from './util/blockHeaderUtilities'
+import { blockHash, validateHeaderFormat, validateHeaderProofOfWork } from './util/blockHeaderUtilities'
 import { Chain } from '../../../sdk/types'
 import {
   ChaintracksInfoApi,
@@ -322,7 +322,8 @@ export class Chaintracks implements ChaintracksManagementApi {
       bulkIngestors: this.bulkIngestors.map(bulkIngestor => bulkIngestor.constructor.name),
       liveIngestors: this.liveIngestors.map(liveIngestor => liveIngestor.constructor.name),
       packages: [],
-      sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status }))
+      sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status })),
+      bulkData: this.storage.bulkManager.getStats()
     }
     return info
   }
@@ -522,6 +523,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private async addLiveHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     validateHeaderFormat(header)
+    validateHeaderProofOfWork(header)
     validateAgainstDirtyHashes(header.hash)
 
     const ihr = this.available

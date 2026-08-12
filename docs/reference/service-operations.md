@@ -104,7 +104,7 @@ Incident handling follows this evidence-preserving sequence:
 ### chaintracks-server
 
 - Configuration: required `CHAIN`; optional
-  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `CHAINTRACKS_DISABLE_WHATSONCHAIN`, `CHAINTRACKS_UPSTREAM_API_PREFIX`, `CHAINTRACKS_UPSTREAM_MAX_HEADERS`, `CHAINTRACKS_UPSTREAM_URL`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `ROUTING_PREFIX`, `SOURCE_CDN_URL`, `STN_ARCADE_URL`, `STN_CHAINTRACKS_URL`, `TSTN_ARCADE_URL`, `TSTN_CHAINTRACKS_URL`, `WHATSONCHAIN_API_KEY`; secret-bearing
+  `BULK_HEADERS_PATH`, `CDN_HOST_URL`, `CHAINTRACKS_BULK_FILE_CACHE`, `CHAINTRACKS_DISABLE_WHATSONCHAIN`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX`, `CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS`, `CHAINTRACKS_UPSTREAM_API_PREFIX`, `CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR`, `CHAINTRACKS_UPSTREAM_MAX_HEADERS`, `CHAINTRACKS_UPSTREAM_URL`, `ENABLE_BULK_HEADERS_CDN`, `PORT`, `ROUTING_PREFIX`, `SOURCE_CDN_URL`, `STN_ARCADE_URL`, `STN_CHAINTRACKS_URL`, `TSTN_ARCADE_URL`, `TSTN_CHAINTRACKS_URL`, `TRUST_PROXY_HOPS`, `WHATSONCHAIN_API_KEY`; secret-bearing
   `OTEL_EXPORTER_OTLP_HEADERS`, `WHATSONCHAIN_API_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
@@ -117,9 +117,11 @@ Incident handling follows this evidence-preserving sequence:
 - Alerts:
 - header tip age or height stops advancing
 - all configured bulk/live sources are degraded or upstream retrieval repeatedly fails
+- persistent bulk-cache rejects or upstream download-budget exhaustion occurs
+- historical-route rate limiting remains saturated
 - API or CDN saturation exceeds its independent concurrency budget
-- State: Bulk-header files under BULK_HEADERS_PATH; upstream headers are reproducible.
-- Migration/startup: No schema migration. Validate the retained header corpus before rollout.
+- State: Verified immutable bulk-header objects under BULK_HEADERS_PATH plus locally retained live headers; upstream headers are reproducible.
+- Migration/startup: No schema migration. Enable the persistent bulk cache, validate the retained header corpus, and confirm cache-hit/download-budget counters before rollout.
 - Backup/restore: Snapshot BULK_HEADERS_PATH or repopulate it from a verified source CDN.
 - RPO starting point: 24 hours when reproducible upstreams are healthy; otherwise match the operator's header-retention risk.
 - RTO starting point: 4 hours from a verified snapshot or reproducible upstream.

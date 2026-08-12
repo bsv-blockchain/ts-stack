@@ -219,6 +219,14 @@ export interface WalletServicesOptions {
   /** Optional provider-neutral service and ChainTracks tracing. */
   telemetry?: TelemetryConfig
   /**
+   * Optional SDK verifier returned directly by `getChainTracker`.
+   *
+   * Use this for a local-primary or otherwise composed verifier. When omitted,
+   * Services preserves the existing behavior of wrapping `chaintracks` in a
+   * `ChaintracksChainTracker`.
+   */
+  chainTracker?: ChainTracker
+  /**
    * As of 2025-08-31 the `taalApiKey` is unused for default configured services.
    * See `arcConfig` instead.
    */

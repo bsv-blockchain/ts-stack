@@ -51,7 +51,7 @@ This server provides two main services:
 ### 1. ChaintracksService (Port 3011)
 
 - **Tracks BSV blockchain headers** in real-time
-- **In-memory NoDb storage** - no database required
+- **Validated local header storage** - no database service required
 - **REST API endpoints** for querying headers
 - **Automatic sync** with BSV blockchain
 - **Event subscriptions** for headers and reorgs
@@ -70,14 +70,17 @@ This server provides two main services:
 
 Your server can become a CDN node:
 
-1. Downloads headers from remote CDN (if local files don't exist)
-2. Exports headers to filesystem
-3. Serves headers to other servers via HTTP
-4. Creates a distributed network of header sources
+1. Reads and validates retained immutable header objects before the network
+2. Coalesces a missing object's callers into one bounded remote download
+3. Writes only validated objects to persistent storage using atomic replacement
+4. Serves headers to other servers via HTTP
+5. Creates a distributed network of header sources
 
 ### 📦 Automatic Header Management
 
-- Downloads from `SOURCE_CDN_URL` on first startup
+- Reads retained objects before `SOURCE_CDN_URL` and downloads only a miss
+- Validates object digest, genesis, linkage, chain work, and proof of work
+- Caps response bodies, retries, and remote bulk bytes
 - Exports to filesystem automatically
 - Serves via CDN on port 3012
 - Updates every 67 hours (400 blocks)
@@ -87,13 +90,14 @@ Your server can become a CDN node:
 
 - Mainnet/testnet: uses the CDN plus public Arcade binary and SSE APIs
 - TTN: uses the public Arcade binary and SSE APIs
-- Subsequent runs: Uses local filesystem
+- Subsequent runs reuse the verified persistent cache
 - Automatically exports new headers
 - Other servers can use you as a source
 - WhatsOnChain is a mainnet/testnet fallback and does not require a key
 
-Remote headers pass through local serialization, hash, continuity, and genesis
-checks before storage. Source failures fall through in priority order, SSE
+Remote headers pass through local serialization, hash, continuity, genesis,
+chain-work, and proof-of-work checks before storage. Source failures fall
+through in priority order, SSE
 reconnects with bounded backoff, and a synchronized process keeps serving
 last-good checked data while reporting degraded sources from `/getInfo` and
 `/readyz`.
@@ -127,7 +131,7 @@ bundled into this TypeScript/browser distribution.
 │  └────────────────────────────────────┘  │
 │                                           │
 │  Downloads from (if needed):              │
-│  SOURCE_CDN_URL=https://cdn.babbage.com  │
+│  SOURCE_CDN_URL=https://headers.example │
 └──────────────────────────────────────────┘
 ```
 
@@ -199,6 +203,12 @@ TSTN_CHAINTRACKS_URL=
 
 # SOURCE_CDN_URL - Where to download headers FROM (if local files don't exist)
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
+CHAINTRACKS_BULK_FILE_CACHE=true
+CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS=60000
+CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
+# Set only for a deployment whose direct peers are trusted proxies.
+TRUST_PROXY_HOPS=
 
 # ENABLE_BULK_HEADERS_CDN - Enable CDN hosting
 ENABLE_BULK_HEADERS_CDN=true
@@ -226,6 +236,9 @@ WHATSONCHAIN_API_KEY=
 ENABLE_BULK_HEADERS_CDN=true
 CDN_HOST_URL=https://headers.yourdomain.com
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
+CHAINTRACKS_BULK_FILE_CACHE=true
+CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
 ```
 
 **Setup nginx reverse proxy:**
@@ -280,18 +293,20 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 
 ### First Startup
 
-1. Server starts and checks `./public/headers` for existing files
-2. No files found, downloads from `SOURCE_CDN_URL`
-3. Syncs blockchain headers to current height
-4. Exports all headers to `./public/headers`
-5. CDN server starts serving files on port 3012
+1. The server opens `BULK_HEADERS_PATH` and constructs the persistent cache.
+2. Each required object is loaded from retained storage before the network.
+3. A cache miss reserves the object's bytes, performs one coalesced bounded
+   download, and validates the complete object before an atomic cache write.
+4. ChainTracks synchronizes validated headers to the current height.
+5. The optional CDN exports and serves immutable objects on port 3012.
 
 ### Subsequent Startups
 
-1. Server starts and checks `./public/headers`
-2. Finds existing files, loads them directly (no download!)
-3. Continues syncing from last height
-4. Automatically exports new headers at 100k boundaries
+1. The server reopens `BULK_HEADERS_PATH`.
+2. Retained objects are digest-, linkage-, and proof-of-work-validated on first
+   use and do not generate a remote bulk download.
+3. Synchronization resumes from the last durable height.
+4. New immutable objects are exported at 100k boundaries.
 
 ### Becoming a CDN Source
 
@@ -445,6 +460,9 @@ Creates a **self-healing, distributed CDN network**! 🌍
 # API health
 curl http://localhost:3011/getInfo
 
+# Cache/download counters and readiness source state
+curl http://localhost:3011/readyz
+
 # CDN health
 curl http://localhost:3012/mainNetBlockHeaders.json
 ```
@@ -480,6 +498,8 @@ ls -lh public/headers/
 
 - Check the configured Arcade/go-chaintracks source and `/readyz` source states
 - Check `SOURCE_CDN_URL` is reachable
+- Check `bulkData.persistentCacheRejects` and the upstream byte budget before
+  raising either limit
 - Verify network connectivity
 
 The service does not need a WhatsOnChain key. If one is configured and rejected,

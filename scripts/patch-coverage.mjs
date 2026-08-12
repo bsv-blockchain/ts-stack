@@ -45,7 +45,14 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/wallet\/wallet-toolbox\/src\/SetupWallet\.ts$/,
   /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/,
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
-  /packages\/wallet\/btms\/src\/types\.ts$/
+  /packages\/wallet\/btms\/src\/types\.ts$/,
+  // These ChainTracks modules emit no executable statements: two contain
+  // interfaces/type-only imports and the mobile entry point only re-exports
+  // platform-safe implementations. Keep the exclusions exact so executable
+  // modules with similar names remain governed.
+  /packages\/wallet\/wallet-toolbox\/src\/services\/chaintracker\/chaintracks\/Api\/BulkFileDataCacheApi\.ts$/,
+  /packages\/wallet\/wallet-toolbox\/src\/services\/chaintracker\/chaintracks\/Api\/ChaintracksFetchApi\.ts$/,
+  /packages\/wallet\/wallet-toolbox\/src\/services\/chaintracker\/index\.mobile\.ts$/
 ]
 
 function normalizedPath(value) {

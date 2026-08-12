@@ -9,6 +9,7 @@ import { readUtf8FileIfExists, writeUtf8FileAtomic } from './file-system.mjs'
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const canonicalPath = 'infra/wab/src/security/rateLimitPolicy.ts'
 const synchronizedPaths = [
+  'infra/chaintracks-server/src/security/rateLimitPolicy.ts',
   'infra/uhrp-server-basic/src/security/rateLimitPolicy.ts',
   'infra/uhrp-server-cloud-bucket/src/security/rateLimitPolicy.ts',
   'infra/message-box-server/src/security/rateLimitPolicy.ts'
