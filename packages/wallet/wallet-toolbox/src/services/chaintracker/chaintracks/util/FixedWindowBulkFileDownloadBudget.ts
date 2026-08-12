@@ -53,10 +53,17 @@ export class FixedWindowBulkFileDownloadBudget implements BulkFileDownloadBudget
     this.consumedBytes += byteCount
   }
 
-  snapshot(): { maxBytes: number; consumedBytes: number; windowStartedAt: number; windowMsecs: number } {
+  snapshot(): {
+    maxBytes: number
+    consumedBytes: number
+    remainingBytes: number
+    windowStartedAt: number
+    windowMsecs: number
+  } {
     return {
       maxBytes: this.maxBytes,
       consumedBytes: this.consumedBytes,
+      remainingBytes: this.maxBytes - this.consumedBytes,
       windowStartedAt: this.windowStartedAt,
       windowMsecs: this.windowMsecs
     }

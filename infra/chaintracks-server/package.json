@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -13,6 +13,7 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test dist/__tests__/*.test.js",
     "lint": "oxlint src --deny-warnings",
     "start": "node --require ./dist/telemetry.js dist/server.js",
     "start:test": "CHAIN=test node --require ./dist/telemetry.js dist/server.js",

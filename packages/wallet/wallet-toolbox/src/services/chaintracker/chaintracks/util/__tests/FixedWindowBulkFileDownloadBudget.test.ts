@@ -13,6 +13,7 @@ describe('FixedWindowBulkFileDownloadBudget', () => {
     expect(budget.snapshot()).toEqual({
       maxBytes: 10,
       consumedBytes: 4,
+      remainingBytes: 6,
       windowStartedAt: 1_000,
       windowMsecs: 100
     })
@@ -26,6 +27,7 @@ describe('FixedWindowBulkFileDownloadBudget', () => {
     expect(budget.snapshot()).toEqual({
       maxBytes: 10,
       consumedBytes: 7,
+      remainingBytes: 3,
       windowStartedAt: 1_100,
       windowMsecs: 100
     })

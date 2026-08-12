@@ -19,9 +19,20 @@ attention to changes that materially alter behavior or extend functionality.
   quorum-confirmed stuck height before optional recovery. The reviewed platform
   service seam also accepts a composed SDK `chainTracker` directly while
   retaining the existing client-wrapping default. The reviewed platform
-  ceilings advance to 1,596,000 Vite bytes, 1,246,000 esbuild bytes, and
-  3,344,000 Hermes bytes; their matching gzip/Brotli ceilings are
-  376,000/295,000, 343,000/275,000, and 1,351,000/1,052,000 bytes.
+  ceilings advance to 1,601,000 Vite bytes, 1,249,000 esbuild bytes, and
+  3,355,000 Hermes bytes; their matching gzip/Brotli ceilings are
+  377,000/295,000, 343,000/276,000, and 1,351,000/1,054,000 bytes.
+- Keep ChainTracks availability independent of immutable-header verification:
+  stale heights now return immediately behind a single refresh, complete
+  digest/linkage/chain-work/proof-of-work validation can run in a bounded Node
+  worker pool, and historical reads release the manager lock before disk,
+  network, or worker waits. Filesystem caches use content-addressed objects,
+  quarantine rejected entries, and promote validated legacy files without
+  deleting the only retained copy. A crash-safe download ledger reserves every
+  physical retry before network I/O and survives restarts; failed objects back
+  off before another attempt. The reference server keeps probes local, applies
+  separate historical concurrency admission, and publishes complete CDN
+  generations behind an atomic pointer while retaining rollback generations.
 - Age proactive pending-transaction review from immutable request creation
   time, so repeated proof polling cannot keep a rejected transaction below the
   reconciliation threshold forever. A descendant of a locally terminal parent

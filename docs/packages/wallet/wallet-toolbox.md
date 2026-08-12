@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.8.0'
-last_updated: '2026-08-11'
-last_verified: '2026-08-11'
+version: '2.9.0'
+last_updated: '2026-08-12'
+last_verified: '2026-08-12'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -62,6 +62,13 @@ hash, continuity, and genesis checks; source failures fall through in priority
 order; and synchronized trackers keep serving last-good local data.
 WhatsOnChain is an optional, rate-limited mainnet/testnet fallback; no key is
 required.
+
+Local ChainTracks height reads now use stale-while-revalidate singleflight,
+while immutable bulk objects coalesce misses and back off failed loads. Node
+services can move complete length, digest, linkage, chain-work, genesis, and
+proof-of-work validation into `NodeBulkFileDataValidator`; filesystem
+deployments can pair content-addressed quarantine storage with a crash-safe,
+per-attempt `DurableFileBulkFileDownloadBudget`.
 
 ## Install
 

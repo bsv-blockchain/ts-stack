@@ -2,9 +2,9 @@
 id: infra-chaintracks-server
 title: 'Chaintracks Server'
 kind: infra
-version: '1.1.0'
-last_updated: '2026-08-05'
-last_verified: '2026-08-05'
+version: '1.2.0'
+last_updated: '2026-08-12'
+last_verified: '2026-08-12'
 review_cadence_days: 30
 status: stable
 tags: [chaintracks, block-headers, spv, merkle, infrastructure]
@@ -39,11 +39,22 @@ On first start, Chaintracks must acquire all existing BSV block headers before s
 Every remote batch still passes through ChainTracks' local serialization, hash,
 continuity, genesis, chain-work, and proof-of-work checks before storage.
 Concurrent misses for one immutable object share one request; retry and body
-limits are enforced in one layer; a per-process remote-byte budget is reserved
-before download; and successful objects are atomically persisted. When every provider is
+limits are enforced in one layer; a durable remote-byte ledger reserves the
+full object before every physical attempt; and successful objects are
+content-addressed and atomically persisted. Complete-object validation runs in
+a bounded Node worker pool, so normal requests and probes do not share its CPU
+work. When every provider is
 temporarily unavailable, a synchronized process continues serving its
 last-good checked height and headers and exposes degraded source state from
 `getInfo`/`readyz`.
+
+Rejected cache objects move to quarantine instead of being unlinked. Legacy
+flat files are read during migration and promoted only after complete
+validation. CDN files publish as a complete generation behind an atomic
+`current` pointer; the last three generations remain available for rollback.
+A process crash during download, validation, export, or pointer publication
+therefore leaves the last-good generation and its content-addressed objects in
+place.
 
 Arcade is the HTTPS/SSE gateway used by browser, mobile, local, and service deployments and may itself be backed by Teranode P2P. This TypeScript server does not open a direct Teranode P2P session; adding one would require a separately reviewed server-only adapter and must not enter browser bundles. <!-- audio: Chaintracks server.m4a @ 00:40 -->
 
@@ -95,8 +106,11 @@ CHAIN=main                                 # main | test | stn | ttn | tstn
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
 CHAINTRACKS_BULK_FILE_CACHE=true             # set false only for ephemeral development
 CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_VALIDATION_WORKERS=1
+CHAINTRACKS_VALIDATION_QUEUE_MAX=8
 CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS=60000
 CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
+CHAINTRACKS_HISTORICAL_MAX_CONCURRENT_REQUESTS=8
 TRUST_PROXY_HOPS=                            # opt in only behind trusted proxies
 CHAINTRACKS_UPSTREAM_URL=                  # optional override; "disabled" disables
 CHAINTRACKS_UPSTREAM_API_PREFIX=           # inferred as /chaintracks/v2 by default
@@ -115,9 +129,19 @@ For `stn` or `tstn`, set `CHAINTRACKS_UPSTREAM_URL` (or the corresponding
 `TSTN_CHAINTRACKS_URL`) to an operator-controlled Arcade or go-chaintracks v2
 service. The server fails closed rather than aliasing either network to testnet.
 
-`GET /healthz` is the process liveness endpoint. `GET /readyz` (under
-`ROUTING_PREFIX` when configured) verifies that ChainTracks is listening and
-can report a locally or remotely sourced height; it also includes source health.
+Release Chaintracks Server 1.1.10 only after the protected
+`@bsv/wallet-toolbox` 2.9.0 publication and standalone lockfile reconciliation.
+The source can start against 2.8.0 in an explicit compatibility mode so CI can
+validate release ordering, but that mode retains in-process validation and a
+process-local budget; production startup must log
+`resilient_bulk_runtime_active: true`.
+
+`GET /healthz` and `GET /readyz` are local, constant-time endpoints registered
+before public request admission. Both remain available at the root and under
+`ROUTING_PREFIX`. Readiness uses an in-memory availability snapshot and never
+refreshes a provider, reads storage, or starts validation. The snapshot exposes
+last-good height freshness, refresh state, source state, cache counters, worker
+queue/duration counters, durable budget remaining, and sampled event-loop lag.
 
 Public browser access is enabled by default. Use
 `CHAINTRACKS_CORS_MODE=allowlist` and
@@ -126,12 +150,26 @@ caller set. Omit `CHAINTRACKS_CORS_ALLOWED_HEADERS` and
 `CHAINTRACKS_CDN_CORS_ALLOWED_HEADERS` for additive well-formed preflight
 header compatibility; set exact comma-separated lists only for a strict
 browser header allowlist. Historical height and batch routes also have a
-separate process-local rate limit; horizontally scaled deployments must enforce
-the equivalent aggregate limit at a shared gateway. API JSON bodies are capped
+separate process-local rate limit and concurrency queue; horizontally scaled
+deployments must enforce the equivalent aggregate limits at a shared gateway.
+API JSON bodies are capped
 at 256 KiB, the optional bulk CDN has a separate concurrency/timeout policy,
 and all responses receive the shared
 security-header baseline. See
 [Public Service Edge Security](service-edge-security.md#chaintracks-server-and-reusable-chaintracksservice).
+
+`BULK_HEADERS_PATH` is now a durable state root:
+
+- `cache/objects/<prefix>/<sha256>.headers` stores verified immutable objects;
+- `cache/quarantine/` retains rejected content for later diagnosis;
+- `state/download-budget.json` is flushed before each physical attempt;
+- `generations/` contains complete CDN snapshots; and
+- `current` atomically selects the generation served by the CDN listener.
+
+The first upgraded boot can read the former flat files directly and serves
+them as a fallback until the first new generation is complete. Roll back the
+service image without deleting this root. Older releases continue to see their
+flat files; the new content-addressed and generation directories are additive.
 
 ## When to deploy this
 

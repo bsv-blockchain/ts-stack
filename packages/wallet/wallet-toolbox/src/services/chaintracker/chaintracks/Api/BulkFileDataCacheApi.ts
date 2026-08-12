@@ -12,6 +12,22 @@ import type { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 export interface BulkFileDataCacheApi {
   get(file: Readonly<BulkHeaderFileInfo>): Promise<Uint8Array | undefined>
   set(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void>
+  /**
+   * Preserve a rejected object outside the active cache namespace. The manager
+   * calls this before attempting a replacement and never removes a last-good
+   * object merely because a newer source is unavailable.
+   */
+  quarantine?(
+    file: Readonly<BulkHeaderFileInfo>,
+    reason: string,
+    /** Exact rejected bytes, used to avoid quarantining a concurrent replacement. */
+    rejectedData?: Uint8Array
+  ): Promise<void>
+  /**
+   * Promote a validated legacy entry into the implementation's preferred
+   * immutable namespace. Implementations should make this idempotent.
+   */
+  promoteValidated?(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void>
   delete?(file: Readonly<BulkHeaderFileInfo>): Promise<void>
 }
 
@@ -24,4 +40,14 @@ export interface BulkFileDataCacheApi {
  */
 export interface BulkFileDownloadBudgetApi {
   consume(byteCount: number): void | Promise<void>
+  snapshot?(): BulkFileDownloadBudgetSnapshot
+}
+
+/** @public */
+export interface BulkFileDownloadBudgetSnapshot {
+  maxBytes: number
+  consumedBytes: number
+  remainingBytes: number
+  windowStartedAt: number
+  windowMsecs: number
 }

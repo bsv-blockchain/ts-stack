@@ -79,8 +79,12 @@ Your server can become a CDN node:
 ### 📦 Automatic Header Management
 
 - Reads retained objects before `SOURCE_CDN_URL` and downloads only a miss
-- Validates object digest, genesis, linkage, chain work, and proof of work
-- Caps response bodies, retries, and remote bulk bytes
+- Validates object digest, genesis, linkage, chain work, and proof of work in a
+  bounded worker pool
+- Caps response bodies and retries, and durably reserves every physical
+  attempt before network I/O
+- Stores verified objects by digest, quarantines rejected bytes, and retains
+  last-good objects until later garbage collection
 - Exports to filesystem automatically
 - Serves via CDN on port 3012
 - Updates every 67 hours (400 blocks)
@@ -205,8 +209,11 @@ TSTN_CHAINTRACKS_URL=
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
 CHAINTRACKS_BULK_FILE_CACHE=true
 CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_VALIDATION_WORKERS=1
+CHAINTRACKS_VALIDATION_QUEUE_MAX=8
 CHAINTRACKS_HISTORICAL_RATE_LIMIT_WINDOW_MS=60000
 CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
+CHAINTRACKS_HISTORICAL_MAX_CONCURRENT_REQUESTS=8
 # Set only for a deployment whose direct peers are trusted proxies.
 TRUST_PROXY_HOPS=
 
@@ -217,7 +224,7 @@ ENABLE_BULK_HEADERS_CDN=true
 # This is written to JSON rootFolder field
 CDN_HOST_URL=https://headers.yourdomain.com
 
-# BULK_HEADERS_PATH - Where to store/serve header files
+# BULK_HEADERS_PATH - Durable cache, ledger, quarantine, and CDN snapshot root
 # Default: ./public/headers
 BULK_HEADERS_PATH=
 
@@ -238,7 +245,10 @@ CDN_HOST_URL=https://headers.yourdomain.com
 SOURCE_CDN_URL=https://cdn.projectbabbage.com/blockheaders/
 CHAINTRACKS_BULK_FILE_CACHE=true
 CHAINTRACKS_UPSTREAM_DOWNLOAD_MAX_BYTES_PER_HOUR=536870912
+CHAINTRACKS_VALIDATION_WORKERS=1
+CHAINTRACKS_VALIDATION_QUEUE_MAX=8
 CHAINTRACKS_HISTORICAL_RATE_LIMIT_MAX=600
+CHAINTRACKS_HISTORICAL_MAX_CONCURRENT_REQUESTS=8
 ```
 
 **Setup nginx reverse proxy:**
@@ -295,10 +305,13 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
 
 1. The server opens `BULK_HEADERS_PATH` and constructs the persistent cache.
 2. Each required object is loaded from retained storage before the network.
-3. A cache miss reserves the object's bytes, performs one coalesced bounded
-   download, and validates the complete object before an atomic cache write.
+3. A cache miss durably reserves each physical attempt, performs one coalesced
+   bounded download, and validates the complete object in a worker before an
+   atomic content-addressed cache write.
 4. ChainTracks synchronizes validated headers to the current height.
-5. The optional CDN exports and serves immutable objects on port 3012.
+5. The optional CDN publishes and serves a complete immutable generation on
+   port 3012; a crash before the atomic pointer swap leaves the previous
+   generation active.
 
 ### Subsequent Startups
 
@@ -307,6 +320,17 @@ See [DOCKER.md](DOCKER.md) for comprehensive Docker documentation.
    use and do not generate a remote bulk download.
 3. Synchronization resumes from the last durable height.
 4. New immutable objects are exported at 100k boundaries.
+
+### Release sequencing
+
+The resilient server path requires `@bsv/wallet-toolbox` 2.9.0 or later. The
+standalone image lock is reconciled only after that protected npm candidate is
+published. Until the lock contains that version, the server can start in an
+explicit compatibility mode for CI and release sequencing, but it uses the
+older in-process validator and process-local budget. Do not publish or deploy
+the Chaintracks Server 1.1.10 image until `package-lock.json` resolves the
+resilient Wallet Toolbox release and startup logs
+`resilient_bulk_runtime_active: true`.
 
 ### Becoming a CDN Source
 

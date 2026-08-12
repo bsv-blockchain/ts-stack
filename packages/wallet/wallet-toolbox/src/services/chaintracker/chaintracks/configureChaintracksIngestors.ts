@@ -15,6 +15,7 @@ import { LiveIngestorChaintracksSSE } from './Ingest/LiveIngestorChaintracksSSE'
 import { GoChaintracksServiceClient } from './GoChaintracksServiceClient'
 import { publicArcadeUrl } from '../../networkConfig'
 import type { BulkFileDataCacheApi, BulkFileDownloadBudgetApi } from './Api/BulkFileDataCacheApi'
+import type { BulkFileDataValidatorApi } from './Api/BulkFileDataValidatorApi'
 
 export interface ChaintracksSourceOptions {
   /** Preferred go-chaintracks or Arcade source. */
@@ -31,6 +32,8 @@ export interface ChaintracksSourceOptions {
   bulkFileCache?: BulkFileDataCacheApi
   /** Optional byte budget applied before remote bulk-file downloads. */
   bulkFileDownloadBudget?: BulkFileDownloadBudgetApi
+  /** Optional complete-object validator; Node services should use a bounded worker implementation. */
+  bulkFileDataValidator?: BulkFileDataValidatorApi
 }
 
 export type ChaintracksArgumentsTail = [
@@ -142,7 +145,8 @@ export function createDefaultBulkFileDataManager(params: ResolvedDefaultChaintra
     maxRetained: params.maxRetained,
     fromKnownSourceUrl: params.cdnUrl,
     cache: params.sources.bulkFileCache,
-    downloadBudget: params.sources.bulkFileDownloadBudget
+    downloadBudget: params.sources.bulkFileDownloadBudget,
+    validator: params.sources.bulkFileDataValidator
   }
   return new BulkFileDataManager(options)
 }

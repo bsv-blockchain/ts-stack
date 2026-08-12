@@ -11,15 +11,23 @@ import {
   convertBitsToWork,
   deserializeBlockHeader,
   serializeBaseBlockHeaders,
-  subWork,
-  validateBufferOfHeaders,
-  validateGenesisHeader
+  subWork
 } from './blockHeaderUtilities'
 import { ChaintracksStorageBulkFileApi } from '../Api/ChaintracksStorageApi'
 import { ChaintracksFetch } from './ChaintracksFetch'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
 import { SingleWriterMultiReaderLock } from './SingleWriterMultiReaderLock'
-import type { BulkFileDataCacheApi, BulkFileDownloadBudgetApi } from '../Api/BulkFileDataCacheApi'
+import type {
+  BulkFileDataCacheApi,
+  BulkFileDownloadBudgetApi,
+  BulkFileDownloadBudgetSnapshot
+} from '../Api/BulkFileDataCacheApi'
+import {
+  BulkFileDataValidationError,
+  type BulkFileDataValidatorApi,
+  type BulkFileDataValidatorStats
+} from '../Api/BulkFileDataValidatorApi'
+import { InlineBulkFileDataValidator } from './InlineBulkFileDataValidator'
 
 export interface BulkFileDataManagerOptions {
   chain: Chain
@@ -31,6 +39,10 @@ export interface BulkFileDataManagerOptions {
   cache?: BulkFileDataCacheApi
   /** Optional process-local or shared reservation budget for remote bytes. */
   downloadBudget?: BulkFileDownloadBudgetApi
+  /** Complete-object validator. Node services should inject a worker-backed implementation. */
+  validator?: BulkFileDataValidatorApi
+  /** Cooldown after a failed load before the same immutable object can retry. */
+  failedLoadRetryMsecs?: number
 }
 
 /** @public */
@@ -43,6 +55,9 @@ export interface BulkFileDataManagerStats {
   coalescedLoads: number
   downloads: number
   downloadedBytes: number
+  loadBackoffs: number
+  validation?: BulkFileDataValidatorStats
+  downloadBudget?: BulkFileDownloadBudgetSnapshot
 }
 
 /**
@@ -71,6 +86,7 @@ export class BulkFileDataManager {
   private fileHashToIndex: Record<string, number> = {}
   private readonly lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
   private readonly inFlightLoads = new Map<string, Promise<Uint8Array>>()
+  private readonly failedLoads = new Map<string, { retryAt: number; error: Error }>()
   private storage?: ChaintracksStorageBulkFileApi
   private readonly stats: BulkFileDataManagerStats = {
     memoryHits: 0,
@@ -80,7 +96,8 @@ export class BulkFileDataManager {
     persistentCacheRejects: 0,
     coalescedLoads: 0,
     downloads: 0,
-    downloadedBytes: 0
+    downloadedBytes: 0,
+    loadBackoffs: 0
   }
 
   readonly chain: Chain
@@ -90,6 +107,8 @@ export class BulkFileDataManager {
   readonly fromKnownSourceUrl?: string
   readonly cache?: BulkFileDataCacheApi
   readonly downloadBudget?: BulkFileDownloadBudgetApi
+  readonly validator: BulkFileDataValidatorApi
+  readonly failedLoadRetryMsecs: number
 
   constructor(options: BulkFileDataManagerOptions | Chain) {
     const resolvedOptions = typeof options === 'object' ? options : BulkFileDataManager.createDefaultOptions(options)
@@ -100,12 +119,21 @@ export class BulkFileDataManager {
     this.fetch = resolvedOptions.fetch
     this.cache = resolvedOptions.cache
     this.downloadBudget = resolvedOptions.downloadBudget
+    this.validator = resolvedOptions.validator ?? new InlineBulkFileDataValidator()
+    this.failedLoadRetryMsecs = resolvedOptions.failedLoadRetryMsecs ?? 30 * 1000
+    if (!Number.isSafeInteger(this.failedLoadRetryMsecs) || this.failedLoadRetryMsecs < 0) {
+      throw new WERR_INVALID_PARAMETER('failedLoadRetryMsecs', 'a non-negative safe integer')
+    }
 
     this.deleteBulkFilesNoLock()
   }
 
   getStats(): BulkFileDataManagerStats {
-    return { ...this.stats }
+    return {
+      ...this.stats,
+      validation: this.validator.getStats?.(),
+      downloadBudget: this.downloadBudget?.snapshot?.()
+    }
   }
 
   async deleteBulkFiles(): Promise<void> {
@@ -381,14 +409,47 @@ export class BulkFileDataManager {
   }
 
   async getDataFromFile(file: BulkHeaderFileInfo, offset?: number, length?: number): Promise<Uint8Array | undefined> {
-    const bfd = this.getBfdForHeight(file.firstHeight)
-    if (bfd == null || bfd.count < file.count) {
-      throw new WERR_INVALID_PARAMETER(
-        'file',
-        `a match for ${file.firstHeight}, ${file.count} in the BulkFileDataManager.`
-      )
+    const resolved = await this.lock.withReadLock(async () => {
+      const resolved = this.getBfdForHeight(file.firstHeight)
+      if (resolved == null || resolved.count < file.count) {
+        throw new WERR_INVALID_PARAMETER(
+          'file',
+          `a match for ${file.firstHeight}, ${file.count} in the BulkFileDataManager.`
+        )
+      }
+      return { current: resolved, snapshot: snapshotBfd(resolved) }
+    })
+    // The immutable descriptor is snapshotted under the reader lock, but disk,
+    // network, and validation work happens after releasing it. A concurrent
+    // writer can publish a newer descriptor without invalidating this read.
+    return await this.getDataFromSnapshot(resolved.current, resolved.snapshot, offset, length)
+  }
+
+  private async getDataFromSnapshot(
+    original: BulkFileData,
+    snapshot: BulkFileData,
+    offset?: number,
+    length?: number
+  ): Promise<Uint8Array | undefined> {
+    const data = await this.getDataFromFileNoLock(snapshot, offset, length)
+    if (snapshot.data != null) {
+      await this.lock.withWriteLock(async () => {
+        if (
+          this.bfds.includes(original) &&
+          original.fileHash === snapshot.fileHash &&
+          original.firstHeight === snapshot.firstHeight &&
+          original.count === snapshot.count
+        ) {
+          original.data = snapshot.data
+          original.validated = true
+          original.lastHash = snapshot.lastHash
+          original.lastChainWork = snapshot.lastChainWork
+          original.mru = Date.now()
+          this.ensureMaxRetained()
+        }
+      })
     }
-    return await this.lock.withReadLock(async () => await this.getDataFromFileNoLock(bfd, offset, length))
+    return data
   }
 
   private async getDataFromFileNoLock(
@@ -410,18 +471,17 @@ export class BulkFileDataManager {
   }
 
   async findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined> {
-    return await this.lock.withReadLock(async () => {
+    const resolved = await this.lock.withReadLock(async () => {
       if (!Number.isInteger(height) || height < 0) {
         throw new WERR_INVALID_PARAMETER('height', `a non-negative integer (${height}).`)
       }
       const file = this.bfds.find(f => f.firstHeight <= height && f.firstHeight + f.count > height)
       if (file == null) return undefined
-      const offset = (height - file.firstHeight) * 80
-      const data = await this.getDataFromFileNoLock(file, offset, 80)
-      if (data == null) return undefined
-      const header = deserializeBlockHeader(data, height, 0)
-      return header
+      return { current: file, snapshot: snapshotBfd(file), offset: (height - file.firstHeight) * 80 }
     })
+    if (resolved == null) return undefined
+    const data = await this.getDataFromSnapshot(resolved.current, resolved.snapshot, resolved.offset, 80)
+    return data == null ? undefined : deserializeBlockHeader(data, height, 0)
   }
 
   async getFileForHeight(height: number): Promise<BulkHeaderFileInfo | undefined> {
@@ -507,41 +567,32 @@ export class BulkFileDataManager {
   }
 
   private async validateBfdData(bfd: BulkFileData, expectedFileHash: string): Promise<void> {
-    await this.ensureData(bfd)
-
-    if (bfd.data?.length !== bfd.count * 80) {
-      throw new WERR_INVALID_PARAMETER(
-        'file.data',
-        `bulk file ${bfd.fileName} data length ${bfd.data?.length} does not match expected count ${bfd.count}`
-      )
-    }
-
-    bfd.fileHash = asString(Hash.sha256(asArray(bfd.data)), 'base64')
-    if (expectedFileHash && expectedFileHash !== bfd.fileHash) {
-      throw new WERR_INVALID_PARAMETER('file.fileHash', `expected ${expectedFileHash} but got ${bfd.fileHash}`)
-    }
-
-    this.validateBfdHeaders(bfd)
+    const data = await this.ensureData(bfd)
+    const validated = await this.validateRetrievedData(bfd, data, expectedFileHash)
+    bfd.data = validated
   }
 
-  private validateBfdHeaders(bfd: BulkFileData): void {
+  private async validateBfdHeaders(bfd: BulkFileData, expectedFileHash = bfd.fileHash): Promise<Uint8Array> {
     const pbf = bfd.firstHeight > 0 ? this.getBfdForHeight(bfd.firstHeight - 1) : undefined
     const prevHash = pbf?.lastHash ?? '00'.repeat(32)
     const prevChainWork = pbf?.lastChainWork ?? '00'.repeat(32)
-
-    const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(bfd.data!, prevHash, 0, undefined, prevChainWork)
-
-    if (bfd.lastHash && bfd.lastHash !== lastHeaderHash) {
-      throw new WERR_INVALID_PARAMETER('file.lastHash', `expected ${bfd.lastHash} but got ${lastHeaderHash}`)
-    }
-    if (bfd.lastChainWork && bfd.lastChainWork !== lastChainWork) {
-      throw new WERR_INVALID_PARAMETER('file.lastChainWork', `expected ${bfd.lastChainWork} but got ${lastChainWork}`)
-    }
-
-    bfd.lastHash = lastHeaderHash
-    bfd.lastChainWork = lastChainWork!
-
-    if (bfd.firstHeight === 0) validateGenesisHeader(bfd.data!, bfd.chain!)
+    const result = await this.validator.validate({
+      fileName: bfd.fileName,
+      data: bfd.data!,
+      count: bfd.count,
+      fileHash: expectedFileHash,
+      firstHeight: bfd.firstHeight,
+      prevHash,
+      prevChainWork,
+      lastHash: bfd.lastHash,
+      lastChainWork: bfd.lastChainWork,
+      chain: bfd.chain
+    })
+    bfd.data = result.data
+    bfd.fileHash = result.fileHash
+    bfd.lastHash = result.lastHeaderHash
+    bfd.lastChainWork = result.lastChainWork
+    return result.data
   }
 
   async ReValidate(): Promise<void> {
@@ -823,15 +874,29 @@ export class BulkFileDataManager {
       return data
     }
 
+    const failed = this.failedLoads.get(key)
+    if (failed != null) {
+      if (Date.now() < failed.retryAt) {
+        this.stats.loadBackoffs++
+        throw failed.error
+      }
+      this.failedLoads.delete(key)
+    }
+
     const load = this.loadAndValidateData(bfd)
     this.inFlightLoads.set(key, load)
     try {
       const data = await load
       bfd.data = data
       bfd.validated = true
+      this.failedLoads.delete(key)
       bfd.mru = Date.now()
       this.ensureMaxRetained()
       return data
+    } catch (error) {
+      const resolved = error instanceof Error ? error : new Error(String(error))
+      this.failedLoads.set(key, { retryAt: Date.now() + this.failedLoadRetryMsecs, error: resolved })
+      throw resolved
     } finally {
       if (this.inFlightLoads.get(key) === load) this.inFlightLoads.delete(key)
     }
@@ -843,21 +908,30 @@ export class BulkFileDataManager {
       if (stored == null) {
         throw new WERR_INVALID_PARAMETER('fileId', `valid, data not found for fileId ${bfd.fileId}`)
       }
-      this.validateRetrievedData(bfd, stored)
+      const validated = await this.validateRetrievedData(bfd, stored)
       this.stats.storageHits++
-      return stored
+      return validated
     }
 
     if (this.cache != null) {
       const cached = await this.cache.get(bfd)
       if (cached != null) {
         try {
-          this.validateRetrievedData(bfd, cached)
+          const validated = await this.validateRetrievedData(bfd, cached)
           this.stats.persistentCacheHits++
-          return cached
+          await this.cache.promoteValidated?.(bfd, validated)
+          return validated
         } catch (error) {
+          // Only deterministic rejection of these exact bytes may quarantine
+          // an immutable cache object. Worker crashes, queue pressure, and
+          // other operational failures preserve it and do not spend download
+          // budget on a replacement that cannot currently be validated.
+          if (!(error instanceof BulkFileDataValidationError)) throw error
           this.stats.persistentCacheRejects++
-          await this.cache.delete?.(bfd)
+          const returnedData = error.data
+          const rejectedData =
+            returnedData instanceof Uint8Array ? returnedData : cached.byteLength > 0 ? cached : undefined
+          await this.cache.quarantine?.(bfd, String(error), rejectedData)
           this.log(`Rejected corrupt bulk-header cache entry ${bfd.fileName}: ${String(error)}`)
         }
       } else {
@@ -869,33 +943,32 @@ export class BulkFileDataManager {
       const expectedBytes = bfd.count * 80
       await this.downloadBudget?.consume(expectedBytes)
       const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
-      const downloaded = await this.fetch.download(url, expectedBytes)
+      const downloaded = await this.fetch.download(url, expectedBytes, {
+        beforeRetry: async () => await this.downloadBudget?.consume(expectedBytes)
+      })
       if (downloaded == null) {
         throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
       }
-      this.validateRetrievedData(bfd, downloaded)
+      const validated = await this.validateRetrievedData(bfd, downloaded)
       this.stats.downloads++
-      this.stats.downloadedBytes += downloaded.length
-      await this.cache?.set(bfd, downloaded)
-      return downloaded
+      this.stats.downloadedBytes += validated.length
+      await this.cache?.set(bfd, validated)
+      return validated
     }
 
     throw new WERR_INVALID_PARAMETER('data', `defined. Unable to retrieve data for ${bfd.fileName}`)
   }
 
-  private validateRetrievedData(bfd: BulkFileData, data: Uint8Array): void {
-    if (data.length !== bfd.count * 80) {
-      throw new WERR_INVALID_PARAMETER(
-        'file.data',
-        `bulk file ${bfd.fileName} data length ${data.length} does not match expected count ${bfd.count}`
-      )
-    }
-    const fileHash = asString(Hash.sha256(asArray(data)), 'base64')
-    if (fileHash !== bfd.fileHash) {
-      throw new WERR_INVALID_PARAMETER('fileHash', `a match for retrieved data for ${bfd.fileName}`)
-    }
+  private async validateRetrievedData(
+    bfd: BulkFileData,
+    data: Uint8Array,
+    expectedFileHash = bfd.fileHash
+  ): Promise<Uint8Array> {
     const candidate = { ...bfd, data }
-    this.validateBfdHeaders(candidate)
+    const validated = await this.validateBfdHeaders(candidate, expectedFileHash)
+    bfd.lastHash = candidate.lastHash
+    bfd.lastChainWork = candidate.lastChainWork
+    return validated
   }
 
   private ensureMaxRetained(): void {
@@ -947,19 +1020,26 @@ export class BulkFileDataManager {
         break
       }
 
-      const last = validateBufferOfHeaders(data, lastHeaderHash, 0, undefined, lastChainWork)
+      const validated = await this.validator.validate({
+        fileName: toFileName(i),
+        data,
+        count: data.length / 80,
+        firstHeight,
+        prevHash: lastHeaderHash,
+        prevChainWork: lastChainWork,
+        chain
+      })
 
-      await toFs.writeFile(toPath(i), data)
+      await toFs.writeFile(toPath(i), validated.data)
 
-      const fileHash = asString(Hash.sha256(asArray(data)), 'base64')
       const file: BulkHeaderFileInfo = {
         chain,
-        count: data.length / 80,
-        fileHash,
+        count: validated.data.length / 80,
+        fileHash: validated.fileHash,
         fileName: toFileName(i),
         firstHeight,
-        lastChainWork: last.lastChainWork!,
-        lastHash: last.lastHeaderHash,
+        lastChainWork: validated.lastChainWork,
+        lastHash: validated.lastHeaderHash,
         prevChainWork: lastChainWork,
         prevHash: lastHeaderHash,
         sourceUrl
@@ -972,11 +1052,19 @@ export class BulkFileDataManager {
 
     await toFs.writeFile(toJsonPath(), asUint8Array(JSON.stringify(toBulkFiles), 'utf8'))
   }
+
+  async destroy(): Promise<void> {
+    await this.validator.destroy?.()
+  }
 }
 
 interface BulkFileData extends BulkHeaderFileInfo {
   mru: number
   fileHash: string
+}
+
+function snapshotBfd(file: BulkFileData): BulkFileData {
+  return { ...file, data: file.data }
 }
 
 export function selectBulkHeaderFiles(

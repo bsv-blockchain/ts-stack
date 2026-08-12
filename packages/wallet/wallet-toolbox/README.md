@@ -72,7 +72,15 @@ Browser, mobile, and Node applications can instead make a persisted local
 ChainTracks instance their primary SDK `ChainTracker`. Immutable checkpoint
 assets are read through `BulkFileDataCacheApi` before any network request;
 downloaded objects are length-, SHA-256-, linkage-, chain-work-, genesis-, and
-proof-of-work-validated before use. `LocalChainTracker` reserves remote clients
+proof-of-work-validated before use. Stale present-height reads return the
+last-good value immediately while one coalesced refresh runs in the background.
+Node services can inject `NodeBulkFileDataValidator` to transfer complete-object
+verification through a bounded worker pool; browser and mobile builds retain
+the portable `InlineBulkFileDataValidator`. Filesystem deployments can combine
+the content-addressed, quarantining `BulkFileDataCacheFs` with
+`DurableFileBulkFileDownloadBudget`, which flushes a conservative reservation
+before every physical attempt and preserves the allowance across restarts.
+`LocalChainTracker` reserves remote clients
 for explicit remote-only mode, local exceptions, and quorum-backed consistency
 or recovery checks. See
 [Local-first ChainTracks](./docs/local-first-chaintracks.md) for packaging,

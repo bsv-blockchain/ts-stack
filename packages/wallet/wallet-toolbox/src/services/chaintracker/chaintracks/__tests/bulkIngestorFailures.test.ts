@@ -82,6 +82,65 @@ describe('Chaintracks bulk ingestor failure handling', () => {
     )
   })
 
+  test('coalesces concurrent cold present-height callers into one provider refresh', async () => {
+    let resolveHeight!: (height: number) => void
+    const source = {
+      getPresentHeight: jest.fn(
+        async () =>
+          await new Promise<number>(resolve => {
+            resolveHeight = resolve
+          })
+      )
+    }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: { log: () => {} } as any,
+      bulkIngestors: [source as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+
+    const callers = Array.from({ length: 64 }, async () => await chaintracks.getPresentHeight())
+    await new Promise(resolve => setImmediate(resolve))
+    expect(source.getPresentHeight).toHaveBeenCalledTimes(1)
+    resolveHeight(654321)
+    await expect(Promise.all(callers)).resolves.toEqual(Array(64).fill(654321))
+  })
+
+  test('serves stale height immediately while one refresh runs in the background', async () => {
+    let resolveHeight!: (height: number) => void
+    const source = {
+      getPresentHeight: jest.fn(
+        async () =>
+          await new Promise<number>(resolve => {
+            resolveHeight = resolve
+          })
+      )
+    }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: { log: () => {} } as any,
+      bulkIngestors: [source as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+    ;(chaintracks as any).lastPresentHeight = 88
+    ;(chaintracks as any).lastPresentHeightMsecs = 0
+
+    await expect(
+      Promise.all(Array.from({ length: 64 }, async () => await chaintracks.getPresentHeight()))
+    ).resolves.toEqual(Array(64).fill(88))
+    expect(source.getPresentHeight).toHaveBeenCalledTimes(1)
+
+    resolveHeight(89)
+    await new Promise(resolve => setImmediate(resolve))
+    await expect(chaintracks.getPresentHeight()).resolves.toBe(89)
+  })
+
   test('uses the locally validated height when every external provider is unavailable', async () => {
     const failed = {
       getPresentHeight: jest.fn(async () => {

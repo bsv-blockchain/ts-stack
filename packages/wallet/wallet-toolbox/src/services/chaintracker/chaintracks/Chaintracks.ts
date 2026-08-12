@@ -9,6 +9,7 @@ import { blockHash, validateHeaderFormat, validateHeaderProofOfWork } from './ut
 import { Chain } from '../../../sdk/types'
 import {
   ChaintracksInfoApi,
+  ChaintracksAvailabilitySnapshotApi,
   ChaintracksSourceStatusApi,
   HeaderListener,
   ReorgListener
@@ -63,6 +64,8 @@ export class Chaintracks implements ChaintracksManagementApi {
   private lastPresentHeight = -1
   private lastPresentHeightMsecs = 0
   private readonly lastPresentHeightMaxAge = 60 * 1000 // 1 minute, in milliseconds
+  private presentHeightRefresh?: Promise<number>
+  private mainLoopHeartbeatMsecs = 0
 
   private readonly lock = new SingleWriterMultiReaderLock()
   private readonly sourceStatus = new Map<string, ChaintracksSourceStatusApi>()
@@ -102,14 +105,35 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   /**
-   * Caches and returns most recently sourced value if less than one minute old.
-   * @returns the current externally available chain height (via bulk ingestors).
+   * Returns the last known valid height immediately and refreshes stale state
+   * once in the background. Cold start waits for the single shared refresh.
    */
   async getPresentHeight(): Promise<number> {
     const now = Date.now()
     if (this.lastPresentHeight >= 0 && now - this.lastPresentHeightMsecs < this.lastPresentHeightMaxAge) {
       return this.lastPresentHeight
     }
+    if (this.lastPresentHeight >= 0) {
+      void this.refreshPresentHeight().catch(error => {
+        this.log(`Background present-height refresh failed: ${WalletError.fromUnknown(error).message}`)
+      })
+      return this.lastPresentHeight
+    }
+    return await this.refreshPresentHeight()
+  }
+
+  private async refreshPresentHeight(): Promise<number> {
+    if (this.presentHeightRefresh != null) return await this.presentHeightRefresh
+    const refresh = this.loadPresentHeight()
+    this.presentHeightRefresh = refresh
+    try {
+      return await refresh
+    } finally {
+      if (this.presentHeightRefresh === refresh) this.presentHeightRefresh = undefined
+    }
+  }
+
+  private async loadPresentHeight(): Promise<number> {
     for (const [index, bulk] of this.bulkIngestors.entries()) {
       const source = this.sourceName('bulk', index, bulk)
       try {
@@ -117,7 +141,7 @@ export class Chaintracks implements ChaintracksManagementApi {
         if (presentHeight != null && Number.isInteger(presentHeight) && presentHeight >= 0) {
           this.markSourceSuccess(source, 'bulk')
           this.lastPresentHeight = presentHeight
-          this.lastPresentHeightMsecs = now
+          this.lastPresentHeightMsecs = Date.now()
           return presentHeight
         }
       } catch (uerr: unknown) {
@@ -134,7 +158,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       const localHeight = Math.max(ranges.bulk.maxHeight, ranges.live.maxHeight)
       if (localHeight >= 0) {
         this.lastPresentHeight = localHeight
-        this.lastPresentHeightMsecs = now
+        this.lastPresentHeightMsecs = Date.now()
         return localHeight
       }
     } catch (error: unknown) {
@@ -145,6 +169,22 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async currentHeight(): Promise<number> {
     return await this.getPresentHeight()
+  }
+
+  /** Returns local process state without locks, storage reads, or network I/O. */
+  getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi {
+    return {
+      available: this.available,
+      startupError: this.startupError?.message,
+      presentHeight: this.lastPresentHeight >= 0 ? this.lastPresentHeight : undefined,
+      presentHeightUpdatedAt:
+        this.lastPresentHeightMsecs > 0 ? new Date(this.lastPresentHeightMsecs).toISOString() : undefined,
+      presentHeightRefreshInFlight: this.presentHeightRefresh != null,
+      mainLoopHeartbeatAt:
+        this.mainLoopHeartbeatMsecs > 0 ? new Date(this.mainLoopHeartbeatMsecs).toISOString() : undefined,
+      sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status })),
+      bulkData: this.storage.bulkManager.getStats()
+    }
   }
 
   async subscribeHeaders(listener: HeaderListener): Promise<string> {
@@ -230,6 +270,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       for (const liveIn of this.liveIngestors) await liveIn.shutdown()
       for (const bulkIn of this.bulkIngestors) await bulkIn.shutdown()
       await Promise.all(this.promises)
+      await this.storage.bulkManager.destroy()
       await this.storage.destroy()
       this.available = false
       this.stopMainThread = false
@@ -592,9 +633,11 @@ export class Chaintracks implements ChaintracksManagementApi {
     while (!this.stopMainThread) {
       try {
         const now = Date.now()
+        this.mainLoopHeartbeatMsecs = now
         lastSyncCheck = now
         lastBulkSync = await this.runBulkSyncIfNeeded(now, lastBulkSync, cdnSyncRepeatMsecs)
         await this.processLiveHeaderQueue(lastSyncCheck, syncCheckRepeatMsecs)
+        this.mainLoopHeartbeatMsecs = Date.now()
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         if (this.available) {
@@ -609,7 +652,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   /** Returns (potentially updated) lastBulkSync timestamp. */
   private async runBulkSyncIfNeeded(now: number, lastBulkSync: number, cdnSyncRepeatMsecs: number): Promise<number> {
-    const presentHeight = await this.getPresentHeight()
+    const presentHeight = await this.refreshPresentHeight()
     const before = await this.storage.getAvailableHeightRanges()
 
     let skipBulkSync = !before.live.isEmpty && before.live.maxHeight >= presentHeight - this.addLiveRecursionLimit / 2
