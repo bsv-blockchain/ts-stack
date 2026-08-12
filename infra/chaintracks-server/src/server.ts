@@ -779,6 +779,22 @@ async function main() {
     })
   }
 
+  // Bind constant-time probes before synchronization, then explicitly drive
+  // ChainTracks to availability. Readiness must never depend on a normal API
+  // request arriving first: Kubernetes retains the old replica until the new
+  // pod passes /readyz, so request-driven startup would deadlock a rollout.
+  const availabilityStartedAt = Date.now()
+  log.info({ operation: 'readiness', outcome: 'starting' }, 'Starting ChainTracks synchronization')
+  await chaintracks.listening()
+  log.info(
+    {
+      operation: 'readiness',
+      outcome: 'ok',
+      duration_ms: Date.now() - availabilityStartedAt
+    },
+    'ChainTracks is available'
+  )
+
   // Perform initial export if CDN is enabled
   if (enableBulkHeadersCDN) {
     log.info(

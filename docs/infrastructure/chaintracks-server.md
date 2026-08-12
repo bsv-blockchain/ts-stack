@@ -29,12 +29,16 @@ The Chaintracks primitives and client interface are defined in `@bsv/wallet-tool
 
 On first start, Chaintracks must acquire all existing BSV block headers before serving SPV queries. The bootstrap sequence:
 
-1. **Retained/bundled files** — Local immutable objects are consulted before
+1. **Probe listeners and active startup** — The server binds constant-time
+   liveness/readiness endpoints, explicitly starts ChainTracks synchronization,
+   and keeps readiness at `503` until the tracker becomes available. A normal
+   API request is never required to unblock a Kubernetes rollout.
+2. **Retained/bundled files** — Local immutable objects are consulted before
    the network and revalidated for length, digest, linkage, chain work,
    genesis, and proof of work before first use.
-2. **CDN bulk ingest** — `SOURCE_CDN_URL` supplies immutable bulk files. Set it to an empty string to disable this source without changing older deployments that rely on the default.
-3. **Arcade/go-chaintracks** — The server fetches bounded binary header batches and follows the reconnecting tip SSE stream. Public defaults exist for mainnet, testnet, and TerraTestNet; STN and Terra Scaling TestNet require an operator endpoint.
-4. **WhatsOnChain fallback** — Mainnet and testnet only. No key is required: anonymous requests are serialized below the documented three requests/second limit. A key can raise the allowance, but a rejected key is retried anonymously instead of making ChainTracks unavailable.
+3. **CDN bulk ingest** — `SOURCE_CDN_URL` supplies immutable bulk files. Set it to an empty string to disable this source without changing older deployments that rely on the default.
+4. **Arcade/go-chaintracks** — The server fetches bounded binary header batches and follows the reconnecting tip SSE stream. Public defaults exist for mainnet, testnet, and TerraTestNet; STN and Terra Scaling TestNet require an operator endpoint.
+5. **WhatsOnChain fallback** — Mainnet and testnet only. No key is required: anonymous requests are serialized below the documented three requests/second limit. A key can raise the allowance, but a rejected key is retried anonymously instead of making ChainTracks unavailable.
 
 Every remote batch still passes through ChainTracks' local serialization, hash,
 continuity, genesis, chain-work, and proof-of-work checks before storage.
@@ -129,12 +133,12 @@ For `stn` or `tstn`, set `CHAINTRACKS_UPSTREAM_URL` (or the corresponding
 `TSTN_CHAINTRACKS_URL`) to an operator-controlled Arcade or go-chaintracks v2
 service. The server fails closed rather than aliasing either network to testnet.
 
-Release Chaintracks Server 1.1.10 only after the protected
-`@bsv/wallet-toolbox` 2.9.0 publication and standalone lockfile reconciliation.
-The source can start against 2.8.0 in an explicit compatibility mode so CI can
-validate release ordering, but that mode retains in-process validation and a
-process-local budget; production startup must log
-`resilient_bulk_runtime_active: true`.
+Chaintracks Server 1.1.12 is the first deployable resilient image after the
+protected `@bsv/wallet-toolbox` 2.9.0 publication and standalone lockfile
+reconciliation. Version 1.1.10 preceded that reconciliation; staging rejected
+1.1.11 because synchronization did not start until a normal API request
+arrived. Production startup must log `resilient_bulk_runtime_active: true` and
+the `readiness` operation must complete successfully.
 
 `GET /healthz` and `GET /readyz` are local, constant-time endpoints registered
 before public request admission. Both remain available at the root and under

@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   contractEnvironment,
   contractNames,
+  contractProbePaths,
   walletDependencyEnvironment
 } from './container-runtime-contract.mjs'
 
@@ -18,8 +19,13 @@ test('container runtime contracts exactly cover the governed service inventory',
   )
 })
 
-test('chaintracks runtime contract exercises the image default port', () => {
+test('chaintracks runtime contract exercises the image default port and local probes', () => {
   assert.equal(contractEnvironment('chaintracks-server').PORT, undefined)
+  assert.deepEqual(contractProbePaths('chaintracks-server'), {
+    liveness: '/healthz',
+    readiness: '/readyz',
+    transaction: '/getInfo'
+  })
 })
 
 test('wallet dependency profile coexists with services on port 8080', () => {
