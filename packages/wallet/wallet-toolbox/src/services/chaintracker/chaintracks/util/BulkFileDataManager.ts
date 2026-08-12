@@ -903,60 +903,70 @@ export class BulkFileDataManager {
   }
 
   private async loadAndValidateData(bfd: BulkFileData): Promise<Uint8Array> {
-    if (this.storage != null && bfd.fileId) {
-      const stored = await this.storage.getBulkFileData(bfd.fileId)
-      if (stored == null) {
-        throw new WERR_INVALID_PARAMETER('fileId', `valid, data not found for fileId ${bfd.fileId}`)
-      }
-      const validated = await this.validateRetrievedData(bfd, stored)
-      this.stats.storageHits++
-      return validated
-    }
+    const stored = await this.loadFromStorage(bfd)
+    if (stored != null) return stored
 
-    if (this.cache != null) {
-      const cached = await this.cache.get(bfd)
-      if (cached != null) {
-        try {
-          const validated = await this.validateRetrievedData(bfd, cached)
-          this.stats.persistentCacheHits++
-          await this.cache.promoteValidated?.(bfd, validated)
-          return validated
-        } catch (error) {
-          // Only deterministic rejection of these exact bytes may quarantine
-          // an immutable cache object. Worker crashes, queue pressure, and
-          // other operational failures preserve it and do not spend download
-          // budget on a replacement that cannot currently be validated.
-          if (!(error instanceof BulkFileDataValidationError)) throw error
-          this.stats.persistentCacheRejects++
-          const returnedData = error.data
-          const rejectedData =
-            returnedData instanceof Uint8Array ? returnedData : cached.byteLength > 0 ? cached : undefined
-          await this.cache.quarantine?.(bfd, String(error), rejectedData)
-          this.log(`Rejected corrupt bulk-header cache entry ${bfd.fileName}: ${String(error)}`)
-        }
-      } else {
-        this.stats.persistentCacheMisses++
-      }
-    }
+    const cached = await this.loadFromCache(bfd)
+    if (cached != null) return cached
 
-    if (this.fetch != null && bfd.sourceUrl) {
-      const expectedBytes = bfd.count * 80
-      await this.downloadBudget?.consume(expectedBytes)
-      const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
-      const downloaded = await this.fetch.download(url, expectedBytes, {
-        beforeRetry: async () => await this.downloadBudget?.consume(expectedBytes)
-      })
-      if (downloaded == null) {
-        throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
-      }
-      const validated = await this.validateRetrievedData(bfd, downloaded)
-      this.stats.downloads++
-      this.stats.downloadedBytes += validated.length
-      await this.cache?.set(bfd, validated)
-      return validated
-    }
+    const downloaded = await this.loadFromRemote(bfd)
+    if (downloaded != null) return downloaded
 
     throw new WERR_INVALID_PARAMETER('data', `defined. Unable to retrieve data for ${bfd.fileName}`)
+  }
+
+  private async loadFromStorage(bfd: BulkFileData): Promise<Uint8Array | undefined> {
+    if (this.storage == null || !bfd.fileId) return undefined
+    const stored = await this.storage.getBulkFileData(bfd.fileId)
+    if (stored == null) {
+      throw new WERR_INVALID_PARAMETER('fileId', `valid, data not found for fileId ${bfd.fileId}`)
+    }
+    const validated = await this.validateRetrievedData(bfd, stored)
+    this.stats.storageHits++
+    return validated
+  }
+
+  private async loadFromCache(bfd: BulkFileData): Promise<Uint8Array | undefined> {
+    if (this.cache == null) return undefined
+    const cached = await this.cache.get(bfd)
+    if (cached == null) {
+      this.stats.persistentCacheMisses++
+      return undefined
+    }
+    try {
+      const validated = await this.validateRetrievedData(bfd, cached)
+      this.stats.persistentCacheHits++
+      await this.cache.promoteValidated?.(bfd, validated)
+      return validated
+    } catch (error) {
+      // Only deterministic rejection of these exact bytes may quarantine an
+      // immutable cache object. Operational validation failures preserve it.
+      if (!(error instanceof BulkFileDataValidationError)) throw error
+      this.stats.persistentCacheRejects++
+      let rejectedData = error.data
+      if (!(rejectedData instanceof Uint8Array) && cached.byteLength > 0) rejectedData = cached
+      await this.cache.quarantine?.(bfd, String(error), rejectedData)
+      this.log(`Rejected corrupt bulk-header cache entry ${bfd.fileName}: ${String(error)}`)
+      return undefined
+    }
+  }
+
+  private async loadFromRemote(bfd: BulkFileData): Promise<Uint8Array | undefined> {
+    if (this.fetch == null || !bfd.sourceUrl) return undefined
+    const expectedBytes = bfd.count * 80
+    await this.downloadBudget?.consume(expectedBytes)
+    const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
+    const downloaded = await this.fetch.download(url, expectedBytes, {
+      beforeRetry: async () => await this.downloadBudget?.consume(expectedBytes)
+    })
+    if (downloaded == null) {
+      throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
+    }
+    const validated = await this.validateRetrievedData(bfd, downloaded)
+    this.stats.downloads++
+    this.stats.downloadedBytes += validated.length
+    await this.cache?.set(bfd, validated)
+    return validated
   }
 
   private async validateRetrievedData(

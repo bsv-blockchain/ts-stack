@@ -725,7 +725,7 @@ async function main() {
         }
         if (
           fileName !== `${chain}NetBlockHeaders.json` &&
-          !new RegExp(`^${chain}Net_[0-9]+\\.headers$`).test(fileName)
+          !new RegExp(String.raw`^${chain}Net_[0-9]+\.headers$`).test(fileName)
         ) {
           next()
           return

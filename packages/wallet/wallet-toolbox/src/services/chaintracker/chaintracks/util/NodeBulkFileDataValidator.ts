@@ -157,7 +157,7 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
 
   private complete(slot: WorkerSlot, message: WorkerSuccess | WorkerFailure): void {
     const task = slot.task
-    if (task == null || task.id !== message.id) return
+    if (task?.id !== message.id) return
     clearTimeout(task.timer)
     slot.task = undefined
     const duration = Date.now() - task.startedAt
