@@ -14,6 +14,7 @@ import {
   MessageBoxTopicManager,
   createMessageBoxLookupService,
   UMPTopicManager,
+  MongoUMPIdentityStore,
   createUMPLookupService,
   HelloWorldTopicManager,
   createHelloWorldLookupService,
@@ -349,9 +350,14 @@ const main = async () => {
   server.configureTopicManager('tm_messagebox', new MessageBoxTopicManager())
   server.configureLookupServiceWithMongo('ls_messagebox', createMessageBoxLookupService)
 
-  // UMP
-  server.configureTopicManager('tm_users', new UMPTopicManager())
-  server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
+  // UMP. The Topic Manager and lookup service share one Mongo-backed identity
+  // reservation store so duplicate hashes are rejected atomically across
+  // replicas before the transaction is admitted.
+  server.configureLookupServiceWithMongo('ls_users', db => {
+    const identityStore = new MongoUMPIdentityStore(db)
+    server.configureTopicManager('tm_users', new UMPTopicManager(identityStore))
+    return createUMPLookupService(db, identityStore)
+  })
 
   // HelloWorld
   server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())

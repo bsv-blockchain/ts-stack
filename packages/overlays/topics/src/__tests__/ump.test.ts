@@ -69,7 +69,10 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
 
 /** Make n arbitrary non-empty data fields */
 function makeFields(n: number): number[][] {
-  return Array.from({ length: n }, (_, i) => [i + 1, 0xaa, 0xbb])
+  const fields = Array.from({ length: n }, (_, i) => [i + 1, 0xaa, 0xbb])
+  if (n > 6) fields[6] = Array(32).fill(0x66)
+  if (n > 7) fields[7] = Array(32).fill(0x77)
+  return fields
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +102,7 @@ describe('UMPTopicManager', () => {
     // 13 fields where field[11] has length > 1 (not a v3 version byte)
     const fields = makeFields(11)
     fields.push([0x01, 0x02, 0x03]) // field[11]: length 3, not a v3 marker
-    fields.push([0x04, 0x05])       // field[12]
+    fields.push([0x04, 0x05]) // field[12]
     const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
     const tx = buildTxWithInput([lockingScript])
 
@@ -133,7 +136,7 @@ describe('UMPTopicManager', () => {
     const key = PrivateKey.fromRandom()
     // 11 base fields + field[11]=[3] (version byte) + field[12]=kdfAlg + field[13]=kdfParams
     const fields = makeFields(11)
-    fields.push([3])  // field[11]: v3 version byte
+    fields.push([3]) // field[11]: v3 version byte
     fields.push(Array.from(new TextEncoder().encode('argon2id')))
     fields.push(Array.from(new TextEncoder().encode(JSON.stringify({ iterations: 3 }))))
     const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
@@ -198,8 +201,8 @@ describe('UMPTopicManager', () => {
   it('rejects a v3 PushDrop with unsupported kdfAlgorithm', async () => {
     const key = PrivateKey.fromRandom()
     const fields = makeFields(11)
-    fields.push([3])  // version byte at index 11
-    fields.push(Array.from(new TextEncoder().encode('md5')))  // unsupported
+    fields.push([3]) // version byte at index 11
+    fields.push(Array.from(new TextEncoder().encode('md5'))) // unsupported
     fields.push(Array.from(new TextEncoder().encode(JSON.stringify({ iterations: 3 }))))
     const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
     const tx = buildTxWithInput([lockingScript])
@@ -226,7 +229,7 @@ describe('UMPTopicManager', () => {
       { op: 0x76 }, // OP_DUP
       { op: 0xa9 }, // OP_HASH160
       { op: 0x88 }, // OP_EQUALVERIFY
-      { op: 0xac }  // OP_CHECKSIG
+      { op: 0xac } // OP_CHECKSIG
     ])
     const tx = buildTxWithInput([badScript])
 
@@ -242,6 +245,55 @@ describe('UMPTopicManager', () => {
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [5, 10])
     expect(result.coinsToRetain).toEqual([5, 10])
+  })
+
+  it('rejects unrelated outputs that reuse either reserved identity hash', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    const first = buildTxWithInput([buildPushDropScript(key.toPublicKey(), fields)])
+    const presentationCollisionFields = makeFields(11)
+    presentationCollisionFields[7] = Array(32).fill(0x88)
+    const recoveryCollisionFields = makeFields(11)
+    recoveryCollisionFields[6] = Array(32).fill(0x99)
+    const presentationCollision = buildTxWithInput([
+      buildPushDropScript(PrivateKey.fromRandom().toPublicKey(), presentationCollisionFields)
+    ])
+    const recoveryCollision = buildTxWithInput([
+      buildPushDropScript(PrivateKey.fromRandom().toPublicKey(), recoveryCollisionFields)
+    ])
+
+    await expect(manager.identifyAdmissibleOutputs(first.toBEEF(), [])).resolves.toMatchObject({
+      outputsToAdmit: [0]
+    })
+    await expect(
+      manager.identifyAdmissibleOutputs(presentationCollision.toBEEF(), [])
+    ).resolves.toMatchObject({ outputsToAdmit: [] })
+    await expect(
+      manager.identifyAdmissibleOutputs(recoveryCollision.toBEEF(), [])
+    ).resolves.toMatchObject({ outputsToAdmit: [] })
+  })
+
+  it('transfers reserved hashes when the owning UMP outpoint is consumed', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    const first = buildTxWithInput([buildPushDropScript(key.toPublicKey(), fields)])
+    await manager.identifyAdmissibleOutputs(first.toBEEF(), [])
+
+    const update = new Transaction()
+    update.addInput({
+      sourceTransaction: first,
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    update.addOutput({
+      lockingScript: buildPushDropScript(key.toPublicKey(), fields),
+      satoshis: 1
+    })
+
+    await expect(manager.identifyAdmissibleOutputs(update.toBEEF(), [0])).resolves.toMatchObject({
+      outputsToAdmit: [0],
+      coinsToRetain: [0]
+    })
   })
 
   it('returns empty results for malformed BEEF', async () => {

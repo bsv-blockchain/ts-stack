@@ -64,6 +64,10 @@ export class UserService {
         return db<User>("users").where({ presentationKey: key }).first();
     }
 
+    static async setUMPTokenOutpoint(userId: number, outpoint: string | null): Promise<void> {
+        await db("users").where({ id: userId }).update({ umpTokenOutpoint: outpoint });
+    }
+
     /**
      * Delete a user (and cascade the other records)
      */

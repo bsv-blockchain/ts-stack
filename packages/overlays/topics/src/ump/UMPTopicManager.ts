@@ -1,5 +1,6 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, PushDrop } from '@bsv/sdk'
+import { Transaction, PushDrop, Utils } from '@bsv/sdk'
+import { InMemoryUMPIdentityStore, UMPIdentityReservationStore } from './UMPIdentityStore.js'
 
 function getV3VersionIndex(protocolFields: number[][]): number | undefined {
   const hasV3AtIndex11 = protocolFields.length >= 12 && protocolFields[11]?.length === 1
@@ -43,11 +44,18 @@ function validateUMPFields(protocolFields: number[][]): void {
   if (protocolFields.length < 11) {
     throw new Error('Invalid UMP token: insufficient fields')
   }
+  if (protocolFields[6]?.length !== 32 || protocolFields[7]?.length !== 32) {
+    throw new Error('Invalid UMP token: presentation and recovery hashes must be 32 bytes')
+  }
   const versionIndex = getV3VersionIndex(protocolFields)
   if (versionIndex !== undefined) validateV3Fields(protocolFields, versionIndex)
 }
 
 export default class UMPTopicManager implements TopicManager {
+  constructor(
+    private readonly identityStore: UMPIdentityReservationStore = new InMemoryUMPIdentityStore()
+  ) {}
+
   async identifyAdmissibleOutputs(
     beef: number[],
     previousCoins: number[]
@@ -55,12 +63,27 @@ export default class UMPTopicManager implements TopicManager {
     try {
       const outputs: number[] = []
       const parsedTransaction = Transaction.fromBEEF(beef)
+      const txid = parsedTransaction.id('hex')
+      const consumedOutpoints = previousCoins.flatMap(inputIndex => {
+        const input = parsedTransaction.inputs[inputIndex]
+        if (input == null || input.sourceOutputIndex == null) return []
+        const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        return sourceTxid == null ? [] : [`${sourceTxid}.${input.sourceOutputIndex}`]
+      })
 
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         try {
           const result = PushDrop.decode(output.lockingScript)
           const protocolFields = result.fields
           validateUMPFields(protocolFields)
+          await this.identityStore.reserve(
+            {
+              outpoint: `${txid}.${i}`,
+              presentationHash: Utils.toHex(protocolFields[6]),
+              recoveryHash: Utils.toHex(protocolFields[7])
+            },
+            consumedOutpoints
+          )
           outputs.push(i)
         } catch (error) {
           console.warn(`Output ${i} failed UMP validation:`, error)

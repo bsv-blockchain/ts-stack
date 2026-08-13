@@ -116,35 +116,22 @@ function isValidKdfConfig(kdf: UMPToken['passwordKdf']): boolean {
 
 function findKdfVersionFieldIndex(protocolFields: number[][]): number {
   const hasMetadataWithProfiles =
-    protocolFields.length >= 15 &&
-    protocolFields[12]?.length === 1 &&
-    protocolFields[12][0] === 3
+    protocolFields.length >= 15 && protocolFields[12]?.length === 1 && protocolFields[12][0] === 3
   if (hasMetadataWithProfiles) return 12
   const hasMetadataWithoutProfiles =
-    protocolFields.length >= 14 &&
-    protocolFields[11]?.length === 1 &&
-    protocolFields[11][0] === 3
+    protocolFields.length >= 14 && protocolFields[11]?.length === 1 && protocolFields[11][0] === 3
   return hasMetadataWithoutProfiles ? 11 : -1
 }
 
-function addProfilesField(
-  token: UMPToken,
-  protocolFields: number[][],
-  kdfVersionFieldIndex: number
-): boolean {
-  const hasProfilesField =
-    kdfVersionFieldIndex === 12 || (kdfVersionFieldIndex !== 11 && protocolFields[11] != null)
+function addProfilesField(token: UMPToken, protocolFields: number[][], kdfVersionFieldIndex: number): boolean {
+  const hasProfilesField = kdfVersionFieldIndex === 12 || (kdfVersionFieldIndex !== 11 && protocolFields[11] != null)
   if (!hasProfilesField || protocolFields[11].length === 0) return true
   if (protocolFields[11].length > MAX_STATE_SNAPSHOT_BYTES) return false
   token.profilesEncrypted = protocolFields[11]
   return true
 }
 
-function addPasswordKdf(
-  token: UMPToken,
-  protocolFields: number[][],
-  kdfVersionFieldIndex: number
-): boolean {
+function addPasswordKdf(token: UMPToken, protocolFields: number[][], kdfVersionFieldIndex: number): boolean {
   if (kdfVersionFieldIndex === -1) return true
   const kdfAlgorithmField = protocolFields[kdfVersionFieldIndex + 1]
   const kdfParamsField = protocolFields[kdfVersionFieldIndex + 2]
@@ -524,7 +511,7 @@ export interface UMPTokenInteractor {
    * @returns The UMP token if found; otherwise, undefined.
    * @throws Implementations should throw when no verified token or clean empty response is available.
    */
-  findByPresentationKeyHash: (hash: number[]) => Promise<UMPToken | undefined>
+  findByPresentationKeyHash: (hash: number[], options?: UMPTokenLookupOptions) => Promise<UMPToken | undefined>
 
   /**
    * Locates the latest valid copy of a UMP token (including its outpoint)
@@ -534,7 +521,7 @@ export interface UMPTokenInteractor {
    * @returns The UMP token if found; otherwise, undefined.
    * @throws Implementations should throw when no verified token or clean empty response is available.
    */
-  findByRecoveryKeyHash: (hash: number[]) => Promise<UMPToken | undefined>
+  findByRecoveryKeyHash: (hash: number[], options?: UMPTokenLookupOptions) => Promise<UMPToken | undefined>
 
   /**
    * Creates (and optionally consumes the previous version of) a UMP token on-chain.
@@ -551,6 +538,15 @@ export interface UMPTokenInteractor {
     token: UMPToken,
     oldTokenToConsume?: UMPToken
   ) => Promise<OutpointString>
+}
+
+export interface UMPTokenLookupOptions {
+  /**
+   * WAB-administered fallback used only when normal lineage resolution leaves
+   * more than one verified matching token. The outpoint must be one of the
+   * verified lookup candidates or it has no effect.
+   */
+  pinnedOutpoint?: OutpointString
 }
 
 export interface UMPTokenLookupDiagnostics {
@@ -635,13 +631,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the presentation key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByPresentationKeyHash(hash: number[]): Promise<UMPToken | undefined> {
+  public async findByPresentationKeyHash(
+    hash: number[],
+    options?: UMPTokenLookupOptions
+  ): Promise<UMPToken | undefined> {
     return await this.findToken(
       {
         service: 'ls_users',
         query: { presentationHash: Utils.toHex(hash) }
       },
-      'presentation'
+      'presentation',
+      options
     )
   }
 
@@ -652,19 +652,21 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the recovery key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByRecoveryKeyHash(hash: number[]): Promise<UMPToken | undefined> {
+  public async findByRecoveryKeyHash(hash: number[], options?: UMPTokenLookupOptions): Promise<UMPToken | undefined> {
     return await this.findToken(
       {
         service: 'ls_users',
         query: { recoveryHash: Utils.toHex(hash) }
       },
-      'recovery'
+      'recovery',
+      options
     )
   }
 
   private async findToken(
     question: { service: string; query: Record<string, string> },
-    lookupKind: 'presentation' | 'recovery'
+    lookupKind: 'presentation' | 'recovery',
+    options?: UMPTokenLookupOptions
   ): Promise<UMPToken | undefined> {
     const correlationId = this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
     const startedAt = Date.now()
@@ -712,6 +714,16 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
           supersededTokens: matchingTokens.length - 1
         })
         return newest
+      }
+      const pinned =
+        options?.pinnedOutpoint == null
+          ? undefined
+          : matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
+      if (pinned != null) {
+        this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt, {
+          pinnedFallback: 1
+        })
+        return pinned
       }
       const reason = 'token-ambiguous'
       this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
@@ -791,9 +803,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const provenContinuations = survivors.filter(outpoint => {
       const evidence = evidenceByCandidate.get(outpoint)
       const token = candidates.get(outpoint)
-      return (
-        evidence != null && token != null && evidence.txs.some(tx => this.consumesSameIdentityToken(tx, token))
-      )
+      return evidence != null && token != null && evidence.txs.some(tx => this.consumesSameIdentityToken(tx, token))
     })
     if (provenContinuations.length !== 1) return undefined
     return candidates.get(provenContinuations[0])
@@ -1496,6 +1506,18 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Provides the presentation key.
    */
   async providePresentationKey(key: number[]): Promise<void> {
+    await this.providePresentationKeyInternal(key)
+  }
+
+  /**
+   * WAB authentication path for an optional operator pin. Normal lookup and
+   * lineage resolution always run first; the pin is only an ambiguity fallback.
+   */
+  protected async providePresentationKeyWithUMPTokenPin(key: number[], pinnedOutpoint?: OutpointString): Promise<void> {
+    await this.providePresentationKeyInternal(key, pinnedOutpoint == null ? undefined : { pinnedOutpoint })
+  }
+
+  private async providePresentationKeyInternal(key: number[], lookupOptions?: UMPTokenLookupOptions): Promise<void> {
     if (this.authenticated) {
       throw new Error('User is already authenticated')
     }
@@ -1517,7 +1539,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     })
     let token: UMPToken | undefined
     try {
-      token = await this.UMPTokenInteractor.findByPresentationKeyHash(hash)
+      token = await this.UMPTokenInteractor.findByPresentationKeyHash(hash, lookupOptions)
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.authentication.account-lookup.failed',
@@ -2224,7 +2246,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param getRoot If true and factorName is 'privilegedKey', returns the root privileged key bytes directly.
    * @returns The decrypted key bytes.
    */
-  private async getFactor(
+  protected async getFactor(
     factorName: 'passwordKey' | 'presentationKey' | 'recoveryKey' | 'privilegedKey'
   ): Promise<number[]> {
     if (!this.authenticated || this.currentUMPToken == null || this.rootPrivilegedKeyManager == null) {

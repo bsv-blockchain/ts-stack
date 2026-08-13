@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.6.10'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.7.0'
+last_updated: '2026-08-13'
+last_verified: '2026-08-13'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
@@ -49,6 +49,13 @@ const results = await btmsService.lookup({
 - **PushDrop encoding** — All topics use standardized data encoding for consistency
 - **Auto-indexing** — Lookup services auto-create MongoDB indices for efficient queries
 - **Complete documentation** — Each topic includes metadata and protocol docs
+
+For UMP, `UMPTopicManager` and `createUMPLookupService` can share a
+`MongoUMPIdentityStore`. Presentation and recovery hashes are reserved by the
+first unspent outpoint and can move only through a transaction that consumes
+the current owner. The lookup intentionally returns every matching current
+UTXO so a wallet can resolve lineage or use a verified WAB pin for pre-existing
+ambiguous state.
 
 ## Common patterns
 
@@ -128,7 +135,7 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **Lookup factories** — `create*LookupService(db)` functions are async and return configured services
 - **MongoDB indexing** — Services auto-create indices on frequently-queried fields; a failed build is
   logged and skipped so reads keep working, and retried on the next call
-- **`OVERLAY_INDEX_REPAIR`** — Opt-in. When a *unique* index cannot be built because the collection
+- **`OVERLAY_INDEX_REPAIR`** — Opt-in. When a _unique_ index cannot be built because the collection
   already holds duplicate rows, setting this to `true` deletes the duplicates (oldest row per key is
   kept) and rebuilds the index. It deletes rows, so it is off by default
 

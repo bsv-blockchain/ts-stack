@@ -65,6 +65,31 @@ Each topic ships a matching `*TopicManager` (admission rules for incoming transa
 
 Per-topic query types (`*Query`, `*Record`) are exported alongside.
 
+### UMP identity reservations
+
+`UMPTopicManager` reserves each 32-byte presentation hash and recovery hash for
+the first admitted unspent outpoint. A later transaction may reuse either hash
+only when it consumes the outpoint that currently owns the reservation. This
+prevents an unrelated transaction from creating an ambiguous account lookup by
+copying another user's hashes.
+
+Production overlays should share one Mongo database between admission and
+lookup. The reference overlay-server wiring constructs a
+`MongoUMPIdentityStore` and passes it to both services:
+
+```ts
+const identityStore = new MongoUMPIdentityStore(db)
+const manager = new UMPTopicManager(identityStore)
+const lookup = createUMPLookupService(db, identityStore)
+```
+
+The additive `ump_identity_reservations` collection serializes first writers
+across replicas. Pending reservations expire if lookup indexing never confirms
+admission. On upgrade, existing indexed UMP UTXOs seed the collection without
+deleting ambiguous rows. `ls_users` returns all matching current UTXOs so
+wallets can use verified lineage and, only if lineage remains ambiguous, an
+operator-selected WAB pin.
+
 ## Use cases
 
 ### Stand up a multi-topic overlay node

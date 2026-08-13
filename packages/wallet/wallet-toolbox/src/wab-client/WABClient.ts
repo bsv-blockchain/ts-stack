@@ -28,19 +28,27 @@ export interface WABFaucetResponse extends WABOperationResponse {
   }
 }
 
-function assertHexIdentifier (value: string, name: string): void {
+export interface WABPhoneChangeAuthorizationResponse extends WABOperationResponse {
+  changeToken?: string
+}
+
+export interface WABPhoneChangeCommitResponse extends WABOperationResponse {
+  changeId?: number
+}
+
+function assertHexIdentifier(value: string, name: string): void {
   if (!/^[0-9a-fA-F]{64}$/.test(value)) {
     throw new TypeError(`${name} must be a 32-byte hexadecimal string.`)
   }
 }
 
-function assertMethodType (methodType: string): void {
+function assertMethodType(methodType: string): void {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(methodType)) {
     throw new TypeError('methodType contains unsupported characters.')
   }
 }
 
-function normalizeAuthPayload (methodType: string, payload: AuthPayload): AuthPayload {
+function normalizeAuthPayload(methodType: string, payload: AuthPayload): AuthPayload {
   if (methodType !== 'TwilioPhone') return payload
   const phoneNumber = payload.phoneNumber
   if (typeof phoneNumber !== 'string') {
@@ -63,38 +71,32 @@ function normalizeAuthPayload (methodType: string, payload: AuthPayload): AuthPa
 export class WABClient {
   readonly transport: WABTransport
 
-  constructor (serverUrl: string, options: WABClientOptions = {}) {
+  constructor(serverUrl: string, options: WABClientOptions = {}) {
     this.transport = new WABTransport(serverUrl, options)
   }
 
-  public async getInfo (): Promise<WABServerInfo> {
+  public async getInfo(): Promise<WABServerInfo> {
     return await this.transport.request<WABServerInfo>('/info', {
       method: 'GET',
       operation: 'get-info'
     })
   }
 
-  public generateRandomPresentationKey (): string {
+  public generateRandomPresentationKey(): string {
     return PrivateKey.fromRandom().toHex()
   }
 
-  public async startAuthMethod (
+  public async startAuthMethod(
     authMethod: AuthMethodInteractor,
     presentationKey: string,
     payload: AuthPayload,
     correlationId?: string
   ): Promise<StartAuthResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return await authMethod.startAuth(
-      this.transport.serverUrl,
-      presentationKey,
-      payload,
-      this.transport,
-      correlationId
-    )
+    return await authMethod.startAuth(this.transport.serverUrl, presentationKey, payload, this.transport, correlationId)
   }
 
-  public async completeAuthMethod (
+  public async completeAuthMethod(
     authMethod: AuthMethodInteractor,
     presentationKey: string,
     payload: AuthPayload,
@@ -110,7 +112,46 @@ export class WABClient {
     )
   }
 
-  public async listLinkedMethods (presentationKey: string): Promise<WABOperationResponse> {
+  public async startPhoneNumberChange(presentationKey: string, phoneNumber: string): Promise<WABOperationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    const payload = normalizeAuthPayload('TwilioPhone', { phoneNumber })
+    return await this.transport.request<WABOperationResponse>('/auth/phone-change/start', {
+      operation: 'phone-change-start',
+      body: { presentationKey, phoneNumber: payload.phoneNumber }
+    })
+  }
+
+  public async completePhoneNumberChange(
+    presentationKey: string,
+    phoneNumber: string,
+    otp: string
+  ): Promise<WABPhoneChangeAuthorizationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    const payload = normalizeAuthPayload('TwilioPhone', { phoneNumber })
+    if (!/^\d{4,10}$/.test(otp)) throw new TypeError('otp must contain 4 to 10 digits.')
+    return await this.transport.request<WABPhoneChangeAuthorizationResponse>('/auth/phone-change/complete', {
+      operation: 'phone-change-complete',
+      body: { presentationKey, phoneNumber: payload.phoneNumber, otp }
+    })
+  }
+
+  public async commitPhoneNumberChange(
+    changeToken: string,
+    presentationKey: string,
+    newPresentationKey: string
+  ): Promise<WABPhoneChangeCommitResponse> {
+    if (!/^[0-9a-fA-F]{64}$/.test(changeToken)) {
+      throw new TypeError('changeToken must be a 32-byte hexadecimal string.')
+    }
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    assertHexIdentifier(newPresentationKey, 'newPresentationKey')
+    return await this.transport.request<WABPhoneChangeCommitResponse>('/auth/phone-change/commit', {
+      operation: 'phone-change-commit',
+      body: { changeToken, presentationKey, newPresentationKey }
+    })
+  }
+
+  public async listLinkedMethods(presentationKey: string): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
     return await this.transport.request<WABOperationResponse>('/user/linkedMethods', {
       operation: 'list-linked-methods',
@@ -118,10 +159,7 @@ export class WABClient {
     })
   }
 
-  public async unlinkMethod (
-    presentationKey: string,
-    authMethodId: number
-  ): Promise<WABOperationResponse> {
+  public async unlinkMethod(presentationKey: string, authMethodId: number): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
     if (!Number.isSafeInteger(authMethodId) || authMethodId <= 0) {
       throw new TypeError('authMethodId must be a positive safe integer.')
@@ -132,7 +170,7 @@ export class WABClient {
     })
   }
 
-  public async requestFaucet (presentationKey: string): Promise<WABFaucetResponse> {
+  public async requestFaucet(presentationKey: string): Promise<WABFaucetResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
     return await this.transport.request<WABFaucetResponse>('/faucet/request', {
       operation: 'request-faucet',
@@ -140,7 +178,7 @@ export class WABClient {
     })
   }
 
-  public async deleteUser (presentationKey: string): Promise<WABOperationResponse> {
+  public async deleteUser(presentationKey: string): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
     return await this.transport.request<WABOperationResponse>('/user/delete', {
       operation: 'delete-user',
@@ -148,11 +186,11 @@ export class WABClient {
     })
   }
 
-  public async startShareAuth (
+  public async startShareAuth(
     methodType: string,
     userIdHash: string,
     payload: AuthPayload
-  ): Promise<{ success: boolean, message: string }> {
+  ): Promise<{ success: boolean; message: string }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
@@ -166,12 +204,12 @@ export class WABClient {
     })
   }
 
-  public async storeShare (
+  public async storeShare(
     methodType: string,
     payload: AuthPayload,
     shareB: string,
     userIdHash: string
-  ): Promise<{ success: boolean, message: string, userId?: number }> {
+  ): Promise<{ success: boolean; message: string; userId?: number }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
@@ -181,11 +219,11 @@ export class WABClient {
     })
   }
 
-  public async retrieveShare (
+  public async retrieveShare(
     methodType: string,
     payload: AuthPayload,
     userIdHash: string
-  ): Promise<{ success: boolean, shareB?: string, message: string }> {
+  ): Promise<{ success: boolean; shareB?: string; message: string }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
@@ -195,12 +233,12 @@ export class WABClient {
     })
   }
 
-  public async updateShare (
+  public async updateShare(
     methodType: string,
     payload: AuthPayload,
     userIdHash: string,
     newShareB: string
-  ): Promise<{ success: boolean, message: string, shareVersion?: number }> {
+  ): Promise<{ success: boolean; message: string; shareVersion?: number }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
@@ -210,11 +248,11 @@ export class WABClient {
     })
   }
 
-  public async deleteShamirUser (
+  public async deleteShamirUser(
     methodType: string,
     payload: AuthPayload,
     userIdHash: string
-  ): Promise<{ success: boolean, message: string }> {
+  ): Promise<{ success: boolean; message: string }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)

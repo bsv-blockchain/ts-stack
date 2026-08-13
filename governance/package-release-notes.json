@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-12",
+  "lastReviewed": "2026-08-13",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -124,10 +124,10 @@
     },
     {
       "name": "@bsv/overlay-topics",
-      "publishedVersion": "1.6.1",
-      "releaseType": "patch",
-      "summary": "Keeps Mongo-backed lookups serving when an index build fails, retries index creation after a failed build instead of caching the rejection, and upserts outpoint-keyed records so repeated admission of the same output cannot create duplicate rows. Applies to every topic storage manager through a shared CollectionIndexes helper, which can also delete the duplicate rows behind an unbuildable unique index when OVERLAY_INDEX_REPAIR is set.",
-      "migration": "No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged, and index repair stays off unless OVERLAY_INDEX_REPAIR is set to true. Operators of collections that already contain duplicate rows violating a unique index either remove the duplicates themselves or set that variable for one run; lookups now succeed either way, and the index is built on a later call without a restart."
+      "publishedVersion": "1.6.10",
+      "releaseType": "minor",
+      "summary": "Adds persistent first-writer reservations for UMP presentation and recovery hashes, transfers a reservation only when the owning outpoint is consumed, exposes reservation-store integration for multi-replica overlays, and returns every matching legacy UMP candidate so wallet clients can apply verified lineage or an operator pin. It also retains the collection-index resilience and opt-in repair controls from the prior candidate.",
+      "migration": "Existing topic and lookup identifiers remain unchanged. Production UMP overlays must give UMPTopicManager and the UMP lookup service Mongo-backed stores that use the same database, then roll out before updated wallet clients. The reservation collection is additive and initializes from currently indexed UMP UTXOs; take a MongoDB backup before rollout. Legacy ambiguous rows remain visible and can be resolved with WAB pinning rather than deleted."
     },
     {
       "name": "@bsv/paymail",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.8.0",
+      "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Adds local-first ChainTracks management, proof-of-work enforcement, stale-while-revalidate height refresh, bounded singleflight loads, an asynchronous validation seam with a bounded Node worker pool, content-addressed atomic caches with quarantine and legacy promotion, retry-aware durable download budgets, immutable read snapshots, negative load backoff, and cache, worker, budget, and availability observability while retaining the pending-transaction reconciliation corrections.",
-      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are rejected. Node services with large bulk files should inject NodeBulkFileDataValidator, use BulkFileDataCacheFs for content-addressed persistence, and use DurableFileBulkFileDownloadBudget on durable storage; browser and mobile consumers retain inline asynchronous validation."
+      "summary": "Adds WAB-administered UMP ambiguity pinning, verified same-or-new phone-number changes that roll the presentation key by spending the current UMP token, and retry-safe WAB commit semantics, alongside the local-first ChainTracks management, proof-of-work enforcement, bounded validation, cache, and observability candidate.",
+      "migration": "Existing authentication calls remain compatible. WAB operators should deploy the additive auth response and phone-change endpoints before exposing client UI. Wallet applications that offer phone changes call startPhoneNumberChange, collect the SMS code, call completePhoneNumberChange, and persist saveSnapshot immediately after success. A pin is considered only when normal verified lineage resolution remains ambiguous and only when it names a verified lookup candidate."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.8.0",
+      "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Carries the browser-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing browser exports, defaults, and wire contracts remain compatible; inline validation remains portable and applications opt into persistence and management adapters."
+      "summary": "Carries the browser-safe WAB UMP-pin fallback and verified phone-number/presentation-key rotation APIs together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
+      "migration": "Existing browser exports, defaults, and authentication calls remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must save the returned manager snapshot after success. Deploy compatible WAB and UMP overlay services first."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.8.0",
+      "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Carries the mobile-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing React Native exports, remote-storage behavior, and wire contracts remain compatible; inline validation remains portable and applications provide their platform cache or local-storage adapter to opt in."
+      "summary": "Carries the mobile-safe WAB UMP-pin fallback and verified phone-number/presentation-key rotation APIs together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
+      "migration": "Existing React Native exports, remote-storage behavior, and authentication calls remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must persist saveSnapshot after success. Deploy compatible WAB and UMP overlay services first."
     },
     {
       "name": "create-bsv-app",

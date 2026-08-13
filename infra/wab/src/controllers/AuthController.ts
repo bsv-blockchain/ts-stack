@@ -93,6 +93,7 @@ export class AuthController {
             // Auth successful, find or create user by auth method config
             const config = authMethod.buildConfigFromPayload(payload)
             let user = await UserService.findUserByConfig(methodType, config)
+            const existingUser = user != null
             if (!user) {
                 user = await UserService.createUser(presentationKey)
                 await UserService.linkAuthMethod(user.id, methodType, config);
@@ -102,6 +103,9 @@ export class AuthController {
             res.json({
                 success: true,
                 presentationKey: user.presentationKey,
+                accountStatus: existingUser ? "existing-user" : "new-user",
+                existingUser,
+                ...(user.umpTokenOutpoint ? { umpTokenOutpoint: user.umpTokenOutpoint } : {}),
                 message: result.message
             });
         } catch (error: any) {

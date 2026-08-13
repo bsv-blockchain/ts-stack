@@ -432,14 +432,18 @@
           "PORT",
           "TWILIO_ACCOUNT_SID",
           "TWILIO_AUTH_TOKEN",
-          "TWILIO_VERIFY_SERVICE_SID"
+          "TWILIO_VERIFY_SERVICE_SID",
+          "WAB_ADMIN_RATE_LIMIT_MAX",
+          "WAB_ADMIN_RATE_LIMIT_WINDOW_MS",
+          "WAB_ADMIN_TOKEN"
         ],
         "secrets": [
           "DB_PASS",
           "OTEL_EXPORTER_OTLP_HEADERS",
           "SERVER_PRIVATE_KEY",
           "SHARE_ENCRYPTION_KEY",
-          "TWILIO_AUTH_TOKEN"
+          "TWILIO_AUTH_TOKEN",
+          "WAB_ADMIN_TOKEN"
         ]
       },
       "observability": {
@@ -451,6 +455,8 @@
       },
       "criticalJourneys": [
         "start and complete an authentication challenge",
+        "pin a verified legacy UMP outpoint and clear the pin after recovery",
+        "verify, commit, and if necessary restore a phone-number association change",
         "store, retrieve, update, and delete encrypted shares",
         "link, unlink, and delete an identity safely"
       ],
@@ -459,12 +465,12 @@
         "share encryption, retrieval, or deletion failures repeat",
         "database migration or pool failures consume error budget"
       ],
-      "state": "Authentication, identity-link, share, deletion-intent, and faucet database tables.",
+      "state": "Authentication, identity-link, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.",
       "migration": "Migrations complete before listen; verify rollback compatibility before rollout.",
       "backup": "Take an encrypted database snapshot and test identity/share recovery without logging secrets.",
       "rpo": "15 minutes for authentication and encrypted share state.",
       "rto": "4 hours from a verified encrypted backup and independently retained encryption keys.",
-      "restoreValidation": "Verify migration state, authentication completion, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
+      "restoreValidation": "Verify migration state, authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.",

@@ -56,6 +56,13 @@ Clients submit transaction outputs via HTTP, the server routes valid outputs thr
 
 Additional endpoints exposed by configured topic managers and lookup services (see src/services/ for ProtoMap, CertMap, BasketMap, UHRP, Identity, MessageBox, UMP, etc.).
 
+The UMP manager and lookup service share the Mongo-backed
+`ump_identity_reservations` collection. The first current UTXO to claim a
+presentation or recovery hash owns that value until a transaction consumes the
+outpoint. Back up MongoDB before introducing the collection. Existing ambiguous
+UMP rows stay queryable for lineage/WAB-pin recovery; the migration does not
+delete them.
+
 ## WebSocket endpoints
 
 None (HTTP-only OverlayExpress endpoints).

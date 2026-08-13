@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Add bearer-authenticated, rate-limited operator routes to pin a WAB account
+  to a verified UMP outpoint and restore a disputed phone-association transfer.
+- Require current-account knowledge plus Twilio OTP possession before a phone
+  change can commit, hash the short-lived authorization at rest, clear stale
+  UMP pins, and preserve reversible association history.
+
 - Apply one configurable rate-limit policy to authentication, user, faucet,
   deletion, and share routes. Forwarded client addresses are accepted only
   behind an explicitly bounded trusted-proxy chain.
@@ -27,9 +33,10 @@ All notable changes to this project will be documented in this file.
   verified authentication method, preventing cross-account share access.
 - Remove the legacy production OTP bypass and require canonical E.164 phone
   identities for Twilio verification.
-- Make authentication identities non-transferable between live users while
-  preserving faucet history when an identity is relinked after account
-  deletion.
+- Keep ordinary authentication identities non-transferable between live users.
+  The explicit verified phone-change flow can transfer a number while
+  preserving prior associations for support restoration and retaining faucet
+  history.
 - Replace forgeable account-deletion keys with hashed, expiring, rate-limited,
   single-use sessions bound to the exact authentication method and user.
 - Validate presentation keys, user hashes, auth method names, numeric IDs, and
