@@ -57,6 +57,11 @@ interface WABPhoneChangeCommit extends WABOperationResponse {
   changeId?: number
 }
 
+interface PendingPhoneChange {
+  presentationKey: string
+  changeId: number
+}
+
 /**
  * WalletAuthenticationManager
  *
@@ -300,49 +305,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     this.cancelAuth()
     const wabAccountStatus = this.inferAccountStatus(result, session.presentationKey)
     try {
-      const umpTokenOutpoint =
-        typeof result.umpTokenOutpoint === 'string' ? (result.umpTokenOutpoint as `${string}.${number}`) : undefined
-      const lookupOptions = umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
-      const pendingPresentationKey = result.pendingPresentationKey
-      const pendingChangeId = result.pendingPhoneChangeId
-      const hasPendingPhoneChange = pendingPresentationKey !== undefined || pendingChangeId !== undefined
-      if (
-        hasPendingPhoneChange &&
-        (!/^[0-9a-fA-F]{64}$/.test(pendingPresentationKey ?? '') ||
-          !Number.isSafeInteger(pendingChangeId) ||
-          pendingChangeId! <= 0)
-      ) {
-        throw new WABAccountContinuityError('WAB returned invalid pending phone-change data.')
-      }
-
-      let primaryLookupError: unknown
-      try {
-        await this.providePresentationKey(Utils.toArray(result.presentationKey, 'hex'), lookupOptions)
-      } catch (error) {
-        primaryLookupError = error
-        if (!hasPendingPhoneChange) throw error
-      }
-
-      let usedPendingPhoneChange = false
-      if (
-        hasPendingPhoneChange &&
-        (primaryLookupError !== undefined ||
-          (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER))
-      ) {
-        await this.providePresentationKey(Utils.toArray(pendingPresentationKey!, 'hex'), lookupOptions)
-        usedPendingPhoneChange = true
-      }
-
-      if (usedPendingPhoneChange && this.authenticationFlow === EXISTING_USER) {
-        const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
-          changeId: pendingChangeId,
-          presentationKey: result.presentationKey,
-          newPresentationKey: pendingPresentationKey
-        })
-        if (finalized.success !== true || finalized.changeId !== pendingChangeId) {
-          throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
-        }
-      }
+      await this.provideWABPresentationKey(result, wabAccountStatus)
     } catch (error) {
       this.telemetry.capture({
         name: `${AUTH_EVENT}ump-continuity.failed`,
@@ -393,6 +356,67 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
 
   public cancelAuth(): void {
     this.authSession = undefined
+  }
+
+  private readPendingPhoneChange(result: CompleteAuthResponse): PendingPhoneChange | undefined {
+    const presentationKey = result.pendingPresentationKey
+    const changeId = result.pendingPhoneChangeId
+    if (presentationKey === undefined && changeId === undefined) return undefined
+    if (
+      !/^[0-9a-fA-F]{64}$/.test(presentationKey ?? '') ||
+      !Number.isSafeInteger(changeId) ||
+      changeId! <= 0
+    ) {
+      throw new WABAccountContinuityError('WAB returned invalid pending phone-change data.')
+    }
+    return { presentationKey: presentationKey!, changeId: changeId! }
+  }
+
+  private async provideWABPresentationKey(
+    result: CompleteAuthResponse,
+    wabAccountStatus: string
+  ): Promise<void> {
+    const umpTokenOutpoint =
+      typeof result.umpTokenOutpoint === 'string'
+        ? (result.umpTokenOutpoint as `${string}.${number}`)
+        : undefined
+    const lookupOptions =
+      umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
+    const pending = this.readPendingPhoneChange(result)
+    let usePending = false
+    try {
+      await this.providePresentationKey(Utils.toArray(result.presentationKey!, 'hex'), lookupOptions)
+    } catch (error) {
+      if (pending == null) throw error
+      usePending = true
+    }
+
+    if (
+      pending != null &&
+      (usePending ||
+        (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER))
+    ) {
+      await this.providePresentationKey(Utils.toArray(pending.presentationKey, 'hex'), lookupOptions)
+      if (this.authenticationFlow === EXISTING_USER) {
+        await this.finalizePendingPhoneChange(result.presentationKey!, pending)
+      }
+    }
+  }
+
+  private async finalizePendingPhoneChange(
+    currentPresentationKey: string,
+    pending: PendingPhoneChange
+  ): Promise<void> {
+    const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
+      changeId: pending.changeId,
+      presentationKey: currentPresentationKey,
+      newPresentationKey: pending.presentationKey
+    })
+    if (finalized.success !== true || finalized.changeId !== pending.changeId) {
+      throw new WABAccountContinuityError(
+        finalized.message || 'WAB could not finalize the pending phone change.'
+      )
+    }
   }
 
   /**

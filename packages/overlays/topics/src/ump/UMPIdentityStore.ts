@@ -40,6 +40,12 @@ interface ClaimMutation {
   claimedField: 'owner' | 'pendingOwner'
 }
 
+interface ReservationEntry {
+  id: string
+  kind: 'presentation' | 'recovery'
+  hash: string
+}
+
 export class UMPIdentityConflictError extends Error {
   constructor(readonly kind: 'presentation' | 'recovery') {
     super(`The UMP ${kind} hash is already reserved by another unspent outpoint.`)
@@ -49,7 +55,7 @@ export class UMPIdentityConflictError extends Error {
 
 function reservationEntries(
   claim: UMPIdentityClaim
-): Array<{ id: string; kind: 'presentation' | 'recovery'; hash: string }> {
+): ReservationEntry[] {
   return [
     {
       id: `presentation:${claim.presentationHash}`,
@@ -93,34 +99,12 @@ export class InMemoryUMPIdentityStore implements UMPIdentityReservationStore {
 
     try {
       for (const entry of reservationEntries(claim)) {
-        const current = this.reservations.get(entry.id)
-        if (current?.ownerOutpoint === claim.outpoint && current.pendingOwnerOutpoint == null) {
-          continue
-        }
-        if (current?.pendingOwnerOutpoint === claim.outpoint) continue
-        if (current != null && (!current.confirmed || !consumed.has(current.ownerOutpoint))) {
-          throw new UMPIdentityConflictError(entry.kind)
-        }
-        acquired.push({
-          id: entry.id,
-          ...(current == null ? {} : { previous: { ...current } })
-        })
-        if (current == null) {
-          this.reservations.set(entry.id, {
-            ownerOutpoint: claim.outpoint,
-            confirmed: false,
-            pendingUntil: Date.now() + this.pendingReservationTtlMs
-          })
-        } else {
-          this.reservations.set(entry.id, {
-            ...current,
-            pendingOwnerOutpoint: claim.outpoint,
-            pendingOwnerUntil: Date.now() + this.pendingReservationTtlMs
-          })
-        }
+        const mutation = this.claimOne(entry, claim.outpoint, consumed)
+        if (mutation != null) acquired.push({ id: entry.id, ...mutation })
       }
     } catch (error) {
-      for (const entry of acquired.reverse()) {
+      acquired.reverse()
+      for (const entry of acquired) {
         if (entry.previous == null) this.reservations.delete(entry.id)
         else this.reservations.set(entry.id, entry.previous)
       }
@@ -174,6 +158,37 @@ export class InMemoryUMPIdentityStore implements UMPIdentityReservationStore {
         this.reservations.set(id, confirmed)
       }
     }
+  }
+
+  private claimOne(
+    entry: ReservationEntry,
+    ownerOutpoint: string,
+    consumed: Set<string>
+  ): { previous?: InMemoryReservation } | undefined {
+    const current = this.reservations.get(entry.id)
+    if (current?.ownerOutpoint === ownerOutpoint && current.pendingOwnerOutpoint == null) {
+      return undefined
+    }
+    if (current?.pendingOwnerOutpoint === ownerOutpoint) return undefined
+    if (current != null && (!current.confirmed || !consumed.has(current.ownerOutpoint))) {
+      throw new UMPIdentityConflictError(entry.kind)
+    }
+
+    const expiresAt = Date.now() + this.pendingReservationTtlMs
+    if (current == null) {
+      this.reservations.set(entry.id, {
+        ownerOutpoint,
+        confirmed: false,
+        pendingUntil: expiresAt
+      })
+      return {}
+    }
+    this.reservations.set(entry.id, {
+      ...current,
+      pendingOwnerOutpoint: ownerOutpoint,
+      pendingOwnerUntil: expiresAt
+    })
+    return { previous: { ...current } }
   }
 
   private removeExpiredPendingReservations(): void {
@@ -366,7 +381,7 @@ export class MongoUMPIdentityStore implements UMPIdentityReservationStore {
   }
 
   private async claimOne(
-    entry: { id: string; kind: 'presentation' | 'recovery'; hash: string },
+    entry: ReservationEntry,
     ownerOutpoint: string,
     consumedOutpoints: string[]
   ): Promise<ClaimMutation | null> {
@@ -374,103 +389,157 @@ export class MongoUMPIdentityStore implements UMPIdentityReservationStore {
       const now = new Date()
       const expiresAt = new Date(now.getTime() + this.pendingReservationTtlMs)
       const current = await this.reservations.findOne({ _id: entry.id })
-
+      let result: ClaimMutation | null | false
       if (current == null) {
-        try {
-          await this.reservations.insertOne({
-            _id: entry.id,
-            kind: entry.kind,
-            hash: entry.hash,
-            ownerOutpoint,
-            pendingUntil: expiresAt
-          })
-          return { id: entry.id, previous: null, claimedField: 'owner' }
-        } catch (error) {
-          if (this.isDuplicateKey(error)) continue
-          throw error
-        }
-      }
-
-      if (current.ownerOutpoint === ownerOutpoint && current.pendingOwnerOutpoint == null) {
-        if (current.pendingUntil == null) return null
-        const previous = await this.reservations.findOneAndUpdate(
-          { _id: entry.id, ownerOutpoint, pendingUntil: current.pendingUntil },
-          { $set: { pendingUntil: expiresAt } },
-          { returnDocument: 'before' }
+        result = await this.insertInitialClaim(entry, ownerOutpoint, expiresAt)
+      } else {
+        result = await this.claimExistingReservation(
+          entry,
+          current,
+          ownerOutpoint,
+          consumedOutpoints,
+          now,
+          expiresAt
         )
-        if (previous == null) continue
-        return { id: entry.id, previous, claimedField: 'owner' }
       }
+      if (result !== false) return result
+    }
+  }
 
-      if (current.pendingOwnerOutpoint === ownerOutpoint) {
-        const previous = await this.reservations.findOneAndUpdate(
-          {
-            _id: entry.id,
-            ownerOutpoint: current.ownerOutpoint,
-            pendingOwnerOutpoint: ownerOutpoint
-          },
-          { $set: { pendingOwnerUntil: expiresAt } },
-          { returnDocument: 'before' }
-        )
-        if (previous == null) continue
-        return { id: entry.id, previous, claimedField: 'pendingOwner' }
-      }
+  private async claimExistingReservation(
+    entry: ReservationEntry,
+    current: UMPIdentityReservation,
+    ownerOutpoint: string,
+    consumedOutpoints: string[],
+    now: Date,
+    expiresAt: Date
+  ): Promise<ClaimMutation | null | false> {
+    const renewed = await this.renewExistingClaim(current, ownerOutpoint, expiresAt)
+    if (renewed !== undefined) return renewed
 
-      if (current.pendingOwnerOutpoint != null) {
-        if (current.pendingOwnerUntil != null && current.pendingOwnerUntil <= now) {
-          const cleared = await this.reservations.updateOne(
-            {
-              _id: entry.id,
-              ownerOutpoint: current.ownerOutpoint,
-              pendingOwnerOutpoint: current.pendingOwnerOutpoint,
-              pendingOwnerUntil: current.pendingOwnerUntil
-            },
-            { $unset: { pendingOwnerOutpoint: '', pendingOwnerUntil: '' } }
-          )
-          if (cleared.modifiedCount === 0) continue
-          continue
-        }
-        throw new UMPIdentityConflictError(entry.kind)
-      }
-
-      if (current.pendingUntil != null && current.pendingUntil <= now) {
-        const previous = await this.reservations.findOneAndUpdate(
-          {
-            _id: entry.id,
-            ownerOutpoint: current.ownerOutpoint,
-            pendingUntil: current.pendingUntil
-          },
-          {
-            $set: {
-              kind: entry.kind,
-              hash: entry.hash,
-              ownerOutpoint,
-              pendingUntil: expiresAt
-            }
-          },
-          { returnDocument: 'before' }
-        )
-        if (previous == null) continue
-        return { id: entry.id, previous, claimedField: 'owner' }
-      }
-
-      if (current.pendingUntil == null && consumedOutpoints.includes(current.ownerOutpoint)) {
-        const previous = await this.reservations.findOneAndUpdate(
-          {
-            _id: entry.id,
-            ownerOutpoint: current.ownerOutpoint,
-            pendingUntil: { $exists: false },
-            pendingOwnerOutpoint: { $exists: false }
-          },
-          { $set: { pendingOwnerOutpoint: ownerOutpoint, pendingOwnerUntil: expiresAt } },
-          { returnDocument: 'before' }
-        )
-        if (previous == null) continue
-        return { id: entry.id, previous, claimedField: 'pendingOwner' }
-      }
-
+    if (current.pendingOwnerOutpoint != null) {
+      if (await this.clearExpiredSuccessor(current, now)) return false
       throw new UMPIdentityConflictError(entry.kind)
     }
+    if (current.pendingUntil != null && current.pendingUntil <= now) {
+      return await this.replaceExpiredInitialClaim(entry, current, ownerOutpoint, expiresAt)
+    }
+    if (current.pendingUntil == null && consumedOutpoints.includes(current.ownerOutpoint)) {
+      return await this.stageSuccessor(entry.id, current, ownerOutpoint, expiresAt)
+    }
+    throw new UMPIdentityConflictError(entry.kind)
+  }
+
+  private async insertInitialClaim(
+    entry: ReservationEntry,
+    ownerOutpoint: string,
+    expiresAt: Date
+  ): Promise<ClaimMutation | false> {
+    try {
+      await this.reservations.insertOne({
+        _id: entry.id,
+        kind: entry.kind,
+        hash: entry.hash,
+        ownerOutpoint,
+        pendingUntil: expiresAt
+      })
+      return { id: entry.id, previous: null, claimedField: 'owner' }
+    } catch (error) {
+      if (this.isDuplicateKey(error)) return false
+      throw error
+    }
+  }
+
+  private async renewExistingClaim(
+    current: UMPIdentityReservation,
+    ownerOutpoint: string,
+    expiresAt: Date
+  ): Promise<ClaimMutation | null | false | undefined> {
+    if (current.ownerOutpoint === ownerOutpoint && current.pendingOwnerOutpoint == null) {
+      if (current.pendingUntil == null) return null
+      const previous = await this.reservations.findOneAndUpdate(
+        { _id: current._id, ownerOutpoint, pendingUntil: current.pendingUntil },
+        { $set: { pendingUntil: expiresAt } },
+        { returnDocument: 'before' }
+      )
+      return previous == null
+        ? false
+        : { id: current._id, previous, claimedField: 'owner' }
+    }
+    if (current.pendingOwnerOutpoint !== ownerOutpoint) return undefined
+    const previous = await this.reservations.findOneAndUpdate(
+      {
+        _id: current._id,
+        ownerOutpoint: current.ownerOutpoint,
+        pendingOwnerOutpoint: ownerOutpoint
+      },
+      { $set: { pendingOwnerUntil: expiresAt } },
+      { returnDocument: 'before' }
+    )
+    return previous == null
+      ? false
+      : { id: current._id, previous, claimedField: 'pendingOwner' }
+  }
+
+  private async clearExpiredSuccessor(
+    current: UMPIdentityReservation,
+    now: Date
+  ): Promise<boolean> {
+    if (current.pendingOwnerUntil == null || current.pendingOwnerUntil > now) return false
+    await this.reservations.updateOne(
+      {
+        _id: current._id,
+        ownerOutpoint: current.ownerOutpoint,
+        pendingOwnerOutpoint: current.pendingOwnerOutpoint,
+        pendingOwnerUntil: current.pendingOwnerUntil
+      },
+      { $unset: { pendingOwnerOutpoint: '', pendingOwnerUntil: '' } }
+    )
+    return true
+  }
+
+  private async replaceExpiredInitialClaim(
+    entry: ReservationEntry,
+    current: UMPIdentityReservation,
+    ownerOutpoint: string,
+    expiresAt: Date
+  ): Promise<ClaimMutation | false> {
+    const previous = await this.reservations.findOneAndUpdate(
+      {
+        _id: entry.id,
+        ownerOutpoint: current.ownerOutpoint,
+        pendingUntil: current.pendingUntil
+      },
+      {
+        $set: {
+          kind: entry.kind,
+          hash: entry.hash,
+          ownerOutpoint,
+          pendingUntil: expiresAt
+        }
+      },
+      { returnDocument: 'before' }
+    )
+    return previous == null ? false : { id: entry.id, previous, claimedField: 'owner' }
+  }
+
+  private async stageSuccessor(
+    id: string,
+    current: UMPIdentityReservation,
+    ownerOutpoint: string,
+    expiresAt: Date
+  ): Promise<ClaimMutation | false> {
+    const previous = await this.reservations.findOneAndUpdate(
+      {
+        _id: id,
+        ownerOutpoint: current.ownerOutpoint,
+        pendingUntil: { $exists: false },
+        pendingOwnerOutpoint: { $exists: false }
+      },
+      { $set: { pendingOwnerOutpoint: ownerOutpoint, pendingOwnerUntil: expiresAt } },
+      { returnDocument: 'before' }
+    )
+    return previous == null ? false : { id, previous, claimedField: 'pendingOwner' }
   }
 
   private async rollback(acquired: ClaimMutation[], ownerOutpoint: string): Promise<void> {

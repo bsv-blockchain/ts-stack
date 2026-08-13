@@ -4,6 +4,7 @@ import { db } from '../db/knex'
 import type { AuthMethodEntity, User } from '../types'
 
 const PHONE_CHANGE_TTL_MS = 10 * 60 * 1000
+type EpochMilliseconds = string | number
 
 interface PhoneChangeSessionEntity {
   id: number
@@ -11,10 +12,10 @@ interface PhoneChangeSessionEntity {
   userId: number | null
   methodType: string
   config: string
-  expiresAtEpochMs: string | number
-  consumedAtEpochMs: string | number | null
+  expiresAtEpochMs: EpochMilliseconds
+  consumedAtEpochMs: EpochMilliseconds | null
   committedChangeId: number | null
-  createdAtEpochMs: string | number
+  createdAtEpochMs: EpochMilliseconds
 }
 
 interface PhoneChangeHistoryEntity {
@@ -27,9 +28,9 @@ interface PhoneChangeHistoryEntity {
   config: string
   previousPresentationKey: string
   newPresentationKey: string
-  createdAtEpochMs: string | number
-  finalizedAtEpochMs: string | number | null
-  restoredAtEpochMs: string | number | null
+  createdAtEpochMs: EpochMilliseconds
+  finalizedAtEpochMs: EpochMilliseconds | null
+  restoredAtEpochMs: EpochMilliseconds | null
 }
 
 export interface PendingPhoneChange {

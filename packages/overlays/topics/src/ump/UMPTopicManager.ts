@@ -60,12 +60,13 @@ export default class UMPTopicManager implements TopicManager {
   private readonly identityStore: UMPIdentityReservationStore
 
   constructor(identityStoreOrDb?: UMPIdentityReservationStore | Db) {
-    this.identityStore =
-      identityStoreOrDb == null
-        ? new InMemoryUMPIdentityStore()
-        : 'reserve' in identityStoreOrDb
-          ? identityStoreOrDb
-          : new MongoUMPIdentityStore(identityStoreOrDb)
+    if (identityStoreOrDb == null) {
+      this.identityStore = new InMemoryUMPIdentityStore()
+    } else if ('reserve' in identityStoreOrDb) {
+      this.identityStore = identityStoreOrDb
+    } else {
+      this.identityStore = new MongoUMPIdentityStore(identityStoreOrDb)
+    }
   }
 
   async identifyAdmissibleOutputs(
