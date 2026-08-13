@@ -187,10 +187,10 @@ export class WABTransport {
   readonly serverOrigin: string
   readonly telemetry: Telemetry
 
-  #fetchClient: typeof fetch
-  #timeoutMs: number
-  #maxRequestBytes: number
-  #maxResponseBytes: number
+  readonly #fetchClient: typeof fetch
+  readonly #timeoutMs: number
+  readonly #maxRequestBytes: number
+  readonly #maxResponseBytes: number
 
   constructor(serverUrl: string, options: WABTransportOptions = {}) {
     const normalized = normalizeServerUrl(serverUrl)

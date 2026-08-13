@@ -601,14 +601,14 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   /**
    * A `LookupResolver` instance used to query overlay networks.
    */
-  #resolver: LookupResolver
+  readonly #resolver: LookupResolver
 
   /**
    * A SHIP broadcaster that can be used to publish updated UMP tokens
    * under the `tm_users` topic to overlay service peers.
    */
-  #broadcaster: SHIPBroadcaster
-  #telemetry: Telemetry
+  readonly #broadcaster: SHIPBroadcaster
+  readonly #telemetry: Telemetry
 
   /**
    * Construct a new OverlayUMPTokenInteractor.
