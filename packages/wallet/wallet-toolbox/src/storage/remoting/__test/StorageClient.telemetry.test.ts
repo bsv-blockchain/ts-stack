@@ -73,6 +73,16 @@ describe('StorageClient telemetry', () => {
         }
       })
       expect(byName.get('wallet.storage.http')?.parentSpanId).toBe(rpc.spanId)
+      expect(byName.get('wallet.storage.http')?.attributes).toMatchObject({
+        'rpc.method': 'isAvailable',
+        'request.size_bytes': expect.any(Number)
+      })
+      expect(rpc.attributes).toMatchObject({
+        'rpc.request.encoding': binaryRequests ? 'binary-json' : 'json',
+        'rpc.response.encoding': 'json',
+        'request.size_bytes': expect.any(Number),
+        'response.size_bytes': expect.any(Number)
+      })
       expect(JSON.stringify(events)).not.toContain('userId')
       expect(JSON.stringify(events)).not.toContain('available')
     }
@@ -149,5 +159,42 @@ describe('StorageClient telemetry', () => {
     expect(events.filter(event => event.name === 'wallet.storage.rpc').slice(1)).toEqual(
       expect.arrayContaining([expect.objectContaining({ spanStatus: 'error' })])
     )
+  })
+
+  it.each([
+    ['browser and Node', StorageClient],
+    ['mobile', StorageMobile]
+  ])('coalesces concurrent %s availability checks', async (_name, Client) => {
+    const client = new Client({} as WalletInterface, 'https://storage.example.test/rpc')
+    let resolveRequest: ((response: Response) => void) | undefined
+    const fetch = jest.fn(
+      async () =>
+        await new Promise<Response>(resolve => {
+          resolveRequest = resolve
+        })
+    )
+    Reflect.set(client, 'authClient', { fetch })
+
+    const first = client.makeAvailable()
+    const second = client.makeAvailable()
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(fetch).toHaveBeenCalledTimes(1)
+    resolveRequest?.(
+      new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: { storageIdentityKey: 'storage-key' }
+        })
+      )
+    )
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { storageIdentityKey: 'storage-key' },
+      { storageIdentityKey: 'storage-key' }
+    ])
+    await client.makeAvailable()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

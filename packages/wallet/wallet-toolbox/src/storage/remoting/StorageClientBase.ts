@@ -66,6 +66,7 @@ import {
   encodeActionBatchPack,
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc } from './BinaryJson'
 
 export interface StorageClientOptions {
   /**
@@ -95,6 +96,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected serverSupportsBinary = false
   protected readonly binaryRequests: boolean
   protected readonly telemetry: Telemetry
+  private availabilityPromise?: Promise<TableSettings>
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings
@@ -148,6 +150,78 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     )
   }
 
+  protected rpcEncodingTelemetryAttributes(encoding: string): Readonly<Record<string, unknown>> {
+    return { 'rpc.encoding': encoding }
+  }
+
+  protected rpcRequestTelemetryAttributes(
+    method: string,
+    encoding: string,
+    sizeBytes: number
+  ): Readonly<Record<string, unknown>> {
+    return {
+      'http.request.method': 'POST',
+      'rpc.method': method,
+      'rpc.encoding': encoding,
+      'request.size_bytes': sizeBytes
+    }
+  }
+
+  protected rpcResponseTelemetryAttributes(
+    status: number,
+    encoding: string,
+    sizeBytes?: number
+  ): Readonly<Record<string, unknown>> {
+    return {
+      'http.response.status_code': status,
+      'rpc.encoding': encoding,
+      ...(sizeBytes == null ? {} : { 'response.size_bytes': sizeBytes })
+    }
+  }
+
+  protected rpcSummaryTelemetryAttributes(
+    status: number,
+    requestEncoding: string,
+    responseEncoding: string,
+    requestSizeBytes: number,
+    responseSizeBytes: number
+  ): Readonly<Record<string, unknown>> {
+    return {
+      'http.response.status_code': status,
+      'rpc.encoding': responseEncoding,
+      'rpc.request.encoding': requestEncoding,
+      'rpc.response.encoding': responseEncoding,
+      'request.size_bytes': requestSizeBytes,
+      'response.size_bytes': responseSizeBytes
+    }
+  }
+
+  protected async readRpcResponse(
+    response: Response,
+    rpcSpan?: TelemetrySpan
+  ): Promise<{ json: any; responseEncoding: string; responseText: string }> {
+    if (!response.ok) {
+      throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+    }
+
+    const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+    if (responseUsesBinary) this.serverSupportsBinary = true
+    const responseEncoding = responseUsesBinary ? 'binary-json' : 'json'
+    const responseText = await this.traceRpcStep(
+      'wallet.storage.response.read',
+      rpcSpan,
+      async () => await response.text(),
+      this.rpcResponseTelemetryAttributes(response.status, responseEncoding)
+    )
+    const json = await this.traceRpcStep(
+      'wallet.storage.response.parse',
+      rpcSpan,
+      () => parseJsonRpc(responseText, responseUsesBinary),
+      this.rpcResponseTelemetryAttributes(response.status, responseEncoding, responseText.length)
+    )
+    return { json, responseEncoding, responseText }
+  }
+
   /**
    * The `StorageClient` implements the `WalletStorageProvider` interface.
    * It does not implement the lower level `StorageProvider` interface.
@@ -191,8 +265,15 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns remote storage `TableSettings`
    */
   async makeAvailable(): Promise<TableSettings> {
-    this.settings ??= await this.rpcCall<TableSettings>('makeAvailable', [])
-    return this.settings
+    if (this.settings != null) return this.settings
+
+    this.availabilityPromise ??= this.rpcCall<TableSettings>('makeAvailable', [])
+    try {
+      this.settings = await this.availabilityPromise
+      return this.settings
+    } finally {
+      this.availabilityPromise = undefined
+    }
   }
 
   /// ///////////////////////////////////////////////////////////////////////////

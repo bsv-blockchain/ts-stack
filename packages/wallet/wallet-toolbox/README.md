@@ -238,6 +238,26 @@ verification, and serialization spans and retains gates of 100 ms p50 / 150 ms
 p95 for the normal cohort and 500 ms p95 for the 153-input cohort. These are
 regression gates, not universal hardware guarantees.
 
+Remote client RPC and HTTP spans carry the method, phase-specific encoding, and
+bounded serialized byte counts so operators can compare like-for-like action
+classes without inspecting wallet payloads. Concurrent `makeAvailable()` calls
+on one client share the same authenticated request. Applications connected to
+a uniformly upgraded storage endpoint can opt into compact request payloads;
+the first response advertises support and later requests use binary JSON:
+
+```typescript
+const client = new StorageClient(wallet, endpointUrl, {
+  binaryRequests: true,
+  telemetry
+})
+await client.makeAvailable()
+await storageManager.addWalletStorageProvider(client)
+```
+
+Keep the option disabled while an endpoint can route to legacy server
+instances. Response negotiation remains automatic and the default stays
+legacy-safe for mixed-version rolling deployments.
+
 Trace context remains local to the telemetry carrier and sink. Wallet Toolbox
 does not add telemetry headers to AuthFetch, so BRC-103/104, Auth Express
 Middleware, AuthSocket, JSON-RPC, and mixed-version remote storage behavior are

@@ -1,12 +1,6 @@
 import { WalletInterface } from '@bsv/sdk'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
-import {
-  BINARY_ENCODING,
-  BINARY_ENCODING_HEADER,
-  BINARY_REQUEST_ENCODING_HEADER,
-  parseJsonRpc,
-  stringifyJsonRpc
-} from './BinaryJson'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, stringifyJsonRpc } from './BinaryJson'
 
 /**
  * `StorageClient` (mobile variant) implements the `WalletStorageProvider` interface which allows it to
@@ -45,11 +39,12 @@ export class StorageClient extends StorageClientBase {
       }
 
       const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
+      const requestEncoding = requestUsesBinary ? 'binary-json' : 'json'
       const requestBody = await this.traceRpcStep(
         'wallet.storage.request.serialize',
         rpcSpan,
         () => stringifyJsonRpc(body, requestUsesBinary),
-        { 'rpc.encoding': requestUsesBinary ? 'binary-json' : 'json' }
+        this.rpcEncodingTelemetryAttributes(requestEncoding)
       )
       const response = await this.traceRpcStep(
         'wallet.storage.http',
@@ -64,36 +59,10 @@ export class StorageClient extends StorageClientBase {
             },
             body: requestBody
           }),
-        {
-          'http.request.method': 'POST',
-          'rpc.encoding': requestUsesBinary ? 'binary-json' : 'json'
-        }
+        this.rpcRequestTelemetryAttributes(method, requestEncoding, requestBody.length)
       )
 
-      if (!response.ok) {
-        throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
-      }
-
-      const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
-      if (responseUsesBinary) this.serverSupportsBinary = true
-      const responseText = await this.traceRpcStep(
-        'wallet.storage.response.read',
-        rpcSpan,
-        async () => await response.text(),
-        {
-          'http.response.status_code': response.status,
-          'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json'
-        }
-      )
-      const json = await this.traceRpcStep(
-        'wallet.storage.response.parse',
-        rpcSpan,
-        () => parseJsonRpc(responseText, responseUsesBinary),
-        {
-          'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json',
-          'response.size_bytes': responseText.length
-        }
-      )
+      const { json, responseEncoding, responseText } = await this.readRpcResponse(response, rpcSpan)
       if (json.error) {
         const { code, message, data } = json.error
         const err = new Error(`RPC Error: ${message}`)
@@ -104,10 +73,13 @@ export class StorageClient extends StorageClientBase {
       }
 
       rpcSpan?.end({
-        attributes: {
-          'http.response.status_code': response.status,
-          'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json'
-        }
+        attributes: this.rpcSummaryTelemetryAttributes(
+          response.status,
+          requestEncoding,
+          responseEncoding,
+          requestBody.length,
+          responseText.length
+        )
       })
       return json.result
     })

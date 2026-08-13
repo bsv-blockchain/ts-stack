@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Coalesce concurrent remote `makeAvailable` calls so wallet startup performs
+  one authenticated availability request per client. Remote client spans now
+  identify the RPC method at RPC and HTTP boundaries and report bounded
+  request/response byte sizes plus independent request and
+  response encodings. This makes binary-request adoption and remote
+  `createAction` latency attributable without adding headers or payload data to
+  the authenticated wire.
 - Add a local-first ChainTracks control plane for browser, mobile, and Node
   wallets, including explicit local-primary/remote-only mode, independently
   sourced consistency checks, quorum-backed exceptional fallback, local-clear

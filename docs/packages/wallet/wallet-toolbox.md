@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.8.0'
-last_updated: '2026-08-11'
-last_verified: '2026-08-11'
+version: '2.8.1'
+last_updated: '2026-08-12'
+last_verified: '2026-08-12'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -45,9 +45,10 @@ remote providers without relying on a class name. Browser and application
 bundlers may safely minify the provider constructor while backup selection and
 make-primary flows continue matching the original endpoint URL.
 
-Opt-in remote-storage timing spans retain trace and parent-span correlation in
-the telemetry sink without adding headers to authenticated requests. BRC-103,
-BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
+Remote-storage spans report RPC method, encoding, and bounded serialized byte
+counts without payload data or wire headers. Concurrent availability checks on
+one client share one authenticated request. BRC-103, BRC-104, AuthFetch, and
+the storage RPC wire contract remain unchanged.
 
 UMP account lookup accepts one verified matching token as an existing account.
 When no token verifies, one clean empty overlay response establishes a new

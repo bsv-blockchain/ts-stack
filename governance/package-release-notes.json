@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.7.0",
-      "releaseType": "minor",
-      "summary": "Adds local-first ChainTracks management, a direct composed ChainTracker service seam, proof-of-work enforcement for bulk and live ingestion, typed persistent bulk-header caches, concurrent-miss coalescing, bounded fetch deadlines and bodies, download budgets, and cache/download observability while retaining the pending-transaction reconciliation corrections.",
-      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are now rejected. Applications may opt into BulkFileDataCacheApi for packaged or persistent checkpoints, LocalChainTracker for explicit local-primary, remote-only, consistency, clearing, and recovery controls, and WalletServicesOptions.chainTracker to install the composed verifier directly."
+      "publishedVersion": "2.8.0",
+      "releaseType": "patch",
+      "summary": "Coalesces concurrent remote availability checks and adds method, phase-specific encoding, and serialized-byte attributes to local remote-storage transport spans so createAction latency and binary-request adoption can be measured without payload data or wire headers.",
+      "migration": "No consumer migration is required. Remote APIs, request defaults, authentication, and wire behavior are unchanged; uniformly upgraded deployments may continue to opt into binaryRequests, while mixed-version endpoints retain the legacy-safe default."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.7.0",
-      "releaseType": "minor",
-      "summary": "Carries the browser-safe local-first ChainTracks controller, local proof-of-work enforcement, checkpoint cache contract, download budget, bounded fetch behavior, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing browser exports, defaults, and wire contracts remain compatible; applications opt into the new local persistence and management APIs."
+      "publishedVersion": "2.8.0",
+      "releaseType": "patch",
+      "summary": "Carries coalesced remote availability checks and privacy-bounded method, encoding, and serialized-byte transport telemetry for browser and desktop wallet consumers.",
+      "migration": "No consumer migration is required. Browser exports, defaults, authentication, and wire contracts remain unchanged; binary requests remain an explicit opt-in for uniformly upgraded endpoints."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.7.0",
-      "releaseType": "minor",
-      "summary": "Carries the mobile-safe local-first ChainTracks controller, local proof-of-work enforcement, checkpoint cache contract, download budget, bounded fetch behavior, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing React Native exports, remote-storage behavior, and wire contracts remain compatible; applications provide their platform cache or local-storage adapter to opt in."
+      "publishedVersion": "2.8.0",
+      "releaseType": "patch",
+      "summary": "Carries coalesced remote availability checks and privacy-bounded method, encoding, and serialized-byte transport telemetry for React Native wallet consumers.",
+      "migration": "No consumer migration is required. React Native exports, defaults, authentication, and wire contracts remain unchanged; binary requests remain an explicit opt-in for uniformly upgraded endpoints."
     },
     {
       "name": "create-bsv-app",

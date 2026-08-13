@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.8.0'
-last_updated: '2026-08-11'
-last_verified: '2026-08-11'
+version: '2.8.1'
+last_updated: '2026-08-12'
+last_verified: '2026-08-12'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -31,8 +31,9 @@ are never hidden. New and migrated wallets progressively prefer useful
 5,000-satoshi liquidity units without gathering inputs merely to create them.
 Durable permission tokens retain delayed broadcast so permission approval does
 not inherit network latency.
-Opt-in remote-storage timing spans retain trace and parent-span correlation in
-the telemetry sink without adding headers to authenticated requests.
+Remote-storage spans report RPC method, encoding, and bounded serialized byte
+counts without payload data or wire headers. Concurrent availability checks on
+one client share one authenticated request.
 Mobile authentication accepts one verified matching UMP token as an existing
 account. When no token verifies, one clean empty overlay response establishes a
 new account even if other hosts fail or return malformed records.

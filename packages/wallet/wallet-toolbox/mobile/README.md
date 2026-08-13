@@ -43,7 +43,12 @@ const keyDeriver = new KeyDeriver(new PrivateKey(privateKeyHex, 'hex'))
 
 // Remote storage over HTTP is the default mobile-safe backend.
 const storageManager = new WalletStorageManager(keyDeriver.identityKey)
-await storageManager.addWalletStorageProvider(new StorageClient(keyDeriver, 'https://storage.example.com'))
+await storageManager.addWalletStorageProvider(
+  new StorageClient(keyDeriver, 'https://storage.example.com', {
+    // Enable only when every server instance behind the endpoint supports it.
+    binaryRequests: true
+  })
+)
 await storageManager.makeAvailable()
 
 const services = new Services(chain)
@@ -55,6 +60,12 @@ const { tx } = await wallet.createAction({
   outputs: [{ satoshis: 1000, lockingScript: recipientScript }]
 })
 ```
+
+The availability request negotiates response support before later requests use
+compact binary JSON. Leave `binaryRequests` disabled during mixed-version
+rolling deployments. With telemetry enabled, each remote phase reports the RPC
+method, encoding, and serialized byte count without exporting request or
+response payloads.
 
 ## Use cases
 
