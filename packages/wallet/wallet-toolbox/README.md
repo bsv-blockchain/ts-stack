@@ -207,6 +207,12 @@ pack transport, atomic commit, compatibility behavior, and retained benchmarks.
 
 ### `createAction` performance telemetry
 
+Wallet Storage treats `inputBEEF` as proof data for the inputs declared in the
+action. Before verification and persistence, it retains only those input
+transactions and their recursive proof dependencies. Structurally valid but
+unrelated branches are ignored; malformed BEEF and incomplete or invalid proof
+data for a declared input remain errors.
+
 With the optional SDK telemetry sink enabled, legacy `createAction` reports
 bounded-cardinality spans for input validation, record/output persistence,
 funding candidate selection, fee-aware planning, atomic input claiming, input

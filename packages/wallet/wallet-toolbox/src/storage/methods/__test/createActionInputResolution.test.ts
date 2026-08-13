@@ -99,6 +99,52 @@ describe('legacy createAction input-resolution compatibility', () => {
     expect(spending.txid).toBeDefined()
   })
 
+  test('prunes proof data unrelated to the declared inputs before validation and storage', async () => {
+    const source = makeProvenSourceTransaction()
+    const unrelatedTxid = 'ab'.repeat(32)
+    const beef = new Beef()
+    beef.mergeTransaction(source)
+    beef.mergeTxidOnly(unrelatedTxid)
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    })
+    const verifyKnown = jest.spyOn(ctx.activeStorage, 'verifyKnownValidTransaction')
+    const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
+
+    await ctx.wallet.createAction({
+      inputs: [
+        {
+          outpoint: `${source.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'external source with unrelated proof data'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [
+        {
+          satoshis: 500,
+          lockingScript: '51',
+          outputDescription: 'external source replacement'
+        }
+      ],
+      description: 'ignore unrelated input proof data',
+      options: {
+        noSend: true,
+        noSendChange: [],
+        randomizeOutputs: false
+      }
+    })
+
+    const stored = insertTransaction.mock.calls
+      .map(([transaction]) => transaction)
+      .find(transaction => transaction.description === 'ignore unrelated input proof data')
+    expect(stored?.inputBEEF).toBeDefined()
+    const storedBeef = Beef.fromBinary(stored!.inputBEEF!)
+    expect(storedBeef.findTxid(source.id('hex'))).toBeDefined()
+    expect(storedBeef.findTxid(unrelatedTxid)).toBeUndefined()
+    expect(verifyKnown).not.toHaveBeenCalledWith(unrelatedTxid)
+  })
+
   test('hydrates a trusted txid-only input from storage raw transaction data', async () => {
     const source = makeProvenSourceTransaction()
     const txid = source.id('hex')

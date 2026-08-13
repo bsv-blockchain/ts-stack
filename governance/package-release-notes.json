@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-12",
+  "lastReviewed": "2026-08-13",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.8.0",
-      "releaseType": "minor",
-      "summary": "Adds local-first ChainTracks management, proof-of-work enforcement, stale-while-revalidate height refresh, bounded singleflight loads, an asynchronous validation seam with a bounded Node worker pool, content-addressed atomic caches with quarantine and legacy promotion, retry-aware durable download budgets, immutable read snapshots, negative load backoff, and cache, worker, budget, and availability observability while retaining the pending-transaction reconciliation corrections.",
-      "migration": "No API migration is required. Existing factories, positional arguments, remote clients, and valid-header behavior remain compatible; headers that do not satisfy their declared proof-of-work target are rejected. Node services with large bulk files should inject NodeBulkFileDataValidator, use BulkFileDataCacheFs for content-addressed persistence, and use DurableFileBulkFileDownloadBudget on durable storage; browser and mobile consumers retain inline asynchronous validation."
+      "publishedVersion": "2.9.0",
+      "releaseType": "patch",
+      "summary": "Prunes createAction inputBEEF to the recursive proof dependencies of the declared inputs before verification and persistence, so unrelated proof branches do not add validation work or reject an otherwise valid action.",
+      "migration": "No consumer migration is required; declared inputs and their complete dependency proofs are validated as before, while structurally valid unrelated BEEF branches are ignored."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.8.0",
-      "releaseType": "minor",
-      "summary": "Carries the browser-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing browser exports, defaults, and wire contracts remain compatible; inline validation remains portable and applications opt into persistence and management adapters."
+      "publishedVersion": "2.9.0",
+      "releaseType": "patch",
+      "summary": "Carries the createAction inputBEEF dependency-pruning correction in the browser-safe Wallet Toolbox distribution.",
+      "migration": "No consumer migration is required; public browser APIs and wire contracts are unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.8.0",
-      "releaseType": "minor",
-      "summary": "Carries the mobile-safe local-first ChainTracks controller, proof-of-work enforcement, stale-while-revalidate singleflight refresh, asynchronous inline validation, checkpoint cache and download-budget contracts, bounded fetch behavior, negative load backoff, and lockstep Wallet Toolbox corrections.",
-      "migration": "No consumer migration is required. Existing React Native exports, remote-storage behavior, and wire contracts remain compatible; inline validation remains portable and applications provide their platform cache or local-storage adapter to opt in."
+      "publishedVersion": "2.9.0",
+      "releaseType": "patch",
+      "summary": "Carries the createAction inputBEEF dependency-pruning correction in the mobile-safe Wallet Toolbox distribution.",
+      "migration": "No consumer migration is required; public mobile APIs, remote-storage behavior, and wire contracts are unchanged."
     },
     {
       "name": "create-bsv-app",
