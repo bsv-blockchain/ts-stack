@@ -1,4 +1,4 @@
-import { Beef, MerklePath, Script, Transaction } from '@bsv/sdk'
+import { Beef, MerklePath, Script, Transaction, UnlockingScript } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../../test/utils/TestUtilsWalletStorage'
 import { setDisableDoubleSpendCheckForTest } from '../createAction'
 
@@ -101,10 +101,11 @@ describe('legacy createAction input-resolution compatibility', () => {
 
   test('prunes proof data unrelated to the declared inputs before validation and storage', async () => {
     const source = makeProvenSourceTransaction()
-    const unrelatedTxid = 'ab'.repeat(32)
+    const unrelated = makeUnprovenSourceTransaction(2000)
+    const unrelatedTxid = unrelated.id('hex')
     const beef = new Beef()
     beef.mergeTransaction(source)
-    beef.mergeTxidOnly(unrelatedTxid)
+    beef.mergeTransaction(unrelated)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
       isValidRootForHeight: async () => true
     })
@@ -145,11 +146,61 @@ describe('legacy createAction input-resolution compatibility', () => {
     expect(verifyKnown).not.toHaveBeenCalledWith(unrelatedTxid)
   })
 
+  test('retains the complete multi-level ancestry of a declared input', async () => {
+    const root = makeProvenSourceTransaction()
+    const parent = makeSpendingTransaction(root, 900)
+    const required = makeSpendingTransaction(parent, 800)
+    const beef = new Beef()
+    beef.mergeTransaction(root)
+    beef.mergeTransaction(parent)
+    beef.mergeTransaction(required)
+    beef.mergeTransaction(makeUnprovenSourceTransaction(2000))
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    })
+    const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
+
+    await ctx.wallet.createAction({
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'external source with deep ancestry'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [
+        {
+          satoshis: 500,
+          lockingScript: '51',
+          outputDescription: 'deep source replacement'
+        }
+      ],
+      description: 'retain deep input ancestry',
+      options: {
+        noSend: true,
+        noSendChange: [],
+        randomizeOutputs: false
+      }
+    })
+
+    const stored = insertTransaction.mock.calls
+      .map(([transaction]) => transaction)
+      .find(transaction => transaction.description === 'retain deep input ancestry')
+    const storedBeef = Beef.fromBinary(stored!.inputBEEF!)
+    expect(storedBeef.findTxid(root.id('hex'))).toBeDefined()
+    expect(storedBeef.findTxid(parent.id('hex'))).toBeDefined()
+    expect(storedBeef.findTxid(required.id('hex'))).toBeDefined()
+    expect(storedBeef.txs).toHaveLength(3)
+  })
+
   test('hydrates a trusted txid-only input from storage raw transaction data', async () => {
     const source = makeProvenSourceTransaction()
     const txid = source.id('hex')
+    const unrelated = makeUnprovenSourceTransaction(2000)
     const beef = new Beef()
     beef.mergeTxidOnly(txid)
+    beef.mergeTransaction(unrelated)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
       isValidRootForHeight: async () => true
     })
@@ -158,6 +209,7 @@ describe('legacy createAction input-resolution compatibility', () => {
       proven: undefined,
       rawTx: source.toBinary()
     })
+    const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
 
     const spending = await ctx.wallet.createAction({
       inputs: [
@@ -186,6 +238,13 @@ describe('legacy createAction input-resolution compatibility', () => {
 
     expect(spending.tx).toBeDefined()
     expect(ctx.activeStorage.getProvenOrRawTx).toHaveBeenCalledWith(txid)
+    expect(ctx.activeStorage.verifyKnownValidTransaction).not.toHaveBeenCalledWith(unrelated.id('hex'))
+    const stored = insertTransaction.mock.calls
+      .map(([transaction]) => transaction)
+      .find(transaction => transaction.description === 'spend a trusted txid-only source')
+    const storedBeef = Beef.fromBinary(stored!.inputBEEF!)
+    expect(storedBeef.findTxid(txid)).toBeDefined()
+    expect(storedBeef.findTxid(unrelated.id('hex'))).toBeUndefined()
   })
 
   test('continues to reject wallet-managed change as an explicit input', async () => {
@@ -425,4 +484,27 @@ function makeProvenSourceTransaction(): Transaction {
     ]
   ])
   return source
+}
+
+function makeUnprovenSourceTransaction(satoshis: number): Transaction {
+  const source = new Transaction()
+  source.addOutput({
+    satoshis,
+    lockingScript: Script.fromHex('7551')
+  })
+  return source
+}
+
+function makeSpendingTransaction(source: Transaction, satoshis: number): Transaction {
+  const transaction = new Transaction()
+  transaction.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScript: new UnlockingScript()
+  })
+  transaction.addOutput({
+    satoshis,
+    lockingScript: Script.fromHex('7551')
+  })
+  return transaction
 }

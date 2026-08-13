@@ -1,4 +1,4 @@
-import { Beef, Script, Transaction, UnlockingScript, Validation, type WalletInterface } from '@bsv/sdk'
+import { BEEF_V1, Beef, Script, Transaction, UnlockingScript, Validation, type WalletInterface } from '@bsv/sdk'
 import { StorageClientBase } from '../StorageClientBase'
 
 class CapturingStorageClient extends StorageClientBase {
@@ -69,6 +69,57 @@ describe('StorageClientBase createAction inputBEEF pruning', () => {
     const sentArgs = client.calls[0].params[1] as Validation.ValidCreateActionArgs
     expect(sentArgs.inputBEEF).toBeUndefined()
     expect(args.inputBEEF).toBeDefined()
+  })
+
+  test('forwards the original bytes when every BEEF entry is required', async () => {
+    const required = makeTransaction(1000)
+    const beef = new Beef()
+    beef.mergeTransaction(required)
+    const args = Validation.validateCreateActionArgs({
+      description: 'forward already minimal proof data',
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'declared minimal input'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'replacement output' }]
+    })
+    const originalBytes = args.inputBEEF
+    const client = new CapturingStorageClient({} as WalletInterface, 'https://storage.example.test')
+
+    await client.createAction(auth, args)
+
+    const sentArgs = client.calls[0].params[1] as Validation.ValidCreateActionArgs
+    expect(sentArgs).toBe(args)
+    expect(sentArgs.inputBEEF).toBe(originalBytes)
+  })
+
+  test('preserves BEEF V1 when client-side pruning is required', async () => {
+    const required = makeTransaction(1000)
+    const beef = new Beef(BEEF_V1)
+    beef.mergeTransaction(required)
+    beef.mergeTransaction(makeTransaction(2000))
+    const args = Validation.validateCreateActionArgs({
+      description: 'prune legacy proof data',
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'declared legacy input'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'replacement output' }]
+    })
+    const client = new CapturingStorageClient({} as WalletInterface, 'https://storage.example.test')
+
+    await client.createAction(auth, args)
+
+    const sentArgs = client.calls[0].params[1] as Validation.ValidCreateActionArgs
+    expect(Beef.fromBinary(sentArgs.inputBEEF!).version).toBe(BEEF_V1)
   })
 
   test('forwards malformed inputBEEF so the server preserves its validation error contract', async () => {

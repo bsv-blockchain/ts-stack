@@ -67,7 +67,7 @@ import {
   encodeActionBatchPack,
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
-import { beefForTxids } from '../../utility/beefForTxids'
+import { pruneBeefForTxids } from '../../utility/beefForTxids'
 
 export interface StorageClientOptions {
   /**
@@ -265,21 +265,32 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (args.inputBEEF != null) {
-      try {
-        const source = Beef.fromBinary(args.inputBEEF)
+      if (args.inputs.length === 0) {
         args = {
           ...args,
-          inputBEEF:
-            args.inputs.length === 0
-              ? undefined
-              : beefForTxids(
-                  source,
-                  args.inputs.map(input => input.outpoint.txid)
-                ).toBinary()
+          inputBEEF: undefined
         }
-      } catch {
-        // Forward malformed proof data so the server preserves its established
-        // validation error contract.
+      } else {
+        let source: Beef | undefined
+        try {
+          source = Beef.fromBinary(args.inputBEEF)
+        } catch {
+          // Forward malformed proof data so the server preserves its established
+          // validation error contract.
+          source = undefined
+        }
+        if (source != null) {
+          const pruned = pruneBeefForTxids(
+            source,
+            args.inputs.map(input => input.outpoint.txid)
+          )
+          if (pruned != null) {
+            args = {
+              ...args,
+              inputBEEF: pruned.toBinary()
+            }
+          }
+        }
       }
     }
     return await this.rpcCall<StorageCreateActionResult>('createAction', [auth, args])

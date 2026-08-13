@@ -167,7 +167,7 @@ describe('update tests', () => {
 
   test('2_update ProvenTxReq', async () => {
     const primaryKey = 'provenTxReqId'
-    for (const { storage } of setups) {
+    for (const [setupIndex, { storage }] of setups.entries()) {
       const records = await storage.findProvenTxReqs({ partial: {} })
       for (const record of records) {
         try {
@@ -176,7 +176,7 @@ describe('update tests', () => {
             provenTxId: 1,
             batch: `batch-001`,
             status: 'completed',
-            txid: `mockTxid-${Date.now()}`,
+            txid: `mockTxid-${setupIndex}-${record[primaryKey]}`,
             created_at: new Date('2024-12-30T23:00:00Z'),
             updated_at: new Date('2024-12-30T23:05:00Z'),
             attempts: 3,
