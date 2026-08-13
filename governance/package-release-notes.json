@@ -196,21 +196,21 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.9.0",
       "releaseType": "patch",
-      "summary": "Prunes createAction inputBEEF to the recursive proof dependencies of the declared inputs before verification and persistence, so unrelated proof branches do not add validation work or reject an otherwise valid action.",
+      "summary": "Prunes createAction inputBEEF to the recursive proof dependencies of the declared inputs before remote request serialization, then repeats the pruning before server verification and persistence, so unrelated proof branches do not add transfer or validation work or reject an otherwise valid action.",
       "migration": "No consumer migration is required; declared inputs and their complete dependency proofs are validated as before, while structurally valid unrelated BEEF branches are ignored."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.9.0",
       "releaseType": "patch",
-      "summary": "Carries the createAction inputBEEF dependency-pruning correction in the browser-safe Wallet Toolbox distribution.",
+      "summary": "Prunes createAction inputBEEF to declared-input dependencies before remote request serialization and carries the server-side defense in the browser-safe Wallet Toolbox distribution.",
       "migration": "No consumer migration is required; public browser APIs and wire contracts are unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.9.0",
       "releaseType": "patch",
-      "summary": "Carries the createAction inputBEEF dependency-pruning correction in the mobile-safe Wallet Toolbox distribution.",
+      "summary": "Prunes createAction inputBEEF to declared-input dependencies before remote request serialization and carries the server-side defense in the mobile-safe Wallet Toolbox distribution.",
       "migration": "No consumer migration is required; public mobile APIs, remote-storage behavior, and wire contracts are unchanged."
     },
     {

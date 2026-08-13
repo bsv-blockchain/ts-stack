@@ -477,7 +477,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Prunes createAction inputBEEF to the recursive proof dependencies of the declared inputs before verification and persistence, so unrelated proof branches do not add validation work or reject an otherwise valid action.
+- Release note: Prunes createAction inputBEEF to the recursive proof dependencies of the declared inputs before remote request serialization, then repeats the pruning before server verification and persistence, so unrelated proof branches do not add transfer or validation work or reject an otherwise valid action.
 - Migration: No consumer migration is required; declared inputs and their complete dependency proofs are validated as before, while structurally valid unrelated BEEF branches are ignored.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
@@ -491,7 +491,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Carries the createAction inputBEEF dependency-pruning correction in the browser-safe Wallet Toolbox distribution.
+- Release note: Prunes createAction inputBEEF to declared-input dependencies before remote request serialization and carries the server-side defense in the browser-safe Wallet Toolbox distribution.
 - Migration: No consumer migration is required; public browser APIs and wire contracts are unchanged.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
@@ -503,7 +503,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Carries the createAction inputBEEF dependency-pruning correction in the mobile-safe Wallet Toolbox distribution.
+- Release note: Prunes createAction inputBEEF to declared-input dependencies before remote request serialization and carries the server-side defense in the mobile-safe Wallet Toolbox distribution.
 - Migration: No consumer migration is required; public mobile APIs, remote-storage behavior, and wire contracts are unchanged.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |

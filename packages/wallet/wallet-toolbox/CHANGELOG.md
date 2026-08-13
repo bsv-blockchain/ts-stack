@@ -7,9 +7,11 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox (unreleased)
 
 - Prune `inputBEEF` to the dependency closure of explicitly declared action
-  inputs before verification and persistence. Unrelated proof branches no
-  longer add validation latency or cause an otherwise valid action to fail;
-  proof data required by a declared input is still fully validated.
+  inputs before remote request serialization and repeat the pruning on the
+  server before verification and persistence. Unrelated proof branches no
+  longer consume transfer or validation work or cause an otherwise valid
+  action to fail; proof data required by a declared input is still fully
+  validated.
 
 - Add a local-first ChainTracks control plane for browser, mobile, and Node
   wallets, including explicit local-primary/remote-only mode, independently
