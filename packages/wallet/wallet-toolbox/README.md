@@ -63,11 +63,16 @@ await manager.completePhoneNumberChange(code)
 await persist(manager.saveSnapshot())
 ```
 
-The completion call publishes a UMP update that consumes the current token
-before it commits the WAB association. A transient final WAB failure can be
-retried on the same manager without publishing a second UMP update. Persist the
-snapshot immediately after success. Deploy the compatible overlay topic and
-WAB schema/routes before enabling this UI.
+The completion call first stages the verified phone association and new key in
+WAB while retaining the current presentation key, then publishes the UMP update
+that consumes the current token, and finally promotes the staged WAB key. A
+transient publish or finalization failure can be retried without duplicating
+completed work. If the app restarts between phases, a later verified login
+receives both current and pending keys and selects the one backed by the
+verified UMP token before idempotently finalizing. Repeating phone verification
+also resumes an unpublished staged change without committing another key.
+Persist the snapshot immediately after success. Deploy the compatible overlay
+topic and WAB schema/routes before enabling this UI.
 
 ### ChainTracks sources and networks
 

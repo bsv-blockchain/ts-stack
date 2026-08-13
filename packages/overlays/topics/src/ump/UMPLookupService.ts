@@ -90,7 +90,10 @@ class UMPLookupService implements LookupService {
       throw new Error('Query parameters must include presentationHash, recoveryHash, or outpoint!')
     }
 
-    const docs = await this.records.find(filter).sort({ _id: 1 }).limit(100).toArray()
+    // Legacy ambiguous hashes can have more rows than the bounded response.
+    // Prefer the most recently indexed candidates so the live lineage tip is
+    // not permanently hidden behind the oldest 100 records.
+    const docs = await this.records.find(filter).sort({ _id: -1 }).limit(100).toArray()
     return docs.map(doc => ({ txid: doc.txid, outputIndex: doc.outputIndex }))
   }
 

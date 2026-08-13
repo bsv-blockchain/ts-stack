@@ -6,10 +6,14 @@ function subject() {
   const commitResponses: Array<{ success: boolean; changeId?: number; message?: string }> = [
     { success: true, changeId: 41 }
   ]
+  const finalizeResponses: Array<{ success: boolean; changeId?: number; message?: string }> = [
+    { success: true, changeId: 41 }
+  ]
   const request = jest.fn(async (path: string) => {
     if (path.endsWith('/start')) return { success: true }
     if (path.endsWith('/complete')) return { success: true, changeToken: 'a'.repeat(64) }
-    return commitResponses.shift() ?? { success: true, changeId: 41 }
+    if (path.endsWith('/commit')) return commitResponses.shift() ?? { success: true, changeId: 41 }
+    return finalizeResponses.shift() ?? { success: true, changeId: 41 }
   })
   const wabClient = {
     transport: { request }
@@ -21,7 +25,7 @@ function subject() {
     getFactor: jest.fn(async () => currentPresentationKey),
     changePresentationKey: jest.fn(async () => undefined)
   })
-  return { manager, request, commitResponses, currentPresentationKey }
+  return { manager, request, commitResponses, finalizeResponses, currentPresentationKey }
 }
 
 describe('verified phone-number changes', () => {
@@ -55,11 +59,64 @@ describe('verified phone-number changes', () => {
         newPresentationKey: Utils.toHex((manager as any).changePresentationKey.mock.calls[0][0])
       }
     })
+    expect(request).toHaveBeenNthCalledWith(4, '/auth/phone-change/finalize', {
+      operation: 'phone-change',
+      body: {
+        changeId: 41,
+        presentationKey: Utils.toHex(currentPresentationKey),
+        newPresentationKey: Utils.toHex((manager as any).changePresentationKey.mock.calls[0][0])
+      }
+    })
+    expect(request.mock.invocationCallOrder[2]).toBeLessThan(
+      (manager as any).changePresentationKey.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('retries finalization without publishing a second UMP update', async () => {
+    const { manager, request, finalizeResponses } = subject()
+    finalizeResponses.splice(0, 1, { success: false, message: 'finalize unavailable' }, { success: true, changeId: 41 })
+
+    await manager.startPhoneNumberChange('+12065550103')
+    await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('finalize unavailable')
+    await expect(manager.completePhoneNumberChange('123456')).resolves.toEqual({ changeId: 41 })
+
+    expect((manager as any).changePresentationKey).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.filter(([path]) => path.endsWith('/commit'))).toHaveLength(1)
+    expect(request.mock.calls.filter(([path]) => path.endsWith('/finalize'))).toHaveLength(2)
+  })
+
+  it('resumes a staged change after the app restarts', async () => {
+    const { manager, request, currentPresentationKey } = subject()
+    const pendingPresentationKey = 'b'.repeat(64)
+    request.mockImplementationOnce(async () => ({ success: true }))
+    request.mockImplementationOnce(async () => ({
+      success: true,
+      pendingPresentationKey,
+      pendingPhoneChangeId: 73
+    }))
+    request.mockImplementationOnce(async () => ({ success: true, changeId: 73 }))
+
+    await manager.startPhoneNumberChange('+12065550104')
+    await expect(manager.completePhoneNumberChange('123456')).resolves.toEqual({ changeId: 73 })
+
+    expect(request.mock.calls.some(([path]) => path.endsWith('/commit'))).toBe(false)
+    expect((manager as any).changePresentationKey).toHaveBeenCalledWith(
+      Utils.toArray(pendingPresentationKey, 'hex')
+    )
+    expect(request).toHaveBeenLastCalledWith('/auth/phone-change/finalize', {
+      operation: 'phone-change',
+      body: {
+        changeId: 73,
+        presentationKey: Utils.toHex(currentPresentationKey),
+        newPresentationKey: pendingPresentationKey
+      }
+    })
   })
 
   it('retries the WAB commit without publishing a second UMP update', async () => {
-    const { manager, request, commitResponses } = subject()
+    const { manager, request, commitResponses, finalizeResponses } = subject()
     commitResponses.splice(0, 1, { success: false, message: 'temporary failure' }, { success: true, changeId: 42 })
+    finalizeResponses.splice(0, 1, { success: true, changeId: 42 })
 
     await manager.startPhoneNumberChange('+12065550101')
     await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('temporary failure')

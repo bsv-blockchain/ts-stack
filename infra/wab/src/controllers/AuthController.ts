@@ -21,6 +21,7 @@ import {
     isRecord
 } from "../security/requestValidation";
 import { log } from "../logger";
+import { PhoneChangeService } from "../services/PhoneChangeService";
 
 export class AuthController {
     /**
@@ -98,6 +99,9 @@ export class AuthController {
                 user = await UserService.createUser(presentationKey)
                 await UserService.linkAuthMethod(user.id, methodType, config);
             }
+            const pendingPhoneChange = existingUser
+                ? await PhoneChangeService.findPending(user.id, methodType, config)
+                : undefined;
 
             // Return the presentationKey from DB (ensures the user gets the stored key if user is existing)
             res.json({
@@ -106,6 +110,10 @@ export class AuthController {
                 accountStatus: existingUser ? "existing-user" : "new-user",
                 existingUser,
                 ...(user.umpTokenOutpoint ? { umpTokenOutpoint: user.umpTokenOutpoint } : {}),
+                ...(pendingPhoneChange == null ? {} : {
+                    pendingPresentationKey: pendingPhoneChange.presentationKey,
+                    pendingPhoneChangeId: pendingPhoneChange.changeId
+                }),
                 message: result.message
             });
         } catch (error: any) {

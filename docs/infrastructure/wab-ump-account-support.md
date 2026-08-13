@@ -24,7 +24,8 @@ presentation keys, OTPs, admin tokens, or full phone numbers into broad logs.
 - The WAB migration containing `umpTokenOutpoint`, `phone_change_sessions`, and
   `phone_change_history` has completed.
 - `WAB_ADMIN_TOKEN` is at least 32 random characters and comes from the
-  deployment secret manager. If it is absent, `/admin/*` intentionally returns 404.
+  deployment secret manager. If it is absent, `/admin/*` intentionally returns
+  404; if it is non-empty but shorter, WAB refuses to start.
 - The support workstation reaches WAB only over the trusted HTTPS endpoint.
 
 ## Pin an ambiguous UMP account
@@ -74,18 +75,25 @@ ignores it and keeps reporting ambiguity.
 ## Phone-number changes and takeovers
 
 The wallet must already be authenticated. It sends the current presentation
-key to WAB, proves possession of the requested number through Twilio OTP, then
-publishes a new UMP token that spends the current token. The final WAB commit:
+key to WAB and proves possession of the requested number through Twilio OTP.
+WAB commit then stages the association and replacement key while retaining the
+current key. The wallet publishes a new UMP token that spends the current token
+and calls WAB finalize. The staged commit:
 
 - accepts the existing phone number as a deliberate key/hash refresh;
 - permits a verified number to move from another live WAB user;
-- rotates the target WAB presentation key and clears its previous UMP pin;
+- records the pending target presentation key without removing the current key;
 - detaches the target's prior phone association when the number differs; and
 - records both prior associations and the returned `changeId`.
 
-The authorization token is hashed at rest, expires after ten minutes, and is
-single-use. Retrying a lost final response is idempotent when the same new
-presentation key is supplied.
+Finalize promotes the pending key and clears the previous UMP pin. The
+authorization token is hashed at rest, expires after ten minutes, and is
+single-use. Retrying commit, UMP publication, or finalize is idempotent for the
+same change. If the app restarts between phases, verified authentication
+returns both current and pending keys. The wallet uses whichever key is backed
+by the verified UMP token and finalizes when the pending key is live. If the
+current key is still live, repeating OTP verification returns the already
+staged key and change ID so the wallet can resume without a second commit.
 
 ## Restore a disputed phone transfer
 

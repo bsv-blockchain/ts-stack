@@ -52,7 +52,8 @@ account to one verified outpoint and restore recorded phone associations.
 | POST   | /auth/complete              | Complete authentication (methodType, presentationKey, payload) |
 | POST   | /auth/phone-change/start    | Verify current account and send OTP to requested phone         |
 | POST   | /auth/phone-change/complete | Verify OTP and issue a ten-minute change token                 |
-| POST   | /auth/phone-change/commit   | Commit new presentation key and phone association              |
+| POST   | /auth/phone-change/commit   | Stage the verified phone association and replacement key       |
+| POST   | /auth/phone-change/finalize | Promote the key after the wallet publishes its UMP rotation     |
 | POST   | /admin/ump-pin              | Set/clear a support UMP outpoint pin (admin bearer required)   |
 | POST   | /admin/phone-change/restore | Restore recorded phone associations (admin bearer required)    |
 | POST   | /user/linkedMethods         | List user's linked auth methods (presentationKey)              |
@@ -196,7 +197,7 @@ configuration endpoint. Monitor:
 - WalletAuthenticationManager uses WAB for presentation key authentication
 - UMP (User Management Protocol) token system coordinates with presentation keys
 - A WAB UMP pin is an ambiguity-only fallback and must match a wallet-verified lookup candidate
-- Phone changes verify possession by OTP and clear a stale pin while recording reversible association history
+- Phone changes verify possession by OTP, stage current/pending keys across the UMP publish boundary, and clear a stale pin at finalization while recording reversible association history
 - See how-it-works.md for detailed 2-of-3 cryptographic recovery explanation
 - See [UMP account support](wab-ump-account-support.md) for the operator workflow
 
@@ -209,7 +210,7 @@ configuration endpoint. Monitor:
 - Dev console is ephemeral: its OTP store resets on restart and is intentionally unavailable in production/staging
 - Public CORS is intentional for wallet apps on unknown domains; use `WAB_CORS_MODE=allowlist` only when the deployment has a closed caller set
 - Migration timing: Must run before server startup; Knex handles schema versioning automatically
-- Support token: `/admin/*` returns 404 until a strong `WAB_ADMIN_TOKEN` is configured
+- Support token: `/admin/*` returns 404 when `WAB_ADMIN_TOKEN` is absent; a non-empty token shorter than 32 characters fails startup
 - Phone takeover: proving possession of a number can transfer its WAB association; support must preserve and audit the returned `changeId` so a fraudulent transfer can be restored
 
 ## Source

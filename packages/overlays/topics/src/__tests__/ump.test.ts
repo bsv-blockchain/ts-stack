@@ -13,6 +13,7 @@
 
 import { LockingScript, PrivateKey, PublicKey, Transaction, Utils } from '@bsv/sdk'
 import UMPTopicManager from '../ump/UMPTopicManager.js'
+import { InMemoryUMPIdentityStore } from '../ump/UMPIdentityStore.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,10 +286,13 @@ describe('UMPTopicManager', () => {
   })
 
   it('transfers reserved hashes when the owning UMP outpoint is consumed', async () => {
+    const identityStore = new InMemoryUMPIdentityStore()
+    manager = new UMPTopicManager(identityStore)
     const key = PrivateKey.fromRandom()
     const fields = makeFields(11)
     const first = buildTxWithInput([buildPushDropScript(key.toPublicKey(), fields)])
     await manager.identifyAdmissibleOutputs(first.toBEEF(), [])
+    await identityStore.confirm(`${first.id('hex')}.0`)
 
     const update = new Transaction()
     update.addInput({

@@ -1,6 +1,11 @@
-import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
+import { AdmittanceInstructions, TopicAdmittanceContext, TopicManager } from '@bsv/overlay'
 import { Transaction, PushDrop, Utils } from '@bsv/sdk'
-import { InMemoryUMPIdentityStore, UMPIdentityReservationStore } from './UMPIdentityStore.js'
+import type { Db } from 'mongodb'
+import {
+  InMemoryUMPIdentityStore,
+  MongoUMPIdentityStore,
+  UMPIdentityReservationStore
+} from './UMPIdentityStore.js'
 
 function getV3VersionIndex(protocolFields: number[][]): number | undefined {
   const hasV3AtIndex11 = protocolFields.length >= 12 && protocolFields[11]?.length === 1
@@ -52,13 +57,23 @@ function validateUMPFields(protocolFields: number[][]): void {
 }
 
 export default class UMPTopicManager implements TopicManager {
-  constructor(
-    private readonly identityStore: UMPIdentityReservationStore = new InMemoryUMPIdentityStore()
-  ) {}
+  private readonly identityStore: UMPIdentityReservationStore
+
+  constructor(identityStoreOrDb?: UMPIdentityReservationStore | Db) {
+    this.identityStore =
+      identityStoreOrDb == null
+        ? new InMemoryUMPIdentityStore()
+        : 'reserve' in identityStoreOrDb
+          ? identityStoreOrDb
+          : new MongoUMPIdentityStore(identityStoreOrDb)
+  }
 
   async identifyAdmissibleOutputs(
     beef: number[],
-    previousCoins: number[]
+    previousCoins: number[],
+    _offChainValues?: number[],
+    _mode?: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv',
+    context?: TopicAdmittanceContext
   ): Promise<AdmittanceInstructions> {
     try {
       const outputs: number[] = []
@@ -76,14 +91,16 @@ export default class UMPTopicManager implements TopicManager {
           const result = PushDrop.decode(output.lockingScript)
           const protocolFields = result.fields
           validateUMPFields(protocolFields)
-          await this.identityStore.reserve(
-            {
-              outpoint: `${txid}.${i}`,
-              presentationHash: Utils.toHex(protocolFields[6]),
-              recoveryHash: Utils.toHex(protocolFields[7])
-            },
-            consumedOutpoints
-          )
+          if (context?.dryRun !== true) {
+            await this.identityStore.reserve(
+              {
+                outpoint: `${txid}.${i}`,
+                presentationHash: Utils.toHex(protocolFields[6]),
+                recoveryHash: Utils.toHex(protocolFields[7])
+              },
+              consumedOutpoints
+            )
+          }
           outputs.push(i)
         } catch (error) {
           console.warn(`Output ${i} failed UMP validation:`, error)
@@ -99,6 +116,15 @@ export default class UMPTopicManager implements TopicManager {
       console.warn(`[UMPTopicManager] identifyAdmissibleOutputs failed: ${error}`)
       return { coinsToRetain: [], outputsToAdmit: [] }
     }
+  }
+
+  async abortAdmissibleOutputs(beef: number[], outputsToAbort: number[]): Promise<void> {
+    const txid = Transaction.fromBEEF(beef).id('hex')
+    await Promise.all(
+      outputsToAbort.map(async outputIndex => {
+        await this.identityStore.abort(`${txid}.${outputIndex}`)
+      })
+    )
   }
 
   async getDocumentation(): Promise<string> {

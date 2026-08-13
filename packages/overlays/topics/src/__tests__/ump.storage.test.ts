@@ -45,6 +45,7 @@ describe('InMemoryUMPIdentityStore', () => {
     const first = claim('a.0')
     await store.reserve(first, [])
     await store.reserve(first, [])
+    await store.confirm('a.0')
 
     await expect(store.reserve(claim('b.0', '33'.repeat(32)), [])).rejects.toMatchObject({
       kind: 'recovery'
@@ -60,6 +61,7 @@ describe('InMemoryUMPIdentityStore', () => {
     // If a consumed first hash is transferred before the second hash
     // conflicts, rollback restores the previous owner rather than deleting it.
     await store.reserve(claim('owner-r.0', '55'.repeat(32), '66'.repeat(32)), [])
+    await store.confirm('owner-r.0')
     await expect(
       store.reserve(claim('failed-transfer.0', '11'.repeat(32), '66'.repeat(32)), ['a.0'])
     ).rejects.toMatchObject({ kind: 'recovery' })
@@ -68,7 +70,12 @@ describe('InMemoryUMPIdentityStore', () => {
     })
 
     await expect(store.reserve(claim('e.0'), ['a.0'])).resolves.toBeUndefined()
+    await store.abort('e.0')
+    await expect(store.reserve(claim('retry.0'), ['a.0'])).resolves.toBeUndefined()
+    await store.abort('retry.0')
+    await store.reserve(claim('e.0'), ['a.0'])
     await store.confirm('e.0')
+    await store.reserve(claim('e.0'), [])
     await store.release('e.0')
     await expect(store.reserve(claim('f.0'), [])).resolves.toBeUndefined()
   })
@@ -127,8 +134,17 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     expect(presentation?.ownerOutpoint).toBe('legacy-a.0')
     const indexes = await db.collection('ump_identity_reservations').indexes()
     expect(indexes.map(index => index.name)).toEqual(
-      expect.arrayContaining(['ump_pending_reservation_expiry', 'ump_reservation_owner'])
+      expect.arrayContaining([
+        'ump_pending_reservation_expiry',
+        'ump_reservation_owner',
+        'ump_pending_reservation_owner'
+      ])
     )
+    await expect(
+      db.collection('ump_identity_reservation_migrations').findOne({
+        _id: 'legacy-ump-reservations-v1'
+      })
+    ).resolves.not.toBeNull()
   })
 
   it('atomically transfers, confirms, expires, rolls back, releases, and reclaims reservations', async () => {
@@ -136,6 +152,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     const first = claim('a.0')
     await store.reserve(first, [])
     await store.confirm('a.0')
+    await store.reserve(first, [])
     expect(
       await db.collection<any>('ump_identity_reservations').countDocuments({
         ownerOutpoint: 'a.0',
@@ -146,8 +163,21 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     await expect(store.reserve(claim('b.0'), [])).rejects.toMatchObject({ kind: 'presentation' })
     await store.reserve(claim('c.0'), ['a.0'])
     expect(
-      await db.collection<any>('ump_identity_reservations').countDocuments({ ownerOutpoint: 'c.0' })
+      await db
+        .collection<any>('ump_identity_reservations')
+        .countDocuments({ ownerOutpoint: 'a.0', pendingOwnerOutpoint: 'c.0' })
     ).toBe(2)
+
+    // A failed PHASE 2 broadcast releases only the provisional successor and
+    // leaves the confirmed owner protected for a rebuilt retry.
+    await store.abort('c.0')
+    expect(
+      await db.collection<any>('ump_identity_reservations').countDocuments({
+        ownerOutpoint: 'a.0',
+        pendingOwnerOutpoint: { $exists: false }
+      })
+    ).toBe(2)
+    await store.reserve(claim('c.0'), ['a.0'])
 
     // A partial acquisition is removed if the second hash conflicts.
     await expect(store.reserve(claim('d.0', '33'.repeat(32)), [])).rejects.toMatchObject({
@@ -185,10 +215,65 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     await expect(store.reserve(claim('replacement.0'), [])).resolves.toBeUndefined()
   })
 
+  it('keeps a confirmed owner protected when an unconfirmed transfer expires', async () => {
+    const store = new MongoUMPIdentityStore(db, 1000)
+    await store.reserve(claim('owner.0'), [])
+    await store.confirm('owner.0')
+    await store.reserve(claim('successor.0'), ['owner.0'])
+    await db
+      .collection('ump_identity_reservations')
+      .updateMany(
+        { pendingOwnerOutpoint: 'successor.0' },
+        { $set: { pendingOwnerUntil: new Date(0) } }
+      )
+
+    await expect(store.reserve(claim('attacker.0'), [])).rejects.toMatchObject({
+      kind: 'presentation'
+    })
+    await expect(
+      db.collection('ump_identity_reservations').countDocuments({
+        ownerOutpoint: 'owner.0'
+      })
+    ).resolves.toBe(2)
+    await expect(
+      db.collection('ump_identity_reservations').findOne({
+        _id: `presentation:${'11'.repeat(32)}`
+      })
+    ).resolves.toMatchObject({ ownerOutpoint: 'owner.0' })
+  })
+
+  it('retries initialization after a transient failure and skips completed legacy bootstrap work', async () => {
+    const store = new MongoUMPIdentityStore(db)
+    const originalInitialize = (store as any).initialize.bind(store)
+    const initialize = jest
+      .spyOn(store as any, 'initialize')
+      .mockRejectedValueOnce(new Error('temporary Mongo failure'))
+      .mockImplementation(async () => await originalInitialize())
+
+    await expect(store.reserve(claim('first.0'), [])).rejects.toThrow('temporary Mongo failure')
+    await expect(store.reserve(claim('first.0'), [])).resolves.toBeUndefined()
+    initialize.mockRestore()
+
+    await db.collection('ump').insertOne({
+      txid: 'late-legacy',
+      outputIndex: 0,
+      presentationHash: '77'.repeat(32),
+      recoveryHash: '88'.repeat(32)
+    })
+    const restarted = new MongoUMPIdentityStore(db)
+    await restarted.reserve(claim('after-restart.0', '77'.repeat(32), '99'.repeat(32)), [])
+    await expect(
+      db.collection('ump_identity_reservations').findOne({
+        _id: `presentation:${'77'.repeat(32)}`
+      })
+    ).resolves.toMatchObject({ ownerOutpoint: 'after-restart.0' })
+  })
+
   it('persists, confirms, looks up, spends, and evicts UMP records', async () => {
     const identityStore: UMPIdentityReservationStore = {
       reserve: jest.fn(async () => undefined),
       confirm: jest.fn(async () => undefined),
+      abort: jest.fn(async () => undefined),
       release: jest.fn(async () => undefined)
     }
     const service = createUMPLookupService(db, identityStore)
@@ -240,6 +325,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     const service = createUMPLookupService(db, {
       reserve: async () => undefined,
       confirm: async () => undefined,
+      abort: async () => undefined,
       release: async () => undefined
     })
     const fields = Array.from({ length: 11 }, (_, index) => [index + 1])
@@ -271,5 +357,31 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     } as any)
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  it('returns the newest 100 legacy candidates so a current token is not truncated', async () => {
+    const identityStore: UMPIdentityReservationStore = {
+      reserve: async () => undefined,
+      confirm: async () => undefined,
+      abort: async () => undefined,
+      release: async () => undefined
+    }
+    await db.collection('ump').insertMany(
+      Array.from({ length: 105 }, (_, index) => ({
+        _id: index,
+        txid: `tx-${index}`,
+        outputIndex: 0,
+        presentationHash: 'aa'.repeat(32),
+        recoveryHash: `${index}`.padStart(64, '0')
+      }))
+    )
+    const service = createUMPLookupService(db, identityStore)
+
+    const results = await service.lookup({
+      query: { presentationHash: 'aa'.repeat(32) }
+    } as any)
+    expect(results).toHaveLength(100)
+    expect(results[0]).toEqual({ txid: 'tx-104', outputIndex: 0 })
+    expect(results).not.toContainEqual({ txid: 'tx-0', outputIndex: 0 })
   })
 })

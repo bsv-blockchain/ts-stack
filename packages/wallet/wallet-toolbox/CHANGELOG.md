@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Make verified phone changes interruption-safe by staging the replacement key
+  in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
+  can recover an interrupted transition from the current or pending key and
+  idempotently finish it without creating a second UMP update.
+
 - Prune `inputBEEF` to the dependency closure of explicitly declared action
   inputs before remote request serialization and repeat the pruning on the
   server before verification and persistence. Unrelated proof branches no

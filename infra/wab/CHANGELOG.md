@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
 - Require current-account knowledge plus Twilio OTP possession before a phone
   change can commit, hash the short-lived authorization at rest, clear stale
   UMP pins, and preserve reversible association history.
+- Stage phone changes before the on-chain rotation, retain current and pending
+  presentation keys until explicit finalization, and return pending recovery
+  data during verified authentication so restarts cannot strand the account.
+- Reject a configured `WAB_ADMIN_TOKEN` shorter than 32 characters during
+  startup instead of silently treating the support routes as disabled.
 
 - Apply one configurable rate-limit policy to authentication, user, faucet,
   deletion, and share routes. Forwarded client addresses are accepted only

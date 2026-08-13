@@ -11,7 +11,10 @@ function subject() {
       success: true,
       presentationKey: temporaryKey,
       accountStatus: 'new-user'
-    }))
+    })),
+    transport: {
+      request: jest.fn(async () => ({ success: true, changeId: 73 }))
+    }
   }
   const manager = Object.create(WalletAuthenticationManager.prototype) as WalletAuthenticationManager
   Object.assign(manager as any, {
@@ -88,6 +91,33 @@ describe('WAB authentication continuity', () => {
       pinnedOutpoint
     })
     expect((manager as any).authSession).toBeUndefined()
+  })
+
+  it('uses and finalizes a staged presentation key after an interrupted phone change', async () => {
+    const { manager, wabClient } = subject()
+    await manager.startAuth({ phoneNumber: '+12065550100' })
+    const pendingKey = '33'.repeat(32)
+    wabClient.completeAuthMethod.mockResolvedValueOnce({
+      success: true,
+      presentationKey: existingKey,
+      accountStatus: 'existing-user',
+      pendingPresentationKey: pendingKey,
+      pendingPhoneChangeId: 73
+    })
+    ;(manager as any).providePresentationKey.mockImplementation(async (key: number[]) => {
+      ;(manager as any).authenticationFlow = key[0] === 0x33 ? 'existing-user' : 'new-user'
+    })
+
+    await expect(manager.completeAuth({ otp: '123456' })).resolves.toBeUndefined()
+    expect((manager as any).providePresentationKey).toHaveBeenCalledTimes(2)
+    expect(wabClient.transport.request).toHaveBeenCalledWith('/auth/phone-change/finalize', {
+      operation: 'phone-change',
+      body: {
+        changeId: 73,
+        presentationKey: existingKey,
+        newPresentationKey: pendingKey
+      }
+    })
   })
 
   it('rejects missing, switched, expired, unsuccessful, and malformed completion state', async () => {

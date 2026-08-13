@@ -3,6 +3,7 @@ import { Knex } from 'knex'
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.alterTable('users', table => {
     table.string('umpTokenOutpoint', 75).nullable()
+    table.string('pendingPresentationKey', 64).nullable()
   })
 
   await knex.schema.createTable('phone_change_history', table => {
@@ -40,6 +41,7 @@ export async function up(knex: Knex): Promise<void> {
     table.string('previousPresentationKey', 64).notNullable()
     table.string('newPresentationKey', 64).notNullable()
     table.bigInteger('createdAtEpochMs').notNullable()
+    table.bigInteger('finalizedAtEpochMs').nullable()
     table.bigInteger('restoredAtEpochMs').nullable()
     table.index(['methodType', 'config', 'createdAtEpochMs'], 'phone_change_history_identity_idx')
     table.index(['targetUserId', 'createdAtEpochMs'], 'phone_change_history_target_idx')
@@ -75,6 +77,7 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('phone_change_sessions')
   await knex.schema.dropTableIfExists('phone_change_history')
   await knex.schema.alterTable('users', table => {
+    table.dropColumn('pendingPresentationKey')
     table.dropColumn('umpTokenOutpoint')
   })
 }

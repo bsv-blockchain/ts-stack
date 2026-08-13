@@ -38,10 +38,19 @@ interface WABAuthSession {
   correlationId?: string
 }
 
-type WABPhoneChangeSession = [phoneNumber: string, presentationKey: string, changeToken?: string, newKey?: number[]]
+interface WABPhoneChangeSession {
+  phoneNumber: string
+  presentationKey: string
+  changeToken?: string
+  newKey?: number[]
+  changeId?: number
+  umpUpdated?: boolean
+}
 
 interface WABPhoneChangeAuthorization extends WABOperationResponse {
   changeToken?: string
+  pendingPresentationKey?: string
+  pendingPhoneChangeId?: number
 }
 
 interface WABPhoneChangeCommit extends WABOperationResponse {
@@ -293,10 +302,47 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     try {
       const umpTokenOutpoint =
         typeof result.umpTokenOutpoint === 'string' ? (result.umpTokenOutpoint as `${string}.${number}`) : undefined
-      await this.providePresentationKey(
-        Utils.toArray(result.presentationKey, 'hex'),
-        umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
-      )
+      const lookupOptions = umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
+      const pendingPresentationKey = result.pendingPresentationKey
+      const pendingChangeId = result.pendingPhoneChangeId
+      const hasPendingPhoneChange = pendingPresentationKey !== undefined || pendingChangeId !== undefined
+      if (
+        hasPendingPhoneChange &&
+        (!/^[0-9a-fA-F]{64}$/.test(pendingPresentationKey ?? '') ||
+          !Number.isSafeInteger(pendingChangeId) ||
+          pendingChangeId! <= 0)
+      ) {
+        throw new WABAccountContinuityError('WAB returned invalid pending phone-change data.')
+      }
+
+      let primaryLookupError: unknown
+      try {
+        await this.providePresentationKey(Utils.toArray(result.presentationKey, 'hex'), lookupOptions)
+      } catch (error) {
+        primaryLookupError = error
+        if (!hasPendingPhoneChange) throw error
+      }
+
+      let usedPendingPhoneChange = false
+      if (
+        hasPendingPhoneChange &&
+        (primaryLookupError !== undefined ||
+          (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER))
+      ) {
+        await this.providePresentationKey(Utils.toArray(pendingPresentationKey!, 'hex'), lookupOptions)
+        usedPendingPhoneChange = true
+      }
+
+      if (usedPendingPhoneChange && this.authenticationFlow === EXISTING_USER) {
+        const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
+          changeId: pendingChangeId,
+          presentationKey: result.presentationKey,
+          newPresentationKey: pendingPresentationKey
+        })
+        if (finalized.success !== true || finalized.changeId !== pendingChangeId) {
+          throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
+        }
+      }
     } catch (error) {
       this.telemetry.capture({
         name: `${AUTH_EVENT}ump-continuity.failed`,
@@ -362,51 +408,77 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       phoneNumber: normalizedPhone
     })
     if (response.success !== true) throw new Error(response.message || 'Phone change failed')
-    this.phoneChangeSession = [normalizedPhone, currentPresentationKey]
+    this.phoneChangeSession = {
+      phoneNumber: normalizedPhone,
+      presentationKey: currentPresentationKey
+    }
   }
 
   /**
-   * Completes phone verification, rolls the on-chain UMP presentation key by
-   * spending the current token, and only then commits the WAB association.
-   * A failed final WAB request can be retried with the same OTP while this
-   * manager remains alive; the UMP update is not repeated.
+   * Completes phone verification and stages the WAB association before
+   * publishing the UMP key rotation. WAB retains both the current and pending
+   * presentation keys until finalization, so either side of an interrupted
+   * transition remains recoverable on the next verified login.
    */
   public async completePhoneNumberChange(otp: string): Promise<{ changeId: number }> {
     const session = this.phoneChangeSession
     if (session == null) throw new Error('No phone change')
 
-    if (session[2] == null) {
+    if (session.changeToken == null) {
       const authorization = await this.phoneChange<WABPhoneChangeAuthorization>('complete', {
-        presentationKey: session[1],
-        phoneNumber: session[0],
+        presentationKey: session.presentationKey,
+        phoneNumber: session.phoneNumber,
         otp: otp.trim()
       })
-      if (
-        authorization.success !== true ||
-        typeof authorization.changeToken !== 'string' ||
-        authorization.changeToken.length === 0
-      ) {
+      if (authorization.success !== true) {
         throw new Error(authorization.message || 'Phone change failed')
       }
-      session[2] = authorization.changeToken
+      const resumable =
+        /^[0-9a-fA-F]{64}$/.test(authorization.pendingPresentationKey ?? '') &&
+        Number.isSafeInteger(authorization.pendingPhoneChangeId) &&
+        authorization.pendingPhoneChangeId! > 0
+      if (resumable) {
+        session.newKey = Utils.toArray(authorization.pendingPresentationKey!, 'hex')
+        session.changeId = authorization.pendingPhoneChangeId
+      } else if (
+        typeof authorization.changeToken === 'string' &&
+        authorization.changeToken.length > 0
+      ) {
+        session.changeToken = authorization.changeToken
+      } else {
+        throw new Error(authorization.message || 'Phone change failed')
+      }
     }
 
-    if (session[3] == null) {
-      const newKey = Random(32)
-      await this.changePresentationKey(newKey)
-      session[3] = newKey
+    session.newKey ??= Random(32)
+    if (session.changeId == null) {
+      const committed = await this.phoneChange<WABPhoneChangeCommit>('commit', {
+        changeToken: session.changeToken,
+        presentationKey: session.presentationKey,
+        newPresentationKey: Utils.toHex(session.newKey)
+      })
+      if (committed.success !== true || !Number.isSafeInteger(committed.changeId) || committed.changeId! <= 0) {
+        throw new Error(committed.message || 'Phone change failed')
+      }
+      session.changeId = committed.changeId as number
+    }
+    const changeId = session.changeId
+
+    if (session.umpUpdated !== true) {
+      await this.changePresentationKey(session.newKey)
+      session.umpUpdated = true
     }
 
-    const committed = await this.phoneChange<WABPhoneChangeCommit>('commit', {
-      changeToken: session[2],
-      presentationKey: session[1],
-      newPresentationKey: Utils.toHex(session[3])
+    const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
+      changeId,
+      presentationKey: session.presentationKey,
+      newPresentationKey: Utils.toHex(session.newKey)
     })
-    if (committed.success !== true || !Number.isSafeInteger(committed.changeId) || committed.changeId! <= 0) {
-      throw new Error(committed.message || 'Phone change failed')
+    if (finalized.success !== true || finalized.changeId !== changeId) {
+      throw new Error(finalized.message || 'Phone change failed')
     }
     this.phoneChangeSession = undefined
-    return { changeId: committed.changeId as number }
+    return { changeId }
   }
 
   public cancelPhoneNumberChange(): void {

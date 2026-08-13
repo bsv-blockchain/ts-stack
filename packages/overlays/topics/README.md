@@ -84,11 +84,20 @@ const lookup = createUMPLookupService(db, identityStore)
 ```
 
 The additive `ump_identity_reservations` collection serializes first writers
-across replicas. Pending reservations expire if lookup indexing never confirms
-admission. On upgrade, existing indexed UMP UTXOs seed the collection without
-deleting ambiguous rows. `ls_users` returns all matching current UTXOs so
-wallets can use verified lineage and, only if lineage remains ambiguous, an
-operator-selected WAB pin.
+across replicas. A failed strict broadcast invokes the manager's provisional
+admission abort hook. During a legitimate transfer the confirmed owner remains
+authoritative until lookup indexing confirms its successor, so an expired or
+interrupted transfer cannot unprotect a live token. Initial pending claims
+expire if lookup indexing never confirms admission. On upgrade, existing
+indexed UMP UTXOs seed the collection once, with a durable completion marker,
+without deleting ambiguous rows. `ls_users` returns the newest 100 matching
+current UTXOs so a live lineage tip is not hidden by older legacy ambiguity and
+wallets can use verified lineage or an operator-selected WAB pin.
+
+The no-argument manager retains a bounded in-memory store for isolated tests
+and single-process validation. Production construction must pass a `Db` or a
+store shared with lookup; do not combine the no-argument manager with the
+lookup service's Mongo default.
 
 ## Use cases
 

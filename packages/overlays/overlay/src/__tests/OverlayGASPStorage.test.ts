@@ -230,14 +230,16 @@ describe('OverlayGASPStorage', () => {
         parentBEEF,
         [],
         undefined,
-        'historical-tx'
+        'historical-tx',
+        { dryRun: true }
       )
       expect(identifyAdmissibleOutputs).toHaveBeenNthCalledWith(
         2,
         rootBEEF,
         [0],
         undefined,
-        'historical-tx'
+        'historical-tx',
+        { dryRun: true }
       )
     })
 

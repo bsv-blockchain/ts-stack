@@ -113,6 +113,7 @@ app.post('/auth/complete', authenticationLimiter, AuthController.completeAuth)
 app.post('/auth/phone-change/start', authenticationLimiter, PhoneChangeController.start)
 app.post('/auth/phone-change/complete', authenticationLimiter, PhoneChangeController.complete)
 app.post('/auth/phone-change/commit', authenticationLimiter, PhoneChangeController.commit)
+app.post('/auth/phone-change/finalize', authenticationLimiter, PhoneChangeController.finalize)
 
 // Administrative support routes are unavailable unless WAB_ADMIN_TOKEN is set.
 app.post('/admin/ump-pin', adminLimiter, requireWABAdmin, AdminController.setUMPTokenPin)

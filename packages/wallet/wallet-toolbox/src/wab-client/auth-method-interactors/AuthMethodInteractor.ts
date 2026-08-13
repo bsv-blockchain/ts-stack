@@ -20,6 +20,10 @@ export interface CompleteAuthResponse {
   existingUser?: boolean
   /** Operator-selected UMP ambiguity fallback supplied by newer WAB servers. */
   umpTokenOutpoint?: string
+  /** Staged key returned while a verified phone change awaits WAB finalization. */
+  pendingPresentationKey?: string
+  /** Identifier used to idempotently finalize a staged phone change. */
+  pendingPhoneChangeId?: number
 }
 
 /**

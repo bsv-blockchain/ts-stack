@@ -28,7 +28,13 @@ interface PhoneChangeHistoryEntity {
   previousPresentationKey: string
   newPresentationKey: string
   createdAtEpochMs: string | number
+  finalizedAtEpochMs: string | number | null
   restoredAtEpochMs: string | number | null
+}
+
+export interface PendingPhoneChange {
+  changeId: number
+  presentationKey: string
 }
 
 export class PhoneChangeError extends Error {
@@ -82,6 +88,30 @@ async function findOrCreatePhoneMethod(
 }
 
 export class PhoneChangeService {
+  static async findPending(
+    userId: number,
+    methodType?: string,
+    config?: string
+  ): Promise<PendingPhoneChange | undefined> {
+    const user = await db<User>('users').where({ id: userId }).first()
+    if (user?.pendingPresentationKey == null) return undefined
+    const query = db<PhoneChangeHistoryEntity>('phone_change_history')
+      .where({
+        targetUserId: userId,
+        newPresentationKey: user.pendingPresentationKey,
+        finalizedAtEpochMs: null,
+        restoredAtEpochMs: null
+      })
+    if (methodType != null) query.andWhere({ methodType })
+    if (config != null) query.andWhere({ config })
+    const history = await query
+      .orderBy('id', 'desc')
+      .first()
+    return history == null
+      ? undefined
+      : { changeId: history.id, presentationKey: user.pendingPresentationKey }
+  }
+
   static async createAuthorization(
     userId: number,
     methodType: string,
@@ -136,6 +166,12 @@ export class PhoneChangeService {
       if (user?.presentationKey !== currentPresentationKey) {
         throw new PhoneChangeError('The current wallet account could not be verified.', 401)
       }
+      if (
+        user.pendingPresentationKey != null &&
+        user.pendingPresentationKey !== newPresentationKey
+      ) {
+        throw new PhoneChangeError('A phone change is already awaiting wallet completion.')
+      }
 
       const currentMethod = await trx<AuthMethodEntity>('auth_methods')
         .where({ userId: user.id, methodType: session.methodType })
@@ -157,10 +193,9 @@ export class PhoneChangeService {
         await trx('auth_methods').where({ id: claimedMethod.id }).update({ userId: user.id })
       }
 
-      await trx('users').where({ id: user.id }).update({
-        presentationKey: newPresentationKey,
-        umpTokenOutpoint: null
-      })
+      await trx('users')
+        .where({ id: user.id })
+        .update({ pendingPresentationKey: newPresentationKey })
 
       const now = Date.now()
       const historyResult = await trx('phone_change_history').insert(
@@ -174,6 +209,7 @@ export class PhoneChangeService {
           previousPresentationKey: currentPresentationKey,
           newPresentationKey,
           createdAtEpochMs: now,
+          finalizedAtEpochMs: null,
           restoredAtEpochMs: null
         },
         ['id']
@@ -189,6 +225,51 @@ export class PhoneChangeService {
     })
   }
 
+  static async finalize(
+    changeId: number,
+    currentPresentationKey: string,
+    newPresentationKey: string
+  ): Promise<void> {
+    await db.transaction(async trx => {
+      const history = await trx<PhoneChangeHistoryEntity>('phone_change_history')
+        .where({ id: changeId })
+        .forUpdate()
+        .first()
+      if (
+        history?.targetUserId == null ||
+        history.restoredAtEpochMs != null ||
+        history.previousPresentationKey !== currentPresentationKey ||
+        history.newPresentationKey !== newPresentationKey
+      ) {
+        throw new PhoneChangeError('Phone change finalization could not be verified.', 401)
+      }
+
+      const user = await trx<User>('users').where({ id: history.targetUserId }).forUpdate().first()
+      if (history.finalizedAtEpochMs != null) {
+        if (user?.presentationKey !== newPresentationKey) {
+          throw new PhoneChangeError('Phone change finalization no longer matches the account.')
+        }
+        return
+      }
+      if (
+        user?.presentationKey !== currentPresentationKey ||
+        user.pendingPresentationKey !== newPresentationKey
+      ) {
+        throw new PhoneChangeError('Phone change finalization no longer matches the account.')
+      }
+
+      const now = Date.now()
+      await trx('users').where({ id: user.id }).update({
+        presentationKey: newPresentationKey,
+        pendingPresentationKey: null,
+        umpTokenOutpoint: null
+      })
+      await trx('phone_change_history')
+        .where({ id: history.id })
+        .update({ finalizedAtEpochMs: now })
+    })
+  }
+
   static async restore(changeId: number): Promise<void> {
     await db.transaction(async trx => {
       const history = await trx<PhoneChangeHistoryEntity>('phone_change_history')
@@ -199,6 +280,12 @@ export class PhoneChangeService {
       if (history.restoredAtEpochMs != null) return
       if (history.targetUserId == null || history.phoneAuthMethodId == null) {
         throw new PhoneChangeError('Phone change record can no longer be restored automatically.')
+      }
+
+      if (history.finalizedAtEpochMs == null) {
+        await trx('users')
+          .where({ id: history.targetUserId, pendingPresentationKey: history.newPresentationKey })
+          .update({ pendingPresentationKey: null })
       }
 
       const phoneMethod = await trx<AuthMethodEntity>('auth_methods')

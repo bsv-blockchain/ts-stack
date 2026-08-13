@@ -219,8 +219,9 @@ Phone identities use canonical E.164 form. Ordinary sign-in and linking do not
 move a phone identity between live users. The authenticated phone-change flow
 is the deliberate exception: after the target wallet proves its current
 presentation key and possession of the claimed phone by OTP, the WAB moves the
-phone record, rotates the target presentation key, clears any obsolete UMP
-pin, and writes the previous owners/associations to `phone_change_history`.
+phone record, stages and then finalizes the target presentation key, clears any
+obsolete UMP pin at finalization, and writes the previous owners/associations
+to `phone_change_history`.
 Support can restore those associations if the change is later determined to be
 fraudulent. Faucet history remains attached to its original auth-method record.
 Presentation keys and Shamir user hashes are exact 256-bit hexadecimal values.
@@ -243,15 +244,24 @@ clients still run normal verified UMP lookup and lineage selection first. They
 use the pin only if the result remains ambiguous and the pin names one of the
 verified candidates.
 
-Phone changes use three calls: `/auth/phone-change/start`,
-`/auth/phone-change/complete`, and `/auth/phone-change/commit`. The first two
-prove possession of the requested number. The final call consumes a hashed,
-ten-minute, single-use authorization after the wallet has published a UMP
-update with a fresh presentation key. Entering the current number is valid and
-intentionally refreshes the presentation key/hash.
+Phone changes use four calls: `/auth/phone-change/start`,
+`/auth/phone-change/complete`, `/auth/phone-change/commit`, and
+`/auth/phone-change/finalize`. The first two prove possession of the requested
+number. Commit consumes the hashed, ten-minute, single-use authorization and
+stages the phone association plus replacement presentation key while retaining
+the current key. After the wallet publishes the UMP update, finalize promotes
+the staged key and clears the obsolete pin. During an interrupted transition,
+`/auth/complete` adds the pending key and change ID so an updated wallet can
+select the key backed by the verified UMP token and finish idempotently. If the
+current key remains live, repeating the phone-change OTP returns the staged key
+and change ID instead of creating a second authorization/commit. Entering the
+current number is valid and intentionally refreshes the key/hash.
 
 Operator routes require `Authorization: Bearer <WAB_ADMIN_TOKEN>`, are
 rate-limited, and return 404 when no strong token is configured:
+
+A non-empty token shorter than 32 characters is a startup configuration error;
+only an absent/empty value intentionally disables the routes.
 
 - `POST /admin/ump-pin` sets or clears a pin after identifying a user by
   presentation key or authentication method payload.

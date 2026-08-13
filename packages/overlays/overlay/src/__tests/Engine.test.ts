@@ -816,6 +816,39 @@ describe('BSV Overlay Services Engine', () => {
         )
       })
 
+      it('aborts provisional topic state when strict broadcast fails', async () => {
+        const abortAdmissibleOutputs = jest.fn(async () => undefined)
+        mockTopicManager.abortAdmissibleOutputs = abortAdmissibleOutputs
+        const broadcaster = {
+          broadcast: jest.fn(async () => ({
+            status: 'error' as const,
+            code: 'ERR_REJECTED',
+            description: 'provider rejected the transaction'
+          }))
+        }
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          broadcaster,
+          undefined,
+          undefined,
+          false,
+          '[OVERLAY_ENGINE] ',
+          true
+        )
+
+        await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).rejects.toThrow(
+          'provider rejected the transaction'
+        )
+        expect(abortAdmissibleOutputs).toHaveBeenCalledWith(exampleBeef, [0])
+        expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+      })
+
       it('logs transport exceptions and continues when strict broadcast failure is disabled', async () => {
         const broadcaster = {
           broadcast: jest.fn(async () => {

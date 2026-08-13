@@ -76,6 +76,15 @@ export class PhoneChangeController {
       const result = await authMethod.completeAuth(req.body.presentationKey, payload)
       if (!result.success) return res.json(result)
       const config = authMethod.buildConfigFromPayload(payload)
+      const pending = await PhoneChangeService.findPending(user.id, METHOD_TYPE, config)
+      if (pending != null) {
+        return res.json({
+          success: true,
+          message: result.message,
+          pendingPresentationKey: pending.presentationKey,
+          pendingPhoneChangeId: pending.changeId
+        })
+      }
       const changeToken = await PhoneChangeService.createAuthorization(user.id, METHOD_TYPE, config)
       return res.json({ success: true, message: result.message, changeToken })
     } catch (error) {
@@ -113,6 +122,37 @@ export class PhoneChangeController {
       log.error(
         { operation: 'controller.phone_change.commit', err: error },
         'Phone change commit failed'
+      )
+      return res.status(500).json({ message: 'An internal error occurred.' })
+    }
+  }
+
+  static async finalize(req: Request, res: Response): Promise<Response> {
+    try {
+      if (
+        !isRecord(req.body) ||
+        !Number.isSafeInteger(req.body.changeId) ||
+        Number(req.body.changeId) <= 0 ||
+        !isHexIdentifier(req.body.presentationKey) ||
+        !isHexIdentifier(req.body.newPresentationKey)
+      ) {
+        return res.status(400).json({
+          message: 'A valid changeId, presentationKey, and newPresentationKey are required.'
+        })
+      }
+      await PhoneChangeService.finalize(
+        Number(req.body.changeId),
+        req.body.presentationKey,
+        req.body.newPresentationKey
+      )
+      return res.json({ success: true, changeId: Number(req.body.changeId) })
+    } catch (error) {
+      if (error instanceof PhoneChangeError) {
+        return res.status(error.status).json({ success: false, message: error.message })
+      }
+      log.error(
+        { operation: 'controller.phone_change.finalize', err: error },
+        'Phone change finalization failed'
       )
       return res.status(500).json({ message: 'An internal error occurred.' })
     }

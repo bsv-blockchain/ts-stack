@@ -25,7 +25,25 @@ describe('PhoneChangeService', () => {
     const changeId = await PhoneChangeService.commit(token, oldKey, newKey)
 
     await expect(UserService.getUserById(user.id)).resolves.toMatchObject({
+      presentationKey: oldKey,
+      pendingPresentationKey: newKey,
+      umpTokenOutpoint: `${'f'.repeat(64)}.0`
+    })
+    await expect(PhoneChangeService.findPending(user.id)).resolves.toEqual({
+      changeId,
+      presentationKey: newKey
+    })
+    await expect(
+      PhoneChangeService.findPending(user.id, 'TwilioPhone', '+15555550100')
+    ).resolves.toEqual({ changeId, presentationKey: newKey })
+    await expect(
+      PhoneChangeService.findPending(user.id, 'TwilioPhone', '+15555550999')
+    ).resolves.toBeUndefined()
+    await PhoneChangeService.finalize(changeId, oldKey, newKey)
+    await PhoneChangeService.finalize(changeId, oldKey, newKey)
+    await expect(UserService.getUserById(user.id)).resolves.toMatchObject({
       presentationKey: newKey,
+      pendingPresentationKey: null,
       umpTokenOutpoint: null
     })
     await expect(db('auth_methods').where({ id: method.id }).first()).resolves.toMatchObject({
@@ -36,7 +54,8 @@ describe('PhoneChangeService', () => {
         targetUserId: user.id,
         previousPhoneOwnerUserId: user.id,
         previousPresentationKey: oldKey,
-        newPresentationKey: newKey
+        newPresentationKey: newKey,
+        finalizedAtEpochMs: expect.anything()
       }
     )
   })
@@ -61,6 +80,7 @@ describe('PhoneChangeService', () => {
     )
 
     const changeId = await PhoneChangeService.commit(token, target.presentationKey, '5'.repeat(64))
+    await PhoneChangeService.finalize(changeId, target.presentationKey, '5'.repeat(64))
     await expect(db('auth_methods').where({ id: claimedPhone.id }).first()).resolves.toMatchObject({
       userId: target.id
     })
