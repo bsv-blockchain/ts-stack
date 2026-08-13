@@ -30,25 +30,17 @@ describe('WAB transport hardening', () => {
     expect(nestedFetch).toHaveBeenCalledWith('https://wab.example/customer/info', expect.any(Object))
   })
 
-  it.each([
-    'https://wab.example',
-    'https://wab.example/',
-    'https://wab.example///'
-  ])('never duplicates the path separator for auth requests to %s', async serverUrl => {
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
-    const client = new WABClient(serverUrl, { fetch: fetchClient })
+  it.each(['https://wab.example', 'https://wab.example/', 'https://wab.example///'])(
+    'never duplicates the path separator for auth requests to %s',
+    async serverUrl => {
+      const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+      const client = new WABClient(serverUrl, { fetch: fetchClient })
 
-    await client.startAuthMethod(
-      new TwilioPhoneInteractor(),
-      'a'.repeat(64),
-      { phoneNumber: '+15555550123' }
-    )
+      await client.startAuthMethod(new TwilioPhoneInteractor(), 'a'.repeat(64), { phoneNumber: '+15555550123' })
 
-    expect(fetchClient).toHaveBeenCalledWith(
-      'https://wab.example/auth/start',
-      expect.any(Object)
-    )
-  })
+      expect(fetchClient).toHaveBeenCalledWith('https://wab.example/auth/start', expect.any(Object))
+    }
+  )
 
   it('requires canonical E.164 phone identity before sending authentication', async () => {
     const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
@@ -120,7 +112,7 @@ describe('WAB transport hardening', () => {
     })
     await expect(networkFailure.getInfo()).rejects.toMatchObject({
       code: 'WAB_NETWORK_ERROR',
-      message: 'WAB request failed before receiving a response.',
+      message: 'WAB request failed before response.',
       retryable: true
     })
 
@@ -198,7 +190,7 @@ describe('WAB transport hardening', () => {
     })
     await expect(failedBody.getInfo()).rejects.toMatchObject({
       code: 'WAB_INVALID_RESPONSE',
-      message: 'WAB response could not be read.'
+      message: 'WAB response read failed.'
     })
   })
 

@@ -25,7 +25,7 @@ export interface WalletAuthenticationManagerOptions {
 export class WABAccountContinuityError extends Error {
   readonly code = 'WERR_WAB_ACCOUNT_CONTINUITY'
 
-  constructor(message: string = 'WAB and UMP account state did not agree. Retry or use account recovery.') {
+  constructor(message: string = 'WAB and UMP accounts disagree; retry or recover.') {
     super(message)
     this.name = 'WABAccountContinuityError'
   }
@@ -139,7 +139,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
           )
 
           if (faucetRedeemTXCreationResult.signableTransaction == null) {
-            throw new Error('Faucet redemption did not return a signableTransaction')
+            throw new Error('Faucet redemption was not signable.')
           }
 
           const faucetRedeemTX = Transaction.fromAtomicBEEF(faucetRedeemTXCreationResult.signableTransaction.tx)
@@ -193,7 +193,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
    */
   public async startAuth(payload: AuthPayload): Promise<void> {
     if (this.authMethod == null) {
-      throw new Error('No AuthMethod selected in WalletAuthenticationManager')
+      throw new Error('No WAB authentication method selected.')
     }
     const authMethod = this.authMethod
     if (this.authenticated) throw new Error('User is already authenticated')
@@ -250,16 +250,16 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
    */
   public async completeAuth(payload: AuthPayload): Promise<void> {
     if (this.authMethod == null || this.authSession == null) {
-      throw new Error('No AuthMethod selected in WalletAuthenticationManager or startAuth has yet to be called.')
+      throw new Error('Start WAB authentication first.')
     }
     const authMethod = this.authMethod
     if (this.authSession.methodType !== authMethod.methodType) {
       this.cancelAuth()
-      throw new Error('The selected authentication method changed. Start authentication again.')
+      throw new Error('WAB authentication method changed; restart.')
     }
     if (Date.now() >= this.authSession.expiresAt) {
       this.cancelAuth()
-      throw new Error('The WAB authentication session expired. Start authentication again.')
+      throw new Error('WAB authentication expired; restart.')
     }
 
     const session = this.authSession
@@ -419,8 +419,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     super.destroy()
   }
 
-  private async phoneChange<T>(phase: string, body: unknown): Promise<T> {
-    return await this.wabClient.transport.request<T>(`/auth/phone-change/${phase}`, {
+  private phoneChange<T>(phase: string, body: unknown): Promise<T> {
+    return this.wabClient.transport.request<T>(`/auth/phone-change/${phase}`, {
       operation: 'phone-change',
       body
     })
@@ -436,18 +436,18 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     const keyMatchesTemporary = this.constantTimeHexEqual(result.presentationKey, temporaryPresentationKey)
     const rawAccountStatus: unknown = result.accountStatus
     if (rawAccountStatus !== undefined && rawAccountStatus !== NEW_USER && rawAccountStatus !== EXISTING_USER) {
-      throw new WABAccountContinuityError('WAB returned an invalid account-continuity status.')
+      throw new WABAccountContinuityError('WAB returned an invalid account status.')
     }
     const rawExistingUser: unknown = result.existingUser
     if (rawExistingUser !== undefined && typeof rawExistingUser !== 'boolean') {
-      throw new WABAccountContinuityError('WAB returned an invalid existing-user status.')
+      throw new WABAccountContinuityError('WAB returned invalid existing-user data.')
     }
     if (
       rawAccountStatus !== undefined &&
       rawExistingUser !== undefined &&
       (rawAccountStatus === EXISTING_USER) !== rawExistingUser
     ) {
-      throw new WABAccountContinuityError('WAB returned contradictory account-continuity statuses.')
+      throw new WABAccountContinuityError('WAB returned conflicting account status.')
     }
     let compatibilityStatus: 'existing-user' | 'new-user' | undefined
     if (typeof rawExistingUser === 'boolean') {
@@ -459,7 +459,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       (explicitStatus === NEW_USER && !keyMatchesTemporary) ||
       (explicitStatus === EXISTING_USER && keyMatchesTemporary)
     ) {
-      throw new WABAccountContinuityError('WAB returned contradictory account-continuity data.')
+      throw new WABAccountContinuityError('WAB returned conflicting account status.')
     }
     return explicitStatus ?? (keyMatchesTemporary ? NEW_USER : EXISTING_USER)
   }
