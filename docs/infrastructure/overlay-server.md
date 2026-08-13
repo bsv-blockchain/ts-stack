@@ -33,7 +33,7 @@ Clients submit transaction outputs via HTTP, the server routes valid outputs thr
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Database          | MongoDB (lookup data), MySQL/Knex (overlay tracking)                                                                                                |
 | External services | Wallet Storage (service advertisement), Arcade and/or Arc (transaction propagation), Chaintracks/go-chaintracks-compatible headers and reorg stream |
-| ts-stack packages | @bsv/sdk, @bsv/overlay-express, @bsv/auth-express-middleware                                                                                        |
+| ts-stack packages | @bsv/sdk, @bsv/overlay-express, @bsv/auth-express-middleware, @bsv/overlay-topics 1.7.0+ for UMP reservations                                      |
 
 ## HTTP endpoints
 
@@ -62,6 +62,12 @@ presentation or recovery hash owns that value until a transaction consumes the
 outpoint. Back up MongoDB before introducing the collection. Existing ambiguous
 UMP rows stay queryable for lineage/WAB-pin recovery; the migration does not
 delete them.
+
+The infrastructure source capability-gates this wiring so pull-request image
+contracts can still build against the latest published package. A production
+image does not enable cross-replica reservations until the protected package
+release publishes `@bsv/overlay-topics` 1.7.0 and the generated dependency-sync
+PR pins that version in `infra/overlay-server`.
 
 ## WebSocket endpoints
 

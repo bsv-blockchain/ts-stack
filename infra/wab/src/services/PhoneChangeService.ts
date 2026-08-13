@@ -83,7 +83,7 @@ export class PhoneChangeService {
         .where({ tokenHash: tokenHash(token) })
         .forUpdate()
         .first()
-      if (session == null || session.userId == null) {
+      if (session?.userId == null) {
         throw new PhoneChangeError('Phone change authorization is invalid or expired.', 401)
       }
 
@@ -104,7 +104,7 @@ export class PhoneChangeService {
       }
 
       const user = await trx<User>('users').where({ id: session.userId }).forUpdate().first()
-      if (user == null || user.presentationKey !== currentPresentationKey) {
+      if (user?.presentationKey !== currentPresentationKey) {
         throw new PhoneChangeError('The current wallet account could not be verified.', 401)
       }
 

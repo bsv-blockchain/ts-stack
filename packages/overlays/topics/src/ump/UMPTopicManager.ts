@@ -66,7 +66,7 @@ export default class UMPTopicManager implements TopicManager {
       const txid = parsedTransaction.id('hex')
       const consumedOutpoints = previousCoins.flatMap(inputIndex => {
         const input = parsedTransaction.inputs[inputIndex]
-        if (input == null || input.sourceOutputIndex == null) return []
+        if (input?.sourceOutputIndex == null) return []
         const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
         return sourceTxid == null ? [] : [`${sourceTxid}.${input.sourceOutputIndex}`]
       })

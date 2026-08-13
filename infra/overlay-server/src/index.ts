@@ -14,7 +14,6 @@ import {
   MessageBoxTopicManager,
   createMessageBoxLookupService,
   UMPTopicManager,
-  MongoUMPIdentityStore,
   createUMPLookupService,
   HelloWorldTopicManager,
   createHelloWorldLookupService,
@@ -43,6 +42,7 @@ import {
   createMandalaLookupService,
   InMemoryScreeningProvider
 } from '@bsv/overlay-topics'
+import * as overlayTopics from '@bsv/overlay-topics'
 import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
 
 import { config } from 'dotenv'
@@ -350,14 +350,33 @@ const main = async () => {
   server.configureTopicManager('tm_messagebox', new MessageBoxTopicManager())
   server.configureLookupServiceWithMongo('ls_messagebox', createMessageBoxLookupService)
 
-  // UMP. The Topic Manager and lookup service share one Mongo-backed identity
-  // reservation store so duplicate hashes are rejected atomically across
-  // replicas before the transaction is admitted.
-  server.configureLookupServiceWithMongo('ls_users', db => {
-    const identityStore = new MongoUMPIdentityStore(db)
-    server.configureTopicManager('tm_users', new UMPTopicManager(identityStore))
-    return createUMPLookupService(db, identityStore)
-  })
+  // UMP. Package-source PRs are validated against the latest released
+  // infrastructure dependency, so this capability gate preserves that image
+  // contract until the governed dependency-sync PR installs overlay-topics
+  // 1.7.0. Once present, the Topic Manager and lookup service share one
+  // Mongo-backed reservation store across replicas.
+  const MongoUMPIdentityStore = (
+    overlayTopics as unknown as {
+      MongoUMPIdentityStore?: new (db: Parameters<typeof createUMPLookupService>[0]) => unknown
+    }
+  ).MongoUMPIdentityStore
+  if (MongoUMPIdentityStore == null) {
+    server.configureTopicManager('tm_users', new UMPTopicManager())
+    server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
+  } else {
+    server.configureLookupServiceWithMongo('ls_users', db => {
+      const identityStore = new MongoUMPIdentityStore(db)
+      const topicManager = new (UMPTopicManager as unknown as new (
+        identityStore: unknown
+      ) => UMPTopicManager)(identityStore)
+      const lookupFactory = createUMPLookupService as unknown as (
+        mongoDb: typeof db,
+        store: unknown
+      ) => ReturnType<typeof createUMPLookupService>
+      server.configureTopicManager('tm_users', topicManager)
+      return lookupFactory(db, identityStore)
+    })
+  }
 
   // HelloWorld
   server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())

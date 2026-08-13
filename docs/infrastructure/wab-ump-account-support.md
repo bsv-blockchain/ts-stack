@@ -116,10 +116,13 @@ presentation key is supplied.
 Roll out in this order:
 
 1. back up MongoDB and the WAB database;
-2. deploy the reservation-aware UMP overlay and validate duplicate rejection;
-3. apply the WAB additive migration and deploy WAB with its admin secret;
-4. publish/deploy Wallet Toolbox clients; and
-5. enable desktop/mobile phone-change UI.
+2. publish `@bsv/overlay-topics` 1.7.0 through the protected package workflow
+   and merge its generated infrastructure dependency-sync PR;
+3. release and deploy the reservation-aware UMP overlay, then validate
+   duplicate rejection;
+4. apply the WAB additive migration and deploy WAB with its admin secret;
+5. publish/deploy Wallet Toolbox clients; and
+6. enable desktop/mobile phone-change UI.
 
 Validate an ordinary existing login, a clean new account, an ambiguity login
 with a valid pin, rejection of a pin absent from candidates, same-number

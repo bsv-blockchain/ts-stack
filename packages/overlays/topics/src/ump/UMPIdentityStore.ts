@@ -68,7 +68,9 @@ export class InMemoryUMPIdentityStore implements UMPIdentityReservationStore {
         this.reservations.set(entry.id, claim.outpoint)
       }
     } catch (error) {
-      for (const entry of acquired.reverse()) {
+      const rollbackEntries = [...acquired]
+      rollbackEntries.reverse()
+      for (const entry of rollbackEntries) {
         if (entry.previous === undefined) this.reservations.delete(entry.id)
         else this.reservations.set(entry.id, entry.previous)
       }
@@ -76,7 +78,9 @@ export class InMemoryUMPIdentityStore implements UMPIdentityReservationStore {
     }
   }
 
-  async confirm(_outpoint: string): Promise<void> {}
+  confirm(_outpoint: string): Promise<void> {
+    return Promise.resolve()
+  }
 
   async release(outpoint: string): Promise<void> {
     for (const [id, owner] of this.reservations) {
@@ -218,7 +222,9 @@ export class MongoUMPIdentityStore implements UMPIdentityReservationStore {
     acquired: Array<{ id: string; previous: UMPIdentityReservation | null }>,
     ownerOutpoint: string
   ): Promise<void> {
-    for (const entry of acquired.reverse()) {
+    const rollbackEntries = [...acquired]
+    rollbackEntries.reverse()
+    for (const entry of rollbackEntries) {
       if (entry.previous === null) {
         await this.reservations.deleteOne({ _id: entry.id, ownerOutpoint })
         continue
