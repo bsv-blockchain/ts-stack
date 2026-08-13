@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
+import type { Knex } from 'knex'
 import { db } from '../db/knex'
 import type { AuthMethodEntity, User } from '../types'
 
@@ -50,6 +51,34 @@ function insertedId(result: unknown): number | undefined {
   if (candidate == null || typeof candidate !== 'object' || !('id' in candidate)) return undefined
   const id = (candidate as { id?: unknown }).id
   return typeof id === 'number' ? id : undefined
+}
+
+async function findOrCreatePhoneMethod(
+  trx: Knex.Transaction,
+  userId: number,
+  methodType: string,
+  config: string
+): Promise<{ claimedMethod: AuthMethodEntity; previousPhoneOwnerUserId: number | null }> {
+  const existingMethod = await trx<AuthMethodEntity>('auth_methods')
+    .where({ methodType, config })
+    .forUpdate()
+    .first()
+  if (existingMethod != null) {
+    return {
+      claimedMethod: existingMethod,
+      previousPhoneOwnerUserId: existingMethod.userId ?? null
+    }
+  }
+
+  const result = await trx('auth_methods').insert(
+    { userId, methodType, config, receivedFaucet: false },
+    ['id']
+  )
+  const id = insertedId(result)
+  if (id == null) throw new Error('Failed to create the phone authentication record.')
+  const claimedMethod = await trx<AuthMethodEntity>('auth_methods').where({ id }).first()
+  if (claimedMethod == null) throw new Error('Failed to load the phone authentication record.')
+  return { claimedMethod, previousPhoneOwnerUserId: null }
 }
 
 export class PhoneChangeService {
@@ -112,28 +141,12 @@ export class PhoneChangeService {
         .where({ userId: user.id, methodType: session.methodType })
         .forUpdate()
         .first()
-      let claimedMethod = await trx<AuthMethodEntity>('auth_methods')
-        .where({ methodType: session.methodType, config: session.config })
-        .forUpdate()
-        .first()
-      const previousPhoneOwnerUserId = claimedMethod?.userId ?? null
-
-      if (claimedMethod == null) {
-        const result = await trx('auth_methods').insert(
-          {
-            userId: user.id,
-            methodType: session.methodType,
-            config: session.config,
-            receivedFaucet: false
-          },
-          ['id']
-        )
-        const id = insertedId(result)
-        if (id == null) throw new Error('Failed to create the phone authentication record.')
-        claimedMethod = await trx<AuthMethodEntity>('auth_methods').where({ id }).first()
-        if (claimedMethod == null)
-          throw new Error('Failed to load the phone authentication record.')
-      }
+      const { claimedMethod, previousPhoneOwnerUserId } = await findOrCreatePhoneMethod(
+        trx,
+        user.id,
+        session.methodType,
+        session.config
+      )
 
       if (currentMethod != null && currentMethod.id !== claimedMethod.id) {
         await trx('auth_methods')

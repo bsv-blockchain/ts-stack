@@ -176,6 +176,32 @@ type OverlayProviderConfigMethods = OverlayExpress & {
   configureUnprovenMaintenance?: (config: { intervalMs?: number; thresholdBlocks?: number }) => void
 }
 
+const configureUMPServices = (server: OverlayExpress): void => {
+  const MongoUMPIdentityStore = (
+    overlayTopics as unknown as {
+      MongoUMPIdentityStore?: new (db: Parameters<typeof createUMPLookupService>[0]) => unknown
+    }
+  ).MongoUMPIdentityStore
+  if (MongoUMPIdentityStore == null) {
+    server.configureTopicManager('tm_users', new UMPTopicManager())
+    server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
+    return
+  }
+
+  server.configureLookupServiceWithMongo('ls_users', db => {
+    const identityStore = new MongoUMPIdentityStore(db)
+    const topicManager = new (
+      UMPTopicManager as unknown as new (identityStore: unknown) => UMPTopicManager
+    )(identityStore)
+    const lookupFactory = createUMPLookupService as unknown as (
+      mongoDb: typeof db,
+      store: unknown
+    ) => ReturnType<typeof createUMPLookupService>
+    server.configureTopicManager('tm_users', topicManager)
+    return lookupFactory(db, identityStore)
+  })
+}
+
 // Hi there! Let's configure Overlay Express!
 let overlayLifecycle: OverlayLifecycle | undefined
 
@@ -355,28 +381,7 @@ const main = async () => {
   // contract until the governed dependency-sync PR installs overlay-topics
   // 1.7.0. Once present, the Topic Manager and lookup service share one
   // Mongo-backed reservation store across replicas.
-  const MongoUMPIdentityStore = (
-    overlayTopics as unknown as {
-      MongoUMPIdentityStore?: new (db: Parameters<typeof createUMPLookupService>[0]) => unknown
-    }
-  ).MongoUMPIdentityStore
-  if (MongoUMPIdentityStore == null) {
-    server.configureTopicManager('tm_users', new UMPTopicManager())
-    server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
-  } else {
-    server.configureLookupServiceWithMongo('ls_users', db => {
-      const identityStore = new MongoUMPIdentityStore(db)
-      const topicManager = new (UMPTopicManager as unknown as new (
-        identityStore: unknown
-      ) => UMPTopicManager)(identityStore)
-      const lookupFactory = createUMPLookupService as unknown as (
-        mongoDb: typeof db,
-        store: unknown
-      ) => ReturnType<typeof createUMPLookupService>
-      server.configureTopicManager('tm_users', topicManager)
-      return lookupFactory(db, identityStore)
-    })
-  }
+  configureUMPServices(server)
 
   // HelloWorld
   server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
