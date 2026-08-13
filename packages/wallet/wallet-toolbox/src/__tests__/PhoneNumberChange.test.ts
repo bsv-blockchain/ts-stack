@@ -25,6 +25,16 @@ function subject() {
 }
 
 describe('verified phone-number changes', () => {
+  it('requires an authenticated wallet and a successful WAB start', async () => {
+    const { manager, request } = subject()
+    Object.assign(manager as any, { authenticated: false })
+    await expect(manager.startPhoneNumberChange('+12065550100')).rejects.toThrow('Not authenticated')
+
+    Object.assign(manager as any, { authenticated: true })
+    request.mockResolvedValueOnce({ success: false, message: 'cannot send OTP' })
+    await expect(manager.startPhoneNumberChange(' +12065550100 ')).rejects.toThrow('cannot send OTP')
+  })
+
   it('allows the currently registered number and rolls the presentation key', async () => {
     const { manager, request, currentPresentationKey } = subject()
 
@@ -58,5 +68,22 @@ describe('verified phone-number changes', () => {
     expect(request.mock.calls.filter(([path]) => path.endsWith('/complete'))).toHaveLength(1)
     expect((manager as any).changePresentationKey).toHaveBeenCalledTimes(1)
     expect(request.mock.calls.filter(([path]) => path.endsWith('/commit'))).toHaveLength(2)
+  })
+
+  it('rejects missing sessions, unsuccessful authorization, and invalid commits', async () => {
+    const { manager, request, commitResponses } = subject()
+    await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('No phone change')
+
+    await manager.startPhoneNumberChange('+12065550102')
+    request.mockResolvedValueOnce({ success: false, message: 'wrong OTP' })
+    await expect(manager.completePhoneNumberChange(' bad ')).rejects.toThrow('wrong OTP')
+
+    request.mockResolvedValueOnce({ success: true, changeToken: '' })
+    await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('Phone change failed')
+
+    commitResponses.splice(0, 1, { success: true, changeId: 0 })
+    await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('Phone change failed')
+    manager.cancelPhoneNumberChange()
+    await expect(manager.completePhoneNumberChange('123456')).rejects.toThrow('No phone change')
   })
 })
