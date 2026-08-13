@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.9.0'
+version: '2.9.1'
 last_updated: '2026-08-12'
 last_verified: '2026-08-12'
 review_cadence_days: 30

@@ -2,12 +2,12 @@
   "profile": "browser",
   "maximumBytes": {
     "vite": {
-      "raw": 1601000,
-      "gzip": 377000,
+      "raw": 1602400,
+      "gzip": 377300,
       "brotli": 296000
     },
     "esbuild": {
-      "raw": 1249000,
+      "raw": 1250000,
       "gzip": 344000,
       "brotli": 276000
     }
