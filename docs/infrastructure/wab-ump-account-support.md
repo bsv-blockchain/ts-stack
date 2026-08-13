@@ -1,7 +1,7 @@
 ---
 id: wab-ump-account-support
 title: 'WAB UMP Account Support'
-kind: runbook
+kind: infra
 version: '1.0.0'
 last_updated: '2026-08-13'
 last_verified: '2026-08-13'
