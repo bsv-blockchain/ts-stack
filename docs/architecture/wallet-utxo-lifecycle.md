@@ -571,8 +571,9 @@ promoted at queue time. On the immediate path it is promoted only when the netwo
 the transaction. TypeScript sets `spendable: true` at commit and gates visibility through
 the parent-status join instead.
 
-Four Monitor tasks are registered in Go: check for proofs, send waiting, fail abandoned,
-and unfail.
+Four scheduled Monitor tasks are registered in Go — check for proofs, send waiting, fail
+abandoned, and unfail — alongside event-driven consumers for broadcast status, reorgs, and
+new tips. See [difference 11](#11-background-convergence-uses-different-mechanisms).
 
 ## BRC-100 method inventory
 
@@ -768,12 +769,23 @@ Go adds `ListTransactions` and `GetBalance` to the storage provider interface; T
 has neither there and answers the equivalent questions through `listActions` and
 list-outputs special operations.
 
-### 11. Monitor coverage is much narrower in Go
+### 11. Background convergence uses different mechanisms
 
-TypeScript ships nineteen Monitor tasks; Go registers four. Absent on the Go side are the
-review-status cascade, double-spend review, reorg handling, `nosend` settlement, UTXO
-review, purge, broadcaster push events, and pending-transaction reconciliation. Statuses
-that only those tasks advance will not advance in Go.
+TypeScript ships nineteen registered Monitor tasks; Go registers four. That comparison is
+misleading on its own, because Go moves much of the same work off the scheduler:
+
+- **Event consumers.** `pkg/monitor` runs an SSE broadcast-event pipeline with a persisted
+  replay cursor (`arcade_sse_last_event_id`) plus reorg and new-tip consumers. Reorg
+  handling is real — `Provider.HandleReorg` invalidates merkle proofs for orphaned blocks —
+  it is simply event-driven rather than polled.
+- **Inline verification.** `confirmDoubleSpends` re-verifies every aggregated double-spend
+  verdict before it becomes terminal, downgrading false positives to `serviceError` for
+  retry. TypeScript does the equivalent in a scheduled `TaskReviewDoubleSpends`.
+
+What TypeScript has and Go does not reproduce is the `reviewStatus` cascade, which
+reconciles transaction rows against their proof requests. Statuses that only that cascade
+advances will not advance in Go. Purge and action-batch cleanup also have no Go
+counterpart, the latter because Go has no action batching at all.
 
 ### 12. Conformance vectors are vendored and stale in Go
 
