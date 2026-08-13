@@ -28,14 +28,6 @@ export interface WABFaucetResponse extends WABOperationResponse {
   }
 }
 
-export interface WABPhoneChangeAuthorizationResponse extends WABOperationResponse {
-  changeToken?: string
-}
-
-export interface WABPhoneChangeCommitResponse extends WABOperationResponse {
-  changeId?: number
-}
-
 function assertHexIdentifier(value: string, name: string): void {
   if (!/^[0-9a-fA-F]{64}$/.test(value)) {
     throw new TypeError(`${name} must be a 32-byte hexadecimal string.`)
@@ -110,45 +102,6 @@ export class WABClient {
       this.transport,
       correlationId
     )
-  }
-
-  public async startPhoneNumberChange(presentationKey: string, phoneNumber: string): Promise<WABOperationResponse> {
-    assertHexIdentifier(presentationKey, 'presentationKey')
-    const payload = normalizeAuthPayload('TwilioPhone', { phoneNumber })
-    return await this.transport.request<WABOperationResponse>('/auth/phone-change/start', {
-      operation: 'phone-change-start',
-      body: { presentationKey, phoneNumber: payload.phoneNumber }
-    })
-  }
-
-  public async completePhoneNumberChange(
-    presentationKey: string,
-    phoneNumber: string,
-    otp: string
-  ): Promise<WABPhoneChangeAuthorizationResponse> {
-    assertHexIdentifier(presentationKey, 'presentationKey')
-    const payload = normalizeAuthPayload('TwilioPhone', { phoneNumber })
-    if (!/^\d{4,10}$/.test(otp)) throw new TypeError('otp must contain 4 to 10 digits.')
-    return await this.transport.request<WABPhoneChangeAuthorizationResponse>('/auth/phone-change/complete', {
-      operation: 'phone-change-complete',
-      body: { presentationKey, phoneNumber: payload.phoneNumber, otp }
-    })
-  }
-
-  public async commitPhoneNumberChange(
-    changeToken: string,
-    presentationKey: string,
-    newPresentationKey: string
-  ): Promise<WABPhoneChangeCommitResponse> {
-    if (!/^[0-9a-fA-F]{64}$/.test(changeToken)) {
-      throw new TypeError('changeToken must be a 32-byte hexadecimal string.')
-    }
-    assertHexIdentifier(presentationKey, 'presentationKey')
-    assertHexIdentifier(newPresentationKey, 'newPresentationKey')
-    return await this.transport.request<WABPhoneChangeCommitResponse>('/auth/phone-change/commit', {
-      operation: 'phone-change-commit',
-      body: { changeToken, presentationKey, newPresentationKey }
-    })
   }
 
   public async listLinkedMethods(presentationKey: string): Promise<WABOperationResponse> {

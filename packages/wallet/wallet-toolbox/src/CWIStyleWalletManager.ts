@@ -70,6 +70,8 @@ import {
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { argon2id, createSHA256, createSHA512, pbkdf2 } from './utility/hashWasm'
 
+const CWI_COMPONENT = 'wallet-toolbox.cwi-manager'
+
 /**
  * Number of rounds used in PBKDF2 for deriving password keys.
  */
@@ -599,14 +601,14 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   /**
    * A `LookupResolver` instance used to query overlay networks.
    */
-  private readonly resolver: LookupResolver
+  #resolver: LookupResolver
 
   /**
    * A SHIP broadcaster that can be used to publish updated UMP tokens
    * under the `tm_users` topic to overlay service peers.
    */
-  private readonly broadcaster: SHIPBroadcaster
-  private readonly telemetry: Telemetry
+  #broadcaster: SHIPBroadcaster
+  #telemetry: Telemetry
 
   /**
    * Construct a new OverlayUMPTokenInteractor.
@@ -619,9 +621,9 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     broadcaster: SHIPBroadcaster = new SHIPBroadcaster(['tm_users']),
     telemetry?: TelemetryConfig
   ) {
-    this.resolver = resolver
-    this.broadcaster = broadcaster
-    this.telemetry = new Telemetry(telemetry)
+    this.#resolver = resolver
+    this.#broadcaster = broadcaster
+    this.#telemetry = new Telemetry(telemetry)
   }
 
   /**
@@ -635,7 +637,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     hash: number[],
     options?: UMPTokenLookupOptions
   ): Promise<UMPToken | undefined> {
-    return await this.findToken(
+    return await this.#findToken(
       {
         service: 'ls_users',
         query: { presentationHash: Utils.toHex(hash) }
@@ -653,7 +655,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
   public async findByRecoveryKeyHash(hash: number[], options?: UMPTokenLookupOptions): Promise<UMPToken | undefined> {
-    return await this.findToken(
+    return await this.#findToken(
       {
         service: 'ls_users',
         query: { recoveryHash: Utils.toHex(hash) }
@@ -663,14 +665,14 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     )
   }
 
-  private async findToken(
+  async #findToken(
     question: { service: string; query: Record<string, string> },
     lookupKind: 'presentation' | 'recovery',
     options?: UMPTokenLookupOptions
   ): Promise<UMPToken | undefined> {
-    const correlationId = this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
+    const correlationId = this.#telemetry.enabled === true ? this.#telemetry.createCorrelationId() : undefined
     const startedAt = Date.now()
-    this.telemetry.capture({
+    this.#telemetry.capture({
       name: 'wallet-toolbox.ump.lookup.started',
       component: 'wallet-toolbox.ump',
       severity: 'debug',
@@ -680,17 +682,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
     let resolution: LookupResolution
     try {
-      resolution = await this.resolver.queryDetailed(question, undefined, {
+      resolution = await this.#resolver.queryDetailed(question, undefined, {
         waitForAllHosts: true,
         correlationId
       })
     } catch (error) {
-      const diagnostics = this.emptyLookupDiagnostics(correlationId)
-      this.captureLookupFailure(lookupKind, 'lookup-unavailable', diagnostics, startedAt, error)
+      const diagnostics = this.#emptyLookupDiagnostics(correlationId)
+      this.#captureLookupFailure(lookupKind, 'lookup-unavailable', diagnostics, startedAt, error)
       throw new UMPTokenLookupError('lookup-unavailable', diagnostics, { cause: error })
     }
 
-    const diagnostics = this.toLookupDiagnostics(resolution)
+    const diagnostics = this.#toLookupDiagnostics(resolution)
     const tokens = this.parseLookupAnswers(resolution.answer)
     const expectedHash =
       question.query[lookupKind === 'presentation' ? 'presentationHash' : 'recoveryHash'].toLowerCase()
@@ -710,27 +712,24 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (matchingTokens.length > 1) {
       const newest = this.resolveNewestToken(matchingTokens, resolution.answer.outputs)
       if (newest != null) {
-        this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt, {
+        this.#captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt, {
           supersededTokens: matchingTokens.length - 1
         })
         return newest
       }
-      const pinned =
-        options?.pinnedOutpoint == null
-          ? undefined
-          : matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
+      const pinned = options?.pinnedOutpoint
+        ? matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
+        : undefined
       if (pinned != null) {
-        this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt, {
-          pinnedFallback: 1
-        })
+        this.#captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt)
         return pinned
       }
       const reason = 'token-ambiguous'
-      this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
+      this.#captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
       throw new UMPTokenLookupError(reason, diagnostics)
     }
     if (matchingTokens.length === 1) {
-      this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt)
+      this.#captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt)
       return matchingTokens[0]
     }
 
@@ -738,12 +737,12 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     // token exists. Malformed outputs and failed peers are ignored so they cannot
     // deny onboarding by advertising corrupt data or remaining unavailable.
     if (resolution.progress.emptyHosts > 0) {
-      this.captureLookupCompleted(lookupKind, 'not-found', diagnostics, startedAt)
+      this.#captureLookupCompleted(lookupKind, 'not-found', diagnostics, startedAt)
       return undefined
     }
 
     const reason = resolution.answer.outputs.length > 0 ? 'token-malformed' : 'lookup-incomplete'
-    this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
+    this.#captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
     throw new UMPTokenLookupError(reason, diagnostics)
   }
 
@@ -777,7 +776,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         if (!candidates.has(outpoint)) continue
         const evidence = evidenceByCandidate.get(outpoint) ?? { txs: [], spent: new Set<string>() }
         evidence.txs.push(tx)
-        this.collectSpentOutpoints(tx, evidence.spent, new Set())
+        this.#collectSpentOutpoints(tx, evidence.spent, new Set())
         evidenceByCandidate.set(outpoint, evidence)
       } catch {
         // Malformed outputs never produced candidates; nothing to correlate.
@@ -803,7 +802,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const provenContinuations = survivors.filter(outpoint => {
       const evidence = evidenceByCandidate.get(outpoint)
       const token = candidates.get(outpoint)
-      return evidence != null && token != null && evidence.txs.some(tx => this.consumesSameIdentityToken(tx, token))
+      return evidence != null && token != null && evidence.txs.some(tx => this.#consumesSameIdentityToken(tx, token))
     })
     if (provenContinuations.length !== 1) return undefined
     return candidates.get(provenContinuations[0])
@@ -815,7 +814,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * hash — on-chain proof that the candidate is an update of a same-identity
    * predecessor rather than an independently minted token.
    */
-  private consumesSameIdentityToken(tx: Transaction, token: UMPToken): boolean {
+  #consumesSameIdentityToken(tx: Transaction, token: UMPToken): boolean {
     const presentationHash = Utils.toHex(token.presentationHash)
     const recoveryHash = Utils.toHex(token.recoveryHash)
     for (const input of tx.inputs) {
@@ -844,7 +843,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * renditions are absent from the lookup answer. Iterative so arbitrarily
    * long update chains cannot exhaust the call stack.
    */
-  private collectSpentOutpoints(tx: Transaction, spent: Set<string>, visited: Set<string>): void {
+  #collectSpentOutpoints(tx: Transaction, spent: Set<string>, visited: Set<string>): void {
     const pending: Transaction[] = [tx]
     while (pending.length > 0) {
       const current = pending.pop() as Transaction
@@ -862,7 +861,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
   }
 
-  private emptyLookupDiagnostics(correlationId?: string): UMPTokenLookupDiagnostics {
+  #emptyLookupDiagnostics(correlationId?: string): UMPTokenLookupDiagnostics {
     return {
       hostCount: 0,
       completedHosts: 0,
@@ -876,7 +875,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
   }
 
-  private toLookupDiagnostics(resolution: LookupResolution): UMPTokenLookupDiagnostics {
+  #toLookupDiagnostics(resolution: LookupResolution): UMPTokenLookupDiagnostics {
     const progress = resolution.progress
     return {
       hostCount: progress.hostCount,
@@ -891,7 +890,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
   }
 
-  private lookupDiagnosticAttributes(diagnostics: UMPTokenLookupDiagnostics): Record<string, number> {
+  #lookupDiagnosticAttributes(diagnostics: UMPTokenLookupDiagnostics): Record<string, number> {
     return {
       hostCount: diagnostics.hostCount,
       completedHosts: diagnostics.completedHosts,
@@ -904,14 +903,14 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
   }
 
-  private captureLookupCompleted(
+  #captureLookupCompleted(
     lookupKind: 'presentation' | 'recovery',
     result: 'found' | 'not-found',
     diagnostics: UMPTokenLookupDiagnostics,
     startedAt: number,
     extraAttributes: Record<string, number> = {}
   ): void {
-    this.telemetry.capture({
+    this.#telemetry.capture({
       name: 'wallet-toolbox.ump.lookup.completed',
       component: 'wallet-toolbox.ump',
       severity: 'info',
@@ -920,20 +919,20 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         lookupKind,
         result,
         durationMs: Date.now() - startedAt,
-        ...this.lookupDiagnosticAttributes(diagnostics),
+        ...this.#lookupDiagnosticAttributes(diagnostics),
         ...extraAttributes
       }
     })
   }
 
-  private captureLookupFailure(
+  #captureLookupFailure(
     lookupKind: 'presentation' | 'recovery' | 'outpoint',
     reason: UMPTokenLookupFailureReason,
     diagnostics: UMPTokenLookupDiagnostics,
     startedAt: number,
     error?: unknown
   ): void {
-    this.telemetry.capture({
+    this.#telemetry.capture({
       name: 'wallet-toolbox.ump.lookup.indeterminate',
       component: 'wallet-toolbox.ump',
       severity: 'warn',
@@ -942,7 +941,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         lookupKind,
         reason,
         durationMs: Date.now() - startedAt,
-        ...this.lookupDiagnosticAttributes(diagnostics)
+        ...this.#lookupDiagnosticAttributes(diagnostics)
       },
       error
     })
@@ -967,7 +966,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     oldTokenToConsume?: UMPToken
   ): Promise<OutpointString> {
     // 1) Construct the data fields and PushDrop locking script for the new UMP token.
-    const fields = this.buildUMPTokenFields(token)
+    const fields = this.#buildUMPTokenFields(token)
     const script = await new PushDrop(wallet, adminOriginator).lock(
       fields,
       [2, 'admin user management token'],
@@ -979,7 +978,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const tokenOutput = [{ lockingScript: script.toHex(), satoshis: 1, outputDescription: 'New UMP token output' }]
 
     // 2) Resolve the old-token input (if provided) and create the action.
-    const { resolvedOldToken, inputToken } = await this.resolveOldTokenInput(oldTokenToConsume)
+    const { resolvedOldToken, inputToken } = await this.#resolveOldTokenInput(oldTokenToConsume)
     const inputs: CreateActionInput[] = resolvedOldToken?.currentOutpoint
       ? [
           {
@@ -990,7 +989,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         ]
       : []
 
-    const createResult = await this.createUMPAction(
+    const createResult = await this.#createUMPAction(
       wallet,
       adminOriginator,
       inputs,
@@ -1001,20 +1000,20 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
     // 3) If the wallet fully processed it (no signable tx), broadcast and return.
     if (!createResult.signableTransaction) {
-      return await this.broadcastFinishedUMPAction(createResult)
+      return await this.#broadcastFinishedUMPAction(createResult)
     }
 
     // 4) Sign and broadcast: with old token input or without.
     const reference = createResult.signableTransaction.reference
     const partialTx = Transaction.fromBEEF(createResult.signableTransaction.tx)
     if (resolvedOldToken?.currentOutpoint) {
-      return await this.signAndBroadcastWithOldToken(wallet, adminOriginator, reference, partialTx)
+      return await this.#signAndBroadcastWithOldToken(wallet, adminOriginator, reference, partialTx)
     }
-    return await this.signAndBroadcastNewToken(wallet, adminOriginator, reference)
+    return await this.#signAndBroadcastNewToken(wallet, adminOriginator, reference)
   }
 
   /** Assembles the ordered number[][] fields array from a UMPToken. */
-  private buildUMPTokenFields(token: UMPToken): number[][] {
+  #buildUMPTokenFields(token: UMPToken): number[][] {
     const fields: number[][] = []
     fields[0] = token.passwordSalt
     fields[1] = token.passwordPresentationPrimary
@@ -1042,7 +1041,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   }
 
   /** Looks up the old token on the overlay; returns undefined resolved token if not found. */
-  private async resolveOldTokenInput(
+  async #resolveOldTokenInput(
     oldTokenToConsume?: UMPToken
   ): Promise<{ resolvedOldToken?: UMPToken; inputToken?: { beef: number[]; outputIndex: number } }> {
     if (!oldTokenToConsume?.currentOutpoint) return { resolvedOldToken: undefined, inputToken: undefined }
@@ -1054,7 +1053,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   }
 
   /** Creates the UMP action without dropping a required old-token input on failure. */
-  private async createUMPAction(
+  async #createUMPAction(
     wallet: WalletInterface,
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     inputs: CreateActionInput[],
@@ -1074,7 +1073,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         adminOriginator
       )
     } catch (error) {
-      this.telemetry.capture({
+      this.#telemetry.capture({
         name: 'wallet-toolbox.ump.action.failed',
         component: 'wallet-toolbox.ump',
         severity: 'error',
@@ -1089,7 +1088,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   }
 
   /** Handles a fully-finalized (no signable tx) createAction result — broadcasts and returns outpoint. */
-  private async broadcastFinishedUMPAction(
+  async #broadcastFinishedUMPAction(
     createResult: Awaited<ReturnType<WalletInterface['createAction']>>
   ): Promise<OutpointString> {
     const finalTxid =
@@ -1097,13 +1096,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (!finalTxid) throw new Error('No signableTransaction and no final TX found.')
     if (createResult.tx == null) throw new Error('No final TX data to broadcast.')
     const broadcastTx = Transaction.fromAtomicBEEF(createResult.tx)
-    const result = await this.broadcaster.broadcast(broadcastTx)
-    this.assertSuccessfulBroadcast(result, 'create-finalized')
+    const result = await this.#broadcaster.broadcast(broadcastTx)
+    this.#assertSuccessfulBroadcast(result, 'create-finalized')
     return `${finalTxid}.0`
   }
 
   /** Signs the old-token input and broadcasts — used during UMP token renewal. */
-  private async signAndBroadcastWithOldToken(
+  async #signAndBroadcastWithOldToken(
     wallet: WalletInterface,
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     reference: string,
@@ -1119,13 +1118,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       signResult.txid || (signResult.tx == null ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
     if (!finalTxid) throw new Error('Could not finalize transaction for renewed UMP token.')
     if (signResult.tx == null) throw new Error('Final transaction data missing after signing renewed UMP token.')
-    const result = await this.broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
-    this.assertSuccessfulBroadcast(result, 'renew')
+    const result = await this.#broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
+    this.#assertSuccessfulBroadcast(result, 'renew')
     return `${finalTxid}.0`
   }
 
   /** Signs without input spending and broadcasts — used when creating a brand-new UMP token. */
-  private async signAndBroadcastNewToken(
+  async #signAndBroadcastNewToken(
     wallet: WalletInterface,
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     reference: string
@@ -1135,17 +1134,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       signResult.txid || (signResult.tx == null ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
     if (!finalTxid) throw new Error('Failed to finalize new UMP token transaction.')
     if (signResult.tx == null) throw new Error('Final transaction data missing after signing new UMP token.')
-    const result = await this.broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
-    this.assertSuccessfulBroadcast(result, 'create')
+    const result = await this.#broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
+    this.#assertSuccessfulBroadcast(result, 'create')
     return `${finalTxid}.0`
   }
 
-  private assertSuccessfulBroadcast(
+  #assertSuccessfulBroadcast(
     result: Awaited<ReturnType<SHIPBroadcaster['broadcast']>>,
     operation: 'create-finalized' | 'renew' | 'create'
   ): void {
     const succeeded = result.status === 'success'
-    this.telemetry.capture({
+    this.#telemetry.capture({
       name: succeeded ? 'wallet-toolbox.ump.broadcast.completed' : 'wallet-toolbox.ump.broadcast.failed',
       component: 'wallet-toolbox.ump',
       severity: succeeded ? 'info' : 'error',
@@ -1176,13 +1175,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (answer.type !== 'output-list' || answer.outputs.length === 0) return []
     const tokens: UMPToken[] = []
     for (const output of answer.outputs) {
-      const token = this.parseLookupOutput(output)
+      const token = this.#parseLookupOutput(output)
       if (token != null) tokens.push(token)
     }
     return tokens
   }
 
-  private parseLookupOutput(output: LookupAnswer['outputs'][number]): UMPToken | undefined {
+  #parseLookupOutput(output: LookupAnswer['outputs'][number]): UMPToken | undefined {
     try {
       const tx = Transaction.fromBEEF(output.beef)
       const txOutput = tx.outputs[output.outputIndex]
@@ -1233,11 +1232,11 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @returns The result so that we can use it to unlock the transaction
    */
   private async findByOutpoint(outpoint: string): Promise<{ beef: number[]; outputIndex: number } | undefined> {
-    const correlationId = this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
+    const correlationId = this.#telemetry.enabled === true ? this.#telemetry.createCorrelationId() : undefined
     const startedAt = Date.now()
     let resolution: LookupResolution
     try {
-      resolution = await this.resolver.queryDetailed(
+      resolution = await this.#resolver.queryDetailed(
         {
           service: 'ls_users',
           query: {
@@ -1251,15 +1250,15 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         }
       )
     } catch (error) {
-      const diagnostics = this.emptyLookupDiagnostics(correlationId)
-      this.captureLookupFailure('outpoint', 'lookup-unavailable', diagnostics, startedAt, error)
+      const diagnostics = this.#emptyLookupDiagnostics(correlationId)
+      this.#captureLookupFailure('outpoint', 'lookup-unavailable', diagnostics, startedAt, error)
       throw new UMPTokenLookupError('lookup-unavailable', diagnostics, { cause: error })
     }
     if (resolution.answer.outputs.length === 0) {
       const p = resolution.progress
       if (p.emptyHosts === 0) {
-        const diagnostics = this.toLookupDiagnostics(resolution)
-        this.captureLookupFailure('outpoint', 'lookup-incomplete', diagnostics, startedAt)
+        const diagnostics = this.#toLookupDiagnostics(resolution)
+        this.#captureLookupFailure('outpoint', 'lookup-incomplete', diagnostics, startedAt)
         throw new UMPTokenLookupError('lookup-incomplete', diagnostics)
       }
       return undefined
@@ -1478,20 +1477,20 @@ export class CWIStyleWalletManager implements WalletInterface {
     if (this._initSnapshot !== undefined) {
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.initialization.started',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'debug'
       })
       try {
         await this.loadSnapshot(this._initSnapshot)
         this.telemetry.capture({
           name: 'wallet-toolbox.snapshot.initialization.completed',
-          component: 'wallet-toolbox.cwi-manager',
+          component: CWI_COMPONENT,
           severity: 'info'
         })
       } catch (error) {
         this.telemetry.capture({
           name: 'wallet-toolbox.snapshot.initialization.failed',
-          component: 'wallet-toolbox.cwi-manager',
+          component: CWI_COMPONENT,
           severity: 'error',
           error
         })
@@ -1503,21 +1502,11 @@ export class CWIStyleWalletManager implements WalletInterface {
   // --- Authentication Methods ---
 
   /**
-   * Provides the presentation key.
+   * Provides the presentation key. A WAB operator pin may be supplied by the
+   * authentication manager; normal lookup and lineage resolution always run
+   * before this ambiguity-only fallback.
    */
-  async providePresentationKey(key: number[]): Promise<void> {
-    await this.providePresentationKeyInternal(key)
-  }
-
-  /**
-   * WAB authentication path for an optional operator pin. Normal lookup and
-   * lineage resolution always run first; the pin is only an ambiguity fallback.
-   */
-  protected async providePresentationKeyWithUMPTokenPin(key: number[], pinnedOutpoint?: OutpointString): Promise<void> {
-    await this.providePresentationKeyInternal(key, pinnedOutpoint == null ? undefined : { pinnedOutpoint })
-  }
-
-  private async providePresentationKeyInternal(key: number[], lookupOptions?: UMPTokenLookupOptions): Promise<void> {
+  async providePresentationKey(key: number[], lookupOptions?: UMPTokenLookupOptions): Promise<void> {
     if (this.authenticated) {
       throw new Error('User is already authenticated')
     }
@@ -1533,7 +1522,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const startedAt = Date.now()
     this.telemetry.capture({
       name: 'wallet-toolbox.authentication.account-lookup.started',
-      component: 'wallet-toolbox.cwi-manager',
+      component: CWI_COMPONENT,
       severity: 'debug',
       attributes: { lookupKind: 'presentation' }
     })
@@ -1543,7 +1532,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.authentication.account-lookup.failed',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'warn',
         attributes: {
           lookupKind: 'presentation',
@@ -1566,7 +1555,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
     this.telemetry.capture({
       name: 'wallet-toolbox.authentication.account-lookup.completed',
-      component: 'wallet-toolbox.cwi-manager',
+      component: CWI_COMPONENT,
       severity: 'info',
       attributes: {
         lookupKind: 'presentation',
@@ -1588,14 +1577,14 @@ export class CWIStyleWalletManager implements WalletInterface {
       throw new Error('Determine account status with a presentation or recovery key before providing a password.')
     }
     if (this.authenticationFlow === 'existing-user') {
-      await this.handleExistingUserPassword(password)
+      await this.#handleExistingUserPassword(password)
     } else {
-      await this.handleNewUserPassword(password)
+      await this.#handleNewUserPassword(password)
     }
   }
 
   /** Handles the password step for an existing user — derives keys, sets up infrastructure. */
-  private async handleExistingUserPassword(password: string): Promise<void> {
+  async #handleExistingUserPassword(password: string): Promise<void> {
     if (this.currentUMPToken == null) throw new Error('Provide presentation or recovery key first.')
     const derivedPasswordKey = await derivePasswordKey(this.currentUMPToken, Utils.toArray(password, 'utf8'))
     let rootPrimaryKey: number[]
@@ -1617,12 +1606,12 @@ export class CWIStyleWalletManager implements WalletInterface {
         this.currentUMPToken.passwordPrimaryPrivileged
       ) as number[]
     }
-    await this.setupRootInfrastructure(rootPrimaryKey, rootPrivilegedKey)
+    await this.#setupRoot(rootPrimaryKey, rootPrivilegedKey)
     await this.switchProfile(this.activeProfileId)
   }
 
   /** Handles the password step for a new user — generates keys, builds UMP token, publishes on-chain. */
-  private async handleNewUserPassword(password: string): Promise<void> {
+  async #handleNewUserPassword(password: string): Promise<void> {
     if (this.authenticationMode !== 'presentation-key-and-password') {
       throw new Error('New-user flow requires presentation key and password mode.')
     }
@@ -1669,7 +1658,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
     this.currentUMPToken = newToken
 
-    await this.setupRootInfrastructure(rootPrimaryKey)
+    await this.#setupRoot(rootPrimaryKey)
     await this.switchProfile(DEFAULT_PROFILE_ID)
 
     // Fund the *default* wallet if funder provided
@@ -1679,7 +1668,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       } catch (error) {
         this.telemetry.capture({
           name: 'wallet-toolbox.authentication.new-wallet-funding.failed',
-          component: 'wallet-toolbox.cwi-manager',
+          component: CWI_COMPONENT,
           severity: 'error',
           error: new Error('New wallet funding failed.')
         })
@@ -1736,7 +1725,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       ) as number[]
 
       // Build root infrastructure, load profiles, switch to default
-      await this.setupRootInfrastructure(rootPrimaryKey, rootPrivilegedKey)
+      await this.#setupRoot(rootPrimaryKey, rootPrivilegedKey)
       await this.switchProfile(this.activeProfileId)
     }
   }
@@ -1786,7 +1775,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
     this.telemetry.capture({
       name: 'wallet-toolbox.snapshot.saved',
-      component: 'wallet-toolbox.cwi-manager',
+      component: CWI_COMPONENT,
       severity: 'info',
       attributes: {
         formatVersion: 2,
@@ -1845,13 +1834,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.currentUMPToken = token
 
       // Setup root infrastructure, load profiles, and switch to the loaded active profile
-      await this.setupRootInfrastructure(rootPrimaryKey) // Will automatically load profiles
+      await this.#setupRoot(rootPrimaryKey) // Will automatically load profiles
       await this.switchProfile(activeProfileId) // Switch to the profile saved in the snapshot
 
       this.authenticationFlow = 'existing-user' // Loading implies existing user
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.loaded',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'info',
         attributes: {
           formatVersion: version,
@@ -1862,7 +1851,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.destroy() // Clear state on error
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.load-failed',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'error',
         error
       })
@@ -1900,7 +1889,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     this.currentUMPToken = refreshed
-    await this.setupRootInfrastructure(this.rootPrimaryKey)
+    await this.#setupRoot(this.rootPrimaryKey)
     this.saveSnapshot()
     return true
   }
@@ -1993,7 +1982,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.profiles.push(newProfile)
 
     // Update the UMP token with the new profile list
-    await this.updateAuthFactors(
+    await this.#updateAuthFactors(
       this.currentUMPToken.passwordSalt,
       // Need to re-derive/decrypt factors needed for re-encryption
       await this.getFactor('passwordKey'),
@@ -2041,7 +2030,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Update the UMP token
-    await this.updateAuthFactors(
+    await this.#updateAuthFactors(
       this.currentUMPToken.passwordSalt,
       await this.getFactor('passwordKey'),
       await this.getFactor('presentationKey'),
@@ -2132,7 +2121,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const presentationKey = await this.getFactor('presentationKey')
     const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
 
-    await this.updateAuthFactors(
+    await this.#updateAuthFactors(
       passwordSalt,
       newPasswordKey,
       presentationKey,
@@ -2175,7 +2164,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const newRecoveryKey = Random(32)
     await this.recoveryKeySaver(newRecoveryKey)
 
-    await this.updateAuthFactors(
+    await this.#updateAuthFactors(
       this.currentUMPToken.passwordSalt,
       passwordKey,
       presentationKey,
@@ -2207,7 +2196,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const passwordKey = await this.getFactor('passwordKey')
     const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
 
-    await this.updateAuthFactors(
+    await this.#updateAuthFactors(
       this.currentUMPToken.passwordSalt,
       passwordKey,
       newPresentationKey, // Use the new key
@@ -2295,7 +2284,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.authentication.factor-decryption.failed',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'error',
         attributes: { factor: factorName },
         error
@@ -2309,7 +2298,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Recomputes UMP token fields with updated factors and profiles, then publishes the update.
    * This operation requires the *root* privileged key and the *default* profile wallet.
    */
-  private async updateAuthFactors(
+  async #updateAuthFactors(
     passwordSalt: number[],
     passwordKey: number[],
     presentationKey: number[],
@@ -2397,7 +2386,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     if (!currentActiveId.every(x => x === 0)) {
       this.telemetry.capture({
         name: 'wallet-toolbox.ump.profile-switch.started',
-        component: 'wallet-toolbox.cwi-manager',
+        component: CWI_COMPONENT,
         severity: 'debug',
         attributes: { reason: 'token-update' }
       })
@@ -2426,7 +2415,7 @@ export class CWIStyleWalletManager implements WalletInterface {
         await this.switchProfile(currentActiveId)
         this.telemetry.capture({
           name: 'wallet-toolbox.ump.profile-switch.completed',
-          component: 'wallet-toolbox.cwi-manager',
+          component: CWI_COMPONENT,
           severity: 'debug',
           attributes: { reason: 'token-update' }
         })
@@ -2613,14 +2602,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param rootPrimaryKey      The user's root primary key (32 bytes).
    * @param ephemeralRootPrivilegedKey Optional root privileged key (e.g., during recovery flows).
    */
-  private async setupRootInfrastructure(
-    rootPrimaryKey: number[],
-    ephemeralRootPrivilegedKey?: number[]
-  ): Promise<void> {
+  async #setupRoot(rootKey: number[], ephemeralRootPrivilegedKey?: number[]): Promise<void> {
     if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
-    this.rootPrimaryKey = rootPrimaryKey
+    this.rootPrimaryKey = rootKey
 
     // Store ephemeral key if provided, for one-time use by the manager
     let oneTimePrivilegedKey: PrivateKey | undefined =
@@ -2669,7 +2655,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.profiles = [] // Clear existing profiles before loading
     if (this.currentUMPToken.profilesEncrypted != null && this.currentUMPToken.profilesEncrypted.length > 0) {
       try {
-        const decryptedProfileBytes = new SymmetricKey(rootPrimaryKey).decrypt(
+        const decryptedProfileBytes = new SymmetricKey(rootKey).decrypt(
           this.currentUMPToken.profilesEncrypted
         ) as number[]
         const profilesJson = Utils.toUTF8(decryptedProfileBytes)
@@ -2682,7 +2668,7 @@ export class CWIStyleWalletManager implements WalletInterface {
         this.profiles = []
         this.telemetry.capture({
           name: 'wallet-toolbox.profile.load-failed',
-          component: 'wallet-toolbox.cwi-manager',
+          component: CWI_COMPONENT,
           severity: 'error',
           error
         })
@@ -2703,7 +2689,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * ---------------------------------------------------------------------------------------
    */
 
-  private checkAuthAndUnderlying(originator?: string): void {
+  #assertReady(originator?: string): void {
     if (!this.authenticated) {
       throw new Error('User is not authenticated.')
     }
@@ -2721,7 +2707,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.getPublicKey(args, originator)
   }
 
@@ -2729,7 +2715,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.revealCounterpartyKeyLinkage(args, originator)
   }
 
@@ -2737,7 +2723,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.revealSpecificKeyLinkage(args, originator)
   }
 
@@ -2745,7 +2731,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: WalletEncryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletEncryptResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.encrypt(args, originator)
   }
 
@@ -2753,7 +2739,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: WalletDecryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletDecryptResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.decrypt(args, originator)
   }
 
@@ -2761,7 +2747,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: CreateHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateHmacResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.createHmac(args, originator)
   }
 
@@ -2769,7 +2755,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: VerifyHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifyHmacResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.verifyHmac(args, originator)
   }
 
@@ -2777,7 +2763,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.createSignature(args, originator)
   }
 
@@ -2785,7 +2771,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.verifySignature(args, originator)
   }
 
@@ -2793,7 +2779,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.createAction(args, originator)
   }
 
@@ -2801,7 +2787,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.signAction(args, originator)
   }
 
@@ -2809,7 +2795,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AbortActionResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.abortAction(args, originator)
   }
 
@@ -2817,7 +2803,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.listActions(args, originator)
   }
 
@@ -2825,7 +2811,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.internalizeAction(args, originator)
   }
 
@@ -2833,7 +2819,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.listOutputs(args, originator)
   }
 
@@ -2841,7 +2827,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.relinquishOutput(args, originator)
   }
 
@@ -2849,7 +2835,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.acquireCertificate(args, originator)
   }
 
@@ -2857,7 +2843,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.listCertificates(args, originator)
   }
 
@@ -2865,7 +2851,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.proveCertificate(args, originator)
   }
 
@@ -2873,7 +2859,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.relinquishCertificate(args, originator)
   }
 
@@ -2881,7 +2867,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.discoverByIdentityKey(args, originator)
   }
 
@@ -2889,7 +2875,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.discoverByAttributes(args, originator)
   }
 
@@ -2917,7 +2903,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.getHeight({}, originator)
   }
 
@@ -2925,17 +2911,17 @@ export class CWIStyleWalletManager implements WalletInterface {
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.getHeaderForHeight(args, originator)
   }
 
   async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.getNetwork({}, originator)
   }
 
   async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    this.checkAuthAndUnderlying(originator)
+    this.#assertReady(originator)
     return await this.underlying!.getVersion({}, originator)
   }
 }

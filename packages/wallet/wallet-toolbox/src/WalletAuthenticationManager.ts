@@ -1,7 +1,7 @@
 import { CWIStyleWalletManager, UMPTokenInteractor } from './CWIStyleWalletManager'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { WalletInterface, Random, Utils, Transaction, RPuzzle, PrivateKey, BigNumber, TelemetryConfig } from '@bsv/sdk'
-import { WABClient } from './wab-client/WABClient'
+import { WABClient, WABOperationResponse } from './wab-client/WABClient'
 import { WABClientError } from './wab-client/WABTransport'
 import {
   AuthMethodInteractor,
@@ -11,7 +11,10 @@ import {
 
 const DEFAULT_AUTH_SESSION_TTL_MS = 10 * 60 * 1000
 const MAX_AUTH_SESSION_TTL_MS = 60 * 60 * 1000
-const UMP_OUTPOINT = /^[0-9a-fA-F]{64}\.(?:0|[1-9]\d*)$/
+const AUTH_COMPONENT = 'wallet-toolbox.authentication-manager'
+const AUTH_EVENT = 'wallet-toolbox.authentication.'
+const EXISTING_USER = 'existing-user'
+const NEW_USER = 'new-user'
 
 export interface WalletAuthenticationManagerOptions {
   telemetry?: TelemetryConfig
@@ -35,12 +38,14 @@ interface WABAuthSession {
   correlationId?: string
 }
 
-interface WABPhoneChangeSession {
-  phoneNumber: string
-  currentPresentationKey: string
+type WABPhoneChangeSession = [phoneNumber: string, presentationKey: string, changeToken?: string, newKey?: number[]]
+
+interface WABPhoneChangeAuthorization extends WABOperationResponse {
   changeToken?: string
-  newPresentationKey?: number[]
-  umpUpdated?: boolean
+}
+
+interface WABPhoneChangeCommit extends WABOperationResponse {
+  changeId?: number
 }
 
 /**
@@ -203,8 +208,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       ...(correlationId !== undefined ? { correlationId } : {})
     }
     this.telemetry.capture({
-      name: 'wallet-toolbox.authentication.wab-start.started',
-      component: 'wallet-toolbox.authentication-manager',
+      name: `${AUTH_EVENT}wab-start.started`,
+      component: AUTH_COMPONENT,
       severity: 'debug',
       correlationId,
       attributes: { methodType: authMethod.methodType }
@@ -220,8 +225,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
         throw new Error(message)
       }
       this.telemetry.capture({
-        name: 'wallet-toolbox.authentication.wab-start.completed',
-        component: 'wallet-toolbox.authentication-manager',
+        name: `${AUTH_EVENT}wab-start.completed`,
+        component: AUTH_COMPONENT,
         severity: 'info',
         correlationId,
         attributes: { methodType: authMethod.methodType }
@@ -229,8 +234,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     } catch (error) {
       this.cancelAuth()
       this.telemetry.capture({
-        name: 'wallet-toolbox.authentication.wab-start.failed',
-        component: 'wallet-toolbox.authentication-manager',
+        name: `${AUTH_EVENT}wab-start.failed`,
+        component: AUTH_COMPONENT,
         severity: 'warn',
         correlationId,
         attributes: { methodType: authMethod.methodType },
@@ -268,8 +273,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     const authSucceeded: unknown = result.success
     if (authSucceeded !== true || result.presentationKey == null || result.presentationKey.length === 0) {
       this.telemetry.capture({
-        name: 'wallet-toolbox.authentication.wab-complete.rejected',
-        component: 'wallet-toolbox.authentication-manager',
+        name: `${AUTH_EVENT}wab-complete.rejected`,
+        component: AUTH_COMPONENT,
         severity: 'warn',
         correlationId: session.correlationId,
         attributes: { methodType: session.methodType }
@@ -286,12 +291,16 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     this.cancelAuth()
     const wabAccountStatus = this.inferAccountStatus(result, session.presentationKey)
     try {
-      const umpTokenOutpoint = this.readUMPTokenOutpoint(result)
-      await this.providePresentationKeyWithUMPTokenPin(Utils.toArray(result.presentationKey, 'hex'), umpTokenOutpoint)
+      const umpTokenOutpoint =
+        typeof result.umpTokenOutpoint === 'string' ? (result.umpTokenOutpoint as `${string}.${number}`) : undefined
+      await this.providePresentationKey(
+        Utils.toArray(result.presentationKey, 'hex'),
+        umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
+      )
     } catch (error) {
       this.telemetry.capture({
-        name: 'wallet-toolbox.authentication.ump-continuity.failed',
-        component: 'wallet-toolbox.authentication-manager',
+        name: `${AUTH_EVENT}ump-continuity.failed`,
+        component: AUTH_COMPONENT,
         severity: 'warn',
         correlationId: session.correlationId,
         attributes: {
@@ -303,18 +312,18 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       throw error
     }
 
-    if (wabAccountStatus === 'existing-user' && this.authenticationFlow !== 'existing-user') {
+    if (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER) {
       super.destroy()
       const error = new WABAccountContinuityError()
       this.telemetry.capture({
-        name: 'wallet-toolbox.authentication.account-continuity.mismatch',
-        component: 'wallet-toolbox.authentication-manager',
+        name: `${AUTH_EVENT}account-continuity.mismatch`,
+        component: AUTH_COMPONENT,
         severity: 'error',
         correlationId: session.correlationId,
         attributes: {
           methodType: session.methodType,
           wabAccountStatus,
-          umpAccountStatus: 'new-user'
+          umpAccountStatus: NEW_USER
         },
         error
       })
@@ -323,8 +332,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
 
     const continuity = wabAccountStatus === this.authenticationFlow ? 'matched' : 'ump-existing'
     this.telemetry.capture({
-      name: 'wallet-toolbox.authentication.completed',
-      component: 'wallet-toolbox.authentication-manager',
+      name: `${AUTH_EVENT}completed`,
+      component: AUTH_COMPONENT,
       severity: continuity === 'matched' ? 'info' : 'warn',
       correlationId: session.correlationId,
       attributes: {
@@ -345,16 +354,15 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
    * is valid and intentionally produces a fresh presentation key/hash.
    */
   public async startPhoneNumberChange(phoneNumber: string): Promise<void> {
-    if (!this.authenticated) throw new Error('Authenticate the wallet before changing its phone number.')
+    if (!this.authenticated) throw new Error('Not authenticated')
+    const normalizedPhone = phoneNumber.trim()
     const currentPresentationKey = Utils.toHex(await this.getFactor('presentationKey'))
-    const response = await this.wabClient.startPhoneNumberChange(currentPresentationKey, phoneNumber)
-    if (response.success !== true) {
-      throw new Error(response.message || 'Failed to start phone number verification.')
-    }
-    this.phoneChangeSession = {
-      phoneNumber: phoneNumber.trim(),
-      currentPresentationKey
-    }
+    const response = await this.phoneChange<WABOperationResponse>('start', {
+      presentationKey: currentPresentationKey,
+      phoneNumber: normalizedPhone
+    })
+    if (response.success !== true) throw new Error(response.message || 'Phone change failed')
+    this.phoneChangeSession = [normalizedPhone, currentPresentationKey]
   }
 
   /**
@@ -365,45 +373,40 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
    */
   public async completePhoneNumberChange(otp: string): Promise<{ changeId: number }> {
     const session = this.phoneChangeSession
-    if (session == null) throw new Error('Start phone number verification first.')
+    if (session == null) throw new Error('No phone change')
 
-    if (session.changeToken == null) {
-      const authorization = await this.wabClient.completePhoneNumberChange(
-        session.currentPresentationKey,
-        session.phoneNumber,
-        otp.trim()
-      )
+    if (session[2] == null) {
+      const authorization = await this.phoneChange<WABPhoneChangeAuthorization>('complete', {
+        presentationKey: session[1],
+        phoneNumber: session[0],
+        otp: otp.trim()
+      })
       if (
         authorization.success !== true ||
         typeof authorization.changeToken !== 'string' ||
-        !/^[0-9a-fA-F]{64}$/.test(authorization.changeToken)
+        authorization.changeToken.length === 0
       ) {
-        throw new Error(authorization.message || 'Failed to verify the new phone number.')
+        throw new Error(authorization.message || 'Phone change failed')
       }
-      session.changeToken = authorization.changeToken
+      session[2] = authorization.changeToken
     }
 
-    session.newPresentationKey ??= Random(32)
-    if (session.umpUpdated !== true) {
-      await this.changePresentationKey(session.newPresentationKey)
-      session.umpUpdated = true
+    if (session[3] == null) {
+      const newKey = Random(32)
+      await this.changePresentationKey(newKey)
+      session[3] = newKey
     }
 
-    const committed = await this.wabClient.commitPhoneNumberChange(
-      session.changeToken,
-      session.currentPresentationKey,
-      Utils.toHex(session.newPresentationKey)
-    )
-    if (
-      committed.success !== true ||
-      committed.changeId == null ||
-      !Number.isSafeInteger(committed.changeId) ||
-      committed.changeId <= 0
-    ) {
-      throw new Error(committed.message || 'Failed to commit the verified phone number change.')
+    const committed = await this.phoneChange<WABPhoneChangeCommit>('commit', {
+      changeToken: session[2],
+      presentationKey: session[1],
+      newPresentationKey: Utils.toHex(session[3])
+    })
+    if (committed.success !== true || !Number.isSafeInteger(committed.changeId) || committed.changeId! <= 0) {
+      throw new Error(committed.message || 'Phone change failed')
     }
     this.phoneChangeSession = undefined
-    return { changeId: committed.changeId }
+    return { changeId: committed.changeId as number }
   }
 
   public cancelPhoneNumberChange(): void {
@@ -416,6 +419,13 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     super.destroy()
   }
 
+  private async phoneChange<T>(phase: string, body: unknown): Promise<T> {
+    return await this.wabClient.transport.request<T>(`/auth/phone-change/${phase}`, {
+      operation: 'phone-change',
+      body
+    })
+  }
+
   private inferAccountStatus(
     result: CompleteAuthResponse,
     temporaryPresentationKey: string
@@ -425,7 +435,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     }
     const keyMatchesTemporary = this.constantTimeHexEqual(result.presentationKey, temporaryPresentationKey)
     const rawAccountStatus: unknown = result.accountStatus
-    if (rawAccountStatus !== undefined && rawAccountStatus !== 'new-user' && rawAccountStatus !== 'existing-user') {
+    if (rawAccountStatus !== undefined && rawAccountStatus !== NEW_USER && rawAccountStatus !== EXISTING_USER) {
       throw new WABAccountContinuityError('WAB returned an invalid account-continuity status.')
     }
     const rawExistingUser: unknown = result.existingUser
@@ -435,37 +445,23 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     if (
       rawAccountStatus !== undefined &&
       rawExistingUser !== undefined &&
-      (rawAccountStatus === 'existing-user') !== rawExistingUser
+      (rawAccountStatus === EXISTING_USER) !== rawExistingUser
     ) {
       throw new WABAccountContinuityError('WAB returned contradictory account-continuity statuses.')
     }
     let compatibilityStatus: 'existing-user' | 'new-user' | undefined
     if (typeof rawExistingUser === 'boolean') {
-      compatibilityStatus = rawExistingUser ? 'existing-user' : 'new-user'
+      compatibilityStatus = rawExistingUser ? EXISTING_USER : NEW_USER
     }
     const explicitStatus = rawAccountStatus ?? compatibilityStatus
 
     if (
-      (explicitStatus === 'new-user' && !keyMatchesTemporary) ||
-      (explicitStatus === 'existing-user' && keyMatchesTemporary)
+      (explicitStatus === NEW_USER && !keyMatchesTemporary) ||
+      (explicitStatus === EXISTING_USER && keyMatchesTemporary)
     ) {
       throw new WABAccountContinuityError('WAB returned contradictory account-continuity data.')
     }
-    return explicitStatus ?? (keyMatchesTemporary ? 'new-user' : 'existing-user')
-  }
-
-  private readUMPTokenOutpoint(result: CompleteAuthResponse): `${string}.${number}` | undefined {
-    const value: unknown = result.umpTokenOutpoint
-    if (value === undefined) return undefined
-    if (typeof value !== 'string' || !UMP_OUTPOINT.test(value)) {
-      return undefined
-    }
-    const [txid, outputIndexText] = value.split('.')
-    const outputIndex = Number(outputIndexText)
-    if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndex > 0xffffffff) {
-      return undefined
-    }
-    return `${txid.toLowerCase()}.${outputIndex}`
+    return explicitStatus ?? (keyMatchesTemporary ? NEW_USER : EXISTING_USER)
   }
 
   private constantTimeHexEqual(left: string, right: string): boolean {
