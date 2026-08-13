@@ -54,6 +54,7 @@ import { isAutoSpendableChangeOutput } from './managedChange'
 import type { ManagedChangeInputCandidate } from './availableManagedChange'
 import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 import { TransactionStatus } from '../../sdk/types'
+import { beefForTxids } from '../../utility/beefForTxids'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -793,7 +794,7 @@ async function validateRequiredInputs(
 }> {
   // stampLog(vargs, `start storage verifyInputBeef`)
 
-  const beef = new Beef()
+  let beef = new Beef()
 
   if (vargs.inputs.length === 0) return { storageBeef: beef, beef, xinputs: [] }
 
@@ -823,6 +824,11 @@ async function validateRequiredInputs(
     inputsByTxid[input.outpoint.txid] ||= []
     inputsByTxid[input.outpoint.txid].push(input)
   }
+
+  // inputBEEF is an untrusted proof-data container, not a declaration of
+  // additional inputs. Retain only the transactions needed to prove the
+  // declared inputs so unrelated branches are neither validated nor stored.
+  beef = beefForTxids(beef, Object.keys(inputsByTxid))
 
   const localKnownInputTxids: Record<string, boolean> = {}
   for (const [txid, txInputs] of Object.entries(inputsByTxid)) {

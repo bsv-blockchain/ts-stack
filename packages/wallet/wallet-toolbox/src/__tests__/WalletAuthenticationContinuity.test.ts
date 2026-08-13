@@ -31,6 +31,24 @@ function subject() {
 }
 
 describe('WAB authentication continuity', () => {
+  it('surfaces a WAB faucet failure message before attempting wallet funding', async () => {
+    const wabClient = {
+      requestFaucet: jest.fn(async () => ({ success: false, message: 'faucet unavailable' }))
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => Object.create(null),
+      undefined,
+      async () => true,
+      async () => 'password',
+      wabClient as any
+    )
+
+    await expect(
+      (manager as any).newWalletFunder(Array(32).fill(1), Object.create(null), 'admin.example')
+    ).rejects.toThrow('Faucet request failed: faucet unavailable')
+  })
+
   it('starts, cancels, switches, and reports failed authentication starts', async () => {
     const { manager, authMethod, wabClient } = subject()
     Object.assign(manager as any, { authMethod: undefined })
@@ -118,5 +136,19 @@ describe('WAB authentication continuity', () => {
     expect((manager as any).constantTimeHexEqual('aa', 'ab')).toBe(false)
     expect((manager as any).constantTimeHexEqual('a', 'aa')).toBe(false)
     expect(new WABAccountContinuityError().code).toBe('WERR_WAB_ACCOUNT_CONTINUITY')
+  })
+
+  it('clears both authentication sessions when the manager is destroyed', () => {
+    const { manager } = subject()
+    Object.assign(manager as any, {
+      authSession: { presentationKey: temporaryKey },
+      phoneChangeSession: ['+12065550100', temporaryKey]
+    })
+
+    manager.destroy()
+
+    expect((manager as any).authSession).toBeUndefined()
+    expect((manager as any).phoneChangeSession).toBeUndefined()
+    expect(manager.authenticated).toBe(false)
   })
 })

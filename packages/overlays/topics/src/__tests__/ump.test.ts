@@ -121,6 +121,17 @@ describe('UMPTopicManager', () => {
     expect(result.outputsToAdmit).toHaveLength(0)
   })
 
+  it('rejects identity hashes that are not exactly 32 bytes', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    fields[6] = [0x66]
+    const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
   it('rejects a PushDrop with 0 fields', async () => {
     const key = PrivateKey.fromRandom()
     // An empty PushDrop — no fields

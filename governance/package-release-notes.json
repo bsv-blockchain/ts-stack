@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Adds WAB-administered UMP ambiguity pinning, verified same-or-new phone-number changes that roll the presentation key by spending the current UMP token, and retry-safe WAB commit semantics, alongside the local-first ChainTracks management, proof-of-work enforcement, bounded validation, cache, and observability candidate.",
-      "migration": "Existing authentication calls remain compatible. WAB operators should deploy the additive auth response and phone-change endpoints before exposing client UI. Wallet applications that offer phone changes call startPhoneNumberChange, collect the SMS code, call completePhoneNumberChange, and persist saveSnapshot immediately after success. A pin is considered only when normal verified lineage resolution remains ambiguous and only when it names a verified lookup candidate."
+      "summary": "Adds WAB-administered UMP ambiguity pinning, verified same-or-new phone-number changes that roll the presentation key by spending the current UMP token, retry-safe WAB commit semantics, and inputBEEF pruning to declared-input proof dependencies, alongside the local-first ChainTracks management, proof-of-work enforcement, bounded validation, cache, and observability candidate.",
+      "migration": "Existing authentication calls remain compatible. WAB operators should deploy the additive auth response and phone-change endpoints before exposing client UI. Wallet applications that offer phone changes call startPhoneNumberChange, collect the SMS code, call completePhoneNumberChange, and persist saveSnapshot immediately after success. A pin is considered only when normal verified lineage resolution remains ambiguous and only when it names a verified lookup candidate. Declared inputs and their complete dependency proofs are validated as before, while structurally valid unrelated BEEF branches are ignored."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Carries the browser-safe WAB UMP-pin fallback and verified phone-number/presentation-key rotation APIs together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
-      "migration": "Existing browser exports, defaults, and authentication calls remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must save the returned manager snapshot after success. Deploy compatible WAB and UMP overlay services first."
+      "summary": "Carries the browser-safe WAB UMP-pin fallback, verified phone-number/presentation-key rotation APIs, and inputBEEF pruning to declared-input dependencies together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
+      "migration": "Existing browser exports, defaults, authentication calls, and wire contracts remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must save the returned manager snapshot after success. Deploy compatible WAB and UMP overlay services first."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.9.0",
       "releaseType": "minor",
-      "summary": "Carries the mobile-safe WAB UMP-pin fallback and verified phone-number/presentation-key rotation APIs together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
-      "migration": "Existing React Native exports, remote-storage behavior, and authentication calls remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must persist saveSnapshot after success. Deploy compatible WAB and UMP overlay services first."
+      "summary": "Carries the mobile-safe WAB UMP-pin fallback, verified phone-number/presentation-key rotation APIs, and inputBEEF pruning to declared-input dependencies together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
+      "migration": "Existing React Native exports, remote-storage behavior, authentication calls, and wire contracts remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must persist saveSnapshot after success. Deploy compatible WAB and UMP overlay services first."
     },
     {
       "name": "create-bsv-app",

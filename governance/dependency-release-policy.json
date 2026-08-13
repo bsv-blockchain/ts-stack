@@ -145,9 +145,9 @@
   },
   "overrideRemovalReview": {
     "reviewedAt": "2026-08-13",
-    "method": "Rechecked all retained root and standalone overrides against their current natural dependency graphs, refreshed the root lock against the current advisory database, reproduced the expanded nanoid advisory boundary, selected the narrowest compatible override, and reran the full governance and audit gates.",
+    "method": "Rechecked all retained root and standalone overrides against their current natural dependency graphs, refreshed the root lock against the current advisory database, and reproduced the updated nanoid and image-size findings before selecting the narrowest compatible override and committed parser patch.",
     "retainedCount": 20,
-    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. The nanoid override selects the first patched 3.x release for the Vite/PostCSS graph. No override can be removed safely in this wave.",
+    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. The nanoid override selects 3.3.18, the first 3.x release patched after GHSA-2v37-7h3g-55p8 was expanded on 2026-08-13. No override can be removed safely in this wave.",
     "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [

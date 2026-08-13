@@ -1,4 +1,4 @@
-import { Hash } from '@bsv/sdk'
+import { Hash, PushDrop } from '@bsv/sdk'
 import { OverlayUMPTokenInteractor, UMPToken, UMPTokenLookupError } from '../CWIStyleWalletManager'
 
 function token(outpoint: `${string}.${number}`, presentationHash: number[]): UMPToken {
@@ -80,5 +80,32 @@ describe('WAB-administered UMP pin fallback', () => {
         pinnedOutpoint: `${'c'.repeat(64)}.0`
       })
     ).rejects.toMatchObject<Partial<UMPTokenLookupError>>({ reason: 'token-ambiguous' })
+  })
+
+  it('builds and broadcasts a finalized UMP token through the shared action path', async () => {
+    const { subject, first } = interactor()
+    const finalizedOutpoint = `${'d'.repeat(64)}.0` as const
+    const lock = jest.spyOn(PushDrop.prototype, 'lock').mockResolvedValue({ toHex: () => '51' } as any)
+    const fields = jest.spyOn(subject as any, 'tokenFields').mockReturnValue([])
+    const oldInput = jest.spyOn(subject as any, 'resolveOldInput').mockResolvedValue({
+      resolvedOldToken: undefined,
+      inputToken: undefined
+    })
+    const createAction = jest.spyOn(subject as any, 'createAction').mockResolvedValue({ txid: 'd'.repeat(64) })
+    const broadcastFinal = jest.spyOn(subject as any, 'broadcastFinal').mockResolvedValue(finalizedOutpoint)
+
+    await expect(subject.buildAndSend({} as any, 'admin.example', first)).resolves.toBe(finalizedOutpoint)
+    expect(fields).toHaveBeenCalledWith(first)
+    expect(oldInput).toHaveBeenCalledWith(undefined)
+    expect(createAction).toHaveBeenCalledWith(
+      expect.anything(),
+      'admin.example',
+      [],
+      [{ lockingScript: '51', satoshis: 1, outputDescription: 'New UMP token output' }],
+      undefined,
+      undefined
+    )
+    expect(broadcastFinal).toHaveBeenCalledWith({ txid: 'd'.repeat(64) })
+    lock.mockRestore()
   })
 })
