@@ -9,6 +9,7 @@ import {
   TableOutputBasket,
   TableProvenTx,
   TableProvenTxReq,
+  TableSyncState,
   TableTransaction,
   TableUser
 } from '../schema/tables'
@@ -16,6 +17,7 @@ import { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { StorageIdbSchema } from '../schema/StorageIdbSchema'
 import { openDB } from 'idb'
 import 'fake-indexeddb/auto'
+import { createSyncMap } from '../schema/entities'
 
 describe('StorageIdb tests', () => {
   jest.setTimeout(99999999)
@@ -177,6 +179,59 @@ describe('StorageIdb tests', () => {
         const locked = await storage.findOutputsByOutpointsForUpdate(userId, [outpoint], trx, true)
         expect(locked[`${txid}.0`]?.outputId).toBe(outputId)
       })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('processes an entire sync page in one IndexedDB transaction', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '05'.repeat(33)
+      const userId = await insertUser(storage, identityKey)
+      const now = new Date()
+      const syncState: TableSyncState = {
+        syncStateId: 0,
+        userId,
+        storageIdentityKey: 'from-storage',
+        storageName: 'remote source',
+        status: 'unknown',
+        init: true,
+        refNum: 'atomic-sync-page',
+        syncMap: JSON.stringify(createSyncMap()),
+        created_at: now,
+        updated_at: now
+      }
+      await storage.insertSyncState(syncState)
+      const transaction = jest.spyOn(storage, 'transaction')
+
+      await storage.processSyncChunk({
+        identityKey,
+        maxRoughSize: 20_000_000,
+        maxItems: 1000,
+        offsets: [],
+        since: undefined,
+        fromStorageIdentityKey: 'from-storage',
+        toStorageIdentityKey: 'to-storage'
+      }, {
+        fromStorageIdentityKey: 'from-storage',
+        toStorageIdentityKey: 'to-storage',
+        userIdentityKey: identityKey,
+        provenTxs: [],
+        provenTxReqs: [],
+        outputBaskets: [],
+        txLabels: [],
+        outputTags: [],
+        transactions: [],
+        txLabelMaps: [],
+        commissions: [],
+        outputs: [],
+        outputTagMaps: [],
+        certificates: [],
+        certificateFields: []
+      })
+
+      expect(transaction).toHaveBeenCalledTimes(1)
     } finally {
       await resetStorage(storage)
     }

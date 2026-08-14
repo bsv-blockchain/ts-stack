@@ -1163,19 +1163,27 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
-    const user = verifyTruthy(await this.findUserByIdentityKey(args.identityKey))
-    const ss = new EntitySyncState(
-      verifyOne(
-        await this.findSyncStates({
-          partial: {
-            storageIdentityKey: args.fromStorageIdentityKey,
-            userId: user.userId
-          }
-        })
+    // A sync page may contain hundreds of related entities. Keep their lookups,
+    // inserts, ID remapping, and sync-state checkpoint in one transaction. This
+    // avoids a transaction startup/commit for every record (especially costly
+    // in IndexedDB) and makes the page checkpoint atomic with its data changes.
+    return await this.transaction(async trx => {
+      const user = verifyTruthy(
+        verifyOneOrNone(await this.findUsers({ partial: { identityKey: args.identityKey }, trx }))
       )
-    )
-    const r = await ss.processSyncChunk(this, args, chunk)
-    return r
+      const ss = new EntitySyncState(
+        verifyOne(
+          await this.findSyncStates({
+            partial: {
+              storageIdentityKey: args.fromStorageIdentityKey,
+              userId: user.userId
+            },
+            trx
+          })
+        )
+      )
+      return await ss.processSyncChunk(this, args, chunk, trx)
+    })
   }
 
   /**
