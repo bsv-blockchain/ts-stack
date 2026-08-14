@@ -227,6 +227,40 @@ describe('SimplifiedFetchTransport send — non-general auth message', () => {
     expect(received).toHaveLength(1)
   })
 
+  test('normalizes typed and historical JSON byte fields in both directions', async () => {
+    const historicalBytes = (bytes: number[]) => JSON.parse(JSON.stringify(new Uint8Array(bytes)))
+    const responseBody = JSON.stringify({
+      version: '0.1',
+      messageType: 'initialRequest',
+      identityKey: 'server-key',
+      payload: historicalBytes([4, 5]),
+      signature: historicalBytes([6, 7])
+    })
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        new Response(responseBody, { status: 200, headers: { 'Content-Type': 'application/json' } })
+      ) as any
+    const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
+    const received: AuthMessage[] = []
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
+
+    await transport.send(
+      makeAuthMessage('initialRequest', {
+        payload: new Uint8Array([1, 2]) as any,
+        signature: new Uint8Array([3]) as any
+      })
+    )
+
+    const request = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
+    expect(request.payload).toEqual([1, 2])
+    expect(request.signature).toEqual([3])
+    expect(received[0]?.payload).toEqual([4, 5])
+    expect(received[0]?.signature).toEqual([6, 7])
+  })
+
   test('non-ok response on auth endpoint throws unauthenticated error', async () => {
     const mockFetch = jest
       .fn<() => any>()

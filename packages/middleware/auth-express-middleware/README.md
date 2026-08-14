@@ -5,6 +5,11 @@ BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
 
+Version 2.2.2 preserves BRC-100 byte fields in handshake and buffered JSON
+responses across number arrays, `Uint8Array`, and historical numeric-key JSON
+objects. Generic signed application-body canonicalization remains unchanged so
+old and new peers continue to verify the same bytes.
+
 ## Requirements
 
 - Node.js 22 or newer

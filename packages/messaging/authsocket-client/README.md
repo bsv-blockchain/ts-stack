@@ -64,6 +64,11 @@ socket.on('disconnect', () => {
 2. Interact with `.on(...)`, `.emit(...)` as normal.
 3. Behind the scenes, each message is signed with your client wallet key and verified by the server. Inbound messages are also verified.
 
+Authenticated event data preserves BRC-100 byte fields across historical and
+current runtimes. Existing `number[]`, current `Uint8Array`, and legacy
+numeric-key JSON representations are delivered as portable number arrays;
+sparse or invalid byte records are not coerced.
+
 ### Failure isolation and resource limits
 
 Authentication frames and application callbacks are contained inside the

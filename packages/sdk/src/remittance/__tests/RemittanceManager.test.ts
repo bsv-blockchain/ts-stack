@@ -133,6 +133,28 @@ const waitForKind = async (
 }
 
 describe('RemittanceManager base flows', () => {
+  it('serializes module-defined transaction bytes portably in envelopes', async () => {
+    const bus = new MessageBus()
+    const module: RemittanceModule<{ transaction: Uint8Array }, {}, {}> = {
+      id: 'byte-module',
+      name: 'Byte Module',
+      allowUnsolicitedSettlements: false,
+      createOption: async () => ({ transaction: new Uint8Array([1, 2, 3]) }),
+      buildSettlement: async () => ({ action: 'settle', artifact: {} }),
+      acceptSettlement: async () => ({ action: 'accept', receiptData: {} })
+    }
+    const maker = new RemittanceManager(
+      { remittanceModules: [module], threadIdFactory: makeThreadIdFactory() },
+      makeWallet('maker-key'),
+      new TestComms('maker-key', bus)
+    )
+
+    await maker.sendInvoice('taker-key', makeInvoiceInput())
+
+    const envelope = parseEnvelope(bus.list('taker-key', 'remittance_inbox')[0])
+    expect((envelope.payload as any).options['byte-module'].transaction).toEqual([1, 2, 3])
+  })
+
   it('processes an invoice, settlement, and receipt end-to-end', async () => {
     const bus = new MessageBus()
     const moduleProcessReceipt = jest.fn()

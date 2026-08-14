@@ -1,4 +1,4 @@
-import type { WalletInterface } from '@bsv/sdk'
+import { normalizeBRC100WalletByteFields, stringifyBRC100, type WalletInterface } from '@bsv/sdk'
 import type {
   SessionInfo,
   WalletRequest,
@@ -251,7 +251,7 @@ export class WalletRelayClient {
       const res = await fetch(`${this._apiUrl}/request/${this._session.sessionId}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ method, params })
+        body: stringifyBRC100({ method, params })
       })
 
       if (!res.ok) {
@@ -276,7 +276,7 @@ export class WalletRelayClient {
         throw new WalletRelayError(msg, code)
       }
 
-      const rpc = (await res.json()) as {
+      const rpc = normalizeBRC100WalletByteFields(await res.json()) as {
         result?: unknown
         error?: { code: number; message: string }
       }
@@ -393,7 +393,7 @@ export class WalletRelayClient {
         status: this._session.status,
         savedAt: Date.now()
       }
-      sessionStorage.setItem(this._storageKey, JSON.stringify(entry))
+      sessionStorage.setItem(this._storageKey, stringifyBRC100(entry))
     } catch {
       /* SSR or storage unavailable */
     }

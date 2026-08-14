@@ -1,6 +1,13 @@
 import { Server as HttpServer } from 'node:http'
 import { ServerOptions, Server as IoServer, Socket as IoSocket } from 'socket.io'
-import { WalletInterface, Peer, SessionManager, AsyncSessionManager } from '@bsv/sdk'
+import {
+  WalletInterface,
+  Peer,
+  SessionManager,
+  AsyncSessionManager,
+  normalizeBRC100WalletByteFields,
+  stringifyBRC100
+} from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'
 
 export type AuthSocketErrorPhase = 'authentication' | 'application' | 'connection' | 'send'
@@ -19,7 +26,7 @@ export type AuthSocketErrorHandler = (
 export function decodeAuthSocketEventPayload(payload: number[]): { eventName: string; data: any } {
   try {
     const str = Buffer.from(payload).toString('utf8')
-    const decoded: unknown = JSON.parse(str)
+    const decoded: unknown = normalizeBRC100WalletByteFields(JSON.parse(str))
     if (
       decoded === null ||
       typeof decoded !== 'object' ||
@@ -251,7 +258,7 @@ export class AuthSocketServer {
 
   private encodeEventPayload(eventName: string, data: any): number[] {
     const obj = { eventName, data }
-    return Array.from(Buffer.from(JSON.stringify(obj), 'utf8'))
+    return Array.from(Buffer.from(stringifyBRC100(obj), 'utf8'))
   }
 
   private reportError(error: unknown, context: AuthSocketErrorContext): void {
@@ -365,7 +372,7 @@ export class AuthSocket {
   /////////////////////////////
 
   private encodeEventPayload(eventName: string, data: any): number[] {
-    const json = JSON.stringify({ eventName, data })
+    const json = stringifyBRC100({ eventName, data })
     return Array.from(Buffer.from(json, 'utf8'))
   }
 

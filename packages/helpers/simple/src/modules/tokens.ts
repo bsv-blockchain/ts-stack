@@ -1,4 +1,14 @@
-import { Utils, PushDrop, SecurityLevel, Random, LockingScript, Transaction, Beef } from '@bsv/sdk'
+import {
+  Utils,
+  PushDrop,
+  SecurityLevel,
+  Random,
+  LockingScript,
+  Transaction,
+  Beef,
+  normalizeBRC100ByteArray,
+  stringifyBRC100
+} from '@bsv/sdk'
 import { PeerPayClient } from '@bsv/message-box-client'
 import { WalletCore } from '../core/WalletCore'
 import {
@@ -84,7 +94,7 @@ export function createTokenMethods(core: WalletCore): {
         const satoshis = options.satoshis ?? 1
 
         const dataString =
-          typeof options.data === 'object' ? JSON.stringify(options.data) : String(options.data)
+          typeof options.data === 'object' ? stringifyBRC100(options.data) : String(options.data)
 
         const plaintext = Array.from(Utils.toArray(dataString, 'utf8'))
         const encryptResult = await client.encrypt({
@@ -113,7 +123,7 @@ export function createTokenMethods(core: WalletCore): {
               lockingScript: lockingScript.toHex(),
               satoshis,
               basket,
-              customInstructions: JSON.stringify({ protocolID, keyID, counterparty: 'self' }),
+              customInstructions: stringifyBRC100({ protocolID, keyID, counterparty: 'self' }),
               tags: ['token'],
               outputDescription: `Token (${basket})`
             }
@@ -256,7 +266,7 @@ export function createTokenMethods(core: WalletCore): {
               lockingScript: newLockingScript.toHex(),
               outputDescription: 'Token for recipient',
               basket,
-              customInstructions: JSON.stringify({
+              customInstructions: stringifyBRC100({
                 protocolID,
                 keyID: newKeyID,
                 counterparty: newCounterparty
@@ -479,7 +489,7 @@ export function createTokenMethods(core: WalletCore): {
         await peerPay.sendMessage({
           recipient: to,
           messageBox: TOKEN_MESSAGE_BOX,
-          body: JSON.stringify({
+          body: stringifyBRC100({
             transaction: (finalResult as any).tx,
             protocolID,
             keyID: newKeyID,
@@ -516,10 +526,11 @@ export function createTokenMethods(core: WalletCore): {
               body = JSON.parse(body)
             } catch {}
           }
+          const transaction = normalizeBRC100ByteArray(body?.transaction)
           return {
             messageId: msg.messageId,
             sender: (body?.sender ?? msg.sender) as string,
-            transaction: body?.transaction,
+            transaction: transaction ?? body?.transaction,
             protocolID: body?.protocolID,
             keyID: body?.keyID,
             outputIndex: body?.outputIndex ?? 0,
@@ -535,16 +546,20 @@ export function createTokenMethods(core: WalletCore): {
       try {
         const client = core.getClient()
         const effectiveBasket = basket ?? core.defaults.tokenBasket
+        const transaction = normalizeBRC100ByteArray(token.transaction)
+        if (transaction == null || transaction.length === 0) {
+          throw new Error('Incoming token contains an invalid transaction byte payload')
+        }
 
         await client.internalizeAction({
-          tx: token.transaction,
+          tx: transaction,
           outputs: [
             {
               outputIndex: token.outputIndex ?? 0,
               protocol: 'basket insertion',
               insertionRemittance: {
                 basket: effectiveBasket,
-                customInstructions: JSON.stringify({
+                customInstructions: stringifyBRC100({
                   protocolID: token.protocolID,
                   keyID: token.keyID,
                   counterparty: token.sender

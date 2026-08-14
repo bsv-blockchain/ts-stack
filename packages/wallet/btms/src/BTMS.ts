@@ -19,7 +19,9 @@ import {
   Random,
   WalletInterface,
   CommsLayer,
-  AtomicBEEF
+  AtomicBEEF,
+  normalizeBRC100ByteArray,
+  stringifyBRC100
 } from '@bsv/sdk'
 
 import { BTMSToken } from './BTMSToken.js'
@@ -185,7 +187,7 @@ export class BTMS {
           {
             satoshis: DEFAULT_TOKEN_SATOSHIS,
             lockingScript: lockingScriptHex,
-            customInstructions: JSON.stringify({
+            customInstructions: stringifyBRC100({
               derivationPrefix,
               derivationSuffix
             }),
@@ -232,7 +234,7 @@ export class BTMS {
             protocol: 'basket insertion',
             insertionRemittance: {
               basket: BTMS_BASKET,
-              customInstructions: JSON.stringify({
+              customInstructions: stringifyBRC100({
                 derivationPrefix,
                 derivationSuffix
               }),
@@ -351,7 +353,7 @@ export class BTMS {
       outputs.push({
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         lockingScript: recipientScriptHex,
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix: transferDerivationPrefix,
           derivationSuffix: recipientDerivationSuffix
         }),
@@ -434,7 +436,7 @@ export class BTMS {
         amount,
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         beef: signedTx,
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix: transferDerivationPrefix,
           derivationSuffix: recipientDerivationSuffix
         }),
@@ -447,7 +449,7 @@ export class BTMS {
         await this.comms.sendMessage({
           recipient,
           messageBox: BTMS_MESSAGE_BOX,
-          body: JSON.stringify(tokenForRecipient)
+          body: stringifyBRC100(tokenForRecipient)
         })
       }
 
@@ -644,17 +646,9 @@ export class BTMS {
 
     const payments: IncomingToken[] = []
     for (const msg of messages) {
-      try {
-        const payment = JSON.parse(msg.body) as IncomingToken
-        payment.messageId = msg.messageId
-        payment.sender = msg.sender
-
-        // Filter by assetId if provided
-        if (!assetId || payment.assetId === assetId) {
-          payments.push(payment)
-        }
-      } catch {
-        // Skip invalid messages
+      const payment = parseIncomingMessage(msg)
+      if (payment != null && (!assetId || payment.assetId === assetId)) {
+        payments.push(payment)
       }
     }
 
@@ -672,6 +666,10 @@ export class BTMS {
    */
   async accept(token: IncomingToken): Promise<AcceptResult> {
     try {
+      const beef = token.beef === undefined ? undefined : normalizeBRC100ByteArray(token.beef)
+      if (token.beef !== undefined && (beef == null || beef.length === 0)) {
+        throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
+      }
       // Decode and validate the token
       const decoded = BTMSToken.decode(token.lockingScript)
       if (!decoded.valid) {
@@ -682,8 +680,8 @@ export class BTMS {
       const { found: isOnOverlay } = await this.lookupTokenOnOverlay(token.txid, token.outputIndex)
 
       // Re-broadcast if token is not on overlay
-      if (!isOnOverlay && token.beef) {
-        const tx = Transaction.fromBEEF(token.beef)
+      if (!isOnOverlay && beef != null) {
+        const tx = Transaction.fromBEEF(beef)
         try {
           await this.broadcastWithRetry(tx, `accept rebroadcast ${token.txid}`)
         } catch {
@@ -718,7 +716,7 @@ export class BTMS {
       // Internalize the token into the wallet
       // Augment customInstructions with senderIdentityKey so we can unlock later
       const originalInstructions = JSON.parse(token.customInstructions)
-      const augmentedInstructions = JSON.stringify({
+      const augmentedInstructions = stringifyBRC100({
         ...originalInstructions,
         senderIdentityKey: token.sender
       })
@@ -728,7 +726,7 @@ export class BTMS {
       const timestampTag = this.getTimestampTag()
 
       await this.wallet.internalizeAction({
-        tx: token.beef,
+        tx: beef as AtomicBEEF,
         labels: [
           `${BTMS_LABEL_PREFIX}type receive`,
           `${BTMS_LABEL_PREFIX}direction incoming`,
@@ -796,6 +794,10 @@ export class BTMS {
       if (!this.comms) {
         throw new Error('Comms layer is required to refund incoming tokens')
       }
+      const beef = token.beef === undefined ? undefined : normalizeBRC100ByteArray(token.beef)
+      if (token.beef !== undefined && (beef == null || beef.length === 0)) {
+        throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
+      }
 
       // Decode and validate the token
       const decoded = BTMSToken.decode(token.lockingScript)
@@ -807,8 +809,8 @@ export class BTMS {
       const overlayLookup = await this.lookupTokenOnOverlay(token.txid, token.outputIndex, true)
 
       // Re-broadcast if token is not on overlay
-      if (!overlayLookup.found && token.beef) {
-        const tx = Transaction.fromBEEF(token.beef)
+      if (!overlayLookup.found && beef != null) {
+        const tx = Transaction.fromBEEF(beef)
         try {
           await this.broadcastWithRetry(tx, `refund rebroadcast ${token.txid}`)
         } catch {
@@ -816,8 +818,7 @@ export class BTMS {
         }
       }
 
-      const inputBeef =
-        overlayLookup.beef ?? (token.beef ? Beef.fromBinary(Utils.toArray(token.beef)) : undefined)
+      const inputBeef = overlayLookup.beef ?? (beef != null ? Beef.fromBinary(beef) : undefined)
 
       if (!inputBeef) {
         throw new Error('Missing BEEF data required to refund token')
@@ -875,7 +876,7 @@ export class BTMS {
         {
           satoshis: DEFAULT_TOKEN_SATOSHIS,
           lockingScript: refundScript.toHex(),
-          customInstructions: JSON.stringify({
+          customInstructions: stringifyBRC100({
             derivationPrefix: refundDerivationPrefix,
             derivationSuffix: refundDerivationSuffix
           }),
@@ -925,7 +926,7 @@ export class BTMS {
       }
 
       const originalInstructions = JSON.parse(token.customInstructions)
-      const refundInstructions = JSON.stringify({
+      const refundInstructions = stringifyBRC100({
         ...originalInstructions,
         senderIdentityKey: token.sender
       })
@@ -939,7 +940,7 @@ export class BTMS {
         customInstructions: refundInstructions,
         token: decoded,
         spendable: true,
-        beef: token.beef
+        beef
       }
 
       const spends = await this.buildSpendsForInputs([selectedUtxo], signableTransaction.tx)
@@ -955,7 +956,7 @@ export class BTMS {
         amount: token.amount,
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         beef: signedTx,
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix: refundDerivationPrefix,
           derivationSuffix: refundDerivationSuffix
         }),
@@ -966,7 +967,7 @@ export class BTMS {
       await this.comms.sendMessage({
         recipient: token.sender,
         messageBox: BTMS_MESSAGE_BOX,
-        body: JSON.stringify(tokenForRecipient)
+        body: stringifyBRC100(tokenForRecipient)
       })
 
       if (token.messageId) {
@@ -1719,9 +1720,9 @@ export class BTMS {
     selected: Array<{ token: { metadata?: unknown } }>,
     metadata: unknown
   ): void {
-    const metadataJson = JSON.stringify(metadata ?? null)
+    const metadataJson = stringifyBRC100(metadata ?? null)
     for (const utxo of selected) {
-      if (JSON.stringify(utxo.token.metadata ?? null) !== metadataJson) {
+      if (stringifyBRC100(utxo.token.metadata ?? null) !== metadataJson) {
         throw new Error('Metadata mismatch across selected tokens')
       }
     }
@@ -1751,7 +1752,7 @@ export class BTMS {
       result.push({
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         lockingScript: changeScript.toHex(),
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix,
           derivationSuffix: changeDerivationSuffix
         }),

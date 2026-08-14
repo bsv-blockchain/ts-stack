@@ -3,6 +3,7 @@ import * as Utils from '../../primitives/utils.js'
 import { WalletError } from '../WalletError.js'
 import { CallType } from './WalletWireCalls.js'
 import { InvokableWalletBase } from './InvokableWalletBase.js'
+import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '../BRC100ByteEncoding.js'
 
 type ReactNativeWindow = Window & {
   ReactNativeWebView: {
@@ -16,18 +17,18 @@ type ReactNativeWindow = Window & {
 export default class ReactNativeWebView extends InvokableWalletBase {
   private readonly domain: string
 
-
   constructor(domain: string = '*') {
     super()
     if (typeof globalThis.window !== 'object') {
       throw new TypeError('The XDM substrate requires a global window object.')
     }
-    if (!(globalThis.window as unknown as ReactNativeWindow).hasOwnProperty("ReactNativeWebView")) {
-      throw new Error(
-        'The window object does not have a ReactNativeWebView property.'
-      )
+    if (!(globalThis.window as unknown as ReactNativeWindow).hasOwnProperty('ReactNativeWebView')) {
+      throw new Error('The window object does not have a ReactNativeWebView property.')
     }
-    if (typeof (globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage !== 'function') {
+    if (
+      typeof (globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage !==
+      'function'
+    ) {
       throw new TypeError(
         'The window.ReactNativeWebView property does not seem to support postMessage calls.'
       )
@@ -39,12 +40,8 @@ export default class ReactNativeWebView extends InvokableWalletBase {
     return await new Promise((resolve, reject) => {
       const id = Utils.toBase64(Random(12))
       const listener = (e: MessageEvent): void => {
-        const data = JSON.parse(e.data)
-        if (
-          data.type !== 'CWI' ||
-          data.id !== id ||
-          data.isInvocation === true
-        ) {
+        const data = normalizeBRC100WalletByteFields(JSON.parse(e.data))
+        if (data.type !== 'CWI' || data.id !== id || data.isInvocation === true) {
           return
         }
         if (typeof globalThis.window.removeEventListener === 'function') {
@@ -59,7 +56,7 @@ export default class ReactNativeWebView extends InvokableWalletBase {
       }
       globalThis.window.addEventListener('message', listener)
       ;(globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage(
-        JSON.stringify({
+        stringifyBRC100({
           type: 'CWI',
           isInvocation: true,
           id,

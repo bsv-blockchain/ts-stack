@@ -65,6 +65,23 @@ describe('AuthSocket', () => {
     expect(identityKey).toBe('peer-key')
   })
 
+  it('normalizes wallet bytes in both authenticated event directions', async () => {
+    const { authSocket, generalMessage, peer } = createHarness()
+    const received = jest.fn()
+    const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
+    authSocket.on('payment', received)
+
+    generalMessage({ eventName: 'payment', data: { transaction: historicalTx } })
+    await authSocket.emit('payment', { transaction: new Uint8Array([1, 2, 3]) })
+
+    expect(received).toHaveBeenCalledWith({ transaction: [4, 5, 6] })
+    const [payload] = peer.toPeer.mock.calls[0]
+    expect(JSON.parse(Buffer.from(payload).toString('utf8'))).toEqual({
+      eventName: 'payment',
+      data: { transaction: [1, 2, 3] }
+    })
+  })
+
   it('routes malformed payloads to the explicit unknown event', () => {
     const { authSocket, generalMessage } = createHarness()
     const unknown = jest.fn()

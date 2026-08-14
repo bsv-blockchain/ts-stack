@@ -268,6 +268,30 @@ describe('WalletRelayClient requests', () => {
     client.destroy()
   })
 
+  it('keeps request bytes portable and repairs responses from historical relay JSON', async () => {
+    const client = await connectedClient()
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
+    fetchMock.mockResolvedValueOnce(
+      response({
+        result: { signableTransaction: { tx: mangledTx, reference: 'cmVm' } }
+      })
+    )
+
+    const result = await client.sendRequest('createAction', {
+      description: 'test action',
+      inputBEEF: new Uint8Array([1, 2, 3])
+    })
+
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]
+    expect(JSON.parse(String(lastCall?.[1]?.body))).toMatchObject({
+      params: { inputBEEF: [1, 2, 3] }
+    })
+    expect(result.result).toEqual({
+      signableTransaction: { tx: [4, 5, 6], reference: 'cmVm' }
+    })
+    client.destroy()
+  })
+
   it.each([
     [401, 'bad token', 'INVALID_TOKEN'],
     [400, 'not connected', 'SESSION_NOT_CONNECTED'],

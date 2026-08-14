@@ -85,6 +85,20 @@ describe('ReactNativeWebView', () => {
       )
     })
 
+    it('serializes typed wallet args as portable arrays', () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+
+      void substrate.invoke('createAction', {
+        description: 'Test action',
+        inputBEEF: new Uint8Array([1, 2, 3])
+      })
+
+      expect(JSON.parse(postMessageMock.mock.calls[0][0])).toMatchObject({
+        args: { inputBEEF: [1, 2, 3] }
+      })
+    })
+
     it('resolves the result from a matching response', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
       const substrate = new ReactNativeWebView()
@@ -100,6 +114,29 @@ describe('ReactNativeWebView', () => {
 
       await expect(promise).resolves.toEqual({ version: '1.0.0' })
       expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
+    it('repairs numeric-key byte objects in nested wallet responses', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+
+      const promise = substrate.invoke('createAction', {})
+      dispatchMessage({
+        type: 'CWI',
+        isInvocation: false,
+        id: 'request-id',
+        status: 'success',
+        result: {
+          signableTransaction: {
+            tx: JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3]))),
+            reference: 'cmVm'
+          }
+        }
+      })
+
+      await expect(promise).resolves.toEqual({
+        signableTransaction: { tx: [1, 2, 3], reference: 'cmVm' }
+      })
     })
 
     it('rejects matching error responses as WalletError', async () => {
@@ -118,7 +155,7 @@ describe('ReactNativeWebView', () => {
 
       await expect(promise).rejects.toThrow(WalletError)
       await expect(promise).rejects.toThrow('Action was rejected')
-      await promise.catch((err) => {
+      await promise.catch(err => {
         expect(err.code).toBe(123)
       })
       expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
@@ -130,8 +167,12 @@ describe('ReactNativeWebView', () => {
       const promise = substrate.invoke('getVersion', {})
       let settled = false
       promise.then(
-        () => { settled = true },
-        () => { settled = true }
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
       )
 
       dispatchMessage({
@@ -156,7 +197,7 @@ describe('ReactNativeWebView', () => {
         result: {}
       })
 
-      await new Promise((resolve) => setTimeout(resolve, 1))
+      await new Promise(resolve => setTimeout(resolve, 1))
       expect(settled).toBe(false)
       expect(removeEventListenerMock).not.toHaveBeenCalled()
 

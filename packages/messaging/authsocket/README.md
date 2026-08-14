@@ -91,6 +91,11 @@ cross-origin default of its own.
    `socket.on(...)` and `socket.emit(...)` calls.
 3. Messages are signed and verified under the hood.
 
+Authenticated event data preserves BRC-100 byte fields across historical and
+current runtimes. Existing `number[]`, current `Uint8Array`, and legacy
+numeric-key JSON representations are delivered as portable number arrays;
+sparse or invalid byte records are not coerced.
+
 Call `await io.close()` during shutdown. It is idempotent and disconnects
 active Socket.IO clients before closing the attached HTTP server.
 

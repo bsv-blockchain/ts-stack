@@ -112,7 +112,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',
-          'await this.onDataCallback!((await response.json()) as AuthMessage)',
+          'await this.onDataCallback!(',
           "if (message.messageType === 'initialRequest') resolve()"
         ],
         [

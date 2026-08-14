@@ -40,6 +40,11 @@ The library has two entry points:
 
 Both entry points provide the same API surface — the only difference is how they connect to the underlying wallet.
 
+Message Box payment helpers normalize historical number-array, current binary
+Wallet Wire, and numeric-key JSON transaction representations before sending
+or internalizing them. Malformed transaction records fail without acknowledging
+the pending payment.
+
 ## A taste of the API
 
 ```typescript

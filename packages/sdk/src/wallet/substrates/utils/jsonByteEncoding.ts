@@ -11,32 +11,27 @@
  * corrupt requests.
  *
  * `walletJsonReplacer` makes serialization safe. `normalizeWalletJsonTx`
- * repairs already-corrupted action results produced by affected deployed
- * wallets.
+ * repairs already-corrupted wallet payloads produced by affected deployed
+ * wallets. Both compatibility names delegate to the shared BRC-100 byte
+ * encoding contract used by every JSON transport.
  */
 
+import { brc100JsonReplacer, normalizeBRC100WalletByteFields } from '../../BRC100ByteEncoding.js'
+
 /** JSON.stringify replacer that encodes Uint8Array values as plain number arrays. */
-export function walletJsonReplacer(_key: string, value: unknown): unknown {
-  if (value instanceof Uint8Array) return [...value]
-  return value
+export function walletJsonReplacer(
+  this: Record<string, unknown>,
+  key: string,
+  value: unknown
+): unknown {
+  return brc100JsonReplacer.call(this, key, value)
 }
 
 /**
- * Repair the top-level action-result `tx` regression introduced by Uint8Array
- * action serialization. Healthy arrays and all other fields are returned
- * untouched.
+ * Repair wallet byte fields affected by Uint8Array JSON serialization,
+ * including direct and signable action transactions, list-output BEEF,
+ * cryptographic byte results, and review-action error BEEF.
  */
 export function normalizeWalletJsonTx<T>(value: T): T {
-  const tx = (value as { tx?: unknown } | null)?.tx
-  if (!tx || typeof tx !== 'object' || Array.isArray(tx)) {
-    return value
-  }
-  const entries = Object.entries(tx)
-  if (
-    entries.length > 0 &&
-    entries.every(([key, byte], index) => key === String(index) && typeof byte === 'number')
-  ) {
-    Object.assign(value as object, { tx: entries.map(([, byte]) => byte) })
-  }
-  return value
+  return normalizeBRC100WalletByteFields(value)
 }

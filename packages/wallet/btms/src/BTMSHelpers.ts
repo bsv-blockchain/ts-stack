@@ -13,7 +13,12 @@ import type {
   IncomingToken,
   GetTransactionsResult
 } from './types.js'
-import type { ListActionsResult, PubKeyHex, TXIDHexString } from '@bsv/sdk'
+import {
+  normalizeBRC100ByteArray,
+  type ListActionsResult,
+  type PubKeyHex,
+  type TXIDHexString
+} from '@bsv/sdk'
 import { BTMS_LABEL_PREFIX, ISSUE_MARKER, DEFAULT_TOKEN_SATOSHIS } from './constants.js'
 
 // ---------------------------------------------------------------------------
@@ -242,6 +247,11 @@ export function parseIncomingMessage(msg: {
 }): IncomingToken | null {
   try {
     const payment = JSON.parse(msg.body) as IncomingToken
+    if (payment.beef !== undefined) {
+      const beef = normalizeBRC100ByteArray(payment.beef)
+      if (beef == null || beef.length === 0) return null
+      payment.beef = beef
+    }
     if (msg.messageId !== undefined) payment.messageId = msg.messageId
     if (msg.sender !== undefined) payment.sender = msg.sender
     return payment

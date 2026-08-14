@@ -216,6 +216,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add shared BRC-100 byte-boundary helpers that preserve valid `number[]` and
+  `Uint8Array` fast paths by identity, recover the numeric-key form emitted by
+  historical JSON transports, serialize typed arrays portably, and reject
+  sparse or invalid byte records.
 - Add the `teratestnet` lookup/SHIP preset, isolated TTN SLAP roots, and
   explicit identity/registry overlay routing without changing BRC-100's
   mainnet/testnet wallet-network response.
@@ -308,8 +312,16 @@ All notable changes to this project will be documented in this file. The format 
   browser `WalletClient` auto-discovery can reach Cicada on port 3301 instead
   of falling through after an `Illegal invocation` error.
 - Preserve `HTTPWalletJSON` action wire compatibility by serializing
-  `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
-  returned by older wallet HTTP implementations.
+  `Uint8Array` request fields as JSON arrays and normalizing direct and nested
+  action transactions, list-output BEEF, cryptographic byte results, and
+  review-action error BEEF returned by older wallet HTTP implementations.
+- Preserve BRC-100 byte fields across React Native JSON bridges in both
+  directions, including deferred-signing `signableTransaction.tx` results.
+- Preserve typed and historical numeric-key byte fields in authenticated JSON
+  request bodies, remittance envelopes, and serialized wallet review errors.
+  Existing `number[]` payloads retain their zero-copy fast path. The reviewed
+  Vite, esbuild, and UMD raw ceilings advance by 2 kB to 740, 559, and 554 kB;
+  compressed ceilings remain unchanged.
 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.
