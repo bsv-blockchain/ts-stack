@@ -32,8 +32,18 @@ import {
 
 import * as Logger from './Utils/logger.js'
 
-function toNumberArray(tx: AtomicBEEF): number[] {
-  return Array.isArray(tx) ? tx : Array.from(tx)
+function toNumberArray(tx: unknown): number[] {
+  if (Array.isArray(tx)) return tx
+  if (tx instanceof Uint8Array) return Array.from(tx)
+
+  if (tx != null && typeof tx === 'object') {
+    const entries = Object.entries(tx)
+    if (entries.length > 0 && entries.every(([key], index) => key === String(index))) {
+      return entries.map(([, byte]) => byte as number)
+    }
+  }
+
+  return []
 }
 
 function hexToBytes(hex: string): number[] {

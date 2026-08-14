@@ -28,7 +28,9 @@ npm install @bsv/message-box-client @bsv/sdk
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
 Use SDK 2.4.1 or newer so BRC-29 sends accept both historical `number[]` and
-binary Wallet Wire `Uint8Array` transaction results.
+binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
+recovers pending typed-array tokens serialized through JSON as numeric-key
+objects.
 
 ## Quick start
 

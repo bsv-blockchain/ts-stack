@@ -98,8 +98,8 @@
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.4.0",
       "releaseType": "patch",
-      "summary": "Rebuilds BRC-29 payment transport against the SDK correction for binary Wallet Wire transaction results and requires the corrected SDK peer.",
-      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets and current Uint8Array Wallet Wire substrates produce the same JSON-safe payment token."
+      "summary": "Rebuilds BRC-29 payment transport against the SDK correction for binary Wallet Wire transaction results and recovers pending typed-array tokens serialized through JSON.",
+      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets and current Uint8Array Wallet Wire substrates produce the same JSON-safe payment token, while pending numeric-key tokens remain receivable."
     },
     {
       "name": "@bsv/overlay",
