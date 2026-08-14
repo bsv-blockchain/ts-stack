@@ -40,6 +40,7 @@ export default class ReactNativeWebView extends InvokableWalletBase {
     return await new Promise((resolve, reject) => {
       const id = Utils.toBase64(Random(12))
       const listener = (e: MessageEvent): void => {
+        if (this.domain !== '*' && e.origin !== this.domain) return
         const data = normalizeBRC100WalletByteFields(JSON.parse(e.data))
         if (data.type !== 'CWI' || data.id !== id || data.isInvocation === true) {
           return

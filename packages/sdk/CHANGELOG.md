@@ -317,6 +317,8 @@ All notable changes to this project will be documented in this file. The format 
   review-action error BEEF returned by older wallet HTTP implementations.
 - Preserve BRC-100 byte fields across React Native JSON bridges in both
   directions, including deferred-signing `signableTransaction.tx` results.
+  When a concrete domain is configured, response messages from every other
+  origin are ignored before parsing.
 - Preserve typed and historical numeric-key byte fields in authenticated JSON
   request bodies, remittance envelopes, and serialized wallet review errors.
   Existing `number[]` payloads retain their zero-copy fast path. The reviewed

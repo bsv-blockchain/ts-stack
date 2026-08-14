@@ -28,16 +28,16 @@ describe('ReactNativeWebView', () => {
     jest.restoreAllMocks()
   })
 
-  const getMessageListener = (): ((event: { data: string }) => void) => {
+  const getMessageListener = (): ((event: { data: string; origin?: string }) => void) => {
     const call = addEventListenerMock.mock.calls.at(-1)
     if (call == null) {
       throw new Error('No message listener registered.')
     }
-    return call[1] as (event: { data: string }) => void
+    return call[1] as (event: { data: string; origin?: string }) => void
   }
 
-  const dispatchMessage = (data: unknown): void => {
-    getMessageListener()({ data: JSON.stringify(data) })
+  const dispatchMessage = (data: unknown, origin?: string): void => {
+    getMessageListener()({ data: JSON.stringify(data), origin })
   }
 
   describe('constructor', () => {
@@ -137,6 +137,36 @@ describe('ReactNativeWebView', () => {
       await expect(promise).resolves.toEqual({
         signableTransaction: { tx: [1, 2, 3], reference: 'cmVm' }
       })
+    })
+
+    it('accepts responses only from the configured origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('https://trusted.example')
+      const promise = substrate.invoke('getVersion', {})
+      let settled = false
+      promise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      const response = {
+        type: 'CWI',
+        isInvocation: false,
+        id: 'request-id',
+        status: 'success',
+        result: { version: '1.0.0' }
+      }
+
+      dispatchMessage(response, 'https://hostile.example')
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+
+      dispatchMessage(response, 'https://trusted.example')
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
     })
 
     it('rejects matching error responses as WalletError', async () => {

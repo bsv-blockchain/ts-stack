@@ -147,7 +147,7 @@ async function changedConfiguredTargets(base, currentTargets) {
 
 export function targetsForUnresolvedMutationRange(currentTargets, error) {
   const message = error instanceof Error ? error.message : String(error)
-  const match = message.match(/Unable to resolve mutation range in ([^:]+):/)
+  const match = /Unable to resolve mutation range in ([^:]+):/.exec(message)
   if (match === null) return Object.keys(currentTargets)
 
   const filePath = normalized(match[1])

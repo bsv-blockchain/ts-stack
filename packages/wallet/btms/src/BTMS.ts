@@ -76,6 +76,15 @@ type UtxoVerificationResult = {
   beef?: Beef
 }
 
+function normalizeIncomingTokenBeef(value: unknown): AtomicBEEF | undefined {
+  if (value === undefined) return undefined
+  const beef = normalizeBRC100ByteArray(value)
+  if (beef == null || beef.length === 0) {
+    throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
+  }
+  return beef
+}
+
 /**
  * BTMS - Basic Token Management System
  *
@@ -666,10 +675,7 @@ export class BTMS {
    */
   async accept(token: IncomingToken): Promise<AcceptResult> {
     try {
-      const beef = token.beef === undefined ? undefined : normalizeBRC100ByteArray(token.beef)
-      if (token.beef !== undefined && (beef == null || beef.length === 0)) {
-        throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
-      }
+      const beef = normalizeIncomingTokenBeef(token.beef)
       // Decode and validate the token
       const decoded = BTMSToken.decode(token.lockingScript)
       if (!decoded.valid) {
@@ -794,10 +800,7 @@ export class BTMS {
       if (!this.comms) {
         throw new Error('Comms layer is required to refund incoming tokens')
       }
-      const beef = token.beef === undefined ? undefined : normalizeBRC100ByteArray(token.beef)
-      if (token.beef !== undefined && (beef == null || beef.length === 0)) {
-        throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
-      }
+      const beef = normalizeIncomingTokenBeef(token.beef)
 
       // Decode and validate the token
       const decoded = BTMSToken.decode(token.lockingScript)

@@ -49,6 +49,15 @@ function isByte(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 255
 }
 
+function isUnsupportedBinaryView(value: unknown): boolean {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    typeof ArrayBuffer !== 'undefined' &&
+    (ArrayBuffer.isView(value) || Object.prototype.toString.call(value) === '[object ArrayBuffer]')
+  )
+}
+
 /**
  * Normalizes the runtime representations used for BRC-100 byte arrays.
  *
@@ -59,14 +68,7 @@ function isByte(value: unknown): value is number {
  */
 export function normalizeBRC100ByteArray(value: unknown): AtomicBEEF | undefined {
   if (isUint8Array(value)) return value
-
-  if (
-    value != null &&
-    typeof value === 'object' &&
-    typeof ArrayBuffer !== 'undefined' &&
-    (ArrayBuffer.isView(value) || Object.prototype.toString.call(value) === '[object ArrayBuffer]')
-  )
-    return undefined
+  if (isUnsupportedBinaryView(value)) return undefined
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
@@ -128,6 +130,19 @@ export function stringifyBRC100(value: unknown, space?: string | number): string
   return serialized
 }
 
+function visitBRC100WalletByteField(
+  candidate: Record<string, unknown>,
+  key: string,
+  fieldValue: unknown,
+  visit: (value: unknown) => void
+): void {
+  const bytes = isAmbiguousEmptyContainer(key, fieldValue)
+    ? undefined
+    : normalizeBRC100ByteArray(fieldValue)
+  if (bytes != null) candidate[key] = bytes
+  else visit(fieldValue)
+}
+
 /**
  * Repairs known byte fields in a wallet request, result, or serialized wallet
  * error. This is intentionally field-aware: unrelated numeric-key objects are
@@ -148,11 +163,7 @@ export function normalizeBRC100WalletByteFields<T>(value: T): T {
 
     for (const [key, fieldValue] of Object.entries(candidate)) {
       if (walletByteFieldNames.has(key)) {
-        const bytes = isAmbiguousEmptyContainer(key, fieldValue)
-          ? undefined
-          : normalizeBRC100ByteArray(fieldValue)
-        if (bytes != null) (candidate as Record<string, unknown>)[key] = bytes
-        else visit(fieldValue)
+        visitBRC100WalletByteField(candidate as Record<string, unknown>, key, fieldValue, visit)
       } else {
         visit(fieldValue)
       }
