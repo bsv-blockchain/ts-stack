@@ -9,6 +9,7 @@ import {
   TableOutputBasket,
   TableProvenTx,
   TableProvenTxReq,
+  TableSyncState,
   TableTransaction,
   TableUser
 } from '../schema/tables'
@@ -16,6 +17,7 @@ import { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { StorageIdbSchema } from '../schema/StorageIdbSchema'
 import { openDB } from 'idb'
 import 'fake-indexeddb/auto'
+import { createSyncMap } from '../schema/entities'
 
 describe('StorageIdb tests', () => {
   jest.setTimeout(99999999)
@@ -177,6 +179,97 @@ describe('StorageIdb tests', () => {
         const locked = await storage.findOutputsByOutpointsForUpdate(userId, [outpoint], trx, true)
         expect(locked[`${txid}.0`]?.outputId).toBe(outputId)
       })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('processes an entire sync page in one IndexedDB transaction', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '05'.repeat(33)
+      const userId = await insertUser(storage, identityKey)
+      const now = new Date()
+      const syncState: TableSyncState = {
+        syncStateId: 0,
+        userId,
+        storageIdentityKey: 'from-storage',
+        storageName: 'remote source',
+        status: 'unknown',
+        init: true,
+        refNum: 'atomic-sync-page',
+        syncMap: JSON.stringify(createSyncMap()),
+        created_at: now,
+        updated_at: now
+      }
+      await storage.insertSyncState(syncState)
+      const transaction = jest.spyOn(storage, 'transaction')
+      const transactions: TableTransaction[] = Array.from({ length: 300 }, (_, index) => ({
+        transactionId: index + 1,
+        userId: 999,
+        status: 'completed',
+        reference: Buffer.from(`synced-transaction-${index}`).toString('base64'),
+        isOutgoing: true,
+        satoshis: index,
+        description: `synced transaction ${index}`,
+        txid: (index + 1).toString(16).padStart(64, '0'),
+        created_at: now,
+        updated_at: now
+      }))
+
+      const result = await storage.processSyncChunk({
+        identityKey,
+        maxRoughSize: 20_000_000,
+        maxItems: 1000,
+        offsets: [],
+        since: undefined,
+        fromStorageIdentityKey: 'from-storage',
+        toStorageIdentityKey: 'to-storage'
+      }, {
+        fromStorageIdentityKey: 'from-storage',
+        toStorageIdentityKey: 'to-storage',
+        userIdentityKey: identityKey,
+        provenTxs: [],
+        provenTxReqs: [],
+        outputBaskets: [],
+        txLabels: [],
+        outputTags: [],
+        transactions,
+        txLabelMaps: [],
+        commissions: [],
+        outputs: [],
+        outputTagMaps: [],
+        certificates: [],
+        certificateFields: []
+      })
+
+      expect(transaction).toHaveBeenCalledTimes(1)
+      expect(result.inserts).toBe(transactions.length)
+      await expect(storage.countTransactions({ partial: { userId } })).resolves.toBe(transactions.length)
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('preserves the original error when aborting an IndexedDB transaction', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '06'.repeat(33)
+      const originalError = new Error('original transaction failure')
+      const now = new Date()
+
+      await expect(storage.transaction(async trx => {
+        await storage.insertUser({
+          userId: 0,
+          identityKey,
+          activeStorage: '42'.repeat(32),
+          created_at: now,
+          updated_at: now
+        }, trx)
+        throw originalError
+      })).rejects.toBe(originalError)
+
+      await expect(storage.findUserByIdentityKey(identityKey)).resolves.toBeUndefined()
     } finally {
       await resetStorage(storage)
     }

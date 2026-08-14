@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Commit each received wallet-storage sync page and its durable checkpoint in
+  one provider transaction. Large IndexedDB replications avoid thousands of
+  transaction startup/commit cycles, failed pages roll back without advancing
+  the checkpoint, and abort cleanup preserves the original storage error.
+
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
   can recover an interrupted transition from the current or pending key and

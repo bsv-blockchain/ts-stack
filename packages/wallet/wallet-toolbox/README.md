@@ -45,6 +45,11 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; remote wallet storage plus portable local ChainTracks components and adapter contracts
 
+Wallet storage replication applies each received page and its durable sync
+checkpoint in one provider transaction. IndexedDB and Knex therefore avoid
+per-record transaction startup, and a failed page rolls back without advancing
+the checkpoint. The sync wire format and persisted schemas are unchanged.
+
 ### UMP account continuity and phone changes
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the

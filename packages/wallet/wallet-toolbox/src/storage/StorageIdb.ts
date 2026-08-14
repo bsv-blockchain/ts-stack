@@ -1477,8 +1477,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       await tx.done
       return r
     } catch (err) {
-      tx.abort()
-      await tx.done
+      try {
+        tx.abort()
+        await tx.done
+      } catch {}
       throw err
     }
   }

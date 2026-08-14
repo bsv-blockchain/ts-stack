@@ -362,7 +362,8 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   async processSyncChunk(
     writer: EntityStorage,
     args: RequestSyncChunkArgs,
-    chunk: SyncChunk
+    chunk: SyncChunk,
+    trx?: TrxToken
   ): Promise<{
     done: boolean
     maxUpdated_at: Date | undefined
@@ -392,9 +393,9 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     // Merge User
     if (chunk.user != null) {
       const ei = chunk.user
-      const { found, eo } = await EntityUser.mergeFind(writer, this.userId, ei)
+      const { found, eo } = await EntityUser.mergeFind(writer, this.userId, ei, trx)
       if (found) {
-        if (await eo.mergeExisting(writer, args.since, ei)) {
+        if (await eo.mergeExisting(writer, args.since, ei, undefined, trx)) {
           maxUpdated_at = maxDate(maxUpdated_at, ei.updated_at)
           updates++
         }
@@ -403,7 +404,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
 
     // Merge everything else...
     for (const me of mes) {
-      const r = await me.merge(args.since, writer, this.userId, this.syncMap)
+      const r = await me.merge(args.since, writer, this.userId, this.syncMap, trx)
       // The counts become the offsets for the next chunk.
       me.esm.count += me.stateArray?.length || 0
       updates += r.updates
@@ -419,7 +420,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       for (const me of mes) me.esm.count = 0
     }
 
-    await this.updateStorage(writer, false)
+    await this.updateStorage(writer, false, trx)
 
     return { done, maxUpdated_at, updates, inserts }
   }
