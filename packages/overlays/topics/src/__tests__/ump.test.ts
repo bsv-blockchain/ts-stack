@@ -12,8 +12,12 @@
  */
 
 import { LockingScript, PrivateKey, PublicKey, Transaction, Utils } from '@bsv/sdk'
+import { jest } from '@jest/globals'
 import UMPTopicManager from '../ump/UMPTopicManager.js'
-import { InMemoryUMPIdentityStore } from '../ump/UMPIdentityStore.js'
+import {
+  InMemoryUMPIdentityStore,
+  UMPIdentityReservationStore
+} from '../ump/UMPIdentityStore.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -309,6 +313,33 @@ describe('UMPTopicManager', () => {
       outputsToAdmit: [0],
       coinsToRetain: [0]
     })
+  })
+
+  it('keeps GASP validation read-only and aborts reserved outputs on broadcast failure', async () => {
+    const identityStore: UMPIdentityReservationStore = {
+      reserve: jest.fn(async () => undefined),
+      confirm: jest.fn(async () => undefined),
+      abort: jest.fn(async () => undefined),
+      release: jest.fn(async () => undefined)
+    }
+    manager = new UMPTopicManager(identityStore)
+    const fields = makeFields(11)
+    const tx = buildTxWithInput([
+      buildPushDropScript(PrivateKey.fromRandom().toPublicKey(), fields)
+    ])
+
+    await manager.identifyAdmissibleOutputs(
+      tx.toBEEF(),
+      [],
+      undefined,
+      'historical-tx',
+      { dryRun: true }
+    )
+    expect(identityStore.reserve).not.toHaveBeenCalled()
+    await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(identityStore.reserve).toHaveBeenCalledTimes(1)
+    await manager.abortAdmissibleOutputs(tx.toBEEF(), [0])
+    expect(identityStore.abort).toHaveBeenCalledWith(`${tx.id('hex')}.0`)
   })
 
   it('returns empty results for malformed BEEF', async () => {

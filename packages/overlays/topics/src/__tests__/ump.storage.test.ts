@@ -40,6 +40,39 @@ function umpScript(presentation = 0x11, recovery = 0x22): LockingScript {
 }
 
 describe('InMemoryUMPIdentityStore', () => {
+  it('validates its TTL and cleans every provisional state transition', async () => {
+    expect(() => new InMemoryUMPIdentityStore(0)).toThrow(TypeError)
+    expect(() => new InMemoryUMPIdentityStore(1.5)).toThrow(TypeError)
+
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = new InMemoryUMPIdentityStore(100)
+
+    await store.reserve(claim('aborted.0'), [])
+    await store.abort('aborted.0')
+    await store.reserve(claim('owner.0'), [])
+    await store.confirm('owner.0')
+    await store.reserve(claim('successor.0'), ['owner.0'])
+    await store.release('successor.0')
+    await store.reserve(claim('successor.0'), ['owner.0'])
+    await store.release('owner.0')
+    await store.confirm('successor.0')
+    await store.release('successor.0')
+
+    await store.reserve(claim('expiring.0'), [])
+    now.mockReturnValue(1_101)
+    await expect(store.reserve(claim('after-expiry.0'), [])).resolves.toBeUndefined()
+
+    const transferStore = new InMemoryUMPIdentityStore(100)
+    await transferStore.reserve(claim('confirmed.0'), [])
+    await transferStore.confirm('confirmed.0')
+    await transferStore.reserve(claim('expired-successor.0'), ['confirmed.0'])
+    now.mockReturnValue(1_202)
+    await expect(transferStore.reserve(claim('blocked.0'), [])).rejects.toMatchObject({
+      kind: 'presentation'
+    })
+    now.mockRestore()
+  })
+
   it('reserves first writers, rolls back partial conflicts, transfers consumed owners, and releases', async () => {
     const store = new InMemoryUMPIdentityStore()
     const first = claim('a.0')
@@ -240,6 +273,41 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
         _id: `presentation:${'11'.repeat(32)}`
       })
     ).resolves.toMatchObject({ ownerOutpoint: 'owner.0' })
+  })
+
+  it('retries compare-and-set races while renewing, staging, and replacing claims', async () => {
+    const store = new MongoUMPIdentityStore(db, 1000)
+    const reservations = (store as any).reservations
+    const originalFindOneAndUpdate = reservations.findOneAndUpdate.bind(reservations)
+    const loseOneRace = () =>
+      jest
+        .spyOn(reservations, 'findOneAndUpdate')
+        .mockResolvedValueOnce(null)
+        .mockImplementation((...args: any[]) => originalFindOneAndUpdate(...args))
+
+    await store.reserve(claim('owner.0'), [])
+    let race = loseOneRace()
+    await store.reserve(claim('owner.0'), [])
+    race.mockRestore()
+    await store.confirm('owner.0')
+
+    race = loseOneRace()
+    await store.reserve(claim('successor.0'), ['owner.0'])
+    race.mockRestore()
+    race = loseOneRace()
+    await store.reserve(claim('successor.0'), ['owner.0'])
+    race.mockRestore()
+    await store.release('owner.0')
+    await store.confirm('successor.0')
+
+    await store.reserve(claim('expired.0', '33'.repeat(32), '44'.repeat(32)), [])
+    await db.collection('ump_identity_reservations').updateMany(
+      { ownerOutpoint: 'expired.0' },
+      { $set: { pendingUntil: new Date(0) } }
+    )
+    race = loseOneRace()
+    await store.reserve(claim('replacement.0', '33'.repeat(32), '44'.repeat(32)), [])
+    race.mockRestore()
   })
 
   it('retries initialization after a transient failure and skips completed legacy bootstrap work', async () => {

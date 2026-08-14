@@ -38,6 +38,8 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // do carry statements elsewhere: `packages/helpers/create-bsv-app/src/index.ts`
   // is a CLI that reads `process.argv` and branches on it, and excluding it by
   // shape would quietly drop real code out of this gate.
+  /packages\/overlays\/overlay\/mod\.ts$/,
+  /packages\/overlays\/overlay\/src\/TopicManager\.ts$/,
   /packages\/overlays\/topics\/src\/index\.ts$/,
   /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/,
   // SetupWallet is declarations only, while the mobile storage entry point is
