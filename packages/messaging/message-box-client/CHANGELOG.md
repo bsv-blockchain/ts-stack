@@ -27,6 +27,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Require the SDK patch that accepts binary Wallet Wire `Uint8Array`
+  transaction results in BRC-29 payment construction, and rebuild the browser
+  bundle with that correction. Historical `number[]` wallet results remain
+  unchanged.
+
 ### Security
 
 ---

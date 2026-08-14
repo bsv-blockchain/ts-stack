@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.4.0'
+version: '2.4.1'
 npm: '@bsv/sdk'
-last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+last_updated: '2026-08-14'
+last_verified: '2026-08-14'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -141,6 +141,10 @@ console.log(publicKey, action.txid)
 ```
 
 `WalletClient` implements the BRC-100 method surface. It discovers a wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
+
+`CreateActionResult` can carry AtomicBEEF as either a historical `number[]` or
+a binary Wallet Wire `Uint8Array`. BRC-29 remittance accepts both and emits a
+portable `number[]` settlement artifact for JSON-safe transport.
 
 For advanced postMessage integrations, `XDM` defaults to the wildcard target
 origin so public apps, mobile webviews, and opaque origins can reach an embedded

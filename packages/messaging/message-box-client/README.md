@@ -192,6 +192,9 @@ for (const payment of incoming) {
 `PeerPayClient` uses BRC-29 wallet-payment derivation and the same authenticated
 Message Box transport. It also supports live delivery, payment requests,
 responses, cancellations, and explicit rejection/refund flows.
+Its SDK peer accepts both historical `number[]` and binary Wallet Wire
+`Uint8Array` transaction results, while payment messages retain a portable JSON
+byte-array representation.
 
 ## Token settlement
 

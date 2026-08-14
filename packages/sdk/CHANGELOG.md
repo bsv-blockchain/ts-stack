@@ -299,6 +299,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Normalize both supported `CreateActionResult` AtomicBEEF representations,
+  `number[]` and Wallet Wire `Uint8Array`, into the portable byte-array form
+  emitted by BRC-29 remittance settlements. Binary wallet substrates no longer
+  fail payment creation with `brc29.invalid_tx`, and JSON transports receive
+  the same transaction shape as historical wallets.
 - Bind the default `HTTPWalletWire` fetch client to its global receiver so
   browser `WalletClient` auto-discovery can reach Cicada on port 3301 instead
   of falling through after an `Illegal invocation` error.

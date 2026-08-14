@@ -243,7 +243,8 @@ export class Brc29RemittanceModule
       if (tx == null) {
         return terminate('brc29.missing_tx', 'wallet.createAction did not return a transaction.')
       }
-      if (!isAtomicBeef(tx)) {
+      const transaction = toPortableTransaction(tx)
+      if (transaction == null) {
         return terminate('brc29.invalid_tx', 'wallet.createAction returned an invalid transaction payload.')
       }
 
@@ -251,7 +252,7 @@ export class Brc29RemittanceModule
         action: 'settle',
         artifact: {
           customInstructions: { derivationPrefix, derivationSuffix },
-          transaction: tx,
+          transaction,
           amountSatoshis: option.amountSatoshis,
           outputIndex: option.outputIndex ?? 0
         }
@@ -355,15 +356,19 @@ function ensureValidSettlement(settlement: Brc29SettlementArtifact): Brc29Settle
   if (outputIndex != null && (!Number.isInteger(outputIndex) || outputIndex < 0)) {
     throw new Error('BRC-29 settlement outputIndex must be a non-negative integer')
   }
-  if (!isAtomicBeef(settlement.transaction)) {
+  const transaction = toPortableTransaction(settlement.transaction)
+  if (transaction == null) {
     throw new Error('BRC-29 settlement transaction must be a non-empty byte array')
   }
-  return settlement
+  return transaction === settlement.transaction ? settlement : { ...settlement, transaction }
 }
 
-function isAtomicBeef(tx: unknown): tx is number[] {
-  if (!Array.isArray(tx) || tx.length === 0) return false
-  return tx.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+function toPortableTransaction(tx: unknown): number[] | undefined {
+  const bytes = tx instanceof Uint8Array ? [...tx] : tx
+  return Array.isArray(bytes) && bytes.length > 0 &&
+    bytes.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+    ? bytes
+    : undefined
 }
 
 function isNonEmptyString(value: unknown): value is string {

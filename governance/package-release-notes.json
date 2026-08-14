@@ -96,10 +96,10 @@
     },
     {
       "name": "@bsv/message-box-client",
-      "publishedVersion": "2.2.2",
-      "releaseType": "minor",
-      "summary": "Adds first-class TerraTestNet overlay routing while requiring an explicit TTN Message Box host until a dedicated deployment is available.",
-      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet and must provide the dedicated TTN host explicitly."
+      "publishedVersion": "2.4.0",
+      "releaseType": "patch",
+      "summary": "Rebuilds BRC-29 payment transport against the SDK correction for binary Wallet Wire transaction results and requires the corrected SDK peer.",
+      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets and current Uint8Array Wallet Wire substrates produce the same JSON-safe payment token."
     },
     {
       "name": "@bsv/overlay",
@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.3.1",
-      "releaseType": "minor",
-      "summary": "Adds the teratestnet overlay preset, an isolated TTN SHIP/SLAP root, and explicit resolver selection for identity and registry clients.",
-      "migration": "Existing mainnet, testnet, and local routing is unchanged. TTN consumers select teratestnet explicitly because BRC-100 getNetwork continues to report testnet for all test-family chains."
+      "publishedVersion": "2.4.0",
+      "releaseType": "patch",
+      "summary": "Restores BRC-29 payment construction for binary Wallet Wire substrates by accepting Uint8Array CreateActionResult transactions and emitting portable number-array settlements.",
+      "migration": "No API migration is required. Historical number-array wallets remain unchanged, while binary Wallet Wire wallets now work with the same BRC-29 and Message Box payment primitives."
     },
     {
       "name": "@bsv/simple",
