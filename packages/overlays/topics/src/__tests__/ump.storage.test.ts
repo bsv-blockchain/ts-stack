@@ -1,4 +1,4 @@
-import { Db, MongoClient } from 'mongodb'
+import { Db, MongoClient, MongoServerError } from 'mongodb'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { LockingScript, PrivateKey, PublicKey, Utils } from '@bsv/sdk'
 import { jest } from '@jest/globals'
@@ -180,6 +180,65 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     ).resolves.not.toBeNull()
   })
 
+  it('propagates unexpected legacy bootstrap reservation failures', async () => {
+    await db.collection<any>('ump').insertOne({
+      txid: 'legacy-error',
+      outputIndex: 0,
+      presentationHash: '11'.repeat(32),
+      recoveryHash: '22'.repeat(32)
+    })
+    const store = new MongoUMPIdentityStore(db)
+    const reservations = (store as any).reservations
+    const updateOne = jest
+      .spyOn(reservations, 'updateOne')
+      .mockRejectedValueOnce(new Error('bootstrap write failed'))
+
+    await expect(store.reserve(claim('new.0'), [])).rejects.toThrow('bootstrap write failed')
+    updateOne.mockRestore()
+  })
+
+  it('retries duplicate insert races and propagates unexpected insert failures', async () => {
+    const store = new MongoUMPIdentityStore(db)
+    await store.reserve(claim('seed.0'), [])
+    const reservations = (store as any).reservations
+    const originalInsertOne = reservations.insertOne.bind(reservations)
+    let insertOne = jest
+      .spyOn(reservations, 'insertOne')
+      .mockRejectedValueOnce(new MongoServerError({ message: 'duplicate race', code: 11000 }))
+      .mockImplementation((...args: any[]) => originalInsertOne(...args))
+
+    await expect(
+      store.reserve(claim('race.0', '33'.repeat(32), '44'.repeat(32)), [])
+    ).resolves.toBeUndefined()
+    insertOne.mockRestore()
+
+    insertOne = jest
+      .spyOn(reservations, 'insertOne')
+      .mockRejectedValueOnce(new Error('reservation write failed'))
+    await expect(
+      store.reserve(claim('failed.0', '55'.repeat(32), '66'.repeat(32)), [])
+    ).rejects.toThrow('reservation write failed')
+    insertOne.mockRestore()
+  })
+
+  it('restores a renewed provisional owner when the second hash conflicts', async () => {
+    const store = new MongoUMPIdentityStore(db)
+    await store.reserve(claim('pending.0', '11'.repeat(32), '22'.repeat(32)), [])
+    await store.reserve(claim('blocker.0', '33'.repeat(32), '44'.repeat(32)), [])
+    await store.confirm('blocker.0')
+    const reservations = db.collection<any>('ump_identity_reservations')
+    const reservationId = `presentation:${'11'.repeat(32)}`
+    const before = await reservations.findOne({ _id: reservationId })
+
+    await expect(
+      store.reserve(claim('pending.0', '11'.repeat(32), '44'.repeat(32)), [])
+    ).rejects.toMatchObject({ kind: 'recovery' })
+    await expect(reservations.findOne({ _id: reservationId })).resolves.toMatchObject({
+      ownerOutpoint: 'pending.0',
+      pendingUntil: before?.pendingUntil
+    })
+  })
+
   it('atomically transfers, confirms, expires, rolls back, releases, and reclaims reservations', async () => {
     const store = new MongoUMPIdentityStore(db, 1000)
     const first = claim('a.0')
@@ -301,10 +360,9 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     await store.confirm('successor.0')
 
     await store.reserve(claim('expired.0', '33'.repeat(32), '44'.repeat(32)), [])
-    await db.collection('ump_identity_reservations').updateMany(
-      { ownerOutpoint: 'expired.0' },
-      { $set: { pendingUntil: new Date(0) } }
-    )
+    await db
+      .collection('ump_identity_reservations')
+      .updateMany({ ownerOutpoint: 'expired.0' }, { $set: { pendingUntil: new Date(0) } })
     race = loseOneRace()
     await store.reserve(claim('replacement.0', '33'.repeat(32), '44'.repeat(32)), [])
     race.mockRestore()
