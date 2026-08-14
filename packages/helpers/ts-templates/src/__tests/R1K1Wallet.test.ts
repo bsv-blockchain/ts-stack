@@ -85,6 +85,20 @@ describe('R1K1Wallet', () => {
     await expect(template.lock(r1Commitment, k1Commitment.slice(1))).rejects.toThrow(
       'K1 public key hash must be 20 bytes'
     )
+    await expect(template.lock([...r1Commitment.slice(0, -1), 256], k1Commitment)).rejects.toThrow(
+      'must contain only bytes'
+    )
+  })
+
+  it('rejects an invalid compressed P-256 key before constructing an unlocker', () => {
+    expect(() =>
+      template.unlock({
+        path: 'r1',
+        publicKey: [0x04, ...r1PublicKey.slice(1)],
+        salt: r1Salt,
+        signDigest: () => new Uint8Array(64)
+      })
+    ).toThrow('R1 public key must use compressed P-256 encoding')
   })
 
   it('builds the R1 witness from a YubiKey-style DER digest signer', async () => {
@@ -164,6 +178,28 @@ describe('R1K1Wallet', () => {
     expect(called).toBe(false)
   })
 
+  it('rejects malformed hardware signatures and accepts the raw 64-byte form', async () => {
+    const lockingScript = await template.lock(r1Commitment, k1Commitment)
+    const { spendingTransaction } = transactionFor(lockingScript)
+    const malformed = template.unlock({
+      path: 'r1',
+      publicKey: r1PublicKey,
+      salt: r1Salt,
+      signDigest: () => [1]
+    })
+    await expect(malformed.sign(spendingTransaction, 0)).rejects.toThrow(
+      'must return a DER signature or raw 64-byte r || s'
+    )
+
+    const raw = template.unlock({
+      path: 'r1',
+      publicKey: r1PublicKey,
+      salt: r1Salt,
+      signDigest: () => new Uint8Array(64)
+    })
+    await expect(raw.sign(spendingTransaction, 0)).resolves.toBeInstanceOf(UnlockingScript)
+  })
+
   it('spends through the K1 recovery branch with a real transaction signature', async () => {
     const lockingScript = await template.lock(r1Commitment, k1Commitment)
     const { sourceTransaction, spendingTransaction } = transactionFor(lockingScript)
@@ -184,5 +220,47 @@ describe('R1K1Wallet', () => {
     await expect(
       template.unlock({ path: 'k1', privateKey: unrelatedKey }).sign(spendingTransaction, 0)
     ).rejects.toThrow('does not match the locking script commitment')
+  })
+
+  it('validates required source details and malformed locking scripts', async () => {
+    const recovery = template.unlockK1({ privateKey: k1PrivateKey })
+    await expect(recovery.sign(new Transaction(), 0)).rejects.toThrow(
+      'Transaction input 0 does not exist'
+    )
+
+    const transactionWithoutSource = {
+      inputs: [{ sourceOutputIndex: 0 }],
+      outputs: [],
+      version: 1,
+      lockTime: 0
+    } as unknown as Transaction
+    await expect(recovery.sign(transactionWithoutSource, 0)).rejects.toThrow(
+      'sourceTXID or sourceTransaction is required'
+    )
+
+    const transactionWithTXID = {
+      inputs: [{ sourceTXID: '00'.repeat(32), sourceOutputIndex: 0 }],
+      outputs: [],
+      version: 1,
+      lockTime: 0
+    } as unknown as Transaction
+    await expect(recovery.sign(transactionWithTXID, 0)).rejects.toThrow(
+      'sourceSatoshis or input sourceTransaction is required'
+    )
+    await expect(
+      template
+        .unlockK1({ privateKey: k1PrivateKey, sourceSatoshis: 1000 })
+        .sign(transactionWithTXID, 0)
+    ).rejects.toThrow('lockingScript or input sourceTransaction is required')
+    await expect(
+      template
+        .unlockK1({
+          privateKey: k1PrivateKey,
+          sourceSatoshis: 1000,
+          lockingScript: new LockingScript([{ op: OP.OP_TRUE }])
+        })
+        .sign(transactionWithTXID, 0)
+    ).rejects.toThrow(`locking script must be ${R1K1Wallet.lockingScriptByteLength} bytes`)
+    await expect(recovery.estimateLength()).resolves.toBe(109)
   })
 })
