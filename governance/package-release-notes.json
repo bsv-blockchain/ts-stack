@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.9.0",
-      "releaseType": "minor",
-      "summary": "Adds WAB-administered UMP ambiguity pinning, interruption-safe same-or-new phone-number changes that stage the WAB key before spending the current UMP token and finalize afterward, restart recovery across current and pending keys, inputBEEF pruning to declared-input proof dependencies, and atomic page-level wallet storage replication, alongside the local-first ChainTracks management, proof-of-work enforcement, bounded validation, cache, and observability candidate.",
-      "migration": "Existing authentication and storage APIs remain compatible. WAB operators should deploy the additive auth response plus start, complete, commit, and finalize phone-change endpoints before exposing client UI. Wallet applications call startPhoneNumberChange, collect the SMS code, call completePhoneNumberChange, and persist saveSnapshot immediately after success; interrupted transitions recover during verified login. A pin is considered only when normal verified lineage resolution remains ambiguous and only when it names a verified lookup candidate. Declared inputs and their complete dependency proofs are validated as before, while structurally valid unrelated BEEF branches are ignored. Storage replication now commits each received page and its sync checkpoint in one provider transaction; failed pages roll back and retry from the prior durable checkpoint without a wire-format or persisted-schema migration."
+      "publishedVersion": "2.10.0",
+      "releaseType": "patch",
+      "summary": "Restores BRC-95 backward compatibility for internalizeAction by pruning unrelated legacy BEEF branches around the transaction declared by the atomic prefix before strict transaction, proof, and BRC-29 output validation.",
+      "migration": "No consumer migration is required. Canonical AtomicBEEF behavior is unchanged; legacy envelopes containing unrelated branches are accepted only when the declared transaction, its complete recursive dependency proof, and every requested BRC-29 payment output validate normally."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.9.0",
-      "releaseType": "minor",
-      "summary": "Carries the browser-safe WAB UMP-pin fallback, interruption-safe staged phone-number/presentation-key rotation APIs with verified-login recovery, inputBEEF pruning to declared-input dependencies, and atomic page-level IndexedDB replication together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
-      "migration": "Existing browser exports, defaults, authentication calls, storage wire contracts, and persisted schemas remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must save the returned manager snapshot after success. Deploy WAB with the staged commit/finalize protocol and compatible UMP overlay services first. Storage replication automatically commits page data and its checkpoint together; no consumer migration is required."
+      "publishedVersion": "2.10.0",
+      "releaseType": "patch",
+      "summary": "Carries the browser Wallet Toolbox internalizeAction compatibility fix that removes unrelated legacy BEEF branches before strict validation of the declared AtomicBEEF transaction closure.",
+      "migration": "No consumer migration is required. Browser exports, wire types, canonical AtomicBEEF behavior, proof validation, and BRC-29 locking-script validation are unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.9.0",
-      "releaseType": "minor",
-      "summary": "Carries the mobile-safe WAB UMP-pin fallback, interruption-safe staged phone-number/presentation-key rotation APIs with verified-login recovery, inputBEEF pruning to declared-input dependencies, and atomic page-level storage replication together with the local-first ChainTracks controller, proof-of-work enforcement, bounded fetch and inline validation, checkpoint cache, download-budget contracts, and lockstep Wallet Toolbox corrections.",
-      "migration": "Existing React Native exports, remote-storage behavior, authentication calls, storage wire contracts, and persisted schemas remain compatible. A settings UI may call startPhoneNumberChange and completePhoneNumberChange, including with the currently registered number, and must persist saveSnapshot after success. Deploy WAB with the staged commit/finalize protocol and compatible UMP overlay services first. Storage replication automatically commits page data and its checkpoint together; no consumer migration is required."
+      "publishedVersion": "2.10.0",
+      "releaseType": "patch",
+      "summary": "Carries the mobile Wallet Toolbox internalizeAction compatibility fix that removes unrelated legacy BEEF branches before strict validation of the declared AtomicBEEF transaction closure.",
+      "migration": "No consumer migration is required. React Native exports, wire types, canonical AtomicBEEF behavior, proof validation, and BRC-29 locking-script validation are unchanged."
     },
     {
       "name": "create-bsv-app",
