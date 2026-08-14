@@ -134,10 +134,32 @@ async function changedConfiguredTargets(base, currentTargets) {
   const module = await import(
     `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
   )
-  const baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
+  let baseTargets
+  try {
+    baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
+  } catch (error) {
+    return targetsForUnresolvedMutationRange(currentTargets, error)
+  }
   return [...new Set([...Object.keys(currentTargets), ...Object.keys(baseTargets)])].filter(
     id => JSON.stringify(currentTargets[id]) !== JSON.stringify(baseTargets[id])
   )
+}
+
+export function targetsForUnresolvedMutationRange(currentTargets, error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const match = message.match(/Unable to resolve mutation range in ([^:]+):/)
+  if (match === null) return Object.keys(currentTargets)
+
+  const filePath = normalized(match[1])
+  const matchingTargets = Object.entries(currentTargets)
+    .filter(([, target]) =>
+      (target.mutate ?? []).some(mutate => mutate.replace(/:\d+(?:-\d+)?$/, '') === filePath)
+    )
+    .map(([id]) => id)
+
+  // If the previous target was removed, selecting every current target is the
+  // conservative fallback: a configuration change must never suppress mutation coverage.
+  return matchingTargets.length > 0 ? matchingTargets : Object.keys(currentTargets)
 }
 
 function readPolicy() {

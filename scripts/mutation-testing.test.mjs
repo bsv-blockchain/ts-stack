@@ -5,7 +5,8 @@ import {
   calculateMutationMetrics,
   evaluateMutationReport,
   parseArguments,
-  selectAffectedMutationTargets
+  selectAffectedMutationTargets,
+  targetsForUnresolvedMutationRange
 } from './mutation-testing.mjs'
 
 const targets = {
@@ -87,6 +88,36 @@ test('affected mutation selection follows exact target inputs and changed govern
   assert.deepEqual(selectAffectedMutationTargets(targets, ['package.json']), ['one', 'two'])
   assert.deepEqual(selectAffectedMutationTargets(targets, ['.github/workflows/ci.yml']), [])
   assert.deepEqual(selectAffectedMutationTargets(targets, ['scripts/mutation-testing.mjs']), [])
+})
+
+test('mutation selection survives source edits that invalidate previous range markers', () => {
+  const rangedTargets = {
+    auth: {
+      mutate: ['src/auth/Transport.ts:10-20']
+    },
+    wallet: {
+      mutate: ['src/wallet/Wallet.ts:30-40']
+    }
+  }
+
+  assert.deepEqual(
+    targetsForUnresolvedMutationRange(
+      rangedTargets,
+      new Error('Unable to resolve mutation range in src/auth/Transport.ts: old .. new')
+    ),
+    ['auth']
+  )
+  assert.deepEqual(
+    targetsForUnresolvedMutationRange(
+      rangedTargets,
+      new Error('Unable to resolve mutation range in src/removed/File.ts: old .. new')
+    ),
+    ['auth', 'wallet']
+  )
+  assert.deepEqual(targetsForUnresolvedMutationRange(rangedTargets, new Error('unexpected')), [
+    'auth',
+    'wallet'
+  ])
 })
 
 test('mutation report evaluation ratchets score, coverage, and invalid outcomes', () => {
