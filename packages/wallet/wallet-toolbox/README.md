@@ -222,6 +222,11 @@ historical BRC-100 shape across plain JSON bridges; parse it with
 `Transaction.fromAtomicBEEF(result.tx)`. The `AtomicBEEF` type and binary Wallet
 Wire transports also support `Uint8Array`.
 
+`internalizeAction` accepts canonical BRC-95 envelopes and legacy envelopes
+that contain unrelated BEEF branches. The wallet restricts either form to the
+declared transaction and its recursive dependencies before independently
+validating every transaction, proof, and BRC-29 payment output.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.

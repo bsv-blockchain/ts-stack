@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.10.0'
+version: '2.10.1'
 last_updated: '2026-08-13'
 last_verified: '2026-08-13'
 review_cadence_days: 30

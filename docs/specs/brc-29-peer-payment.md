@@ -64,6 +64,11 @@ tags: ["spec", "payments", "brc-29"]
 - `derivationSuffix: string` — Client-provided derivation suffix
 - `metadata: object` — Optional sender metadata (memo, reference ID, etc.)
 
+For compatibility with older senders, recipients may prune unrelated BEEF
+branches from the AtomicBEEF envelope before internalization. The transaction
+identified by the BRC-95 prefix, all of its recursive dependencies, every proof,
+and the derived BRC-29 locking script remain mandatory validation inputs.
+
 **PaymentAck schema**:
 - `status: "ACCEPTED" | "REJECTED"` — Whether recipient accepted the transaction
 - `txid: string` — Transaction ID (if accepted)

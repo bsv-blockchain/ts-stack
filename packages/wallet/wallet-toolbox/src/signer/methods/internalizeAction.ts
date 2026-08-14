@@ -1,7 +1,8 @@
-import { Beef, InternalizeActionArgs, InternalizeOutput, P2PKH, WalletProtocol, Validation } from '@bsv/sdk'
+import { InternalizeActionArgs, InternalizeOutput, P2PKH, WalletProtocol, Validation } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { AuthId, StorageInternalizeActionResult } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { canonicalizeAtomicBeef } from '../../utility/canonicalizeAtomicBeef'
 
 /**
  * Internalize Action allows a wallet to take ownership of outputs in a pre-existing transaction.
@@ -48,7 +49,7 @@ export async function internalizeAction(
 ): Promise<StorageInternalizeActionResult> {
   const vargs = Validation.validateInternalizeActionArgs(args)
 
-  const { tx } = await validateAtomicBeef()
+  const { ab, tx, txid } = await validateAtomicBeef()
   const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
   for (const o of vargs.outputs) {
@@ -67,7 +68,10 @@ export async function internalizeAction(
     }
   }
 
-  const r: StorageInternalizeActionResult = await wallet.storage.internalizeAction(args)
+  const r: StorageInternalizeActionResult = await wallet.storage.internalizeAction({
+    ...args,
+    tx: ab.toBinaryAtomic(txid)
+  })
 
   return r
 
@@ -101,7 +105,7 @@ export async function internalizeAction(
    * 2. That the proofs are for the same block as recorded in the wallet's configured storage in the event of a reorg.
    */
   async function validateAtomicBeef() {
-    const ab = Beef.fromBinary(vargs.tx)
+    const ab = canonicalizeAtomicBeef(vargs.tx)
 
     // Internalization is a trust boundary, so verify the AtomicBEEF against the
     // configured chain tracker instead of accepting caller-supplied known txids.
