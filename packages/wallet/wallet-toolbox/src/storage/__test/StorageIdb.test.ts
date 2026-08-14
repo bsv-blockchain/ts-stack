@@ -204,8 +204,20 @@ describe('StorageIdb tests', () => {
       }
       await storage.insertSyncState(syncState)
       const transaction = jest.spyOn(storage, 'transaction')
+      const transactions: TableTransaction[] = Array.from({ length: 300 }, (_, index) => ({
+        transactionId: index + 1,
+        userId: 999,
+        status: 'completed',
+        reference: Buffer.from(`synced-transaction-${index}`).toString('base64'),
+        isOutgoing: true,
+        satoshis: index,
+        description: `synced transaction ${index}`,
+        txid: (index + 1).toString(16).padStart(64, '0'),
+        created_at: now,
+        updated_at: now
+      }))
 
-      await storage.processSyncChunk({
+      const result = await storage.processSyncChunk({
         identityKey,
         maxRoughSize: 20_000_000,
         maxItems: 1000,
@@ -222,7 +234,7 @@ describe('StorageIdb tests', () => {
         outputBaskets: [],
         txLabels: [],
         outputTags: [],
-        transactions: [],
+        transactions,
         txLabelMaps: [],
         commissions: [],
         outputs: [],
@@ -232,6 +244,32 @@ describe('StorageIdb tests', () => {
       })
 
       expect(transaction).toHaveBeenCalledTimes(1)
+      expect(result.inserts).toBe(transactions.length)
+      await expect(storage.countTransactions({ partial: { userId } })).resolves.toBe(transactions.length)
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('preserves the original error when aborting an IndexedDB transaction', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '06'.repeat(33)
+      const originalError = new Error('original transaction failure')
+      const now = new Date()
+
+      await expect(storage.transaction(async trx => {
+        await storage.insertUser({
+          userId: 0,
+          identityKey,
+          activeStorage: '42'.repeat(32),
+          created_at: now,
+          updated_at: now
+        }, trx)
+        throw originalError
+      })).rejects.toBe(originalError)
+
+      await expect(storage.findUserByIdentityKey(identityKey)).resolves.toBeUndefined()
     } finally {
       await resetStorage(storage)
     }
