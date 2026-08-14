@@ -7,6 +7,9 @@ import { UserController } from './controllers/UserController'
 import { FaucetController } from './controllers/FaucetController'
 import { AccountDeletionController } from './controllers/AccountDeletionController'
 import { ShareController } from './controllers/ShareController'
+import { AdminController } from './controllers/AdminController'
+import { PhoneChangeController } from './controllers/PhoneChangeController'
+import { requireWABAdmin } from './security/adminAuth'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy'
 import {
   bodyParserErrorHandler,
@@ -87,6 +90,10 @@ const shareLimiter = rateLimit(
   rateLimitOptions('WAB_SHARE_RATE_LIMIT', { windowMs: 15 * 60 * 1000, limit: 10 })
 )
 
+const adminLimiter = rateLimit(
+  rateLimitOptions('WAB_ADMIN_RATE_LIMIT', { windowMs: 15 * 60 * 1000, limit: 30 })
+)
+
 // Info route
 app.get('/healthz', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store')
@@ -103,6 +110,19 @@ app.get('/info', InfoController.getInfo)
 // Auth routes
 app.post('/auth/start', authenticationLimiter, AuthController.startAuth)
 app.post('/auth/complete', authenticationLimiter, AuthController.completeAuth)
+app.post('/auth/phone-change/start', authenticationLimiter, PhoneChangeController.start)
+app.post('/auth/phone-change/complete', authenticationLimiter, PhoneChangeController.complete)
+app.post('/auth/phone-change/commit', authenticationLimiter, PhoneChangeController.commit)
+app.post('/auth/phone-change/finalize', authenticationLimiter, PhoneChangeController.finalize)
+
+// Administrative support routes are unavailable unless WAB_ADMIN_TOKEN is set.
+app.post('/admin/ump-pin', adminLimiter, requireWABAdmin, AdminController.setUMPTokenPin)
+app.post(
+  '/admin/phone-change/restore',
+  adminLimiter,
+  requireWABAdmin,
+  AdminController.restorePhoneChange
+)
 
 // Account deletion routes (for users who can't access their account)
 // Rate limited to prevent SMS spam and brute-force attacks

@@ -45,6 +45,35 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; remote wallet storage plus portable local ChainTracks components and adapter contracts
 
+### UMP account continuity and phone changes
+
+`WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
+backward-compatible WAB authentication response. Normal verified lookup and
+lineage resolution always run first. The WAB pin is considered only when those
+checks leave multiple valid UMP tokens, and only when the pinned outpoint is
+present in the verified candidates. A pin cannot introduce an outpoint that the
+wallet did not independently retrieve and validate.
+
+Authenticated applications can verify a phone number and roll the presentation
+key, including when the user enters the same phone number:
+
+```ts
+await manager.startPhoneNumberChange('+12065550100')
+await manager.completePhoneNumberChange(code)
+await persist(manager.saveSnapshot())
+```
+
+The completion call first stages the verified phone association and new key in
+WAB while retaining the current presentation key, then publishes the UMP update
+that consumes the current token, and finally promotes the staged WAB key. A
+transient publish or finalization failure can be retried without duplicating
+completed work. If the app restarts between phases, a later verified login
+receives both current and pending keys and selects the one backed by the
+verified UMP token before idempotently finalizing. Repeating phone verification
+also resumes an unpublished staged change without committing another key.
+Persist the snapshot immediately after success. Deploy the compatible overlay
+topic and WAB schema/routes before enabling this UI.
+
 ### ChainTracks sources and networks
 
 Wallet services do not require a WhatsOnChain key for ChainTracks. Node

@@ -21,6 +21,7 @@ import {
     isRecord
 } from "../security/requestValidation";
 import { log } from "../logger";
+import { PhoneChangeService } from "../services/PhoneChangeService";
 
 export class AuthController {
     /**
@@ -93,15 +94,26 @@ export class AuthController {
             // Auth successful, find or create user by auth method config
             const config = authMethod.buildConfigFromPayload(payload)
             let user = await UserService.findUserByConfig(methodType, config)
+            const existingUser = user != null
             if (!user) {
                 user = await UserService.createUser(presentationKey)
                 await UserService.linkAuthMethod(user.id, methodType, config);
             }
+            const pendingPhoneChange = existingUser
+                ? await PhoneChangeService.findPending(user.id, methodType, config)
+                : undefined;
 
             // Return the presentationKey from DB (ensures the user gets the stored key if user is existing)
             res.json({
                 success: true,
                 presentationKey: user.presentationKey,
+                accountStatus: existingUser ? "existing-user" : "new-user",
+                existingUser,
+                ...(user.umpTokenOutpoint ? { umpTokenOutpoint: user.umpTokenOutpoint } : {}),
+                ...(pendingPhoneChange == null ? {} : {
+                    pendingPresentationKey: pendingPhoneChange.presentationKey,
+                    pendingPhoneChangeId: pendingPhoneChange.changeId
+                }),
                 message: result.message
             });
         } catch (error: any) {

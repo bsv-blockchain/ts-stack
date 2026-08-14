@@ -18,6 +18,12 @@ export interface CompleteAuthResponse {
   accountStatus?: 'new-user' | 'existing-user'
   /** Compatibility signal accepted from WAB deployments using a boolean. */
   existingUser?: boolean
+  /** Operator-selected UMP ambiguity fallback supplied by newer WAB servers. */
+  umpTokenOutpoint?: string
+  /** Staged key returned while a verified phone change awaits WAB finalization. */
+  pendingPresentationKey?: string
+  /** Identifier used to idempotently finalize a staged phone change. */
+  pendingPhoneChangeId?: number
 }
 
 /**
@@ -29,14 +35,14 @@ export interface CompleteAuthResponse {
 export abstract class AuthMethodInteractor {
   public abstract methodType: string
 
-  protected preparePayload (payload: AuthPayload): AuthPayload {
+  protected preparePayload(payload: AuthPayload): AuthPayload {
     return payload
   }
 
   /**
    * Shared POST helper for auth endpoints.
    */
-  private async postAuth<T extends { success: boolean, message?: string }>(
+  private async postAuth<T extends { success: boolean; message?: string }>(
     serverUrl: string,
     endpoint: string,
     presentationKey: string,
@@ -59,7 +65,7 @@ export abstract class AuthMethodInteractor {
   /**
    * Start the flow (e.g. request an OTP or create a session).
    */
-  public async startAuth (
+  public async startAuth(
     serverUrl: string,
     presentationKey: string,
     payload: AuthPayload,
@@ -79,7 +85,7 @@ export abstract class AuthMethodInteractor {
   /**
    * Complete the flow (e.g. confirm OTP).
    */
-  public async completeAuth (
+  public async completeAuth(
     serverUrl: string,
     presentationKey: string,
     payload: AuthPayload,

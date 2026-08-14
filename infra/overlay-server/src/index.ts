@@ -42,6 +42,7 @@ import {
   createMandalaLookupService,
   InMemoryScreeningProvider
 } from '@bsv/overlay-topics'
+import * as overlayTopics from '@bsv/overlay-topics'
 import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
 
 import { config } from 'dotenv'
@@ -173,6 +174,32 @@ type OverlayProviderConfigMethods = OverlayExpress & {
     }
   ) => void
   configureUnprovenMaintenance?: (config: { intervalMs?: number; thresholdBlocks?: number }) => void
+}
+
+const configureUMPServices = (server: OverlayExpress): void => {
+  const MongoUMPIdentityStore = (
+    overlayTopics as unknown as {
+      MongoUMPIdentityStore?: new (db: Parameters<typeof createUMPLookupService>[0]) => unknown
+    }
+  ).MongoUMPIdentityStore
+  if (MongoUMPIdentityStore == null) {
+    server.configureTopicManager('tm_users', new UMPTopicManager())
+    server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
+    return
+  }
+
+  server.configureLookupServiceWithMongo('ls_users', db => {
+    const identityStore = new MongoUMPIdentityStore(db)
+    const topicManager = new (
+      UMPTopicManager as unknown as new (identityStore: unknown) => UMPTopicManager
+    )(identityStore)
+    const lookupFactory = createUMPLookupService as unknown as (
+      mongoDb: typeof db,
+      store: unknown
+    ) => ReturnType<typeof createUMPLookupService>
+    server.configureTopicManager('tm_users', topicManager)
+    return lookupFactory(db, identityStore)
+  })
 }
 
 // Hi there! Let's configure Overlay Express!
@@ -349,9 +376,12 @@ const main = async () => {
   server.configureTopicManager('tm_messagebox', new MessageBoxTopicManager())
   server.configureLookupServiceWithMongo('ls_messagebox', createMessageBoxLookupService)
 
-  // UMP
-  server.configureTopicManager('tm_users', new UMPTopicManager())
-  server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
+  // UMP. Package-source PRs are validated against the latest released
+  // infrastructure dependency, so this capability gate preserves that image
+  // contract until the governed dependency-sync PR installs overlay-topics
+  // 1.7.0. Once present, the Topic Manager and lookup service share one
+  // Mongo-backed reservation store across replicas.
+  configureUMPServices(server)
 
   // HelloWorld
   server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())

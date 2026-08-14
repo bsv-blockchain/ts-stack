@@ -319,14 +319,14 @@
     "@bsv/overlay": "2.3.0",
     "@bsv/overlay-discovery-services": "2.2.0",
     "@bsv/overlay-express": "2.6.0",
-    "@bsv/overlay-topics": "1.6.10",
+    "@bsv/overlay-topics": "1.7.0",
     "@bsv/sdk": "2.4.0",
     "@bsv/verifast": "0.3.4",
     "@bsv/btms": "1.2.0",
     "@bsv/btms-permission-module": "1.1.3",
     "@bsv/wallet-relay": "0.3.4",
-    "@bsv/wallet-toolbox-client": "2.9.1",
-    "@bsv/wallet-toolbox-mobile": "2.9.1",
-    "@bsv/wallet-toolbox": "2.9.1"
+    "@bsv/wallet-toolbox-client": "2.10.0",
+    "@bsv/wallet-toolbox-mobile": "2.10.0",
+    "@bsv/wallet-toolbox": "2.10.0"
   }
 }

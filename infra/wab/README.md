@@ -35,6 +35,8 @@ Additionally, the WAB provides a **faucet** feature that can make a one-time BSV
 5. **TypeScript** – Strict typing, improved developer experience.
 6. **Docker** – Containerized for easy deployment.
 7. **CI/CD** – Example GitHub Actions workflow to build, push, and deploy to **Google Cloud Run** with **Cloud SQL**.
+8. **UMP support pinning** – An authenticated operator can select one UMP outpoint as a legacy-ambiguity fallback.
+9. **Verified phone changes** – Authenticated wallets can verify the same or a new number, rotate their presentation key, and retain reversible ownership history.
 
 ---
 
@@ -178,6 +180,10 @@ TRUST_PROXY_HOPS=1
 # Console OTP is permitted only in development/test and requires both values.
 # NODE_ENV=development
 # DEV_CONSOLE_AUTH_METHOD_ENABLED=true
+
+# Optional support capability. Use at least 32 random characters and source it
+# from the deployment secret manager. If omitted, admin routes return 404.
+# WAB_ADMIN_TOKEN=
 ```
 
 _(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)_
@@ -189,7 +195,9 @@ deletion attempts per 15 minutes, and 10 share operations per 15 minutes.
 Override a policy with `<PREFIX>_MAX` and `<PREFIX>_WINDOW_MS`, where the
 prefix is `WAB_AUTH_RATE_LIMIT`, `WAB_USER_RATE_LIMIT`,
 `WAB_FAUCET_RATE_LIMIT`, `WAB_ACCOUNT_DELETION_RATE_LIMIT`, or
-`WAB_SHARE_RATE_LIMIT`. Invalid or unbounded values fail startup.
+`WAB_SHARE_RATE_LIMIT`. Administrative support routes use
+`WAB_ADMIN_RATE_LIMIT` (30 requests per 15 minutes by default). Invalid or
+unbounded values fail startup.
 
 Express ignores forwarding headers unless `TRUST_PROXY_HOPS` is explicitly set
 to a value from 0 through 10. Set it only to the number of trusted proxies in
@@ -207,9 +215,15 @@ operations.
 
 ### Authentication and account-deletion invariants
 
-Phone identities use canonical E.164 form and cannot move between live user
-accounts. A previously linked identity may be attached to a new account only
-after its old account has been deleted; its faucet history is retained.
+Phone identities use canonical E.164 form. Ordinary sign-in and linking do not
+move a phone identity between live users. The authenticated phone-change flow
+is the deliberate exception: after the target wallet proves its current
+presentation key and possession of the claimed phone by OTP, the WAB moves the
+phone record, stages and then finalizes the target presentation key, clears any
+obsolete UMP pin at finalization, and writes the previous owners/associations
+to `phone_change_history`.
+Support can restore those associations if the change is later determined to be
+fraudulent. Faucet history remains attached to its original auth-method record.
 Presentation keys and Shamir user hashes are exact 256-bit hexadecimal values.
 Stored Shamir shares are bounded and structurally validated before any database
 operation.
@@ -221,6 +235,41 @@ intent expires after ten minutes, is single-use, is rate-limited per external
 identity, and is bound to the authentication method, canonical identity, and
 specific live user. A valid OTP from another flow or account cannot authorize
 deletion.
+
+### UMP pin and phone-change support
+
+`POST /auth/complete` remains backward compatible and may add
+`umpTokenOutpoint` when support has pinned that WAB account. Updated wallet
+clients still run normal verified UMP lookup and lineage selection first. They
+use the pin only if the result remains ambiguous and the pin names one of the
+verified candidates.
+
+Phone changes use four calls: `/auth/phone-change/start`,
+`/auth/phone-change/complete`, `/auth/phone-change/commit`, and
+`/auth/phone-change/finalize`. The first two prove possession of the requested
+number. Commit consumes the hashed, ten-minute, single-use authorization and
+stages the phone association plus replacement presentation key while retaining
+the current key. After the wallet publishes the UMP update, finalize promotes
+the staged key and clears the obsolete pin. During an interrupted transition,
+`/auth/complete` adds the pending key and change ID so an updated wallet can
+select the key backed by the verified UMP token and finish idempotently. If the
+current key remains live, repeating the phone-change OTP returns the staged key
+and change ID instead of creating a second authorization/commit. Entering the
+current number is valid and intentionally refreshes the key/hash.
+
+Operator routes require `Authorization: Bearer <WAB_ADMIN_TOKEN>`, are
+rate-limited, and return 404 when no strong token is configured:
+
+A non-empty token shorter than 32 characters is a startup configuration error;
+only an absent/empty value intentionally disables the routes.
+
+- `POST /admin/ump-pin` sets or clears a pin after identifying a user by
+  presentation key or authentication method payload.
+- `POST /admin/phone-change/restore` restores the associations recorded for a
+  `changeId`; it refuses automatic restoration after another ownership change.
+
+Follow [UMP account support](../../docs/infrastructure/wab-ump-account-support.md)
+for evidence requirements, commands, auditing, rollout, and rollback.
 
 ### Running Locally
 

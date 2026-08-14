@@ -14,6 +14,18 @@ function jsonResponse(value: unknown, status: number = 200, headers: Record<stri
 }
 
 describe('WAB transport hardening', () => {
+  it('rejects malformed URLs, invalid limits, and missing fetch implementations', () => {
+    expect(() => new WABClient('not-an-absolute-url')).toThrow('absolute URL')
+    expect(() => new WABClient('https://wab.example', { timeoutMs: 0 })).toThrow('timeoutMs')
+    expect(() => new WABClient('https://wab.example', { maxRequestBytes: 1.5 })).toThrow('maxRequestBytes')
+    expect(() => new WABClient('https://wab.example', { maxResponseBytes: Number.MAX_SAFE_INTEGER })).toThrow(
+      'maxResponseBytes'
+    )
+    expect(() => new WABClient('https://wab.example', { fetch: 1 as unknown as typeof fetch })).toThrow(
+      'fetch implementation'
+    )
+  })
+
   it('requires HTTPS except for local development', () => {
     expect(() => new WABClient('http://wab.example')).toThrow(WABClientError)
     expect(() => new WABClient('https://user:password@wab.example')).toThrow(WABClientError)
@@ -30,25 +42,17 @@ describe('WAB transport hardening', () => {
     expect(nestedFetch).toHaveBeenCalledWith('https://wab.example/customer/info', expect.any(Object))
   })
 
-  it.each([
-    'https://wab.example',
-    'https://wab.example/',
-    'https://wab.example///'
-  ])('never duplicates the path separator for auth requests to %s', async serverUrl => {
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
-    const client = new WABClient(serverUrl, { fetch: fetchClient })
+  it.each(['https://wab.example', 'https://wab.example/', 'https://wab.example///'])(
+    'never duplicates the path separator for auth requests to %s',
+    async serverUrl => {
+      const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+      const client = new WABClient(serverUrl, { fetch: fetchClient })
 
-    await client.startAuthMethod(
-      new TwilioPhoneInteractor(),
-      'a'.repeat(64),
-      { phoneNumber: '+15555550123' }
-    )
+      await client.startAuthMethod(new TwilioPhoneInteractor(), 'a'.repeat(64), { phoneNumber: '+15555550123' })
 
-    expect(fetchClient).toHaveBeenCalledWith(
-      'https://wab.example/auth/start',
-      expect.any(Object)
-    )
-  })
+      expect(fetchClient).toHaveBeenCalledWith('https://wab.example/auth/start', expect.any(Object))
+    }
+  )
 
   it('requires canonical E.164 phone identity before sending authentication', async () => {
     const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
@@ -112,6 +116,32 @@ describe('WAB transport hardening', () => {
     expect(fetchClient).not.toHaveBeenCalled()
   })
 
+  it('rejects declared and buffered response sizes before parsing', async () => {
+    const declared = new WABClient('https://wab.example', {
+      fetch: jest.fn(
+        async () =>
+          new Response('{"success":true}', {
+            headers: { 'content-length': '1000' }
+          })
+      ) as typeof fetch,
+      maxResponseBytes: 64
+    })
+    await expect(declared.getInfo()).rejects.toMatchObject({ code: 'WAB_RESPONSE_TOO_LARGE' })
+
+    const bufferedResponse = {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: null,
+      arrayBuffer: async () => new Uint8Array(100).buffer
+    } as unknown as Response
+    const buffered = new WABClient('https://wab.example', {
+      fetch: jest.fn(async () => bufferedResponse) as typeof fetch,
+      maxResponseBytes: 64
+    })
+    await expect(buffered.getInfo()).rejects.toMatchObject({ code: 'WAB_RESPONSE_TOO_LARGE' })
+  })
+
   it('normalizes network failures and timeouts while reading a response body', async () => {
     const networkFailure = new WABClient('https://wab.example', {
       fetch: jest.fn(async () => {
@@ -120,7 +150,7 @@ describe('WAB transport hardening', () => {
     })
     await expect(networkFailure.getInfo()).rejects.toMatchObject({
       code: 'WAB_NETWORK_ERROR',
-      message: 'WAB request failed before receiving a response.',
+      message: 'WAB request failed before response.',
       retryable: true
     })
 
@@ -198,7 +228,7 @@ describe('WAB transport hardening', () => {
     })
     await expect(failedBody.getInfo()).rejects.toMatchObject({
       code: 'WAB_INVALID_RESPONSE',
-      message: 'WAB response could not be read.'
+      message: 'WAB response read failed.'
     })
   })
 

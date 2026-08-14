@@ -9,6 +9,7 @@ import { trace, SpanStatusCode } from "@opentelemetry/api";
 import { log } from "./logger";
 import { configureHttpServer } from "./security/edgePolicy";
 import type { Server } from "node:http";
+import { validateWABAdminConfig } from "./security/adminAuth";
 
 const PORT = process.env.PORT || 8080;
 const tracer = trace.getTracer("@bsv/wab-server");
@@ -17,6 +18,7 @@ async function startServer(): Promise<Server | undefined> {
     return await tracer.startActiveSpan("wab.bootstrap", async (span) => {
         const startedAt = Date.now();
         try {
+            validateWABAdminConfig();
             await migrateLatest();
             log.info({ operation: "migrate", outcome: "ok" }, "migrations applied");
             const server = app.listen(PORT, () => {
