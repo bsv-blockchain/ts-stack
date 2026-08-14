@@ -10,9 +10,10 @@ attention to changes that materially alter behavior or extend functionality.
   by reducing them to the declared transaction and its dependency closure
   before strict proof and BRC-29 validation. Malformed transactions, invalid
   proofs, and incorrectly locked payment outputs remain rejected. The shared
-  helper adds 137 bytes to the optimized Hermes fixture; the reviewed raw
-  ceiling advances by 1,000 bytes to 3,361,000 while compressed ceilings are
-  unchanged.
+  helper adds 137 bytes to the local optimized Hermes fixture. The reviewed
+  ceilings advance by 1,000 bytes to 3,361,000 raw and 1,362,000 gzip, covering
+  the measured macOS raw size of 3,360,137 bytes and hosted Linux gzip size of
+  1,361,509 bytes; the Brotli ceiling remains unchanged.
 
 - Commit each received wallet-storage sync page and its durable checkpoint in
   one provider transaction. Large IndexedDB replications avoid thousands of
