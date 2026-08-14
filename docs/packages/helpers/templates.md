@@ -163,6 +163,13 @@ The generated locking script is 959,632 bytes after both commitments are
 baked, above common 500 KB miner policy. Confirm target-miner policy before
 funding it.
 
+An R1 unlocking script also pushes the BIP-143 preimage, whose `scriptCode`
+contains roughly 960 KB of the contract after `OP_CODESEPARATOR`. The R1 path
+therefore involves about 2 MB of locking-plus-unlocking script material, and
+the witness alone adds roughly 960 KB to the spending transaction. Account for
+the resulting fees and confirm any maximum-transaction policy; `estimateLength`
+includes this preimage push. The K1 unlocking script remains small.
+
 PIV proves that the hardware key signed the supplied digest, but a YubiKey
 does not display or independently validate the Bitcoin transaction. PIN and
 touch policies protect key use, not transaction intent; review the transaction

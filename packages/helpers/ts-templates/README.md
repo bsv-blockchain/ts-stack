@@ -32,8 +32,8 @@ tx.addOutput({
 | [OpReturn](./src/OpReturn.ts)           | Tag data in a non-spendable script                   |
 | [Metant](./src/Metanet.ts)              | Create transactions that follow the Metanet protocol |
 | [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners      |
-| [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold             |
-| [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key      |
+| [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold            |
+| [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key    |
 
 ### R1-K1 hardware wallet
 
@@ -77,6 +77,13 @@ const recoverySpend = template.unlock({
 The synthesized P-256 verifier produces a 959,632-byte locking script after
 constructor commitments are baked. This exceeds common 500 KB miner policy;
 confirm the target miner's limits before funding an output.
+
+An R1 unlocking script also pushes the BIP-143 preimage, whose `scriptCode`
+contains roughly 960 KB of the contract after `OP_CODESEPARATOR`. The R1 path
+therefore involves about 2 MB of locking-plus-unlocking script material, and
+the witness alone adds roughly 960 KB to the spending transaction. Account for
+the resulting fees and confirm any maximum-transaction policy; `estimateLength`
+includes this preimage push. The K1 unlocking script remains small.
 
 PIV proves that the hardware key signed the supplied digest, but a YubiKey
 does not display or independently validate the Bitcoin transaction. A PIN or

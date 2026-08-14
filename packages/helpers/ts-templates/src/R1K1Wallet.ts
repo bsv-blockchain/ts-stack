@@ -63,21 +63,10 @@ const BAKED_K1_SLOT_OFFSET = R1_K1_K1_SLOT_OFFSET + CONSTRUCTOR_SLOT_EXPANSION
 
 let templateBytesPromise: Promise<Uint8Array> | undefined
 
-/**
- * Static R1-K1 Runar contract template.
- *
- * The normal path verifies a P-256 signature made by hardware such as a
- * YubiKey PIV device. The recovery path uses an independent secp256k1 key.
- * Each output commits to HASH160(compressedR1PublicKey || privateSalt), which
- * keeps reuse of the PIV public key unlinkable until the output is spent.
- */
 export class R1K1Wallet implements ScriptTemplate {
   static readonly compiledTemplateByteLength = R1_K1_TEMPLATE_BYTE_LENGTH
   static readonly lockingScriptByteLength = BAKED_SCRIPT_BYTE_LENGTH
 
-  /**
-   * Creates the R1-K1 locking script from its two 20-byte commitments.
-   */
   async lock(r1SaltedPublicKeyHash: R1K1Bytes, k1PublicKeyHash: R1K1Bytes): Promise<LockingScript> {
     const r1Hash = normalizeBytes(r1SaltedPublicKeyHash, 'R1 salted public key hash', 20)
     const k1Hash = normalizeBytes(k1PublicKeyHash, 'K1 public key hash', 20)
@@ -86,10 +75,6 @@ export class R1K1Wallet implements ScriptTemplate {
     return new LockingScript([], scriptBytes, undefined, false)
   }
 
-  /**
-   * Creates an unlocking template for either the hardware R1 path or the K1
-   * recovery path. Both paths are fixed to SIGHASH_ALL | SIGHASH_FORKID.
-   */
   unlock(params: R1K1UnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>
@@ -97,7 +82,6 @@ export class R1K1Wallet implements ScriptTemplate {
     return params.path === 'r1' ? this.unlockR1(params) : this.unlockK1(params)
   }
 
-  /** Creates the normal P-256 hardware signing path. */
   unlockR1(params: Omit<R1K1R1UnlockParams, 'path'> | R1K1R1UnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>
@@ -153,7 +137,6 @@ export class R1K1Wallet implements ScriptTemplate {
     }
   }
 
-  /** Creates the mnemonic-derived secp256k1 recovery path. */
   unlockK1(params: Omit<R1K1K1UnlockParams, 'path'> | R1K1K1UnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: () => Promise<109>
@@ -279,8 +262,7 @@ function formatPreimage(
       inputSequence: input.sequence ?? 0xffffffff,
       subscript,
       lockTime: tx.lockTime,
-      scope: SIGHASH_ALL_FORKID,
-      cache: tx.getSignatureHashCache()
+      scope: SIGHASH_ALL_FORKID
     })
   )
 }

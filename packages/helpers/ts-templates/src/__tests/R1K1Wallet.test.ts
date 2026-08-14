@@ -212,6 +212,20 @@ describe('R1K1Wallet', () => {
     ).toBe(true)
   }, 30000)
 
+  it('does not depend on the SDK internal signature-hash cache API', async () => {
+    const lockingScript = await template.lock(r1Commitment, k1Commitment)
+    const { sourceTransaction, spendingTransaction } = transactionFor(lockingScript)
+    Object.defineProperty(spendingTransaction, 'getSignatureHashCache', { value: undefined })
+
+    const unlockingScript = await template
+      .unlock({ path: 'k1', privateKey: k1PrivateKey })
+      .sign(spendingTransaction, 0)
+
+    expect(
+      spend(lockingScript, unlockingScript, sourceTransaction, spendingTransaction).validate()
+    ).toBe(true)
+  }, 30000)
+
   it('rejects an unrelated K1 recovery key before signing', async () => {
     const lockingScript = await template.lock(r1Commitment, k1Commitment)
     const { spendingTransaction } = transactionFor(lockingScript)
