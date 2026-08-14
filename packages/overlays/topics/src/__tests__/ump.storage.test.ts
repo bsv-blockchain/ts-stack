@@ -308,6 +308,11 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     race = loseOneRace()
     await store.reserve(claim('replacement.0', '33'.repeat(32), '44'.repeat(32)), [])
     race.mockRestore()
+    await expect(
+      db.collection('ump_identity_reservations').findOne({
+        _id: `presentation:${'33'.repeat(32)}`
+      })
+    ).resolves.toMatchObject({ ownerOutpoint: 'replacement.0' })
   })
 
   it('retries initialization after a transient failure and skips completed legacy bootstrap work', async () => {
