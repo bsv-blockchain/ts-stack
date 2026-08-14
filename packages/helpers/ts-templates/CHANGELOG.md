@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+- `R1K1Wallet`, a static Runar contract template with a salted P-256 hardware
+  signing path and an independent secp256k1 recovery path.
 
 ### Changed
 - Point contributors and AI agents to the canonical stack-level contribution

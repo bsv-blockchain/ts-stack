@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '1.9.6'
+version: '1.10.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-14'
+last_verified: '2026-08-14'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -43,6 +43,7 @@ console.log(decodedData) // ['APP', '{"action":"vote"}']
 - **OpReturn** — Non-spendable data storage; create and decode OP_RETURN scripts
 - **MultiPushDrop** — Encrypted data tokens with multiple trusted owners; BRC-95 format
 - **P2MSKH** — Pay-to-Multisig-Key-Hash; M-of-N threshold signing with wallet support
+- **R1K1Wallet** — Salted P-256 hardware signing with independent secp256k1 recovery
 - **Script utilities** — Type detection, parsing, serialization helpers
 - **Wallet integration** — Templates accept WalletInterface for BRC-29/BRC-42 derivation
 
@@ -121,6 +122,52 @@ const customInstructions = {
 const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 ```
 
+### Create an R1-K1 hardware-backed output
+
+```typescript
+import { Hash, type PrivateKey, Utils } from '@bsv/sdk'
+import { R1K1Wallet } from '@bsv/templates'
+
+declare const compressedP256PublicKeyHex: string
+declare const k1RecoveryPrivateKey: PrivateKey
+declare const signWithYubiKeyPiv: (digest: Uint8Array) => Promise<Uint8Array>
+
+const template = new R1K1Wallet()
+const r1PublicKey = Utils.toArray(compressedP256PublicKeyHex, 'hex')
+const salt = crypto.getRandomValues(new Uint8Array(32))
+const lockingScript = await template.lock(
+  Hash.hash160([...r1PublicKey, ...salt]),
+  Hash.hash160(k1RecoveryPrivateKey.toPublicKey().encode(true) as number[])
+)
+
+const normalSpend = template.unlock({
+  path: 'r1',
+  publicKey: r1PublicKey,
+  salt,
+  signDigest: signWithYubiKeyPiv
+})
+const recoverySpend = template.unlock({
+  path: 'k1',
+  privateKey: k1RecoveryPrivateKey
+})
+```
+
+The R1 signer receives the final 32-byte transaction digest. A PIV adapter must
+submit it unchanged to GENERAL AUTHENTICATE and return either the DER ECDSA
+signature produced by the device or raw 64-byte `r || s`; applying SHA-256
+again creates an invalid signature. Preserve each private 32-byte salt with the
+wallet metadata. The salt hides a reused PIV public key only until the R1 output
+is spent.
+
+The generated locking script is 959,632 bytes after both commitments are
+baked, above common 500 KB miner policy. Confirm target-miner policy before
+funding it.
+
+PIV proves that the hardware key signed the supplied digest, but a YubiKey
+does not display or independently validate the Bitcoin transaction. PIN and
+touch policies protect key use, not transaction intent; review the transaction
+on a trusted host before approving it.
+
 ## Key concepts
 
 - **ScriptTemplate Interface** — Implements `lock()` to create locking script and `unlock()` to sign/spend
@@ -129,6 +176,7 @@ const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 - **Multisig** — M-of-N threshold signing; requires m private keys to unlock
 - **Wallet Integration** — Templates accept WalletInterface for wallet-compatible key derivation (BRC-29, BRC-42)
 - **Direct Key Mode** — Can also use raw public/private keys without wallet
+- **Hardware Digest Signer** — R1K1Wallet accepts DER output from a PIV signer without exposing the P-256 private key
 - **Protocol ID** — Identifier for script family; used in wallet derivation contexts
 - **Reasonableness Limit** — Anti-DoS measure for PushDrop templates
 
@@ -138,6 +186,7 @@ const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 - Building applications that need P2PKH or multisig payment flows
 - Storing data on-chain with OP_RETURN
 - Implementing multi-owner token systems with PushDrop
+- Building hardware-backed outputs with an intentionally inconvenient K1 recovery path
 - Learning Bitcoin Script patterns
 
 ## When NOT to use this
@@ -161,6 +210,8 @@ const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 - **Lock/Unlock consistency** — Lock and unlock must use same protocol ID, key ID, and counterparty parameters
 - **Wallet context required** — Some templates require WalletInterface if using wallet derivation; pass explicitly
 - **Signature generation async** — All `unlock().sign()` calls are async; use await
+- **R1 salt backup** — Losing an output's private salt makes its R1 path unusable; retain the K1 recovery key and salt metadata separately
+- **Miner policy** — R1K1Wallet's synthesized P-256 script exceeds common 500 KB policy limits
 - **OP_RETURN encoding** — Data is UTF-8 by default; encode as hex first and specify `enc: 'hex'` for binary
 
 ## Related packages
