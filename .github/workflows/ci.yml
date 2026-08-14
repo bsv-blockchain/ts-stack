@@ -1120,6 +1120,16 @@ jobs:
           # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
           fail_ci_if_error: false
 
+      - name: Publish finalized Codecov notifications
+        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: bsv-blockchain/ts-stack
+          run_command: send-notifications
+          # Notification delivery is non-blocking for the same reason as upload.
+          fail_ci_if_error: false
+
       - name: SonarQube Cloud scan and quality gate
         # SONAR_CI_ENABLED is flipped only after a Sonar organization admin
         # disables Automatic Analysis; the two methods cannot run together.
