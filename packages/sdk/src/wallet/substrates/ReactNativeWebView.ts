@@ -20,11 +20,12 @@ type ReactNativeWindow = Window & {
  * carries no source at all. Messages from any other browsing context - a
  * framed document, an opener, or a sandboxed frame reporting an opaque origin
  * - are never wallet responses and are ignored before their payload is read.
- * A browser-attested origin must belong to this document or to the configured
- * wallet origin; hosts stamp their own origin on synthesized events, which the
- * browser does not attest, so those are matched only when an exact domain is
- * configured. The default wildcard target keeps every React Native host
- * reachable, and configuring an exact origin pins responses to it.
+ * A relaying host frame is a separate browsing context, so its browser-attested
+ * origin must belong to this document or to the configured wallet origin.
+ * Whatever origin a host stamps on an event it synthesizes in this document is
+ * accepted, because the browser does not attest it and the injection is already
+ * same-origin; configuring an exact domain additionally pins every response to
+ * that origin, while the default wildcard target keeps every host reachable.
  */
 export default class ReactNativeWebView extends InvokableWalletBase {
   private readonly domain: string
@@ -61,18 +62,20 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         }
       }
       const listener = (e: MessageEvent): void => {
-        // The host injects responses into this document, so a response comes
-        // from this window, from the frame bridging for it, or from a
-        // synthesized event without a source. Any other browsing context is
-        // not the wallet bridge.
-        if (!isBridgeDelivered(e.source)) {
+        // The host injects the response into this document, so a response is
+        // delivered by this window or by a synthesized event that carries no
+        // source. The frame bridging for it may relay one, and being a separate
+        // browsing context it has a browser-attested origin, which has to be
+        // this document's origin or the configured wallet origin. Verify that
+        // before the payload is read: every other context - a framed document,
+        // an opener, or a sandboxed frame reporting an opaque origin - is not
+        // the wallet bridge.
+        const win = globalThis.window
+        const relayed = e.source != null && e.source !== win
+        if (relayed && e.source !== win.parent) {
           return
         }
-        // Verify the origin of the received message before its data is read.
-        // The browser attests the origin of a real postMessage, so a response
-        // it delivers must come from this document or from the configured
-        // wallet origin.
-        if (e.source != null && e.origin !== documentOrigin() && e.origin !== this.domain) {
+        if (relayed && e.origin !== win.location?.origin && e.origin !== this.domain) {
           return
         }
         let data: any
@@ -86,7 +89,12 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         }
         // A configured domain also pins host-synthesized responses, which
         // carry whatever origin - commonly none - the host stamped on them.
-        if (isPinnedOriginMismatch(this.domain, e.origin)) {
+        if (
+          this.domain !== '*' &&
+          e.origin != null &&
+          e.origin !== '' &&
+          e.origin !== this.domain
+        ) {
           cleanup()
           reject(
             new Error(
@@ -126,34 +134,6 @@ export default class ReactNativeWebView extends InvokableWalletBase {
       }
     })
   }
-}
-
-/**
- * Whether a message was delivered inside the document that made the call: a
- * host-synthesized event carries no source, a bridged `postMessage` comes from
- * this window, and a host that relays through the surrounding frame comes from
- * its parent. Every other browsing context is rejected.
- */
-function isBridgeDelivered(source: MessageEventSource | null): boolean {
-  const win = globalThis.window
-  return source == null || source === win || source === win.parent
-}
-
-/**
- * Whether a response violates an exact configured wallet origin. Hosts inject
- * responses without a browser-attested origin, so an absent origin stays
- * acceptable while any other origin must match the configured one.
- */
-function isPinnedOriginMismatch(domain: string, origin: string | undefined): boolean {
-  return domain !== '*' && origin != null && origin !== '' && origin !== domain
-}
-
-/**
- * The origin of the document running this substrate, or an empty string when
- * the environment does not expose one.
- */
-function documentOrigin(): string {
-  return (globalThis.window as Partial<Window> | undefined)?.location?.origin ?? ''
 }
 
 function normalizeOrigin(domain: string): string {

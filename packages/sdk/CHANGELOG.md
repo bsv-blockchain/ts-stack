@@ -357,11 +357,12 @@ All notable changes to this project will be documented in this file. The format 
 - Verify that a `ReactNativeWebView` response was delivered by the React Native
   bridge before its payload is read. A response now has to come from this
   window, from the frame bridging for it, or from a host-synthesized event
-  without a source, and a browser-attested origin has to belong to this
-  document or to the configured wallet origin. Framed documents, openers, and
+  without a source, and a relaying host frame has to carry this document's
+  origin or the configured wallet origin. Framed documents, openers, and
   sandboxed frames with opaque origins can no longer answer a BRC-100
-  invocation, while bridge injections, `window.postMessage` responses, and an
-  exact configured domain keep their existing behavior.
+  invocation, while bridge injections, `window.postMessage` responses,
+  host-stamped origins on synthesized events, and an exact configured domain
+  keep their existing behavior.
 
 ---
 

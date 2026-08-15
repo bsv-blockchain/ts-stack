@@ -308,6 +308,28 @@ describe('ReactNativeWebView', () => {
       await expect(promise).resolves.toEqual({ version: '1.0.0' })
     })
 
+    it('accepts a response this window dispatches without an origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).location = { origin: 'https://app.example' }
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, '', global.window)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts a response this window dispatches with a host-stamped origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).location = { origin: 'https://app.example' }
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, 'react-native', global.window)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
     it('accepts a response relayed by a same-origin host frame', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
       const hostFrame = { name: 'host-frame' }
