@@ -303,7 +303,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a response posted by this window', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
 
@@ -314,7 +314,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a response this window dispatches without an origin', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
 
@@ -325,7 +325,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a response this window dispatches with a host-stamped origin', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
 
@@ -336,7 +336,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a response relayed by a same-origin host frame', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       ;(global.window as any).parent = HOST_FRAME
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
@@ -348,7 +348,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a response relayed by a host frame on the configured domain', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       ;(global.window as any).parent = HOST_FRAME
       const substrate = new ReactNativeWebView('wallet.example')
       const promise = substrate.invoke('getVersion', {})
@@ -360,7 +360,7 @@ describe('ReactNativeWebView', () => {
 
     it('ignores a response relayed by a cross-origin host frame', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       ;(global.window as any).parent = HOST_FRAME
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
@@ -383,7 +383,7 @@ describe('ReactNativeWebView', () => {
 
     it('accepts a host-synthesized response that stamps the wallet vendor origin', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      ;(global.window as any).location = { origin: APP_ORIGIN }
+      ;(global.window as any).origin = APP_ORIGIN
       const substrate = new ReactNativeWebView()
       const promise = substrate.invoke('getVersion', {})
 

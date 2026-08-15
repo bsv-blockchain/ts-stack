@@ -140,9 +140,9 @@ export default class ReactNativeWebView extends InvokableWalletBase {
  */
 function isBridgeDelivered(e: MessageEvent, domain: string): boolean {
   const win = globalThis.window
-  if (e.source == null || e.source === win) return true
-  if (e.source !== win.parent) return false
-  return e.origin === win.location?.origin || e.origin === domain
+  const from = e.source
+  if (from == null || from === win) return true
+  return from === win.parent && (e.origin === win.origin || e.origin === domain)
 }
 
 function normalizeOrigin(domain: string): string {
