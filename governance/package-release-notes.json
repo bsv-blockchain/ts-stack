@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-13",
+  "lastReviewed": "2026-08-14",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -160,9 +160,9 @@
     {
       "name": "@bsv/templates",
       "publishedVersion": "1.9.1",
-      "releaseType": "patch",
-      "summary": "Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy.",
-      "migration": "No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged."
+      "releaseType": "minor",
+      "summary": "Adds the R1K1Wallet ScriptTemplate for salted P-256 hardware signing with an independent secp256k1 recovery path, including a checksummed static Runar artifact and browser-safe lazy decompression. Also consolidates MultiPushDrop script construction without changing its output, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy.",
+      "migration": "No existing consumer migration is required; existing template APIs and generated scripts are unchanged. New R1K1Wallet consumers await lock(), retain each private 32-byte salt, and provide a PIV signer that signs the supplied digest directly without hashing it again."
     },
     {
       "name": "@bsv/teranode-listener",
