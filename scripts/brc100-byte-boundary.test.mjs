@@ -5,6 +5,7 @@ import test from 'node:test'
 const walletBoundaryFiles = [
   'packages/sdk/src/wallet/substrates/HTTPWalletJSON.ts',
   'packages/sdk/src/wallet/substrates/ReactNativeWebView.ts',
+  'packages/sdk/src/overlay-tools/LookupResolver.ts',
   'packages/sdk/src/auth/transports/SimplifiedFetchTransport.ts',
   'packages/messaging/authsocket-client/src/AuthSocketClient.ts',
   'packages/messaging/authsocket/src/AuthSocketServer.ts',
@@ -14,6 +15,7 @@ const walletBoundaryFiles = [
   'packages/messaging/message-box-client/src/RemittanceAdapter.ts',
   'packages/helpers/simple/src/modules/messagebox.ts',
   'packages/helpers/simple/src/modules/tokens.ts',
+  'packages/helpers/simple/src/server/handler-types.ts',
   'packages/wallet/btms/src/BTMS.ts',
   'packages/wallet/ts-wallet-relay/src/client/WalletPairingSession.ts',
   'packages/wallet/ts-wallet-relay/src/client/WalletRelayClient.ts',

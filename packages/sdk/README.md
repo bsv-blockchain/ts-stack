@@ -13,7 +13,8 @@ For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClien
 The BRC-100 `CreateActionResult` permits AtomicBEEF as either `number[]` or
 `Uint8Array`. SDK BRC-29 remittance accepts both wallet representations and
 emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
-and JSON transports preserve identical transaction bytes.
+and JSON transports preserve identical transaction bytes. The same boundary
+protects overlay lookup queries and JSON BEEF responses.
 
 ## Table of Contents
 

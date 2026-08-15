@@ -4,6 +4,10 @@ import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 import * as Utils from '../primitives/utils.js'
 import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
 import { Telemetry, TelemetryConfig } from '../telemetry/Telemetry.js'
+import {
+  normalizeBRC100WalletByteFields,
+  stringifyBRC100
+} from '../wallet/BRC100ByteEncoding.js'
 
 const defaultFetch: typeof fetch =
   typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
@@ -407,7 +411,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
         'Content-Type': 'application/json',
         'X-Aggregation': 'yes'
       },
-      body: JSON.stringify({ service: question.service, query: question.query }),
+      body: stringifyBRC100({ service: question.service, query: question.query }),
       signal
     }
     const response: Response = await this.fetchClient(`${url}/lookup`, fco)
@@ -428,7 +432,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     if (isOctetStream(response.headers.get('content-type'))) {
       return await this.parseOctetStreamLookup(response)
     }
-    return await response.json()
+    return normalizeBRC100WalletByteFields(await response.json())
   }
 
   /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */

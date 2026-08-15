@@ -316,7 +316,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/sdk/bsv-sdk.md](../packages/sdk/bsv-sdk.md)
 - Source: [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
-- Release note: Adds one strict BRC-100 byte-boundary contract and applies it to HTTP, React Native, authenticated fetch, AuthSocket, remittance, wallet-error, and BRC-29 paths so number arrays, Uint8Array values, and historical numeric-key JSON payloads interoperate.
+- Release note: Adds one strict BRC-100 byte-boundary contract and applies it to HTTP, React Native, authenticated fetch, AuthSocket, overlay lookup, remittance, wallet-error, and BRC-29 paths so number arrays, Uint8Array values, and historical numeric-key JSON payloads interoperate.
 - Migration: No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new peers remain compatible through portable number-array output and legacy numeric-key input recovery.
 
 | Public subpath                     | Runtime target(s)                                                                                          | Declaration target(s)                                                                                            |
@@ -398,7 +398,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/helpers/simple.md](../packages/helpers/simple.md)
 - Source: [packages/helpers/simple](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple)
-- Release note: Adds TerraTestNet and preserves Message Box and token send/receive transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.
+- Release note: Adds TerraTestNet and preserves Message Box, token send/receive, and server-adapter transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.
 - Migration: Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility.
 
 | Public subpath | Runtime target(s)                            | Declaration target(s)                            |

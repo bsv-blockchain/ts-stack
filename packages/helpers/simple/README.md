@@ -43,7 +43,8 @@ Both entry points provide the same API surface — the only difference is how th
 Message Box payment helpers normalize historical number-array, current binary
 Wallet Wire, and numeric-key JSON transaction representations before sending
 or internalizing them. Malformed transaction records fail without acknowledging
-the pending payment.
+the pending payment. The server adapter applies the same compatibility contract
+to request and response bodies before the host framework's JSON boundary.
 
 ## A taste of the API
 

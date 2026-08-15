@@ -320,8 +320,9 @@ All notable changes to this project will be documented in this file. The format 
   When a concrete domain is configured, response messages from every other
   origin are ignored before parsing.
 - Preserve typed and historical numeric-key byte fields in authenticated JSON
-  request bodies, remittance envelopes, and serialized wallet review errors.
-  Existing `number[]` payloads retain their zero-copy fast path. The reviewed
+  request bodies, remittance envelopes, overlay lookup queries and BEEF
+  responses, and serialized wallet review errors. Existing `number[]` payloads
+  retain their zero-copy fast path. The reviewed
   Vite, esbuild, and UMD raw ceilings advance by 2 kB to 740, 559, and 554 kB;
   compressed ceilings remain unchanged.
 
