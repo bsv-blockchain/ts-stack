@@ -42,27 +42,15 @@ function isUnsupportedBinaryView(value: unknown): boolean {
   )
 }
 
-/**
- * Normalizes the runtime representations used for BRC-100 byte arrays.
- *
- * Healthy `number[]` and `Uint8Array` values are returned by identity so the
- * common path does not allocate. The fallback recovers the contiguous
- * numeric-key object produced by `JSON.stringify(new Uint8Array(...))` in
- * historical JSON transports. Invalid, sparse, or non-byte input is rejected.
- */
-export function normalizeBRC100ByteArray(value: unknown): AtomicBEEF | undefined {
-  if (isUint8Array(value)) return value
-  if (isUnsupportedBinaryView(value)) return undefined
-
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      if (!hasOwn.call(value, i) || !isByte(value[i])) return undefined
-    }
-    return value as number[]
+function normalizeByteNumberArray(value: unknown[]): number[] | undefined {
+  for (let i = 0; i < value.length; i++) {
+    if (!hasOwn.call(value, i) || !isByte(value[i])) return undefined
   }
+  return value as number[]
+}
 
+function normalizeHistoricalByteObject(value: unknown): number[] | undefined {
   if (value == null || typeof value !== 'object') return undefined
-
   try {
     const keys = Object.keys(value)
     // JSON.stringify(new Uint8Array()) and a legitimate empty JSON object are
@@ -80,6 +68,21 @@ export function normalizeBRC100ByteArray(value: unknown): AtomicBEEF | undefined
   } catch {
     return undefined
   }
+}
+
+/**
+ * Normalizes the runtime representations used for BRC-100 byte arrays.
+ *
+ * Healthy `number[]` and `Uint8Array` values are returned by identity so the
+ * common path does not allocate. The fallback recovers the contiguous
+ * numeric-key object produced by `JSON.stringify(new Uint8Array(...))` in
+ * historical JSON transports. Invalid, sparse, or non-byte input is rejected.
+ */
+export function normalizeBRC100ByteArray(value: unknown): AtomicBEEF | undefined {
+  if (isUint8Array(value)) return value
+  if (isUnsupportedBinaryView(value)) return undefined
+  if (Array.isArray(value)) return normalizeByteNumberArray(value)
+  return normalizeHistoricalByteObject(value)
 }
 
 /** Convert a valid BRC-100 byte array to the portable JSON `number[]` form. */

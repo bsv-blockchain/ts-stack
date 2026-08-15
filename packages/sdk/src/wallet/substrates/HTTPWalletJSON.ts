@@ -38,9 +38,8 @@ import {
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
-import { normalizeBRC100WalletByteFields } from '../BRC100ByteEncoding.js'
+import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '../BRC100ByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
-import { stringifyBRC100 } from '../BRC100ByteEncoding.js'
 
 function deserializeWalletError(data: any): Error | undefined {
   switch (data.code) {

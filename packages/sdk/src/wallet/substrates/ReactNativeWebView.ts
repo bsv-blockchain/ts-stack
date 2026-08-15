@@ -109,11 +109,11 @@ function normalizeOrigin(domain: string): string {
   if (domain === '*') return domain
   try {
     if (/^[a-z][a-z\d+.-]*:\/\//i.test(domain) && !/^https?:\/\//i.test(domain)) {
-      throw new TypeError()
+      throw new TypeError('Only HTTP(S) origins are supported.')
     }
     const candidate = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`
     const origin = new URL(candidate).origin
-    if (origin === 'null') throw new TypeError()
+    if (origin === 'null') throw new TypeError('The origin could not be normalized.')
     return origin
   } catch {
     throw new TypeError('ReactNativeWebView domain must be an HTTP(S) origin or domain name.')
