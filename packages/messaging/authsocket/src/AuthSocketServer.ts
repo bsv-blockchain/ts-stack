@@ -5,7 +5,6 @@ import {
   Peer,
   SessionManager,
   AsyncSessionManager,
-  normalizeBRC100WalletByteFields,
   stringifyBRC100
 } from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'
@@ -26,7 +25,7 @@ export type AuthSocketErrorHandler = (
 export function decodeAuthSocketEventPayload(payload: number[]): { eventName: string; data: any } {
   try {
     const str = Buffer.from(payload).toString('utf8')
-    const decoded: unknown = normalizeBRC100WalletByteFields(JSON.parse(str))
+    const decoded: unknown = JSON.parse(str)
     if (
       decoded === null ||
       typeof decoded !== 'object' ||

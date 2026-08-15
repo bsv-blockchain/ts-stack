@@ -2,6 +2,7 @@ import vm from 'node:vm'
 import {
   brc100JsonReplacer,
   normalizeBRC100ByteArray,
+  normalizeBRC100ByteFields,
   normalizeBRC100WalletByteFields,
   stringifyBRC100,
   toBRC100PortableByteArray
@@ -33,7 +34,7 @@ describe('BRC-100 byte encoding', () => {
   it('recovers contiguous numeric-key JSON objects independent of insertion order', () => {
     const numericObject = JSON.parse('{"2":3,"0":1,"1":2}')
     expect(normalizeBRC100ByteArray(numericObject)).toEqual([1, 2, 3])
-    expect(normalizeBRC100ByteArray({})).toEqual([])
+    expect(normalizeBRC100ByteArray({})).toBeUndefined()
   })
 
   it.each([
@@ -50,6 +51,25 @@ describe('BRC-100 byte encoding', () => {
 
   it('rejects non-Uint8 typed arrays', () => {
     expect(normalizeBRC100ByteArray(new Int8Array([1]))).toBeUndefined()
+    expect(normalizeBRC100ByteArray(new Uint16Array([1]))).toBeUndefined()
+    expect(normalizeBRC100ByteArray(new DataView(new ArrayBuffer(1)))).toBeUndefined()
+    expect(normalizeBRC100ByteArray(new ArrayBuffer(1))).toBeUndefined()
+  })
+
+  it('rejects nullish, primitive, empty, and hostile records without throwing', () => {
+    for (const value of [null, undefined, true, false, 0, 1, 'bytes', Symbol('bytes')]) {
+      expect(normalizeBRC100ByteArray(value)).toBeUndefined()
+      expect(toBRC100PortableByteArray(value)).toBeUndefined()
+    }
+    const hostile = new Proxy(
+      {},
+      {
+        ownKeys: () => {
+          throw new Error('hostile ownKeys')
+        }
+      }
+    )
+    expect(normalizeBRC100ByteArray(hostile)).toBeUndefined()
   })
 
   it('only allocates when a portable array is required', () => {
@@ -74,11 +94,57 @@ describe('BRC-100 byte encoding', () => {
     expect(stringifyBRC100(payload)).toBe('{"tx":[1,2,3]}')
   })
 
-  it('repairs historical numeric-key wallet byte fields during serialization', () => {
-    const tx = JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3])))
-    const unrelated = JSON.parse(JSON.stringify(new Uint8Array([4, 5])))
+  it('rejects top-level values that native JSON cannot serialize', () => {
+    expect(() => stringifyBRC100(undefined)).toThrow('BRC-100 JSON payload is not serializable')
+    expect(() => stringifyBRC100(Symbol('payload'))).toThrow(
+      'BRC-100 JSON payload is not serializable'
+    )
+  })
 
-    expect(stringifyBRC100({ tx, unrelated })).toBe('{"tx":[1,2,3],"unrelated":{"0":4,"1":5}}')
+  it('keeps the public replacer safe when called without a JSON holder', () => {
+    const plain = { 0: 1, 1: 2 }
+    expect(
+      brc100JsonReplacer.call(null as unknown as Record<string, unknown>, 'data', plain)
+    ).toBe(plain)
+  })
+
+  it('preserves plain numeric-key objects during serialization, including byte-like field names', () => {
+    const tx = JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3])))
+    const data = JSON.parse(JSON.stringify(new Uint8Array([4, 5])))
+
+    expect(stringifyBRC100({ tx, data })).toBe('{"tx":{"0":1,"1":2,"2":3},"data":{"0":4,"1":5}}')
+  })
+
+  it('normalizes only explicitly selected fields at opaque protocol boundaries', () => {
+    const payload = {
+      payload: { 0: 1, 1: 2 },
+      signature: { 0: 3 },
+      hmac: {},
+      data: { 0: 4, 1: 5 },
+      tx: {}
+    }
+
+    expect(normalizeBRC100ByteFields(payload, ['payload', 'signature', 'hmac'])).toBe(payload)
+    expect(payload).toEqual({
+      payload: [1, 2],
+      signature: [3],
+      hmac: [],
+      data: { 0: 4, 1: 5 },
+      tx: {}
+    })
+  })
+
+  it('does not traverse absent, inherited, invalid, array, or primitive protocol fields', () => {
+    const inherited = Object.create({ payload: { 0: 1 } }) as Record<string, unknown>
+    inherited.signature = { nope: 1 }
+    const array = [{ payload: { 0: 2 } }]
+
+    expect(normalizeBRC100ByteFields(null, ['payload'])).toBeNull()
+    expect(normalizeBRC100ByteFields('payload', ['payload'])).toBe('payload')
+    expect(normalizeBRC100ByteFields(array, ['payload'])).toBe(array)
+    expect(normalizeBRC100ByteFields(inherited, ['payload', 'signature', 'missing'])).toBe(inherited)
+    expect(inherited.payload).toEqual({ 0: 1 })
+    expect(inherited.signature).toEqual({ nope: 1 })
   })
 
   it('repairs all known nested wallet byte fields and leaves unrelated records alone', () => {
@@ -105,18 +171,24 @@ describe('BRC-100 byte encoding', () => {
     expect(result.unrelated).toBe(unrelated)
   })
 
-  it('preserves generic empty data and payload containers while visiting nested byte fields', () => {
+  it('preserves every empty object under a byte-like name while visiting nested byte fields', () => {
     const mangled = (bytes: number[]): Record<string, number> =>
       JSON.parse(JSON.stringify(new Uint8Array(bytes)))
     const result = {
       data: {},
+      tx: {},
+      signature: {},
       payload: { transaction: mangled([1, 2, 3]) }
     }
 
     expect(normalizeBRC100WalletByteFields(result)).toEqual({
       data: {},
+      tx: {},
+      signature: {},
       payload: { transaction: [1, 2, 3] }
     })
-    expect(stringifyBRC100(result)).toBe('{"data":{},"payload":{"transaction":[1,2,3]}}')
+    expect(stringifyBRC100(result)).toBe(
+      '{"data":{},"tx":{},"signature":{},"payload":{"transaction":[1,2,3]}}'
+    )
   })
 })

@@ -38,7 +38,7 @@ import {
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
-import { normalizeWalletJsonTx } from './utils/jsonByteEncoding.js'
+import { normalizeBRC100WalletByteFields } from '../BRC100ByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
 import { stringifyBRC100 } from '../BRC100ByteEncoding.js'
 
@@ -106,7 +106,7 @@ export default class HTTPWalletJSON implements WalletInterface {
         body: stringifyBRC100(args)
       })
 
-      const data = normalizeWalletJsonTx(await res.json())
+      const data = normalizeBRC100WalletByteFields(await res.json())
 
       // Check the HTTP status on the original response
       if (!res.ok) {

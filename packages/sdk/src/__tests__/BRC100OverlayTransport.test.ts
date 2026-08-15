@@ -38,4 +38,18 @@ describe('overlay lookup BRC-100 byte compatibility', () => {
       outputs: [{ beef: [1, 2, 255], outputIndex: 0 }]
     })
   })
+
+  it('preserves byte-like objects inside freeform lookup results', async () => {
+    const result = { data: { 0: 1, 1: 2 }, tx: {}, payload: { 0: 3 } }
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ type: 'freeform', result })
+    })
+    const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+
+    await expect(
+      facilitator.lookup('http://host', { service: 'ls_test', query: {} })
+    ).resolves.toEqual({ type: 'freeform', result })
+  })
 })

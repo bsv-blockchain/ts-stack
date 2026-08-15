@@ -22,7 +22,7 @@ import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { bytesToBase64url } from '../shared/encoding.js'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
-import { stringifyBRC100 } from '@bsv/sdk'
+import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '@bsv/sdk'
 
 export interface WalletRelayServiceOptions {
   /**
@@ -500,6 +500,7 @@ export class WalletRelayService {
 
     const msg = this.handler.parseMessage(plaintext)
     if (this.handler.isResponse(msg)) {
+      normalizeBRC100WalletByteFields(msg.result)
       const pending = this.pending.get(msg.id)
       if (pending) {
         clearTimeout(pending.timer)

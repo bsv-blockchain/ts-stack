@@ -42,15 +42,15 @@
       "name": "@bsv/authsocket",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures, caps per-socket authentication concurrency, and preserves BRC-100 byte fields in signed event envelopes across number-array, Uint8Array, and historical numeric-key JSON runtimes.",
-      "migration": "No API migration is required. Existing event data and number arrays are unchanged; upgrade to @bsv/sdk 2.4.1 or later to send current typed wallet bytes portably and recover historical numeric-key byte fields after signature verification."
+      "summary": "Contains authentication and application callback failures, caps per-socket authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
     },
     {
       "name": "@bsv/authsocket-client",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures, caps authentication concurrency, and preserves BRC-100 byte fields in signed event envelopes across number-array, Uint8Array, and historical numeric-key JSON runtimes.",
-      "migration": "No API migration is required. Existing event data and number arrays are unchanged; upgrade to @bsv/sdk 2.4.1 or later to send current typed wallet bytes portably and recover historical numeric-key byte fields after signature verification."
+      "summary": "Contains authentication and application callback failures, caps authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
     },
     {
       "name": "@bsv/btms",
@@ -147,8 +147,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.4.0",
       "releaseType": "patch",
-      "summary": "Adds one strict BRC-100 byte-boundary contract and applies it to HTTP, React Native, authenticated fetch, AuthSocket, overlay lookup, remittance, wallet-error, and BRC-29 paths so number arrays, Uint8Array values, and historical numeric-key JSON payloads interoperate.",
-      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new peers remain compatible through portable number-array output and legacy numeric-key input recovery."
+      "summary": "Adds one strict BRC-100 byte-boundary contract: real typed arrays serialize portably, historical bytes recover only at typed protocol fields, arbitrary JSON round-trips unchanged, and React Native discovery remains compatible and bounded.",
+      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new wallet peers remain compatible through portable output and typed-boundary recovery."
     },
     {
       "name": "@bsv/simple",
@@ -196,7 +196,7 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Retains BRC-95 internalization compatibility and preserves typed AtomicBEEF, competing BEEF, WAB request/response bytes, and wallet review errors across portable and historical JSON representations.",
+      "summary": "Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, and leaves opaque WAB response JSON unchanged.",
       "migration": "No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility."
     },
     {

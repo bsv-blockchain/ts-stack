@@ -64,6 +64,12 @@ describe('ReactNativeWebView', () => {
         'The window.ReactNativeWebView property does not seem to support postMessage calls.'
       )
     })
+
+    it('rejects a non-HTTP domain filter', () => {
+      expect(() => new ReactNativeWebView('file:///wallet.html')).toThrow(
+        'ReactNativeWebView domain must be an HTTP(S) origin or domain name.'
+      )
+    })
   })
 
   describe('invoke', () => {
@@ -83,6 +89,27 @@ describe('ReactNativeWebView', () => {
           args: {}
         })
       )
+    })
+
+    it('removes its listener and rejects when serialization fails', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+
+      await expect(substrate.invoke('createAction', circular)).rejects.toThrow(TypeError)
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+      expect(postMessageMock).not.toHaveBeenCalled()
+    })
+
+    it('times out and removes its listener when configured for discovery', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('*', 5)
+
+      await expect(substrate.invoke('getVersion', {})).rejects.toThrow(
+        'React Native wallet response timed out.'
+      )
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
     })
 
     it('serializes typed wallet args as portable arrays', () => {
@@ -139,19 +166,10 @@ describe('ReactNativeWebView', () => {
       })
     })
 
-    it('accepts responses only from the configured origin', async () => {
+    it('normalizes a schemeless configured domain and accepts its full origin', async () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
-      const substrate = new ReactNativeWebView('https://trusted.example')
+      const substrate = new ReactNativeWebView('trusted.example')
       const promise = substrate.invoke('getVersion', {})
-      let settled = false
-      promise.then(
-        () => {
-          settled = true
-        },
-        () => {
-          settled = true
-        }
-      )
       const response = {
         type: 'CWI',
         isInvocation: false,
@@ -160,13 +178,68 @@ describe('ReactNativeWebView', () => {
         result: { version: '1.0.0' }
       }
 
-      dispatchMessage(response, 'https://hostile.example')
-      await new Promise(resolve => setTimeout(resolve, 1))
-      expect(settled).toBe(false)
-      expect(removeEventListenerMock).not.toHaveBeenCalled()
-
       dispatchMessage(response, 'https://trusted.example')
       await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('normalizes a schemeless configured host with a port', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('localhost:3000')
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(
+        {
+          type: 'CWI',
+          isInvocation: false,
+          id: 'request-id',
+          status: 'success',
+          result: { version: '1.0.0' }
+        },
+        'https://localhost:3000'
+      )
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts originless native-to-web responses with an explicit domain', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('trusted.example')
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(
+        {
+          type: 'CWI',
+          isInvocation: false,
+          id: 'request-id',
+          status: 'success',
+          result: { version: '1.0.0' }
+        },
+        ''
+      )
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('rejects a matching response from a mismatched non-empty origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('trusted.example')
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(
+        {
+          type: 'CWI',
+          isInvocation: false,
+          id: 'request-id',
+          status: 'success',
+          result: { version: '1.0.0' }
+        },
+        'https://hostile.example'
+      )
+
+      await expect(promise).rejects.toThrow(
+        'React Native wallet response origin https://hostile.example did not match https://trusted.example.'
+      )
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
     })
 
     it('rejects matching error responses as WalletError', async () => {
@@ -212,6 +285,7 @@ describe('ReactNativeWebView', () => {
         status: 'success',
         result: {}
       })
+      getMessageListener()({ data: '{not-json', origin: 'https://hostile.example' })
       dispatchMessage({
         type: 'CWI',
         isInvocation: false,

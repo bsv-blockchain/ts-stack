@@ -22,22 +22,6 @@ const walletByteFieldNames = new Set([
   'tx'
 ])
 
-// These names are byte arrays in BRC-100 methods but are also common JSON
-// envelope containers. An empty object is therefore ambiguous and must remain
-// an object at recursive boundaries; explicit arrays and typed arrays are not.
-const ambiguousContainerFieldNames = new Set(['data', 'payload'])
-
-function isAmbiguousEmptyContainer(key: string, value: unknown): boolean {
-  return (
-    ambiguousContainerFieldNames.has(key) &&
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    !isUint8Array(value) &&
-    Object.keys(value).length === 0
-  )
-}
-
 function isUint8Array(value: unknown): value is Uint8Array {
   if (value == null || typeof value !== 'object' || typeof ArrayBuffer === 'undefined') return false
   return (
@@ -81,6 +65,10 @@ export function normalizeBRC100ByteArray(value: unknown): AtomicBEEF | undefined
 
   try {
     const keys = Object.keys(value)
+    // JSON.stringify(new Uint8Array()) and a legitimate empty JSON object are
+    // indistinguishable. Require at least one byte for historical recovery;
+    // callers can represent an intentional empty byte sequence as [] instead.
+    if (keys.length === 0) return undefined
     const bytes: number[] = []
     for (let i = 0; i < keys.length; i++) {
       if (keys[i] !== String(i)) return undefined
@@ -110,13 +98,10 @@ export function brc100JsonReplacer(
   // Buffer.toJSON runs before a replacer. Inspect the holder so Node Buffers
   // retain the same portable array contract as browser Uint8Array values.
   const original = this == null ? undefined : this[key]
-  if (walletByteFieldNames.has(key)) {
-    const candidate = original ?? value
-    const bytes = isAmbiguousEmptyContainer(key, candidate)
-      ? undefined
-      : toBRC100PortableByteArray(candidate)
-    if (bytes != null) return bytes
-  }
+  // Serialization may safely identify real typed arrays, but it must never
+  // reinterpret a plain numeric-key object. Such objects are valid arbitrary
+  // application JSON and are indistinguishable from historical Uint8Array
+  // damage once they have been parsed. Recovery belongs at typed boundaries.
   if (isUint8Array(original)) return Array.from(original)
   return isUint8Array(value) ? Array.from(value) : value
 }
@@ -130,15 +115,40 @@ export function stringifyBRC100(value: unknown, space?: string | number): string
   return serialized
 }
 
+/**
+ * Repairs byte arrays only in explicitly selected own fields of one protocol
+ * object. This non-recursive helper is for envelopes that also contain opaque
+ * application data, where field-name-based traversal would be destructive.
+ */
+export function normalizeBRC100ByteFields<T>(value: T, fieldNames: readonly string[]): T {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return value
+  const record = value as Record<string, unknown>
+  for (const fieldName of fieldNames) {
+    if (!hasOwn.call(record, fieldName)) continue
+    const fieldValue = record[fieldName]
+    // At a schema-owned byte field, an empty JSON object can only be the
+    // historical encoding of an empty Uint8Array. Generic and recursive
+    // normalization deliberately leave the same ambiguous shape untouched.
+    const bytes =
+      fieldValue != null &&
+      typeof fieldValue === 'object' &&
+      !Array.isArray(fieldValue) &&
+      !isUint8Array(fieldValue) &&
+      Object.keys(fieldValue).length === 0
+        ? []
+        : normalizeBRC100ByteArray(fieldValue)
+    if (bytes != null) record[fieldName] = bytes
+  }
+  return value
+}
+
 function visitBRC100WalletByteField(
   candidate: Record<string, unknown>,
   key: string,
   fieldValue: unknown,
   visit: (value: unknown) => void
 ): void {
-  const bytes = isAmbiguousEmptyContainer(key, fieldValue)
-    ? undefined
-    : normalizeBRC100ByteArray(fieldValue)
+  const bytes = normalizeBRC100ByteArray(fieldValue)
   if (bytes != null) candidate[key] = bytes
   else visit(fieldValue)
 }

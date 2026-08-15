@@ -3,7 +3,7 @@
  * Avoids importing 'next/server' so the library has no Next.js build dependency.
  */
 
-import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '@bsv/sdk'
+import { stringifyBRC100 } from '@bsv/sdk'
 
 export interface HandlerRequest {
   url: string
@@ -54,7 +54,7 @@ export function toNextHandlers(handler: RouteHandler): {
       const result = await coreFn({
         url: (req.url as string | undefined) ?? req.nextUrl?.toString() ?? '',
         method,
-        json: async () => normalizeBRC100WalletByteFields(await req.json())
+        json: async () => await req.json()
       })
 
       // Use Web-standard Response (works in Next.js, Deno, Bun, Workers)

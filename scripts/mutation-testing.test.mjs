@@ -105,7 +105,7 @@ test('mutation selection survives source edits that invalidate previous range ma
       rangedTargets,
       new Error('Unable to resolve mutation range in src/auth/Transport.ts: old .. new')
     ),
-    ['auth']
+    ['auth', 'wallet']
   )
   assert.deepEqual(
     targetsForUnresolvedMutationRange(

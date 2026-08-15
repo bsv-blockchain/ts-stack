@@ -145,21 +145,11 @@ async function changedConfiguredTargets(base, currentTargets) {
   )
 }
 
-export function targetsForUnresolvedMutationRange(currentTargets, error) {
-  const message = error instanceof Error ? error.message : String(error)
-  const match = /Unable to resolve mutation range in ([^:]+):/.exec(message)
-  if (match === null) return Object.keys(currentTargets)
-
-  const filePath = normalized(match[1])
-  const matchingTargets = Object.entries(currentTargets)
-    .filter(([, target]) =>
-      (target.mutate ?? []).some(mutate => mutate.replace(/:\d+(?:-\d+)?$/, '') === filePath)
-    )
-    .map(([id]) => id)
-
-  // If the previous target was removed, selecting every current target is the
-  // conservative fallback: a configuration change must never suppress mutation coverage.
-  return matchingTargets.length > 0 ? matchingTargets : Object.keys(currentTargets)
+export function targetsForUnresolvedMutationRange(currentTargets, _error) {
+  // If the base configuration cannot be evaluated, its full target diff is
+  // unknowable. Run every current target so a second config-only change cannot
+  // be silently omitted merely because the first stale marker named one file.
+  return Object.keys(currentTargets)
 }
 
 function readPolicy() {

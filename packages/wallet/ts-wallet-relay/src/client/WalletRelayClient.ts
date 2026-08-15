@@ -276,10 +276,11 @@ export class WalletRelayClient {
         throw new WalletRelayError(msg, code)
       }
 
-      const rpc = normalizeBRC100WalletByteFields(await res.json()) as {
+      const rpc = (await res.json()) as {
         result?: unknown
         error?: { code: number; message: string }
       }
+      normalizeBRC100WalletByteFields(rpc.result)
       const response: WalletResponse = {
         requestId,
         result: rpc.result,

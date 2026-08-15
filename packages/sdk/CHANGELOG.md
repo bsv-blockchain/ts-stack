@@ -317,12 +317,16 @@ All notable changes to this project will be documented in this file. The format 
   review-action error BEEF returned by older wallet HTTP implementations.
 - Preserve BRC-100 byte fields across React Native JSON bridges in both
   directions, including deferred-signing `signableTransaction.tx` results.
-  When a concrete domain is configured, response messages from every other
-  origin are ignored before parsing.
-- Preserve typed and historical numeric-key byte fields in authenticated JSON
-  request bodies, remittance envelopes, overlay lookup queries and BEEF
-  responses, and serialized wallet review errors. Existing `number[]` payloads
-  retain their zero-copy fast path. The reviewed
+  `WalletClient` no longer confuses its schemeless BRC-100 originator with a
+  browser message origin, originless native responses remain compatible, and
+  every auto-detected substrate has a bounded version probe so discovery cannot
+  deadlock on an unresponsive candidate.
+- Preserve typed arrays portably in authenticated JSON request bodies,
+  remittance envelopes, overlay lookup queries, and serialized wallet review
+  errors. Historical numeric-key recovery is limited to typed protocol fields
+  such as authentication payload/signature and overlay output BEEF/context;
+  arbitrary JSON objects are never reinterpreted by name or shape. Existing
+  `number[]` payloads retain their zero-copy fast path. The reviewed
   Vite, esbuild, and UMD raw ceilings advance by 2 kB to 740, 559, and 554 kB;
   compressed ceilings remain unchanged.
 

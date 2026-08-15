@@ -20,7 +20,6 @@ const walletBoundaryFiles = [
   'packages/wallet/ts-wallet-relay/src/client/WalletPairingSession.ts',
   'packages/wallet/ts-wallet-relay/src/client/WalletRelayClient.ts',
   'packages/wallet/ts-wallet-relay/src/server/WalletRelayService.ts',
-  'packages/wallet/ts-wallet-relay/src/server/WalletRequestHandler.ts',
   'packages/wallet/ts-wallet-relay/src/server/WebSocketRelay.ts',
   'packages/wallet/ts-wallet-relay/src/shared/crypto.ts',
   'packages/wallet/ts-wallet-relay/src/shared/encoding.ts',
@@ -61,7 +60,7 @@ const specializedBoundaries = [
   },
   {
     file: 'packages/sdk/src/remittance/RemittanceManager.ts',
-    forbidden: /(?:const body = JSON\.stringify\(env\)|const parsed = JSON\.parse\(body\))/
+    forbidden: /const body = JSON\.stringify\(env\)/
   },
   {
     file: 'packages/sdk/src/wallet/WalletError.ts',
@@ -69,7 +68,7 @@ const specializedBoundaries = [
   },
   {
     file: 'packages/wallet/wallet-toolbox/src/wab-client/WABTransport.ts',
-    forbidden: /(?:JSON\.stringify\(options\.body\)|parsed = JSON\.parse\(responseText\))/
+    forbidden: /JSON\.stringify\(options\.body\)/
   }
 ]
 
@@ -78,6 +77,22 @@ for (const { file, forbidden } of specializedBoundaries) {
     const source = await readFile(file, 'utf8')
     assert.doesNotMatch(source, forbidden)
     assert.match(source, byteSafeHelper)
+  })
+}
+
+const opaqueJsonBoundaries = [
+  'packages/helpers/simple/src/server/handler-types.ts',
+  'packages/messaging/authsocket-client/src/AuthSocketClient.ts',
+  'packages/messaging/authsocket/src/AuthSocketServer.ts',
+  'packages/sdk/src/remittance/RemittanceManager.ts',
+  'packages/wallet/ts-wallet-relay/src/server/WalletRequestHandler.ts',
+  'packages/wallet/wallet-toolbox/src/wab-client/WABTransport.ts'
+]
+
+for (const file of opaqueJsonBoundaries) {
+  test(`${file} never recursively reinterprets arbitrary JSON as wallet bytes`, async () => {
+    const source = await readFile(file, 'utf8')
+    assert.doesNotMatch(source, /normalizeBRC100WalletByteFields/)
   })
 }
 

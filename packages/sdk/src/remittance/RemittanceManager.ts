@@ -21,7 +21,7 @@ import type { CommsLayer } from './CommsLayer.js'
 import type { IdentityLayer } from './IdentityLayer.js'
 import type { RemittanceModule } from './RemittanceModule.js'
 import { OriginatorDomainNameStringUnder250Bytes, PubKeyHex, WalletInterface } from '../wallet/Wallet.interfaces.js'
-import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '../wallet/BRC100ByteEncoding.js'
+import { stringifyBRC100 } from '../wallet/BRC100ByteEncoding.js'
 import { toBase64, toSafeString } from '../primitives/utils.js'
 import Random from '../primitives/Random.js'
 
@@ -1850,7 +1850,7 @@ export class InvoiceHandle extends ThreadHandle {
 
 function safeParseEnvelope (body: string): RemittanceEnvelope | undefined {
   try {
-    const parsed = normalizeBRC100WalletByteFields(JSON.parse(body))
+    const parsed = JSON.parse(body)
     if (typeof parsed !== 'object') return undefined
     if (parsed.v !== 1) return undefined
     if (typeof parsed.kind !== 'string') return undefined

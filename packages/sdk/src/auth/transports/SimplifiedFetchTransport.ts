@@ -2,10 +2,7 @@
 // @ts-expect-error
 import { AuthMessage, RequestedCertificateSet, Transport } from '../types.js'
 import * as Utils from '../../primitives/utils.js'
-import {
-  normalizeBRC100WalletByteFields,
-  stringifyBRC100
-} from '../../wallet/BRC100ByteEncoding.js'
+import { normalizeBRC100ByteFields, stringifyBRC100 } from '../../wallet/BRC100ByteEncoding.js'
 
 const defaultFetch: typeof fetch =
   typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
@@ -84,7 +81,10 @@ export class SimplifiedFetchTransport implements Transport {
             throw this.createUnauthenticatedResponseError(url, response, body)
           }
           await this.onDataCallback!(
-            normalizeBRC100WalletByteFields(await response.json()) as AuthMessage
+            normalizeBRC100ByteFields(await response.json(), [
+              'payload',
+              'signature'
+            ]) as AuthMessage
           )
           if (message.messageType === 'initialRequest') resolve()
         } catch (error) {

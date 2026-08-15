@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { normalizeBRC100WalletByteFields } from '@bsv/sdk'
 import type { RpcRequest, RpcResponse } from '../types.js'
 
 /**
@@ -20,7 +19,7 @@ export class WalletRequestHandler {
   }
 
   parseMessage(raw: string): RpcRequest | RpcResponse {
-    return normalizeBRC100WalletByteFields(JSON.parse(raw)) as RpcRequest | RpcResponse
+    return JSON.parse(raw) as RpcRequest | RpcResponse
   }
 
   isResponse(msg: RpcRequest | RpcResponse): msg is RpcResponse {

@@ -6,7 +6,7 @@ import {
   SessionManager,
   PublicKey,
   Telemetry,
-  normalizeBRC100WalletByteFields,
+  normalizeBRC100ByteFields,
   stringifyBRC100,
   type AsyncSessionManager,
   type AuthMessage,
@@ -218,7 +218,10 @@ function validateHandshakeMessage(req: Request): {
   if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
     throw new AuthProtocolError('The BRC-104 handshake body must be an object.')
   }
-  const message = normalizeBRC100WalletByteFields(req.body) as Partial<AuthMessage>
+  const message = normalizeBRC100ByteFields(req.body, [
+    'payload',
+    'signature'
+  ]) as Partial<AuthMessage>
   if (
     typeof message.messageType !== 'string' ||
     message.messageType.length === 0 ||

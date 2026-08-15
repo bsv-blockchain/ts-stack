@@ -274,8 +274,7 @@ export class WalletPairingSession {
           return // tampered or wrong key — drop
         }
 
-        const msg = normalizeBRC100WalletByteFields(JSON.parse(plaintext)) as
-          RpcRequest | RpcResponse
+        const msg = JSON.parse(plaintext) as RpcRequest | RpcResponse
 
         // M4: Replay protection — drop anything not strictly greater than last seq
         if (typeof msg.seq !== 'number' || msg.seq <= this._lastSeq) {
@@ -340,6 +339,7 @@ export class WalletPairingSession {
 
   private async handleRpc(request: RpcRequest): Promise<void> {
     const { topic, backendIdentityKey } = this.params
+    normalizeBRC100WalletByteFields(request.params)
     const cryptoParams: CryptoParams = {
       protocolID: this.protocolID,
       keyID: topic,

@@ -232,18 +232,18 @@ describe('WAB transport hardening', () => {
     })
   })
 
-  it('normalizes wallet byte fields in both JSON directions', async () => {
+  it('serializes typed request bytes without rewriting opaque response objects', async () => {
     const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
     const fetchClient = jest.fn(async () => jsonResponse({ tx: historicalTx })) as typeof fetch
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
 
-    const result = await client.transport.request<{ tx: number[] }>('/test', {
+    const result = await client.transport.request<{ tx: Record<string, number> }>('/test', {
       operation: 'byte-compatibility',
       body: { transaction: new Uint8Array([1, 2, 3]) }
     })
 
     expect(JSON.parse(String(fetchClient.mock.calls[0][1]?.body))).toEqual({ transaction: [1, 2, 3] })
-    expect(result.tx).toEqual([4, 5, 6])
+    expect(result.tx).toEqual(historicalTx)
   })
 
   it('sends correlation IDs without telemetry and preserves request context on errors', async () => {

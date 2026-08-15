@@ -11,12 +11,12 @@
  * corrupt requests.
  *
  * `walletJsonReplacer` makes serialization safe. `normalizeWalletJsonTx`
- * repairs already-corrupted wallet payloads produced by affected deployed
- * wallets. Both compatibility names delegate to the shared BRC-100 byte
- * encoding contract used by every JSON transport.
+ * repairs the historical top-level action-result `tx` shape produced by
+ * affected deployed wallets. Broader recovery is performed internally by the
+ * HTTP substrate without changing this exported helper's narrow contract.
  */
 
-import { brc100JsonReplacer, normalizeBRC100WalletByteFields } from '../../BRC100ByteEncoding.js'
+import { brc100JsonReplacer, normalizeBRC100ByteArray } from '../../BRC100ByteEncoding.js'
 
 /** JSON.stringify replacer that encodes Uint8Array values as plain number arrays. */
 export function walletJsonReplacer(
@@ -28,10 +28,13 @@ export function walletJsonReplacer(
 }
 
 /**
- * Repair wallet byte fields affected by Uint8Array JSON serialization,
- * including direct and signable action transactions, list-output BEEF,
- * cryptographic byte results, and review-action error BEEF.
+ * Repair the historical top-level action-result `tx` regression. This narrow
+ * compatibility export intentionally leaves every other field untouched.
  */
 export function normalizeWalletJsonTx<T>(value: T): T {
-  return normalizeBRC100WalletByteFields(value)
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return value
+  const record = value as Record<string, unknown>
+  const tx = normalizeBRC100ByteArray(record.tx)
+  if (tx != null) record.tx = tx
+  return value
 }

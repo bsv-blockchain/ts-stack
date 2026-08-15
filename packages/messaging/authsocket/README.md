@@ -91,10 +91,11 @@ cross-origin default of its own.
    `socket.on(...)` and `socket.emit(...)` calls.
 3. Messages are signed and verified under the hood.
 
-Authenticated event data preserves BRC-100 byte fields across historical and
-current runtimes. Existing `number[]`, current `Uint8Array`, and legacy
-numeric-key JSON representations are delivered as portable number arrays;
-sparse or invalid byte records are not coerced.
+Authenticated event data preserves arbitrary JSON exactly, including plain
+numeric-key objects under names such as `data`, `payload`, `transaction`, and
+`tx`. Real `Uint8Array` values are serialized as portable number arrays. Code
+that owns a typed payment or wallet protocol may recover a historical
+numeric-key byte object at that protocol's explicit byte field after receipt.
 
 Call `await io.close()` during shutdown. It is idempotent and disconnects
 active Socket.IO clients before closing the attached HTTP server.

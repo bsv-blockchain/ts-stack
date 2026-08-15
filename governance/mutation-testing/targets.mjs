@@ -70,6 +70,42 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'sdk-brc100-json': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest: 'packages/sdk/src/wallet/__tests/BRC100ByteEncoding.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/wallet/BRC100ByteEncoding.ts',
+          'export function normalizeBRC100ByteArray(',
+          '/** Convert a valid BRC-100 byte array'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/wallet/BRC100ByteEncoding.ts',
+          'export function brc100JsonReplacer(',
+          '/** Serialize a BRC-100 payload'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/wallet/BRC100ByteEncoding.ts',
+          'export function stringifyBRC100(',
+          '* Repairs byte arrays only in explicitly selected own fields'
+        )
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/wallet/__tests/BRC100ByteEncoding.property.test.ts',
+          '<rootDir>/src/wallet/__tests/BRC100ByteEncoding.test.ts'
+        ],
+        { esm: true }
+      )
+    },
     'sdk-auth-http': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
@@ -112,8 +148,8 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',
-          'await this.onDataCallback!(',
-          "if (message.messageType === 'initialRequest') resolve()"
+          'private async sendAuthMessage(message: AuthMessage): Promise<void> {',
+          'private encodeRequestBody('
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',

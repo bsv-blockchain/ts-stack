@@ -95,7 +95,7 @@ describe('auth transport serialization properties', () => {
     expect(convertValueToArray(1n, {})).toEqual(Utils.toArray('1', 'utf8'))
   })
 
-  test('keeps current and historical nested wallet bytes portable without rewriting unrelated records', () => {
+  test('keeps typed bytes portable without rewriting byte-like plain records', () => {
     const historical = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
     const encoded = convertValueToArray(
       {
@@ -109,7 +109,7 @@ describe('auth transport serialization properties', () => {
 
     expect(JSON.parse(Utils.toUTF8(encoded))).toEqual({
       tx: [1, 2, 3],
-      payload: { transaction: [4, 5, 6] },
+      payload: { transaction: historical },
       data: {},
       unrelated: historical
     })

@@ -12,7 +12,6 @@ import {
   WalletInterface,
   Utils,
   OriginatorDomainNameStringUnder250Bytes,
-  normalizeBRC100WalletByteFields,
   stringifyBRC100
 } from '@bsv/sdk'
 import { SocketClientTransport } from './SocketClientTransport.js'
@@ -33,7 +32,7 @@ export type AuthSocketClientErrorHandler = (
 export function decodeAuthSocketEventPayload(payload: number[]): { eventName: string; data: any } {
   try {
     const str = Utils.toUTF8(payload)
-    const decoded: unknown = normalizeBRC100WalletByteFields(JSON.parse(str))
+    const decoded: unknown = JSON.parse(str)
     if (
       decoded === null ||
       typeof decoded !== 'object' ||

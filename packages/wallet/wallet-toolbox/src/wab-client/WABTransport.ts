@@ -1,4 +1,4 @@
-import { normalizeBRC100WalletByteFields, stringifyBRC100, Telemetry, TelemetryConfig } from '@bsv/sdk'
+import { stringifyBRC100, Telemetry, TelemetryConfig } from '@bsv/sdk'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
@@ -437,7 +437,7 @@ export class WABTransport {
   ): T {
     let parsed: unknown
     try {
-      parsed = normalizeBRC100WalletByteFields(JSON.parse(responseText))
+      parsed = JSON.parse(responseText)
     } catch (cause) {
       const error = new WABClientError(
         'WAB_INVALID_RESPONSE',
