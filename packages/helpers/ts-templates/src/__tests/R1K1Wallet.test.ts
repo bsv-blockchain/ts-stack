@@ -12,6 +12,27 @@ import {
   Utils
 } from '@bsv/sdk'
 import { R1K1Wallet } from '../R1K1Wallet.js'
+import { R1_K1_R1_SLOT_OFFSET, R1_K1_TEMPLATE_BYTE_LENGTH } from '../R1K1Wallet.artifact.js'
+
+type ArtifactModule = typeof import('../R1K1Wallet.artifact.js')
+type WidenLiteral<T> = T extends number ? number : T extends string ? string : T
+type ArtifactOverrides = {
+  [Key in keyof ArtifactModule]?: WidenLiteral<ArtifactModule[Key]>
+}
+
+function walletWithArtifact(overrides: ArtifactOverrides): R1K1Wallet {
+  let Wallet: typeof R1K1Wallet | undefined
+  jest.isolateModules(() => {
+    jest.doMock('../R1K1Wallet.artifact.js', () => ({
+      ...jest.requireActual<ArtifactModule>('../R1K1Wallet.artifact.js'),
+      ...overrides
+    }))
+    Wallet = jest.requireActual<typeof import('../R1K1Wallet.js')>('../R1K1Wallet.js').R1K1Wallet
+  })
+  jest.dontMock('../R1K1Wallet.artifact.js')
+  if (Wallet == null) throw new Error('Failed to load isolated R1K1Wallet module')
+  return new Wallet()
+}
 
 const p256 = new Secp256r1()
 const r1PrivateKey = '01'.padStart(64, '0')
@@ -76,6 +97,38 @@ describe('R1K1Wallet', () => {
     expect(Array.from(bytes.subarray(17, 37))).toEqual(r1Commitment)
     expect(Array.from(bytes.subarray(959609, 959629))).toEqual(k1Commitment)
     expect(bytes[59]).toBe(OP.OP_CODESEPARATOR)
+  })
+
+  it('accepts constructor commitments encoded as hex strings', async () => {
+    const lockingScript = await template.lock(Utils.toHex(r1Commitment), Utils.toHex(k1Commitment))
+
+    expect(lockingScript.toUint8Array()).toHaveLength(R1K1Wallet.lockingScriptByteLength)
+  })
+
+  it('rejects an artifact whose decompressed length does not match its manifest', async () => {
+    const isolated = walletWithArtifact({
+      R1_K1_TEMPLATE_BYTE_LENGTH: R1_K1_TEMPLATE_BYTE_LENGTH + 1
+    })
+
+    await expect(isolated.lock(r1Commitment, k1Commitment)).rejects.toThrow(
+      `artifact length mismatch: expected ${R1_K1_TEMPLATE_BYTE_LENGTH + 1}`
+    )
+  })
+
+  it('rejects an artifact whose checksum does not match its manifest', async () => {
+    const isolated = walletWithArtifact({ R1_K1_TEMPLATE_SHA256: '00'.repeat(32) })
+
+    await expect(isolated.lock(r1Commitment, k1Commitment)).rejects.toThrow(
+      'artifact checksum mismatch'
+    )
+  })
+
+  it('rejects an artifact whose constructor slot is not an OP_0 placeholder', async () => {
+    const isolated = walletWithArtifact({ R1_K1_R1_SLOT_OFFSET: R1_K1_R1_SLOT_OFFSET + 1 })
+
+    await expect(isolated.lock(r1Commitment, k1Commitment)).rejects.toThrow(
+      'artifact constructor slots are invalid'
+    )
   })
 
   it('rejects malformed constructor hashes', async () => {
@@ -225,6 +278,17 @@ describe('R1K1Wallet', () => {
       spend(lockingScript, unlockingScript, sourceTransaction, spendingTransaction).validate()
     ).toBe(true)
   }, 30000)
+
+  it('defaults a missing input sequence to the final sequence number', async () => {
+    const lockingScript = await template.lock(r1Commitment, k1Commitment)
+    const { spendingTransaction } = transactionFor(lockingScript)
+    const input = spendingTransaction.inputs[0] as { sequence?: number }
+    delete input.sequence
+
+    await expect(
+      template.unlockK1({ privateKey: k1PrivateKey }).sign(spendingTransaction, 0)
+    ).resolves.toBeInstanceOf(UnlockingScript)
+  })
 
   it('rejects an unrelated K1 recovery key before signing', async () => {
     const lockingScript = await template.lock(r1Commitment, k1Commitment)

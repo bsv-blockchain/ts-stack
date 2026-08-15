@@ -319,16 +319,17 @@ function normalizeBytes(value: R1K1Bytes, label: string, length?: number): numbe
 }
 
 function encodedPushLength(dataLength: number): number {
-  if (dataLength <= 75) return 1 + dataLength
-  if (dataLength <= 0xff) return 2 + dataLength
-  if (dataLength <= 0xffff) return 3 + dataLength
-  return 5 + dataLength
+  // Direct pushes and PUSHDATA1/2/4 add 1, 2, 3, and 5 prefix bytes respectively.
+  const prefixLength =
+    1 + Number(dataLength > 75) + Number(dataLength > 0xff) + 2 * Number(dataLength > 0xffff)
+  return prefixLength + dataLength
 }
 
 function equalBytes(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
-  if (left.length !== right.length) return false
-  for (let index = 0; index < left.length; index++) {
-    if (left[index] !== right[index]) return false
+  let difference = Number(left.length !== right.length)
+  const sharedLength = Math.min(left.length, right.length)
+  for (let index = 0; index < sharedLength; index++) {
+    difference |= left[index]! ^ right[index]!
   }
-  return true
+  return difference === 0
 }
