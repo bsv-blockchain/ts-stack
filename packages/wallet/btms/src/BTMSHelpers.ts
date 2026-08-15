@@ -249,7 +249,8 @@ export function parseIncomingMessage(msg: {
     const payment = JSON.parse(msg.body) as IncomingToken
     if (payment.beef !== undefined) {
       const beef = normalizeBRC100ByteArray(payment.beef)
-      if (beef == null || beef.length === 0) return null
+      if (beef == null) return null
+      if (beef.length === 0) return null
       payment.beef = beef
     }
     if (msg.messageId !== undefined) payment.messageId = msg.messageId

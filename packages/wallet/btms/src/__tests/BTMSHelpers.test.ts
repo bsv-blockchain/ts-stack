@@ -1,11 +1,13 @@
 import type { ListActionsResult } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import {
+  accumulateOutputIntoBalances,
   calcActionAmount,
   mapActionToTransaction,
   stripLabelPrefix,
   verifyProvenTokenAssetId
 } from '../BTMSHelpers.js'
+import { BTMSToken } from '../BTMSToken.js'
 import { BTMS_LABEL_PREFIX, ISSUE_MARKER } from '../constants.js'
 import { parseCustomInstructions } from '../utils.js'
 
@@ -59,6 +61,33 @@ describe('BTMS helper edge cases', () => {
     expect(() =>
       verifyProvenTokenAssetId({ assetId: 'different.0' } as never, TXID, 0, ASSET_ID)
     ).toThrow('Token asset ID does not match proof asset ID')
+  })
+
+  it('keeps the first decoded metadata while accumulating an asset balance', () => {
+    jest.spyOn(BTMSToken, 'decode').mockReturnValueOnce({
+      valid: true,
+      assetId: ASSET_ID,
+      amount: 7,
+      metadata: JSON.stringify({ name: 'replacement' }),
+      lockingPublicKey: ''
+    })
+    const originalMetadata = { name: 'original' }
+    const balances = new Map([[ASSET_ID, { balance: 5, metadata: originalMetadata }]])
+
+    accumulateOutputIntoBalances(
+      {
+        spendable: true,
+        satoshis: 1,
+        outpoint: `${TXID}.1`,
+        lockingScript: 'mocked'
+      },
+      balances
+    )
+
+    expect(balances.get(ASSET_ID)).toEqual({
+      balance: 12,
+      metadata: originalMetadata
+    })
   })
 
   it('reports unknown non-Error JSON failures without losing UTXO context', () => {
