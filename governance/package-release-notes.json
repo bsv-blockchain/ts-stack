@@ -35,29 +35,29 @@
       "name": "@bsv/auth-express-middleware",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, preventing a second Express response from terminating the service process.",
-      "migration": "No consumer migration is required; valid request, response, authentication, and error contracts are unchanged."
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, and preserves BRC-100 byte fields in handshake and buffered JSON responses across number-array, Uint8Array, and historical numeric-key JSON runtimes.",
+      "migration": "No API migration is required. Upgrade to @bsv/sdk 2.4.1 or later for the shared byte-boundary contract. Generic signed application-body canonicalization remains unchanged so old and new peers verify identical bytes."
     },
     {
       "name": "@bsv/authsocket",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures to the offending socket, caps per-socket authentication concurrency, validates authenticated event envelopes, adds safe error reporting, and adds randomized and real-Socket.IO process-survival regression coverage.",
-      "migration": "Valid traffic and the wire contract are unchanged. A socket is now disconnected when its authentication processing exceeds the concurrency limit or a callback fails; use onError for diagnostics and maxPendingAuthMessages to tune the default limit of 32."
+      "summary": "Contains authentication and application callback failures, caps per-socket authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
     },
     {
       "name": "@bsv/authsocket-client",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures, caps authentication concurrency, validates authenticated event envelopes, adds safe error reporting, and registers the remote payload boundary for randomized and mutation testing.",
-      "migration": "Valid traffic and supported imports are unchanged. The client now disconnects from a server that causes authentication failure or exceeds the concurrency limit; use onError for diagnostics and maxPendingAuthMessages to tune the default limit of 32."
+      "summary": "Contains authentication and application callback failures, caps authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
     },
     {
       "name": "@bsv/btms",
       "publishedVersion": "1.1.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet as an explicit overlay-network preset alongside the existing token-manager hardening and package contracts.",
-      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
+      "summary": "Adds TerraTestNet and preserves token settlement and refund transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.",
+      "migration": "Existing local, mainnet, testnet, and number-array behavior is unchanged. TTN consumers select networkPreset teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility."
     },
     {
       "name": "@bsv/btms-permission-module",
@@ -96,10 +96,10 @@
     },
     {
       "name": "@bsv/message-box-client",
-      "publishedVersion": "2.2.2",
-      "releaseType": "minor",
-      "summary": "Adds first-class TerraTestNet overlay routing while requiring an explicit TTN Message Box host until a dedicated deployment is available.",
-      "migration": "Existing local, mainnet, testnet, and explicit-host clients are unchanged. TTN consumers set networkPreset to teratestnet and must provide the dedicated TTN host explicitly."
+      "publishedVersion": "2.4.0",
+      "releaseType": "patch",
+      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, with strict rejection of sparse or invalid byte records.",
+      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form."
     },
     {
       "name": "@bsv/overlay",
@@ -145,17 +145,17 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.3.1",
-      "releaseType": "minor",
-      "summary": "Adds the teratestnet overlay preset, an isolated TTN SHIP/SLAP root, and explicit resolver selection for identity and registry clients.",
-      "migration": "Existing mainnet, testnet, and local routing is unchanged. TTN consumers select teratestnet explicitly because BRC-100 getNetwork continues to report testnet for all test-family chains."
+      "publishedVersion": "2.4.0",
+      "releaseType": "patch",
+      "summary": "Adds one strict BRC-100 byte-boundary contract: real typed arrays serialize portably, historical bytes recover only at typed protocol fields, arbitrary JSON round-trips unchanged, and React Native discovery remains compatible and bounded.",
+      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new wallet peers remain compatible through portable output and typed-boundary recovery."
     },
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet to the public Overlay configuration while retaining strict browser and server package contracts.",
-      "migration": "Existing overlay configurations are unchanged. TTN consumers select network teratestnet and use @bsv/sdk 2.4 or later."
+      "summary": "Adds TerraTestNet and preserves Message Box, token send/receive, and server-adapter transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.",
+      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility."
     },
     {
       "name": "@bsv/templates",
@@ -189,29 +189,29 @@
       "name": "@bsv/wallet-relay",
       "publishedVersion": "0.2.2",
       "releaseType": "minor",
-      "summary": "Adds the strict package and artifact contract, strengthens relay runtime, declaration consistency, native QR accessibility, CLI control flow, and host-owned Express type compatibility, and distinguishes generated consumer customization markers from unfinished library work.",
-      "migration": "QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers. Express integrations now use the host application's matching Express runtime and type graph."
+      "summary": "Adds the strict package contract and preserves wallet RPC, encrypted relay payloads, signatures, and transaction bytes across number-array, Uint8Array, Buffer, and historical numeric-key JSON runtimes.",
+      "migration": "No wallet RPC migration is required; upgrade to @bsv/sdk 2.4.1 or later. Existing relay sessions and number arrays remain valid, and host applications continue to provide their matching Express runtime and type graph."
     },
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Restores BRC-95 backward compatibility for internalizeAction by pruning unrelated legacy BEEF branches around the transaction declared by the atomic prefix before strict transaction, proof, and BRC-29 output validation.",
-      "migration": "No consumer migration is required. Canonical AtomicBEEF behavior is unchanged; legacy envelopes containing unrelated branches are accepted only when the declared transaction, its complete recursive dependency proof, and every requested BRC-29 payment output validate normally."
+      "summary": "Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, and leaves opaque WAB response JSON unchanged.",
+      "migration": "No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Carries the browser Wallet Toolbox internalizeAction compatibility fix that removes unrelated legacy BEEF branches before strict validation of the declared AtomicBEEF transaction closure.",
-      "migration": "No consumer migration is required. Browser exports, wire types, canonical AtomicBEEF behavior, proof validation, and BRC-29 locking-script validation are unchanged."
+      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors and historical response recovery.",
+      "migration": "No consumer migration is required. Browser exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Carries the mobile Wallet Toolbox internalizeAction compatibility fix that removes unrelated legacy BEEF branches before strict validation of the declared AtomicBEEF transaction closure.",
-      "migration": "No consumer migration is required. React Native exports, wire types, canonical AtomicBEEF behavior, proof validation, and BRC-29 locking-script validation are unchanged."
+      "summary": "Carries the mobile Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors and historical response recovery.",
+      "migration": "No consumer migration is required. React Native exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later."
     },
     {
       "name": "create-bsv-app",

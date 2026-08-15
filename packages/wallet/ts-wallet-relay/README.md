@@ -33,6 +33,11 @@ application, so relay routes share one Express 4 or 5 type graph with the host.
 
 `@bsv/sdk` is used throughout — backend wallet crypto, frontend local wallet detection, and mobile pairing. Install it in every layer of your project.
 
+Wallet RPC byte fields are normalized and validated in both directions. The
+relay preserves historical `number[]`, current `Uint8Array`, and numeric-key
+JSON wallet representations for direct and deferred-signing actions without
+changing non-byte RPC fields.
+
 > **TypeScript:** your `tsconfig.json` needs `"moduleResolution": "bundler"` (or `"node16"` / `"nodenext"`) to resolve the `@bsv/wallet-relay/react` and `@bsv/wallet-relay/client` subpath exports.
 
 ### 2. Generate a stable backend key

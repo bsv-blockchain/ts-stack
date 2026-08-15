@@ -64,6 +64,12 @@ socket.on('disconnect', () => {
 2. Interact with `.on(...)`, `.emit(...)` as normal.
 3. Behind the scenes, each message is signed with your client wallet key and verified by the server. Inbound messages are also verified.
 
+Authenticated event data preserves arbitrary JSON exactly, including plain
+numeric-key objects under names such as `data`, `payload`, `transaction`, and
+`tx`. Real `Uint8Array` values are serialized as portable number arrays. Code
+that owns a typed payment or wallet protocol may recover a historical
+numeric-key byte object at that protocol's explicit byte field after receipt.
+
 ### Failure isolation and resource limits
 
 Authentication frames and application callbacks are contained inside the

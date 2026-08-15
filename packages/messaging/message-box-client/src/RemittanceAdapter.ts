@@ -28,7 +28,7 @@
  * ```
  */
 
-import { PubKeyHex } from '@bsv/sdk'
+import { PubKeyHex, stringifyBRC100 } from '@bsv/sdk'
 import type { CommsLayer as SdkCommsLayer, PeerMessage as SdkRemittancePeerMessage } from '@bsv/sdk'
 import type { MessageBoxClient } from './MessageBoxClient.js'
 import type { PeerMessage as MessageBoxPeerMessage } from './types.js'
@@ -162,7 +162,7 @@ export class RemittanceAdapter implements SdkCommsLayer {
   private toBodyString(body: unknown): string {
     if (typeof body === 'string') return body
     try {
-      return JSON.stringify(body) ?? ''
+      return stringifyBRC100(body)
     } catch {
       return ''
     }

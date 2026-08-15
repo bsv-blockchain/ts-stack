@@ -27,14 +27,12 @@ import {
   Base64String,
   OriginatorDomainNameStringUnder250Bytes,
   Brc29RemittanceModule,
-  createNonce
+  createNonce,
+  toBRC100PortableByteArray,
+  stringifyBRC100
 } from '@bsv/sdk'
 
 import * as Logger from './Utils/logger.js'
-
-function toNumberArray(tx: AtomicBEEF): number[] {
-  return Array.isArray(tx) ? tx : Array.from(tx)
-}
 
 function hexToBytes(hex: string): number[] {
   const matches = hex.match(/.{1,2}/g)
@@ -307,7 +305,7 @@ export class PeerPayClient extends MessageBoxClient {
       {
         recipient: payment.recipient,
         messageBox: this.messageBox,
-        body: JSON.stringify(paymentToken)
+        body: stringifyBRC100(paymentToken)
       },
       hostOverride
     )
@@ -336,7 +334,7 @@ export class PeerPayClient extends MessageBoxClient {
         {
           recipient: payment.recipient,
           messageBox: this.messageBox,
-          body: JSON.stringify(paymentToken)
+          body: stringifyBRC100(paymentToken)
         },
         overrideHost
       )
@@ -348,7 +346,7 @@ export class PeerPayClient extends MessageBoxClient {
         {
           recipient: payment.recipient,
           messageBox: this.messageBox,
-          body: JSON.stringify(paymentToken)
+          body: stringifyBRC100(paymentToken)
         },
         overrideHost
       )
@@ -407,7 +405,12 @@ export class PeerPayClient extends MessageBoxClient {
    */
   async acceptPayment(payment: IncomingPayment): Promise<any> {
     try {
-      Logger.log(`[PP CLIENT] Processing payment: ${JSON.stringify(payment, null, 2)}`)
+      Logger.log(`[PP CLIENT] Processing payment: ${stringifyBRC100(payment, 2)}`)
+
+      const transaction = toBRC100PortableByteArray(payment.token.transaction)
+      if (transaction == null || transaction.length === 0) {
+        throw new Error('Payment transaction must be a non-empty BRC-100 byte array')
+      }
 
       const acceptResult = await this.settlementModule.acceptSettlement(
         {
@@ -418,7 +421,7 @@ export class PeerPayClient extends MessageBoxClient {
               derivationPrefix: payment.token.customInstructions.derivationPrefix,
               derivationSuffix: payment.token.customInstructions.derivationSuffix
             },
-            transaction: toNumberArray(payment.token.transaction),
+            transaction,
             amountSatoshis: payment.token.amount,
             outputIndex: payment.token.outputIndex ?? STANDARD_PAYMENT_OUTPUT_INDEX
           }
@@ -438,7 +441,7 @@ export class PeerPayClient extends MessageBoxClient {
       const paymentResult = acceptResult.receiptData?.internalizeResult
 
       Logger.log(
-        `[PP CLIENT] Payment internalized successfully: ${JSON.stringify(paymentResult, null, 2)}`
+        `[PP CLIENT] Payment internalized successfully: ${stringifyBRC100(paymentResult, 2)}`
       )
       Logger.log(`[PP CLIENT] Acknowledging payment with messageId: ${payment.messageId}`)
 
@@ -462,7 +465,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<void>} Resolves when the payment is either acknowledged or refunded.
    */
   async rejectPayment(payment: IncomingPayment): Promise<void> {
-    Logger.log(`[PP CLIENT] Rejecting payment: ${JSON.stringify(payment, null, 2)}`)
+    Logger.log(`[PP CLIENT] Rejecting payment: ${stringifyBRC100(payment, 2)}`)
 
     if (payment.token.amount - 1000 < 1000) {
       Logger.log('[PP CLIENT] Payment amount too small after fee, just acknowledging.')
@@ -662,7 +665,7 @@ export class PeerPayClient extends MessageBoxClient {
       {
         recipient: request.sender,
         messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
-        body: JSON.stringify(response)
+        body: stringifyBRC100(response)
       },
       hostOverride
     )
@@ -696,7 +699,7 @@ export class PeerPayClient extends MessageBoxClient {
       {
         recipient: request.sender,
         messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
-        body: JSON.stringify(response)
+        body: stringifyBRC100(response)
       },
       hostOverride
     )
@@ -758,7 +761,7 @@ export class PeerPayClient extends MessageBoxClient {
         {
           recipient: params.recipient,
           messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
-          body: JSON.stringify(body)
+          body: stringifyBRC100(body)
         },
         hostOverride
       )
@@ -978,7 +981,7 @@ export class PeerPayClient extends MessageBoxClient {
       {
         recipient: params.recipient,
         messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
-        body: JSON.stringify(body)
+        body: stringifyBRC100(body)
       },
       hostOverride
     )

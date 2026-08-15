@@ -1,4 +1,4 @@
-import { Telemetry, TelemetryConfig } from '@bsv/sdk'
+import { stringifyBRC100, Telemetry, TelemetryConfig } from '@bsv/sdk'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
@@ -281,7 +281,7 @@ export class WABTransport {
   private bodyFor(options: WABRequestOptions, metadata: WABRequestMetadata): string | undefined {
     let body: string | undefined
     try {
-      body = options.body === undefined ? undefined : JSON.stringify(options.body)
+      body = options.body === undefined ? undefined : stringifyBRC100(options.body)
     } catch (cause) {
       const error = new WABClientError('WAB_INVALID_REQUEST', 'WAB request encoding failed.', false, undefined, {
         ...metadata.errorContext,

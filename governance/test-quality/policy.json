@@ -57,6 +57,18 @@
         ]
       },
       {
+        "path": "packages/sdk/src/wallet/__tests/BRC100ByteEncoding.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-100 wallet byte recovery and arbitrary application JSON serialization",
+        "target": "Portable typed-array encoding without reinterpretation of ordinary or numeric-key JSON objects",
+        "invariants": [
+          "Every ordinary JSON value retains exactly the native JSON serialization.",
+          "Every Uint8Array is serialized as the equivalent portable number array.",
+          "Adjacent application-defined JSON remains unchanged while typed bytes are encoded."
+        ]
+      },
+      {
         "path": "packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts",
         "manifest": "packages/sdk/package.json",
         "risk": "critical",

@@ -69,6 +69,39 @@ describe('Brc29RemittanceModule', () => {
       expect(createArgs.outputs[0].outputDescription).toBe('Test output')
     })
 
+    it.each([
+      ['direct tx', { tx: new Uint8Array([1, 2, 3]) }],
+      [
+        'signable transaction',
+        { signableTransaction: { tx: new Uint8Array([4, 5, 6]), reference: 'cmVm' } }
+      ]
+    ])('normalizes a Wallet Wire Uint8Array from %s into a portable settlement', async (_case, action) => {
+      const wallet = {
+        getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
+        createAction: jest.fn(async () => action)
+      } as unknown as WalletInterface
+
+      const module = new Brc29RemittanceModule({
+        nonceProvider: {
+          createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
+        },
+        lockingScriptProvider: {
+          pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
+        }
+      })
+
+      const result = await module.buildSettlement(
+        { threadId: 'thread-1', option: { amountSatoshis: 1000, payee: 'payee-key' } },
+        makeContext(wallet)
+      )
+
+      expect(result.action).toBe('settle')
+      if (result.action !== 'settle') return
+      expect(Array.isArray(result.artifact.transaction)).toBe(true)
+      expect(result.artifact.transaction).toEqual(Array.from(action.tx ?? action.signableTransaction!.tx))
+      expect(JSON.parse(JSON.stringify(result.artifact.transaction))).toEqual(result.artifact.transaction)
+    })
+
     it('terminates on invalid amounts for unsolicited settlements', async () => {
       const wallet = {
         getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),

@@ -1,6 +1,7 @@
 import * as Validation from './validationHelpers.js'
 
 export * from './Wallet.interfaces.js'
+export * from './BRC100ByteEncoding.js'
 export * from './KeyDeriver.js'
 export { default as CachedKeyDeriver } from './CachedKeyDeriver.js'
 export { default as ProtoWallet } from './ProtoWallet.js'

@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
+  portable JSON arrays, keeping HTTP and relay error recovery compatible with
+  both historical array wallets and current binary Wallet Wire wallets.
+- Serialize real typed arrays portably in outbound WAB requests while
+  preserving arbitrary inbound WAB JSON objects exactly.
+
 - Accept legacy BRC-95 payment envelopes that include unrelated BEEF branches
   by reducing them to the declared transaction and its dependency closure
   before strict proof and BRC-29 validation. Malformed transactions, invalid

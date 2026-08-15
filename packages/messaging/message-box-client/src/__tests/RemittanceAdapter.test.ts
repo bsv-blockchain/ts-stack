@@ -120,6 +120,25 @@ describe('RemittanceAdapter', () => {
     ])
   })
 
+  it('serializes typed settlement bytes in object message bodies as arrays', async () => {
+    const messageBox = {
+      getIdentityKey: jest.fn<() => Promise<string>>().mockResolvedValue(myIdentityKey),
+      listMessages: jest.fn<() => Promise<any[]>>().mockResolvedValue([
+        {
+          messageId: 'm-bytes',
+          sender: senderKey,
+          body: { settlement: { transaction: new Uint8Array([1, 2, 3]) } }
+        }
+      ])
+    } as unknown as MessageBoxClient
+
+    const [result] = await new RemittanceAdapter(messageBox).listMessages({
+      messageBox: 'remittance_inbox'
+    })
+
+    expect(JSON.parse(result.body)).toEqual({ settlement: { transaction: [1, 2, 3] } })
+  })
+
   it('forwards live listener setup and normalizes inbound message shape', async () => {
     const onPaymentMessage = jest.fn()
     let forwardedListener:

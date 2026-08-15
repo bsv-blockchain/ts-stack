@@ -22,6 +22,7 @@ import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { bytesToBase64url } from '../shared/encoding.js'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
+import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '@bsv/sdk'
 
 export interface WalletRelayServiceOptions {
   /**
@@ -281,7 +282,7 @@ export class WalletRelayService {
     const uri = buildPairingUri({
       sessionId: session.id,
       backendIdentityKey,
-      protocolID: JSON.stringify(PROTOCOL_ID),
+      protocolID: stringifyBRC100(PROTOCOL_ID),
       origin,
       expiry,
       sig,
@@ -336,7 +337,7 @@ export class WalletRelayService {
     const ciphertext = await encryptEnvelope(
       this.wallet,
       { protocolID: PROTOCOL_ID, keyID: sessionId, counterparty: session.mobileIdentityKey },
-      JSON.stringify(rpc)
+      stringifyBRC100(rpc)
     )
     this.relay.sendToMobile(sessionId, { topic: sessionId, ciphertext })
 
@@ -499,6 +500,7 @@ export class WalletRelayService {
 
     const msg = this.handler.parseMessage(plaintext)
     if (this.handler.isResponse(msg)) {
+      normalizeBRC100WalletByteFields(msg.result)
       const pending = this.pending.get(msg.id)
       if (pending) {
         clearTimeout(pending.timer)
@@ -546,7 +548,7 @@ export class WalletRelayService {
     const ciphertext = await encryptEnvelope(
       this.wallet,
       { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
-      JSON.stringify(ack)
+      stringifyBRC100(ack)
     )
     this.relay.sendToMobile(topic, { topic, ciphertext })
   }

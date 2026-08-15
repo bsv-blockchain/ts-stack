@@ -1,7 +1,9 @@
-import { Utils } from '@bsv/sdk'
+import { Utils, toBRC100PortableByteArray } from '@bsv/sdk'
 
 /** Convert a byte array to a base64url string using @bsv/sdk Utils. */
-export function bytesToBase64url(bytes: number[]): string {
+export function bytesToBase64url(value: unknown): string {
+  const bytes = toBRC100PortableByteArray(value)
+  if (bytes == null) throw new TypeError('Invalid BRC-100 byte payload')
   return Utils.toBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 

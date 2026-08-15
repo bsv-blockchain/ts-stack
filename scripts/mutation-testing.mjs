@@ -134,10 +134,22 @@ async function changedConfiguredTargets(base, currentTargets) {
   const module = await import(
     `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
   )
-  const baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
+  let baseTargets
+  try {
+    baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
+  } catch (error) {
+    return targetsForUnresolvedMutationRange(currentTargets, error)
+  }
   return [...new Set([...Object.keys(currentTargets), ...Object.keys(baseTargets)])].filter(
     id => JSON.stringify(currentTargets[id]) !== JSON.stringify(baseTargets[id])
   )
+}
+
+export function targetsForUnresolvedMutationRange(currentTargets, _error) {
+  // If the base configuration cannot be evaluated, its full target diff is
+  // unknowable. Run every current target so a second config-only change cannot
+  // be silently omitted merely because the first stale marker named one file.
+  return Object.keys(currentTargets)
 }
 
 function readPolicy() {

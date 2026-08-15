@@ -22,10 +22,17 @@ import {
 const mockWalletStorage = {
   createAction: jest.fn().mockImplementation((_args: any) => {
     throw new WERR_REVIEW_ACTIONS(
-      [{ txid: 'txid123', status: 'doubleSpend', competingTxs: ['txid456'], competingBeef: [0, 1, 2, 3] }],
+      [
+        {
+          txid: 'txid123',
+          status: 'doubleSpend',
+          competingTxs: ['txid456'],
+          competingBeef: new Uint8Array([0, 1, 2, 3])
+        }
+      ],
       [{ txid: 'txid123', status: 'failed' }],
       'txid123',
-      [5, 6, 7, 8],
+      new Uint8Array([5, 6, 7, 8]),
       ['00'.repeat(32) + '.0']
     )
   })
@@ -51,6 +58,7 @@ describe('WalletError tests', () => {
         { txid: 'txid123', status: 'doubleSpend', competingTxs: ['txid456'], competingBeef: [0, 1, 2, 3] }
       ])
       expect(werr3.sendWithResults).toEqual([{ txid: 'txid123', status: 'failed' }])
+      expect(werr3.tx).toEqual([5, 6, 7, 8])
       expect(werr3.noSendChange).toEqual(['00'.repeat(32) + '.0'])
     }
   })
