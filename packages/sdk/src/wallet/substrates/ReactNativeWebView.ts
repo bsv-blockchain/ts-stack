@@ -70,12 +70,7 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         // before the payload is read: every other context - a framed document,
         // an opener, or a sandboxed frame reporting an opaque origin - is not
         // the wallet bridge.
-        const win = globalThis.window
-        const relayed = e.source != null && e.source !== win
-        if (relayed && e.source !== win.parent) {
-          return
-        }
-        if (relayed && e.origin !== win.location?.origin && e.origin !== this.domain) {
+        if (!isBridgeDelivered(e, this.domain)) {
           return
         }
         let data: any
@@ -134,6 +129,20 @@ export default class ReactNativeWebView extends InvokableWalletBase {
       }
     })
   }
+}
+
+/**
+ * Whether a message reached this document the way a React Native host delivers
+ * a response: synthesized in this document, posted by this window, or relayed
+ * by the frame bridging for it. A relaying frame is a separate browsing
+ * context, so the browser attests its origin, which then has to be this
+ * document's origin or the configured wallet origin.
+ */
+function isBridgeDelivered(e: MessageEvent, domain: string): boolean {
+  const win = globalThis.window
+  if (e.source == null || e.source === win) return true
+  if (e.source !== win.parent) return false
+  return e.origin === win.location?.origin || e.origin === domain
 }
 
 function normalizeOrigin(domain: string): string {
