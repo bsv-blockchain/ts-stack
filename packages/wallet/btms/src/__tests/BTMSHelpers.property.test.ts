@@ -82,6 +82,22 @@ describe('BTMS untrusted data properties', () => {
     expect(() => parseCustomInstructions(undefined, 'txid', 7)).toThrow('txid.7')
   })
 
+  test('recovers JSON-serialized Uint8Array BEEF and rejects sparse byte records', () => {
+    const beef = JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3])))
+    expect(parseIncomingMessage({ body: JSON.stringify({ beef }) })).toMatchObject({
+      beef: [1, 2, 3]
+    })
+    expect(parseIncomingMessage({ body: JSON.stringify({ beef: { 0: 1, 2: 3 } }) })).toBeNull()
+    expect(parseIncomingMessage({ body: JSON.stringify({ beef: {} }) })).toBeNull()
+
+    const withoutEnvelopeMetadata = parseIncomingMessage({
+      body: JSON.stringify({ beef: [1, 2, 3] })
+    })
+    expect(withoutEnvelopeMetadata).not.toBeNull()
+    expect(Object.hasOwn(withoutEnvelopeMetadata as object, 'messageId')).toBe(false)
+    expect(Object.hasOwn(withoutEnvelopeMetadata as object, 'sender')).toBe(false)
+  })
+
   test('strips exactly one governed label prefix and is total for arbitrary message text', () => {
     fc.assert(
       fc.property(fc.array(fc.string({ maxLength: 200 }), { maxLength: 100 }), labels => {

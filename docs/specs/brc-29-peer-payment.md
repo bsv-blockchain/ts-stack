@@ -3,8 +3,8 @@ id: spec-brc-29-peer-payment
 title: BRC-29 Simple Authenticated P2P Payment Protocol
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-08-14"
+last_verified: "2026-08-14"
 status: stable
 tags: ["spec", "payments", "brc-29"]
 ---
@@ -63,6 +63,11 @@ tags: ["spec", "payments", "brc-29"]
 - `derivationPrefix: string` — Server-provided nonce (BRC-29 format)
 - `derivationSuffix: string` — Client-provided derivation suffix
 - `metadata: object` — Optional sender metadata (memo, reference ID, etc.)
+
+Wallet implementations may return the AtomicBEEF created for this message as
+either the historical `number[]` representation or a binary `Uint8Array`.
+Remittance producers accept both BRC-100 representations and normalize the
+transport artifact to a JSON-safe byte array without changing its bytes.
 
 For compatibility with older senders, recipients may prune unrelated BEEF
 branches from the AtomicBEEF envelope before internalization. The transaction

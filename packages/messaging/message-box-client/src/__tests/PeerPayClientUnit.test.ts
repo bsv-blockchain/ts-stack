@@ -200,6 +200,48 @@ describe('PeerPayClient Unit Tests', () => {
       expect(mockWalletClient.internalizeAction).toHaveBeenCalled()
       expect(peerPayClient.acknowledgeMessage).toHaveBeenCalledWith({ messageIds: ['123'] })
     })
+
+    it('recovers a Uint8Array transaction after JSON message transport', async () => {
+      mockWalletClient.internalizeAction.mockResolvedValue({ accepted: true })
+      jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('acknowledged')
+      const transaction = JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3])))
+
+      await peerPayClient.acceptPayment({
+        messageId: 'json-typed-array',
+        sender: 'senderKey',
+        token: {
+          customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+          transaction,
+          amount: 6
+        }
+      })
+
+      expect(mockWalletClient.internalizeAction).toHaveBeenCalledWith(
+        expect.objectContaining({ tx: [1, 2, 3] }),
+        undefined
+      )
+      expect(peerPayClient.acknowledgeMessage).toHaveBeenCalledWith({
+        messageIds: ['json-typed-array']
+      })
+    })
+
+    it('rejects a non-contiguous transaction object without internalizing it', async () => {
+      const acknowledge = jest.spyOn(peerPayClient, 'acknowledgeMessage')
+
+      const result = await peerPayClient.acceptPayment({
+        messageId: 'malformed-object',
+        sender: 'senderKey',
+        token: {
+          customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+          transaction: { 1: 2 } as any,
+          amount: 6
+        }
+      })
+
+      expect(result).toBe('Unable to receive payment!')
+      expect(mockWalletClient.internalizeAction).not.toHaveBeenCalled()
+      expect(acknowledge).not.toHaveBeenCalled()
+    })
   })
 
   // Test: rejectPayment

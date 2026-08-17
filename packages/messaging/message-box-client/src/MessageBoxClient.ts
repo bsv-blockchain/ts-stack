@@ -40,6 +40,9 @@ import {
   Random,
   OriginatorDomainNameStringUnder250Bytes,
   Beef,
+  normalizeBRC100ByteArray,
+  toBRC100PortableByteArray,
+  stringifyBRC100,
   type LookupNetworkPreset
 } from '@bsv/sdk'
 import { AuthSocketClient } from '@bsv/authsocket-client'
@@ -449,13 +452,13 @@ export class MessageBoxClient {
 
       // Listen for authentication success from the server
       this.socket.on('authenticationSuccess', data => {
-        Logger.log(`[MB CLIENT] WebSocket authentication successful: ${JSON.stringify(data)}`)
+        Logger.log(`[MB CLIENT] WebSocket authentication successful: ${stringifyBRC100(data)}`)
         this.socketAuthenticated = true
       })
 
       // Handle authentication failures
       this.socket.on('authenticationFailed', data => {
-        Logger.error(`[MB CLIENT ERROR] WebSocket authentication failed: ${JSON.stringify(data)}`)
+        Logger.error(`[MB CLIENT ERROR] WebSocket authentication failed: ${stringifyBRC100(data)}`)
         this.socketAuthenticated = false
       })
 
@@ -778,7 +781,7 @@ export class MessageBoxClient {
                 ? parsedBody
                 : (() => {
                     try {
-                      return JSON.stringify(parsedBody)
+                      return stringifyBRC100(parsedBody)
                     } catch {
                       return '[Error: Unstringifiable message]'
                     }
@@ -853,7 +856,7 @@ export class MessageBoxClient {
     try {
       const hmac = await this.walletClient.createHmac(
         {
-          data: Array.from(new TextEncoder().encode(JSON.stringify(body))),
+          data: Array.from(new TextEncoder().encode(stringifyBRC100(body))),
           protocolID: [1, 'messagebox'],
           keyID: '1',
           counterparty: recipient
@@ -875,19 +878,19 @@ export class MessageBoxClient {
 
     let outgoingBody: string
     if (skipEncryption === true) {
-      outgoingBody = typeof body === 'string' ? body : JSON.stringify(body)
+      outgoingBody = typeof body === 'string' ? body : stringifyBRC100(body)
     } else {
       const encryptedMessage = await this.walletClient.encrypt(
         {
           protocolID: [1, 'messagebox'],
           keyID: '1',
           counterparty: recipient,
-          plaintext: Utils.toArray(typeof body === 'string' ? body : JSON.stringify(body), 'utf8')
+          plaintext: Utils.toArray(typeof body === 'string' ? body : stringifyBRC100(body), 'utf8')
         },
         this.originator
       )
 
-      outgoingBody = JSON.stringify({
+      outgoingBody = stringifyBRC100({
         encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext)
       })
     }
@@ -1078,14 +1081,14 @@ export class MessageBoxClient {
 
       const sendUrl = messageBoxEndpoint(finalHost, '/sendMessage')
       Logger.log('[MB CLIENT] Sending HTTP request to:', sendUrl)
-      Logger.log('[MB CLIENT] Request Body:', JSON.stringify(requestBody, null, 2))
+      Logger.log('[MB CLIENT] Request Body:', stringifyBRC100(requestBody, 2))
 
       await this.ensureIdentityKey()
 
       const response = await this.authFetch.fetch(sendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: stringifyBRC100(requestBody)
       })
 
       if (response.bodyUsed)
@@ -1172,7 +1175,7 @@ export class MessageBoxClient {
     try {
       const hmac = await this.walletClient.createHmac(
         {
-          data: Array.from(new TextEncoder().encode(JSON.stringify(message.body))),
+          data: Array.from(new TextEncoder().encode(stringifyBRC100(message.body))),
           protocolID: [1, 'messagebox'],
           keyID: '1',
           counterparty: message.recipient
@@ -1193,7 +1196,7 @@ export class MessageBoxClient {
 
   /** Encode the message body (encrypt unless skipEncryption is set). */
   private async encodeMessageBody(message: SendMessageParams): Promise<string | EncryptedMessage> {
-    const bodyStr = typeof message.body === 'string' ? message.body : JSON.stringify(message.body)
+    const bodyStr = typeof message.body === 'string' ? message.body : stringifyBRC100(message.body)
     if (message.skipEncryption === true) return bodyStr
     const encryptedMessage = await this.walletClient.encrypt(
       {
@@ -1204,7 +1207,7 @@ export class MessageBoxClient {
       },
       this.originator
     )
-    return JSON.stringify({ encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext) })
+    return stringifyBRC100({ encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext) })
   }
 
   /** Ensure myIdentityKey is populated, fetching it if needed. */
@@ -1260,9 +1263,13 @@ export class MessageBoxClient {
       Logger.log(
         `[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`
       )
+      const tx = normalizeBRC100ByteArray(p.paymentData!.tx)
+      if (tx == null || tx.length === 0) {
+        throw new Error('Message payment transaction must be a non-empty BRC-100 byte array')
+      }
       const result = await this.walletClient.internalizeAction(
         {
-          tx: p.paymentData!.tx,
+          tx,
           outputs: recipientOutputs,
           description: p.paymentData!.description ?? 'MessageBox recipient payment'
         },
@@ -1388,7 +1395,7 @@ export class MessageBoxClient {
     }
 
     // 6) Build per-recipient messageIds (HMAC), same order as allowedRecipients
-    const bodyBytes = Array.from(new TextEncoder().encode(JSON.stringify(body)))
+    const bodyBytes = Array.from(new TextEncoder().encode(stringifyBRC100(body)))
     const messageIds: string[] = await this.mapWithConcurrency(allowedRecipients, 8, async r => {
       const hmac = await this.walletClient.createHmac(
         {
@@ -1406,7 +1413,7 @@ export class MessageBoxClient {
 
     // 7) Body: for batch route the server expects a single shared body.
     // Per-recipient encryption requires a different server payload shape.
-    const finalBody = typeof body === 'string' ? body : JSON.stringify(body)
+    const finalBody = typeof body === 'string' ? body : stringifyBRC100(body)
 
     // 8) ONE batch payment with server output at index 0
     const paymentData = await this.createMessagePaymentBatch(
@@ -1430,14 +1437,14 @@ export class MessageBoxClient {
     Logger.log('[MB CLIENT] Sending HTTP request to:', sendUrl)
     Logger.log(
       '[MB CLIENT] Request Body (batch):',
-      JSON.stringify({ ...requestBody, payment: { ...paymentData, tx: '<omitted>' } }, null, 2)
+      stringifyBRC100({ ...requestBody, payment: { ...paymentData, tx: '<omitted>' } }, 2)
     )
 
     try {
       const response = await this.authFetch.fetch(sendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: stringifyBRC100(requestBody)
       })
 
       const parsed = await response.json().catch(() => ({}) as any)
@@ -2032,7 +2039,7 @@ export class MessageBoxClient {
     const response = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: stringifyBRC100(body)
     })
     if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
 
@@ -2167,8 +2174,12 @@ export class MessageBoxClient {
           `[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`
         )
 
+        const tx = normalizeBRC100ByteArray(paymentData.tx)
+        if (tx == null || tx.length === 0) {
+          throw new Error('Message payment transaction must be a non-empty BRC-100 byte array')
+        }
         const internalizeResult = await this.walletClient.internalizeAction({
-          tx: paymentData.tx,
+          tx,
           outputs: recipientOutputs,
           description: paymentData.description ?? 'MessageBox recipient payment'
         })
@@ -2214,7 +2225,7 @@ export class MessageBoxClient {
       throw new Error('Message IDs array cannot be empty')
     }
 
-    Logger.log(`[MB CLIENT] Acknowledging messages ${JSON.stringify(messageIds)}…`)
+    Logger.log(`[MB CLIENT] Acknowledging messages ${stringifyBRC100(messageIds)}…`)
 
     let hosts: string[] = host != null ? [normalizeMessageBoxHost(host)] : []
     if (hosts.length === 0) {
@@ -2230,7 +2241,7 @@ export class MessageBoxClient {
         const res = await this.authFetch.fetch(messageBoxEndpoint(host, '/acknowledgeMessage'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageIds })
+          body: stringifyBRC100({ messageIds })
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
@@ -2300,7 +2311,7 @@ export class MessageBoxClient {
     const response = await this.authFetch.fetch(messageBoxEndpoint(finalHost, '/permissions/set'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: stringifyBRC100({
         messageBox: params.messageBox,
         recipientFee: params.recipientFee,
         ...(params.sender != null && { sender: params.sender })
@@ -2964,7 +2975,7 @@ export class MessageBoxClient {
     const response = await this.authFetch.fetch(messageBoxEndpoint(finalHost, '/registerDevice'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: stringifyBRC100({
         fcmToken: params.fcmToken.trim(),
         deviceId: params.deviceId?.trim() ?? undefined,
         platform: params.platform ?? undefined
@@ -3125,7 +3136,7 @@ export class MessageBoxClient {
         satoshis: quote.deliveryFee,
         lockingScript,
         outputDescription: 'MessageBox server delivery fee',
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix,
           derivationSuffix,
           recipientIdentityKey: quote.deliveryAgentIdentityKey
@@ -3169,7 +3180,7 @@ export class MessageBoxClient {
         satoshis: quote.recipientFee,
         lockingScript,
         outputDescription: 'Recipient message fee',
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix,
           derivationSuffix,
           recipientIdentityKey: recipient
@@ -3196,12 +3207,13 @@ export class MessageBoxClient {
       this.originator
     )
 
-    if (tx == null) {
+    const portableTx = toBRC100PortableByteArray(tx)
+    if (portableTx == null || portableTx.length === 0) {
       throw new Error('Failed to create payment transaction')
     }
 
     return {
-      tx,
+      tx: portableTx,
       outputs,
       description
       // labels
@@ -3248,7 +3260,7 @@ export class MessageBoxClient {
         satoshis: deliveryFeeOnce,
         lockingScript,
         outputDescription: 'MessageBox server delivery fee (batch)',
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix,
           derivationSuffix,
           recipientIdentityKey: serverIdentityKey
@@ -3287,7 +3299,7 @@ export class MessageBoxClient {
         satoshis: q.recipientFee,
         lockingScript,
         outputDescription: `Recipient message fee (${r.slice(0, 8)}…)`,
-        customInstructions: JSON.stringify({
+        customInstructions: stringifyBRC100({
           derivationPrefix,
           derivationSuffix,
           recipientIdentityKey: r
@@ -3314,8 +3326,11 @@ export class MessageBoxClient {
       this.originator
     )
 
-    if (tx == null) throw new Error('Failed to create payment transaction')
+    const portableTx = toBRC100PortableByteArray(tx)
+    if (portableTx == null || portableTx.length === 0) {
+      throw new Error('Failed to create payment transaction')
+    }
 
-    return { tx, outputs, description }
+    return { tx: portableTx, outputs, description }
   }
 }

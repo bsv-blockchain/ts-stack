@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.9.6",
+  "version": "1.10.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -45,7 +45,7 @@
     "dev": "pnpm build --watch",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/ts-templates/src/**/*.ts\" \"packages/helpers/ts-templates/__tests/*.ts\" \"packages/helpers/ts-templates/*.{js,json,ts}\"",
     "lint": "oxlint src __tests --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports ADMIN_PROTOCOL,Bsv21Token,DstasToken,MandalaAdmin,MandalaToken,MultiPushDrop,OpReturn,P2MSKH,StasToken",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports ADMIN_PROTOCOL,Bsv21Token,DstasToken,MandalaAdmin,MandalaToken,MultiPushDrop,OpReturn,P2MSKH,R1K1Wallet,StasToken",
     "prepublishOnly": "pnpm build",
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",

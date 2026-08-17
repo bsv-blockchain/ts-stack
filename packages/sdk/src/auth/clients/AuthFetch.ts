@@ -7,6 +7,7 @@ import {
   OriginatorDomainNameStringUnder250Bytes,
   WalletInterface
 } from '../../wallet/Wallet.interfaces.js'
+import { stringifyBRC100 } from '../../wallet/BRC100ByteEncoding.js'
 import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
 import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
@@ -929,7 +930,7 @@ export class AuthFetch {
 
   private describeSerializableRequestBody(body: any): RequestBodySummary {
     try {
-      const serialized = JSON.stringify(body)
+      const serialized = stringifyBRC100(body)
       if (typeof serialized === 'string') {
         return { type: 'object', byteLength: Utils.toArray(serialized, 'utf8').length }
       }
@@ -1106,7 +1107,7 @@ export class AuthFetch {
     }
 
     // 8. Plain object JSON body
-    if (typeof body === 'object') return Utils.toArray(JSON.stringify(body), 'utf8')
+    if (typeof body === 'object') return Utils.toArray(stringifyBRC100(body), 'utf8')
 
     // 9. Fallback
     throw new Error('Unsupported body type in this SimplifiedFetch implementation.')

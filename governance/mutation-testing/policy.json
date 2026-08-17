@@ -28,6 +28,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "sdk-brc100-json",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/wallet/__tests/BRC100ByteEncoding.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-100 wallet byte recovery and arbitrary application JSON serialization",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "sdk-auth-http",
       "manifest": "packages/sdk/package.json",
       "propertyTest": "packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts",

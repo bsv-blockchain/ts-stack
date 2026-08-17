@@ -10,6 +10,12 @@ Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SD
 
 For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClient` interface. BSV Desktop and BSV Browser are the BSV Association reference implementations for this interface; vendor distributions such as Babbage's Metanet Desktop / Metanet Explorer and Hudos Browser can implement the same interface with their own branding and service defaults.
 
+The BRC-100 `CreateActionResult` permits AtomicBEEF as either `number[]` or
+`Uint8Array`. SDK BRC-29 remittance accepts both wallet representations and
+emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
+and JSON transports preserve identical transaction bytes. The same boundary
+protects overlay lookup queries and JSON BEEF responses.
+
 ## Table of Contents
 
 1. [Objective](#objective)

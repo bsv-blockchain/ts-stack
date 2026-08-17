@@ -145,6 +145,18 @@ describe('WalletError', () => {
         expect(parsed.tx).toEqual(tx)
       })
 
+      it('serializes typed transaction bytes portably', () => {
+        const tx = new Uint8Array([1, 2, 3])
+        const err = new WERR_REVIEW_ACTIONS(
+          reviewActionResults,
+          sendWithResults,
+          undefined,
+          tx as unknown as number[]
+        )
+        const parsed = JSON.parse(WalletError.unknownToJson(err))
+        expect(parsed.tx).toEqual([1, 2, 3])
+      })
+
       it('includes optional noSendChange when provided', () => {
         const noSendChange = ['outpoint1', 'outpoint2']
         const err = new WERR_REVIEW_ACTIONS(
@@ -253,7 +265,7 @@ describe('WalletError', () => {
 
       it('uses the constructor name, not the name property', () => {
         class CustomError extends Error {
-          constructor (msg: string) {
+          constructor(msg: string) {
             super(msg)
             this.name = 'CustomError'
           }

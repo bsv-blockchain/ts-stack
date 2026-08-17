@@ -19,3 +19,11 @@ export { Bsv21Token } from './src/Bsv21Token.js'
 export type { Bsv21TokenDecoded } from './src/Bsv21Token.js'
 export { DstasToken } from './src/DstasToken.js'
 export type { DstasTokenDecoded } from './src/DstasToken.js'
+export { R1K1Wallet } from './src/R1K1Wallet.js'
+export type {
+  R1K1Bytes,
+  R1K1P256DigestSigner,
+  R1K1R1UnlockParams,
+  R1K1K1UnlockParams,
+  R1K1UnlockParams
+} from './src/R1K1Wallet.js'

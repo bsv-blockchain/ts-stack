@@ -1,4 +1,4 @@
-import { AtomicBEEF, OutpointString, SendWithResult, TXIDHexString, WalletNetwork } from '@bsv/sdk'
+import { AtomicBEEF, OutpointString, SendWithResult, TXIDHexString, WalletNetwork, stringifyBRC100 } from '@bsv/sdk'
 import { WalletError } from './WalletError'
 import { ReviewActionResult } from './WalletStorage.interfaces'
 
@@ -55,7 +55,7 @@ export class WERR_UTXO_REVIEW_INCONCLUSIVE extends WalletError {
     obj.checked = this.checked
     obj.confirmedSpent = this.confirmedSpent
     obj.unknown = this.unknown
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -77,7 +77,7 @@ class WERRActionBatchState extends WalletError {
     const obj = JSON.parse(super.toJson())
     obj.state = this.state
     obj.batchId = this.batchId
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -109,7 +109,7 @@ export class WERR_INVALID_PARAMETER extends WalletError {
     const obj = JSON.parse(super.toJson())
     obj.code = 6 // Must match HTTPWalletJSON.ts code
     obj.parameter = this.parameter
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -138,7 +138,7 @@ export class WERR_INVALID_MERKLE_ROOT extends WalletError {
     obj.blockHeight = this.blockHeight
     obj.merkleRoot = this.merkleRoot
     obj.txid = this.txid
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -155,7 +155,7 @@ export class WERR_MISSING_PARAMETER extends WalletError {
   override toJson(): string {
     const obj = JSON.parse(super.toJson())
     obj.parameter = this.parameter
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -225,7 +225,7 @@ export class WERR_INSUFFICIENT_FUNDS extends WalletError {
     obj.code = 7 // Must match HTTPWalletJSON.ts code
     obj.totalSatoshisNeeded = this.totalSatoshisNeeded
     obj.moreSatoshisNeeded = this.moreSatoshisNeeded
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -248,7 +248,7 @@ export class WERR_INVALID_PUBLIC_KEY extends WalletError {
   protected override toJson(): string {
     const obj = JSON.parse(super.toJson())
     obj.key = this.key
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
@@ -281,7 +281,7 @@ export class WERR_REVIEW_ACTIONS extends WalletError {
     obj.txid = this.txid
     obj.tx = this.tx
     obj.noSendChange = this.noSendChange
-    return JSON.stringify(obj)
+    return stringifyBRC100(obj)
   }
 }
 
