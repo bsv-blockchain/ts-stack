@@ -46,6 +46,17 @@ attention to changes that materially alter behavior or extend functionality.
   transaction startup/commit cycles, failed pages roll back without advancing
   the checkpoint, and abort cleanup preserves the original storage error.
 
+- Fill wallet-storage sync pages with adaptive, size-aware source queries and
+  add composite SQL indexes for user-scoped proof lookups. Sync clients may
+  request optional source record totals for exact progress and ETA displays;
+  older clients and providers remain wire-compatible and do not incur count
+  queries unless totals are requested. The authoritative Linux Vite fixture is
+  1,607,393 raw bytes and the local gzip fixture is 378,833 bytes; those
+  ceilings advance by 400 and 100 bytes to 1,607,400 and 378,900. The measured
+  authoritative Linux esbuild fixture is 1,252,871 raw and 345,202 gzip bytes;
+  those ceilings advance by 400 and 300 bytes to 1,252,900 and 345,300. Other
+  browser compressed and mobile ceilings remain unchanged.
+
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
   can recover an interrupted transition from the current or pending key and

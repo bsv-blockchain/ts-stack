@@ -6,6 +6,7 @@ import {
   MANAGED_CHANGE_POLICY_MIGRATION,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
   StorageKnex,
+  WALLET_SYNC_SOURCE_INDEX_MIGRATION,
   wait
 } from '../../src/index.all'
 import { Knex } from 'knex'
@@ -206,7 +207,55 @@ describe('KnexMigrations tests', () => {
     }
   })
 
-  test('5a upgrades only exact untouched managed-change defaults', async () => {
+  test('5a creates and uses the wallet sync source indexes', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratesyncindexes.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('proven_txs', table => {
+        table.increments('provenTxId')
+      })
+      await knex.schema.createTable('transactions', table => {
+        table.increments('transactionId')
+        table.integer('userId').notNullable()
+        table.integer('provenTxId').nullable()
+        table.string('txid', 64).nullable()
+      })
+      const source = new KnexMigrations('test', 'wallet sync index test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(WALLET_SYNC_SOURCE_INDEX_MIGRATION)
+      await migration.up(knex)
+
+      const indexes = await knex('sqlite_master')
+        .where({ type: 'index' })
+        .whereIn('name', ['idx_transactions_user_proven_tx', 'idx_transactions_user_txid'])
+        .pluck('name')
+      expect(indexes.sort()).toEqual(['idx_transactions_user_proven_tx', 'idx_transactions_user_txid'])
+
+      const provenPlan = await knex.raw(
+        'EXPLAIN QUERY PLAN SELECT * FROM proven_txs WHERE EXISTS (' +
+        'SELECT * FROM transactions WHERE proven_txs.provenTxId = transactions.provenTxId AND transactions.userId = ?)',
+        [1]
+      ) as Array<{ detail: string }>
+      expect(provenPlan.some(step => step.detail.includes('idx_transactions_user_proven_tx'))).toBe(true)
+
+      const requestPlan = await knex.raw(
+        'EXPLAIN QUERY PLAN SELECT * FROM transactions WHERE userId = ? AND txid = ?',
+        [1, '00'.repeat(32)]
+      ) as Array<{ detail: string }>
+      expect(requestPlan.some(step => step.detail.includes('idx_transactions_user_txid'))).toBe(true)
+
+      await migration.down?.(knex)
+      const indexesAfterDown = await knex('sqlite_master')
+        .where({ type: 'index' })
+        .whereIn('name', ['idx_transactions_user_proven_tx', 'idx_transactions_user_txid'])
+        .pluck('name')
+      expect(indexesAfterDown).toEqual([])
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5b upgrades only exact untouched managed-change defaults', async () => {
     const localSQLiteFile = await _tu.newTmpFile('migratemanagedchange.sqlite', false, false, false)
     const knex = _tu.createLocalSQLite(localSQLiteFile)
 

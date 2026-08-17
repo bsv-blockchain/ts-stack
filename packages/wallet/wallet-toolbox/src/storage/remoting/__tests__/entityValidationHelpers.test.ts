@@ -238,6 +238,31 @@ describe('entityValidationHelpers', () => {
       expect(result.provenTxs).toBeUndefined()
     })
 
+    test('preserves optional progress totals for remoted chunks', () => {
+      const chunk: SyncChunk = {
+        ...baseChunk(),
+        totals: {
+          totalRecords: 12,
+          records: {
+            provenTxs: 1,
+            outputBaskets: 1,
+            outputTags: 1,
+            txLabels: 1,
+            transactions: 1,
+            outputs: 1,
+            txLabelMaps: 1,
+            outputTagMaps: 1,
+            certificates: 1,
+            certificateFields: 1,
+            commissions: 1,
+            provenTxReqs: 1
+          }
+        }
+      }
+
+      expect(validateSyncChunkEntities(chunk).totals).toEqual(chunk.totals)
+    })
+
     test('validates the user entity when present', () => {
       const chunk: SyncChunk = {
         ...baseChunk(),

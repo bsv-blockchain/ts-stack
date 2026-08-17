@@ -54,6 +54,8 @@ import {
   PurgeParams,
   PurgeResults,
   TrxToken,
+  RequestSyncChunkArgs,
+  SyncChunkTotals,
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
@@ -323,6 +325,60 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const q = this.getOutputTagMapsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs, undefined, ['isDeleted'])
+  }
+
+  private async countSyncQuery (query: Knex.QueryBuilder): Promise<number> {
+    const row = await query.count<{ count: string | number }>({ count: '*' }).first()
+    return Number(row?.count ?? 0)
+  }
+
+  override async getSyncChunkTotals (args: RequestSyncChunkArgs, userId: number): Promise<SyncChunkTotals> {
+    const since = args.since
+    const [
+      provenTxs,
+      outputBaskets,
+      outputTags,
+      txLabels,
+      transactions,
+      outputs,
+      txLabelMaps,
+      outputTagMaps,
+      certificates,
+      certificateFields,
+      commissions,
+      provenTxReqs
+    ] = await Promise.all([
+      this.countSyncQuery(this.getProvenTxsForUserQuery({ userId, since })),
+      this.countOutputBaskets({ partial: { userId }, since }),
+      this.countOutputTags({ partial: { userId }, since }),
+      this.countTxLabels({ partial: { userId }, since }),
+      this.countTransactions({ partial: { userId }, since, noRawTx: true }),
+      this.countOutputs({ partial: { userId }, since, noScript: true }),
+      this.countSyncQuery(this.getTxLabelMapsForUserQuery({ userId, since })),
+      this.countSyncQuery(this.getOutputTagMapsForUserQuery({ userId, since })),
+      this.countCertificates({ partial: { userId }, since }),
+      this.countCertificateFields({ partial: { userId }, since }),
+      this.countCommissions({ partial: { userId }, since }),
+      this.countSyncQuery(this.getProvenTxReqsForUserQuery({ userId, since }))
+    ])
+    const records = {
+      provenTxs,
+      outputBaskets,
+      outputTags,
+      txLabels,
+      transactions,
+      outputs,
+      txLabelMaps,
+      outputTagMaps,
+      certificates,
+      certificateFields,
+      commissions,
+      provenTxReqs
+    }
+    return {
+      totalRecords: Object.values(records).reduce((total, count) => total + count, 0),
+      records
+    }
   }
 
   override async listActions (auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {

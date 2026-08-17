@@ -15,6 +15,45 @@ import { FindForUserSincePagedArgs, RequestSyncChunkArgs, SyncChunk } from '../.
 import { verifyTruthy } from '../../utility/utilityHelpers'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
+const MIN_SYNC_QUERY_ITEMS = 10
+const MAX_SYNC_QUERY_ITEMS = 250
+const SYNC_QUERY_GROWTH_FACTOR = 8
+
+function getNextSyncQueryLimit(
+  currentLimit: number,
+  itemsRemaining: number,
+  roughSizeRemaining: number,
+  batchRoughSize: number,
+  batchItemCount: number
+): number {
+  const averageItemSize = Math.max(1, Math.ceil(batchRoughSize / batchItemCount))
+  const estimatedItemsRemaining = Math.max(1, Math.floor(roughSizeRemaining / averageItemSize))
+  return Math.min(
+    itemsRemaining,
+    MAX_SYNC_QUERY_ITEMS,
+    currentLimit * SYNC_QUERY_GROWTH_FACTOR,
+    estimatedItemsRemaining
+  )
+}
+
+function appendSyncItems(chunker: ChunkerArgs, items: any[], offset: number, itemCount: number, roughSize: number) {
+  let batchRoughSize = 0
+  let done = false
+  for (const item of items) {
+    offset++
+    chunker.addItem(item)
+    itemCount--
+    const itemRoughSize = JSON.stringify(item).length
+    batchRoughSize += itemRoughSize
+    roughSize -= itemRoughSize
+    if (itemCount <= 0 || roughSize < 0) {
+      done = true
+      break
+    }
+  }
+  return { offset, itemCount, roughSize, batchRoughSize, done }
+}
+
 /**
  * Gets the next sync chunk of updated data from un-remoted storage (could be using a remote DB connection).
  * @param storage
@@ -35,6 +74,10 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
 
   const user = verifyTruthy(await storage.findUserByIdentityKey(args.identityKey))
   if (args.since == null || user.updated_at > new Date(args.since)) r.user = user
+  const totalsPromise =
+    args.includeTotals === true
+      ? storage.getSyncChunkTotals(args, user.userId).catch(() => undefined)
+      : Promise.resolve(undefined)
 
   const chunkers: ChunkerArgs[] = [
     {
@@ -237,8 +280,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`)
     }
     let preAddCalled = false
+    let limit = Math.min(itemCount, Math.max(MIN_SYNC_QUERY_ITEMS, Math.ceil(args.maxItems / a.maxDivider)))
     while (!done) {
-      const limit = Math.min(itemCount, Math.max(10, args.maxItems / a.maxDivider))
       if (limit <= 0) break
       const items = await a.findItems(storage, {
         userId: user.userId,
@@ -251,16 +294,18 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
         preAddCalled = true
       }
       if (items.length === 0) break
-      for (const item of items) {
-        offset++
-        a.addItem(item)
-        itemCount--
-        roughSize -= JSON.stringify(item).length
-        if (itemCount <= 0 || roughSize < 0) {
-          done = true
-          break
-        }
-      }
+      const appended = appendSyncItems(a, items, offset, itemCount, roughSize)
+      offset = appended.offset
+      itemCount = appended.itemCount
+      roughSize = appended.roughSize
+      done = appended.done
+      if (done || items.length < limit) break
+
+      // The small first query protects providers from loading hundreds of
+      // unexpectedly large binary records. Once their actual encoded size is
+      // known, grow the next query to fill the remaining page in a bounded
+      // number of database round trips.
+      limit = getNextSyncQueryLimit(limit, itemCount, roughSize, appended.batchRoughSize, items.length)
     }
   }
 
@@ -269,6 +314,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       await addItems(c)
     }
   }
+
+  r.totals = await totalsPromise
 
   return r
 }

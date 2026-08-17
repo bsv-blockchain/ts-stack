@@ -375,9 +375,9 @@ describe('StorageServer JSON-RPC boundary', () => {
       invoke(server, 'enforceRpcRequestBudgets', 'listActions', [{}, { limit: Number.MAX_SAFE_INTEGER + 1 }])
     ).rejects.toThrow('positive safe integers')
 
-    const syncParams: any[] = [{ maxRoughSize: 'unbounded' }]
+    const syncParams: any[] = [{ maxRoughSize: 'unbounded', includeTotals: true }]
     await invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', syncParams)
-    expect(syncParams[0]).toEqual({ maxItems: 5, maxRoughSize: 128 })
+    expect(syncParams[0]).toEqual({ maxItems: 5, maxRoughSize: 128, includeTotals: true })
 
     const oversizedSyncParams: any[] = [{ maxItems: 4, maxRoughSize: 129 }]
     await invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', oversizedSyncParams)
