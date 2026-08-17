@@ -19,6 +19,8 @@ export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed c
 export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifacts'
 export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
+export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
+
 interface Migration {
   up: (knex: Knex) => Promise<void>
   down?: (knex: Knex) => Promise<void>
@@ -176,6 +178,21 @@ export class KnexMigrations implements MigrationSource<string> {
       async down() {
         // Intentionally irreversible. Restoring 32-satoshi liquidity units on
         // rollback would actively re-fragment wallets that already migrated.
+      }
+    }
+
+    migrations[WALLET_SYNC_SOURCE_INDEX_MIGRATION] = {
+      async up(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.index(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
+          table.index(['userId', 'txid'], 'idx_transactions_user_txid')
+        })
+      },
+      async down(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.dropIndex(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
+          table.dropIndex(['userId', 'txid'], 'idx_transactions_user_txid')
+        })
       }
     }
 

@@ -610,6 +610,12 @@ export interface RequestSyncChunkArgs {
    */
   maxItems: number
   /**
+   * Include source-side record totals for this `since` window when the
+   * provider can calculate them efficiently. Older providers ignore this
+   * optional hint and remain wire-compatible.
+   */
+  includeTotals?: boolean
+  /**
    * For each entity in dependency order, the offset at which to start returning items
    * from `since`.
    *
@@ -630,6 +636,24 @@ export interface RequestSyncChunkArgs {
   offsets: Array<{ name: string, offset: number }>
 }
 
+export interface SyncChunkTotals {
+  totalRecords: number
+  records: {
+    provenTxs: number
+    outputBaskets: number
+    outputTags: number
+    txLabels: number
+    transactions: number
+    outputs: number
+    txLabelMaps: number
+    outputTagMaps: number
+    certificates: number
+    certificateFields: number
+    commissions: number
+    provenTxReqs: number
+  }
+}
+
 /**
  * Result received from remote `WalletStorage` in response to a `RequestSyncChunkArgs` request.
  *
@@ -641,6 +665,9 @@ export interface SyncChunk {
   fromStorageIdentityKey: string
   toStorageIdentityKey: string
   userIdentityKey: string
+
+  /** Optional progress totals requested with `includeTotals`. */
+  totals?: SyncChunkTotals
 
   user?: TableUser
   provenTxs?: TableProvenTx[]

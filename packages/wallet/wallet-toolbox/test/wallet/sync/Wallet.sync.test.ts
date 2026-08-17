@@ -1,4 +1,12 @@
-import { verifyOne, verifyOneOrNone, verifyTruthy, wait, Wallet, WalletStorageManager } from '../../../src/index.client'
+import {
+  EntitySyncState,
+  verifyOne,
+  verifyOneOrNone,
+  verifyTruthy,
+  wait,
+  Wallet,
+  WalletStorageManager
+} from '../../../src/index.client'
 import { StorageKnex } from '../../../src/storage/StorageKnex'
 import { _tu, logger, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
@@ -32,6 +40,19 @@ describe('Wallet sync tests', () => {
     const manager = new WalletStorageManager(identityKey, storage, [tmpStore])
 
     const auth = await manager.getAuth()
+    const destinationSyncState = await EntitySyncState.fromStorage(tmpStore, identityKey, _srcSettings)
+    const totalsArgs = destinationSyncState.makeRequestSyncChunkArgs(
+      identityKey,
+      tmpStore.getSettings().storageIdentityKey,
+      2 * 1024 * 1024,
+      250
+    )
+    totalsArgs.includeTotals = true
+    const firstChunk = await storage.getSyncChunk(totalsArgs)
+    expect(firstChunk.totals?.totalRecords).toBeGreaterThan(1000)
+    expect(firstChunk.totals?.totalRecords).toBe(
+      Object.values(firstChunk.totals?.records ?? {}).reduce((total, count) => total + count, 0)
+    )
     {
       const r = await manager.syncToWriter(auth, tmpStore)
       expect(r.inserts).toBeGreaterThan(1000)
