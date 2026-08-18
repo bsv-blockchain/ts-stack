@@ -108,6 +108,32 @@ describe('Wallet sync tests', () => {
 
     await ctx.storage.destroy()
   })
+
+  test('1c keeps the original active while adding a fresh local backup', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('walletSyncTest1cSource')
+    const localSQLiteFile = await _tu.newTmpFile('walletSyncTest1cLocal.sqlite', true, false, false)
+    const localStorage = new StorageKnex({
+      ...StorageKnex.defaultOptions(),
+      chain: env.chain,
+      knex: _tu.createLocalSQLite(localSQLiteFile)
+    })
+
+    try {
+      const localStorageIdentityKey = `02${'08'.repeat(32)}`
+      await localStorage.migrate('BSV Desktop Wallet', localStorageIdentityKey)
+      await localStorage.makeAvailable()
+
+      const originalStorageIdentityKey = ctx.activeStorage.getSettings().storageIdentityKey
+      await ctx.storage.addWalletStorageProvider(localStorage)
+      await ctx.storage.setActive(originalStorageIdentityKey)
+
+      expect(ctx.storage.getActiveStore()).toBe(originalStorageIdentityKey)
+      expect(ctx.storage.isActiveEnabled).toBe(true)
+      expect(ctx.storage.getBackupStores()).toEqual([localStorageIdentityKey])
+    } finally {
+      await ctx.storage.destroy()
+    }
+  })
 })
 
 async function setActiveTwice(

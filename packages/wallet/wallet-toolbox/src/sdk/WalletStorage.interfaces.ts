@@ -536,6 +536,12 @@ export type SyncProtocolVersion = '0.1.0'
 
 export interface RequestSyncChunkArgs {
   /**
+   * The writer-local sync state selected when the source provider was
+   * registered. New clients include this to disambiguate legacy databases
+   * that contain multiple rows for a reused storage identity key.
+   */
+  syncStateId?: number
+  /**
    * The storageIdentityKey of the storage supplying the update SyncChunk data.
    */
   fromStorageIdentityKey: string

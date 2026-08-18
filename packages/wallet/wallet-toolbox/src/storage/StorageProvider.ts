@@ -1174,7 +1174,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       const ss = new EntitySyncState(
         verifyOne(
           await this.findSyncStates({
-            partial: {
+            partial: args.syncStateId == null ? {
+              storageIdentityKey: args.fromStorageIdentityKey,
+              userId: user.userId
+            } : {
+              syncStateId: args.syncStateId,
               storageIdentityKey: args.fromStorageIdentityKey,
               userId: user.userId
             },

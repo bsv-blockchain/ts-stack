@@ -61,7 +61,10 @@ the checkpoint. Sources fill each bounded page with adaptive, size-aware reads,
 and Knex storage adds user-scoped proof lookup indexes. Clients may set
 `includeTotals` on a sync-chunk request to receive optional source record totals
 for exact progress reporting. Older providers ignore the hint, and totals are
-not counted unless requested.
+not counted unless requested. New clients also send the writer-local sync-state
+identifier selected during provider registration. New providers use it to
+disambiguate legacy duplicate checkpoints, while either side remains compatible
+with older protocol peers.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
