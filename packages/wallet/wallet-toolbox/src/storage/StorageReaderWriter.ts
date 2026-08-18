@@ -34,6 +34,24 @@ import {
 } from './methods/managedChangePolicy'
 import { WERR_INVALID_OPERATION } from '../sdk/WERR_errors'
 
+function selectSyncStateForRegistration (
+  matches: TableSyncState[],
+  storageName: string
+): TableSyncState | undefined {
+  if (matches.length <= 1) return matches[0]
+
+  // Older releases included storageName in the lookup and could create
+  // duplicate rows when a provider was renamed or two apps reused a provider
+  // identity. Preserve exact-name access so upgraded clients can identify and
+  // repair those rows without guessing a checkpoint.
+  const exactMatches = matches.filter(s => s.storageName === storageName)
+  if (exactMatches.length === 1) return exactMatches[0]
+
+  throw new WERR_INVALID_OPERATION(
+    'Storage identity has conflicting sync states. Use a unique identity for each storage provider.'
+  )
+}
+
 export abstract class StorageReaderWriter extends StorageReader {
   abstract dropAllData (): Promise<void>
   abstract migrate (storageName: string, storageIdentityKey: string): Promise<string>
@@ -367,22 +385,7 @@ export abstract class StorageReaderWriter extends StorageReader {
       try {
         const now = new Date()
         const matches = await this.findSyncStates({ partial })
-        let syncState: TableSyncState | undefined
-        if (matches.length === 1) {
-          syncState = matches[0]
-        } else if (matches.length > 1) {
-          // Older releases included storageName in the lookup and could create
-          // duplicate rows when a provider was renamed or two apps reused a
-          // provider identity. Preserve exact-name access so upgraded clients
-          // can identify and repair those rows without guessing a checkpoint.
-          const exactMatches = matches.filter(s => s.storageName === storageName)
-          if (exactMatches.length !== 1) {
-            throw new WERR_INVALID_OPERATION(
-              'Storage identity has conflicting sync states. Use a unique identity for each storage provider.'
-            )
-          }
-          syncState = exactMatches[0]
-        }
+        let syncState = selectSyncStateForRegistration(matches, storageName)
         if (syncState == null) {
           syncState = {
             ...partial,
