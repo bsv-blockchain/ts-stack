@@ -55,10 +55,11 @@ attention to changes that materially alter behavior or extend functionality.
   with a smaller chunk budget and reusing the working limit for later pages.
   Clean macOS fixtures measure Vite at 1,608,681 raw, 379,257 gzip, and 297,202
   Brotli bytes; esbuild at 1,253,841 raw, 344,592 gzip, and 277,563 Brotli
-  bytes; and Hermes at 3,369,326 raw bytes. The reviewed ceilings for the
+  bytes; and Hermes at 3,369,326 raw bytes locally and 1,366,854 gzip bytes on
+  hosted Linux. The reviewed ceilings for the
   complete sync feature advance to 1,608,800/379,400/297,300 for Vite,
-  1,253,900/345,500/277,700 for esbuild, and 3,369,500 raw bytes for Hermes.
-  Metro and the compressed mobile ceilings remain unchanged.
+  1,253,900/345,600/277,700 for esbuild, and 3,369,500/1,367,000 raw/gzip
+  bytes for Hermes. Metro and the mobile Brotli ceiling remain unchanged.
 
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
