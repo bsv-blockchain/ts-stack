@@ -64,7 +64,10 @@ for exact progress reporting. Older providers ignore the hint, and totals are
 not counted unless requested. New clients also send the writer-local sync-state
 identifier selected during provider registration. New providers use it to
 disambiguate legacy duplicate checkpoints, while either side remains compatible
-with older protocol peers.
+with older protocol peers. When a provider rejects a sync page because its
+serialized RPC response exceeds the service ceiling, remote clients retry the
+read-only request with a smaller chunk budget and remember the working limit
+for the rest of the session.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages

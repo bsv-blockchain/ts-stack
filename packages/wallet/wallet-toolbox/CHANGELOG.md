@@ -50,12 +50,15 @@ attention to changes that materially alter behavior or extend functionality.
   add composite SQL indexes for user-scoped proof lookups. Sync clients may
   request optional source record totals for exact progress and ETA displays;
   older clients and providers remain wire-compatible and do not incur count
-  queries unless totals are requested. The authoritative Linux Vite fixture is
-  1,607,393 raw bytes and the local gzip fixture is 378,833 bytes; those
-  ceilings advance by 400 and 100 bytes to 1,607,400 and 378,900. The measured
-  authoritative Linux esbuild fixture is 1,252,871 raw and 345,202 gzip bytes;
-  those ceilings advance by 400 and 300 bytes to 1,252,900 and 345,300. Other
-  browser compressed and mobile ceilings remain unchanged.
+  queries unless totals are requested. Remote clients also recover from a
+  provider's HTTP 413 response ceiling by retrying the read-only sync request
+  with a smaller chunk budget and reusing the working limit for later pages.
+  Clean macOS fixtures measure Vite at 1,608,681 raw, 379,257 gzip, and 297,202
+  Brotli bytes; esbuild at 1,253,841 raw, 344,592 gzip, and 277,563 Brotli
+  bytes; and Hermes at 3,369,326 raw bytes. The reviewed ceilings for the
+  complete sync feature advance to 1,608,800/379,400/297,300 for Vite,
+  1,253,900/345,500/277,700 for esbuild, and 3,369,500 raw bytes for Hermes.
+  Metro and the compressed mobile ceilings remain unchanged.
 
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication

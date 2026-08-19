@@ -69,6 +69,13 @@ import {
 } from '../../utility/actionBatchPack'
 import { pruneBeefForTxids } from '../../utility/beefForTxids'
 
+const syncChunkResponseRetryLimit = 4
+const minimumSyncChunkRoughSize = 64 * 1024
+
+function isSyncChunkResponseTooLarge (error: unknown): boolean {
+  return error instanceof Error && /WalletStorageClient rpcCall: network error 413(?:\s|$)/.test(error.message)
+}
+
 export interface StorageClientOptions {
   /**
    * Send compact tagged binary request values after the server advertises
@@ -97,6 +104,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected serverSupportsBinary = false
   protected readonly binaryRequests: boolean
   protected readonly telemetry: Telemetry
+  private syncChunkRoughSizeLimit?: number
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings
@@ -603,8 +611,25 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns the next "chunk" of replication data
    */
   async getSyncChunk(args: RequestSyncChunkArgs): Promise<SyncChunk> {
-    const r = await this.rpcCall<SyncChunk>('getSyncChunk', [args])
-    return validateSyncChunkEntities(r)
+    let requestArgs = { ...args }
+    if (this.syncChunkRoughSizeLimit != null) {
+      requestArgs.maxRoughSize = Math.min(requestArgs.maxRoughSize, this.syncChunkRoughSizeLimit)
+    }
+
+    for (let retries = 0; ; retries++) {
+      try {
+        const r = await this.rpcCall<SyncChunk>('getSyncChunk', [requestArgs])
+        if (requestArgs.maxRoughSize < args.maxRoughSize) {
+          this.syncChunkRoughSizeLimit = requestArgs.maxRoughSize
+        }
+        return validateSyncChunkEntities(r)
+      } catch (error: unknown) {
+        if (!isSyncChunkResponseTooLarge(error) || retries >= syncChunkResponseRetryLimit) throw error
+        const nextRoughSize = Math.max(minimumSyncChunkRoughSize, Math.floor(requestArgs.maxRoughSize / 2))
+        if (nextRoughSize >= requestArgs.maxRoughSize) throw error
+        requestArgs = { ...requestArgs, maxRoughSize: nextRoughSize }
+      }
+    }
   }
 
   /**
