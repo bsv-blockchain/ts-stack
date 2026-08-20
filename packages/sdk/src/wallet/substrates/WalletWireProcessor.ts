@@ -1165,6 +1165,34 @@ export default class WalletWireProcessor implements WalletWire {
             return responseWriter.toUint8Array()
           })()
 
+        case 'multiplyPoint':
+          return await (async () => {
+            // BRC-229. The point is a fixed 33 bytes, so it is read positionally before the
+            // variable-length key parameters.
+            const args: any = {}
+            args.point = Utils.toHex(paramsReader.read(33))
+            Object.assign(args, this.decodeKeyRelatedParams(paramsReader))
+
+            const invertFlag = paramsReader.readInt8()
+            args.invert = invertFlag === -1 ? undefined : invertFlag === 1
+
+            const seekPermission = paramsReader.readInt8()
+            args.seekPermission = seekPermission === -1 ? undefined : seekPermission === 1
+
+            // multiplyPoint is optional on the interface, so a wallet may legitimately not
+            // implement it. Report that as an error rather than calling undefined, which is
+            // how a caller feature-detects across a substrate.
+            if (typeof this.wallet.multiplyPoint !== 'function') {
+              throw new Error('multiplyPoint is not implemented by this wallet')
+            }
+            const multiplyPointResult = await this.wallet.multiplyPoint(args, originator)
+
+            const responseWriter = new Utils.WriterUint8Array()
+            responseWriter.writeUInt8(0) // errorByte = 0
+            responseWriter.write(Utils.toUint8Array(multiplyPointResult.point, 'hex'))
+            return responseWriter.toUint8Array()
+          })()
+
         case 'encrypt':
           return await (async () => {
             const args: any = this.decodeKeyRelatedParams(paramsReader)

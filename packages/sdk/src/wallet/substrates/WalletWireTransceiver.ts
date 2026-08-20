@@ -44,7 +44,9 @@ import {
   VersionString7To30Bytes,
   WalletInterface,
   ActionStatus,
-  SendWithResultStatus
+  SendWithResultStatus,
+  MultiplyPointArgs,
+  MultiplyPointResult
 } from '../Wallet.interfaces.js'
 import WalletWire from './WalletWire.js'
 import Certificate from '../../auth/certificates/Certificate.js'
@@ -617,6 +619,35 @@ export default class WalletWireTransceiver implements WalletInterface {
     return {
       publicKey: Utils.toHex(result)
     }
+  }
+
+  /**
+   * BRC-229 point multiplication over the wire.
+   *
+   * The point travels as its 33 raw bytes rather than as hex, matching how getPublicKey
+   * returns a key. `invert` rides as an optional boolean so that a wallet reading an older
+   * frame layout cannot mistake its absence for `true`.
+   */
+  async multiplyPoint(
+    args: MultiplyPointArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<MultiplyPointResult> {
+    const paramWriter = new Utils.WriterUint8Array()
+    paramWriter.write(Utils.toUint8Array(args.point, 'hex'))
+    paramWriter.write(
+      this.encodeKeyRelatedParams(
+        args.protocolID,
+        args.keyID,
+        args.counterparty,
+        args.privileged,
+        args.privilegedReason
+      )
+    )
+    this.writeOptionalBool(paramWriter, args.invert)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
+
+    const result = await this.transmit('multiplyPoint', originator, paramWriter.toUint8Array())
+    return { point: Utils.toHex(result) }
   }
 
   async revealCounterpartyKeyLinkage(

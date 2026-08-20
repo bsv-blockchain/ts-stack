@@ -48,7 +48,9 @@ import {
   GetHeaderArgs,
   GetHeaderResult,
   GetNetworkResult,
-  GetVersionResult
+  GetVersionResult,
+  MultiplyPointArgs,
+  MultiplyPointResult
 } from '../Wallet.interfaces.js'
 import { CallType } from './WalletWireCalls.js'
 
@@ -92,6 +94,10 @@ export abstract class InvokableWalletBase implements WalletInterface {
 
   async getPublicKey(args: GetPublicKeyArgs): Promise<GetPublicKeyResult> {
     return await this.invoke('getPublicKey', args)
+  }
+
+  async multiplyPoint(args: MultiplyPointArgs): Promise<MultiplyPointResult> {
+    return await this.invoke('multiplyPoint', args)
   }
 
   async revealCounterpartyKeyLinkage(args: RevealCounterpartyKeyLinkageArgs): Promise<RevealCounterpartyKeyLinkageResult> {

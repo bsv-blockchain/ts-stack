@@ -28,6 +28,9 @@ enum calls {
   getHeaderForHeight = 26,
   getNetwork = 27,
   getVersion = 28,
+  // BRC-229. Optional: a wallet that does not implement it returns an error over the wire,
+  // which is how a caller feature-detects across a substrate.
+  multiplyPoint = 29,
 }
 
 export default calls

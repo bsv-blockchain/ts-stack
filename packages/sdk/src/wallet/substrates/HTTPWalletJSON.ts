@@ -33,7 +33,9 @@ import {
   SecurityLevel,
   SignActionArgs,
   SignActionResult,
-  VersionString7To30Bytes
+  VersionString7To30Bytes,
+  MultiplyPointArgs,
+  MultiplyPointResult
 } from '../Wallet.interfaces.js'
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
@@ -166,6 +168,10 @@ export default class HTTPWalletJSON implements WalletInterface {
     forSelf?: BooleanDefaultFalse
   }): Promise<{ publicKey: PubKeyHex }> {
     return (await this.api('getPublicKey', args)) as { publicKey: PubKeyHex }
+  }
+
+  async multiplyPoint(args: MultiplyPointArgs): Promise<MultiplyPointResult> {
+    return (await this.api('multiplyPoint', args)) as MultiplyPointResult
   }
 
   async revealCounterpartyKeyLinkage(args: {

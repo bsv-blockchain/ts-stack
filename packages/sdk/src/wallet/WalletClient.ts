@@ -33,7 +33,9 @@ import {
   SignActionResult,
   VersionString7To30Bytes,
   WalletInterface,
-  AuthenticatedResult
+  AuthenticatedResult,
+  MultiplyPointArgs,
+  MultiplyPointResult
 } from './Wallet.interfaces.js'
 import WindowCWISubstrate from './substrates/window.CWI.js'
 import XDMSubstrate from './substrates/XDM.js'
@@ -232,6 +234,29 @@ export default class WalletClient implements WalletInterface {
   }): Promise<{ publicKey: PubKeyHex }> {
     await this.connectToSubstrate()
     return await (this.substrate as WalletInterface).getPublicKey(args, this.originator)
+  }
+
+  /**
+   * BRC-229 point multiplication. Optional across the interface, so this throws a clear error
+   * when the connected substrate does not implement it rather than failing on `undefined`.
+   * Applications should feature-detect with {@link WalletClient.supportsMultiplyPoint}.
+   */
+  async multiplyPoint(args: MultiplyPointArgs): Promise<MultiplyPointResult> {
+    await this.connectToSubstrate()
+    const substrate = this.substrate as WalletInterface
+    if (typeof substrate.multiplyPoint !== 'function') {
+      throw new Error('The connected wallet does not implement multiplyPoint (BRC-229)')
+    }
+    return await substrate.multiplyPoint(args, this.originator)
+  }
+
+  /**
+   * Reports whether the connected wallet implements BRC-229 point multiplication, so an
+   * application can choose a fallback before committing to a protocol that needs it.
+   */
+  async supportsMultiplyPoint(): Promise<boolean> {
+    await this.connectToSubstrate()
+    return typeof (this.substrate as WalletInterface).multiplyPoint === 'function'
   }
 
   async revealCounterpartyKeyLinkage(args: {
