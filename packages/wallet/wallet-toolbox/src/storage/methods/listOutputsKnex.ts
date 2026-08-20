@@ -357,8 +357,14 @@ export async function listOutputs(
       return specOp.resultFromOutputs(dsk, auth, vargs, specOpTags, outputs)
     }
   }
-  if (!limit || outputs.length < limit) {
-    result.totalOutputs = outputs.length
+  const skipped = specOp?.ignoreLimit ? 0 : offset
+  if ((!limit || outputs.length < limit) && (outputs.length > 0 || skipped === 0)) {
+    // A short page ends the result set, so the total is the rows the offset
+    // skipped plus the rows returned, without running `qcount`. `offset` only
+    // counts when it was actually applied. An empty page is the exception: it
+    // proves only that the offset is at or past the end, so the total still
+    // has to be counted.
+    result.totalOutputs = skipped + outputs.length
   } else {
     const total = verifyOne(
       (await qcount) as Array<{ total: number | string }>

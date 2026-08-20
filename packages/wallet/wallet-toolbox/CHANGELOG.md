@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Report `listOutputs` `totalOutputs` as the size of the whole result set on
+  every page, in both the IndexedDB and Knex storage providers. A short final
+  page previously returned only that page's length, so a client paging a large
+  basket saw the total collapse to the size of the last page; an offset at or
+  past the end now counts instead of inferring, and the managed-change spec-op
+  no longer discards the total it already computed. Full pages, first pages,
+  and empty result sets are unchanged, so no consumer migration is required.
+
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with
   both historical array wallets and current binary Wallet Wire wallets.
