@@ -669,6 +669,35 @@ export interface WalletEncryptionArgs {
  * @param {BooleanDefaultFalse|true} [identityKey] - Use true to retrieve the current user's own identity key, overriding any protocol ID, key ID, or counterparty specified.
  * @param {BooleanDefaultFalse} [forSelf] - Whether to return the public key derived from the current user's own identity (as opposed to the counterparty's identity).
  */
+/**
+ * Arguments for wallet-side elliptic curve point multiplication.
+ */
+export interface MultiplyPointArgs {
+  /** The point to multiply, as a compressed DER-encoded secp256k1 point. */
+  point: PubKeyHex
+  /** BRC-43 security level and protocol ID used to derive the key. */
+  protocolID: WalletProtocol
+  /** BRC-43 key ID used to derive the key. */
+  keyID: KeyIDStringUnder800Bytes
+  /** Counterparty for derivation. Defaults to 'self'. */
+  counterparty?: WalletCounterparty
+  /**
+   * Multiply by the modular inverse of the derived key rather than the key itself, so that a
+   * mask applied under this derivation can be removed under the same derivation.
+   */
+  invert?: BooleanDefaultFalse
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
+  seekPermission?: BooleanDefaultTrue
+}
+
+/**
+ * The resulting point, compressed DER-encoded.
+ */
+export interface MultiplyPointResult {
+  point: PubKeyHex
+}
+
 export interface GetPublicKeyArgs extends Partial<WalletEncryptionArgs> {
   identityKey?: true
   forSelf?: BooleanDefaultFalse
@@ -1024,6 +1053,37 @@ export interface WalletInterface {
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ) => Promise<GetPublicKeyResult>
+
+  /**
+   * Multiplies a caller-supplied secp256k1 point by a key derived from protocolID, keyID and
+   * counterparty, returning the resulting point. The derived key is never disclosed. Set
+   * `invert` to multiply by its modular inverse instead, which removes a mask previously
+   * applied under the same derivation.
+   *
+   * This is the wallet-side equivalent of composing existing SDK primitives:
+   *
+   * ```ts
+   * const masked = new PublicKey(key.deriveSharedSecret(point))
+   * const inverse = new PrivateKey(key.invm(new Curve().n))
+   * const unmasked = inverse.deriveSharedSecret(masked)   // === point
+   * ```
+   *
+   * Those primitives require the private key in application memory. This method performs the
+   * same operations where the key already lives, so an application can participate in
+   * commutative-masking protocols without holding secp256k1 keys of its own.
+   *
+   * Optional: BRC-100 is a stable interface, so a method added after the fact cannot be
+   * mandatory without invalidating existing wallets and substrates. Applications MUST
+   * feature-detect (`typeof wallet.multiplyPoint === 'function'`) and degrade gracefully.
+   *
+   * @param {MultiplyPointArgs} args - The point, the BRC-43 derivation arguments, and options.
+   * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - FQDN of the originating application.
+   * @returns {Promise<MultiplyPointResult>} Resolves to the resulting point, or an error response.
+   */
+  multiplyPoint?: (
+    args: MultiplyPointArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<MultiplyPointResult>
 
   /**
    * Reveals the key linkage between ourselves and a counterparty, to a particular verifier, across all interactions with the counterparty.

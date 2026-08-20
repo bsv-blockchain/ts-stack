@@ -9,6 +9,7 @@ import {
   PublicKey,
   Point,
   PrivateKey,
+  Curve,
   SymmetricKey,
   readyAsyncCryptoBackend,
   isAsyncCryptoDigest,
@@ -20,6 +21,8 @@ import {
   CreateSignatureArgs,
   CreateSignatureResult,
   GetPublicKeyArgs,
+  MultiplyPointArgs,
+  MultiplyPointResult,
   PubKeyHex,
   RevealCounterpartyKeyLinkageArgs,
   RevealCounterpartyKeyLinkageResult,
@@ -89,6 +92,44 @@ async function deriveSymmetricKey(
 }
 
 /**
+ * Parses a compressed DER point and rejects what must not be multiplied.
+ *
+ * The canonical-encoding check is not redundant with the on-curve check. PublicKey.fromString
+ * accepts an x-coordinate greater than the field prime, reduces it modulo p without signalling
+ * anything, and validate() then reports the reduced point as on-curve: '02' + 'ff'.repeat(32)
+ * parses, becomes 0x1000003d0, and validates true. Accepting such a value would multiply a
+ * point the caller never supplied. The range check therefore runs before the parser, because
+ * the parser is what performs the reduction.
+ */
+function parseValidPoint(pointHex: PubKeyHex): Point {
+  if (typeof pointHex !== 'string') {
+    throw new TypeError('multiplyPoint: point must be a string')
+  }
+  if (!/^0[23][0-9a-fA-F]{64}$/.test(pointHex)) {
+    throw new Error('multiplyPoint: point must be a 33-byte compressed DER secp256k1 point in hex')
+  }
+
+  const curve = new Curve()
+  if (new BigNumber(pointHex.slice(2), 16).cmp(curve.p) >= 0) {
+    throw new Error('multiplyPoint: the x-coordinate is not a canonical field element')
+  }
+
+  let point: Point
+  try {
+    point = Point.fromString(pointHex)
+  } catch {
+    throw new Error('multiplyPoint: the supplied point could not be decoded')
+  }
+  if (point.isInfinity()) {
+    throw new Error('multiplyPoint: the supplied point is the identity')
+  }
+  if (!point.validate()) {
+    throw new Error('multiplyPoint: the supplied point is not on the curve')
+  }
+  return point
+}
+
+/**
  * A ProtoWallet is precursor to a full wallet, capable of performing all foundational cryptographic operations.
  * It can derive keys, create signatures, facilitate encryption and HMAC operations, and reveal key linkages.
  *
@@ -128,6 +169,50 @@ export class ProtoWallet {
         publicKey: (await derivePublicKey(keyDeriverOrThrow(this.keyDeriver), args)).toString()
       }
     }
+  }
+
+  /**
+   * Multiplies a caller-supplied point by a derived key, or by its modular inverse when
+   * `invert` is set. The derived key is never disclosed.
+   *
+   * Equivalent to composing existing primitives -- deriveSharedSecret for the forward
+   * direction, and `new PrivateKey(key.invm(curve.n))` for the inverse -- except that both run
+   * where the key already lives rather than requiring it in application memory.
+   *
+   * The key is always derived from protocolID/keyID/counterparty, never the identity or a
+   * spending key. That is load-bearing rather than stylistic: for a counterparty point Q, d*Q
+   * IS the ECDH shared secret with Q, so performing this with a key used for anything else
+   * would hand the caller that secret and break encryption to that counterparty.
+   *
+   * Declared optional so that ProtoWallet remains as wide a structural type as before this
+   * method existed; a required member narrows what satisfies `ProtoWallet` and breaks
+   * implementors that do not extend the class.
+   */
+  multiplyPoint?: (args: MultiplyPointArgs) => Promise<MultiplyPointResult> = async (
+    args: MultiplyPointArgs
+  ): Promise<MultiplyPointResult> => {
+    if (args.protocolID == null || args.keyID == null || args.keyID === '') {
+      throw new Error('protocolID and keyID are required.')
+    }
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
+    const point = parseValidPoint(args.point)
+    const derived = derivePrivateKey(
+      keyDeriver,
+      args.protocolID,
+      args.keyID,
+      args.counterparty ?? 'self'
+    )
+
+    const curve = new Curve()
+    const scalar = args.invert === true ? derived.invm(curve.n) : new BigNumber(derived.toHex(), 16)
+    const result = point.mul(scalar)
+
+    // Refuse a result at infinity rather than encoding it: it carries no information, and
+    // every protocol built on this primitive treats it as a failure.
+    if (result.isInfinity()) {
+      throw new Error('multiplyPoint: the result is the point at infinity')
+    }
+    return { point: result.encode(true, 'hex') as string }
   }
 
   async revealCounterpartyKeyLinkage(
