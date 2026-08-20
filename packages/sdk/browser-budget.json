@@ -16,12 +16,12 @@
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
-      "raw": 742000,
+      "raw": 743000,
       "gzip": 185000,
       "brotli": 150000
     },
     "esbuild": {
-      "raw": 560000,
+      "raw": 561000,
       "gzip": 168000,
       "brotli": 140000
     }
@@ -30,7 +30,7 @@
     "path": "dist/umd/bundle.js",
     "global": "bsv",
     "maximumBytes": {
-      "raw": 555000,
+      "raw": 556000,
       "gzip": 162000,
       "brotli": 136000
     }

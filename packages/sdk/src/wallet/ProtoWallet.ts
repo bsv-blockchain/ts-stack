@@ -106,25 +106,25 @@ function parseValidPoint(pointHex: PubKeyHex): Point {
     throw new TypeError('multiplyPoint: point must be a string')
   }
   if (!/^0[23][0-9a-fA-F]{64}$/.test(pointHex)) {
-    throw new Error('multiplyPoint: point must be a 33-byte compressed DER secp256k1 point in hex')
+    throw new Error('multiplyPoint: expected a 33-byte compressed DER point')
   }
 
   const curve = new Curve()
   if (new BigNumber(pointHex.slice(2), 16).cmp(curve.p) >= 0) {
-    throw new Error('multiplyPoint: the x-coordinate is not a canonical field element')
+    throw new Error('multiplyPoint: x is not a canonical field element')
   }
 
   let point: Point
   try {
     point = Point.fromString(pointHex)
   } catch {
-    throw new Error('multiplyPoint: the supplied point could not be decoded')
+    throw new Error('multiplyPoint: point could not be decoded')
   }
   if (point.isInfinity()) {
-    throw new Error('multiplyPoint: the supplied point is the identity')
+    throw new Error('multiplyPoint: point is the identity')
   }
   if (!point.validate()) {
-    throw new Error('multiplyPoint: the supplied point is not on the curve')
+    throw new Error('multiplyPoint: point is not on the curve')
   }
   return point
 }
@@ -210,7 +210,7 @@ export class ProtoWallet {
     // Refuse a result at infinity rather than encoding it: it carries no information, and
     // every protocol built on this primitive treats it as a failure.
     if (result.isInfinity()) {
-      throw new Error('multiplyPoint: the result is the point at infinity')
+      throw new Error('multiplyPoint: result is the point at infinity')
     }
     return { point: result.encode(true, 'hex') as string }
   }
