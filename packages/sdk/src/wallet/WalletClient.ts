@@ -144,10 +144,7 @@ export default class WalletClient implements WalletInterface {
         () => new HTTPWalletJSON(this.originator, 'https://localhost:2121'),
         MAX_FAST_SUBSTRATE_RESPONSE_WAIT
       ),
-      attemptSubstrate(
-        () => new HTTPWalletJSON(this.originator),
-        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
-      ),
+      attemptSubstrate(() => new HTTPWalletJSON(this.originator), MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
       attemptSubstrate(
         () => new ReactNativeWebView('*', MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
         MAX_FAST_SUBSTRATE_RESPONSE_WAIT
@@ -245,7 +242,7 @@ export default class WalletClient implements WalletInterface {
     await this.connectToSubstrate()
     const substrate = this.substrate as WalletInterface
     if (typeof substrate.multiplyPoint !== 'function') {
-      throw new Error('The connected wallet does not implement multiplyPoint (BRC-229)')
+      throw new TypeError('The connected wallet does not implement multiplyPoint (BRC-229)')
     }
     return await substrate.multiplyPoint(args, this.originator)
   }

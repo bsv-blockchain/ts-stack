@@ -1183,7 +1183,7 @@ export default class WalletWireProcessor implements WalletWire {
             // implement it. Report that as an error rather than calling undefined, which is
             // how a caller feature-detects across a substrate.
             if (typeof this.wallet.multiplyPoint !== 'function') {
-              throw new Error('multiplyPoint is not implemented by this wallet')
+              throw new TypeError('multiplyPoint is not implemented by this wallet')
             }
             const multiplyPointResult = await this.wallet.multiplyPoint(args, originator)
 

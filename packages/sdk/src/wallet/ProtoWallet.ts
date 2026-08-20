@@ -104,7 +104,12 @@ async function deriveSymmetricKey(
  * for invalid-curve attacks.
  */
 function parseValidPoint(pointHex: PubKeyHex): Point {
-  if (typeof pointHex !== 'string' || !/^0[23][0-9a-fA-F]{64}$/.test(pointHex)) {
+  // A wrong type and a wrong format are different faults, so they raise different errors:
+  // TypeError for the former (which is also what Sonar's S7786 asks for), Error for the latter.
+  if (typeof pointHex !== 'string') {
+    throw new TypeError('multiplyPoint: point must be a string')
+  }
+  if (!/^0[23][0-9a-fA-F]{64}$/.test(pointHex)) {
     throw new Error('multiplyPoint: point must be a 33-byte compressed DER secp256k1 point in hex')
   }
 
