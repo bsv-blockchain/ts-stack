@@ -96,7 +96,10 @@ export class VerifiableCertificate extends Certificate {
    * @throws {Error} Throws an error if any of the decryption operations fail, with a message indicating the failure context.
    */
   async decryptFields(
-    verifierWallet: ProtoWallet,
+    // Typed as the capability actually used rather than the whole ProtoWallet class, so
+    // that adding a method to ProtoWallet does not narrow what may be passed here. This
+    // only ever calls decrypt().
+    verifierWallet: Pick<ProtoWallet, 'decrypt'>,
     privileged?: boolean,
     privilegedReason?: string,
     originator?: OriginatorDomainNameStringUnder250Bytes

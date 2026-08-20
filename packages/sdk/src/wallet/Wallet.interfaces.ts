@@ -669,6 +669,35 @@ export interface WalletEncryptionArgs {
  * @param {BooleanDefaultFalse|true} [identityKey] - Use true to retrieve the current user's own identity key, overriding any protocol ID, key ID, or counterparty specified.
  * @param {BooleanDefaultFalse} [forSelf] - Whether to return the public key derived from the current user's own identity (as opposed to the counterparty's identity).
  */
+/**
+ * Arguments for BRC-229 wallet-native elliptic curve point multiplication.
+ */
+export interface MultiplyPointArgs {
+  /** The point to multiply, as a compressed DER-encoded secp256k1 point. */
+  point: PubKeyHex
+  /** BRC-43 security level and protocol ID used to derive the key. */
+  protocolID: WalletProtocol
+  /** BRC-43 key ID used to derive the key. */
+  keyID: KeyIDStringUnder800Bytes
+  /** Counterparty for derivation. Defaults to 'self'. */
+  counterparty?: WalletCounterparty
+  /**
+   * Multiply by the modular inverse of the derived key instead of the key itself,
+   * so a mask applied by the wallet can be removed by the wallet.
+   */
+  invert?: BooleanDefaultFalse
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
+  seekPermission?: BooleanDefaultTrue
+}
+
+/**
+ * Result of a BRC-229 point multiplication: the resulting point, compressed DER-encoded.
+ */
+export interface MultiplyPointResult {
+  point: PubKeyHex
+}
+
 export interface GetPublicKeyArgs extends Partial<WalletEncryptionArgs> {
   identityKey?: true
   forSelf?: BooleanDefaultFalse
@@ -1024,6 +1053,24 @@ export interface WalletInterface {
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ) => Promise<GetPublicKeyResult>
+
+  /**
+   * Multiplies a caller-supplied secp256k1 point by a derived private key, returning the
+   * resulting point without revealing the key (BRC-229). Set `invert` to multiply by the
+   * modular inverse instead, undoing a mask previously applied under the same derivation.
+   *
+   * Optional. BRC-100 is an unchanging interface, so a method added after the fact cannot be
+   * mandatory without invalidating every wallet and substrate already shipped. Applications
+   * MUST feature-detect (`typeof wallet.multiplyPoint === 'function'`) and degrade gracefully.
+   *
+   * @param {MultiplyPointArgs} args - The point, the BRC-43 derivation arguments, and options.
+   * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - FQDN of the originating application.
+   * @returns {Promise<MultiplyPointResult>} Resolves to the resulting point, or an error response.
+   */
+  multiplyPoint?: (
+    args: MultiplyPointArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<MultiplyPointResult>
 
   /**
    * Reveals the key linkage between ourselves and a counterparty, to a particular verifier, across all interactions with the counterparty.
