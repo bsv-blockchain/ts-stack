@@ -163,6 +163,19 @@ describe('ProtoWallet.multiplyPoint (BRC-229)', () => {
     }
   })
 
+  it('stays structurally optional so existing implementors still satisfy ProtoWallet', () => {
+    // Regression guard. Declaring multiplyPoint as a required member -- method or property --
+    // narrows what structurally satisfies ProtoWallet, and every implementor that does not
+    // extend the class stops type-checking. That broke Wallet, PrivilegedKeyManager and the
+    // wallet managers in @bsv/wallet-toolbox with 6 compile errors. This asserts the shape a
+    // structural implementor needs: no multiplyPoint, and it still assigns.
+    const withoutMultiplyPoint: Pick<ProtoWallet, 'multiplyPoint'> = {}
+    expect(withoutMultiplyPoint.multiplyPoint).toBeUndefined()
+
+    // And the real wallet does provide it.
+    expect(typeof alice.multiplyPoint).toEqual('function')
+  })
+
   it('requires protocolID and keyID', async () => {
     const P = card(0)
     await expect(

@@ -194,7 +194,15 @@ export class ProtoWallet {
    * to that counterparty. A protocol-scoped key that never signs and never encrypts has no
    * such property to lose.
    */
-  async multiplyPoint(args: MultiplyPointArgs): Promise<MultiplyPointResult> {
+  // Declared optional (`?`) so that ProtoWallet remains as wide a structural type as it was
+  // before BRC-229 existed. A required member -- method or property -- narrows what satisfies
+  // `ProtoWallet`, and every implementor that does not extend the class stops type-checking:
+  // Wallet, PrivilegedKeyManager and the wallet managers in @bsv/wallet-toolbox all implement
+  // it structurally. BRC-229 is an opt-in capability, so its presence on the type is opt-in
+  // too, and callers feature-detect exactly as they do on WalletInterface.
+  multiplyPoint?: (args: MultiplyPointArgs) => Promise<MultiplyPointResult> = async (
+    args: MultiplyPointArgs
+  ): Promise<MultiplyPointResult> => {
     if (args.protocolID == null || args.keyID == null || args.keyID === '') {
       throw new Error('protocolID and keyID are required.')
     }
