@@ -14,6 +14,7 @@ import {
   WalletInterface,
   type LookupNetworkPreset
 } from '@bsv/sdk'
+import type { AuthSocketClientOptions } from '@bsv/authsocket-client'
 
 /**
  * Configuration options for initializing a MessageBoxClient.
@@ -48,6 +49,14 @@ export interface MessageBoxClientOptions {
    * Originator of the message box client.
    */
   originator?: string
+
+  /**
+   * Socket.IO manager/socket options forwarded to the underlying AuthSocketClient.
+   * Use this to override transport selection, e.g. `{ transports: ['websocket'] }`
+   * against a deployment whose proxy rejects Engine.IO's HTTP polling transport.
+   * Only affects the socket path; HTTP requests are unchanged.
+   */
+  managerOptions?: AuthSocketClientOptions['managerOptions']
 }
 
 /**

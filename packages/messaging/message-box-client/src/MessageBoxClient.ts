@@ -211,6 +211,7 @@ export class MessageBoxClient {
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
   protected originator?: OriginatorDomainNameStringUnder250Bytes
+  private readonly managerOptions?: MessageBoxClientOptions['managerOptions']
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
@@ -218,6 +219,7 @@ export class MessageBoxClient {
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
    * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
+   * @param {Partial<ManagerOptions & SocketOptions>} [options.managerOptions] - Socket.IO manager/socket options forwarded to the underlying AuthSocketClient, e.g. `{ transports: ['websocket'] }`. Omitted when unset.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -241,7 +243,8 @@ export class MessageBoxClient {
       walletClient,
       enableLogging = false,
       networkPreset = 'mainnet',
-      originator = undefined
+      originator = undefined,
+      managerOptions = undefined
     } = options
 
     if (networkPreset === 'teratestnet' && host == null) {
@@ -257,6 +260,7 @@ export class MessageBoxClient {
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator
+    this.managerOptions = managerOptions
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)
     this.networkPreset = networkPreset
@@ -436,7 +440,8 @@ export class MessageBoxClient {
       const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
       this.socket = AuthSocketClient(targetHost, {
         wallet: this.walletClient,
-        originator: this.originator
+        originator: this.originator,
+        ...(this.managerOptions !== undefined && { managerOptions: this.managerOptions })
       })
 
       this.socket.on('connect', () => {

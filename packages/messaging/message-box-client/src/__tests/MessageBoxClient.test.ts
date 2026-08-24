@@ -29,6 +29,9 @@ jest.unstable_mockModule('@bsv/authsocket-client', () => ({
 
 const { MessageBoxClient } = await import('../MessageBoxClient.js')
 
+const { AuthSocketClient } = await import('@bsv/authsocket-client')
+const authSocketClientMock = AuthSocketClient as unknown as jest.Mock
+
 // MOCK: WalletClient methods globally
 jest.spyOn(WalletClient.prototype, 'createHmac').mockResolvedValue({
   hmac: Array.from(new Uint8Array([1, 2, 3]))
@@ -164,6 +167,45 @@ describe('MessageBoxClient', () => {
     }, 100)
 
     await expect(connection).resolves.toBeUndefined()
+  }, 10000)
+
+  it('Forwards managerOptions to AuthSocketClient when configured', async () => {
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech',
+      managerOptions: { transports: ['websocket'] }
+    })
+
+    await messageBoxClient.init()
+
+    const connection = messageBoxClient.initializeConnection()
+    setTimeout(() => {
+      socketOnMap.authenticationSuccess?.({ status: 'ok' })
+    }, 100)
+    await connection
+
+    expect(authSocketClientMock).toHaveBeenCalledWith(
+      'https://message-box-us-1.bsvb.tech',
+      expect.objectContaining({ managerOptions: { transports: ['websocket'] } })
+    )
+  }, 10000)
+
+  it('Omits managerOptions from AuthSocketClient when not configured', async () => {
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech'
+    })
+
+    await messageBoxClient.init()
+
+    const connection = messageBoxClient.initializeConnection()
+    setTimeout(() => {
+      socketOnMap.authenticationSuccess?.({ status: 'ok' })
+    }, 100)
+    await connection
+
+    const options = authSocketClientMock.mock.calls[0][1] as Record<string, unknown>
+    expect(Object.keys(options)).not.toContain('managerOptions')
   }, 10000)
 
   it('Falls back to HTTP when WebSocket is not initialized', async () => {

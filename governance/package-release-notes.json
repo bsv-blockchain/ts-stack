@@ -104,9 +104,9 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
+      "releaseType": "minor",
+      "summary": "Adds an optional managerOptions client option that forwards Socket.IO manager and socket settings to AuthSocketClient, letting callers select transports such as websocket-only against deployments whose proxy rejects Engine.IO HTTP polling. Also preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. managerOptions is optional and omitted by default, so socket transport negotiation and every HTTP code path are unchanged for existing callers. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
     },
     {
       "name": "@bsv/overlay",

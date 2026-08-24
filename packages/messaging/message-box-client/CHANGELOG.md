@@ -15,6 +15,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Added an optional `managerOptions` client option, forwarded to
+  `AuthSocketClient` when the live socket is created. Callers can now select
+  Socket.IO transports (for example `{ transports: ['websocket'] }`) to reach
+  deployments whose proxy rejects Engine.IO's HTTP polling transport. The
+  option is omitted entirely when unset, so default transport negotiation and
+  all HTTP code paths are unchanged.
+
 - Added the `teratestnet` overlay preset. TTN clients must provide an explicit
   Message Box host until a dedicated TTN deployment is available, preventing
   accidental use of the existing testnet staging service.
