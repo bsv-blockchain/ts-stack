@@ -309,7 +309,7 @@
     "@bsv/templates": "1.10.1",
     "@bsv/authsocket": "2.1.7",
     "@bsv/authsocket-client": "2.1.6",
-    "@bsv/message-box-client": "2.4.2",
+    "@bsv/message-box-client": "2.5.0",
     "@bsv/paymail": "2.4.7",
     "@bsv/402-pay": "0.2.5",
     "@bsv/auth": "0.1.4",
