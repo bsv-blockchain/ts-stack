@@ -7,6 +7,7 @@ import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
 import { uhrpNetwork } from '../utils/network'
+import { getChirpStore } from '../chirp/store'
 
 const { lookupPreset } = uhrpNetwork()
 
@@ -229,6 +230,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     })
 
     await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
+    await getChirpStore().extendRootLease(objectIdentifier, newExpiryTimeSeconds)
 
     return res.status(200).json({
       status: 'success',

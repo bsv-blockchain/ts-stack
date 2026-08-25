@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-06T03:52:21.445Z",
-  "totalVectors": 6681,
-  "totalFiles": 75,
+  "timestamp": "2026-08-25T05:15:27.593Z",
+  "totalVectors": 6684,
+  "totalFiles": 76,
   "parseErrors": 0,
   "suites": [
     {
@@ -28049,6 +28049,26 @@
         },
         {
           "name": "tx-015",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "storage/chirp-v1",
+      "cases": [
+        {
+          "name": "storage.chirp-v1.empty",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.hello",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.hello-media-type",
           "pass": true,
           "error": null
         }

@@ -1,0 +1,11 @@
+export const CHIRP_MAGIC = Uint8Array.from([0x43, 0x48, 0x49, 0x52, 0x50])
+export const CHIRP_MAJOR_VERSION = 1
+export const CHIRP_MINOR_VERSION = 0
+export const CHIRP_PROFILE_FIXED_4_MIB = 1
+export const CHIRP_CHUNK_SIZE = 4_194_304
+export const CHIRP_FANOUT = 256
+export const CHIRP_MAX_NODE_BYTES = 65_536
+export const CHIRP_MAX_EXTENSION_BYTES = 16_384
+export const CHIRP_MAX_DEPTH = 16
+export const CHIRP_MEDIA_TYPE_EXTENSION = 1n
+export const CHIRP_UHRP_PREFIX = 'ce00'

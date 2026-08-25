@@ -61,6 +61,7 @@
     ],
     "BRC-121": ["payments.brc121"],
     "BRC-26": ["storage.uhrp-http"],
+    "BRC-167": ["storage.chirp-v1"],
     "BRC-62": ["overlay.submit"],
     "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
     "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
@@ -73,9 +74,9 @@
     "BRC-141": ["transport.air-gap-optical"]
   },
   "stats": {
-    "total_files": 75,
-    "total_vectors": 6681,
-    "last_updated": "2026-07-30"
+    "total_files": 76,
+    "total_vectors": 6684,
+    "last_updated": "2026-08-24"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

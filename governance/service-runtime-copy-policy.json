@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-24",
   "owner": "ts-stack-maintainers",
   "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
   "copies": [
@@ -11,6 +11,84 @@
     {
       "canonicalSource": "infra/uhrp-server-basic/src/utils/network.ts",
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/utils/network.ts"]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/constants.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/constants.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/constants.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/compactSize.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/compactSize.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/compactSize.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/errors.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/errors.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/errors.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/types.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/types.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/types.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/codec.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/codec.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/codec.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/hash.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/hash.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/hash.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/uri.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/uri.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/uri.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/tree.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/tree.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/tree.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/validation.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/core/validation.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/core/validation.ts"
+      ]
+    },
+    {
+      "canonicalSource": "packages/network/chirp/src/openapi.ts",
+      "synchronizedSources": [
+        "infra/uhrp-server-basic/src/chirp/openapi.ts",
+        "infra/uhrp-server-cloud-bucket/src/chirp/openapi.ts"
+      ]
+    },
+    {
+      "canonicalSource": "infra/uhrp-server-basic/src/chirp/contracts.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/contracts.ts"]
+    },
+    {
+      "canonicalSource": "infra/uhrp-server-basic/src/chirp/routes.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/routes.ts"]
     },
     {
       "canonicalSource": "packages/wallet/wallet-toolbox/src/storage/remoting/KnexPaymentReplayStore.ts",

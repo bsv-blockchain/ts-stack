@@ -4,9 +4,9 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 38,
-    "packageAreaProjects": 34,
-    "publicPackages": 31,
+    "projects": 39,
+    "packageAreaProjects": 35,
+    "publicPackages": 32,
     "privatePackageAreaProjects": 3
   },
   "ci": {
@@ -14,10 +14,10 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6470,
+    "passed": 6473,
     "skipped": 211,
-    "total": 6681,
-    "vectorFiles": 75,
+    "total": 6684,
+    "vectorFiles": 76,
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
   },
   "testExceptions": {
@@ -297,6 +297,7 @@
     ]
   },
   "publicPackageVersions": {
+    "@bsv/chirp": "0.1.0",
     "@bsv/air-gap": "0.1.1",
     "@bsv/amountinator": "2.1.4",
     "@bsv/wallet-helper": "0.1.6",

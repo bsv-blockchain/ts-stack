@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schema/vector.schema.json",
+  "id": "storage.chirp-v1",
+  "name": "CHIRP v1 canonical serialization",
+  "brc": ["BRC-167", "BRC-26"],
+  "version": "1.0.0",
+  "reference_impl": "@bsv/chirp@0.1.0",
+  "parity_class": "required",
+  "schemaVersion": 1,
+  "standard": "BRC-167",
+  "profile": 1,
+  "vectors": [
+    {
+      "id": "storage.chirp-v1.empty",
+      "description": "Canonical profile 1 root for empty logical content",
+      "input": {
+        "source": { "encoding": "hex", "value": "" },
+        "mediaType": null
+      },
+      "expected": {
+        "logicalLength": "0",
+        "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "rootBytes": "434849525001000000010000000000000000e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8550000",
+        "rootHash": "0403640d635fd27b6c719d2b81db853483ff8d0fb46f7b90ce9f9d7e9a2729ee",
+        "rootIdentifier": "XUSvYkywHxEMvs7oiYYMV8bJ1sJjHq2mHgZvu8jSLyLhbNRVjG8E",
+        "chirpURL": "chirp://XUSvYkywHxEMvs7oiYYMV8bJ1sJjHq2mHgZvu8jSLyLhbNRVjG8E"
+      },
+      "tags": ["chirp", "profile-1", "empty", "golden"]
+    },
+    {
+      "id": "storage.chirp-v1.hello",
+      "description": "Canonical profile 1 root and blob identity for UTF-8 hello",
+      "input": {
+        "source": { "encoding": "utf8", "value": "hello" },
+        "mediaType": null
+      },
+      "expected": {
+        "logicalLength": "5",
+        "contentHash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        "blobIdentifier": "XUTEaLuvEhPySbAMiJxYEhBBGb258URNoqgnaf3Ym4b2wg683ZKp",
+        "rootBytes": "4348495250010000000100000000000000052cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824010000000000000000052cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b982400",
+        "rootHash": "1731ac8562f744fdd7990a5ef69b36bc140761db5b0e2936e896021d03b276a9",
+        "rootIdentifier": "XUT4zhwjYd9NLrcGUudTnMiQ7WpA3SeEa4T7ZwrcNn85qmW1XucC",
+        "chirpURL": "chirp://XUT4zhwjYd9NLrcGUudTnMiQ7WpA3SeEa4T7ZwrcNn85qmW1XucC"
+      },
+      "tags": ["chirp", "profile-1", "single-blob", "golden"]
+    },
+    {
+      "id": "storage.chirp-v1.hello-media-type",
+      "description": "Canonical advisory mediaType extension for UTF-8 hello",
+      "input": {
+        "source": { "encoding": "utf8", "value": "hello" },
+        "mediaType": "text/plain"
+      },
+      "expected": {
+        "logicalLength": "5",
+        "contentHash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        "rootBytes": "4348495250010000000100000000000000052cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824010000000000000000052cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b982401010a746578742f706c61696e",
+        "rootHash": "5493c139e9366f7c3facf9b3f28d5e0da6514fec975e70f59f5b2c3a40cd2c85",
+        "rootIdentifier": "XUTY2f2HxHyj7RDPgsSngBETiwZj58oYfjyGgfgFLsCE2y3mgrGv",
+        "chirpURL": "chirp://XUTY2f2HxHyj7RDPgsSngBETiwZj58oYfjyGgfgFLsCE2y3mgrGv"
+      },
+      "tags": ["chirp", "profile-1", "media-type", "extension", "golden"]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "non-minimal-zero-child-count",
+      "rootBytes": "434849525001000000010000000000000000e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855fd000000",
+      "errorCode": "ERR_CHIRP_COMPACT_SIZE_NON_MINIMAL"
+    },
+    {
+      "name": "unknown-critical-extension",
+      "rootBytes": "434849525001000000010000000000000000e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85500010200",
+      "errorCode": "ERR_CHIRP_CRITICAL_EXTENSION"
+    },
+    {
+      "name": "trailing-byte",
+      "rootBytes": "434849525001000000010000000000000000e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000",
+      "errorCode": "ERR_CHIRP_TRAILING_BYTES"
+    }
+  ]
+}

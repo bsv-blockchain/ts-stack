@@ -8,6 +8,7 @@ import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
 import { uhrpNetwork } from '../utils/network'
+import { getChirpStore } from '../chirp/store'
 
 const storage = new Storage()
 const GCP_BUCKET_NAME = process.env.GCP_BUCKET_NAME as string
@@ -238,6 +239,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     // Setting the new expiry time in the actual database
     await storage.bucket(GCP_BUCKET_NAME).file(`cdn/${objectIdentifier}`)
       .setMetadata({ customTime: newCustomTimeIso })
+    await getChirpStore().extendRootLease(objectIdentifier, newExpiryTimeSeconds)
 
     return res.status(200).json({
       status: 'success',

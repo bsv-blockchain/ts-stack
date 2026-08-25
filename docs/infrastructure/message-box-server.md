@@ -4,7 +4,7 @@ title: 'Message-box Server'
 kind: infra
 version: '1.1.14'
 last_updated: '2026-07-25'
-last_verified: '2026-07-25'
+last_verified: '2026-08-25'
 review_cadence_days: 30
 status: stable
 tags: [messaging, overlay, store-and-forward, authentication]

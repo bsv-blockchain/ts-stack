@@ -2,6 +2,7 @@
  * Storage dispatcher — Wave 1.
  *
  * Categories:
+ *   chirp-v1    (storage.chirp-v1)
  *   uhrp-http   (storage.uhrp-http)
  *
  * Implementation notes:
@@ -26,11 +27,12 @@
  */
 
 import { expect } from '@jest/globals'
+import { CHIRPBuilder, hashHex, sha256 } from '@bsv/chirp'
 import { StorageUtils } from '@bsv/sdk/storage'
 
 const { getURLForHash, getHashFromURL, isValidURL } = StorageUtils
 
-export const categories: ReadonlyArray<string> = ['uhrp-http']
+export const categories: ReadonlyArray<string> = ['chirp-v1', 'uhrp-http']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -340,10 +342,56 @@ export function dispatch(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
+  if (category === 'chirp-v1') {
+    return dispatchChirpV1(input, expected)
+  }
   if (category === 'uhrp-http') {
     return dispatchUhrpHttp(input, expected)
   }
   throw new Error(`storage dispatcher: unknown category '${category}'`)
+}
+
+async function dispatchChirpV1(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Promise<void> {
+  const source = input['source'] as Record<string, unknown> | undefined
+  const encoding = source?.['encoding']
+  const value = source?.['value']
+  if ((encoding !== 'hex' && encoding !== 'utf8') || typeof value !== 'string') {
+    throw new Error('storage chirp-v1 vector has an invalid source')
+  }
+
+  const mediaTypeValue = input['mediaType']
+  if (mediaTypeValue !== null && typeof mediaTypeValue !== 'string') {
+    throw new Error('storage chirp-v1 vector has an invalid mediaType')
+  }
+
+  const sourceBytes = Uint8Array.from(Buffer.from(value, encoding))
+  const blobIdentifiers: string[] = []
+  const result = await new CHIRPBuilder().build(sourceBytes, {
+    mediaType: mediaTypeValue ?? undefined,
+    sink: {
+      async putObject(objectIdentifier, _bytes, kind) {
+        if (kind === 'blob') blobIdentifiers.push(objectIdentifier)
+      }
+    }
+  })
+
+  expect(result.logicalLength.toString()).toBe(expected['logicalLength'])
+  expect(hashHex(result.contentHash)).toBe(expected['contentHash'])
+  expect(hashHex(result.rootBytes)).toBe(expected['rootBytes'])
+  expect(hashHex(sha256(result.rootBytes))).toBe(expected['rootHash'])
+  expect(result.rootIdentifier).toBe(expected['rootIdentifier'])
+  expect(result.chirpURL).toBe(expected['chirpURL'])
+
+  if (typeof expected['blobIdentifier'] === 'string') {
+    expect(blobIdentifiers).toEqual([expected['blobIdentifier']])
+  } else if (sourceBytes.byteLength > 0) {
+    expect(blobIdentifiers).toEqual([StorageUtils.getURLForHash(Array.from(sha256(sourceBytes)))])
+  } else {
+    expect(blobIdentifiers).toEqual([])
+  }
 }
 
 function hasAuthorizationHeader(input: Record<string, unknown>): boolean {

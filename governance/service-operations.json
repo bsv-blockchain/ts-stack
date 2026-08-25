@@ -312,7 +312,20 @@
       "readinessPath": "/ready",
       "configuration": {
         "required": ["BSV_NETWORK", "SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
-        "optional": ["HOSTING_DOMAIN", "HTTP_PORT", "MIN_HOSTING_MINUTES", "PRICE_PER_GB_MO"],
+        "optional": [
+          "CHIRP_DATA_DIR",
+          "CHIRP_GC_INTERVAL_MS",
+          "CHIRP_GC_MAX_ENTRIES",
+          "CHIRP_MAX_LOGICAL_BYTES",
+          "CHIRP_MAX_OBJECTS",
+          "CHIRP_MAX_RETENTION_SECONDS",
+          "CHIRP_OBJECT_MAX_BODY_BYTES",
+          "CHIRP_STAGING_SECONDS",
+          "HOSTING_DOMAIN",
+          "HTTP_PORT",
+          "MIN_HOSTING_MINUTES",
+          "PRICE_PER_GB_MO"
+        ],
         "secrets": ["OTEL_EXPORTER_OTLP_HEADERS", "SERVER_PRIVATE_KEY"]
       },
       "observability": {
@@ -320,24 +333,32 @@
         "telemetryFile": "src/telemetry.ts",
         "loggerFile": "src/logger.ts",
         "preload": "--require ./out/src/telemetry.js",
-        "operations": ["listen", "shutdown", "request.in", "response.out"]
+        "operations": [
+          "chirp.commit",
+          "chirp.gc",
+          "listen",
+          "shutdown",
+          "request.in",
+          "response.out"
+        ]
       },
       "criticalJourneys": [
         "quote and authenticate an upload",
         "persist and retrieve content without hash drift",
-        "renew retained content"
+        "renew retained content",
+        "stage, validate, advertise, retrieve, and renew a complete CHIRP closure"
       ],
       "alerts": [
         "content write, hash verification, retrieval, or renewal failures repeat",
         "filesystem capacity or inode headroom crosses operator thresholds",
         "wallet storage authentication or payment failures consume error budget"
       ],
-      "state": "Local files and metadata under the configured public storage directory.",
-      "migration": "No schema migration; preserve file and metadata consistency.",
+      "state": "Local UHRP files plus CHIRP objects, sessions, and root records under the configured persistent storage directories.",
+      "migration": "No destructive schema migration; provision persistent CHIRP_DATA_DIR capacity and preserve existing file and metadata consistency.",
       "backup": "Snapshot the complete storage directory and verify hashes before restore.",
       "rpo": "1 hour or the accepted paid-content durability window, whichever is stricter.",
       "rto": "4 hours from a verified filesystem snapshot and wallet configuration.",
-      "restoreValidation": "Verify a sample of content hashes and metadata, upload/download/renew, wallet authentication, and capacity.",
+      "restoreValidation": "Verify legacy upload/download/renew, a complete CHIRP closure and root advertisement, sample object hashes and metadata, wallet authentication, and capacity.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT remove readiness, drain HTTP, destroy the cached wallet client, and flush telemetry.",
@@ -365,6 +386,13 @@
           "WALLET_STORAGE_URL"
         ],
         "optional": [
+          "CHIRP_GC_INTERVAL_MS",
+          "CHIRP_GC_MAX_ENTRIES",
+          "CHIRP_MAX_LOGICAL_BYTES",
+          "CHIRP_MAX_OBJECTS",
+          "CHIRP_MAX_RETENTION_SECONDS",
+          "CHIRP_OBJECT_MAX_BODY_BYTES",
+          "CHIRP_STAGING_SECONDS",
           "GCP_STORAGE_CREDS",
           "HOSTING_DOMAIN",
           "HTTP_PORT",
@@ -378,24 +406,32 @@
         "telemetryFile": "src/telemetry.ts",
         "loggerFile": "src/logger.ts",
         "preload": "--require ./out/src/telemetry.js",
-        "operations": ["listen", "shutdown", "request.in", "response.json"]
+        "operations": [
+          "chirp.commit",
+          "chirp.gc",
+          "listen",
+          "shutdown",
+          "request.in",
+          "response.json"
+        ]
       },
       "criticalJourneys": [
         "quote and authenticate a cloud upload",
         "persist and retrieve an object without hash drift",
-        "renew retained content"
+        "renew retained content",
+        "stage, validate, advertise, retrieve, and renew a complete CHIRP closure"
       ],
       "alerts": [
         "bucket authorization, write, read, metadata, or retention failures repeat",
         "provider quota, throttling, versioning, or replication health degrades",
         "wallet storage authentication or payment failures consume error budget"
       ],
-      "state": "Cloud bucket objects and provider metadata.",
-      "migration": "No local schema migration; validate provider configuration before listen.",
+      "state": "Cloud bucket UHRP objects plus CHIRP objects, sessions, and root records in the additive chirp/v1 namespace.",
+      "migration": "No destructive schema migration; grant the runtime identity access to the additive chirp/v1 namespace and validate provider configuration before listen.",
       "backup": "Use provider versioning/replication and verify object hashes and retention policy.",
       "rpo": "1 hour or the configured provider replication objective, whichever is stricter.",
       "rto": "4 hours from provider replicas/versioning and verified wallet configuration.",
-      "restoreValidation": "Verify object hashes, metadata, retention, upload/download/renew, and provider IAM boundaries.",
+      "restoreValidation": "Verify legacy upload/download/renew, a complete CHIRP closure and root advertisement, object hashes, metadata, retention, and provider IAM boundaries.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT remove readiness, drain HTTP, destroy the cached wallet client, and flush telemetry.",

@@ -3,6 +3,15 @@
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for list, retention, response, connection, and provider-scaling guidance.
 
+The service implements the BRC-167 CHIRP baseline routes under `/chirp/v1`.
+CHIRP objects, sessions, and root leases use the `chirp/v1/` bucket namespace;
+the ordinary `/cdn/*` backend-bucket rule remains unchanged because CHIRP
+objects are served by Cloud Run with closure authorization. A root is submitted
+to `tm_uhrp` only after its entire closure validates, `/renew` extends every
+object's GCS `customTime`, and bounded GC preserves deduplicated objects while
+any session or advertised root still references them. Existing UHRP APIs and
+bucket object layouts remain compatible.
+
 This guide walks you through deploying **UHRP Storage Server** on Google Cloud Platform (GCP) with continuous delivery via GitHub Actions. When you finish, you’ll have:
 
 -   A single‑region **Cloud Storage bucket** that stores all UHRP data.

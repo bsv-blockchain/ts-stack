@@ -28,6 +28,12 @@ COPY --from=build /app/out ./out
 COPY --from=build /app/package.json ./
 COPY public/ ./public/
 
+RUN mkdir -p /data/chirp \
+ && chown -R node:node /data
+
+ENV CHIRP_DATA_DIR=/data/chirp
+VOLUME ["/data"]
+
 USER node
 
 EXPOSE 8080

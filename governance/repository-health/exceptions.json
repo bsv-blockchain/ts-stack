@@ -30,7 +30,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-08-24",
+      "reviewBy": "2026-09-24",
       "removeWhen": "Remove when version synchronization can use a narrower first-party credential or a separate trusted mechanism without losing protected-environment review, provenance, or atomic release reconciliation."
     },
     {
@@ -185,7 +185,7 @@
         "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
       ],
       "created": "2026-08-09",
-      "reviewBy": "2026-08-23",
+      "reviewBy": "2026-09-08",
       "removeWhen": "Replace the patch and exact audit exclusions when Metro supports an image-size release that fixes both advisories, then rerun the frozen audit and mobile platform contract."
     },
     {
@@ -254,7 +254,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
+      "reviewBy": "2026-09-24",
       "removeWhen": "The Sonar backlog wave proves precise source, test, generated, vendored, and coverage boundaries and removes broad exclusions without hiding real findings."
     },
     {

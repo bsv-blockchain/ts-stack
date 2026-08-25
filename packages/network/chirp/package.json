@@ -1,0 +1,89 @@
+{
+  "name": "@bsv/chirp",
+  "version": "0.1.0",
+  "description": "BRC-167 Chunked, Hashed, Interleaved Resolution Protocol reference implementation",
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi.d.ts",
+      "import": "./dist/openapi.js",
+      "default": "./dist/openapi.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "openapi": [
+        "dist/openapi.d.ts"
+      ]
+    }
+  },
+  "bin": {
+    "chirp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/network/chirp/**/*.{json,md,ts}\"",
+    "lint": "oxlint src test --deny-warnings",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/codec.property.test.ts",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports CHIRPBuilder,CHIRPDownloader,CHIRPUploader,MemoryCHIRPCache,decodeCHIRPNode,encodeBranchNode,encodeRootNode,parseCHIRPURL,validateCHIRPClosure --entry-exports \"./openapi=CHIRP_OPENAPI_DOCUMENT\" --bin chirp --bin-args --help",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^2.4.1"
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/network/chirp"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "keywords": [
+    "bsv",
+    "brc-167",
+    "chirp",
+    "uhrp",
+    "merkle",
+    "content-addressing"
+  ]
+}
