@@ -127,7 +127,8 @@ async function loadIdbOutputs(
   }
   const pageManagedChange =
     specOp?.managedChangeOnly === true && specOp.ignoreLimit !== true
-  if (!specOp?.ignoreLimit && !pageManagedChange) {
+  const applyPaging = !specOp?.ignoreLimit && !pageManagedChange
+  if (applyPaging) {
     args.paged = { limit, offset }
   }
   let outputs = await storage.findOutputs(args, tagIds, queryModeAll)
@@ -139,14 +140,18 @@ async function loadIdbOutputs(
   if (pageManagedChange) {
     const totalManagedOutputs = outputs.length
     outputs = outputs.slice(offset, offset + limit)
-    return {
-      outputs,
-      totalOutputs:
-        outputs.length === limit ? totalManagedOutputs : outputs.length
-    }
+    return { outputs, totalOutputs: totalManagedOutputs }
   }
   if (outputs.length !== limit) {
-    return { outputs, totalOutputs: outputs.length }
+    // A short page ends the result set, so the total is the rows the offset
+    // skipped plus the rows returned, with no second query. `offset` only
+    // counts when it was actually applied. An empty page is the exception: it
+    // proves only that the offset is at or past the end, so the total still
+    // has to be counted.
+    const skipped = applyPaging ? offset : 0
+    if (outputs.length > 0 || skipped === 0) {
+      return { outputs, totalOutputs: skipped + outputs.length }
+    }
   }
   args.paged = undefined
   return {

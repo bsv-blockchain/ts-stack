@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-09",
+  "lastReviewed": "2026-08-24",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -17,21 +17,6 @@
       "created": "2026-07-25",
       "reviewBy": "2026-10-23",
       "removeWhen": "Remove only after an explicit operator governance decision replaces maintainer/admin facilitation and the replacement remains practical for maintainer-authored changes."
-    },
-    {
-      "id": "scorecard-release-token-permission",
-      "category": "security",
-      "target": "OpenSSF Scorecard TokenPermissionsID #189 for the npm release version-sync job",
-      "owner": "ts-stack-maintainers",
-      "reason": "The protected first-party release job requires contents write access to push its generated version-sync branch and pull-requests write access to open the reviewable sync PR after OIDC publication; every other workflow and job defaults to no token permissions and declares only its own minimum scope.",
-      "evidence": [
-        ".github/workflows/release.yaml",
-        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/189",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
-      ],
-      "created": "2026-07-25",
-      "reviewBy": "2026-09-24",
-      "removeWhen": "Remove when version synchronization can use a narrower first-party credential or a separate trusted mechanism without losing protected-environment review, provenance, or atomic release reconciliation."
     },
     {
       "id": "scorecard-release-lockfile-refresh",
@@ -185,7 +170,7 @@
         "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
       ],
       "created": "2026-08-09",
-      "reviewBy": "2026-09-08",
+      "reviewBy": "2026-09-23",
       "removeWhen": "Replace the patch and exact audit exclusions when Metro supports an image-size release that fixes both advisories, then rerun the frozen audit and mobile platform contract."
     },
     {
@@ -251,10 +236,10 @@
         "sonar-project.properties#sonar.cpd.exclusions",
         ".sonarcloud.properties",
         "governance/repository-health/projects.json#generatedArtifacts",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+        "https://github.com/bsv-blockchain/ts-stack/issues/402"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-09-24",
+      "reviewBy": "2026-09-23",
       "removeWhen": "The Sonar backlog wave proves precise source, test, generated, vendored, and coverage boundaries and removes broad exclusions without hiding real findings."
     },
     {

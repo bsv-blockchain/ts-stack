@@ -6,6 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Report `listOutputs` `totalOutputs` as the size of the whole result set on
+  every page, in both the IndexedDB and Knex storage providers. A short final
+  page previously returned only that page's length, so a client paging a large
+  basket saw the total collapse to the size of the last page; an offset at or
+  past the end now counts instead of inferring, and the managed-change spec-op
+  no longer discards the total it already computed. Full pages, first pages,
+  and empty result sets are unchanged, so no consumer migration is required.
+  `balanceAndUtxos` now terminates from page progress instead of relying on the
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
+
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with
   both historical array wallets and current binary Wallet Wire wallets.

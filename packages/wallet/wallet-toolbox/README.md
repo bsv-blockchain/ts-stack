@@ -50,6 +50,10 @@ checkpoint in one provider transaction. IndexedDB and Knex therefore avoid
 per-record transaction startup, and a failed page rolls back without advancing
 the checkpoint. The sync wire format and persisted schemas are unchanged.
 
+`listOutputs` reports `totalOutputs` as the full matching result count on every
+page for both Knex and IndexedDB storage, including short final pages and pages
+requested at or past the end of the result set.
+
 ### UMP account continuity and phone changes
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the

@@ -1229,12 +1229,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
         limit: 1000,
         offset
       })
-      if (change.totalOutputs === 0) break
+      if (change.outputs.length === 0) break
       for (const o of change.outputs) {
         r.total += o.satoshis
         r.utxos.push({ satoshis: o.satoshis, outpoint: o.outpoint })
       }
       offset += change.outputs.length
+      if (offset >= change.totalOutputs) break
     }
     return r
   }

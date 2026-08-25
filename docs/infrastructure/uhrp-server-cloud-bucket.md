@@ -2,8 +2,8 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.10'
-last_updated: '2026-07-25'
+version: '0.2.35'
+last_updated: '2026-08-25'
 last_verified: '2026-08-25'
 review_cadence_days: 30
 status: stable
@@ -12,7 +12,7 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 
 # UHRP Server (Cloud Bucket)
 
-> A production-grade UHRP host server backed by Google Cloud Storage (or S3-compatible buckets). Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
+> A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
 
 ## What it does
 
@@ -35,7 +35,7 @@ Clients upload files with authentication, retrieve files via public GET, and ser
 
 | Type              | Requirement                                                                                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Database          | Optional MySQL via Knex (for backup storage or metadata tracking); not required if using cloud-only                      |
+| Database          | None; Google Cloud Storage is the object and metadata source of truth                                                    |
 | External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional)                                             |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox, @bsv/wallet-toolbox-client |
 
@@ -50,6 +50,8 @@ Clients upload files with authentication, retrieve files via public GET, and ser
 | GET      | /list               | List the authenticated uploader's objects                  |
 | GET      | /find               | Find authenticated uploader metadata                       |
 | POST     | /renew              | Authenticated ownership/payment renewal                    |
+| GET      | /health, /healthz   | Public process liveness                                    |
+| GET      | /ready              | Public initialization readiness                            |
 
 ## WebSocket endpoints
 
@@ -122,16 +124,18 @@ Follows GCP 12-factor patterns: stateless design, cloud bucket for file storage,
 
 ## Migrations
 
-Stateless; cloud bucket is source of truth. Optional MySQL Knex migrations for metadata tables if ENABLE_METADATA_DB=true.
+No database migrations. Google Cloud Storage is the durable source of truth.
 
 ## Health checks
 
-Implicit health via /info endpoint (HTTP 200). Cloud Run readiness probe typically checks GET /info or GET /{hash} availability. No explicit /healthz endpoint.
+- `GET /health` and `GET /healthz` report process liveness.
+- `GET /ready` returns 200 only after wallet-backed authentication and payment
+  middleware initialization completes; the container health check uses it.
 
 ## Spec conformance
 
 - **UHRP** – Implements UHRP host protocol for file storage, retrieval, and metadata
-- **BRC-103** – Mutual authentication on PUT, optional on GET/POST
+- **BRC-103** – Mutual authentication on upload, list, find, and renewal workflows
 - **BRC-100** – Payment verification for uploads (optional)
 - **Google Cloud** – Follows Cloud Run best practices (health checks, graceful shutdown, 12-factor)
 
