@@ -24,6 +24,17 @@ function normalizeKnexListOffset(offset: number): {
     : { offset, orderBy: 'asc' }
 }
 
+function inferShortPageTotal(
+  outputsLength: number,
+  limit: number,
+  skipped: number
+): number | undefined {
+  if (limit > 0 && outputsLength >= limit) return undefined
+  // An empty page proves only that the offset is at or past the end.
+  if (outputsLength === 0 && skipped > 0) return undefined
+  return skipped + outputsLength
+}
+
 async function resolveKnexBasketId(
   storage: StorageKnex,
   userId: number,
@@ -358,13 +369,11 @@ export async function listOutputs(
     }
   }
   const skipped = specOp?.ignoreLimit ? 0 : offset
-  if ((!limit || outputs.length < limit) && (outputs.length > 0 || skipped === 0)) {
-    // A short page ends the result set, so the total is the rows the offset
-    // skipped plus the rows returned, without running `qcount`. `offset` only
-    // counts when it was actually applied. An empty page is the exception: it
-    // proves only that the offset is at or past the end, so the total still
-    // has to be counted.
-    result.totalOutputs = skipped + outputs.length
+  const inferredTotal = inferShortPageTotal(outputs.length, limit, skipped)
+  if (inferredTotal !== undefined) {
+    // A non-empty short page ends the result set, so the rows skipped plus the
+    // rows returned are the total without running `qcount`.
+    result.totalOutputs = inferredTotal
   } else {
     const total = verifyOne(
       (await qcount) as Array<{ total: number | string }>

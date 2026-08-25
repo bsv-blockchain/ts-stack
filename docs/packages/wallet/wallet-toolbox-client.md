@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.10.2'
-last_updated: '2026-08-14'
-last_verified: '2026-08-14'
+version: '2.10.3'
+last_updated: '2026-08-24'
+last_verified: '2026-08-24'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -18,6 +18,8 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
+IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
+count across short final and out-of-range pages.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

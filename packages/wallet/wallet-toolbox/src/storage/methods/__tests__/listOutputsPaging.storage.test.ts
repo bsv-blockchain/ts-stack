@@ -52,11 +52,7 @@ describe('listOutputs paging reports a stable total', () => {
     }
   }
 
-  async function seedOutput(
-    storage: StorageProvider,
-    user: TableUser,
-    index: number
-  ): Promise<TableOutput> {
+  async function seedOutput(storage: StorageProvider, user: TableUser, index: number): Promise<TableOutput> {
     const { tx } = await _tu.insertTestTransaction(storage, user, false, {
       status: 'completed',
       txid: `${index + 1}`.padStart(64, '0')
@@ -84,9 +80,7 @@ describe('listOutputs paging reports a stable total', () => {
         await seedOutput(storage, user, index)
       }
       const auth = { userId: user.userId, identityKey: user.identityKey }
-      const pages = await Promise.all(
-        offsets.map(offset => storage.listOutputs(auth, args(offset)))
-      )
+      const pages = await Promise.all(offsets.map(offset => storage.listOutputs(auth, args(offset))))
       byBackend[name] = {
         lengths: pages.map(page => page.outputs.length),
         totals: pages.map(page => page.totalOutputs)
