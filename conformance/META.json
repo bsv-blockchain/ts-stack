@@ -20,14 +20,22 @@
       "sdk.keys.publickey",
       "sdk.crypto.signature"
     ],
-    "BRC-74": ["sdk.transactions.merklepath", "broadcast.merklepath"],
-    "BRC-77": ["sdk.compat.bsm"],
+    "BRC-74": [
+      "sdk.transactions.merklepath",
+      "broadcast.merklepath"
+    ],
+    "BRC-77": [
+      "sdk.compat.bsm"
+    ],
     "BRC-31": [
       "messaging.brc31.authrite-signature",
       "auth.brc31-handshake",
       "messaging.authsocket"
     ],
-    "BRC-29": ["wallet.brc29.payment-derivation", "payments.brc29-payment-protocol"],
+    "BRC-29": [
+      "wallet.brc29.payment-derivation",
+      "payments.brc29-payment-protocol"
+    ],
     "BRC-100": [
       "wallet.brc100.getpublickey",
       "wallet.brc100.createhmac",
@@ -59,24 +67,52 @@
       "wallet.brc100.getversion",
       "wallet.storage.adapterconformance"
     ],
-    "BRC-121": ["payments.brc121"],
-    "BRC-26": ["storage.uhrp-http"],
-    "BRC-167": ["storage.chirp-v1"],
-    "BRC-62": ["overlay.submit"],
-    "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
-    "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
-    "BRC-21": ["sync.gasprotocol"],
-    "BRC-40": ["sync.brc40"],
-    "BRC-14": ["sdk.scripts.evaluation"],
-    "merkle-service": ["broadcast.merkle-service"],
-    "message-box": ["messaging.messagebox-http"],
-    "chaintracks-v2": ["sync.chaintracks-v2-http"],
-    "BRC-141": ["transport.air-gap-optical"]
+    "BRC-121": [
+      "payments.brc121"
+    ],
+    "BRC-26": [
+      "storage.uhrp-http"
+    ],
+    "BRC-167": [
+      "storage.chirp-v1"
+    ],
+    "BRC-62": [
+      "overlay.submit"
+    ],
+    "BRC-22": [
+      "overlay.lookup",
+      "overlay.topicmanagement"
+    ],
+    "BRC-20": [
+      "broadcast.arcsubmit",
+      "broadcast.merklepath"
+    ],
+    "BRC-21": [
+      "sync.gasprotocol"
+    ],
+    "BRC-40": [
+      "sync.brc40"
+    ],
+    "BRC-14": [
+      "sdk.scripts.evaluation"
+    ],
+    "merkle-service": [
+      "broadcast.merkle-service"
+    ],
+    "message-box": [
+      "messaging.messagebox-http"
+    ],
+    "chaintracks-v2": [
+      "sync.chaintracks-v2-http"
+    ],
+    "BRC-141": [
+      "transport.air-gap-optical"
+    ]
   },
   "stats": {
     "total_files": 76,
-    "total_vectors": 6684,
-    "last_updated": "2026-08-24"
+    "total_vectors": 6690,
+    "last_updated": "2026-08-25"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

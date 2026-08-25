@@ -29,12 +29,7 @@ export interface ChirpObjectRead {
 }
 
 export type ChirpStageResult =
-  | 'created'
-  | 'exists'
-  | 'session_missing'
-  | 'digest_mismatch'
-  | 'size_mismatch'
-  | 'too_large'
+  'created' | 'exists' | 'session_missing' | 'digest_mismatch' | 'size_mismatch' | 'too_large'
 
 export interface ChirpStore {
   createSession(
@@ -52,13 +47,20 @@ export interface ChirpStore {
     declaredLength: number | null,
     maximumBytes: number
   ): Promise<ChirpStageResult>
-  readStagedObject(uploadId: string, identityKey: string, objectIdentifier: string): Promise<Uint8Array>
+  readStagedObject(
+    uploadId: string,
+    identityKey: string,
+    objectIdentifier: string
+  ): Promise<Uint8Array>
   withCommitLock<T>(uploadId: string, operation: () => Promise<T>): Promise<T>
   getCommit(rootIdentifier: string): Promise<ChirpCommitRecord | null>
   prepareCommit(record: ChirpCommitRecord): Promise<void>
   activateCommit(rootIdentifier: string): Promise<void>
   abortCommit(rootIdentifier: string): Promise<void>
-  getCommittedObject(rootIdentifier: string, objectIdentifier: string): Promise<ChirpObjectRead | null>
-  extendRootLease(rootIdentifier: string, expiryTime: number): Promise<void>
+  getCommittedObject(
+    rootIdentifier: string,
+    objectIdentifier: string
+  ): Promise<ChirpObjectRead | null>
+  extendRootLease(rootIdentifier: string, expiryTime: number): Promise<boolean>
   collectGarbage(): Promise<void>
 }

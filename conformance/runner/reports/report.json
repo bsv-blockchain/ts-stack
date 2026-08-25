@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-08-25T05:15:27.593Z",
-  "totalVectors": 6684,
+  "timestamp": "2026-08-25T23:43:06.103Z",
+  "totalVectors": 6690,
   "totalFiles": 76,
   "parseErrors": 0,
   "suites": [
@@ -28069,6 +28069,36 @@
         },
         {
           "name": "storage.chirp-v1.hello-media-type",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.chunk-size-minus-one",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.chunk-size",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.chunk-size-plus-one",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.tree-256-blobs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.tree-257-blobs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "storage.chirp-v1.tree-multiple-branch-levels",
           "pass": true,
           "error": null
         }

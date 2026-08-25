@@ -1,9 +1,15 @@
 import { StorageDownloader, type LookupNetworkPreset } from '@bsv/sdk'
-import { CHIRP_MAX_DEPTH, CHIRP_MAX_NODE_BYTES } from './constants.js'
+import {
+  CHIRP_CHUNK_SIZE,
+  CHIRP_MAX_DEPTH,
+  CHIRP_MAX_NODE_BYTES,
+  CHIRP_PROFILE_FIXED_4_MIB
+} from './constants.js'
 import { decodeCHIRPNode, mediaTypeFromRoot } from './codec.js'
 import { CHIRPError } from './errors.js'
 import { createSHA256, equalBytes, objectIdentifierForHash, verifyObjectBytes } from './hash.js'
 import { MemoryCHIRPCache } from './cache.js'
+import { validateProfileOneConstruction } from './validation.js'
 import { deriveCHIRPObjectURL, parseCHIRPURL } from './uri.js'
 import type {
   CHIRPChildReference,
@@ -24,6 +30,7 @@ export interface CHIRPDownloaderConfig {
   maxLogicalLength?: bigint
   maxObjects?: number
   maxDownloadBytes?: number
+  maxObjectBytes?: number
   allowInsecureHTTP?: boolean
   requestTimeoutMs?: number
   resolutionTimeoutMs?: number
@@ -57,6 +64,7 @@ export class CHIRPDownloader {
   private readonly maxLogicalLength: bigint
   private readonly maxObjects: number
   private readonly maxDownloadBytes: number
+  private readonly maxObjectBytes: number
   private readonly allowInsecureHTTP: boolean
   private readonly requestTimeoutMs: number
   private readonly resolutionTimeoutMs: number
@@ -81,6 +89,12 @@ export class CHIRPDownloader {
       1,
       Number.MAX_SAFE_INTEGER,
       'maxDownloadBytes'
+    )
+    this.maxObjectBytes = boundedInteger(
+      config.maxObjectBytes ?? 64 * 1024 * 1024,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      'maxObjectBytes'
     )
     this.allowInsecureHTTP = config.allowInsecureHTTP ?? false
     this.requestTimeoutMs = boundedInteger(
@@ -144,7 +158,7 @@ export class CHIRPDownloader {
       root: node,
       rootIdentifier: parsed.rootIdentifier,
       advertisedLocations,
-      profileCanonical: node.chunkingProfile === 1
+      profileCanonical: false
     }
   }
 
@@ -154,10 +168,20 @@ export class CHIRPDownloader {
   ): AsyncGenerator<CHIRPVerifiedChunk> {
     throwIfAborted(options.signal)
     const context = await this.inspect(chirpURL, options.signal)
+    yield* this.streamContext(context, options)
+  }
+
+  private async *streamContext(
+    context: RootContext,
+    options: CHIRPDownloadOptions,
+    profileState?: { canonical: boolean }
+  ): AsyncGenerator<CHIRPVerifiedChunk> {
     const range = normalizeRange(options.range, context.root.logicalLength)
     const leaves: LeafLocation[] = []
+    const leafDepths = new Set<number>()
     const ancestry = new Set<string>()
     const uniqueObjects = new Set<string>([context.rootIdentifier])
+    let referenceCount = 0
 
     const visit = async (
       reference: CHIRPChildReference,
@@ -165,6 +189,13 @@ export class CHIRPDownloader {
       depth: number
     ): Promise<void> => {
       if (!overlaps(offset, offset + reference.logicalLength, range)) return
+      referenceCount += 1
+      if (referenceCount > this.maxObjects) {
+        throw new CHIRPError(
+          'ERR_CHIRP_REFERENCE_LIMIT',
+          'CHIRP traversal exceeds the reference limit.'
+        )
+      }
       if (depth > CHIRP_MAX_DEPTH) {
         throw new CHIRPError('ERR_CHIRP_DEPTH', 'CHIRP traversal exceeds the v1 depth limit.')
       }
@@ -175,6 +206,7 @@ export class CHIRPDownloader {
       }
       if (reference.childKind === 0) {
         leaves.push({ reference, offset })
+        leafDepths.add(depth)
         return
       }
       if (ancestry.has(objectIdentifier)) {
@@ -209,13 +241,23 @@ export class CHIRPDownloader {
       rootOffset += child.logicalLength
     }
 
+    const fullTraversal = range.start === 0n && range.endExclusive === context.root.logicalLength
+    if (fullTraversal && context.root.chunkingProfile === CHIRP_PROFILE_FIXED_4_MIB) {
+      await validateProfileOneConstruction(
+        context.root,
+        leaves.map(leaf => leaf.reference),
+        leafDepths
+      )
+      if (profileState != null) profileState.canonical = true
+    }
+
     const concurrency = boundedInteger(
       options.concurrency ?? this.defaultConcurrency,
       1,
       64,
       'concurrency'
     )
-    const fullRead = range.start === 0n && range.endExclusive === context.root.logicalLength
+    const fullRead = fullTraversal
     const contentHasher = createSHA256()
     let streamedLength = 0n
 
@@ -226,12 +268,23 @@ export class CHIRPDownloader {
         concurrency,
         async leaf => {
           const objectIdentifier = objectIdentifierForHash(leaf.reference.objectHash)
+          const maximumBytes =
+            context.root.chunkingProfile === CHIRP_PROFILE_FIXED_4_MIB
+              ? CHIRP_CHUNK_SIZE
+              : this.maxObjectBytes
+          if (leaf.reference.logicalLength > BigInt(maximumBytes)) {
+            throw new CHIRPError(
+              'ERR_CHIRP_OBJECT_SIZE',
+              'CHIRP blob reference exceeds its permitted per-object size.'
+            )
+          }
           const data = await this.fetchVerifiedObject(
             context.rootIdentifier,
             objectIdentifier,
             context.advertisedLocations,
-            Number(leaf.reference.logicalLength),
-            work.controller.signal
+            maximumBytes,
+            work.controller.signal,
+            Number(leaf.reference.logicalLength)
           )
           if (BigInt(data.byteLength) !== leaf.reference.logicalLength) {
             throw new CHIRPError('ERR_CHIRP_LENGTH', 'Blob length does not match its reference.')
@@ -293,7 +346,8 @@ export class CHIRPDownloader {
     }
     const chunks: Uint8Array[] = []
     let length = 0
-    for await (const chunk of this.stream(chirpURL, options)) {
+    const profileState = { canonical: false }
+    for await (const chunk of this.streamContext(context, options, profileState)) {
       chunks.push(chunk.data)
       length += chunk.data.byteLength
     }
@@ -309,7 +363,7 @@ export class CHIRPDownloader {
       logicalLength: context.root.logicalLength,
       contentHash: context.root.contentHash,
       rootIdentifier: context.rootIdentifier,
-      profileCanonical: context.profileCanonical
+      profileCanonical: profileState.canonical
     }
   }
 
@@ -318,11 +372,12 @@ export class CHIRPDownloader {
     objectIdentifier: string,
     locations: string[],
     maximumBytes: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    expectedBytes?: number
   ): Promise<Uint8Array> {
     const cached = await this.cache.get(objectIdentifier)
     if (cached != null) {
-      return verifiedCachedObject(objectIdentifier, cached, maximumBytes)
+      return verifiedCachedObject(objectIdentifier, cached, maximumBytes, expectedBytes)
     }
     const attempts = Math.min(locations.length, this.retriesPerObject)
     const startingHost = this.nextHost++ % locations.length
@@ -357,17 +412,34 @@ export class CHIRPDownloader {
             )
           }
           const declaredLength = response.headers.get('content-length')
-          if (declaredLength == null || !/^\d+$/.test(declaredLength)) {
-            throw new CHIRPError('ERR_CHIRP_LENGTH', 'CHIRP object response lacks Content-Length.')
+          if (declaredLength != null && !/^(0|[1-9]\d*)$/.test(declaredLength)) {
+            throw new CHIRPError(
+              'ERR_CHIRP_LENGTH',
+              'CHIRP object response has invalid Content-Length.'
+            )
           }
-          const expectedLength = Number(declaredLength)
-          if (!Number.isSafeInteger(expectedLength) || expectedLength > maximumBytes) {
+          const headerLength = declaredLength == null ? null : Number(declaredLength)
+          if (
+            headerLength != null &&
+            (!Number.isSafeInteger(headerLength) || headerLength > maximumBytes)
+          ) {
             throw new CHIRPError(
               'ERR_CHIRP_OBJECT_SIZE',
               'CHIRP object response exceeds its permitted size.'
             )
           }
-          const bytes = await readBodyBounded(response.body, expectedLength, maximumBytes)
+          if (headerLength != null && expectedBytes != null && headerLength !== expectedBytes) {
+            throw new CHIRPError(
+              'ERR_CHIRP_LENGTH',
+              'CHIRP object Content-Length differs from its verified reference.'
+            )
+          }
+          const bytes = await readBodyBounded(
+            response.body,
+            headerLength,
+            maximumBytes,
+            expectedBytes
+          )
           verifyObjectBytes(objectIdentifier, bytes)
           await this.cache.set(objectIdentifier, bytes)
           return bytes
@@ -389,19 +461,27 @@ export class CHIRPDownloader {
 function verifiedCachedObject(
   objectIdentifier: string,
   cached: Uint8Array,
-  maximumBytes: number
+  maximumBytes: number,
+  expectedBytes?: number
 ): Uint8Array {
   verifyObjectBytes(objectIdentifier, cached)
   if (cached.byteLength > maximumBytes) {
     throw new CHIRPError('ERR_CHIRP_OBJECT_SIZE', 'Cached CHIRP object exceeds its permitted size.')
+  }
+  if (expectedBytes != null && cached.byteLength !== expectedBytes) {
+    throw new CHIRPError(
+      'ERR_CHIRP_LENGTH',
+      'Cached CHIRP object differs from its reference length.'
+    )
   }
   return cached
 }
 
 async function readBodyBounded(
   body: ReadableStream<Uint8Array>,
-  declaredLength: number,
-  maximumBytes: number
+  declaredLength: number | null,
+  maximumBytes: number,
+  expectedBytes?: number
 ): Promise<Uint8Array> {
   const reader = body.getReader()
   const chunks: Uint8Array[] = []
@@ -411,7 +491,7 @@ async function readBodyBounded(
       const result = await reader.read()
       if (result.done) break
       length += result.value.byteLength
-      if (length > maximumBytes || length > declaredLength) {
+      if (length > maximumBytes || (declaredLength != null && length > declaredLength)) {
         await reader.cancel()
         throw new CHIRPError('ERR_CHIRP_OBJECT_SIZE', 'CHIRP response exceeded its declared bound.')
       }
@@ -420,8 +500,11 @@ async function readBodyBounded(
   } finally {
     reader.releaseLock()
   }
-  if (length !== declaredLength) {
+  if (declaredLength != null && length !== declaredLength) {
     throw new CHIRPError('ERR_CHIRP_LENGTH', 'CHIRP response length differs from Content-Length.')
+  }
+  if (expectedBytes != null && length !== expectedBytes) {
+    throw new CHIRPError('ERR_CHIRP_LENGTH', 'CHIRP response length differs from its reference.')
   }
   const bytes = new Uint8Array(length)
   let offset = 0

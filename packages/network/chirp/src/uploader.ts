@@ -25,7 +25,7 @@ export interface CHIRPUploaderConfig {
 export interface CHIRPUploadSessionState {
   host: string
   uploadId: string
-  stagingExpiresAt: number
+  stagingExpiresAt: string
 }
 
 export interface CHIRPUploadCheckpoint {
@@ -211,13 +211,14 @@ export class CHIRPUploader {
             uploadId?: unknown
             stagingExpiresAt?: unknown
           }
-          if (typeof data.uploadId !== 'string' || !Number.isSafeInteger(data.stagingExpiresAt)) {
+          if (typeof data.uploadId !== 'string' || typeof data.stagingExpiresAt !== 'string') {
             return null
           }
+          const stagingExpiresAt = decimalUint64(data.stagingExpiresAt, false)
           return {
             host,
             uploadId: data.uploadId,
-            stagingExpiresAt: data.stagingExpiresAt as number
+            stagingExpiresAt
           }
         } catch {
           throwIfAborted(signal)
@@ -252,8 +253,9 @@ export class CHIRPUploader {
         typeof session?.host !== 'string' ||
         typeof session.uploadId !== 'string' ||
         session.uploadId === '' ||
-        !Number.isSafeInteger(session.stagingExpiresAt) ||
-        session.stagingExpiresAt <= now
+        typeof session.stagingExpiresAt !== 'string' ||
+        !/^[1-9]\d*$/.test(session.stagingExpiresAt) ||
+        BigInt(session.stagingExpiresAt) <= BigInt(now)
       ) {
         continue
       }

@@ -313,6 +313,9 @@
       "configuration": {
         "required": ["BSV_NETWORK", "SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
         "optional": [
+          "CHIRP_COMMIT_CACHE_OBJECTS",
+          "CHIRP_COMMIT_CACHE_ROOTS",
+          "CHIRP_COMMIT_CACHE_SECONDS",
           "CHIRP_DATA_DIR",
           "CHIRP_GC_INTERVAL_MS",
           "CHIRP_GC_MAX_ENTRIES",
@@ -386,6 +389,9 @@
           "WALLET_STORAGE_URL"
         ],
         "optional": [
+          "CHIRP_COMMIT_CACHE_OBJECTS",
+          "CHIRP_COMMIT_CACHE_ROOTS",
+          "CHIRP_COMMIT_CACHE_SECONDS",
           "CHIRP_GC_INTERVAL_MS",
           "CHIRP_GC_MAX_ENTRIES",
           "CHIRP_MAX_LOGICAL_BYTES",

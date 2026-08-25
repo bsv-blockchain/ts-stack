@@ -27,7 +27,8 @@
  */
 
 import { expect } from '@jest/globals'
-import { CHIRPBuilder, hashHex, sha256 } from '@bsv/chirp'
+import { CHIRPBuilder, buildBranchLevels, hashHex, sha256 } from '@bsv/chirp'
+import type { CHIRPChildReference } from '@bsv/chirp'
 import { StorageUtils } from '@bsv/sdk/storage'
 
 const { getURLForHash, getHashFromURL, isValidURL } = StorageUtils
@@ -355,10 +356,57 @@ async function dispatchChirpV1(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
+  const leafCount = input['leafCount']
+  if (typeof leafCount === 'number') {
+    const logicalLength = input['logicalLength']
+    const hashSeed = input['hashSeed']
+    if (
+      !Number.isSafeInteger(leafCount) ||
+      leafCount < 1 ||
+      typeof logicalLength !== 'string' ||
+      typeof hashSeed !== 'string'
+    ) {
+      throw new Error('storage chirp-v1 tree vector is invalid')
+    }
+    const encoder = new TextEncoder()
+    const leaves: CHIRPChildReference[] = Array.from({ length: leafCount }, (_, index) => ({
+      childKind: 0,
+      logicalLength: BigInt(logicalLength),
+      objectHash: sha256(encoder.encode(`${hashSeed}:${index}`))
+    }))
+    const result = await buildBranchLevels(leaves)
+    expect(result.branchCount).toBe(expected['branchCount'])
+    expect(treeLevelWidths(leafCount)).toEqual(expected['levelWidths'])
+    const rootChildren = expected['rootChildren']
+    if (Array.isArray(rootChildren)) {
+      expect(
+        result.children.map(child => ({
+          childKind: child.childKind,
+          logicalLength: child.logicalLength.toString(),
+          objectHash: hashHex(child.objectHash)
+        }))
+      ).toEqual(rootChildren)
+    }
+    return
+  }
+
   const source = input['source'] as Record<string, unknown> | undefined
   const encoding = source?.['encoding']
   const value = source?.['value']
-  if ((encoding !== 'hex' && encoding !== 'utf8') || typeof value !== 'string') {
+  const repeatByte = source?.['byte']
+  const repeatLength = source?.['length']
+  const encodedSource =
+    (encoding === 'hex' || encoding === 'utf8') && typeof value === 'string'
+      ? Uint8Array.from(Buffer.from(value, encoding))
+      : encoding === 'repeat' &&
+          Number.isSafeInteger(repeatByte) &&
+          Number.isSafeInteger(repeatLength) &&
+          (repeatByte as number) >= 0 &&
+          (repeatByte as number) <= 255 &&
+          (repeatLength as number) >= 0
+        ? new Uint8Array(repeatLength as number).fill(repeatByte as number)
+        : null
+  if (encodedSource == null) {
     throw new Error('storage chirp-v1 vector has an invalid source')
   }
 
@@ -367,7 +415,7 @@ async function dispatchChirpV1(
     throw new Error('storage chirp-v1 vector has an invalid mediaType')
   }
 
-  const sourceBytes = Uint8Array.from(Buffer.from(value, encoding))
+  const sourceBytes = encodedSource
   const blobIdentifiers: string[] = []
   const result = await new CHIRPBuilder().build(sourceBytes, {
     mediaType: mediaTypeValue ?? undefined,
@@ -387,11 +435,23 @@ async function dispatchChirpV1(
 
   if (typeof expected['blobIdentifier'] === 'string') {
     expect(blobIdentifiers).toEqual([expected['blobIdentifier']])
+  } else if (typeof expected['blobCount'] === 'number') {
+    expect(blobIdentifiers).toHaveLength(expected['blobCount'])
   } else if (sourceBytes.byteLength > 0) {
     expect(blobIdentifiers).toEqual([StorageUtils.getURLForHash(Array.from(sha256(sourceBytes)))])
   } else {
     expect(blobIdentifiers).toEqual([])
   }
+}
+
+function treeLevelWidths(leafCount: number): number[] {
+  const widths = [leafCount]
+  let width = leafCount
+  while (width > 256) {
+    width = Math.ceil(width / 256)
+    widths.push(width)
+  }
+  return widths
 }
 
 function hasAuthorizationHeader(input: Record<string, unknown>): boolean {

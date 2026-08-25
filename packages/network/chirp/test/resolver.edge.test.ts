@@ -141,7 +141,6 @@ describe('resolver host and response validation', () => {
     'http-status',
     'empty-body',
     'encoding',
-    'missing-length',
     'invalid-length',
     'declared-too-large',
     'body-too-short',
@@ -157,7 +156,6 @@ describe('resolver host and response validation', () => {
         if (kind === 'http-status') return new Response(null, { status: 404 })
         if (kind === 'empty-body') return new Response(null, { status: 200 })
         if (kind === 'encoding') return objectResponse(rootBytes, { 'Content-Encoding': 'gzip' })
-        if (kind === 'missing-length') return new Response(rootBytes, { status: 200 })
         if (kind === 'invalid-length') {
           return new Response(rootBytes, { status: 200, headers: { 'Content-Length': 'x' } })
         }
@@ -375,7 +373,8 @@ describe('resolver traversal, range, and terminal integrity', () => {
       fetch: objectFetcher(objects)
     })
     await expect(lengthDownloader.download(`chirp://${wrongLength}`)).rejects.toMatchObject({
-      code: 'ERR_CHIRP_LENGTH'
+      code: 'ERR_CHIRP_FETCH',
+      cause: expect.objectContaining({ code: 'ERR_CHIRP_LENGTH' })
     })
   })
 

@@ -1,11 +1,11 @@
 import {
-  CHIRP_FANOUT,
   CHIRP_MAGIC,
   CHIRP_MAJOR_VERSION,
   CHIRP_MAX_EXTENSION_BYTES,
   CHIRP_MAX_NODE_BYTES,
   CHIRP_MEDIA_TYPE_EXTENSION,
-  CHIRP_MINOR_VERSION
+  CHIRP_MINOR_VERSION,
+  CHIRP_V1_MAX_CHILDREN
 } from './constants.js'
 import {
   bigEndian,
@@ -177,10 +177,10 @@ function encodeExtensions(extensions: CHIRPExtension[], nodeKind: 0 | 1): Uint8A
 }
 
 function validateChildren(children: CHIRPChildReference[], root: boolean): void {
-  if (children.length > CHIRP_FANOUT || (!root && children.length === 0)) {
+  if (children.length > CHIRP_V1_MAX_CHILDREN || (!root && children.length === 0)) {
     throw new CHIRPError(
       'ERR_CHIRP_FANOUT',
-      `CHIRP nodes support at most ${CHIRP_FANOUT} children.`
+      `CHIRP v1 nodes support at most ${CHIRP_V1_MAX_CHILDREN} children.`
     )
   }
   for (const child of children) {
@@ -313,7 +313,7 @@ class Reader {
 
   children(): CHIRPChildReference[] {
     const count = this.compactSize()
-    if (count > BigInt(CHIRP_FANOUT)) {
+    if (count > BigInt(CHIRP_V1_MAX_CHILDREN)) {
       throw new CHIRPError('ERR_CHIRP_FANOUT', 'CHIRP node fanout exceeds the v1 limit.')
     }
     const children: CHIRPChildReference[] = []

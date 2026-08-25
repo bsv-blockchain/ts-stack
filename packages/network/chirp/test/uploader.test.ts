@@ -12,7 +12,7 @@ test('uploads bounded objects progressively, skips resumed objects, and commits 
     if (url.endsWith('/chirp/v1/uploads') && method === 'POST') {
       const host = new URL(url).host
       return Response.json(
-        { uploadId: `upload-${host}`, stagingExpiresAt: 2_000_000_000 },
+        { uploadId: `upload-${host}`, stagingExpiresAt: '2000000000' },
         { status: 201 }
       )
     }
@@ -76,7 +76,7 @@ const future = 4_000_000_000
 
 function session(host: string): Response {
   return Response.json(
-    { uploadId: `upload-${new URL(host).host}`, stagingExpiresAt: future },
+    { uploadId: `upload-${new URL(host).host}`, stagingExpiresAt: String(future) },
     { status: 201 }
   )
 }
@@ -156,7 +156,7 @@ test('requires enough well-formed staging sessions', async () => {
       const host = new URL(input).origin
       if (host === 'https://a.example') return session(host)
       if (host === 'https://b.example') {
-        return Response.json({ uploadId: 7, stagingExpiresAt: 'bad' }, { status: 201 })
+        return Response.json({ uploadId: 'upload-b', stagingExpiresAt: future }, { status: 201 })
       }
       return new Response(null, { status: 400 })
     }
@@ -177,12 +177,12 @@ test('rejects mismatched, expired, foreign, malformed, and duplicate checkpoints
     retentionSeconds: '60',
     logicalLength: '1',
     sessions: [
-      { host: 'https://host.example', uploadId: 'one', stagingExpiresAt: future },
-      { host: 'https://host.example/', uploadId: 'duplicate', stagingExpiresAt: future },
-      { host: 'https://foreign.example', uploadId: 'foreign', stagingExpiresAt: future },
-      { host: 'not a URL', uploadId: 'invalid', stagingExpiresAt: future },
-      { host: 'https://host.example', uploadId: '', stagingExpiresAt: future },
-      { host: 'https://host.example', uploadId: 'expired', stagingExpiresAt: 1 }
+      { host: 'https://host.example', uploadId: 'one', stagingExpiresAt: String(future) },
+      { host: 'https://host.example/', uploadId: 'duplicate', stagingExpiresAt: String(future) },
+      { host: 'https://foreign.example', uploadId: 'foreign', stagingExpiresAt: String(future) },
+      { host: 'not a URL', uploadId: 'invalid', stagingExpiresAt: String(future) },
+      { host: 'https://host.example', uploadId: '', stagingExpiresAt: String(future) },
+      { host: 'https://host.example', uploadId: 'expired', stagingExpiresAt: '1' }
     ]
   }
   for (const resume of [

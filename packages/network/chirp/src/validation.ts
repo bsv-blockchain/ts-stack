@@ -21,6 +21,7 @@ export interface CHIRPValidationOptions {
   maxDepth?: number
   maxObjects?: number
   maxLogicalLength?: bigint
+  maxObjectBytes?: number
 }
 
 export async function validateCHIRPClosure(
@@ -34,6 +35,7 @@ export async function validateCHIRPClosure(
   const maxDepth = options.maxDepth ?? CHIRP_MAX_DEPTH
   const maxObjects = options.maxObjects ?? 100_000
   const maxLogicalLength = options.maxLogicalLength ?? 0xffffffffffffffffn
+  const maxObjectBytes = options.maxObjectBytes ?? CHIRP_CHUNK_SIZE
   const rootBytes = await loadBounded(loadObject, rootIdentifier, CHIRP_MAX_NODE_BYTES)
   verifyObjectBytes(rootIdentifier, rootBytes)
   const decoded = decodeCHIRPNode(rootBytes)
@@ -50,18 +52,14 @@ export async function validateCHIRPClosure(
   if (root.logicalLength > 0n && root.children.length === 0) {
     throw new CHIRPError('ERR_CHIRP_EMPTY', 'A non-empty CHIRP root must contain children.')
   }
-  if (root.children.some(child => child.childKind !== root.children[0]?.childKind)) {
-    throw new CHIRPError('ERR_CHIRP_MIXED_ROOT', 'All CHIRP root children must have the same kind.')
-  }
 
   const closure = new Set<string>([rootIdentifier])
-  const nodeCache = new Map<string, CHIRPBranchNode>()
   const nodeIdentifiers = new Set<string>([rootIdentifier])
-  const blobCache = new Map<string, Uint8Array>()
   const ancestry = new Set<string>()
   const leaves: CHIRPChildReference[] = []
   const leafDepths = new Set<number>()
   const contentHasher = createSHA256()
+  let referenceCount = 0
 
   const countObject = (identifier: string): void => {
     closure.add(identifier)
@@ -74,23 +72,29 @@ export async function validateCHIRPClosure(
   }
 
   const visit = async (reference: CHIRPChildReference, depth: number): Promise<void> => {
+    referenceCount += 1
+    if (referenceCount > maxObjects) {
+      throw new CHIRPError(
+        'ERR_CHIRP_REFERENCE_LIMIT',
+        'CHIRP closure exceeds the local reference limit.'
+      )
+    }
     if (depth > maxDepth) {
       throw new CHIRPError('ERR_CHIRP_DEPTH', 'CHIRP traversal exceeds the v1 depth limit.')
     }
     const identifier = objectIdentifierForHash(reference.objectHash)
     countObject(identifier)
     if (reference.childKind === 0) {
-      let bytes = blobCache.get(identifier)
-      if (bytes == null) {
-        const maximum = Number(
-          reference.logicalLength > BigInt(CHIRP_CHUNK_SIZE)
-            ? BigInt(CHIRP_CHUNK_SIZE) + 1n
-            : reference.logicalLength
+      const maximum =
+        root.chunkingProfile === CHIRP_PROFILE_FIXED_4_MIB ? CHIRP_CHUNK_SIZE : maxObjectBytes
+      if (reference.logicalLength > BigInt(maximum)) {
+        throw new CHIRPError(
+          'ERR_CHIRP_OBJECT_SIZE',
+          'CHIRP blob reference exceeds its permitted per-object size.'
         )
-        bytes = await loadBounded(loadObject, identifier, maximum)
-        verifyObjectBytes(identifier, bytes)
-        blobCache.set(identifier, bytes)
       }
+      const bytes = await loadBounded(loadObject, identifier, maximum)
+      verifyObjectBytes(identifier, bytes)
       if (BigInt(bytes.byteLength) !== reference.logicalLength) {
         throw new CHIRPError('ERR_CHIRP_LENGTH', 'Blob length does not match its child reference.')
       }
@@ -103,21 +107,17 @@ export async function validateCHIRPClosure(
     if (ancestry.has(identifier)) {
       throw new CHIRPError('ERR_CHIRP_CYCLE', 'CHIRP graph contains an active-ancestry cycle.')
     }
-    let branch = nodeCache.get(identifier)
-    if (branch == null) {
-      const bytes = await loadBounded(loadObject, identifier, CHIRP_MAX_NODE_BYTES)
-      verifyObjectBytes(identifier, bytes)
-      const node = decodeCHIRPNode(bytes)
-      if (node.nodeKind !== 1) {
-        throw new CHIRPError(
-          'ERR_CHIRP_BRANCH_KIND',
-          'Branch reference resolved to a non-branch node.'
-        )
-      }
-      branch = node
-      nodeCache.set(identifier, branch)
-      nodeIdentifiers.add(identifier)
+    const bytes = await loadBounded(loadObject, identifier, CHIRP_MAX_NODE_BYTES)
+    verifyObjectBytes(identifier, bytes)
+    const node = decodeCHIRPNode(bytes)
+    if (node.nodeKind !== 1) {
+      throw new CHIRPError(
+        'ERR_CHIRP_BRANCH_KIND',
+        'Branch reference resolved to a non-branch node.'
+      )
     }
+    const branch = node
+    nodeIdentifiers.add(identifier)
     if (branch.logicalLength !== reference.logicalLength) {
       throw new CHIRPError('ERR_CHIRP_LENGTH', 'Branch length does not match its child reference.')
     }
@@ -130,9 +130,6 @@ export async function validateCHIRPClosure(
   }
 
   for (const child of root.children) await visit(child, 1)
-  if (leafDepths.size > 1) {
-    throw new CHIRPError('ERR_CHIRP_TREE_SHAPE', 'Profile 1 leaves must have equal depth.')
-  }
   const actualContentHash = contentHasher.digest()
   if (!equalBytes(actualContentHash, root.contentHash)) {
     throw new CHIRPError(
@@ -146,14 +143,7 @@ export async function validateCHIRPClosure(
   }
 
   if (root.chunkingProfile === CHIRP_PROFILE_FIXED_4_MIB) {
-    validateProfileOneLeaves(leaves)
-    const canonical = await buildBranchLevels(leaves)
-    if (!equalReferences(canonical.children, root.children)) {
-      throw new CHIRPError(
-        'ERR_CHIRP_TREE_SHAPE',
-        'CHIRP tree is not canonical profile 1 construction.'
-      )
-    }
+    await validateProfileOneConstruction(root, leaves, leafDepths)
   }
 
   return {
@@ -165,6 +155,30 @@ export async function validateCHIRPClosure(
     logicalLength: root.logicalLength,
     contentHash: root.contentHash,
     profileCanonical: root.chunkingProfile === CHIRP_PROFILE_FIXED_4_MIB
+  }
+}
+
+export async function validateProfileOneConstruction(
+  root: CHIRPRootNode,
+  leaves: CHIRPChildReference[],
+  leafDepths: ReadonlySet<number>
+): Promise<void> {
+  if (root.children.some(child => child.childKind !== root.children[0]?.childKind)) {
+    throw new CHIRPError(
+      'ERR_CHIRP_MIXED_ROOT',
+      'All profile 1 root children must have the same kind.'
+    )
+  }
+  if (leafDepths.size > 1) {
+    throw new CHIRPError('ERR_CHIRP_TREE_SHAPE', 'Profile 1 leaves must have equal depth.')
+  }
+  validateProfileOneLeaves(leaves)
+  const canonical = await buildBranchLevels(leaves)
+  if (!equalReferences(canonical.children, root.children)) {
+    throw new CHIRPError(
+      'ERR_CHIRP_TREE_SHAPE',
+      'CHIRP tree is not canonical profile 1 construction.'
+    )
   }
 }
 

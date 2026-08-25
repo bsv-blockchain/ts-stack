@@ -27,7 +27,21 @@ export const CHIRP_OPENAPI_DOCUMENT = {
           }
         },
         responses: {
-          '201': { description: 'Staging session created' },
+          '201': {
+            description: 'Staging session created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['uploadId', 'stagingExpiresAt'],
+                  properties: {
+                    uploadId: { type: 'string' },
+                    stagingExpiresAt: { type: 'string', pattern: '^[1-9][0-9]*$' }
+                  }
+                }
+              }
+            }
+          },
           '400': { description: 'Invalid session request' }
         }
       }

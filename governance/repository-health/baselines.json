@@ -14,9 +14,9 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6473,
+    "passed": 6479,
     "skipped": 211,
-    "total": 6684,
+    "total": 6690,
     "vectorFiles": 76,
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
   },

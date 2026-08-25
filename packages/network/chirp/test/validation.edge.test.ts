@@ -70,7 +70,7 @@ function loader(objects: Objects): (identifier: string) => Promise<Uint8Array> {
 }
 
 describe('closure validation limits and shape', () => {
-  test('rejects branch roots, logical limits, empty children, and mixed root kinds', async () => {
+  test('rejects branch roots, logical limits, and empty children', async () => {
     const objects = new Map<string, Uint8Array>()
     const blob = Uint8Array.of(1)
     put(objects, blob)
@@ -93,8 +93,9 @@ describe('closure validation limits and shape', () => {
     })
 
     const mixed = root(objects, [reference(blob, 0), branchNode.reference], Uint8Array.of(1, 1))
-    await expect(validateCHIRPClosure(mixed, loader(objects))).rejects.toMatchObject({
-      code: 'ERR_CHIRP_MIXED_ROOT'
+    await expect(validateCHIRPClosure(mixed, loader(objects))).resolves.toMatchObject({
+      logicalLength: 2n,
+      profileCanonical: false
     })
   })
 
@@ -158,7 +159,7 @@ describe('closure validation limits and shape', () => {
     put(objects, oversized)
     const oversizedFinal = root(objects, [reference(oversized, 0)], oversized, 1)
     await expect(validateCHIRPClosure(oversizedFinal, loader(objects))).rejects.toMatchObject({
-      code: 'ERR_CHIRP_CHUNK_SIZE'
+      code: 'ERR_CHIRP_OBJECT_SIZE'
     })
   })
 
@@ -192,7 +193,7 @@ describe('closure validation limits and shape', () => {
     })
   })
 
-  test('reuses duplicate branch and blob objects without weakening logical verification', async () => {
+  test('streams duplicate branch and blob occurrences without retaining their bodies', async () => {
     const objects = new Map<string, Uint8Array>()
     const blob = Uint8Array.of(4)
     put(objects, blob)
@@ -204,11 +205,11 @@ describe('closure validation limits and shape', () => {
       return await loader(objects)(objectIdentifier)
     })
     expect(validated.logicalLength).toBe(2n)
-    expect(loads.get(objectIdentifierForBytes(shared.bytes))).toBe(1)
-    expect(loads.get(objectIdentifierForBytes(blob))).toBe(1)
+    expect(loads.get(objectIdentifierForBytes(shared.bytes))).toBe(2)
+    expect(loads.get(objectIdentifierForBytes(blob))).toBe(2)
   })
 
-  test('rejects unequal leaf depth and non-canonical profile-one branches', async () => {
+  test('allows unknown-profile shapes but rejects non-canonical profile-one branches', async () => {
     const objects = new Map<string, Uint8Array>()
     const first = Uint8Array.of(5)
     const second = Uint8Array.of(6)
@@ -218,14 +219,28 @@ describe('closure validation limits and shape', () => {
     const inner = branch(objects, [reference(second, 0)])
     const deep = branch(objects, [inner.reference])
     const unequal = root(objects, [shallow.reference, deep.reference], Uint8Array.of(5, 6))
-    await expect(validateCHIRPClosure(unequal, loader(objects))).rejects.toMatchObject({
-      code: 'ERR_CHIRP_TREE_SHAPE'
+    await expect(validateCHIRPClosure(unequal, loader(objects))).resolves.toMatchObject({
+      profileCanonical: false
     })
 
     const nonCanonical = root(objects, [shallow.reference], first, 1)
     await expect(validateCHIRPClosure(nonCanonical, loader(objects))).rejects.toMatchObject({
       code: 'ERR_CHIRP_TREE_SHAPE'
     })
+  })
+
+  test('bounds repeated references independently of unique object count', async () => {
+    const objects = new Map<string, Uint8Array>()
+    const blob = Uint8Array.of(7)
+    put(objects, blob)
+    const identifier = root(
+      objects,
+      [reference(blob, 0), reference(blob, 0), reference(blob, 0)],
+      Uint8Array.of(7, 7, 7)
+    )
+    await expect(
+      validateCHIRPClosure(identifier, loader(objects), { maxObjects: 2 })
+    ).rejects.toMatchObject({ code: 'ERR_CHIRP_REFERENCE_LIMIT' })
   })
 
   test('accepts the canonical empty profile-one closure', async () => {

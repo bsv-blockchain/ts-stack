@@ -74,7 +74,10 @@ for await (const chunk of downloader.stream(chirpURL, {
 
 Each complete blob is hash-verified before release. A complete stream also
 checks root `logicalLength` and `contentHash` at termination. Use `download()`
-for an atomic bounded `Uint8Array` result.
+for an atomic bounded `Uint8Array` result. Object responses may stream without
+`Content-Length`; when the header is present it must match the verified
+reference. Readers always enforce the referenced blob length and a finite node
+or future-profile object bound.
 
 ## CLI
 
@@ -103,14 +106,17 @@ Storage hosts must use HTTPS unless `allowInsecureHTTP` (or the CLI's
   `tm_uhrp` / `ls_uhrp`.
 - Default atomic downloads are limited to 512 MiB. Streaming, object count,
   concurrency, retry, depth, response size, and cache sizes are bounded and
-  configurable.
+  configurable. Profile 1 blobs are always capped at 4 MiB; `maxObjectBytes`
+  sets the absolute local ceiling for blobs from unknown future profiles.
 - Object requests and UHRP resolution have bounded timeouts. Browser clients
   inherit the browser network boundary; server-side consumers can provide a
   `urlPolicy`, and the CLI rejects DNS results outside public address space by
   default. `--allow-private-hosts` is an explicit local-development override.
 - Resolution of a future chunking profile remains hash-, length-, and
   `contentHash`-verified, while `profileCanonical` reports `false` until the
-  profile-specific construction is understood.
+  profile-specific construction is understood. Profile 1 reports canonical
+  only after a complete traversal validates its chunk boundaries and tree
+  shape; partial-range downloads conservatively report `false`.
 - `mediaType` is untrusted advisory metadata. CHIRP integrity is not author
   authenticity or permission to execute content.
 

@@ -1,4 +1,4 @@
-import { CHIRP_FANOUT } from './constants.js'
+import { CHIRP_PROFILE_1_FANOUT } from './constants.js'
 import { encodeBranchNode, sumLogicalLength } from './codec.js'
 import { objectIdentifierForBytes, sha256 } from './hash.js'
 import type { CHIRPChildReference, CHIRPObjectSink } from './types.js'
@@ -9,10 +9,10 @@ export async function buildBranchLevels(
 ): Promise<{ children: CHIRPChildReference[]; branchCount: number }> {
   let references = leaves.map(cloneReference)
   let branchCount = 0
-  while (references.length > CHIRP_FANOUT) {
+  while (references.length > CHIRP_PROFILE_1_FANOUT) {
     const next: CHIRPChildReference[] = []
-    for (let offset = 0; offset < references.length; offset += CHIRP_FANOUT) {
-      const children = references.slice(offset, offset + CHIRP_FANOUT)
+    for (let offset = 0; offset < references.length; offset += CHIRP_PROFILE_1_FANOUT) {
+      const children = references.slice(offset, offset + CHIRP_PROFILE_1_FANOUT)
       const logicalLength = sumLogicalLength(children)
       const bytes = encodeBranchNode({ logicalLength, children, extensions: [] })
       const objectHash = sha256(bytes)

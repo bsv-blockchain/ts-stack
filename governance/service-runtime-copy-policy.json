@@ -87,6 +87,10 @@
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/contracts.ts"]
     },
     {
+      "canonicalSource": "infra/uhrp-server-basic/src/chirp/commitIndex.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/commitIndex.ts"]
+    },
+    {
       "canonicalSource": "infra/uhrp-server-basic/src/chirp/routes.ts",
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/routes.ts"]
     },

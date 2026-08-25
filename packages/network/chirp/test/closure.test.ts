@@ -58,6 +58,7 @@ describe('closure validation', () => {
     })
     expect(validated.logicalLength).toBe(BigInt(source.byteLength))
     expect(validated.closure).toHaveLength(3)
+    expect(validated.profileCanonical).toBe(true)
   })
 
   test('rejects a missing closure object without advertising partial hosting', async () => {
@@ -102,5 +103,62 @@ describe('closure validation', () => {
       throw new Error('missing')
     })
     expect(validated.profileCanonical).toBe(false)
+  })
+
+  test('re-reads repeated blobs instead of retaining the closure content in memory', async () => {
+    const blob = new TextEncoder().encode('repeat')
+    const content = new Uint8Array(blob.byteLength * 2)
+    content.set(blob)
+    content.set(blob, blob.byteLength)
+    const reference = {
+      childKind: 0 as const,
+      logicalLength: BigInt(blob.byteLength),
+      objectHash: sha256(blob)
+    }
+    const rootBytes = encodeRootNode({
+      chunkingProfile: 2,
+      logicalLength: BigInt(content.byteLength),
+      contentHash: sha256(content),
+      children: [reference, reference],
+      extensions: []
+    })
+    const rootIdentifier = objectIdentifierForBytes(rootBytes)
+    const blobIdentifier = objectIdentifierForBytes(blob)
+    let blobLoads = 0
+    const validated = await validateCHIRPClosure(rootIdentifier, async identifier => {
+      if (identifier === rootIdentifier) return rootBytes
+      if (identifier === blobIdentifier) {
+        blobLoads += 1
+        return blob
+      }
+      throw new Error('missing')
+    })
+    expect(validated.closure).toHaveLength(2)
+    expect(blobLoads).toBe(2)
+  })
+
+  test('bounds future-profile blob bodies with an explicit local ceiling', async () => {
+    const blob = new Uint8Array(65).fill(0x03)
+    const rootBytes = encodeRootNode({
+      chunkingProfile: 2,
+      logicalLength: BigInt(blob.byteLength),
+      contentHash: sha256(blob),
+      children: [
+        {
+          childKind: 0,
+          logicalLength: BigInt(blob.byteLength),
+          objectHash: sha256(blob)
+        }
+      ],
+      extensions: []
+    })
+    const rootIdentifier = objectIdentifierForBytes(rootBytes)
+    await expect(
+      validateCHIRPClosure(
+        rootIdentifier,
+        async identifier => (identifier === rootIdentifier ? rootBytes : blob),
+        { maxObjectBytes: 64 }
+      )
+    ).rejects.toMatchObject({ code: 'ERR_CHIRP_OBJECT_SIZE' })
   })
 })

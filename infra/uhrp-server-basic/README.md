@@ -47,4 +47,8 @@ its complete closure validates, and `/renew` extends the whole closure lease.
 Set `HOSTING_DOMAIN` to the public HTTPS origin and persist `CHIRP_DATA_DIR`
 (the image uses `/data/chirp`). Staging lifetime, GC interval, closure count,
 logical length, object size, and retention are bounded by the `CHIRP_*`
-resource variables. Existing UHRP routes and storage behavior are unchanged.
+resource variables. Public object authorization uses a bounded in-memory
+commit-membership index; tune `CHIRP_COMMIT_CACHE_ROOTS`,
+`CHIRP_COMMIT_CACHE_OBJECTS`, and `CHIRP_COMMIT_CACHE_SECONDS` for the
+deployment's root cardinality and memory budget. Existing UHRP routes and
+storage behavior are unchanged.

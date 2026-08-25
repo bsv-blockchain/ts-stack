@@ -18,7 +18,6 @@ const MAX_OBJECT_BYTES = readBodyLimitBytes('CHIRP_OBJECT', 4_194_304)
 const MAX_LOGICAL_BYTES = BigInt(unboundedResourceLimit('MAX_LOGICAL_BYTES', 11_000_000_000))
 const MAX_OBJECTS = unboundedResourceLimit('MAX_OBJECTS', 100_000)
 const MAX_RETENTION_SECONDS = unboundedResourceLimit('MAX_RETENTION_SECONDS', 31_536_000)
-const STAGING_SECONDS = readResourceLimit('CHIRP', 'STAGING_SECONDS', 86_400)
 
 interface AuthenticatedRequest extends Request {
   auth: { identityKey?: string }
@@ -97,7 +96,7 @@ async function createSessionHandler(req: AuthenticatedRequest, res: Response): P
   const session = await getChirpStore().createSession(identityKey, retentionSeconds, logicalLength)
   return res.status(201).json({
     uploadId: session.uploadId,
-    stagingExpiresAt: session.stagingExpiresAt
+    stagingExpiresAt: String(session.stagingExpiresAt)
   })
 }
 
@@ -181,7 +180,11 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
       const validated = await validateCHIRPClosure(
         rootIdentifier,
         async identifier => await store.readStagedObject(uploadId, identityKey, identifier),
-        { maxLogicalLength: MAX_LOGICAL_BYTES, maxObjects: MAX_OBJECTS }
+        {
+          maxLogicalLength: MAX_LOGICAL_BYTES,
+          maxObjects: MAX_OBJECTS,
+          maxObjectBytes: MAX_OBJECT_BYTES
+        }
       )
       if (
         session.logicalLength != null &&
@@ -356,5 +359,3 @@ function unboundedResourceLimit(name: string, fallback: number): number {
   const value = readResourceLimit('CHIRP', name, fallback)
   return value === -1 ? Number.MAX_SAFE_INTEGER : value
 }
-
-export const chirpStagingSeconds = STAGING_SECONDS

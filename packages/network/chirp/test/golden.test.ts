@@ -8,7 +8,8 @@ import {
   concat,
   decodeCHIRPNode,
   hashHex,
-  objectIdentifierForBytes
+  objectIdentifierForBytes,
+  sha256
 } from '../src/index.js'
 import type { CHIRPChildReference } from '../src/types.js'
 
@@ -19,16 +20,24 @@ const vectors = JSON.parse(readFileSync(vectorPath, 'utf8')) as {
   vectors: Array<{
     id: string
     input: {
-      source: { encoding: 'hex' | 'utf8'; value: string }
-      mediaType: string | null
+      source?:
+        | { encoding: 'hex' | 'utf8'; value: string }
+        | { encoding: 'repeat'; byte: number; length: number }
+      mediaType?: string | null
+      leafCount?: number
+      logicalLength?: string
+      hashSeed?: string
     }
     expected: {
-      logicalLength: string
-      contentHash: string
-      rootBytes: string
-      rootHash: string
-      rootIdentifier: string
-      chirpURL: string
+      logicalLength?: string
+      contentHash?: string
+      rootBytes?: string
+      rootHash?: string
+      rootIdentifier?: string
+      chirpURL?: string
+      branchCount?: number
+      levelWidths?: number[]
+      rootChildren?: Array<{ childKind: number; logicalLength: string; objectHash: string }>
     }
   }>
   invalid: Array<{ name: string; rootBytes: string; errorCode: string }>
@@ -36,10 +45,38 @@ const vectors = JSON.parse(readFileSync(vectorPath, 'utf8')) as {
 
 describe('portable BRC-167 vectors', () => {
   test.each(vectors.vectors)('$id', async vector => {
+    if (vector.input.leafCount != null) {
+      const encoder = new TextEncoder()
+      const leaves: CHIRPChildReference[] = Array.from(
+        { length: vector.input.leafCount },
+        (_, index) => ({
+          childKind: 0,
+          logicalLength: BigInt(vector.input.logicalLength as string),
+          objectHash: sha256(encoder.encode(`${vector.input.hashSeed}:${index}`))
+        })
+      )
+      const result = await buildBranchLevels(leaves)
+      expect(result.branchCount).toBe(vector.expected.branchCount)
+      expect(treeLevelWidths(vector.input.leafCount)).toEqual(vector.expected.levelWidths)
+      if (vector.expected.rootChildren != null) {
+        expect(
+          result.children.map(child => ({
+            childKind: child.childKind,
+            logicalLength: child.logicalLength.toString(),
+            objectHash: hashHex(child.objectHash)
+          }))
+        ).toEqual(vector.expected.rootChildren)
+      }
+      return
+    }
+    const sourceDescription = vector.input.source
+    if (sourceDescription == null) throw new Error('Vector source is missing.')
     const source =
-      vector.input.source.encoding === 'hex'
-        ? Uint8Array.from(Buffer.from(vector.input.source.value, 'hex'))
-        : new TextEncoder().encode(vector.input.source.value)
+      sourceDescription.encoding === 'hex'
+        ? Uint8Array.from(Buffer.from(sourceDescription.value, 'hex'))
+        : sourceDescription.encoding === 'utf8'
+          ? new TextEncoder().encode(sourceDescription.value)
+          : new Uint8Array(sourceDescription.length).fill(sourceDescription.byte)
     const result = await new CHIRPBuilder().build(source, {
       mediaType: vector.input.mediaType ?? undefined
     })
@@ -63,6 +100,16 @@ describe('portable BRC-167 vectors', () => {
     }
   })
 })
+
+function treeLevelWidths(leafCount: number): number[] {
+  const widths = [leafCount]
+  let width = leafCount
+  while (width > 256) {
+    width = Math.ceil(width / 256)
+    widths.push(width)
+  }
+  return widths
+}
 
 test('257 leaves produce two canonical branches beneath the root', async () => {
   const leaves: CHIRPChildReference[] = Array.from({ length: 257 }, (_, index) => ({

@@ -2,6 +2,7 @@ import { Storage, type Bucket, type File } from '@google-cloud/storage'
 import { createHash, randomUUID } from 'node:crypto'
 import { objectIdentifierForHash } from './core/hash'
 import { CHIRPError } from './core/errors'
+import { ChirpCommitIndex } from './commitIndex'
 import type {
   ChirpCommitRecord,
   ChirpObjectRead,
@@ -17,10 +18,18 @@ const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const STAGING_SECONDS = positiveEnvironment('CHIRP_STAGING_SECONDS', 86_400)
 const GC_INTERVAL_MS = positiveEnvironment('CHIRP_GC_INTERVAL_MS', 15 * 60 * 1000)
 const GC_MAX_ENTRIES = positiveEnvironment('CHIRP_GC_MAX_ENTRIES', 100_000)
+const COMMIT_CACHE_ROOTS = positiveEnvironment('CHIRP_COMMIT_CACHE_ROOTS', 128)
+const COMMIT_CACHE_OBJECTS = positiveEnvironment('CHIRP_COMMIT_CACHE_OBJECTS', 200_000)
+const COMMIT_CACHE_SECONDS = positiveEnvironment('CHIRP_COMMIT_CACHE_SECONDS', 30)
 const LOCK_SECONDS = 300
 
 class CloudBucketChirpStore implements ChirpStore {
   private readonly storage: Storage
+  private readonly commitIndex = new ChirpCommitIndex(
+    COMMIT_CACHE_ROOTS,
+    COMMIT_CACHE_OBJECTS,
+    COMMIT_CACHE_SECONDS
+  )
 
   constructor() {
     const credentials = process.env.GCP_STORAGE_CREDS
@@ -176,6 +185,7 @@ class CloudBucketChirpStore implements ChirpStore {
       await extendCustomTime(object, record.expiryTime)
     })
     await this.writeJSON(rootName(record.rootIdentifier), record, record.expiryTime)
+    this.commitIndex.invalidate(record.rootIdentifier)
   }
 
   async activateCommit(rootIdentifier: string): Promise<void> {
@@ -183,6 +193,7 @@ class CloudBucketChirpStore implements ChirpStore {
     if (record == null) throw new CHIRPError('ERR_CHIRP_COMMIT', 'Missing pending commit.')
     record.state = 'active'
     await this.writeJSON(rootName(rootIdentifier), record, record.expiryTime)
+    this.commitIndex.set(record)
   }
 
   async abortCommit(rootIdentifier: string): Promise<void> {
@@ -190,17 +201,23 @@ class CloudBucketChirpStore implements ChirpStore {
     if (record?.state === 'pending') {
       await this.file(rootName(rootIdentifier)).delete({ ignoreNotFound: true })
     }
+    this.commitIndex.invalidate(rootIdentifier)
   }
 
   async getCommittedObject(
     rootIdentifier: string,
     objectIdentifier: string
   ): Promise<ChirpObjectRead | null> {
-    const record = await this.getCommit(rootIdentifier)
+    const membership = await this.commitIndex.get(
+      rootIdentifier,
+      async () => await this.getCommit(rootIdentifier)
+    )
+    const record = membership?.record
     if (
       record?.state !== 'active' ||
       record.expiryTime <= Math.floor(Date.now() / 1000) ||
-      !record.closure.includes(objectIdentifier)
+      membership == null ||
+      !membership.closure.has(objectIdentifier)
     )
       return null
     const file = this.file(objectName(objectIdentifier))
@@ -209,7 +226,7 @@ class CloudBucketChirpStore implements ChirpStore {
     if (!Number.isSafeInteger(length) || length < 0) return null
     return {
       length,
-      contentType: record.nodeIdentifiers.includes(objectIdentifier)
+      contentType: membership.nodeIdentifiers.has(objectIdentifier)
         ? 'application/vnd.bsv.chirp-node'
         : 'application/octet-stream',
       expiryTime: record.expiryTime,
@@ -217,14 +234,18 @@ class CloudBucketChirpStore implements ChirpStore {
     }
   }
 
-  async extendRootLease(rootIdentifier: string, expiryTime: number): Promise<void> {
+  async extendRootLease(rootIdentifier: string, expiryTime: number): Promise<boolean> {
     const record = await this.getCommit(rootIdentifier)
-    if (record?.state !== 'active' || expiryTime <= record.expiryTime) return
-    record.expiryTime = expiryTime
-    await mapLimited(record.closure, 16, async identifier => {
-      await extendCustomTime(this.file(objectName(identifier)), expiryTime)
-    })
-    await this.writeJSON(rootName(rootIdentifier), record, expiryTime)
+    if (record?.state !== 'active') return false
+    if (expiryTime > record.expiryTime) {
+      record.expiryTime = expiryTime
+      await mapLimited(record.closure, 16, async identifier => {
+        await extendCustomTime(this.file(objectName(identifier)), expiryTime)
+      })
+      await this.writeJSON(rootName(rootIdentifier), record, expiryTime)
+      this.commitIndex.set(record)
+    }
+    return true
   }
 
   async collectGarbage(): Promise<void> {

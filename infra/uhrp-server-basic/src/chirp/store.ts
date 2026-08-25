@@ -3,6 +3,7 @@ import { createReadStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { objectIdentifierForHash } from './core/hash'
 import { CHIRPError } from './core/errors'
+import { ChirpCommitIndex } from './commitIndex'
 import type {
   ChirpCommitRecord,
   ChirpObjectRead,
@@ -21,8 +22,17 @@ const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const STAGING_SECONDS = positiveEnvironment('CHIRP_STAGING_SECONDS', 86_400)
 const GC_INTERVAL_MS = positiveEnvironment('CHIRP_GC_INTERVAL_MS', 15 * 60 * 1000)
 const GC_MAX_ENTRIES = positiveEnvironment('CHIRP_GC_MAX_ENTRIES', 100_000)
+const COMMIT_CACHE_ROOTS = positiveEnvironment('CHIRP_COMMIT_CACHE_ROOTS', 128)
+const COMMIT_CACHE_OBJECTS = positiveEnvironment('CHIRP_COMMIT_CACHE_OBJECTS', 200_000)
+const COMMIT_CACHE_SECONDS = positiveEnvironment('CHIRP_COMMIT_CACHE_SECONDS', 30)
 
 class FilesystemChirpStore implements ChirpStore {
+  private readonly commitIndex = new ChirpCommitIndex(
+    COMMIT_CACHE_ROOTS,
+    COMMIT_CACHE_OBJECTS,
+    COMMIT_CACHE_SECONDS
+  )
+
   async createSession(
     identityKey: string,
     retentionSeconds: string,
@@ -186,6 +196,7 @@ class FilesystemChirpStore implements ChirpStore {
     const recordPath = rootRecordPath(record.rootIdentifier)
     if (recordPath == null) throw new CHIRPError('ERR_CHIRP_IDENTIFIER', 'Invalid root identifier.')
     await writeJSONAtomic(recordPath, record)
+    this.commitIndex.invalidate(record.rootIdentifier)
   }
 
   async activateCommit(rootIdentifier: string): Promise<void> {
@@ -195,23 +206,30 @@ class FilesystemChirpStore implements ChirpStore {
       throw new CHIRPError('ERR_CHIRP_COMMIT', 'Missing pending commit.')
     record.state = 'active'
     await writeJSONAtomic(recordPath, record)
+    this.commitIndex.set(record)
   }
 
   async abortCommit(rootIdentifier: string): Promise<void> {
     const record = await this.getCommit(rootIdentifier)
     const recordPath = rootRecordPath(rootIdentifier)
     if (record?.state === 'pending' && recordPath != null) await fs.rm(recordPath, { force: true })
+    this.commitIndex.invalidate(rootIdentifier)
   }
 
   async getCommittedObject(
     rootIdentifier: string,
     objectIdentifier: string
   ): Promise<ChirpObjectRead | null> {
-    const record = await this.getCommit(rootIdentifier)
+    const membership = await this.commitIndex.get(
+      rootIdentifier,
+      async () => await this.getCommit(rootIdentifier)
+    )
+    const record = membership?.record
     if (
       record?.state !== 'active' ||
       record.expiryTime <= Math.floor(Date.now() / 1000) ||
-      !record.closure.includes(objectIdentifier)
+      membership == null ||
+      !membership.closure.has(objectIdentifier)
     )
       return null
     const objectPath = globalObjectPath(objectIdentifier)
@@ -220,7 +238,7 @@ class FilesystemChirpStore implements ChirpStore {
     if (!stat?.isFile()) return null
     return {
       length: stat.size,
-      contentType: record.nodeIdentifiers.includes(objectIdentifier)
+      contentType: membership.nodeIdentifiers.has(objectIdentifier)
         ? 'application/vnd.bsv.chirp-node'
         : 'application/octet-stream',
       expiryTime: record.expiryTime,
@@ -228,14 +246,16 @@ class FilesystemChirpStore implements ChirpStore {
     }
   }
 
-  async extendRootLease(rootIdentifier: string, expiryTime: number): Promise<void> {
+  async extendRootLease(rootIdentifier: string, expiryTime: number): Promise<boolean> {
     const record = await this.getCommit(rootIdentifier)
     const recordPath = rootRecordPath(rootIdentifier)
-    if (record == null || recordPath == null || record.state !== 'active') return
+    if (record == null || recordPath == null || record.state !== 'active') return false
     if (expiryTime > record.expiryTime) {
       record.expiryTime = expiryTime
       await writeJSONAtomic(recordPath, record)
+      this.commitIndex.set(record)
     }
+    return true
   }
 
   async collectGarbage(): Promise<void> {
