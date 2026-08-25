@@ -227,16 +227,7 @@ export class CHIRPDownloader {
         }
       }
 
-      if (
-        fullTraversal &&
-        (streamedLength !== context.root.logicalLength ||
-          !equalBytes(contentHasher.digest(), context.root.contentHash))
-      ) {
-        throw new CHIRPError(
-          'ERR_CHIRP_CONTENT_HASH',
-          'Complete CHIRP stream failed contentHash validation.'
-        )
-      }
+      verifyCompleteStream(fullTraversal, context.root, streamedLength, contentHasher.digest())
     } finally {
       work.dispose()
     }
@@ -472,6 +463,23 @@ async function readVerifiedResponse(
   const bytes = await readBodyBounded(response.body, headerLength, maximumBytes, expectedBytes)
   verifyObjectBytes(objectIdentifier, bytes)
   return bytes
+}
+
+function verifyCompleteStream(
+  fullTraversal: boolean,
+  root: CHIRPRootNode,
+  streamedLength: bigint,
+  contentHash: Uint8Array
+): void {
+  if (
+    fullTraversal &&
+    (streamedLength !== root.logicalLength || !equalBytes(contentHash, root.contentHash))
+  ) {
+    throw new CHIRPError(
+      'ERR_CHIRP_CONTENT_HASH',
+      'Complete CHIRP stream failed contentHash validation.'
+    )
+  }
 }
 
 function verifiedCachedObject(
