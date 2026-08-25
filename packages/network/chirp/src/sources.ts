@@ -20,12 +20,7 @@ export async function* toAsyncBytes(source: CHIRPByteSource): AsyncGenerator<Uin
     return
   }
   if (isAsyncIterable(source)) {
-    for await (const chunk of source) {
-      if (!(chunk instanceof Uint8Array)) {
-        throw new CHIRPError('ERR_CHIRP_SOURCE', 'CHIRP sources must yield Uint8Array chunks.')
-      }
-      if (chunk.byteLength > 0) yield chunk
-    }
+    yield* asyncIterableBytes(source)
     return
   }
   throw new CHIRPError('ERR_CHIRP_SOURCE', 'Unsupported CHIRP byte source.')
@@ -41,6 +36,15 @@ function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<Uint8Array> {
   return typeof value === 'object' && value !== null && Symbol.asyncIterator in value
+}
+
+async function* asyncIterableBytes(source: AsyncIterable<Uint8Array>): AsyncGenerator<Uint8Array> {
+  for await (const chunk of source) {
+    if (!(chunk instanceof Uint8Array)) {
+      throw new CHIRPError('ERR_CHIRP_SOURCE', 'CHIRP sources must yield Uint8Array chunks.')
+    }
+    if (chunk.byteLength > 0) yield chunk
+  }
 }
 
 async function* readableStreamBytes(

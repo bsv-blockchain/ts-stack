@@ -184,7 +184,7 @@ function validateChildren(children: CHIRPChildReference[], root: boolean): void 
     )
   }
   for (const child of children) {
-    if (child.logicalLength < 0n || child.logicalLength > 0xffff_ffff_ffff_ffffn) {
+    if (child.logicalLength < 0n || child.logicalLength > 0xffffffffffffffffn) {
       throw new CHIRPError('ERR_CHIRP_INTEGER_RANGE', 'Child length is outside uint64.')
     }
     validateHash(child.objectHash)

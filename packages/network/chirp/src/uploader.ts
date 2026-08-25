@@ -409,7 +409,7 @@ function decimalUint64(value: bigint | number | string, allowZero: boolean): str
   }
   if (
     parsed < (allowZero ? 0n : 1n) ||
-    parsed > 0xffff_ffff_ffff_ffffn ||
+    parsed > 0xffffffffffffffffn ||
     (typeof value === 'string' && !/^(0|[1-9]\d*)$/.test(value))
   ) {
     throw new CHIRPError('ERR_CHIRP_INTEGER', 'Value is outside canonical uint64 decimal form.')

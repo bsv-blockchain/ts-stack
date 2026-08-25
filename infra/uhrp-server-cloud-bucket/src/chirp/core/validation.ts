@@ -33,7 +33,7 @@ export async function validateCHIRPClosure(
     : parseCHIRPURL(`chirp://${chirpURLOrIdentifier}`).rootIdentifier
   const maxDepth = options.maxDepth ?? CHIRP_MAX_DEPTH
   const maxObjects = options.maxObjects ?? 100_000
-  const maxLogicalLength = options.maxLogicalLength ?? 0xffff_ffff_ffff_ffffn
+  const maxLogicalLength = options.maxLogicalLength ?? 0xffffffffffffffffn
   const rootBytes = await loadBounded(loadObject, rootIdentifier, CHIRP_MAX_NODE_BYTES)
   verifyObjectBytes(rootIdentifier, rootBytes)
   const decoded = decodeCHIRPNode(rootBytes)
@@ -186,8 +186,8 @@ function equalReferences(left: CHIRPChildReference[], right: CHIRPChildReference
     left.length === right.length &&
     left.every((reference, index) => {
       const candidate = right[index]
+      if (candidate == null) return false
       return (
-        candidate != null &&
         reference.childKind === candidate.childKind &&
         reference.logicalLength === candidate.logicalLength &&
         equalBytes(reference.objectHash, candidate.objectHash)

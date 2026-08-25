@@ -57,13 +57,17 @@ class FilesystemChirpStore implements ChirpStore {
     const directory = safeUploadDirectory(uploadId)
     if (directory == null) return null
     const session = await readJSON<ChirpSession>(path.join(directory, 'session.json'))
-    if (session == null || session.identityKey !== identityKey ||
-      session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
+    if (session?.identityKey !== identityKey) return null
+    if (session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
     return session
   }
 
-  async hasStagedObject(uploadId: string, identityKey: string, objectIdentifier: string): Promise<boolean> {
-    if (await this.getSession(uploadId, identityKey) == null) return false
+  async hasStagedObject(
+    uploadId: string,
+    identityKey: string,
+    objectIdentifier: string
+  ): Promise<boolean> {
+    if ((await this.getSession(uploadId, identityKey)) == null) return false
     const marker = stagedMarker(uploadId, objectIdentifier)
     if (marker == null) return false
     return await exists(marker)
@@ -91,20 +95,10 @@ class FilesystemChirpStore implements ChirpStore {
     await this.ensureRoots()
     const temporary = path.join(DATA_ROOT, `.object.${randomUUID()}.tmp`)
     const handle = await fs.open(temporary, 'wx', 0o600)
-    const hasher = createHash('sha256')
-    let length = 0
     try {
-      for await (const chunk of source) {
-        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        length += bytes.byteLength
-        if (length > maximumBytes || (declaredLength != null && length > declaredLength)) {
-          return 'too_large'
-        }
-        hasher.update(bytes)
-        await handle.write(bytes)
-      }
-      if (declaredLength != null && length !== declaredLength) return 'size_mismatch'
-      const actualIdentifier = objectIdentifierForHash(Uint8Array.from(hasher.digest()))
+      const staged = await writeObjectSource(handle, source, declaredLength, maximumBytes)
+      if (typeof staged === 'string') return staged
+      const actualIdentifier = objectIdentifierForHash(staged.digest)
       if (actualIdentifier !== objectIdentifier) return 'digest_mismatch'
       await handle.sync()
       await handle.close()
@@ -131,11 +125,15 @@ class FilesystemChirpStore implements ChirpStore {
     identityKey: string,
     objectIdentifier: string
   ): Promise<Uint8Array> {
-    if (!await this.hasStagedObject(uploadId, identityKey, objectIdentifier)) {
-      throw new CHIRPError('ERR_CHIRP_MISSING_OBJECT', 'Object is not available to this upload session.')
+    if (!(await this.hasStagedObject(uploadId, identityKey, objectIdentifier))) {
+      throw new CHIRPError(
+        'ERR_CHIRP_MISSING_OBJECT',
+        'Object is not available to this upload session.'
+      )
     }
     const objectPath = globalObjectPath(objectIdentifier)
-    if (objectPath == null) throw new CHIRPError('ERR_CHIRP_IDENTIFIER', 'Invalid object identifier.')
+    if (objectPath == null)
+      throw new CHIRPError('ERR_CHIRP_IDENTIFIER', 'Invalid object identifier.')
     return Uint8Array.from(await fs.readFile(objectPath))
   }
 
@@ -158,7 +156,8 @@ class FilesystemChirpStore implements ChirpStore {
         await new Promise(resolve => setTimeout(resolve, 100))
       }
     }
-    if (handle == null) throw new CHIRPError('ERR_CHIRP_COMMIT_BUSY', 'CHIRP commit is already in progress.')
+    if (handle == null)
+      throw new CHIRPError('ERR_CHIRP_COMMIT_BUSY', 'CHIRP commit is already in progress.')
     try {
       return await operation()
     } finally {
@@ -177,8 +176,11 @@ class FilesystemChirpStore implements ChirpStore {
     await this.ensureRoots()
     for (const identifier of record.closure) {
       const objectPath = globalObjectPath(identifier)
-      if (objectPath == null || !await exists(objectPath)) {
-        throw new CHIRPError('ERR_CHIRP_MISSING_OBJECT', 'Cannot lease an incomplete CHIRP closure.')
+      if (objectPath == null || !(await exists(objectPath))) {
+        throw new CHIRPError(
+          'ERR_CHIRP_MISSING_OBJECT',
+          'Cannot lease an incomplete CHIRP closure.'
+        )
       }
     }
     const recordPath = rootRecordPath(record.rootIdentifier)
@@ -189,7 +191,8 @@ class FilesystemChirpStore implements ChirpStore {
   async activateCommit(rootIdentifier: string): Promise<void> {
     const record = await this.getCommit(rootIdentifier)
     const recordPath = rootRecordPath(rootIdentifier)
-    if (record == null || recordPath == null) throw new CHIRPError('ERR_CHIRP_COMMIT', 'Missing pending commit.')
+    if (record == null || recordPath == null)
+      throw new CHIRPError('ERR_CHIRP_COMMIT', 'Missing pending commit.')
     record.state = 'active'
     await writeJSONAtomic(recordPath, record)
   }
@@ -205,13 +208,16 @@ class FilesystemChirpStore implements ChirpStore {
     objectIdentifier: string
   ): Promise<ChirpObjectRead | null> {
     const record = await this.getCommit(rootIdentifier)
-    if (record == null || record.state !== 'active' ||
+    if (
+      record?.state !== 'active' ||
       record.expiryTime <= Math.floor(Date.now() / 1000) ||
-      !record.closure.includes(objectIdentifier)) return null
+      !record.closure.includes(objectIdentifier)
+    )
+      return null
     const objectPath = globalObjectPath(objectIdentifier)
     if (objectPath == null) return null
     const stat = await fs.stat(objectPath).catch(() => null)
-    if (stat == null || !stat.isFile()) return null
+    if (!stat?.isFile()) return null
     return {
       length: stat.size,
       contentType: record.nodeIdentifiers.includes(objectIdentifier)
@@ -239,38 +245,21 @@ class FilesystemChirpStore implements ChirpStore {
     const uploadIds = await fs.readdir(UPLOADS_ROOT).catch(() => [])
     const rootFiles = await fs.readdir(ROOTS_ROOT).catch(() => [])
     const objectFiles = await fs.readdir(OBJECTS_ROOT).catch(() => [])
-    if (uploadIds.length + rootFiles.length + objectFiles.length > GC_MAX_ENTRIES) {
-      log.warn({ operation: 'chirp.gc', outcome: 'bounded', entries: uploadIds.length + rootFiles.length + objectFiles.length }, 'CHIRP GC entry bound reached')
+    const entryCount = uploadIds.length + rootFiles.length + objectFiles.length
+    if (entryCount > GC_MAX_ENTRIES) {
+      log.warn(
+        { operation: 'chirp.gc', outcome: 'bounded', entries: entryCount },
+        'CHIRP GC entry bound reached'
+      )
       return
     }
-    for (const uploadId of uploadIds) {
-      const directory = safeUploadDirectory(uploadId)
-      if (directory == null) continue
-      const session = await readJSON<ChirpSession>(path.join(directory, 'session.json'))
-      if (session == null || session.stagingExpiresAt <= now) {
-        await fs.rm(directory, { recursive: true, force: true })
-        continue
-      }
-      const markers = await fs.readdir(path.join(directory, 'objects')).catch(() => [])
-      for (const identifier of markers) if (IDENTIFIER.test(identifier)) live.add(identifier)
-    }
-    for (const file of rootFiles) {
-      if (!file.endsWith('.json')) continue
-      const recordPath = path.join(ROOTS_ROOT, file)
-      const record = await readJSON<ChirpCommitRecord>(recordPath)
-      const pendingExpired = record?.state === 'pending' && record.preparedAt + STAGING_SECONDS <= now
-      if (record == null || record.expiryTime <= now || pendingExpired) {
-        await fs.rm(recordPath, { force: true })
-        continue
-      }
-      for (const identifier of record.closure) live.add(identifier)
-    }
-    for (const identifier of objectFiles) {
-      if (IDENTIFIER.test(identifier) && !live.has(identifier)) {
-        await fs.rm(path.join(OBJECTS_ROOT, identifier), { force: true })
-      }
-    }
-    log.info({ operation: 'chirp.gc', live_objects: live.size }, 'CHIRP garbage collection completed')
+    await collectLiveUploads(uploadIds, live, now)
+    await collectLiveRoots(rootFiles, live, now)
+    await deleteUnreferencedObjects(objectFiles, live)
+    log.info(
+      { operation: 'chirp.gc', live_objects: live.size },
+      'CHIRP garbage collection completed'
+    )
   }
 
   private async ensureRoots(): Promise<void> {
@@ -279,6 +268,71 @@ class FilesystemChirpStore implements ChirpStore {
       fs.mkdir(UPLOADS_ROOT, { recursive: true, mode: 0o700 }),
       fs.mkdir(ROOTS_ROOT, { recursive: true, mode: 0o700 })
     ])
+  }
+}
+
+async function writeObjectSource(
+  handle: Awaited<ReturnType<typeof fs.open>>,
+  source: AsyncIterable<Uint8Array>,
+  declaredLength: number | null,
+  maximumBytes: number
+): Promise<{ digest: Uint8Array } | 'too_large' | 'size_mismatch'> {
+  const hasher = createHash('sha256')
+  let length = 0
+  for await (const chunk of source) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    length += bytes.byteLength
+    if (length > maximumBytes || (declaredLength != null && length > declaredLength)) {
+      return 'too_large'
+    }
+    hasher.update(bytes)
+    await handle.write(bytes)
+  }
+  if (declaredLength != null && length !== declaredLength) return 'size_mismatch'
+  return { digest: Uint8Array.from(hasher.digest()) }
+}
+
+async function collectLiveUploads(
+  uploadIds: string[],
+  live: Set<string>,
+  now: number
+): Promise<void> {
+  for (const uploadId of uploadIds) {
+    const directory = safeUploadDirectory(uploadId)
+    if (directory == null) continue
+    const session = await readJSON<ChirpSession>(path.join(directory, 'session.json'))
+    if (session == null || session.stagingExpiresAt <= now) {
+      await fs.rm(directory, { recursive: true, force: true })
+      continue
+    }
+    const markers = await fs.readdir(path.join(directory, 'objects')).catch(() => [])
+    for (const identifier of markers) if (IDENTIFIER.test(identifier)) live.add(identifier)
+  }
+}
+
+async function collectLiveRoots(
+  rootFiles: string[],
+  live: Set<string>,
+  now: number
+): Promise<void> {
+  for (const file of rootFiles) {
+    if (!file.endsWith('.json')) continue
+    const recordPath = path.join(ROOTS_ROOT, file)
+    const record = await readJSON<ChirpCommitRecord>(recordPath)
+    const pendingExpired = record?.state === 'pending' && record.preparedAt + STAGING_SECONDS <= now
+    if (record == null || record.expiryTime <= now || pendingExpired) {
+      await fs.rm(recordPath, { force: true })
+      continue
+    }
+    for (const identifier of record.closure) live.add(identifier)
+  }
+}
+
+async function deleteUnreferencedObjects(objectFiles: string[], live: Set<string>): Promise<void> {
+  for (const identifier of objectFiles) {
+    if (IDENTIFIER.test(identifier) && !live.has(identifier)) {
+      await fs.rm(path.join(OBJECTS_ROOT, identifier), { force: true })
+    }
   }
 }
 
@@ -292,11 +346,17 @@ export function getChirpStore(): ChirpStore {
 export function startChirpGarbageCollector(): () => void {
   const store = getChirpStore()
   void store.collectGarbage().catch(error => {
-    log.error({ operation: 'chirp.gc', outcome: 'error', err: error }, 'Initial CHIRP garbage collection failed')
+    log.error(
+      { operation: 'chirp.gc', outcome: 'error', err: error },
+      'Initial CHIRP garbage collection failed'
+    )
   })
   const timer = setInterval(() => {
     void store.collectGarbage().catch(error => {
-      log.error({ operation: 'chirp.gc', outcome: 'error', err: error }, 'CHIRP garbage collection failed')
+      log.error(
+        { operation: 'chirp.gc', outcome: 'error', err: error },
+        'CHIRP garbage collection failed'
+      )
     })
   }, GC_INTERVAL_MS)
   timer.unref()
@@ -359,7 +419,8 @@ function positiveEnvironment(name: string, fallback: number): number {
   const raw = process.env[name]
   if (raw == null || raw === '') return fallback
   const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${name} must be a positive integer.`)
+  if (!Number.isSafeInteger(value) || value < 1)
+    throw new TypeError(`${name} must be a positive integer.`)
   return value
 }
 

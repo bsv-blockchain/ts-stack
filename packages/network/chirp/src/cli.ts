@@ -240,7 +240,9 @@ export async function requirePublicHost(url: URL): Promise<void> {
   }
 }
 
-export function allowAnyHost(): void {}
+export function allowAnyHost(): void {
+  return undefined
+}
 
 export function isPublicIPv4(address: string): boolean {
   const parts = address.split('.').map(Number)

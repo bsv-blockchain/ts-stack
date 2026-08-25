@@ -64,13 +64,21 @@ class CloudBucketChirpStore implements ChirpStore {
   async getSession(uploadId: string, identityKey: string): Promise<ChirpSession | null> {
     if (!UPLOAD_ID.test(uploadId)) return null
     const session = await this.readJSON<ChirpSession>(sessionName(uploadId))
-    if (session == null || session.identityKey !== identityKey ||
-      session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
+    if (session?.identityKey !== identityKey) return null
+    if (session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
     return session
   }
 
-  async hasStagedObject(uploadId: string, identityKey: string, objectIdentifier: string): Promise<boolean> {
-    if (await this.getSession(uploadId, identityKey) == null || !IDENTIFIER.test(objectIdentifier)) return false
+  async hasStagedObject(
+    uploadId: string,
+    identityKey: string,
+    objectIdentifier: string
+  ): Promise<boolean> {
+    if (
+      (await this.getSession(uploadId, identityKey)) == null ||
+      !IDENTIFIER.test(objectIdentifier)
+    )
+      return false
     const [exists] = await this.file(markerName(uploadId, objectIdentifier)).exists()
     return exists
   }
@@ -92,22 +100,13 @@ class CloudBucketChirpStore implements ChirpStore {
       drain(source)
       return 'exists'
     }
-    const chunks: Buffer[] = []
-    const hasher = createHash('sha256')
-    let length = 0
-    for await (const chunk of source) {
-      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      length += bytes.byteLength
-      if (length > maximumBytes || (declaredLength != null && length > declaredLength)) return 'too_large'
-      chunks.push(bytes)
-      hasher.update(bytes)
-    }
-    if (declaredLength != null && length !== declaredLength) return 'size_mismatch'
-    const actualIdentifier = objectIdentifierForHash(Uint8Array.from(hasher.digest()))
+    const staged = await bufferObjectSource(source, declaredLength, maximumBytes)
+    if (typeof staged === 'string') return staged
+    const actualIdentifier = objectIdentifierForHash(staged.digest)
     if (actualIdentifier !== objectIdentifier) return 'digest_mismatch'
     const object = this.file(objectName(objectIdentifier))
     try {
-      await object.save(Buffer.concat(chunks, length), {
+      await object.save(Buffer.concat(staged.chunks, staged.length), {
         resumable: false,
         contentType: 'application/octet-stream',
         preconditionOpts: { ifGenerationMatch: 0 },
@@ -135,36 +134,23 @@ class CloudBucketChirpStore implements ChirpStore {
     identityKey: string,
     objectIdentifier: string
   ): Promise<Uint8Array> {
-    if (!await this.hasStagedObject(uploadId, identityKey, objectIdentifier)) {
-      throw new CHIRPError('ERR_CHIRP_MISSING_OBJECT', 'Object is not available to this upload session.')
+    if (!(await this.hasStagedObject(uploadId, identityKey, objectIdentifier))) {
+      throw new CHIRPError(
+        'ERR_CHIRP_MISSING_OBJECT',
+        'Object is not available to this upload session.'
+      )
     }
     const [bytes] = await this.file(objectName(objectIdentifier)).download()
     return Uint8Array.from(bytes)
   }
 
   async withCommitLock<T>(uploadId: string, operation: () => Promise<T>): Promise<T> {
-    if (!UPLOAD_ID.test(uploadId)) throw new CHIRPError('ERR_CHIRP_SESSION', 'Invalid upload session.')
+    if (!UPLOAD_ID.test(uploadId))
+      throw new CHIRPError('ERR_CHIRP_SESSION', 'Invalid upload session.')
     const lock = this.file(lockName(uploadId))
-    let generation: number | undefined
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      try {
-        await lock.save(String(Date.now()), {
-          resumable: false,
-          preconditionOpts: { ifGenerationMatch: 0 },
-          metadata: { customTime: isoTime(Math.floor(Date.now() / 1000) + LOCK_SECONDS) }
-        })
-        const [metadata] = await lock.getMetadata()
-        generation = Number(metadata.generation)
-        break
-      } catch (error) {
-        if (!isPreconditionFailure(error)) throw error
-        const [metadata] = await lock.getMetadata().catch(() => [null])
-        const customTime = metadata?.customTime == null ? 0 : Date.parse(metadata.customTime)
-        if (customTime > 0 && customTime <= Date.now()) await lock.delete({ ignoreNotFound: true })
-        else await new Promise(resolve => setTimeout(resolve, 100))
-      }
-    }
-    if (generation == null) throw new CHIRPError('ERR_CHIRP_COMMIT_BUSY', 'CHIRP commit is already in progress.')
+    const generation = await acquireCommitLock(lock)
+    if (generation == null)
+      throw new CHIRPError('ERR_CHIRP_COMMIT_BUSY', 'CHIRP commit is already in progress.')
     try {
       return await operation()
     } finally {
@@ -182,7 +168,11 @@ class CloudBucketChirpStore implements ChirpStore {
     await mapLimited(record.closure, 16, async identifier => {
       const object = this.file(objectName(identifier))
       const [exists] = await object.exists()
-      if (!exists) throw new CHIRPError('ERR_CHIRP_MISSING_OBJECT', 'Cannot lease an incomplete CHIRP closure.')
+      if (!exists)
+        throw new CHIRPError(
+          'ERR_CHIRP_MISSING_OBJECT',
+          'Cannot lease an incomplete CHIRP closure.'
+        )
       await extendCustomTime(object, record.expiryTime)
     })
     await this.writeJSON(rootName(record.rootIdentifier), record, record.expiryTime)
@@ -207,9 +197,12 @@ class CloudBucketChirpStore implements ChirpStore {
     objectIdentifier: string
   ): Promise<ChirpObjectRead | null> {
     const record = await this.getCommit(rootIdentifier)
-    if (record == null || record.state !== 'active' ||
+    if (
+      record?.state !== 'active' ||
       record.expiryTime <= Math.floor(Date.now() / 1000) ||
-      !record.closure.includes(objectIdentifier)) return null
+      !record.closure.includes(objectIdentifier)
+    )
+      return null
     const file = this.file(objectName(objectIdentifier))
     const [metadata] = await file.getMetadata().catch(() => [null])
     const length = Number(metadata?.size)
@@ -226,7 +219,7 @@ class CloudBucketChirpStore implements ChirpStore {
 
   async extendRootLease(rootIdentifier: string, expiryTime: number): Promise<void> {
     const record = await this.getCommit(rootIdentifier)
-    if (record == null || record.state !== 'active' || expiryTime <= record.expiryTime) return
+    if (record?.state !== 'active' || expiryTime <= record.expiryTime) return
     record.expiryTime = expiryTime
     await mapLimited(record.closure, 16, async identifier => {
       await extendCustomTime(this.file(objectName(identifier)), expiryTime)
@@ -235,49 +228,35 @@ class CloudBucketChirpStore implements ChirpStore {
   }
 
   async collectGarbage(): Promise<void> {
-    const [files] = await this.bucket().getFiles({ prefix: `${PREFIX}/`, maxResults: GC_MAX_ENTRIES + 1 })
+    const bucket = this.bucket()
+    const [files] = await bucket.getFiles({
+      prefix: `${PREFIX}/`,
+      maxResults: GC_MAX_ENTRIES + 1
+    })
     if (files.length > GC_MAX_ENTRIES) {
-      log.warn({ operation: 'chirp.gc', outcome: 'bounded', entries: files.length }, 'CHIRP GC entry bound reached')
+      log.warn(
+        { operation: 'chirp.gc', outcome: 'bounded', entries: files.length },
+        'CHIRP GC entry bound reached'
+      )
       return
     }
     const now = Math.floor(Date.now() / 1000)
     const live = new Set<string>()
     const sessions = files.filter(file => /\/uploads\/[^/]+\/session\.json$/.test(file.name))
     const roots = files.filter(file => /\/roots\/[^/]+\.json$/.test(file.name))
-    for (const file of sessions) {
-      const session = await downloadJSON<ChirpSession>(file)
-      const prefix = file.name.slice(0, -'session.json'.length)
-      if (session == null || session.stagingExpiresAt <= now) {
-        await deletePrefix(this.bucket(), prefix)
-        continue
-      }
-      for (const marker of files.filter(candidate => candidate.name.startsWith(`${prefix}objects/`))) {
-        const identifier = marker.name.split('/').at(-1)
-        if (identifier != null && IDENTIFIER.test(identifier)) live.add(identifier)
-      }
-    }
-    for (const file of roots) {
-      const record = await downloadJSON<ChirpCommitRecord>(file)
-      const pendingExpired = record?.state === 'pending' && record.preparedAt + STAGING_SECONDS <= now
-      if (record == null || record.expiryTime <= now || pendingExpired) {
-        await file.delete({ ignoreNotFound: true })
-        continue
-      }
-      for (const identifier of record.closure) live.add(identifier)
-    }
-    for (const file of files.filter(candidate => candidate.name.startsWith(`${PREFIX}/objects/`))) {
-      const identifier = file.name.split('/').at(-1)
-      if (identifier == null || live.has(identifier)) continue
-      const [metadata] = await file.getMetadata().catch(() => [null])
-      const customTime = metadata?.customTime == null ? Number.POSITIVE_INFINITY : Date.parse(metadata.customTime)
-      if (customTime <= Date.now()) await file.delete({ ignoreNotFound: true })
-    }
-    log.info({ operation: 'chirp.gc', live_objects: live.size }, 'CHIRP garbage collection completed')
+    await collectLiveCloudSessions(bucket, files, sessions, live, now)
+    await collectLiveCloudRoots(roots, live, now)
+    await deleteUnreferencedCloudObjects(files, live)
+    log.info(
+      { operation: 'chirp.gc', live_objects: live.size },
+      'CHIRP garbage collection completed'
+    )
   }
 
   private bucket() {
     const name = process.env.GCP_BUCKET_NAME
-    if (name == null || name === '') throw new CHIRPError('ERR_CHIRP_BUCKET', 'GCP_BUCKET_NAME is required.')
+    if (name == null || name === '')
+      throw new CHIRPError('ERR_CHIRP_BUCKET', 'GCP_BUCKET_NAME is required.')
     return this.storage.bucket(name)
   }
 
@@ -298,6 +277,99 @@ class CloudBucketChirpStore implements ChirpStore {
   }
 }
 
+async function bufferObjectSource(
+  source: AsyncIterable<Uint8Array>,
+  declaredLength: number | null,
+  maximumBytes: number
+): Promise<
+  { chunks: Buffer[]; digest: Uint8Array; length: number } | 'too_large' | 'size_mismatch'
+> {
+  const chunks: Buffer[] = []
+  const hasher = createHash('sha256')
+  let length = 0
+  for await (const chunk of source) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    length += bytes.byteLength
+    if (length > maximumBytes || (declaredLength != null && length > declaredLength)) {
+      return 'too_large'
+    }
+    chunks.push(bytes)
+    hasher.update(bytes)
+  }
+  if (declaredLength != null && length !== declaredLength) return 'size_mismatch'
+  return { chunks, digest: Uint8Array.from(hasher.digest()), length }
+}
+
+async function acquireCommitLock(lock: File): Promise<number | undefined> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    try {
+      await lock.save(String(Date.now()), {
+        resumable: false,
+        preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: { customTime: isoTime(Math.floor(Date.now() / 1000) + LOCK_SECONDS) }
+      })
+      const [metadata] = await lock.getMetadata()
+      return Number(metadata.generation)
+    } catch (error) {
+      if (!isPreconditionFailure(error)) throw error
+      const [metadata] = await lock.getMetadata().catch(() => [null])
+      const customTime = metadata?.customTime == null ? 0 : Date.parse(metadata.customTime)
+      if (customTime > 0 && customTime <= Date.now()) {
+        await lock.delete({ ignoreNotFound: true })
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+  }
+  return undefined
+}
+
+async function collectLiveCloudSessions(
+  bucket: Bucket,
+  allFiles: File[],
+  sessions: File[],
+  live: Set<string>,
+  now: number
+): Promise<void> {
+  for (const file of sessions) {
+    const session = await downloadJSON<ChirpSession>(file)
+    const prefix = file.name.slice(0, -'session.json'.length)
+    if (session == null || session.stagingExpiresAt <= now) {
+      await deletePrefix(bucket, prefix)
+      continue
+    }
+    const markers = allFiles.filter(candidate => candidate.name.startsWith(`${prefix}objects/`))
+    for (const marker of markers) {
+      const identifier = marker.name.split('/').at(-1)
+      if (identifier != null && IDENTIFIER.test(identifier)) live.add(identifier)
+    }
+  }
+}
+
+async function collectLiveCloudRoots(roots: File[], live: Set<string>, now: number): Promise<void> {
+  for (const file of roots) {
+    const record = await downloadJSON<ChirpCommitRecord>(file)
+    const pendingExpired = record?.state === 'pending' && record.preparedAt + STAGING_SECONDS <= now
+    if (record == null || record.expiryTime <= now || pendingExpired) {
+      await file.delete({ ignoreNotFound: true })
+      continue
+    }
+    for (const identifier of record.closure) live.add(identifier)
+  }
+}
+
+async function deleteUnreferencedCloudObjects(files: File[], live: Set<string>): Promise<void> {
+  const objects = files.filter(candidate => candidate.name.startsWith(`${PREFIX}/objects/`))
+  for (const file of objects) {
+    const identifier = file.name.split('/').at(-1)
+    if (identifier == null || live.has(identifier)) continue
+    const [metadata] = await file.getMetadata().catch(() => [null])
+    const customTime =
+      metadata?.customTime == null ? Number.POSITIVE_INFINITY : Date.parse(metadata.customTime)
+    if (customTime <= Date.now()) await file.delete({ ignoreNotFound: true })
+  }
+}
+
 let singleton: CloudBucketChirpStore | undefined
 
 export function getChirpStore(): ChirpStore {
@@ -308,11 +380,17 @@ export function getChirpStore(): ChirpStore {
 export function startChirpGarbageCollector(): () => void {
   const store = getChirpStore()
   void store.collectGarbage().catch(error => {
-    log.error({ operation: 'chirp.gc', outcome: 'error', err: error }, 'Initial CHIRP garbage collection failed')
+    log.error(
+      { operation: 'chirp.gc', outcome: 'error', err: error },
+      'Initial CHIRP garbage collection failed'
+    )
   })
   const timer = setInterval(() => {
     void store.collectGarbage().catch(error => {
-      log.error({ operation: 'chirp.gc', outcome: 'error', err: error }, 'CHIRP garbage collection failed')
+      log.error(
+        { operation: 'chirp.gc', outcome: 'error', err: error },
+        'CHIRP garbage collection failed'
+      )
     })
   }, GC_INTERVAL_MS)
   timer.unref()
@@ -367,32 +445,48 @@ async function deletePrefix(bucket: Bucket, prefix: string): Promise<void> {
   })
 }
 
-async function mapLimited<T>(values: T[], concurrency: number, operation: (value: T) => Promise<void>): Promise<void> {
+async function mapLimited<T>(
+  values: T[],
+  concurrency: number,
+  operation: (value: T) => Promise<void>
+): Promise<void> {
   let next = 0
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-    while (next < values.length) {
-      const index = next
-      next += 1
-      await operation(values[index])
-    }
-  }))
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (next < values.length) {
+        const index = next
+        next += 1
+        await operation(values[index])
+      }
+    })
+  )
 }
 
 function isPreconditionFailure(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error &&
-    (Number((error as { code: unknown }).code) === 409 || Number((error as { code: unknown }).code) === 412)
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (Number((error as { code: unknown }).code) === 409 ||
+      Number((error as { code: unknown }).code) === 412)
+  )
 }
 
 function isNotFound(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error &&
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
     Number((error as { code: unknown }).code) === 404
+  )
 }
 
 function positiveEnvironment(name: string, fallback: number): number {
   const raw = process.env[name]
   if (raw == null || raw === '') return fallback
   const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${name} must be a positive integer.`)
+  if (!Number.isSafeInteger(value) || value < 1)
+    throw new TypeError(`${name} must be a positive integer.`)
   return value
 }
 

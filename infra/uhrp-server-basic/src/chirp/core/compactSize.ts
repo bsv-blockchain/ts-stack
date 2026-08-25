@@ -1,6 +1,6 @@
 import { CHIRPError } from './errors.js'
 
-const MAX_UINT64 = 0xffff_ffff_ffff_ffffn
+const MAX_UINT64 = 0xffffffffffffffffn
 
 export function encodeCompactSize(value: bigint): Uint8Array {
   if (value < 0n || value > MAX_UINT64) {
@@ -8,7 +8,7 @@ export function encodeCompactSize(value: bigint): Uint8Array {
   }
   if (value <= 252n) return Uint8Array.of(Number(value))
   if (value <= 0xffffn) return concat(Uint8Array.of(0xfd), littleEndian(value, 2))
-  if (value <= 0xffff_ffffn) return concat(Uint8Array.of(0xfe), littleEndian(value, 4))
+  if (value <= 0xffffffffn) return concat(Uint8Array.of(0xfe), littleEndian(value, 4))
   return concat(Uint8Array.of(0xff), littleEndian(value, 8))
 }
 
@@ -19,7 +19,9 @@ export function decodeCompactSize(
   if (offset >= bytes.byteLength) truncated()
   const prefix = bytes[offset]
   if (prefix < 0xfd) return { value: BigInt(prefix), offset: offset + 1 }
-  const width = prefix === 0xfd ? 2 : prefix === 0xfe ? 4 : 8
+  let width = 8
+  if (prefix === 0xfd) width = 2
+  else if (prefix === 0xfe) width = 4
   if (offset + 1 + width > bytes.byteLength) truncated()
   let value = 0n
   for (let index = 0; index < width; index += 1) {
@@ -28,7 +30,7 @@ export function decodeCompactSize(
   if (
     (width === 2 && value < 0xfdn) ||
     (width === 4 && value <= 0xffffn) ||
-    (width === 8 && value <= 0xffff_ffffn)
+    (width === 8 && value <= 0xffffffffn)
   ) {
     throw new CHIRPError(
       'ERR_CHIRP_COMPACT_SIZE_NON_MINIMAL',

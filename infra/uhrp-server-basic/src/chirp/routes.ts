@@ -25,14 +25,32 @@ interface AuthenticatedRequest extends Request {
 
 export const chirpPreAuthRoutes = [
   { type: 'get', path: '/chirp/v1/openapi.json', unsecured: true, func: openapiHandler },
-  { type: 'get', path: '/chirp/v1/:rootIdentifier/objects/:objectIdentifier', unsecured: true, func: getObjectHandler },
-  { type: 'head', path: '/chirp/v1/:rootIdentifier/objects/:objectIdentifier', unsecured: true, func: headObjectHandler }
+  {
+    type: 'get',
+    path: '/chirp/v1/:rootIdentifier/objects/:objectIdentifier',
+    unsecured: true,
+    func: getObjectHandler
+  },
+  {
+    type: 'head',
+    path: '/chirp/v1/:rootIdentifier/objects/:objectIdentifier',
+    unsecured: true,
+    func: headObjectHandler
+  }
 ]
 
 export const chirpPostAuthRoutes = [
   { type: 'post', path: '/chirp/v1/uploads', func: createSessionHandler },
-  { type: 'head', path: '/chirp/v1/uploads/:uploadId/objects/:objectIdentifier', func: headStagedObjectHandler },
-  { type: 'put', path: '/chirp/v1/uploads/:uploadId/objects/:objectIdentifier', func: putStagedObjectHandler },
+  {
+    type: 'head',
+    path: '/chirp/v1/uploads/:uploadId/objects/:objectIdentifier',
+    func: headStagedObjectHandler
+  },
+  {
+    type: 'put',
+    path: '/chirp/v1/uploads/:uploadId/objects/:objectIdentifier',
+    func: putStagedObjectHandler
+  },
   { type: 'post', path: '/chirp/v1/uploads/:uploadId/commit', func: commitHandler }
 ]
 
@@ -63,14 +81,16 @@ async function createSessionHandler(req: AuthenticatedRequest, res: Response): P
   const identityKey = authenticatedIdentity(req)
   if (identityKey == null) return authError(res)
   const retentionSeconds = canonicalDecimal(req.body?.retentionSeconds, false)
-  const logicalLength = req.body?.logicalLength === null
-    ? null
-    : canonicalDecimal(req.body?.logicalLength, true)
+  const logicalLength =
+    req.body?.logicalLength === null ? null : canonicalDecimal(req.body?.logicalLength, true)
   const minimum = Math.max(1, (Number(process.env.MIN_HOSTING_MINUTES) || 0) * 60)
-  if (retentionSeconds == null || logicalLength === undefined ||
+  if (
+    retentionSeconds == null ||
+    logicalLength === undefined ||
     BigInt(retentionSeconds) < BigInt(minimum) ||
     BigInt(retentionSeconds) > BigInt(MAX_RETENTION_SECONDS) ||
-    (logicalLength != null && BigInt(logicalLength) > MAX_LOGICAL_BYTES)) {
+    (logicalLength != null && BigInt(logicalLength) > MAX_LOGICAL_BYTES)
+  ) {
     return error(res, 400, 'ERR_CHIRP_SESSION', 'Invalid CHIRP retentionSeconds or logicalLength.')
   }
   const session = await getChirpStore().createSession(identityKey, retentionSeconds, logicalLength)
@@ -80,12 +100,16 @@ async function createSessionHandler(req: AuthenticatedRequest, res: Response): P
   })
 }
 
-async function headStagedObjectHandler(req: AuthenticatedRequest, res: Response): Promise<Response> {
+async function headStagedObjectHandler(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> {
   const identityKey = authenticatedIdentity(req)
   if (identityKey == null) return authError(res)
   const uploadId = routeParameter(req.params.uploadId)
   const identifier = objectIdentifier(req.params.objectIdentifier)
-  if (uploadId == null || identifier == null) return error(res, 400, 'ERR_CHIRP_IDENTIFIER', 'Invalid upload or object identifier.')
+  if (uploadId == null || identifier == null)
+    return error(res, 400, 'ERR_CHIRP_IDENTIFIER', 'Invalid upload or object identifier.')
   const exists = await getChirpStore().hasStagedObject(uploadId, identityKey, identifier)
   return exists ? res.sendStatus(200) : res.sendStatus(404)
 }
@@ -123,9 +147,12 @@ async function putStagedObjectHandler(req: AuthenticatedRequest, res: Response):
   )
   if (outcome === 'created') return res.sendStatus(201)
   if (outcome === 'exists') return res.sendStatus(204)
-  if (outcome === 'session_missing') return error(res, 404, 'ERR_CHIRP_SESSION', 'Unknown or expired CHIRP upload session.')
-  if (outcome === 'too_large') return error(res, 413, 'ERR_CHIRP_OBJECT_SIZE', 'CHIRP object exceeds the upload limit.')
-  if (outcome === 'size_mismatch') return error(res, 400, 'ERR_CHIRP_LENGTH', 'Object length differs from Content-Length.')
+  if (outcome === 'session_missing')
+    return error(res, 404, 'ERR_CHIRP_SESSION', 'Unknown or expired CHIRP upload session.')
+  if (outcome === 'too_large')
+    return error(res, 413, 'ERR_CHIRP_OBJECT_SIZE', 'CHIRP object exceeds the upload limit.')
+  if (outcome === 'size_mismatch')
+    return error(res, 400, 'ERR_CHIRP_LENGTH', 'Object length differs from Content-Length.')
   return error(res, 400, 'ERR_CHIRP_OBJECT_HASH', 'Object bytes do not match objectIdentifier.')
 }
 
@@ -133,14 +160,16 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
   const identityKey = authenticatedIdentity(req)
   if (identityKey == null) return authError(res)
   const rootIdentifier = objectIdentifier(req.body?.rootIdentifier)
-  if (rootIdentifier == null) return error(res, 400, 'ERR_CHIRP_IDENTIFIER', 'Invalid rootIdentifier.')
+  if (rootIdentifier == null)
+    return error(res, 400, 'ERR_CHIRP_IDENTIFIER', 'Invalid rootIdentifier.')
   const uploadId = routeParameter(req.params.uploadId)
   if (uploadId == null) return error(res, 400, 'ERR_CHIRP_SESSION', 'Invalid upload session.')
   const store = getChirpStore()
   try {
     return await store.withCommitLock(uploadId, async () => {
       const session = await store.getSession(uploadId, identityKey)
-      if (session == null) return error(res, 404, 'ERR_CHIRP_SESSION', 'Unknown or expired CHIRP upload session.')
+      if (session == null)
+        return error(res, 404, 'ERR_CHIRP_SESSION', 'Unknown or expired CHIRP upload session.')
       const existing = await store.getCommit(rootIdentifier)
       if (existing?.state === 'active' && existing.identityKey === identityKey) {
         return commitResponse(res, existing)
@@ -150,8 +179,16 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
         async identifier => await store.readStagedObject(uploadId, identityKey, identifier),
         { maxLogicalLength: MAX_LOGICAL_BYTES, maxObjects: MAX_OBJECTS }
       )
-      if (session.logicalLength != null && BigInt(session.logicalLength) !== validated.logicalLength) {
-        return error(res, 400, 'ERR_CHIRP_LENGTH', 'Committed root differs from declared logicalLength.')
+      if (
+        session.logicalLength != null &&
+        BigInt(session.logicalLength) !== validated.logicalLength
+      ) {
+        return error(
+          res,
+          400,
+          'ERR_CHIRP_LENGTH',
+          'Committed root differs from declared logicalLength.'
+        )
       }
       const expiryTime = Math.floor(Date.now() / 1000) + Number(BigInt(session.retentionSeconds))
       const record: ChirpCommitRecord = {
@@ -187,7 +224,10 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
     })
   } catch (cause) {
     const code = cause instanceof CHIRPError ? cause.code : 'ERR_CHIRP_COMMIT'
-    log.error({ operation: 'chirp.commit', outcome: 'error', code, err: cause }, 'CHIRP commit failed')
+    log.error(
+      { operation: 'chirp.commit', outcome: 'error', code, err: cause },
+      'CHIRP commit failed'
+    )
     return error(res, 400, code, 'CHIRP closure validation or advertisement failed.')
   }
 }
@@ -200,7 +240,11 @@ async function headObjectHandler(req: Request, res: Response): Promise<Response 
   return await serveCommittedObject(req, res, true)
 }
 
-async function serveCommittedObject(req: Request, res: Response, headOnly: boolean): Promise<Response | void> {
+async function serveCommittedObject(
+  req: Request,
+  res: Response,
+  headOnly: boolean
+): Promise<Response | void> {
   const rootIdentifier = objectIdentifier(req.params.rootIdentifier)
   const objectId = objectIdentifier(req.params.objectIdentifier)
   if (rootIdentifier == null || objectId == null) return res.sendStatus(404)
@@ -210,7 +254,10 @@ async function serveCommittedObject(req: Request, res: Response, headOnly: boole
   res.setHeader('Content-Type', object.contentType)
   res.setHeader('Content-Encoding', 'identity')
   res.setHeader('Content-Length', String(object.length))
-  res.setHeader('Cache-Control', `public, immutable, max-age=${Math.max(0, object.expiryTime - Math.floor(Date.now() / 1000))}`)
+  res.setHeader(
+    'Cache-Control',
+    `public, immutable, max-age=${Math.max(0, object.expiryTime - Math.floor(Date.now() / 1000))}`
+  )
   res.setHeader('X-Content-Type-Options', 'nosniff')
   if (headOnly) {
     object.stream.destroy()
@@ -230,9 +277,13 @@ function committedObjectURL(rootIdentifier: string): string {
   if (configured == null || configured.trim() === '') {
     throw new CHIRPError('ERR_CHIRP_HOST', 'HOSTING_DOMAIN is required for CHIRP commitments.')
   }
-  const origin = /^https?:\/\//i.test(configured)
-    ? new URL(configured).origin
-    : `${process.env.NODE_ENV === 'production' ? 'https' : 'http'}://${configured}`
+  let origin: string
+  if (/^https?:\/\//i.test(configured)) {
+    origin = new URL(configured).origin
+  } else {
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
+    origin = `${protocol}://${configured}`
+  }
   const parsed = new URL(origin)
   if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
     throw new CHIRPError('ERR_CHIRP_HOST', 'Production CHIRP commitments require HTTPS.')
@@ -270,7 +321,7 @@ function routeParameter(value: string | string[] | undefined): string | null {
 function canonicalDecimal(value: unknown, allowZero: boolean): string | null | undefined {
   if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) return undefined
   const parsed = BigInt(value)
-  if (parsed < (allowZero ? 0n : 1n) || parsed > 0xffff_ffff_ffff_ffffn) return undefined
+  if (parsed < (allowZero ? 0n : 1n) || parsed > 0xffffffffffffffffn) return undefined
   return parsed.toString()
 }
 

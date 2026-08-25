@@ -322,14 +322,7 @@ export class CHIRPDownloader {
   ): Promise<Uint8Array> {
     const cached = await this.cache.get(objectIdentifier)
     if (cached != null) {
-      verifyObjectBytes(objectIdentifier, cached)
-      if (cached.byteLength > maximumBytes) {
-        throw new CHIRPError(
-          'ERR_CHIRP_OBJECT_SIZE',
-          'Cached CHIRP object exceeds its permitted size.'
-        )
-      }
-      return cached
+      return verifiedCachedObject(objectIdentifier, cached, maximumBytes)
     }
     const attempts = Math.min(locations.length, this.retriesPerObject)
     const startingHost = this.nextHost++ % locations.length
@@ -391,6 +384,18 @@ export class CHIRPDownloader {
       { cause: lastError instanceof Error ? lastError : undefined }
     )
   }
+}
+
+function verifiedCachedObject(
+  objectIdentifier: string,
+  cached: Uint8Array,
+  maximumBytes: number
+): Uint8Array {
+  verifyObjectBytes(objectIdentifier, cached)
+  if (cached.byteLength > maximumBytes) {
+    throw new CHIRPError('ERR_CHIRP_OBJECT_SIZE', 'Cached CHIRP object exceeds its permitted size.')
+  }
+  return cached
 }
 
 async function readBodyBounded(
