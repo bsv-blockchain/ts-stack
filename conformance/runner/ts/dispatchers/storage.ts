@@ -358,64 +358,18 @@ async function dispatchChirpV1(
 ): Promise<void> {
   const leafCount = input['leafCount']
   if (typeof leafCount === 'number') {
-    const logicalLength = input['logicalLength']
-    const hashSeed = input['hashSeed']
-    if (
-      !Number.isSafeInteger(leafCount) ||
-      leafCount < 1 ||
-      typeof logicalLength !== 'string' ||
-      typeof hashSeed !== 'string'
-    ) {
-      throw new Error('storage chirp-v1 tree vector is invalid')
-    }
-    const encoder = new TextEncoder()
-    const leaves: CHIRPChildReference[] = Array.from({ length: leafCount }, (_, index) => ({
-      childKind: 0,
-      logicalLength: BigInt(logicalLength),
-      objectHash: sha256(encoder.encode(`${hashSeed}:${index}`))
-    }))
-    const result = await buildBranchLevels(leaves)
-    expect(result.branchCount).toBe(expected['branchCount'])
-    expect(treeLevelWidths(leafCount)).toEqual(expected['levelWidths'])
-    const rootChildren = expected['rootChildren']
-    if (Array.isArray(rootChildren)) {
-      expect(
-        result.children.map(child => ({
-          childKind: child.childKind,
-          logicalLength: child.logicalLength.toString(),
-          objectHash: hashHex(child.objectHash)
-        }))
-      ).toEqual(rootChildren)
-    }
+    await dispatchChirpTreeVector(input, expected, leafCount)
     return
   }
 
   const source = input['source'] as Record<string, unknown> | undefined
-  const encoding = source?.['encoding']
-  const value = source?.['value']
-  const repeatByte = source?.['byte']
-  const repeatLength = source?.['length']
-  const encodedSource =
-    (encoding === 'hex' || encoding === 'utf8') && typeof value === 'string'
-      ? Uint8Array.from(Buffer.from(value, encoding))
-      : encoding === 'repeat' &&
-          Number.isSafeInteger(repeatByte) &&
-          Number.isSafeInteger(repeatLength) &&
-          (repeatByte as number) >= 0 &&
-          (repeatByte as number) <= 255 &&
-          (repeatLength as number) >= 0
-        ? new Uint8Array(repeatLength as number).fill(repeatByte as number)
-        : null
-  if (encodedSource == null) {
-    throw new Error('storage chirp-v1 vector has an invalid source')
-  }
+  const sourceBytes = decodeChirpVectorSource(source)
 
   const mediaTypeValue = input['mediaType']
   if (mediaTypeValue !== null && typeof mediaTypeValue !== 'string') {
     throw new Error('storage chirp-v1 vector has an invalid mediaType')
   }
 
-  const sourceBytes = encodedSource
   const blobIdentifiers: string[] = []
   const result = await new CHIRPBuilder().build(sourceBytes, {
     mediaType: mediaTypeValue ?? undefined,
@@ -442,6 +396,63 @@ async function dispatchChirpV1(
   } else {
     expect(blobIdentifiers).toEqual([])
   }
+}
+
+async function dispatchChirpTreeVector(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  leafCount: number
+): Promise<void> {
+  const logicalLength = input['logicalLength']
+  const hashSeed = input['hashSeed']
+  if (
+    !Number.isSafeInteger(leafCount) ||
+    leafCount < 1 ||
+    typeof logicalLength !== 'string' ||
+    typeof hashSeed !== 'string'
+  ) {
+    throw new Error('storage chirp-v1 tree vector is invalid')
+  }
+  const encoder = new TextEncoder()
+  const leaves: CHIRPChildReference[] = Array.from({ length: leafCount }, (_, index) => ({
+    childKind: 0,
+    logicalLength: BigInt(logicalLength),
+    objectHash: sha256(encoder.encode(`${hashSeed}:${index}`))
+  }))
+  const result = await buildBranchLevels(leaves)
+  expect(result.branchCount).toBe(expected['branchCount'])
+  expect(treeLevelWidths(leafCount)).toEqual(expected['levelWidths'])
+  const rootChildren = expected['rootChildren']
+  if (Array.isArray(rootChildren)) {
+    expect(
+      result.children.map(child => ({
+        childKind: child.childKind,
+        logicalLength: child.logicalLength.toString(),
+        objectHash: hashHex(child.objectHash)
+      }))
+    ).toEqual(rootChildren)
+  }
+}
+
+function decodeChirpVectorSource(source: Record<string, unknown> | undefined): Uint8Array {
+  const encoding = source?.['encoding']
+  const value = source?.['value']
+  if ((encoding === 'hex' || encoding === 'utf8') && typeof value === 'string') {
+    return Uint8Array.from(Buffer.from(value, encoding))
+  }
+  const repeatByte = source?.['byte']
+  const repeatLength = source?.['length']
+  if (
+    encoding === 'repeat' &&
+    Number.isSafeInteger(repeatByte) &&
+    Number.isSafeInteger(repeatLength) &&
+    (repeatByte as number) >= 0 &&
+    (repeatByte as number) <= 255 &&
+    (repeatLength as number) >= 0
+  ) {
+    return new Uint8Array(repeatLength as number).fill(repeatByte as number)
+  }
+  throw new Error('storage chirp-v1 vector has an invalid source')
 }
 
 function treeLevelWidths(leafCount: number): number[] {

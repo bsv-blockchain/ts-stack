@@ -224,11 +224,10 @@ class FilesystemChirpStore implements ChirpStore {
       rootIdentifier,
       async () => await this.getCommit(rootIdentifier)
     )
-    const record = membership?.record
+    if (membership?.record.state !== 'active') return null
+    const record = membership.record
     if (
-      record?.state !== 'active' ||
       record.expiryTime <= Math.floor(Date.now() / 1000) ||
-      membership == null ||
       !membership.closure.has(objectIdentifier)
     )
       return null
