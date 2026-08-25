@@ -169,11 +169,14 @@ describe('MessageBoxClient', () => {
     await expect(connection).resolves.toBeUndefined()
   }, 10000)
 
-  it('Forwards managerOptions to AuthSocketClient when configured', async () => {
+  it('Forwards socketOptions to AuthSocketClient when configured', async () => {
     const messageBoxClient = new MessageBoxClient({
       walletClient: mockWalletClient,
       host: 'https://message-box-us-1.bsvb.tech',
-      managerOptions: { transports: ['websocket'] }
+      socketOptions: {
+        managerOptions: { transports: ['websocket'] },
+        maxPendingAuthMessages: 8
+      }
     })
 
     await messageBoxClient.init()
@@ -186,11 +189,14 @@ describe('MessageBoxClient', () => {
 
     expect(authSocketClientMock).toHaveBeenCalledWith(
       'https://message-box-us-1.bsvb.tech',
-      expect.objectContaining({ managerOptions: { transports: ['websocket'] } })
+      expect.objectContaining({
+        managerOptions: { transports: ['websocket'] },
+        maxPendingAuthMessages: 8
+      })
     )
   }, 10000)
 
-  it('Omits managerOptions from AuthSocketClient when not configured', async () => {
+  it('Passes only client-owned options to AuthSocketClient when socketOptions is omitted', async () => {
     const messageBoxClient = new MessageBoxClient({
       walletClient: mockWalletClient,
       host: 'https://message-box-us-1.bsvb.tech'
@@ -205,7 +211,33 @@ describe('MessageBoxClient', () => {
     await connection
 
     const options = authSocketClientMock.mock.calls[0][1] as Record<string, unknown>
-    expect(Object.keys(options)).not.toContain('managerOptions')
+    expect(Object.keys(options).sort()).toEqual(['originator', 'wallet'])
+  }, 10000)
+
+  it('Keeps client-owned wallet and originator ahead of socketOptions', async () => {
+    const foreignWallet = { id: 'foreign-wallet' }
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech',
+      originator: 'client.example',
+      // A JS caller can still smuggle these past the Omit<> type.
+      socketOptions: {
+        wallet: foreignWallet,
+        originator: 'socket.example'
+      } as any
+    })
+
+    await messageBoxClient.init()
+
+    const connection = messageBoxClient.initializeConnection()
+    setTimeout(() => {
+      socketOnMap.authenticationSuccess?.({ status: 'ok' })
+    }, 100)
+    await connection
+
+    const options = authSocketClientMock.mock.calls[0][1] as Record<string, unknown>
+    expect(options.originator).toBe('client.example')
+    expect(options.wallet).not.toBe(foreignWallet)
   }, 10000)
 
   it('Falls back to HTTP when WebSocket is not initialized', async () => {

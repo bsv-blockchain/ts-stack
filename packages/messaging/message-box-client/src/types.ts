@@ -51,12 +51,17 @@ export interface MessageBoxClientOptions {
   originator?: string
 
   /**
-   * Socket.IO manager/socket options forwarded to the underlying AuthSocketClient.
-   * Use this to override transport selection, e.g. `{ transports: ['websocket'] }`
-   * against a deployment whose proxy rejects Engine.IO's HTTP polling transport.
-   * Only affects the socket path; HTTP requests are unchanged.
+   * Options forwarded to the underlying AuthSocketClient when the live socket is
+   * created. Covers socket.io transport selection via `managerOptions` (e.g.
+   * `{ managerOptions: { transports: ['websocket'] } }` for a deployment that does
+   * not carry Engine.IO HTTP polling), plus certificate requests, session
+   * management, auth-message concurrency, and error reporting.
+   *
+   * `wallet` and `originator` are excluded because the client owns both; the
+   * client's own values always win. Only affects the socket path; HTTP requests
+   * are unchanged.
    */
-  managerOptions?: AuthSocketClientOptions['managerOptions']
+  socketOptions?: Omit<AuthSocketClientOptions, 'wallet' | 'originator'>
 }
 
 /**
