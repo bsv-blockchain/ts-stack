@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement'
 import getPriceForFile from '../utils/getPriceForFile'
@@ -171,7 +172,10 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
       if (session == null)
         return error(res, 404, 'ERR_CHIRP_SESSION', 'Unknown or expired CHIRP upload session.')
       const existing = await store.getCommit(rootIdentifier)
-      if (existing?.state === 'active' && existing.identityKey === identityKey) {
+      if (
+        existing?.state === 'active' &&
+        existing.identityFingerprint === identityFingerprint(identityKey)
+      ) {
         return commitResponse(res, existing)
       }
       const validated = await validateCHIRPClosure(
@@ -193,7 +197,7 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
       const expiryTime = Math.floor(Date.now() / 1000) + Number(BigInt(session.retentionSeconds))
       const record: ChirpCommitRecord = {
         rootIdentifier,
-        identityKey,
+        identityFingerprint: identityFingerprint(identityKey),
         expiryTime,
         rootLength: validated.rootBytes.byteLength,
         logicalLength: validated.logicalLength.toString(),
@@ -303,6 +307,10 @@ function commitResponse(res: Response, record: ChirpCommitRecord): Response {
 function authenticatedIdentity(req: AuthenticatedRequest): string | null {
   const identityKey = req.auth?.identityKey
   return identityKey == null || identityKey === '' || identityKey === 'unknown' ? null : identityKey
+}
+
+function identityFingerprint(identityKey: string): string {
+  return createHash('sha256').update(identityKey, 'utf8').digest('hex')
 }
 
 function objectIdentifier(value: unknown): string | null {

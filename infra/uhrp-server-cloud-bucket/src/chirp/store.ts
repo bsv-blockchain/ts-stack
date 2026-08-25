@@ -40,7 +40,7 @@ class CloudBucketChirpStore implements ChirpStore {
       const uploadId = randomUUID()
       const session: ChirpSession = {
         uploadId,
-        identityKey,
+        identityFingerprint: fingerprintIdentity(identityKey),
         retentionSeconds,
         logicalLength,
         createdAt: now,
@@ -64,7 +64,7 @@ class CloudBucketChirpStore implements ChirpStore {
   async getSession(uploadId: string, identityKey: string): Promise<ChirpSession | null> {
     if (!UPLOAD_ID.test(uploadId)) return null
     const session = await this.readJSON<ChirpSession>(sessionName(uploadId))
-    if (session?.identityKey !== identityKey) return null
+    if (session?.identityFingerprint !== fingerprintIdentity(identityKey)) return null
     if (session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
     return session
   }
@@ -479,6 +479,10 @@ function isNotFound(error: unknown): boolean {
     'code' in error &&
     Number((error as { code: unknown }).code) === 404
   )
+}
+
+function fingerprintIdentity(identityKey: string): string {
+  return createHash('sha256').update(identityKey, 'utf8').digest('hex')
 }
 
 function positiveEnvironment(name: string, fallback: number): number {

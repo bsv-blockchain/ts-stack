@@ -38,7 +38,7 @@ class FilesystemChirpStore implements ChirpStore {
         await fs.mkdir(path.join(directory, 'objects'), { mode: 0o700 })
         const session: ChirpSession = {
           uploadId,
-          identityKey,
+          identityFingerprint: fingerprintIdentity(identityKey),
           retentionSeconds,
           logicalLength,
           createdAt: now,
@@ -57,7 +57,7 @@ class FilesystemChirpStore implements ChirpStore {
     const directory = safeUploadDirectory(uploadId)
     if (directory == null) return null
     const session = await readJSON<ChirpSession>(path.join(directory, 'session.json'))
-    if (session?.identityKey !== identityKey) return null
+    if (session?.identityFingerprint !== fingerprintIdentity(identityKey)) return null
     if (session.stagingExpiresAt <= Math.floor(Date.now() / 1000)) return null
     return session
   }
@@ -108,7 +108,7 @@ class FilesystemChirpStore implements ChirpStore {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
       }
       try {
-        await fs.writeFile(marker, '', { flag: 'wx', mode: 0o600 })
+        await fs.writeFile(containedDataPath(marker), '', { flag: 'wx', mode: 0o600 })
         return 'created'
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'exists'
@@ -140,7 +140,7 @@ class FilesystemChirpStore implements ChirpStore {
   async withCommitLock<T>(uploadId: string, operation: () => Promise<T>): Promise<T> {
     const directory = safeUploadDirectory(uploadId)
     if (directory == null) throw new CHIRPError('ERR_CHIRP_SESSION', 'Invalid upload session.')
-    const lockPath = path.join(directory, '.commit.lock')
+    const lockPath = containedDataPath(path.join(directory, '.commit.lock'))
     let handle: Awaited<ReturnType<typeof fs.open>> | undefined
     for (let attempt = 0; attempt < 50; attempt += 1) {
       try {
@@ -367,6 +367,19 @@ function uploadDirectory(uploadId: string): string {
   return path.join(UPLOADS_ROOT, uploadId)
 }
 
+function fingerprintIdentity(identityKey: string): string {
+  return createHash('sha256').update(identityKey, 'utf8').digest('hex')
+}
+
+function containedDataPath(file: string): string {
+  const candidate = path.resolve(file)
+  const prefix = DATA_ROOT.endsWith(path.sep) ? DATA_ROOT : `${DATA_ROOT}${path.sep}`
+  if (!candidate.startsWith(prefix)) {
+    throw new CHIRPError('ERR_CHIRP_PATH', 'CHIRP storage path escaped its data directory.')
+  }
+  return candidate
+}
+
 function safeUploadDirectory(uploadId: string): string | null {
   return UPLOAD_ID.test(uploadId) ? uploadDirectory(uploadId) : null
 }
@@ -387,11 +400,12 @@ function rootRecordPath(identifier: string): string | null {
 }
 
 async function writeJSONAtomic(file: string, value: unknown): Promise<void> {
-  const temporary = `${file}.${randomUUID()}.tmp`
-  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
+  const destination = containedDataPath(file)
+  const temporary = containedDataPath(`${destination}.${randomUUID()}.tmp`)
+  await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 })
   try {
     await fs.writeFile(temporary, `${JSON.stringify(value)}\n`, { flag: 'wx', mode: 0o600 })
-    await fs.rename(temporary, file)
+    await fs.rename(temporary, destination)
   } finally {
     await fs.rm(temporary, { force: true })
   }
@@ -399,7 +413,7 @@ async function writeJSONAtomic(file: string, value: unknown): Promise<void> {
 
 async function readJSON<T>(file: string): Promise<T | null> {
   try {
-    return JSON.parse(await fs.readFile(file, 'utf8')) as T
+    return JSON.parse(await fs.readFile(containedDataPath(file), 'utf8')) as T
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
@@ -408,7 +422,7 @@ async function readJSON<T>(file: string): Promise<T | null> {
 
 async function exists(file: string): Promise<boolean> {
   try {
-    await fs.access(file)
+    await fs.access(containedDataPath(file))
     return true
   } catch {
     return false

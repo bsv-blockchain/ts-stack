@@ -20,7 +20,7 @@ test('uploads bounded objects progressively, skips resumed objects, and commits 
       return new Response(null, { status: staged.has(url) ? 200 : 404 })
     }
     if (url.includes('/objects/') && method === 'PUT') {
-      staged.add(url.replace('/objects/', '/objects/'))
+      staged.add(url)
       return new Response(null, { status: 201 })
     }
     if (url.endsWith('/commit') && method === 'POST') {

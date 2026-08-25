@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream'
 
 export interface ChirpSession {
   uploadId: string
-  identityKey: string
+  identityFingerprint: string
   retentionSeconds: string
   logicalLength: string | null
   createdAt: number
@@ -11,7 +11,7 @@ export interface ChirpSession {
 
 export interface ChirpCommitRecord {
   rootIdentifier: string
-  identityKey: string
+  identityFingerprint: string
   expiryTime: number
   rootLength: number
   logicalLength: string

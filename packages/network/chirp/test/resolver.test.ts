@@ -28,7 +28,7 @@ describe('interleaved CHIRP resolution', () => {
       const identifier = new URL(url).pathname.split('/').at(-1) as string
       let bytes = objects.get(identifier)
       if (bytes == null) return new Response(null, { status: 404 })
-      if (url.startsWith('https://a.example') && identifier !== built.rootIdentifier) {
+      if (new URL(url).origin === 'https://a.example' && identifier !== built.rootIdentifier) {
         bytes = new TextEncoder().encode('corrupt')
       }
       return new Response(bytes, {
@@ -50,12 +50,12 @@ describe('interleaved CHIRP resolution', () => {
     expect(new TextDecoder().decode(result.data)).toBe('aaabbbbbbb')
     expect(
       calls.filter(
-        url => url.startsWith('https://a.example') && !url.endsWith(built.rootIdentifier)
+        url => new URL(url).origin === 'https://a.example' && !url.endsWith(built.rootIdentifier)
       )
     ).toHaveLength(1)
     expect(
       calls.filter(
-        url => url.startsWith('https://b.example') && !url.endsWith(built.rootIdentifier)
+        url => new URL(url).origin === 'https://b.example' && !url.endsWith(built.rootIdentifier)
       )
     ).toHaveLength(2)
     expect(objectIdentifierForBytes(built.rootBytes)).toBe(built.rootIdentifier)

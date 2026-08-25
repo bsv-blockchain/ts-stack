@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const crypto = require('node:crypto')
 const os = require('node:os')
 const path = require('node:path')
 const { Readable } = require('node:stream')
@@ -35,7 +36,14 @@ test('stages, validates, leases, and serves a complete filesystem closure', asyn
     extensions: []
   })
   const rootIdentifier = objectIdentifierForBytes(rootBytes)
+  const identityFingerprint = crypto.createHash('sha256').update('test-identity').digest('hex')
   const session = await store.createSession('test-identity', '3600', String(blob.length))
+  const persistedSession = fs.readFileSync(
+    path.join(dataRoot, 'uploads', session.uploadId, 'session.json'),
+    'utf8'
+  )
+  expect(persistedSession).not.toContain('test-identity')
+  expect(JSON.parse(persistedSession).identityFingerprint).toBe(identityFingerprint)
 
   await expect(store.stageObject(
     session.uploadId,
@@ -57,7 +65,7 @@ test('stages, validates, leases, and serves a complete filesystem closure', asyn
   const expiryTime = Math.floor(Date.now() / 1000) + 3600
   await store.prepareCommit({
     rootIdentifier,
-    identityKey: 'test-identity',
+    identityFingerprint,
     expiryTime,
     rootLength: rootBytes.length,
     logicalLength: String(blob.length),
