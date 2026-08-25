@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-14",
+  "lastReviewed": "2026-08-24",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -196,15 +196,15 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, and leaves opaque WAB response JSON unchanged.",
-      "migration": "No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility."
+      "summary": "Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, leaves opaque WAB response JSON unchanged, keeps listOutputs totalOutputs stable across every Knex and IndexedDB page, and keeps balanceAndUtxos paging bounded under that stable-total contract.",
+      "migration": "No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility. listOutputs callers now receive the full matching count on short and out-of-range pages instead of a page-local count."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors and historical response recovery.",
-      "migration": "No consumer migration is required. Browser exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later."
+      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors, historical response recovery, and stable listOutputs totals for IndexedDB pagination.",
+      "migration": "No consumer migration is required. Browser exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later. IndexedDB listOutputs callers now receive the full matching count on every page."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",

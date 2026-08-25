@@ -79,6 +79,10 @@ import { StorageIdb } from '@bsv/wallet-toolbox-client'
 await storageManager.addWalletStorageProvider(new StorageIdb(...))
 ```
 
+IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
+count across every page, including a short final page or an offset at or past
+the end.
+
 ## What's excluded vs `@bsv/wallet-toolbox`
 
 | Excluded                      | Why                                     |

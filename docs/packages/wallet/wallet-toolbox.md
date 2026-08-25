@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.10.2'
-last_updated: '2026-08-14'
-last_verified: '2026-08-14'
+version: '2.10.3'
+last_updated: '2026-08-24'
+last_verified: '2026-08-24'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,9 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
+matching count on every page, including short final and out-of-range pages.
 
 `WalletAuthenticationManager` supports an additive WAB UMP outpoint pin for
 legacy ambiguity and an OTP-verified phone-number change that always rolls the
