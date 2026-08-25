@@ -477,7 +477,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, leaves opaque WAB response JSON unchanged, and keeps listOutputs totalOutputs stable across every Knex and IndexedDB page.
+- Release note: Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, leaves opaque WAB response JSON unchanged, keeps listOutputs totalOutputs stable across every Knex and IndexedDB page, and keeps balanceAndUtxos paging bounded under that stable-total contract.
 - Migration: No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility. listOutputs callers now receive the full matching count on short and out-of-range pages instead of a page-local count.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |

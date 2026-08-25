@@ -13,6 +13,8 @@ attention to changes that materially alter behavior or extend functionality.
   past the end now counts instead of inferring, and the managed-change spec-op
   no longer discards the total it already computed. Full pages, first pages,
   and empty result sets are unchanged, so no consumer migration is required.
+  `balanceAndUtxos` now terminates from page progress instead of relying on the
+  former collapsing total, preventing a zero-progress loop after the final page.
 
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with
