@@ -147,8 +147,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.4.0",
       "releaseType": "patch",
-      "summary": "Adds one strict BRC-100 byte-boundary contract: real typed arrays serialize portably, historical bytes recover only at typed protocol fields, arbitrary JSON round-trips unchanged, and React Native discovery remains compatible and bounded.",
-      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new wallet peers remain compatible through portable output and typed-boundary recovery."
+      "summary": "Adds one strict BRC-100 byte-boundary contract: real typed arrays serialize portably, historical bytes recover only at typed protocol fields, arbitrary JSON round-trips unchanged, and React Native discovery remains compatible and bounded. React Native WebView responses are additionally verified as bridge-delivered before their payload is read, so framed, opener, and sandboxed browsing contexts can no longer answer a wallet invocation.",
+      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new wallet peers remain compatible through portable output and typed-boundary recovery. React Native hosts need no change: bridge injections, `window.postMessage` responses, host frames relaying on the document's own origin, and an exact configured wallet origin all continue to resolve."
     },
     {
       "name": "@bsv/simple",
