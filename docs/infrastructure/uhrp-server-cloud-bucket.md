@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.10'
-last_updated: '2026-07-25'
-last_verified: '2026-07-25'
+version: '0.2.34'
+last_updated: '2026-08-24'
+last_verified: '2026-08-24'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -12,7 +12,7 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 
 # UHRP Server (Cloud Bucket)
 
-> A production-grade UHRP host server backed by Google Cloud Storage (or S3-compatible buckets). Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
+> A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in a cloud bucket with billing/micropayment support and notifier-driven advertising for overlay network discovery.
 
 ## What it does
 
@@ -21,7 +21,8 @@ workflows backed by Google Cloud Storage. Static object retrieval is public;
 upload, list, find, and renewal require BRC-103 identity. A separate
 administrative advertisement endpoint uses a strong Bearer token.
 
-Clients upload files with authentication, retrieve files via public GET, and server continuously advertises hosting capability.
+Clients request authenticated uploads, retrieve files via public GET, and use
+the bucket notifier to trigger authenticated hosting advertisements.
 
 ## When to deploy this
 
@@ -35,8 +36,8 @@ Clients upload files with authentication, retrieve files via public GET, and ser
 
 | Type              | Requirement                                                                                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Database          | Optional MySQL via Knex (for backup storage or metadata tracking); not required if using cloud-only                      |
-| External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional)                                             |
+| Database          | None; Google Cloud Storage is the object and metadata store                                                              |
+| External services | Google Cloud Storage bucket and Wallet Storage                                                                           |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
@@ -63,22 +64,22 @@ None; HTTP-only with background advertising worker.
 | NODE_ENV                       | No       | `development`, `staging`, or `production`                                                |
 | SERVER_PRIVATE_KEY             | Yes      | 256-bit hex private key for server identity                                              |
 | HOSTING_DOMAIN                 | No       | Public HTTPS domain for advertising (e.g., `https://uhrp-storage.example.com`)           |
-| BSV_NETWORK                    | No       | Target blockchain network (`main`, `test`, or `regtest`)                                 |
+| BSV_NETWORK                    | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                    |
 | WALLET_STORAGE_URL             | No       | Wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`)                           |
 | PRICE_PER_GB_MO                | No       | Monthly storage price per GB for billing                                                 |
-| ENABLE_PAYMENT_MIDDLEWARE      | No       | Set to `'true'` to require payment for uploads                                           |
-| GOOGLE_CLOUD_PROJECT           | No       | GCP project ID (auto-detected from service account if available)                         |
-| GOOGLE_CLOUD_BUCKET            | Yes      | Cloud Storage bucket name (e.g., `uhrp-storage-prod`)                                    |
-| GOOGLE_APPLICATION_CREDENTIALS | No       | Path to service account JSON key (for local/Cloud Run auth)                              |
-| ARC_API_KEY                    | No       | ARC API key for transaction broadcasting (advertising)                                   |
-| ADVERTISE_INTERVAL_MS          | No       | Interval for re-advertising to overlay (default: 3600000ms = 1 hour)                     |
-| BUGSNAG_API_KEY                | No       | Bugsnag error reporting API key (optional)                                               |
+| MIN_HOSTING_MINUTES            | No       | Minimum requested retention period (default 180 minutes)                                 |
+| GCP_PROJECT_ID                 | Yes*     | GCP project used for production signed upload URLs                                       |
+| GCP_BUCKET_NAME                | Yes      | Cloud Storage bucket name (e.g., `uhrp-storage-prod`)                                    |
+| GCP_STORAGE_CREDS              | Yes*     | JSON credentials used for production signed upload URLs; provide through a secret        |
 | ADMIN_TOKEN                    | Yes      | At least 32 random characters for `/advertise` Bearer auth                               |
 | UHRP_CORS_MODE                 | No       | `public` (default), `allowlist`, or `disabled`                                           |
 | UHRP_CORS_ALLOWED_ORIGINS      | No       | Exact comma-separated origins in allowlist mode                                          |
 | UHRP_CORS_ALLOWED_HEADERS      | No       | Strict comma-separated browser request-header allowlist; omit for additive compatibility |
 | UHRP_JSON_MAX_BODY_BYTES       | No       | JSON body ceiling (default 262144)                                                       |
 | TRUST_PROXY_HOPS               | No       | Exact trusted proxy hop count, 0 through 10                                              |
+
+`GCP_PROJECT_ID` and `GCP_STORAGE_CREDS` are required by the production
+signed-upload path; the development path returns a local placeholder URL.
 
 See [Public Service Edge Security](service-edge-security.md#uhrp-cloud-bucket-server)
 for full edge controls.
@@ -112,7 +113,7 @@ gcloud run deploy uhrp-storage \
   --image uhrp-storage:latest \
   --platform managed \
   --region us-central1 \
-  --set-env-vars SERVER_PRIVATE_KEY=<hex-key>,GOOGLE_CLOUD_BUCKET=uhrp-storage-prod,ENABLE_PAYMENT_MIDDLEWARE=true
+  --set-env-vars SERVER_PRIVATE_KEY=<hex-key>,GCP_PROJECT_ID=<project>,GCP_BUCKET_NAME=uhrp-storage-prod,ADMIN_TOKEN=<32+-character-token>
 
 # Or deploy with docker-compose (local testing only)
 docker compose up -d
@@ -122,34 +123,38 @@ Follows GCP 12-factor patterns: stateless design, cloud bucket for file storage,
 
 ## Migrations
 
-Stateless; cloud bucket is source of truth. Optional MySQL Knex migrations for metadata tables if ENABLE_METADATA_DB=true.
+None. The cloud bucket and object metadata are the storage authority.
 
 ## Health checks
 
-Implicit health via /info endpoint (HTTP 200). Cloud Run readiness probe typically checks GET /info or GET /{hash} availability. No explicit /healthz endpoint.
+- `GET /health` and `GET /healthz` report process liveness.
+- `GET /ready` returns 200 after initialization and 503 while the process is
+  starting or shutting down.
+- The checked-in container health check probes `/ready`.
 
 ## Spec conformance
 
 - **UHRP** – Implements UHRP host protocol for file storage, retrieval, and metadata
-- **BRC-103** – Mutual authentication on PUT, optional on GET/POST
-- **BRC-100** – Payment verification for uploads (optional)
+- **BRC-103** – Mutual authentication on upload, list, find, and renewal workflows
+- **BRC-100** – Wallet-backed pricing and payment verification for upload and renewal
 - **Google Cloud** – Follows Cloud Run best practices (health checks, graceful shutdown, 12-factor)
 
 ## Integration with ts-stack
 
 - UHRP clients upload/retrieve files using SERVER_PRIVATE_KEY and HOSTING_DOMAIN
 - Wallet Storage derives keys, validates payments, manages user accounts
-- Background worker advertises UHRP host via SHIP overlay protocol using ARC broadcaster
-- Optional Cloud SQL metadata database for query optimization
-- Bugsnag integration for production error tracking and monitoring
+- The bucket notifier calls the token-protected `/advertise` route, which
+  publishes the UHRP advertisement through the SDK SHIP broadcaster
 
 ## Common pitfalls
 
 - GCP credentials: GOOGLE_APPLICATION_CREDENTIALS must point to valid service account JSON; Cloud Run uses default service account if not set
 - Storage bucket policy: Ensure bucket exists and service account has storage.objects.create/get/delete permissions
 - Cost management: Monitor storage usage and pricing; use Cloud Storage lifecycle policies for archival
-- Payment enforcement: ENABLE_PAYMENT_MIDDLEWARE requires ARC_API_KEY and WALLET_STORAGE_URL; uploads fail if not configured
-- Advertising loop: ADVERTISE_INTERVAL_MS should balance frequent updates vs transaction costs; 1 hour is conservative default
+- Signed uploads: `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, and valid JSON in
+  `GCP_STORAGE_CREDS` must agree; malformed credentials fail URL creation
+- Advertising: `ADMIN_TOKEN` must match the bucket notifier and contain at
+  least 32 characters
 - Cloud Run and application request timeouts default to 60 seconds; use direct cloud upload workflows for large objects rather than unbounded application buffering
 - Graceful shutdown: Cloud Run sends SIGTERM; ensure all writes complete before exit (transaction broadcasts, metadata flushes)
 

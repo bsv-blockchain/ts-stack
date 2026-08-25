@@ -2,9 +2,9 @@
 id: infra-message-box-server
 title: 'Message-box Server'
 kind: infra
-version: '1.1.14'
-last_updated: '2026-07-25'
-last_verified: '2026-07-25'
+version: '1.1.39'
+last_updated: '2026-08-24'
+last_verified: '2026-08-24'
 review_cadence_days: 30
 status: stable
 tags: [messaging, overlay, store-and-forward, authentication]
@@ -70,6 +70,7 @@ all limits, shared state, BRC-105 pricing, memory evidence, and scaling guidance
 | Variable                             | Required | Description                                                                                                               |
 | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | NODE_ENV                             | No       | `development`, `staging`, or `production`                                                                                 |
+| BSV_NETWORK                          | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                                                      |
 | PORT                                 | No       | HTTP/WebSocket port (default 8080; takes precedence)                                                                      |
 | HTTP_PORT                            | No       | Compatibility port fallback                                                                                               |
 | HOSTING_DOMAIN                       | No       | Public domain for overlay advertisement (e.g., `http://localhost:8080`)                                                   |
@@ -154,10 +155,12 @@ Migrations tracked in `src/migrations/`:
 - `2025-01-31-001-notification-permissions.ts` – Firebase notification permissions
 - `2025-01-31-002-device-registrations.ts` – Device registration tracking
 - `2026-07-26-001-message-permission-scope.ts` – Enforce one box-wide or sender-specific permission per scope
+- `2026-07-26-002-list-query-indexes.ts` – Add list-query indexes for sender and recipient access paths
+- `2026-08-04-001-resource-safety.ts` – Add message quota, retention, and resource-safety state
 
 ## Health checks
 
-- `GET /health` reports process liveness without authentication.
+- `GET /health` and `GET /healthz` report process liveness without authentication.
 - `GET /ready` verifies database connectivity and returns a non-sensitive 503
   response while dependencies are unavailable.
 - Test an authenticated WebSocket handshake separately when live transport is
