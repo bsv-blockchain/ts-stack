@@ -316,6 +316,16 @@
       "minimumScore": 82,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "ecpm-permission",
+      "manifest": "packages/wallet/ecpm-permission-module/package.json",
+      "propertyTest": "packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet-derived secret scalars applied to untrusted caller-supplied secp256k1 points",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

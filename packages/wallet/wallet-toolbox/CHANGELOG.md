@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Extend the BRC-98/99/111 permission-module interface with an optional semantic
+  `handleRequest` hook. A module can now return a conforming BRC-100 result
+  directly or invoke the underlying wallet operation at most once, while
+  existing `onRequest`/`onResponse` transformation modules remain compatible.
+  The companion `@bsv/ecpm-permission-module` uses this hook to implement
+  `p ecpm` point multiplication without adding a BRC-100 method or wire call.
+
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with
   both historical array wallets and current binary Wallet Wire wallets.

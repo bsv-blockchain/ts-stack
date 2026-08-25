@@ -715,6 +715,17 @@
       "release": "npm-oidc"
     },
     {
+      "path": "packages/wallet/ecpm-permission-module",
+      "name": "@bsv/ecpm-permission-module",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/wallet/ts-wallet-relay",
       "name": "@bsv/wallet-relay",
       "owner": "ts-stack-maintainers",

@@ -31,6 +31,15 @@ broadcast, so permission approval does not inherit network-broadcast latency.
 The funding planner prefers settled change and uses queued permission ancestry
 only as a last resort, keeping the application path fast without hiding funds.
 
+Permission modules may transform calls with `onRequest` and `onResponse`, or
+own a P-scheme's semantics with the optional `handleRequest(request, next)`
+hook. A semantic handler can return the normal BRC-100 result directly; if it
+needs the underlying wallet operation, `next` is guarded so it can be invoked
+at most once. Existing transformation-only modules remain compatible. The
+standalone `@bsv/ecpm-permission-module` demonstrates this extension by
+implementing `p ecpm` point multiplication through `getPublicKey`, without a
+new BRC-100 method or wire message.
+
 Immediate actions prefer completed, then unproven, then sending change. A
 pathological settled plan is compared with pending alternatives by exact
 serialized BEEF plus transaction bytes; queued ancestry is used only when it is

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/ecpm-permission-module",
+  "entry": ".",
+  "requiredExports": ["EcpmPermissionModule", "createEcpmModule"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 110000, "gzip": 38000, "brotli": 32000 },
+    "esbuild": { "raw": 114000, "gzip": 43000, "brotli": 37000 }
+  }
+}

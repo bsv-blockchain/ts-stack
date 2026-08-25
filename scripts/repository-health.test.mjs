@@ -37,11 +37,11 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
   )
 })
 
-test('workspace discovery exactly matches the 38-project registry', () => {
+test('workspace discovery exactly matches the 39-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 38)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 31)
+  assert.equal(discovered.length, 39)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 32)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -65,8 +65,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-08-09' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 38)
-  assert.equal(result.publicPackages, 31)
+  assert.equal(result.projects.length, 39)
+  assert.equal(result.publicPackages, 32)
   assert.equal(result.findings.length, 0)
 })
 
@@ -213,7 +213,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 31)
+  assert.equal(publicPackages.length, 32)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -266,7 +266,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 31)
+  assert.equal(publicProjects.length, 32)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),

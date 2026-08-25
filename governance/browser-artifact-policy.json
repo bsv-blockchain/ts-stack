@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-04",
+  "lastReviewed": "2026-08-24",
   "owner": "ts-stack-maintainers",
   "reportRetentionDays": 30,
   "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison.",
@@ -95,6 +95,13 @@
       "budget": "packages/wallet/ts-wallet-relay/browser-budget.json",
       "entry": "./client",
       "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager."
+    },
+    {
+      "name": "@bsv/ecpm-permission-module",
+      "path": "packages/wallet/ecpm-permission-module",
+      "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled."
     },
     {
       "name": "@bsv/wallet-toolbox-client",

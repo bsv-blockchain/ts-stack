@@ -947,4 +947,93 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(testModule.onRequest).not.toHaveBeenCalled()
     })
   })
+
+  describe('P-Module Semantic Handlers', () => {
+    it('allows a module to return a wallet result without invoking the underlying method', async () => {
+      const testModule: PermissionsModule = {
+        handleRequest: jest.fn(async req => {
+          expect(req.method).toBe('getPublicKey')
+          expect(req.originator).toBe('app.com')
+          return { publicKey: `02${'11'.repeat(32)}` }
+        }),
+        onRequest: jest.fn(async req => ({ args: req.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+
+      const result = await manager.getPublicKey(
+        {
+          protocolID: [2, `p semantic apply 02${'22'.repeat(32)} example protocol`],
+          keyID: 'key 1'
+        },
+        'app.com'
+      )
+
+      expect(result).toEqual({ publicKey: `02${'11'.repeat(32)}` })
+      expect(underlying.getPublicKey).not.toHaveBeenCalled()
+      expect(testModule.onRequest).not.toHaveBeenCalled()
+      expect(testModule.onResponse).not.toHaveBeenCalled()
+    })
+
+    it('allows a semantic handler to forward transformed arguments through next', async () => {
+      const transformedProtocol: [2, string] = [2, 'ordinary protocol']
+      const testModule: PermissionsModule = {
+        handleRequest: jest.fn(async (req, next) => {
+          const result = await next({
+            ...req.args,
+            protocolID: transformedProtocol
+          })
+          return { ...(result as object), handled: true }
+        }),
+        onRequest: jest.fn(async req => ({ args: req.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+      underlying.getPublicKey.mockResolvedValue({ publicKey: `03${'33'.repeat(32)}` })
+
+      const result = await manager.getPublicKey(
+        {
+          protocolID: [2, 'p semantic forwarded request'],
+          keyID: 'key 1'
+        },
+        'app.com'
+      )
+
+      expect(underlying.getPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({ protocolID: transformedProtocol }),
+        'app.com'
+      )
+      expect(result).toEqual({ publicKey: `03${'33'.repeat(32)}`, handled: true })
+    })
+
+    it('rejects a semantic handler that invokes the underlying operation twice', async () => {
+      const testModule: PermissionsModule = {
+        handleRequest: async (request, next) => {
+          await next(request.args)
+          return await next(request.args)
+        },
+        onRequest: jest.fn(async request => ({ args: request.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+      underlying.getPublicKey.mockResolvedValue({ publicKey: `03${'44'.repeat(32)}` })
+
+      await expect(
+        manager.getPublicKey(
+          {
+            protocolID: [0, 'p semantic example request'],
+            keyID: '1'
+          },
+          'app.com'
+        )
+      ).rejects.toThrow(/more than once/)
+      expect(underlying.getPublicKey).toHaveBeenCalledTimes(1)
+    })
+  })
 })

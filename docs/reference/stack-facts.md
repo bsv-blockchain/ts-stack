@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **31 public packages**. Versions
+The release graph currently contains **32 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -64,10 +64,11 @@ authorized release action.
 | sdk | `@bsv/verifast` | `0.3.4` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
 | wallet | `@bsv/btms` | `1.2.1` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.1.3` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
+| wallet | `@bsv/ecpm-permission-module` | `0.1.0` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/ecpm-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm-permission-module) |
 | wallet | `@bsv/wallet-relay` | `0.3.5` | cli-library | browser-bundler, browser-esm, cli, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/ts-wallet-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay) |
-| wallet | `@bsv/wallet-toolbox` | `2.10.2` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
-| wallet | `@bsv/wallet-toolbox-client` | `2.10.2` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
-| wallet | `@bsv/wallet-toolbox-mobile` | `2.10.2` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
+| wallet | `@bsv/wallet-toolbox` | `2.11.0` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
+| wallet | `@bsv/wallet-toolbox-client` | `2.11.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
+| wallet | `@bsv/wallet-toolbox-mobile` | `2.11.0` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
 
 ## Standalone infrastructure manifests
 
@@ -88,9 +89,9 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 38 |
-| Package-area projects | 34 |
-| Public npm packages | 31 |
+| Governed projects | 39 |
+| Package-area projects | 35 |
+| Public npm packages | 32 |
 | Private package-area projects | 3 |
 | Standalone infrastructure projects | 7 |
 
@@ -125,7 +126,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 33 | current package manifests |
+| Projects with a test:coverage script | 34 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
