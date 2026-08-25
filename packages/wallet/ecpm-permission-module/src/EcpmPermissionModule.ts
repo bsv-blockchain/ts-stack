@@ -174,7 +174,7 @@ export class EcpmPermissionModule implements PermissionsModule {
 
   private validatePrivilegedReason(reason: string | undefined): void {
     if (typeof reason !== 'string') {
-      throw new Error('ECPM: privilegedReason is required for privileged operations')
+      throw new TypeError('ECPM: privilegedReason is required for privileged operations')
     }
     const bytes = Utils.toArray(reason, 'utf8').length
     if (bytes < 5 || bytes > 50) {
