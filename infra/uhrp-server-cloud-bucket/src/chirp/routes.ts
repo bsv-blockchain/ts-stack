@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
-import createUHRPAdvertisement from '../utils/createUHRPAdvertisement'
+import { createUHRPAdvertisementWithResult } from '../utils/createUHRPAdvertisement'
 import getPriceForFile from '../utils/getPriceForFile'
 import { log } from '../logger'
 import { readBodyLimitBytes, readResourceLimit } from '../security/edgePolicy'
@@ -212,7 +212,7 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
       await store.prepareCommit(record)
       const hostedFileLocation = committedObjectURL(rootIdentifier)
       try {
-        await createUHRPAdvertisement({
+        const advertisement = await createUHRPAdvertisementWithResult({
           hash: Array.from(hashForObjectIdentifier(rootIdentifier)),
           objectIdentifier: rootIdentifier,
           url: hostedFileLocation,
@@ -221,6 +221,12 @@ async function commitHandler(req: AuthenticatedRequest, res: Response): Promise<
           contentLength: validated.rootBytes.byteLength,
           contentType: 'application/vnd.bsv.chirp-node'
         })
+        if (advertisement.broadcastResult.status === 'error') {
+          throw new CHIRPError(
+            'ERR_CHIRP_ADVERTISEMENT',
+            `UHRP advertisement was not acknowledged (${advertisement.broadcastResult.code}).`
+          )
+        }
         await store.activateCommit(rootIdentifier)
       } catch (cause) {
         await store.abortCommit(rootIdentifier)

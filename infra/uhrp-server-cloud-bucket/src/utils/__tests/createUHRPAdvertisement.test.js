@@ -4,7 +4,7 @@ process.env.SERVER_PRIVATE_KEY = '5KU2L5qbkL5MPnUK1cuC5fWamjz7aoKCAZAbKdqmChed8T
 process.env.BSV_NETWORK = 'testnet'
 process.env.WALLET_STORAGE_URL = 'http://localhost:3000'
 
-const createUHRPAdvertisement = require('../createUHRPAdvertisement').default
+const mockBroadcast = jest.fn()
 
 // Mock all the BSV SDK components
 jest.mock('@bsv/sdk', () => ({
@@ -39,7 +39,7 @@ jest.mock('@bsv/sdk', () => ({
     }))
   },
   SHIPBroadcaster: jest.fn(() => ({
-    broadcast: jest.fn()
+    broadcast: mockBroadcast
   }))
 }))
 
@@ -61,6 +61,10 @@ jest.mock('@bsv/wallet-toolbox', () => ({
   }
 }))
 
+const {
+  default: createUHRPAdvertisement,
+  createUHRPAdvertisementWithResult
+} = require('../createUHRPAdvertisement')
 const { StorageUtils } = require('@bsv/sdk')
 
 let valid
@@ -68,6 +72,11 @@ let valid
 describe('createUHRPAdvertisement', () => {
   beforeEach(() => {
     StorageUtils.getHashFromURL.mockReturnValue([1, 2, 3, 4])
+    mockBroadcast.mockResolvedValue({
+      status: 'success',
+      txid: 'mock-txid',
+      message: 'accepted'
+    })
     valid = {
       hash: 'MOCK_HASH',
       objectIdentifier: 'MOCK_IDENTIFIER',
@@ -90,5 +99,20 @@ describe('createUHRPAdvertisement', () => {
   it('Converts string hash to array using StorageUtils', async () => {
     await createUHRPAdvertisement(valid)
     expect(StorageUtils.getHashFromURL).toHaveBeenCalledWith('MOCK_HASH')
+  })
+
+  it('Exposes returned broadcast failures without changing the legacy response', async () => {
+    const broadcastResult = {
+      status: 'error',
+      code: 'ERR_NO_HOSTS_INTERESTED',
+      description: 'No hosts accepted the advertisement.'
+    }
+    mockBroadcast.mockResolvedValue(broadcastResult)
+
+    await expect(createUHRPAdvertisementWithResult(valid)).resolves.toEqual({
+      txid: 'mock-txid',
+      broadcastResult
+    })
+    await expect(createUHRPAdvertisement(valid)).resolves.toEqual({ txid: 'mock-txid' })
   })
 })

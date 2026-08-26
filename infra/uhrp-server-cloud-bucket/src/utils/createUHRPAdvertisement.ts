@@ -1,4 +1,13 @@
-import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, SHIPBroadcaster } from "@bsv/sdk"
+import {
+  PushDrop,
+  PrivateKey,
+  Transaction,
+  StorageUtils,
+  Utils,
+  SHIPBroadcaster,
+  type BroadcastFailure,
+  type BroadcastResponse
+} from "@bsv/sdk"
 import { Setup } from "@bsv/wallet-toolbox"
 import { uhrpNetwork } from "./network"
 
@@ -21,7 +30,11 @@ export interface AdvertisementResponse {
   txid: string
 }
 
-export default async function createUHRPAdvertisement({
+export interface AdvertisementSubmission extends AdvertisementResponse {
+  broadcastResult: BroadcastResponse | BroadcastFailure
+}
+
+export async function createUHRPAdvertisementWithResult({
   hash,
   objectIdentifier,
   expiryTime,
@@ -29,7 +42,7 @@ export default async function createUHRPAdvertisement({
   uploaderIdentityKey,
   contentLength,
   contentType
-}: AdvertisementParams): Promise<AdvertisementResponse> {
+}: AdvertisementParams): Promise<AdvertisementSubmission> {
   if (typeof hash === 'string') {
     hash = StorageUtils.getHashFromURL(hash)
   }
@@ -96,9 +109,17 @@ export default async function createUHRPAdvertisement({
     // Keep the service buildable against the last published SDK during the coordinated release.
     networkPreset: lookupPreset as 'mainnet' | 'testnet'
   })
-  await broadcaster.broadcast(transaction)
+  const broadcastResult = await broadcaster.broadcast(transaction)
 
   return {
-    txid
+    txid,
+    broadcastResult
   }
+}
+
+export default async function createUHRPAdvertisement(
+  params: AdvertisementParams
+): Promise<AdvertisementResponse> {
+  const { txid } = await createUHRPAdvertisementWithResult(params)
+  return { txid }
 }
