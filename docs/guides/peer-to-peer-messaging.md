@@ -4,7 +4,7 @@ title: "Peer-to-Peer Messaging"
 kind: guide
 version: "1.0.1"
 last_updated: "2026-07-26"
-last_verified: "2026-07-26"
+last_verified: "2026-08-26"
 review_cadence_days: 30
 status: stable
 tags: [guide, messaging, encryption, brc-103]
