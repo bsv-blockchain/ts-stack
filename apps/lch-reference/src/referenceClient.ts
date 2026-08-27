@@ -88,12 +88,10 @@ export class ReferenceLCHClient {
     const requestId = toHex(plan.requestId)
     if (this.recoveryState !== undefined && this.recoveryState.requestId !== requestId)
       throw new Error('Another wallet transaction still requires delivery or License recovery')
-    if (this.recoveryState === undefined) {
-      this.recoveryState = {
-        requestId,
-        payment: await multipay.createPayment(plan),
-        receipts: new Map()
-      }
+    this.recoveryState ??= {
+      requestId,
+      payment: await multipay.createPayment(plan),
+      receipts: new Map()
     }
     const { payment, receipts: recoveredReceipts } = this.recoveryState
     for (const delivery of payment.deliveries) {

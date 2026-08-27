@@ -52,7 +52,7 @@ const lch = await ReferenceLCHServer.create({
 const server = createHttpServer((request, response) => {
   void route(request, response).catch(error => {
     const message = error instanceof Error ? error.message : 'request failed'
-    const status = error instanceof SyntaxError ? 400 : error instanceof RangeError ? 413 : 500
+    const status = errorStatus(error)
     if (!response.headersSent) sendJson(response, status, { error: message })
     else response.end()
   })
@@ -76,27 +76,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
   if (request.method === 'POST' && url.pathname === '/api/assets') {
-    const body = JSON.parse(
-      new TextDecoder().decode(await requestBytes(request, 32 * 1024 * 1024))
-    ) as {
-      name?: unknown
-      mediaType?: unknown
-      bytesBase64?: unknown
-    }
-    if (
-      typeof body.name !== 'string' ||
-      typeof body.mediaType !== 'string' ||
-      typeof body.bytesBase64 !== 'string'
-    ) {
-      sendJson(response, 400, { error: 'name, mediaType, and bytesBase64 are required' })
-      return
-    }
-    const published = await lch.publish({
-      name: body.name,
-      mediaType: body.mediaType,
-      bytes: Uint8Array.from(Buffer.from(body.bytesBase64, 'base64'))
-    })
-    await sendFetchResponse(response, referenceApiResponse(published))
+    await publishAsset(request, response)
     return
   }
   if (request.method === 'POST' && url.pathname === '/api/lch') {
@@ -122,17 +102,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
   if (request.method === 'GET' && url.pathname.startsWith('/content/')) {
-    const key = url.pathname.slice('/content/'.length)
-    if (!/^[0-9a-f]{64}$/u.test(key)) {
-      response.writeHead(404).end()
-      return
-    }
-    const bytes = lch.content.get(key)
-    if (bytes === undefined) {
-      response.writeHead(404).end()
-      return
-    }
-    sendContent(response, request.headers.range, bytes)
+    serveContent(response, request.headers.range, url.pathname)
     return
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
@@ -150,15 +120,61 @@ async function loadWallets(moduleSpecifier: string | undefined): Promise<WalletS
       compositionWallet: createFixtureWallet(103)
     }
   }
-  const specifier = moduleSpecifier.startsWith('.')
-    ? pathToFileURL(join(process.cwd(), moduleSpecifier)).href
-    : moduleSpecifier.startsWith('/')
-      ? pathToFileURL(moduleSpecifier).href
-      : moduleSpecifier
+  const specifier = walletModuleSpecifier(moduleSpecifier)
   const loaded = (await import(/* @vite-ignore */ specifier)) as Partial<WalletModule>
   if (typeof loaded.createLCHWallets !== 'function')
     throw new TypeError('LCH_WALLET_MODULE must export createLCHWallets()')
   return loaded.createLCHWallets()
+}
+
+async function publishAsset(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const body = JSON.parse(
+    new TextDecoder().decode(await requestBytes(request, 32 * 1024 * 1024))
+  ) as {
+    name?: unknown
+    mediaType?: unknown
+    bytesBase64?: unknown
+  }
+  if (
+    typeof body.name !== 'string' ||
+    typeof body.mediaType !== 'string' ||
+    typeof body.bytesBase64 !== 'string'
+  ) {
+    sendJson(response, 400, { error: 'name, mediaType, and bytesBase64 are required' })
+    return
+  }
+  const published = await lch.publish({
+    name: body.name,
+    mediaType: body.mediaType,
+    bytes: Uint8Array.from(Buffer.from(body.bytesBase64, 'base64'))
+  })
+  await sendFetchResponse(response, referenceApiResponse(published))
+}
+
+function serveContent(response: ServerResponse, range: string | undefined, pathname: string): void {
+  const key = pathname.slice('/content/'.length)
+  if (!/^[0-9a-f]{64}$/u.test(key)) {
+    response.writeHead(404).end()
+    return
+  }
+  const bytes = lch.content.get(key)
+  if (bytes === undefined) {
+    response.writeHead(404).end()
+    return
+  }
+  sendContent(response, range, bytes)
+}
+
+function walletModuleSpecifier(value: string): string {
+  if (value.startsWith('.')) return pathToFileURL(join(process.cwd(), value)).href
+  if (value.startsWith('/')) return pathToFileURL(value).href
+  return value
+}
+
+function errorStatus(error: unknown): number {
+  if (error instanceof SyntaxError) return 400
+  if (error instanceof RangeError) return 413
+  return 500
 }
 
 function requestBytes(request: IncomingMessage, maximum: number): Promise<Uint8Array> {

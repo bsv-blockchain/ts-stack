@@ -86,7 +86,7 @@ button:disabled {
 }
 
 .network {
-  margin-left: auto;
+  margin-left: 0;
   color: #596168;
   font:
     11px ui-monospace,
@@ -117,10 +117,6 @@ button:disabled {
     SFMono-Regular,
     Menlo,
     monospace;
-}
-
-.network {
-  margin-left: 0;
 }
 
 main,

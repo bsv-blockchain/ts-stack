@@ -63,39 +63,44 @@ export class LCHHttpServer {
       const value = decodeDeterministicCbor(
         await boundedBytes(request, this.maximumRequestBytes, 'ERR_LCH_FRAMING')
       )
-      if (type === 'license-request-preflight') {
-        await required(this.options.handlers.preflightLicense, type)(signed(value))
-        return new Response(null, { status: 204, headers: cors })
-      }
-      if (type === 'license-request') {
-        const quote = await required(this.options.handlers.quote, type)(signed(value))
-        return cborResponse('quote', quote as unknown as LCHValue, 200, cors)
-      }
-      if (type === 'payment-demand') {
-        await required(this.options.handlers.preflightDemand, type)(signed(value))
-        return new Response(null, { status: 204, headers: cors })
-      }
-      if (type === 'payment-delivery') {
-        const receipt = await required(this.options.handlers.paymentDelivery, type)(signed(value))
-        return cborResponse('payment-receipt', receipt as unknown as LCHValue, 200, cors)
-      }
-      if (type === 'payment-completion') {
-        const license = await required(this.options.handlers.complete, type)(completion(value))
-        return cborResponse('license', license as unknown as LCHValue, 200, cors)
-      }
-      if (type === 'license-recovery') {
-        const requestId = recoveryRequest(value)
-        const license = await required(this.options.handlers.recover, type)(requestId)
-        return license === undefined
-          ? errorResponse(404, 'ERR_LCH_LICENSE', cors)
-          : cborResponse('license', license as unknown as LCHValue, 200, cors)
-      }
-      return errorResponse(415, 'ERR_LCH_PROFILE_UNSUPPORTED', cors)
+      return await this.dispatch(type, value, cors)
     } catch (error) {
       const code = error instanceof LCHError ? error.code : 'ERR_LCH_DELIVERY'
-      const status = code === 'ERR_LCH_PAYMENT' ? 402 : code === 'ERR_LCH_ENDPOINT' ? 400 : 422
-      return errorResponse(status, code, cors)
+      return errorResponse(errorStatus(code), code, cors)
     }
+  }
+
+  private async dispatch(
+    type: LCHHttpMessageType,
+    value: LCHValue,
+    headers: Record<string, string>
+  ): Promise<Response> {
+    if (type === 'license-request-preflight') {
+      await required(this.options.handlers.preflightLicense, type)(signed(value))
+      return new Response(null, { status: 204, headers })
+    }
+    if (type === 'license-request') {
+      const quote = await required(this.options.handlers.quote, type)(signed(value))
+      return cborResponse('quote', quote as unknown as LCHValue, 200, headers)
+    }
+    if (type === 'payment-demand') {
+      await required(this.options.handlers.preflightDemand, type)(signed(value))
+      return new Response(null, { status: 204, headers })
+    }
+    if (type === 'payment-delivery') {
+      const receipt = await required(this.options.handlers.paymentDelivery, type)(signed(value))
+      return cborResponse('payment-receipt', receipt as unknown as LCHValue, 200, headers)
+    }
+    if (type === 'payment-completion') {
+      const license = await required(this.options.handlers.complete, type)(completion(value))
+      return cborResponse('license', license as unknown as LCHValue, 200, headers)
+    }
+    if (type === 'license-recovery') {
+      const license = await required(this.options.handlers.recover, type)(recoveryRequest(value))
+      if (license === undefined) return errorResponse(404, 'ERR_LCH_LICENSE', headers)
+      return cborResponse('license', license as unknown as LCHValue, 200, headers)
+    }
+    return errorResponse(415, 'ERR_LCH_PROFILE_UNSUPPORTED', headers)
   }
 
   private corsHeaders(): Record<string, string> {
@@ -105,6 +110,12 @@ export class LCHHttpServer {
       'cache-control': 'no-store'
     }
   }
+}
+
+function errorStatus(code: LCHErrorCode): number {
+  if (code === 'ERR_LCH_PAYMENT') return 402
+  if (code === 'ERR_LCH_ENDPOINT') return 400
+  return 422
 }
 
 export interface LCHHttpClientOptions {
