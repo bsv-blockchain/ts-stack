@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.40",
+  "version": "1.1.41",
   "overrides": {
     "brace-expansion": "5.0.9",
     "gaxios": "7.3.0",
@@ -41,7 +41,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "description": "",
   "devDependencies": {
-    "@bsv/message-box-client": "^2.4.1",
+    "@bsv/message-box-client": "^2.4.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
@@ -66,11 +66,11 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.2.2",
-    "@bsv/authsocket": "^2.1.6",
-    "@bsv/payment-express-middleware": "^2.1.5",
-    "@bsv/sdk": "^2.4.1",
-    "@bsv/wallet-toolbox": "^2.10.3",
+    "@bsv/auth-express-middleware": "^2.2.3",
+    "@bsv/authsocket": "^2.1.7",
+    "@bsv/payment-express-middleware": "^2.1.6",
+    "@bsv/sdk": "^2.4.2",
+    "@bsv/wallet-toolbox": "^2.10.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
