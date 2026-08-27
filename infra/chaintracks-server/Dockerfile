@@ -49,6 +49,12 @@ RUN npm ci --omit=dev --ignore-scripts \
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
+
 # Create directory for bulk headers and give the non-root node user ownership
 RUN mkdir -p /app/public/headers && chown -R node:node /app
 

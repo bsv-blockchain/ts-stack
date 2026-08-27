@@ -12,7 +12,7 @@
 - Domain: Messaging
 - Criticality tier: 1
 - Reliability Level (current → target): RL1 → RL4
-- Owner / Backup owner: BSV Blockchain Association / Unknown
+- Owner / Backup owner: BSV Association / Unknown
 
 ## Build and Test
 - Build command: `npm run build` (tsc; prebuild: rimraf dist)

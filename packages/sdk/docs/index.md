@@ -15,15 +15,14 @@ npm install @bsv/sdk
 You can then import modules from the SDK as follows:
 
 ```ts
-import { WalletClient, PrivateKey, Transaction } from "@bsv/sdk";
+import { WalletClient, PrivateKey, Transaction } from '@bsv/sdk'
 ```
 
 Or using require syntax:
 
 ```js
-const { WalletClient, PrivateKey, Transaction } = require("@bsv/sdk");
+const { WalletClient, PrivateKey, Transaction } = require('@bsv/sdk')
 ```
-
 
 ## BRC-100 Application to Wallet Interface
 
@@ -34,7 +33,7 @@ BSV Desktop and BSV Browser are the BSV Association reference implementations fo
 🚀 **[WalletClient Quickstart](https://fast.brc.dev/)**
 
 - Run SDK code examples without any setup
-- Experiment with transactions, keys, and scripts in real-time  
+- Experiment with transactions, keys, and scripts in real-time
 - Learn by doing with immediate feedback
 - Test concepts from our tutorials interactively
 
@@ -42,9 +41,9 @@ BSV Desktop and BSV Browser are the BSV Association reference implementations fo
 
 Perfect for getting started quickly or experimenting with new ideas.
 
-Another way to familiarize yourself with the Application to Wallet Interface is to checkout this Swagger UI.
-
-[![Swagger](swagger.png)](./swagger/index.html)
+The machine-readable BRC-100 interface is available as an
+[OpenAPI document](./swagger/swagger.yaml), which can be loaded into a viewer
+of your choice.
 
 Finally, you can deep dive into the details of the interface and types in the reference material below.
 
@@ -67,7 +66,6 @@ Finally, you can deep dive into the details of the interface and types in the re
 - [Compatibility](./reference/compat.md)
 - [Telemetry](./telemetry.md)
 
-
 ## Coming Soon™
 
 - [Manual Transaction Creation](#manual-transaction-creation)
@@ -75,7 +73,6 @@ Finally, you can deep dive into the details of the interface and types in the re
 - [Deriving Keys](#deriving-keys)
 - [Overlays](#overlays)
 - [MessageBox](#message-box)
-
 
 ## Performance Reports
 

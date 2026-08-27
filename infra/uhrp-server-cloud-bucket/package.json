@@ -15,7 +15,9 @@
   "files": [
     "out/src",
     "src",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "repository": {
     "type": "git",

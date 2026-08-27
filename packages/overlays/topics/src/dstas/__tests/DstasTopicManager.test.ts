@@ -1,13 +1,17 @@
 import { DstasTopicManager } from '../DstasTopicManager'
 import { LockingScript, Transaction, UnlockingScript } from '@bsv/sdk'
-import { DstasToken } from '@bsv/templates'
 import { allowlistIssuerPolicy } from '../../admission/issuerPolicy'
-import { DSTAS_PLAIN_HEX } from './dstas-fixture'
 
-// A real DSTAS script (from dxs-bsv-token-sdk). The tokenId is the redemption
-// pkh baked into the script, so two outputs of the same script share a tokenId.
+const FIXTURE_OWNER = '11'.repeat(20)
+const FIXTURE_TOKEN_ID = '22'.repeat(20)
+
+// First-party structural fixture. Its body is synthetic and only exercises
+// the framing that the topic manager consumes.
+const DSTAS_PLAIN_HEX = `14${FIXTURE_OWNER}00` + `${'51'.repeat(2000)}6a14${FIXTURE_TOKEN_ID}0103`
+
+// The tokenId is the redemption pkh baked into the script, so two outputs of
+// the same script share a tokenId.
 const dstasScript = (): LockingScript => LockingScript.fromHex(DSTAS_PLAIN_HEX)
-const FIXTURE_TOKEN_ID = DstasToken.decode(dstasScript()).tokenId
 
 describe('DstasTopicManager', () => {
   const manager = new DstasTopicManager()
@@ -24,7 +28,11 @@ describe('DstasTopicManager', () => {
     sourceTx.addOutput({ lockingScript: dstasScript(), satoshis: 1000 })
 
     const tx = new Transaction()
-    tx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
+    tx.addInput({
+      sourceTransaction: sourceTx,
+      sourceOutputIndex: 0,
+      unlockingScript: new UnlockingScript([])
+    })
     tx.addOutput({ lockingScript: dstasScript(), satoshis: 1000 })
 
     const admitted = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
@@ -37,7 +45,11 @@ describe('DstasTopicManager', () => {
     sourceTx.addOutput({ lockingScript: dstasScript(), satoshis: 1000 })
 
     const tx = new Transaction()
-    tx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
+    tx.addInput({
+      sourceTransaction: sourceTx,
+      sourceOutputIndex: 0,
+      unlockingScript: new UnlockingScript([])
+    })
     tx.addOutput({ lockingScript: dstasScript(), satoshis: 2000 })
 
     const admitted = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
@@ -46,7 +58,10 @@ describe('DstasTopicManager', () => {
 
   it('ignores non-DSTAS outputs', async () => {
     const tx = new Transaction()
-    tx.addOutput({ lockingScript: LockingScript.fromHex('76a914' + 'ab'.repeat(20) + '88ac'), satoshis: 1000 })
+    tx.addOutput({
+      lockingScript: LockingScript.fromHex('76a914' + 'ab'.repeat(20) + '88ac'),
+      satoshis: 1000
+    })
     const admitted = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(admitted.outputsToAdmit).toEqual([])
   })
@@ -73,7 +88,11 @@ describe('DstasTopicManager', () => {
       const sourceTx = new Transaction()
       sourceTx.addOutput({ lockingScript: dstasScript(), satoshis: 1000 })
       const tx = new Transaction()
-      tx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
+      tx.addInput({
+        sourceTransaction: sourceTx,
+        sourceOutputIndex: 0,
+        unlockingScript: new UnlockingScript([])
+      })
       tx.addOutput({ lockingScript: dstasScript(), satoshis: 1000 })
       const admitted = await gated.identifyAdmissibleOutputs(tx.toBEEF(), [0])
       expect(admitted.outputsToAdmit).toEqual([0]) // a transfer, not an issuance — not gated

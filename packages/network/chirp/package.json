@@ -1,8 +1,8 @@
 {
   "name": "@bsv/chirp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BRC-167 Chunked, Hashed, Interleaved Resolution Protocol reference implementation",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "type": "module",
   "sideEffects": false,

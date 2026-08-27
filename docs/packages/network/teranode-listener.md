@@ -4,9 +4,9 @@ title: '@bsv/teranode-listener'
 kind: package
 domain: network
 npm: '@bsv/teranode-listener'
-version: '1.1.4'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.1.5'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p'
 status: stable

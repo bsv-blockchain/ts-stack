@@ -11,6 +11,8 @@ const HEALTH_DIR = path.join(REPOSITORY_ROOT, 'governance/repository-health')
 const CONTRACT_BASELINE_PATH = path.join(HEALTH_DIR, 'contract-baseline.json')
 
 const DISCOVERY_ROOTS = ['packages', 'conformance', 'apps', 'docs-site']
+const PACKAGE_MANIFEST_ROOTS = [...DISCOVERY_ROOTS, 'infra', 'tools']
+export const PACKAGE_AUTHOR = 'BSV Association'
 const IGNORED_DIRECTORIES = new Set([
   '.git',
   '.next',
@@ -119,6 +121,32 @@ export function discoverWorkspaceProjects(root = REPOSITORY_ROOT) {
       }
     })
     .sort((left, right) => left.path.localeCompare(right.path))
+}
+
+export function discoverPackageManifests(root = REPOSITORY_ROOT) {
+  const packageFiles = new Set([path.join(root, 'package.json')])
+  for (const directory of PACKAGE_MANIFEST_ROOTS) {
+    findPackageJsonFiles(path.join(root, directory), packageFiles)
+  }
+
+  return [...packageFiles]
+    .filter(filePath => fs.existsSync(filePath))
+    .map(manifestPath => ({
+      path: relativePath(manifestPath, root),
+      manifestPath,
+      manifest: readJson(manifestPath)
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path))
+}
+
+export function validatePackageAuthorIdentity(manifests) {
+  return manifests
+    .filter(({ manifest }) => manifest.author !== PACKAGE_AUTHOR)
+    .map(
+      ({ path: manifestPath, manifest }) =>
+        `${manifestPath} author is ${JSON.stringify(manifest.author ?? null)}; ` +
+        `every first-party package manifest must use ${JSON.stringify(PACKAGE_AUTHOR)}`
+    )
 }
 
 function isNonEmptyString(value) {
@@ -1065,9 +1093,9 @@ function publicManifestChecks(manifest, projectPath) {
       'Public package requires the canonical repository issue tracker'
     ],
     [
-      'missing-author',
-      !isNonEmptyString(manifest.author),
-      'Public package requires author or organization metadata'
+      'invalid-author',
+      manifest.author !== PACKAGE_AUTHOR,
+      `Public package author must be ${PACKAGE_AUTHOR}`
     ],
     [
       'missing-keywords',
@@ -1311,11 +1339,13 @@ export function evaluateRepositoryHealth({
   const registry = readJson(projectsPath)
   const exceptions = readJson(exceptionsPath)
   const baselines = readJson(baselinesPath)
+  const packageManifests = discoverPackageManifests(root)
   const findings = collectContractFindings(registry, discovered, root)
   const errors = [
     ...validateProjectRegistry(registry, discovered),
     ...validateExceptionRegistry(exceptions, today, registry.ownerDefinitions),
-    ...validateBaselines(baselines, registry, discovered)
+    ...validateBaselines(baselines, registry, discovered),
+    ...validatePackageAuthorIdentity(packageManifests)
   ]
 
   if (!skipContractBaseline) {

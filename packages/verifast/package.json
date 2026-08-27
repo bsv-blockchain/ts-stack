@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -16,7 +16,7 @@
   },
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "keywords": [
     "bsv",
     "bitcoin-script",
@@ -31,7 +31,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "exports": {
     ".": {

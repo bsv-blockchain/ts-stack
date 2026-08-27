@@ -1,3 +1,4 @@
+// Modified elliptic lineage; see ../../THIRD_PARTY_NOTICES.md and ../../LICENSES/elliptic-MIT.txt.
 import BigNumber from './BigNumber.js'
 import ReductionContext from './ReductionContext.js'
 import MontgomoryMethod from './MontgomoryMethod.js'

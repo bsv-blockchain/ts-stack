@@ -1,3 +1,4 @@
+// Reformatted from python-mnemonic vectors.json (MIT); see ../../../THIRD_PARTY_NOTICES.md.
 export default {
   english: [
     {

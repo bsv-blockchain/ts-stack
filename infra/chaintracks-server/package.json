@@ -32,7 +32,7 @@
     "express",
     "api"
   ],
-  "author": "",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/wallet-toolbox": "^2.10.3",

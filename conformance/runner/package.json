@@ -1,5 +1,6 @@
 {
   "name": "@bsv/conformance-runner",
+  "author": "BSV Association",
   "version": "0.1.0",
   "private": true,
   "description": "BSV ts-stack conformance test vector runner",

@@ -179,6 +179,9 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-The license for the code in this repository is the Open BSV License. Refer to [LICENSE.txt](./LICENSE.txt) for the license text.
+TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+Incorporated material remains under the separate terms identified in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md), with complete texts in
+[LICENSES/](./LICENSES/). Keep all three payloads with source and binary distributions.
 
 Thank you for being a part of the BSV Blockchain Libraries Project. Let's build the future of BSV Blockchain together!

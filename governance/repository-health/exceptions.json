@@ -182,6 +182,7 @@
       "evidence": [
         "tools/codegen/node/package.json#overrides",
         "tools/codegen/node/package-lock.json",
+        "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
         "https://github.com/advisories/GHSA-52cp-r559-cp3m",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",

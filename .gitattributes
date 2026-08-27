@@ -1,0 +1,3 @@
+# Preserve hash-pinned third-party license texts byte-for-byte.
+LICENSES/*.txt -text -whitespace
+**/LICENSES/*.txt -text -whitespace

@@ -114,4 +114,7 @@ The gate installs the packed packages in a clean project, bundles them with Vite
 
 ## License
 
-Open BSV License Version 6 — see [LICENSE.txt](./LICENSE.txt).
+This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
+[LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
+browser build.

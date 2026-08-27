@@ -1,231 +1,231 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-24",
+  "lastReviewed": "2026-08-27",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
       "name": "@bsv/402-pay",
       "publishedVersion": "0.2.1",
       "releaseType": "patch",
-      "summary": "Adds an exact-tarball Vite and esbuild contract for the browser-safe client entry point, including a bundle-size ratchet and an assertion that server exports never leak into browser consumers.",
-      "migration": "No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged."
+      "summary": "Adds an exact-tarball Vite and esbuild contract for the browser-safe client entry point, including a bundle-size ratchet and an assertion that server exports never leak into browser consumers. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/air-gap",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "Introduces the zero-dependency one-directional optical air-gap transport, wire protocol v1 (BRC-141): a versioned 23-byte header with an 8-byte session identity, exact-integer ideal-soliton fountain coding, a resource-bounded camera-safe decoder with session locking that never throws, CRC32 payload integrity, browser and Node consumers, and shared conformance vectors under conformance/vectors/transport/.",
+      "summary": "Introduces the zero-dependency one-directional optical air-gap transport, wire protocol v1 (BRC-141): a versioned 23-byte header with an 8-byte session identity, exact-integer ideal-soliton fountain coding, a resource-bounded camera-safe decoder with session locking that never throws, CRC32 payload integrity, browser and Node consumers, and shared conformance vectors under conformance/vectors/transport/. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; this is the first published release of a new package with no prior public API. The experimental pre-release framing that circulated on the unmerged feature branch is not accepted by the v1 decoder."
     },
     {
       "name": "@bsv/amountinator",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Adds the strict package and artifact contract and hardens amount formatting without changing the public API.",
+      "summary": "Adds the strict package and artifact contract, hardens amount formatting, and standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; this is a backward-compatible patch candidate."
     },
     {
       "name": "@bsv/auth",
       "publishedVersion": "0.1.1",
       "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; authentication APIs, wire behavior, and runtime defaults are unchanged."
     },
     {
       "name": "@bsv/auth-express-middleware",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, and preserves BRC-100 byte fields in handshake and buffered JSON responses across number-array, Uint8Array, and historical numeric-key JSON runtimes.",
-      "migration": "No API migration is required. Upgrade to @bsv/sdk 2.4.1 or later for the shared byte-boundary contract. Generic signed application-body canonicalization remains unchanged so old and new peers verify identical bytes."
+      "summary": "Contains late BRC-104 peer-processing failures after the HTTP response or connection has already settled, and preserves BRC-100 byte fields in handshake and buffered JSON responses across number-array, Uint8Array, and historical numeric-key JSON runtimes. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. Upgrade to @bsv/sdk 2.4.1 or later for the shared byte-boundary contract. Generic signed application-body canonicalization remains unchanged so old and new peers verify identical bytes. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/authsocket",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures, caps per-socket authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
-      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
+      "summary": "Contains authentication and application callback failures, caps per-socket authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/authsocket-client",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Contains authentication and application callback failures, caps authentication concurrency, serializes real typed arrays portably, and preserves arbitrary signed event JSON exactly.",
-      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields."
+      "summary": "Contains authentication and application callback failures, caps authentication concurrency, serializes real typed arrays portably, preserves arbitrary signed event JSON exactly, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
     },
     {
       "name": "@bsv/btms",
       "publishedVersion": "1.1.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet and preserves token settlement and refund transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.",
+      "summary": "Adds TerraTestNet and preserves token settlement and refund transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "Existing local, mainnet, testnet, and number-array behavior is unchanged. TTN consumers select networkPreset teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility."
     },
     {
       "name": "@bsv/btms-permission-module",
       "publishedVersion": "1.1.1",
       "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; permission-module APIs and token semantics are unchanged."
     },
     {
       "name": "@bsv/chirp",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "Introduces the BRC-167 CHIRP reference implementation: canonical Merkle codecs and vectors, progressive and resumable multi-host publication, bounded interleaved and range-aware resolution, a verified-object cache, browser and Node byte-source adapters, closure validation, and publication/retrieval/verification CLI commands.",
+      "summary": "Introduces the BRC-167 CHIRP reference implementation: canonical Merkle codecs and vectors, progressive and resumable multi-host publication, bounded interleaved and range-aware resolution, a verified-object cache, browser and Node byte-source adapters, closure validation, and publication/retrieval/verification CLI commands. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ."
     },
     {
       "name": "@bsv/did",
       "publishedVersion": "0.2.1",
       "releaseType": "patch",
-      "summary": "Adds an exact-tarball Vite and esbuild browser-consumer contract with public-export, source-map, server-dependency, and bundle-size ratchets.",
+      "summary": "Adds an exact-tarball Vite and esbuild browser-consumer contract with public-export, source-map, server-dependency, and bundle-size ratchets. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; DID APIs, encodings, credential behavior, and supported import forms are unchanged."
     },
     {
       "name": "@bsv/did-client",
       "publishedVersion": "1.2.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet as an explicit DID overlay-network preset and retains the governed package-quality contract.",
-      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later."
+      "summary": "Adds TerraTestNet as an explicit DID overlay-network preset, retains the governed package-quality contract, ships the complete SDK incorporated-material notice archive with a retained UMD notice banner, and standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
     },
     {
       "name": "@bsv/fund-wallet",
       "publishedVersion": "1.4.1",
       "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; wallet funding APIs and transaction behavior are unchanged."
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract, and retains the imported fund-metanet source's hash-pinned ISC provenance and notice from its exact source and npm publication. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; wallet funding APIs and transaction behavior are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/gasp",
       "publishedVersion": "1.3.1",
       "releaseType": "patch",
-      "summary": "Preserves the positional GASP constructor contract while improving declaration metadata and production maintainability, and adds an exact-tarball browser-consumer and bundle-size contract.",
-      "migration": "No consumer migration is required; existing constructor calls, imports, synchronization behavior, and wire semantics are unchanged."
+      "summary": "Preserves the positional GASP constructor contract while improving declaration metadata and production maintainability, and adds an exact-tarball browser-consumer and bundle-size contract. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; existing constructor calls, imports, synchronization behavior, and wire semantics are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.4.0",
       "releaseType": "patch",
-      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, with strict rejection of sparse or invalid byte records.",
-      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form."
+      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
     },
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.2.1",
       "releaseType": "minor",
-      "summary": "Adds an engine lookup-result cardinality ceiling before transaction/proof hydration and an optional TopicManager abort hook for provisional admission state when strict transaction broadcast fails.",
-      "migration": "Existing Engine and TopicManager implementations remain valid. Lookup results default to 1,000 formulas; pass -1 only when an equivalent deployment bound exists. Topic managers whose validation creates provisional external state should implement abortAdmissibleOutputs, while read-only managers require no change."
+      "summary": "Adds an engine lookup-result cardinality ceiling before transaction/proof hydration and an optional TopicManager abort hook for provisional admission state when strict transaction broadcast fails. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
+      "migration": "Existing Engine and TopicManager implementations remain valid. Lookup results default to 1,000 formulas; pass -1 only when an equivalent deployment bound exists. Topic managers whose validation creates provisional external state should implement abortAdmissibleOutputs, while read-only managers require no change. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/overlay-discovery-services",
       "publishedVersion": "2.1.1",
       "releaseType": "minor",
-      "summary": "Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services.",
-      "migration": "Existing mainnet and testnet advertisers are unchanged. TTN operators pass chain ttn and provision the staging storage and overlay endpoints before advertising."
+      "summary": "Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
+      "migration": "Existing mainnet and testnet advertisers are unchanged. TTN operators pass chain ttn and provision the staging storage and overlay endpoints before advertising. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.5.0",
       "releaseType": "minor",
-      "summary": "Adds a TerraTestNet runtime mode with TTN discovery roots, wallet advertising, and explicit ChainTracks requirements while retaining Arcade-first propagation.",
-      "migration": "Existing mainnet and testnet servers are unchanged. TTN servers call configureNetwork('ttn'), configureArcade with the TTN endpoint, and configureChaintracks or configureChainTracker before engine initialization."
+      "summary": "Adds a TerraTestNet runtime mode with TTN discovery roots, wallet advertising, and explicit ChainTracks requirements while retaining Arcade-first propagation. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
+      "migration": "Existing mainnet and testnet servers are unchanged. TTN servers call configureNetwork('ttn'), configureArcade with the TTN endpoint, and configureChaintracks or configureChainTracker before engine initialization. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.6.10",
       "releaseType": "minor",
-      "summary": "Adds persistent first-writer reservations for UMP presentation and recovery hashes, aborts provisional claims after strict broadcast failure, keeps confirmed owners protected until successor indexing, retries transient initialization, marks one-time legacy bootstrap, and returns the newest bounded legacy candidates for verified lineage or an operator pin. It also retains the collection-index resilience and opt-in repair controls from the prior candidate.",
+      "summary": "Adds persistent first-writer reservations for UMP presentation and recovery hashes, aborts provisional claims after strict broadcast failure, keeps confirmed owners protected until successor indexing, retries transient initialization, marks one-time legacy bootstrap, and returns the newest bounded legacy candidates for verified lineage or an operator pin. It also retains the collection-index resilience and opt-in repair controls from the prior candidate. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "Existing topic and lookup identifiers remain unchanged. Production UMP overlays must give UMPTopicManager and the UMP lookup service Mongo-backed stores that use the same database, then roll out before updated wallet clients; the no-argument manager is bounded but intended only for isolated single-process use. The reservation and bootstrap-marker collections are additive and initialize from currently indexed UMP UTXOs; take a MongoDB backup before rollout. Legacy ambiguous rows remain visible and can be resolved with WAB pinning rather than deleted."
     },
     {
       "name": "@bsv/paymail",
       "publishedVersion": "2.4.2",
       "releaseType": "patch",
-      "summary": "Modernizes the package contract, hardens DNS, capability discovery, and browser-compatible Paymail behavior, and shares the host application's Express runtime and types for server routers.",
-      "migration": "Existing Paymail client APIs and protocol semantics are retained. Consumers provide one Express 4.18 or 5 runtime and matching type graph; browser bundles continue to exclude the server router implementation."
+      "summary": "Modernizes the package contract, hardens DNS, capability discovery, and browser-compatible Paymail behavior, and shares the host application's Express runtime and types for server routers. Removes local copies of externally authored specification documents whose upstream repositories do not assert reusable terms, replacing them with authoritative links. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "Existing Paymail client APIs and protocol semantics are retained. Consumers provide one Express 4.18 or 5 runtime and matching type graph; browser bundles continue to exclude the server router implementation. Consumers of the former bundled Money Button or Tokenized specification documents must follow the authoritative links in docs/specs/README.md. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/payment-express-middleware",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Standardizes package quality, strengthens payment middleware validation, edge policy, and failure handling, and shares the host application's Express runtime and types.",
-      "migration": "No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported, and Express 4 and 5 applications use their own peer-provided Express installation."
+      "summary": "Standardizes package quality, strengthens payment middleware validation, edge policy, and failure handling, and shares the host application's Express runtime and types. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported, and Express 4 and 5 applications use their own peer-provided Express installation. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.4.0",
       "releaseType": "patch",
-      "summary": "Adds one strict BRC-100 byte-boundary contract: real typed arrays serialize portably, historical bytes recover only at typed protocol fields, arbitrary JSON round-trips unchanged, and React Native discovery remains compatible and bounded. React Native WebView responses are additionally verified as bridge-delivered before their payload is read, so framed, opener, and sandboxed browsing contexts can no longer answer a wallet invocation.",
-      "migration": "No API migration is required. Historical number-array fast paths remain unchanged; consumers using JSON or WebView transports should upgrade both endpoints when possible, while mixed old/new wallet peers remain compatible through portable output and typed-boundary recovery. React Native hosts need no change: bridge injections, `window.postMessage` responses, host frames relaying on the document's own origin, and an exact configured wallet origin all continue to resolve."
+      "summary": "Adds one strict BRC-100 byte-boundary contract and secure React Native bridge validation, and completes incorporated-code compliance with hash-pinned provenance, exact MIT/ISC/BSD/Apache notices, source lineage markers, package payloads, a retained UMD banner, SBOM components, and release enforcement. Removes a broken copied Swagger UI scaffold and screenshot; the first-party OpenAPI source remains available for use with any viewer. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles."
     },
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet and preserves Message Box, token send/receive, and server-adapter transaction bytes across number-array, Uint8Array, and historical numeric-key JSON wallet runtimes.",
-      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility."
+      "summary": "Adds TerraTestNet, preserves Message Box, token send/receive, and server-adapter transaction bytes across wallet runtimes, and restores the exact scoped MIT notice for the pre-monorepo source alongside Open BSV licensing for later first-party changes. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "@bsv/templates",
       "publishedVersion": "1.9.1",
       "releaseType": "minor",
-      "summary": "Adds the R1K1Wallet ScriptTemplate for salted P-256 hardware signing with an independent secp256k1 recovery path, including a checksummed static Runar artifact and browser-safe lazy decompression. Also consolidates MultiPushDrop script construction without changing its output, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy.",
-      "migration": "No existing consumer migration is required; existing template APIs and generated scripts are unchanged. New R1K1Wallet consumers await lock(), retain each private 32-byte salt, and provide a PIV signer that signs the supplied digest directly without hashing it again."
+      "summary": "Adds the R1K1Wallet ScriptTemplate for salted P-256 hardware signing with an independent secp256k1 recovery path, including a checksummed static Runar artifact and browser-safe lazy decompression. Also consolidates MultiPushDrop script construction without changing its output, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
+      "migration": "No existing consumer migration is required; existing template APIs and generated scripts are unchanged. New R1K1Wallet consumers await lock(), retain each private 32-byte salt, and provide a PIV signer that signs the supplied digest directly without hashing it again. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/teranode-listener",
       "publishedVersion": "1.1.1",
       "releaseType": "patch",
-      "summary": "Refreshes the compatible libp2p transport, discovery, identification, DHT, peer-ID, ping, and private-network dependency set.",
-      "migration": "No consumer migration is required; listener APIs, topics, and network configuration are unchanged."
+      "summary": "Refreshes the compatible libp2p transport, discovery, identification, DHT, peer-ID, ping, and private-network dependency set, and retains the imported ts-p2p source's hash-pinned MIT provenance and notice from its exact source and npm publication. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; listener APIs, topics, and network configuration are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/verifast",
       "publishedVersion": "0.3.0",
       "releaseType": "patch",
-      "summary": "Adds exact-tarball browser, WASM, worker, strict-CSP, streaming-fallback, UMD source-map, and raw/gzip/Brotli bundle contracts.",
-      "migration": "No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged."
+      "summary": "Adds exact-tarball browser, WASM, worker, strict-CSP, streaming-fallback, UMD source-map, and bundle contracts, and now ships hash-pinned BDK, bitcoin-sv, libsecp256k1, Emscripten, musl, LLVM, and Boost notices with a retained UMD banner and SBOM component records. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged. Keep THIRD_PARTY_NOTICES.md and LICENSES/ with every JavaScript and WebAssembly distribution."
     },
     {
       "name": "@bsv/wallet-helper",
       "publishedVersion": "0.1.1",
       "releaseType": "patch",
-      "summary": "Adds strict package contracts and hardens transaction-builder and OP_RETURN validation behavior.",
-      "migration": "No consumer migration is required; fluent builder APIs and transaction semantics are unchanged."
+      "summary": "Adds strict package contracts and hardens transaction-builder and OP_RETURN validation behavior. Retains the hash-pinned pre-uniformization Open BSV License Version 6 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required; fluent builder APIs and transaction semantics are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/wallet-relay",
       "publishedVersion": "0.2.2",
       "releaseType": "minor",
-      "summary": "Adds the strict package contract and preserves wallet RPC, encrypted relay payloads, signatures, and transaction bytes across number-array, Uint8Array, Buffer, and historical numeric-key JSON runtimes.",
+      "summary": "Adds the strict package contract and preserves wallet RPC, encrypted relay payloads, signatures, and transaction bytes across number-array, Uint8Array, Buffer, and historical numeric-key JSON runtimes. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No wallet RPC migration is required; upgrade to @bsv/sdk 2.4.1 or later. Existing relay sessions and number arrays remain valid, and host applications continue to provide their matching Express runtime and type graph."
     },
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Retains BRC-95 internalization compatibility, preserves typed AtomicBEEF, competing BEEF, and wallet review errors across portable and historical wallet JSON representations, leaves opaque WAB response JSON unchanged, keeps listOutputs totalOutputs stable across every Knex and IndexedDB page, and keeps balanceAndUtxos paging bounded under that stable-total contract.",
-      "migration": "No consumer migration is required. Canonical AtomicBEEF and existing number-array behavior are unchanged; upgrade to @bsv/sdk 2.4.1 or later for cross-version JSON and wallet-error compatibility. listOutputs callers now receive the full matching count on short and out-of-range pages instead of a page-local count."
+      "summary": "Retains BRC-95 and BRC-100 compatibility and stable bounded pagination, removes an obsolete exported JSight application bundle that lacked its required third-party license companion, preserves the package's earlier Open BSV grant in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No runtime consumer migration is required. Canonical AtomicBEEF, number-array behavior, and pagination contracts are unchanged; upgrade to @bsv/sdk 2.4.2 or later. Documentation users should use docs/storage.md instead of the removed JSight export. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors, historical response recovery, and stable listOutputs totals for IndexedDB pagination.",
-      "migration": "No consumer migration is required. Browser exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later. IndexedDB listOutputs callers now receive the full matching count on every page."
+      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 compatibility fixes, stable IndexedDB totals, preserves earlier Open BSV grants in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required. Browser exports, wire types, canonical AtomicBEEF behavior, and pagination contracts are unchanged; use @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.10.0",
       "releaseType": "patch",
-      "summary": "Carries the mobile Wallet Toolbox internalization and BRC-100 JSON byte-boundary compatibility fixes, including portable wallet review errors and historical response recovery.",
-      "migration": "No consumer migration is required. React Native exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.1 or later."
+      "summary": "Carries the mobile Wallet Toolbox internalization and BRC-100 compatibility fixes, preserves earlier Open BSV grants in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No consumer migration is required. React Native exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "create-bsv-app",
       "publishedVersion": "1.0.2",
       "releaseType": "minor",
-      "summary": "Adds TTN to the CLI, browser configurator, configuration model, and persisted project-manifest network choices.",
-      "migration": "Existing mainnet and testnet scaffolds are unchanged. New TTN projects pass --network ttn or select TerraTestNet in the configurator."
+      "summary": "Adds TTN to the CLI, browser configurator, configuration model, and persisted project-manifest network choices. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
+      "migration": "Existing mainnet and testnet scaffolds are unchanged. New TTN projects pass --network ttn or select TerraTestNet in the configurator. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     }
   ]
 }

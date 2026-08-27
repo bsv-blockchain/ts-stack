@@ -1,5 +1,6 @@
 {
   "name": "@bsv/conformance-runner-ts",
+  "author": "BSV Association",
   "private": true,
   "type": "module",
   "scripts": {
