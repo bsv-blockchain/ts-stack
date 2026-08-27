@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.35'
-last_updated: '2026-08-25'
-last_verified: '2026-08-25'
+version: '0.2.36'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -13,6 +13,10 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 # UHRP Server (Cloud Bucket)
 
 > A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
+
+The 0.2.36 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
+to remediate CVE-2026-14456. Service APIs, bucket layouts, CHIRP behavior, and
+deployment configuration are unchanged from 0.2.35.
 
 ## What it does
 
