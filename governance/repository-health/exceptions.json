@@ -3,20 +3,6 @@
   "lastReviewed": "2026-08-24",
   "exceptions": [
     {
-      "id": "chirp-first-publication-bootstrap",
-      "category": "security",
-      "target": "@bsv/chirp@0.1.0 first npm publication",
-      "owner": "ts-stack-maintainers",
-      "reason": "npm requires a new package record before its trusted GitHub Actions publisher can be configured. The one-time fallback is constrained to a manual single-package CHIRP release, a one-day granular token with write access only to the @bsv scope, and the protected npm-production publish job that scans, attests, and publishes the immutable candidate with provenance.",
-      "evidence": [
-        "https://docs.npmjs.com/trusted-publishers#troubleshooting",
-        "https://github.com/bsv-blockchain/ts-stack/actions/runs/33030007295"
-      ],
-      "created": "2026-08-24",
-      "reviewBy": "2026-08-28",
-      "removeWhen": "Remove the workflow input and secret binding, delete the GitHub environment secret, revoke the npm token, and delete this exception immediately after @bsv/chirp@0.1.0 is published and the bsv-blockchain/ts-stack release.yaml trusted publisher is verified for npm-production."
-    },
-    {
       "id": "scorecard-maintainer-merge-policy",
       "category": "security",
       "target": "OpenSSF Scorecard BranchProtectionID #188 and CodeReviewID #203",

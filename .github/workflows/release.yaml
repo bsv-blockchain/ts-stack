@@ -18,10 +18,6 @@ on:
         description: 'pnpm filter (single mode only, e.g. ./packages/sdk)'
         required: false
         default: ''
-      chirp_bootstrap:
-        description: 'One-time @bsv/chirp registry bootstrap (must use single mode and the CHIRP filter)'
-        type: boolean
-        default: false
 
 permissions: {}
 
@@ -42,7 +38,6 @@ jobs:
       count: ${{ steps.artifacts.outputs.count }}
       filter: ${{ steps.plan.outputs.filter }}
       mode: ${{ steps.plan.outputs.mode }}
-      chirp_bootstrap: ${{ steps.plan.outputs.chirp_bootstrap }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +109,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_MODE: ${{ inputs.mode }}
           DISPATCH_FILTER: ${{ inputs.filter }}
-          DISPATCH_CHIRP_BOOTSTRAP: ${{ inputs.chirp_bootstrap }}
         run: |
           mode=""
           filter=""
@@ -145,17 +139,8 @@ jobs:
             fi
           fi
 
-          chirp_bootstrap="${DISPATCH_CHIRP_BOOTSTRAP:-false}"
-          if [[ "$chirp_bootstrap" == "true" ]]; then
-            if [[ "$EVENT_NAME" != "workflow_dispatch" || "$mode" != "single" || "$filter" != "./packages/network/chirp" ]]; then
-              echo "::error::The one-time CHIRP bootstrap requires a manual single-package release filtered to ./packages/network/chirp."
-              exit 1
-            fi
-          fi
-
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "filter=$filter" >> "$GITHUB_OUTPUT"
-          echo "chirp_bootstrap=$chirp_bootstrap" >> "$GITHUB_OUTPUT"
           echo "Resolved release plan: mode=$mode filter='${filter:-<all governed packages>}'"
 
       # Package artifacts cross a single immutable release boundary: pack once,
@@ -285,23 +270,7 @@ jobs:
           retention-days: 90
 
       - name: Publish the attested npm tarballs
-        if: needs.prepare.outputs.chirp_bootstrap != 'true'
         run: node scripts/package-release-artifacts.mjs publish release-artifacts/manifest.json
-
-      # npm requires a package record before a trusted publisher can be bound.
-      # This temporary, protected-environment path is constrained by the plan
-      # step to the first @bsv/chirp publication and is removed immediately
-      # after the package's OIDC trust relationship is established.
-      - name: Bootstrap the attested @bsv/chirp tarball
-        if: needs.prepare.outputs.chirp_bootstrap == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_CHIRP_BOOTSTRAP_TOKEN }}
-        run: |
-          if [[ -z "$NODE_AUTH_TOKEN" ]]; then
-            echo "::error::The protected CHIRP bootstrap token is unavailable."
-            exit 1
-          fi
-          node scripts/package-release-artifacts.mjs publish release-artifacts/manifest.json
 
   # Publication credentials never coexist with source-controlled package build
   # code. The separate sync job receives only repository/PR authority and
