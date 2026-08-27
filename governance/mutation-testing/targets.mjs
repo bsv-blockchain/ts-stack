@@ -497,6 +497,17 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/BasicTokenModule*.test.ts'], {
         esm: true
       })
+    },
+    'chirp-codec': {
+      packageDirectory: 'packages/network/chirp',
+      manifest: 'packages/network/chirp/package.json',
+      propertyTest: 'packages/network/chirp/test/codec.property.test.ts',
+      mutate: ['src/compactSize.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/codec.property.test.ts', '<rootDir>/test/primitives.test.ts'],
+        { esm: true }
+      )
     }
   }
 }

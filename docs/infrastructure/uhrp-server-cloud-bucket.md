@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.34'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+version: '0.2.35'
+last_updated: '2026-08-25'
+last_verified: '2026-08-25'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]

@@ -40,7 +40,8 @@
       "packages/helpers/create-bsv-app/package.json",
       "packages/overlays/gasp-core/package.json",
       "packages/overlays/btms-backend/package.json",
-      "packages/wallet/btms-permission-module/package.json"
+      "packages/wallet/btms-permission-module/package.json",
+      "packages/network/chirp/package.json"
     ],
     "suites": [
       {
@@ -422,6 +423,17 @@
           "Only canonical positive decimal safe integers are admitted as permissioned token amounts.",
           "Session approval is cached independently for each arbitrary originator.",
           "Array-shaped request arguments are rejected at the authorization boundary."
+        ]
+      },
+      {
+        "path": "packages/network/chirp/test/codec.property.test.ts",
+        "manifest": "packages/network/chirp/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted CHIRP binary manifests and arbitrary source bytes crossing the content-addressed storage boundary",
+        "target": "Canonical CompactSize framing and deterministic profile-one closure construction over arbitrary bounded content",
+        "invariants": [
+          "Every unsigned 64-bit value round-trips through the shortest canonical CompactSize representation.",
+          "Every bounded byte source produces a deterministic root identifier and a hash-, length-, and content-verified closure."
         ]
       }
     ],

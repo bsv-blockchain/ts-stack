@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "artifactSchemaVersion": 1,
-  "publicPackageCount": 31,
+  "publicPackageCount": 32,
   "releaseWorkflow": ".github/workflows/release.yaml",
   "releaseEnvironment": "npm-production",
   "buildRuntime": {

@@ -200,7 +200,7 @@ Incident handling follows this evidence-preserving sequence:
 ### uhrp-server-basic
 
 - Configuration: required `BSV_NETWORK`, `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `HOSTING_DOMAIN`, `HTTP_PORT`, `MIN_HOSTING_MINUTES`, `PRICE_PER_GB_MO`; secret-bearing
+  `CHIRP_COMMIT_CACHE_OBJECTS`, `CHIRP_COMMIT_CACHE_ROOTS`, `CHIRP_COMMIT_CACHE_SECONDS`, `CHIRP_DATA_DIR`, `CHIRP_GC_INTERVAL_MS`, `CHIRP_GC_MAX_ENTRIES`, `CHIRP_MAX_LOGICAL_BYTES`, `CHIRP_MAX_OBJECTS`, `CHIRP_MAX_RETENTION_SECONDS`, `CHIRP_OBJECT_MAX_BODY_BYTES`, `CHIRP_STAGING_SECONDS`, `HOSTING_DOMAIN`, `HTTP_PORT`, `MIN_HOSTING_MINUTES`, `PRICE_PER_GB_MO`; secret-bearing
   `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
@@ -210,16 +210,17 @@ Incident handling follows this evidence-preserving sequence:
 - quote and authenticate an upload
 - persist and retrieve content without hash drift
 - renew retained content
+- stage, validate, advertise, retrieve, and renew a complete CHIRP closure
 - Alerts:
 - content write, hash verification, retrieval, or renewal failures repeat
 - filesystem capacity or inode headroom crosses operator thresholds
 - wallet storage authentication or payment failures consume error budget
-- State: Local files and metadata under the configured public storage directory.
-- Migration/startup: No schema migration; preserve file and metadata consistency.
+- State: Local UHRP files plus CHIRP objects, sessions, and root records under the configured persistent storage directories.
+- Migration/startup: No destructive schema migration; provision persistent CHIRP_DATA_DIR capacity and preserve existing file and metadata consistency.
 - Backup/restore: Snapshot the complete storage directory and verify hashes before restore.
 - RPO starting point: 1 hour or the accepted paid-content durability window, whichever is stricter.
 - RTO starting point: 4 hours from a verified filesystem snapshot and wallet configuration.
-- Restore validation: Verify a sample of content hashes and metadata, upload/download/renew, wallet authentication, and capacity.
+- Restore validation: Verify legacy upload/download/renew, a complete CHIRP closure and root advertisement, sample object hashes and metadata, wallet authentication, and capacity.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT remove readiness, drain HTTP, destroy the cached wallet client, and flush telemetry.
 - Scaling: Use one writer unless content and metadata live on a concurrency-safe shared filesystem and rate limits are shared.
 - Disruption: Protect the writer or schedule a maintenance window; never overlap independent local filesystems behind one hostname.
@@ -230,7 +231,7 @@ Incident handling follows this evidence-preserving sequence:
 ### uhrp-server-cloud-bucket
 
 - Configuration: required `BSV_NETWORK`, `GCP_BUCKET_NAME`, `GOOGLE_PROJECT_ID`, `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `GCP_STORAGE_CREDS`, `HOSTING_DOMAIN`, `HTTP_PORT`, `MIN_HOSTING_MINUTES`, `PRICE_PER_GB_MO`; secret-bearing
+  `CHIRP_COMMIT_CACHE_OBJECTS`, `CHIRP_COMMIT_CACHE_ROOTS`, `CHIRP_COMMIT_CACHE_SECONDS`, `CHIRP_GC_INTERVAL_MS`, `CHIRP_GC_MAX_ENTRIES`, `CHIRP_MAX_LOGICAL_BYTES`, `CHIRP_MAX_OBJECTS`, `CHIRP_MAX_RETENTION_SECONDS`, `CHIRP_OBJECT_MAX_BODY_BYTES`, `CHIRP_STAGING_SECONDS`, `GCP_STORAGE_CREDS`, `HOSTING_DOMAIN`, `HTTP_PORT`, `MIN_HOSTING_MINUTES`, `PRICE_PER_GB_MO`; secret-bearing
   `GCP_STORAGE_CREDS`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
@@ -240,16 +241,17 @@ Incident handling follows this evidence-preserving sequence:
 - quote and authenticate a cloud upload
 - persist and retrieve an object without hash drift
 - renew retained content
+- stage, validate, advertise, retrieve, and renew a complete CHIRP closure
 - Alerts:
 - bucket authorization, write, read, metadata, or retention failures repeat
 - provider quota, throttling, versioning, or replication health degrades
 - wallet storage authentication or payment failures consume error budget
-- State: Cloud bucket objects and provider metadata.
-- Migration/startup: No local schema migration; validate provider configuration before listen.
+- State: Cloud bucket UHRP objects plus CHIRP objects, sessions, and root records in the additive chirp/v1 namespace.
+- Migration/startup: No destructive schema migration; grant the runtime identity access to the additive chirp/v1 namespace and validate provider configuration before listen.
 - Backup/restore: Use provider versioning/replication and verify object hashes and retention policy.
 - RPO starting point: 1 hour or the configured provider replication objective, whichever is stricter.
 - RTO starting point: 4 hours from provider replicas/versioning and verified wallet configuration.
-- Restore validation: Verify object hashes, metadata, retention, upload/download/renew, and provider IAM boundaries.
+- Restore validation: Verify legacy upload/download/renew, a complete CHIRP closure and root advertisement, object hashes, metadata, retention, and provider IAM boundaries.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT remove readiness, drain HTTP, destroy the cached wallet client, and flush telemetry.
 - Scaling: Multiple replicas require shared rate limits and a cloud provider configuration safe for concurrent writers.
 - Disruption: Preserve at least one ready replica after shared rate-limit behavior is verified.

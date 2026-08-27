@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **31 public packages**. Versions
+The release graph currently contains **32 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -54,6 +54,7 @@ authorized release action.
 | middleware | `@bsv/auth` | `0.1.3` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth) |
 | middleware | `@bsv/auth-express-middleware` | `2.2.2` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware) |
 | middleware | `@bsv/payment-express-middleware` | `2.1.5` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/payment-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware) |
+| network | `@bsv/chirp` | `0.1.0` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp) |
 | network | `@bsv/teranode-listener` | `1.1.4` | node-library | node-esm | node | `>=22` | [packages/network/ts-p2p](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p) |
 | overlays | `@bsv/gasp` | `1.3.5` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/overlays/gasp-core](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core) |
 | overlays | `@bsv/overlay` | `2.3.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay) |
@@ -79,8 +80,8 @@ the separately released and verified image digest.
 | BSV Chaintracks Server | `chaintracks-server` | `1.1.15` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
 | BSV Message Box Server | `@bsv/messagebox-server` | `1.1.39` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
 | BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.34` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
-| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.32` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
-| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.34` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
+| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.33` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
+| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.35` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
 | Wallet Authentication Backend | `@bsv/wab-server` | `1.5.3` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
 | BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.37` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
 
@@ -88,9 +89,9 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 38 |
-| Package-area projects | 34 |
-| Public npm packages | 31 |
+| Governed projects | 39 |
+| Package-area projects | 35 |
+| Public npm packages | 32 |
 | Private package-area projects | 3 |
 | Standalone infrastructure projects | 7 |
 
@@ -103,14 +104,14 @@ recorded container release route; they are not published by the public-package j
 
 | Metric | Current value |
 | --- | --- |
-| Vector files | 75 |
-| Vectors | 6681 |
-| Structurally passed | 6470 |
+| Vector files | 76 |
+| Vectors | 6690 |
+| Structurally passed | 6479 |
 | Governed skips | 211 |
-| Required parity vectors | 6477 |
+| Required parity vectors | 6486 |
 | Intended parity vectors | 204 |
 | Explicitly skipped vector entries | 7 |
-| Corpus metadata revision | 2026-07-30 |
+| Corpus metadata revision | 2026-08-25 |
 
 Structural runner pass/skip results and parity classifications answer different questions:
 the former is the current runner outcome, while the latter records cross-language
@@ -125,7 +126,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 33 | current package manifests |
+| Projects with a test:coverage script | 34 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |

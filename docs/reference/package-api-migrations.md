@@ -12,7 +12,7 @@ tags: [reference, packages, api, declarations, migrations, release-notes]
 
 # Package API, Declarations, and Migration Ledger
 
-This page is generated from all 31 public manifests, package documentation, and
+This page is generated from all 32 public manifests, package documentation, and
 `governance/package-release-notes.json`. It records source candidates without
 publishing them. CI rejects a version change unless its release classification,
 summary, and migration guidance are updated at the same time.
@@ -34,6 +34,7 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/authsocket-client`          | `2.1.1`      | `2.1.5`  | patch     | [API and usage](../packages/messaging/authsocket-client.md)           | No API migration is required. Existing event data, including numeric-key objects under byte-like names, is unchanged; typed payment protocols recover historical byte objects at their explicit fields.                                                                                                                                                                                                                                                                                                                                                                     |
 | `@bsv/btms`                       | `1.1.1`      | `1.2.1`  | minor     | [API and usage](../packages/wallet/btms.md)                           | Existing local, mainnet, testnet, and number-array behavior is unchanged. TTN consumers select networkPreset teratestnet; all consumers should upgrade to @bsv/sdk 2.4.1 or later for byte-boundary compatibility.                                                                                                                                                                                                                                                                                                                                                          |
 | `@bsv/btms-permission-module`     | `1.1.1`      | `1.1.3`  | patch     | [API and usage](../packages/wallet/btms-permission-module.md)         | No consumer migration is required; permission-module APIs and token semantics are unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@bsv/chirp`                      | `0.0.0`      | `0.1.0`  | minor     | [API and usage](../packages/network/chirp.md)                         | No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ.                                                                                                                                                                                                                                                                        |
 | `@bsv/did`                        | `0.2.1`      | `0.2.4`  | patch     | [API and usage](../packages/helpers/did.md)                           | No consumer migration is required; DID APIs, encodings, credential behavior, and supported import forms are unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `@bsv/did-client`                 | `1.2.1`      | `1.3.0`  | minor     | [API and usage](../packages/helpers/did-client.md)                    | Existing local, mainnet, and testnet behavior is unchanged. TTN consumers select networkPreset teratestnet and use @bsv/sdk 2.4 or later.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `@bsv/fund-wallet`                | `1.4.1`      | `1.4.3`  | patch     | [API and usage](../packages/helpers/fund-wallet.md)                   | No consumer migration is required; wallet funding APIs and transaction behavior are unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -167,6 +168,21 @@ explicitly authorized operations.
 | Public subpath | Runtime target(s)  | Declaration target(s) |
 | -------------- | ------------------ | --------------------- |
 | `.`            | `./dist/index.mjs` | `./dist/index.d.mts`  |
+
+## @bsv/chirp
+
+- Package documentation: [docs/packages/network/chirp.md](../packages/network/chirp.md)
+- Source: [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp)
+- Release note: Introduces the BRC-167 CHIRP reference implementation: canonical Merkle codecs and vectors, progressive and resumable multi-host publication, bounded interleaved and range-aware resolution, a verified-object cache, browser and Node byte-source adapters, closure validation, and publication/retrieval/verification CLI commands.
+- Migration: No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ.
+
+CLI entry points: `{"chirp":"./dist/cli.js"}`.
+
+| Public subpath   | Runtime target(s)                          | Declaration target(s) |
+| ---------------- | ------------------------------------------ | --------------------- |
+| `.`              | `./dist/index.js`<br>`./dist/index.js`     | `./dist/index.d.ts`   |
+| `./openapi`      | `./dist/openapi.js`<br>`./dist/openapi.js` | `./dist/openapi.d.ts` |
+| `./package.json` | `./package.json`                           | —                     |
 
 ## @bsv/did
 

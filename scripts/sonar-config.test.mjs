@@ -8,6 +8,7 @@ import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const AUTOMATIC_CONFIG_PATH = join(REPOSITORY_ROOT, '.sonarcloud.properties')
 const PROJECTS_PATH = join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
+const RUNTIME_COPIES_PATH = join(REPOSITORY_ROOT, 'governance/service-runtime-copy-policy.json')
 
 function readProperty(source, key) {
   const prefix = `${key}=`
@@ -28,6 +29,7 @@ function patternMatchesPath(pattern, path) {
 test('Sonar Automatic Analysis excludes governed generated outputs but analyzes owned copies', () => {
   const config = readFileSync(AUTOMATIC_CONFIG_PATH, 'utf8')
   const registry = JSON.parse(readFileSync(PROJECTS_PATH, 'utf8'))
+  const runtimeCopyPolicy = JSON.parse(readFileSync(RUNTIME_COPIES_PATH, 'utf8'))
   const issueExclusions = readProperty(config, 'sonar.exclusions')
   const duplicationExclusions = readProperty(config, 'sonar.cpd.exclusions')
   const trackedPaths = execFileSync('git', ['ls-files'], {
@@ -62,6 +64,16 @@ test('Sonar Automatic Analysis excludes governed generated outputs but analyzes 
     assert.ok(
       duplicationExclusions.includes(artifact.path),
       `Sonar must suppress only intentional duplication for ${artifact.path}`
+    )
+  }
+  for (const copiedPath of runtimeCopyPolicy.copies.flatMap(copy => copy.synchronizedSources)) {
+    assert.ok(
+      !issueExclusions.some(pattern => patternMatchesPath(pattern, copiedPath)),
+      `Sonar must analyze synchronized runtime source ${copiedPath}`
+    )
+    assert.ok(
+      duplicationExclusions.some(pattern => patternMatchesPath(pattern, copiedPath)),
+      `Sonar must suppress only intentional duplication for ${copiedPath}`
     )
   }
 

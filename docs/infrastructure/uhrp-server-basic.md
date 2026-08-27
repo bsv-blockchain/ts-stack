@@ -2,9 +2,9 @@
 id: infra-uhrp-basic
 title: 'UHRP Server (Basic)'
 kind: infra
-version: '0.1.32'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+version: '0.1.33'
+last_updated: '2026-08-25'
+last_verified: '2026-08-25'
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]

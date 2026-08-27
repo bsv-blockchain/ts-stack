@@ -7,6 +7,7 @@ import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
 import { uhrpNetwork } from '../utils/network'
+import { getChirpStore } from '../chirp/store'
 
 const { lookupPreset } = uhrpNetwork()
 
@@ -97,8 +98,11 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       })
     }
     const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
-    if (!Number.isSafeInteger(additionalMinutes) || additionalMinutes <= 0 ||
-      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)) {
+    if (
+      !Number.isSafeInteger(additionalMinutes) ||
+      additionalMinutes <= 0 ||
+      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)
+    ) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_INVALID_TIME',
@@ -113,15 +117,18 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     } = await getMetadata(uhrpUrl, identityKey, pagination.limit, pagination.offset)
 
     // Convert to MS to create an ISO string
-    const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
+    const newExpiryTimeSeconds = prevExpiryTime + additionalMinutes * 60
 
     const amount = await calculateRenewalAmount(size, additionalMinutes)
 
     // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
-    const { outputs, BEEF, } = await wallet.listOutputs({
+    const { outputs, BEEF } = await wallet.listOutputs({
       basket: 'uhrp advertisements',
-      tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`],
+      tags: [
+        `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+        `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`
+      ],
       tagQueryMode: 'all',
       includeTags: true,
       include: 'entire transactions',
@@ -178,18 +185,22 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 
     const { signableTransaction } = await wallet.createAction({
       inputBEEF: BEEF,
-      inputs: [{
-        outpoint: prevAdvertisement.outpoint,
-        unlockingScriptLength: 74,
-        inputDescription: 'Redeeming old advertisement'
-      }],
-      outputs: [{
-        lockingScript: newLockingScript.toHex(),
-        satoshis: 1,
-        basket: 'uhrp advertisements',
-        outputDescription: 'UHRP advertisement token (renewed)',
-        tags: newTags
-      }],
+      inputs: [
+        {
+          outpoint: prevAdvertisement.outpoint,
+          unlockingScriptLength: 74,
+          inputDescription: 'Redeeming old advertisement'
+        }
+      ],
+      outputs: [
+        {
+          lockingScript: newLockingScript.toHex(),
+          satoshis: 1,
+          basket: 'uhrp advertisements',
+          outputDescription: 'UHRP advertisement token (renewed)',
+          tags: newTags
+        }
+      ],
       description: `Renew advertisement for uhrpUrl ${uhrpUrl}`,
       options: {
         randomizeOutputs: false
@@ -209,8 +220,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     const unlockingScript = await unlocker.sign(partialTx, 0)
     const { tx, txid } = await wallet.signAction({
       reference: signableTransaction.reference,
-      spends:
-      {
+      spends: {
         0: {
           unlockingScript: unlockingScript.toHex()
         }
@@ -228,6 +238,9 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       networkPreset: lookupPreset as 'mainnet' | 'testnet'
     })
 
+    // Make the complete closure durable before publishing the replacement advertisement.
+    // Keep the extension if broadcast is ambiguous so the advertised availability is safe.
+    await getChirpStore().extendRootLease(objectIdentifier, newExpiryTimeSeconds)
     await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
 
     return res.status(200).json({
@@ -249,7 +262,8 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 export default {
   type: 'post',
   path: '/renew',
-  summary: 'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
+  summary:
+    'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
   parameters: {
     uhrpUrl: 'The UHRP URL (e.g. "uhrp://somehash")',
     additionalMinutes: 'Number of minutes to extend'

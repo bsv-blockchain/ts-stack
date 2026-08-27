@@ -29,11 +29,13 @@ import {
   securityHeaders
 } from './security/edgePolicy'
 import { createServiceHealth } from './serviceHealth'
+import { getChirpCommitPrice } from './chirp/routes'
+import { startChirpGarbageCollector } from './chirp/store'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
 const NODE_ENV = process.env.NODE_ENV || 'development'
-type HttpRouteMethod = 'get' | 'put' | 'post' | 'patch' | 'delete'
+type HttpRouteMethod = 'get' | 'head' | 'put' | 'post' | 'patch' | 'delete'
 
 const preAuthRateLimit = rateLimit(rateLimitOptions(
   'UHRP_PRE_AUTH_RATE_LIMIT',
@@ -55,7 +57,7 @@ app.use(initialDoubleSlashCompatibility)
 app.use(securityHeaders({ environmentPrefix: 'UHRP' }))
 app.use(corsPolicy({
   environmentPrefix: 'UHRP',
-  methods: ['GET', 'POST', 'OPTIONS']
+  methods: ['GET', 'HEAD', 'PUT', 'POST', 'OPTIONS']
 }))
 app.use(concurrencyLimit('UHRP', profileValue(resourceProfile, {
   small: 16,
@@ -150,6 +152,14 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       wallet,
       calculateRequestPrice: async (req) => {
 
+        if (/^\/chirp\/v1\/uploads\/[^/]+\/commit$/.test(req.path)) {
+          try {
+            return await getChirpCommitPrice(req as any)
+          } catch {
+            return 0
+          }
+        }
+
         if (req.url === '/upload') {
           const { fileSize, retentionPeriod } = (req.body as any) || {}
           if (!fileSize || !retentionPeriod) return 0
@@ -207,6 +217,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       })
     })
 
+    const stopChirpGarbageCollector = startChirpGarbageCollector()
     serviceHealth.markReady()
     const server = app.listen(HTTP_PORT, () => {
       const identityKey = PrivateKey
@@ -228,6 +239,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     const stopCloudService = (signal: NodeJS.Signals): Promise<void> => {
       stopping ??= new Promise<void>((resolve, reject) => {
         serviceHealth.markNotReady()
+        stopChirpGarbageCollector()
         log.info({ operation: 'shutdown', signal }, 'UHRP cloud-bucket shutdown started')
         server.close(error => error == null ? resolve() : reject(error))
       })

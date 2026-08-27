@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="bsv-conformance" tests="6681" failures="0" errors="0" skipped="0">
+<testsuites name="bsv-conformance" tests="6690" failures="0" errors="0" skipped="0">
   <testsuite name="auth/brc31-handshake" tests="16" failures="0" errors="0" skipped="0">
     <testcase name="auth.brc31-handshake.1" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.2" classname="auth/brc31-handshake" time="0"/>
@@ -5648,6 +5648,17 @@
     <testcase name="tx-013" classname="sdk/transactions/serialization" time="0"/>
     <testcase name="tx-014" classname="sdk/transactions/serialization" time="0"/>
     <testcase name="tx-015" classname="sdk/transactions/serialization" time="0"/>
+  </testsuite>
+  <testsuite name="storage/chirp-v1" tests="9" failures="0" errors="0" skipped="0">
+    <testcase name="storage.chirp-v1.empty" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.hello" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.hello-media-type" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.chunk-size-minus-one" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.chunk-size" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.chunk-size-plus-one" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.tree-256-blobs" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.tree-257-blobs" classname="storage/chirp-v1" time="0"/>
+    <testcase name="storage.chirp-v1.tree-multiple-branch-levels" classname="storage/chirp-v1" time="0"/>
   </testsuite>
   <testsuite name="storage/uhrp-http" tests="15" failures="0" errors="0" skipped="0">
     <testcase name="storage.uhrp-http.1" classname="storage/uhrp-http" time="0"/>

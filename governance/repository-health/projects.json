@@ -587,6 +587,17 @@
       "release": "npm-oidc"
     },
     {
+      "path": "packages/network/chirp",
+      "name": "@bsv/chirp",
+      "owner": "ts-stack-maintainers",
+      "area": "network",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/network/ts-p2p",
       "name": "@bsv/teranode-listener",
       "owner": "ts-stack-maintainers",

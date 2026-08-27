@@ -67,6 +67,13 @@
       "migration": "No consumer migration is required; permission-module APIs and token semantics are unchanged."
     },
     {
+      "name": "@bsv/chirp",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the BRC-167 CHIRP reference implementation: canonical Merkle codecs and vectors, progressive and resumable multi-host publication, bounded interleaved and range-aware resolution, a verified-object cache, browser and Node byte-source adapters, closure validation, and publication/retrieval/verification CLI commands.",
+      "migration": "No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ."
+    },
+    {
       "name": "@bsv/did",
       "publishedVersion": "0.2.1",
       "releaseType": "patch",
