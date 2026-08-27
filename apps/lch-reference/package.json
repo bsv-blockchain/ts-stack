@@ -2,13 +2,14 @@
   "name": "lch-reference-app",
   "version": "0.1.0",
   "private": true,
+  "author": "BSV Association",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/copy-notices.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test --deny-warnings",
-    "format:check": "pnpm --workspace-root exec prettier --check \"apps/lch-reference/**/*.{css,html,json,md,ts}\"",
+    "format:check": "pnpm --workspace-root exec prettier --check \"apps/lch-reference/**/*.{css,html,json,md,mjs,ts}\"",
     "test": "vitest run"
   },
   "dependencies": {

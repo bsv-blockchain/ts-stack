@@ -19,10 +19,13 @@ import {
   parsePinnedPolicy,
   permits,
   requireProfile,
+  requireActiveTimeWindow,
   selectionQuantity,
   selectionsIntersect,
   sha256,
+  signObject,
   supportsProfile,
+  timeWindowStatus,
   toBase64Url,
   toHex,
   unitAmount,
@@ -97,6 +100,23 @@ describe('profiles, selections, prices, and policies', () => {
     expect(fromHex(toHex(value))).toEqual(value)
     expect(() => fromHex('AA')).toThrow()
   })
+
+  it('uses half-open time windows at exact rental boundaries', () => {
+    const window = { notBefore: 1_000, notAfter: 2_000 }
+    expect(timeWindowStatus(window, 999)).toBe('not-started')
+    expect(timeWindowStatus(window, 1_000)).toBe('active')
+    expect(timeWindowStatus(window, 1_999)).toBe('active')
+    expect(timeWindowStatus(window, 2_000)).toBe('expired')
+    expect(() => requireActiveTimeWindow(window, 1_000)).not.toThrow()
+    expect(() => requireActiveTimeWindow(window, 2_000)).toThrow()
+    expect(() => timeWindowStatus({ notBefore: 2_000, notAfter: 2_000 }, 2_000)).toThrow()
+    expect(() => timeWindowStatus({ notBefore: -1 }, 0)).toThrow()
+    expect(timeWindowStatus({}, 0n)).toBe('active')
+    expect(timeWindowStatus({ notBefore: 10n }, 10n)).toBe('active')
+    expect(timeWindowStatus({ notAfter: 10n }, 9n)).toBe('active')
+    expect(() => timeWindowStatus({ notAfter: -1 }, 0)).toThrow()
+    expect(() => timeWindowStatus({}, 0.5)).toThrow()
+  })
 })
 
 describe('issuer and acquisition orchestration', () => {
@@ -132,6 +152,24 @@ describe('issuer and acquisition orchestration', () => {
     await expect(
       validateOffer(offer, new PublicBRC77Verifier(), signer.identityKey)
     ).resolves.toMatch(/^lch:offer:sha256:/u)
+    const emptyWindow = await signObject(
+      'offer',
+      { ...offer.body, notAfter: offer.body.notBefore },
+      signer
+    )
+    await expect(
+      validateOffer(emptyWindow, new PublicBRC77Verifier(), signer.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_LICENSE' })
+    const missingNotBeforeBody = { ...offer.body }
+    delete missingNotBeforeBody.notBefore
+    const missingNotBefore = await signObject('offer', missingNotBeforeBody, signer)
+    await expect(
+      validateOffer(missingNotBefore, new PublicBRC77Verifier(), signer.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_LICENSE' })
+    const invalidNotAfter = await signObject('offer', { ...offer.body, notAfter: 'later' }, signer)
+    await expect(
+      validateOffer(invalidNotAfter, new PublicBRC77Verifier(), signer.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_LICENSE' })
     expect(issuer.quoteFixed([{ satoshis: 2 }, { satoshis: 3 }])).toBe(5n)
 
     const license = await issuer.issueLicense({

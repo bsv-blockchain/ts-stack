@@ -77,10 +77,17 @@ media, draw waveforms, build catalogues, or define recommendation behavior.
 
 The core profile supports repeated whole-placement ingredients. Each placement
 is independently attributable even when the same source asset appears more
-than once. Trim, stretch, mix weighting, spatial placement, timeline edits,
-dataset batching, and derivative royalty allocation need separately registered
-critical profiles. A consumer that does not implement a claimed mapping profile
-must fail closed.
+than once. Trimming, time-warping, reversal, distortion, mixing, spatial
+placement, and other editorial operations can be described in non-critical
+application or C2PA metadata without changing permission or settlement
+semantics. Whole placement conservatively activates the ingredient's complete
+declared source selection. A separately registered critical mapping profile is
+needed only for deterministic selective mapping or proportional allocation; a
+consumer that does not implement one must fail closed.
+
+Integer time windows are half-open: `notBefore` is inclusive and `notAfter` is
+exclusive. Fractional edit values such as playback rates use exact integer
+ratios because deterministic LCH CBOR prohibits floats.
 
 Training alone does not create a composition claim. A creator may identify
 specific source works individually; dataset roots and batch attestations remain
@@ -97,6 +104,8 @@ future profiles.
   credentials across origins.
 - Authenticate every segment before exposing plaintext. Whole-asset grants
   must include every key period intersecting the licensed selection.
+- Keep the scoped `THIRD_PARTY_NOTICES.md` in the npm artifact. The package
+  incorporates no third-party source; peer packages retain their own notices.
 - Treat ODRL/C2PA mappings as evidence and policy description, not as a
   substitute for payment settlement or authority validation.
 

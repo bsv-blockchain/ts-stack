@@ -796,6 +796,17 @@
       ]
     },
     {
+      "path": "packages/content/lch",
+      "packageName": "@bsv/lch",
+      "materials": [],
+      "reason": "The package has peer dependencies but incorporates no third-party source; retain an explicit scoped notice in the npm artifact."
+    },
+    {
+      "path": "apps/lch-reference",
+      "inherits": "packages/sdk",
+      "reason": "The deployable browser bundle incorporates @bsv/sdk and must carry its scoped notice archive."
+    },
+    {
       "path": "packages/helpers/did-client",
       "packageName": "@bsv/did-client",
       "inherits": "packages/sdk",

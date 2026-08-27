@@ -3,6 +3,7 @@ import process from 'node:process'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import {
   PublicBRC77Verifier,
+  WalletBRC78KeyDelivery,
   WalletBRC77Signer,
   encodeDeterministicCbor,
   frameLCH,
@@ -17,6 +18,7 @@ import {
   toBase64Url,
   toHex,
   uint64be,
+  validateCompositionRecord,
   verifySignedObject
 } from '../dist/index.js'
 
@@ -26,6 +28,10 @@ if (path === undefined) {
 }
 
 const source = JSON.parse(await readFile(path, 'utf8'))
+const sdkManifest = JSON.parse(
+  await readFile(new URL('../../../sdk/package.json', import.meta.url), 'utf8')
+)
+const lchManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const vectors = inflate(source)
 const originalEmbedded = fromHex(vectors.framing.embeddedFileHex)
 const originalCiphertext = parseLCH(originalEmbedded).ciphertext
@@ -157,6 +163,42 @@ vectors.multilateralPayment.outputs.forEach((output, index) => {
   output.demandIdHex = toHex(demandIds[index])
 })
 
+const editorialTransforms = [
+  { placement: 1, kind: 'identity' },
+  { placement: 2, kind: 'identity', repeatOf: 1 },
+  { placement: 3, kind: 'reverse' },
+  { placement: 4, kind: 'time-warp', rate: { numerator: 1, denominator: 2 } },
+  { placement: 5, kind: 'time-warp', rate: { numerator: 2, denominator: 1 } },
+  { placement: 6, kind: 'distortion', amount: 4 }
+]
+const editorialSourceAssetId = await objectId('asset', vectors.objects.asset.body)
+vectors.editorialComposition = {
+  body: {
+    version: 1,
+    c2paManifestDigest: await sha256(new TextEncoder().encode('editorial-edge-cases')),
+    ingredients: await Promise.all(
+      editorialTransforms.map(async transform => ({
+        sourceAssetId: editorialSourceAssetId,
+        sourceLicenseId: licenseId,
+        c2paIngredient: {
+          url: `self#jumbf=/c2pa/editorial/c2pa.assertions/c2pa.ingredient.v3/${transform.placement}`,
+          alg: 'sha256',
+          hash: await sha256(new TextEncoder().encode(`editorial:${transform.placement}`))
+        },
+        relationship: 'componentOf',
+        sourceSelection: { type: 'all' },
+        derivedSelection: { type: 'all' },
+        mappingProfile: 'https://bsv.brc.dev/apps/0170#whole-placement-v1',
+        metadata: {
+          'https://example.invalid/lch-reference/edit-v1': transform
+        }
+      }))
+    )
+  }
+}
+validateCompositionRecord(vectors.editorialComposition.body)
+await updateRecord(vectors.editorialComposition, 'composition-record')
+
 vectors.reviewCorrections = {
   paymentRecovery: {
     recoveryPeriodSeconds: 86_400,
@@ -209,7 +251,17 @@ vectors.reviewCorrections = {
     supported: 'https://bsv.brc.dev/apps/0170#whole-placement-v1',
     derivedSelection: { type: 'all' },
     repeatedPlacements: 'distinct ingredients',
+    editorialCompositionId: vectors.editorialComposition.idHex,
+    editorialTransforms,
+    editorialEffect: 'descriptive metadata; complete sourceSelection remains active',
+    duplicateC2paBinding: 'ERR_LCH_PROVENANCE',
     unknownMapping: 'ERR_LCH_PROFILE_UNSUPPORTED'
+  },
+  timeBoundaries: {
+    notBefore: { exact: 'active', oneSecondBefore: 'not-started' },
+    notAfter: { oneSecondBefore: 'active', exact: 'expired' },
+    expiresAt: { oneSecondBefore: 'new transaction allowed', exact: 'new transaction rejected' },
+    recoveryUntil: { oneSecondBefore: 'recovery allowed', exact: 'recovery rejected' }
   },
   keyPeriodCoverage: {
     wholeAssetKeyIds: vectors.segmentedEncryption.descriptor.keyPeriods.map(period => period.keyId),
@@ -226,10 +278,25 @@ vectors.reviewCorrections = {
   }
 }
 
+const canonicalBrc78 = fromHex(vectors.brc78.serializedMessageHex)
+canonicalBrc78.set(Uint8Array.of(0x42, 0x42, 0x10, 0x33), 0)
+vectors.brc78.serializedVersionHex = toHex(canonicalBrc78.slice(0, 4))
+vectors.brc78.serializedMessageHex = toHex(canonicalBrc78)
+const recoveredBrc78 = await new WalletBRC78KeyDelivery(new ProtoWallet(new PrivateKey(2))).recover(
+  canonicalBrc78
+)
+if (
+  toHex(recoveredBrc78.keyId) !== vectors.brc78.expectedRecoveredKeyIdHex ||
+  toHex(recoveredBrc78.cek) !== vectors.brc78.expectedRecoveredCekHex
+) {
+  throw new Error('BRC-78 vector does not recover its expected LCH key grant')
+}
+vectors.brc78.verifiedWithBsvSdk = true
+
 vectors.generatedWith = {
   node: process.version,
-  bsvSdk: '2.4.1',
-  lch: '0.1.0',
+  bsvSdk: sdkManifest.version,
+  lch: lchManifest.version,
   deterministicCbor: '@bsv/lch'
 }
 

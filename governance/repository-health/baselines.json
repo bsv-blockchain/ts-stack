@@ -298,6 +298,7 @@
   },
   "publicPackageVersions": {
     "@bsv/chirp": "0.1.1",
+    "@bsv/lch": "0.1.0",
     "@bsv/air-gap": "0.1.2",
     "@bsv/amountinator": "2.1.5",
     "@bsv/wallet-helper": "0.1.7",

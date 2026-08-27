@@ -125,4 +125,54 @@ describe('composition and payment invariants', () => {
       validateC2PAComposition(id(23), new Uint8Array(manifest.length), record, adapter)
     ).rejects.toMatchObject({ code: 'ERR_LCH_PROVENANCE' })
   })
+
+  it('keeps editorial transforms as non-normative metadata on distinct whole placements', () => {
+    const composer = new LCHComposer(id(30))
+    const transforms = [
+      { kind: 'identity' },
+      { kind: 'time-warp', rate: { numerator: 1, denominator: 2 } },
+      { kind: 'time-warp', rate: { numerator: 2, denominator: 1 } },
+      { kind: 'reverse' },
+      { kind: 'distortion', amount: 4 }
+    ]
+    transforms.forEach((transform, index) => {
+      composer.addWholePlacement({
+        sourceAssetId: id(31),
+        sourceLicenseId: id(32),
+        c2paIngredient: {
+          url: `self#jumbf=/c2pa/edit-${index}`,
+          alg: 'sha256',
+          hash: id(40 + index)
+        },
+        relationship: 'componentOf',
+        sourceSelection: { type: 'segments', ranges: [[1, 3]] },
+        metadata: {
+          'https://example.invalid/lch-reference/edit-v1': transform
+        }
+      })
+    })
+    const record = composer.build()
+    expect(record.ingredients).toHaveLength(transforms.length)
+    expect(
+      record.ingredients.every(item => item.mappingProfile === LCH_MECHANISMS.wholePlacement)
+    ).toBe(true)
+    expect(record.ingredients.every(item => item.derivedSelection.type === 'all')).toBe(true)
+  })
+
+  it('rejects two placements that point at the same C2PA assertion', () => {
+    const placement = {
+      sourceAssetId: id(50),
+      sourceLicenseId: id(51),
+      c2paIngredient: {
+        url: 'self#jumbf=/c2pa/reused',
+        alg: 'sha256',
+        hash: id(52)
+      },
+      relationship: 'componentOf' as const,
+      sourceSelection: { type: 'all' as const }
+    }
+    expect(() =>
+      new LCHComposer(id(53)).addWholePlacement(placement).addWholePlacement(placement).build()
+    ).toThrow()
+  })
 })

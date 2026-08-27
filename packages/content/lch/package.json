@@ -2,7 +2,7 @@
   "name": "@bsv/lch",
   "version": "0.1.0",
   "description": "BRC-170 Licensed Content Header reference implementation",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "type": "module",
   "sideEffects": false,
@@ -28,7 +28,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsc",

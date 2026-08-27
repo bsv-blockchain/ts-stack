@@ -12,6 +12,7 @@ import { signObject, verifySignedObject } from './objects.js'
 import { fixedTotal, recoveryUntil } from './payment.js'
 import { normalizeSelection } from './selection.js'
 import { brc77SignerIdentity, PublicBRC77Verifier } from './signatures.js'
+import { validateTimeWindow } from './time.js'
 import type {
   ContentSink,
   ContentSource,
@@ -280,6 +281,7 @@ export class LCHIssuer {
       'Payment offer must declare a recovery period'
     )
     recoveryUntil(0n, recovery)
+    validateTimeWindow({ notBefore: options.notBefore, notAfter: options.notAfter })
     lchAssert(
       typeof options.keyDelivery.mechanism === 'string' &&
         typeof options.enforcement.class === 'string',
@@ -312,6 +314,7 @@ export class LCHIssuer {
       'License signer is not the issuer'
     )
     const selection = normalizeSelection(options.selection)
+    validateTimeWindow({ notBefore: options.notBefore, notAfter: options.notAfter })
     const segmentSelection =
       options.segmentSelection === undefined
         ? undefined
@@ -516,6 +519,19 @@ export async function validateOffer(
   seller: Uint8Array
 ): Promise<string> {
   await verifySignedObject('offer', offer, verifier, seller)
+  const notBefore = offer.body.notBefore
+  const notAfter = offer.body.notAfter
+  lchAssert(
+    typeof notBefore === 'number' || typeof notBefore === 'bigint',
+    'ERR_LCH_LICENSE',
+    'Offer notBefore is absent'
+  )
+  lchAssert(
+    notAfter === undefined || typeof notAfter === 'number' || typeof notAfter === 'bigint',
+    'ERR_LCH_LICENSE',
+    'Offer notAfter is invalid'
+  )
+  validateTimeWindow({ notBefore, notAfter })
   return objectIri('offer', offer.body)
 }
 

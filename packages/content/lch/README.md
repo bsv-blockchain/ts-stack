@@ -36,7 +36,7 @@ const inspected = await reader.inspect(published.bytes)
 const plaintext = await reader.decrypt(inspected, protectedAsset.keys)
 ```
 
-Application-specific catalogue, streaming index, royalty weighting, waveform, timeline, and social metadata belong in non-critical application data or separately registered profiles. The v1 composition resolver intentionally standardizes only whole placement; an unknown edit mapping fails closed.
+Application-specific catalogue, streaming index, royalty weighting, waveform, timeline, and social metadata belong in non-critical application data or separately registered profiles. The v1 whole-placement resolver supports repeats and arbitrary editorial transforms conservatively: any nonempty derivative selection activates the ingredient's complete declared source selection. Edit metadata does not alter permission or settlement semantics. A future mapping profile is needed only for deterministic selective mapping; an unknown mapping fails closed.
 
 Server-side HTTPS resolution must provide an endpoint policy with a
 public-address DNS resolver and an address-pinning connector. Browser
@@ -48,3 +48,4 @@ See BRC-170 for the normative protocol. If this implementation and the BRC diffe
 ## License
 
 This package is licensed under the [Open BSV License Version 6](./LICENSE.txt).
+The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICES.md). The package incorporates no third-party source; its SDK and optional CHIRP peers retain their own license payloads.

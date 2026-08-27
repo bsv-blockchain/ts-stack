@@ -14,6 +14,7 @@ describe('BRC-78 CEK delivery', () => {
     )
     const receiver = new WalletBRC78KeyDelivery(recipientWallet)
     const payload = await sender.deliver(recipient, keyId, cek)
+    expect(payload.slice(0, 4)).toEqual(Uint8Array.of(0x42, 0x42, 0x10, 0x33))
     await expect(receiver.recover(payload)).resolves.toEqual({ keyId, cek })
   })
 })

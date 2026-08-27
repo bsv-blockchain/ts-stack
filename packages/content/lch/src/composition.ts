@@ -34,6 +34,15 @@ export function validateCompositionRecord(record: CompositionRecord): void {
     'Composition record is invalid'
   )
   record.ingredients.forEach(validateIngredient)
+  const bindings = record.ingredients.map(ingredient => {
+    const { url, alg, hash } = ingredient.c2paIngredient
+    return `${url}\u0000${alg ?? ''}\u0000${toHex(hash)}`
+  })
+  lchAssert(
+    new Set(bindings).size === bindings.length,
+    'ERR_LCH_PROVENANCE',
+    'Composition ingredients must bind distinct C2PA assertions'
+  )
 }
 
 export function validateIngredient(ingredient: CompositionIngredient): void {
