@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.10.3",
+  "version": "2.10.4",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -34,14 +34,16 @@
   "files": [
     "out",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/wallet/wallet-toolbox/client"
   },
-  "author": "Tone Engel",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "keywords": [
     "bsv",

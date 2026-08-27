@@ -261,4 +261,8 @@ Typed and cached serialization materially improves large-EF workloads. See
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+The bundled BDK, bitcoin-sv, libsecp256k1, Emscripten, musl, LLVM, and Boost
+material remains under the separate terms in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
+Keep those files with every JavaScript and WebAssembly distribution.

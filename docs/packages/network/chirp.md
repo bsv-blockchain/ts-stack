@@ -4,9 +4,9 @@ title: '@bsv/chirp'
 kind: package
 domain: network
 npm: '@bsv/chirp'
-version: '0.1.0'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+version: '0.1.1'
+last_updated: '2026-08-27'
+last_verified: '2026-08-27'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp'
 status: experimental

@@ -1,3 +1,4 @@
+// Modified brorand lineage; see ../../THIRD_PARTY_NOTICES.md.
 /**
  * Random number generator that works across modern JavaScript environments.
  *

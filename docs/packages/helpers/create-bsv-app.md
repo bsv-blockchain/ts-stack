@@ -3,9 +3,9 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.1.0'
-last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+version: '1.1.1'
+last_updated: '2026-08-27'
+last_verified: '2026-08-27'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/create-bsv-app'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app'

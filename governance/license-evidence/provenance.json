@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-08-27",
+  "owner": "ts-stack-maintainers",
+  "method": "Public Git and npm records are pinned by immutable commit, Git blob, registry integrity, or tarball digest. Derived notice holder/year fields use the narrowest attribution supported by those records.",
+  "records": [
+    {
+      "id": "aes-gcm-js",
+      "conclusion": "cleared",
+      "license": "ISC",
+      "notice": "Copyright (c) 2019 Taner Mansur",
+      "upstreamRepository": "https://github.com/tmnsur/aes-gcm.js",
+      "upstreamHistory": {
+        "initialCommit": "a1fe76f989275472931e1a8e0d1d0d964f039a74",
+        "repositoryCreated": "2019-09-11T12:34:53Z",
+        "author": "Taner Mansur",
+        "packageManifestAtMasterDeclares": "ISC"
+      },
+      "npmPublication": {
+        "package": "aes-gcm.js@1.0.0",
+        "published": "2019-09-09T14:04:48.738Z",
+        "publisher": "tmnsur",
+        "author": "Taner Mansur",
+        "license": "ISC",
+        "gitHead": "7d6393a940f26c9728912faeca73e4f0f9115cea",
+        "integrity": "sha512-vanZJaHVH4wZE+B34sKvCnOdgEf97AxHFZ0/o13K9cTriurWlfvWjOGjzoot4bw1pS+Fu8Xkd7rQ606A2I7r9g==",
+        "shasum": "c4c1c9b57a9c4cc8391acb0a9da93ec555a82aee",
+        "tarballSha512": "bda9d925a1d51f8c1913e077e2c2af0a739d8047fdec0c47159d3fa35dcaf5c4eb8aead695fbd68ce1a3ce8a2de1bc35a52f85bbc5e477bad0eb4e80d88eebf6",
+        "packageJsonSha256": "79f90540b96ddf74bfe4004f828bde27c431ab19fb33571ff2796c1e4f2ab5a9"
+      },
+      "incorporation": {
+        "introducedByCommit": "e4bcacca48f447305d6270d313e4e9fd14c2cf1e",
+        "introducedPath": "src/primitives/AESGCM.ts",
+        "introducedGitBlobSha1": "190d48988177ecc24d5b2f4def74c35e8652db6f",
+        "introducedSha256": "b8d7680e3a7dd028bb280f9fc8bbac53d05218551134af7bfaefef29aff6d656",
+        "currentPath": "packages/sdk/src/primitives/AESGCM.ts",
+        "relationship": "Direct TypeScript translation subsequently modified by TS Stack contributors"
+      },
+      "basis": "The contemporaneous npm tarball was published by the repository owner, identifies Taner Mansur as author, and expressly declares ISC. The repository history independently identifies the same author and source lineage."
+    },
+    {
+      "id": "bsv-2.0.10",
+      "conclusion": "cleared",
+      "license": "MIT",
+      "notice": "Copyright (c) 2016-2020 Yours Inc.",
+      "upstreamRepository": "https://github.com/moneybutton/bsv",
+      "exactSourceCommit": "feab6d528c4013f6332b33169e771a95bc201285",
+      "licenseGitBlobSha1": "ec9e29dbdb65695bef5fcbe1ac1cd6682e24590d",
+      "licenseSha256": "9573a5d96c7b2c757be3479fcf0a889cef4f4aecb2b19e68b891cefddc6f3d3b",
+      "npmPublication": {
+        "package": "bsv@2.0.10",
+        "published": "2021-06-04T23:04:43.244Z",
+        "author": "Yours Inc.",
+        "license": "MIT",
+        "gitHead": "feab6d528c4013f6332b33169e771a95bc201285",
+        "integrity": "sha512-3zMs39EaPWV6QGKYZdsrtd3q/Pnrb2B5/MkKPa1HIe8sEmLIQpHKj5DF867En0gjHSSJ91LnOCpwuujZugxqtA==",
+        "shasum": "7eaaa6b5cc9806570eefff18f2cf8704c821b8b7",
+        "tarballSha512": "df332cdfd11a3d657a40629865db2bb5ddeafcf9eb6f6079fcc90a3dad4721ef2c1262c84291ca8f90c5f3aec49f48231d2489f752e7382a70bae8d9ba0c6ab4",
+        "packageJsonSha256": "fb29a3578d4d8a30ab6d72bc49ffb3551eeb21b978a1a14a5edcf8fb9c68d68b"
+      },
+      "incorporation": {
+        "relationship": "Direct source comparison identifies modified lineage from lib/bip-32.js, lib/bip-39.js, lib/br.js, lib/cbc.js, lib/ecdsa.js, lib/ecies.js, lib/op-code.js, and their tests.",
+        "registryPaths": "governance/third-party-materials.json#bsv-2.0.10"
+      },
+      "basis": "The immutable npm publication identifies the exact Git source revision and MIT grant. Direct normalized source comparison ties the registered SDK implementation and test paths to that revision; the older 1.5.6 record remains scoped only to its separately traced sighash vectors."
+    },
+    {
+      "id": "runar-r1k1-wallet-artifact",
+      "conclusion": "cleared",
+      "license": "MIT",
+      "notice": "Copyright (c) 2025 Rúnar Contributors",
+      "upstreamRepository": "https://github.com/icellan/runar",
+      "exactSourceCommit": "c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf",
+      "sourcePath": "examples/ts/r1-k1-wallet/R1K1Wallet.runar.ts",
+      "sourceGitBlobSha1": "0a0ad3e0e891e0b6114735a5a977e818481ce137",
+      "sourceSha256": "78fdf34bffa3e3ca28d5217e426e2858ed0897060aba4346f6b8269411d02a87",
+      "licenseGitBlobSha1": "2669e7fb6037fcbb57d065312d0fb57a14af64fb",
+      "licenseSha256": "d476b8293f1cf84c2f6c5333a28c80a19907efeb7372e69f4cabf16f2094debd",
+      "incorporation": {
+        "introducedByCommit": "55f9eb2590b71eeb3b90b52fd58e210ec4dfc7db",
+        "currentPath": "packages/helpers/ts-templates/src/R1K1Wallet.artifact.ts",
+        "decompressedByteLength": 959592,
+        "decompressedSha256": "d5a824bfb1d3ea48ca4e9f70ba987f545d4d171aad689c1264b7339fa6928f2b",
+        "relationship": "Runar-compiled locking script, gzip-compressed and base64-encoded without semantic source modification"
+      },
+      "basis": "The artifact identifies the exact Runar commit and pull request. The pinned source and license blobs establish the MIT grant and notice, while the stored decompressed length and digest make future payload substitution detectable."
+    },
+    {
+      "id": "legacy-chaintracks-server",
+      "conclusion": "cleared",
+      "license": "MIT",
+      "notice": "Copyright (c) 2025-2026 chaintracks-server contributors",
+      "upstreamRepository": "https://github.com/bsv-blockchain/chaintracks-server",
+      "exactImportCommit": "eef334c910acc24d162d3bae75d518c01f7cdde1",
+      "initialCommit": "d5487ad50098325607cd588b5fd7bc345b3bf38e",
+      "packageManifestGitBlobSha1": "f8a0e97f16d1f5a2a9dfa6a6672fb36894c1f7ac",
+      "packageManifestSha256": "756f591e6e572437572615621250c0df101df63f41dcfab7b3cb7b7dfa0c7c5b",
+      "contributors": ["Darren Kellenschwiler (deggen)", "Oskar Szoon", "David Case"],
+      "incorporation": {
+        "subtreeImportCommit": "0c4be9002562d8d5e32bd83fc9bfd9a3296eaae2",
+        "paths": ["infra/chaintracks-server/public/headers", "infra/chaintracks-server/src"]
+      },
+      "basis": "The BSV Blockchain organization repository declared MIT from its initial commit through the exact subtree import. The contributor-form notice avoids asserting an undocumented assignment."
+    },
+    {
+      "id": "legacy-fund-wallet",
+      "conclusion": "cleared",
+      "license": "ISC",
+      "notice": "Copyright (c) 2025 Darren Kellenschwiler (deggen)",
+      "upstreamRepository": "https://github.com/sirdeggen/fund-metanet",
+      "exactImportCommit": "82650ae0bdd49c7013001fd81b05fdcc7c47f42f",
+      "initialCommit": "33f609d0d8d21f238880df0c55621f7a6d1d20ec",
+      "packageManifestGitBlobSha1": "9547120a9ad8e0222bdcbda8b1db5b181e33ef22",
+      "packageManifestSha256": "6b318e7d401b7a0893a125388271d671a50c0eee69df17f45a3a9b576447180e",
+      "npmPublication": {
+        "package": "fund-metanet@1.3.1",
+        "published": "2025-11-25T19:22:09.870Z",
+        "author": "deggen",
+        "gitHead": "82650ae0bdd49c7013001fd81b05fdcc7c47f42f",
+        "license": "ISC",
+        "integrity": "sha512-/1hqz+YHcR1k606pNDSuNGliRL5a1tRd4bdtC7qpuTX2Rr6n8VmT8JVdrN0hLAezLgOA3kCaHBQyKmpaTBfYMA==",
+        "shasum": "63761a56287ec6c4adca2083f1e1262e71219b8a"
+      },
+      "basis": "The sole source author published the exact import commit to npm under ISC and retained ISC in the source manifest."
+    },
+    {
+      "id": "legacy-message-box-server",
+      "conclusion": "cleared",
+      "license": "ISC",
+      "notice": "Copyright (c) 2025-2026 messagebox-server contributors",
+      "upstreamRepositories": [
+        "https://github.com/p2ppsr/messagebox-server",
+        "https://github.com/bsv-blockchain/message-box-server"
+      ],
+      "exactImportCommit": "2ca683e28e1eb0fddfbecc0e7f5b9943e6625075",
+      "initialSourceCommit": "7566449c6202fd26d979db305dd877e512bf05a0",
+      "packageManifestGitBlobSha1": "f1ce3e865be31ee53c07a2e1afcbd6acd1482e6b",
+      "packageManifestSha256": "b0c16037fe58f44a2099193641b6d2d501c0742a6afa9df032ac99d58008e65d",
+      "contributors": [
+        "Stephen Thomson",
+        "Brayden Langley",
+        "Chance Barimbao",
+        "Darren Kellenschwiler (deggen)",
+        "Dylan Murray",
+        "Mohammad Jaber",
+        "Oskar Szoon",
+        "Ty Everett"
+      ],
+      "basis": "ISC was declared in the initial source manifest and remains declared in both public repository lineages through the exact import. The contributor-form notice preserves attribution without asserting an undocumented assignment."
+    },
+    {
+      "id": "legacy-ts-p2p",
+      "conclusion": "cleared",
+      "license": "MIT",
+      "notice": "Copyright (c) 2025 BSV Blockchain Association",
+      "upstreamRepository": "https://github.com/bsv-blockchain/ts-p2p",
+      "exactImportCommit": "f2b10f6e3a29a771c7ce811bf66be87f2a41a08a",
+      "initialCommit": "bac961e8f1cd06d6a94cf5d73619d86f0bb5aa79",
+      "packageManifestGitBlobSha1": "ab9cd24f5f407a2044ce602a2c6f1c97f31970ee",
+      "packageManifestSha256": "7a79aa5bed6e7874ee88a9284b67b9d28296934d407357fbde9a928b62da738f",
+      "npmPublication": {
+        "package": "@bsv/teranode-listener@1.0.1",
+        "published": "2025-07-27T01:10:38.574Z",
+        "author": "BSV Blockchain Association",
+        "gitHead": "c1014293230cfd436aef4d7265aa0dc24d740790",
+        "license": "MIT",
+        "integrity": "sha512-9HyybYBBSB16qF53vfJJmC21SDKWSh8bb4lxGnNKVaaWu2dCWwo9YIl9joXENgLMxc++lDDZxWTxpcZ9MkXZ3w==",
+        "shasum": "55d8561a18664dc5e886b1c93e89134800d14f3b"
+      },
+      "basis": "The BSV Blockchain organization repository declared MIT throughout its history, and its npm publication names BSV Blockchain Association as author and MIT as the license."
+    }
+  ]
+}

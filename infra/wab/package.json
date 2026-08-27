@@ -1,5 +1,6 @@
 {
   "name": "@bsv/wab-server",
+  "author": "BSV Association",
   "private": true,
   "version": "1.5.4",
   "overrides": {

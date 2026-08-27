@@ -11,7 +11,7 @@
   },
   "type": "module",
   "description": "UTXO Management Server",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
@@ -34,7 +34,9 @@
   "files": [
     "out/src",
     "src",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "scripts": {
     "start": "node --import ./out/src/telemetry.js out/src/index.js",

@@ -37,7 +37,7 @@
     "prebuild": "rimraf out"
   },
   "keywords": [],
-  "author": "",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "description": "",
   "devDependencies": {

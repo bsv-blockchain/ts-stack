@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-08-27",
+  "owner": "ts-stack-maintainers",
+  "snapshot": {
+    "uniformizationCommit": "c4bf280d6b5e28e161d4771a408d10784702bbf7",
+    "parentCommit": "d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+    "renameAwareFilesChanged": 107,
+    "licenseNamedFilesChanged": 58,
+    "licenseOrPolicyTextsChanged": 55,
+    "licenseControlScriptsAdded": 3,
+    "preexistingLicenseOrPolicyFiles": 28,
+    "preexistingTextsModified": 19,
+    "preexistingTextsRemovedOrRenamed": 9,
+    "newLicenseTextsAdded": 27
+  },
+  "resolution": {
+    "decision": "Preserve every pre-uniformization grant for the code to which it applied and treat Open BSV License Version 6 as an additional or later grant only where the applicable rightsholder could grant it.",
+    "effect": "No release relies on commit c4bf280d6b5e28e161d4771a408d10784702bbf7 having retroactively extinguished or replaced an earlier license. Material-specific clearances remain controlling where no complete prior grant was preserved.",
+    "rootPolicyEvidence": "governance/license-evidence/pre-uniformization-root-policy.md",
+    "validation": "scripts/third-party-license-policy.mjs"
+  },
+  "priorFiles": [
+    {
+      "path": "infra/overlay-server/LICENSE.md",
+      "kind": "license",
+      "gitBlobSha1": "641e22d756200a0664a06cb406e58b2c672141b8",
+      "licenseText": "Open-BSV-5-overlay-server-pre-uniformization",
+      "scope": "infra/overlay-server",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "infra/uhrp-server-basic/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "infra/uhrp-server-basic",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "infra/uhrp-server-cloud-bucket/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "infra/uhrp-server-cloud-bucket",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "infra/uhrp-server-cloud-bucket/notifier/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "infra/uhrp-server-cloud-bucket/notifier",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "infra/wab/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "infra/wab",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "infra/wallet-infra/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "infra/wallet-infra",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "LICENSE.md",
+      "kind": "licensing-policy",
+      "gitBlobSha1": "d5078b1c3cbe41e60598f96ef443a4efca2b292b",
+      "licenseText": null,
+      "scope": ".",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/helpers/bsv-wallet-helper/LICENSE.md",
+      "kind": "license",
+      "gitBlobSha1": "737e785a39a0307c5888c09efa676f2aa9e19482",
+      "licenseText": "Open-BSV-6-wallet-helper-pre-uniformization",
+      "scope": "packages/helpers/bsv-wallet-helper",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/helpers/create-bsv-app/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "c63acce301f7286718fab41722d386e8a3f5609f",
+      "licenseText": "Open-BSV-4-create-bsv-app-pre-uniformization",
+      "scope": "packages/helpers/create-bsv-app",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/helpers/simple/LICENSE",
+      "kind": "license",
+      "gitBlobSha1": "2ba7e759dda4bac05c983facd67c5f1650c5aaef",
+      "licenseText": "simple-MIT",
+      "scope": "packages/helpers/simple",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/helpers/ts-templates/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/helpers/ts-templates",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/messaging/authsocket-client/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/messaging/authsocket-client",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/messaging/authsocket/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/messaging/authsocket",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/messaging/message-box-client/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/messaging/message-box-client",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/messaging/ts-paymail/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "9ac4c8d1738e2fb5a67dfa6c0b9961da63170f74",
+      "licenseText": "Open-BSV-4-paymail-pre-uniformization",
+      "scope": "packages/messaging/ts-paymail",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/middleware/402-pay/LICENSE.md",
+      "kind": "license",
+      "gitBlobSha1": "64a88f890612c4a63cf20d20f0c196ec1309389c",
+      "licenseText": "Open-BSV-4-402-pay-pre-uniformization",
+      "scope": "packages/middleware/402-pay",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/middleware/auth-express-middleware/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/middleware/auth-express-middleware",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/middleware/payment-express-middleware/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/middleware/payment-express-middleware",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/overlays/gasp-core/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/overlays/gasp-core",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/overlays/overlay-discovery-services/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/overlays/overlay-discovery-services",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/overlays/overlay-express/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/overlays/overlay-express",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/overlays/overlay/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/overlays/overlay",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/sdk/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "6e48033c5bae4fdff2da2742abb67ded3ddb875a",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "scope": "packages/sdk",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/verifast/LICENSE.txt",
+      "kind": "license",
+      "gitBlobSha1": "7d0a54f1d36df83969193077008f9507bc14b4a6",
+      "licenseText": "Open-BSV-4-verifast-pre-uniformization",
+      "scope": "packages/verifast",
+      "uniformizationAction": "modified"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox-examples/license.md",
+      "kind": "license",
+      "gitBlobSha1": "61f0cf2c644b49733792475c26a20508034a92f6",
+      "licenseText": "Open-BSV-4-wallet-pre-uniformization",
+      "scope": "packages/wallet/wallet-toolbox-examples",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/client/license.md",
+      "kind": "license",
+      "gitBlobSha1": "44fe70ec06dc0bee87deb40e4d9d5d0b921992d5",
+      "licenseText": "Open-BSV-4-wallet-client-pre-uniformization",
+      "scope": "packages/wallet/wallet-toolbox/client",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/license.md",
+      "kind": "license",
+      "gitBlobSha1": "61f0cf2c644b49733792475c26a20508034a92f6",
+      "licenseText": "Open-BSV-4-wallet-pre-uniformization",
+      "scope": "packages/wallet/wallet-toolbox",
+      "uniformizationAction": "removed-or-renamed"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/mobile/license.md",
+      "kind": "license",
+      "gitBlobSha1": "44fe70ec06dc0bee87deb40e4d9d5d0b921992d5",
+      "licenseText": "Open-BSV-4-wallet-client-pre-uniformization",
+      "scope": "packages/wallet/wallet-toolbox/mobile",
+      "uniformizationAction": "removed-or-renamed"
+    }
+  ]
+}

@@ -427,6 +427,10 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)
   assert.match(workflow, /name: \$\{\{ needs\.prepare\.outputs\.candidate \}\}/)
+  assert.match(
+    workflow,
+    /- name: Require incorporated-material rights clearance\n\s+run: pnpm license:release-check/
+  )
   const prepareJob = workflow.slice(workflow.indexOf('  prepare:'), workflow.indexOf('  publish:'))
   assert.doesNotMatch(prepareJob, /id-token: write|environment: npm-production/)
   assert.match(prepareJob, /permissions:\n\s+contents: read/)
