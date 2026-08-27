@@ -421,30 +421,15 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.match(workflow, /actions\/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d/g)
   assert.match(workflow, /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/)
   assert.doesNotMatch(workflow, /pnpm\s+-r[\s\S]{0,100}\spublish\b/)
-  const bootstrapInput = workflow.indexOf('chirp_bootstrap:')
-  const bootstrapStep = workflow.indexOf('- name: Bootstrap the attested @bsv/chirp tarball')
-  assert.ok(bootstrapInput > 0)
-  assert.ok(bootstrapStep > 0)
-  assert.match(workflow, /default: false/)
-  assert.match(workflow, /\$filter" != "\.\/packages\/network\/chirp"/)
-  assert.equal(workflow.match(/NODE_AUTH_TOKEN/g)?.length, 2)
-  assert.doesNotMatch(workflow, /NPM_TOKEN/)
+  assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN/)
   assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 3)
   assert.equal(workflow.match(/node-version: 24\.18\.0/g)?.length, 3)
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)
   assert.match(workflow, /name: \$\{\{ needs\.prepare\.outputs\.candidate \}\}/)
   const prepareJob = workflow.slice(workflow.indexOf('  prepare:'), workflow.indexOf('  publish:'))
-  assert.doesNotMatch(
-    prepareJob,
-    /id-token: write|environment: npm-production|NODE_AUTH_TOKEN|NPM_CHIRP_BOOTSTRAP_TOKEN/
-  )
+  assert.doesNotMatch(prepareJob, /id-token: write|environment: npm-production/)
   assert.match(prepareJob, /permissions:\n\s+contents: read/)
-
-  const bootstrapPublish = workflow.slice(bootstrapStep, workflow.indexOf('  sync-versions:'))
-  assert.match(bootstrapPublish, /needs\.prepare\.outputs\.chirp_bootstrap == 'true'/)
-  assert.match(bootstrapPublish, /secrets\.NPM_CHIRP_BOOTSTRAP_TOKEN/)
-  assert.match(bootstrapPublish, /package-release-artifacts\.mjs publish/)
 
   const stage = workflow.indexOf('- name: Stage exact npm release artifacts')
   const scan = workflow.indexOf('- name: Reject high and critical package findings')
