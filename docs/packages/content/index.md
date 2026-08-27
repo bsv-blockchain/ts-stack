@@ -2,6 +2,7 @@
 id: content-packages
 title: Content
 kind: meta
+domain: content
 version: 'n/a'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
