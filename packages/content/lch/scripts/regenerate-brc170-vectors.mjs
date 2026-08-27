@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
-import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { LockingScript, PrivateKey, ProtoWallet, Transaction } from '@bsv/sdk'
 import {
   PublicBRC77Verifier,
   WalletBRC78KeyDelivery,
@@ -92,6 +92,7 @@ const demandIds = []
 for (const [index, demand] of vectors.objects.paymentDemands.entries()) {
   demand.body.offerId = offerId
   demand.body.requestId = requestId
+  demand.body.buyer = buyer.identityKey
   demand.body.recoveryUntil = recovery
   demandIds.push(await updateRecord(demand, 'payment-demand', index === 0 ? publisher : composer))
 }
@@ -102,10 +103,45 @@ vectors.objects.quote.body.recoveryUntil = recovery
 vectors.objects.quote.body.demands = vectors.objects.paymentDemands.map(demand => demand.signed)
 await updateRecord(vectors.objects.quote, 'quote', publisher)
 
+const transaction = new Transaction(
+  1,
+  [],
+  vectors.multilateralPayment.outputs.map(output => ({
+    satoshis: output.satoshis,
+    lockingScript: LockingScript.fromHex(output.lockingScriptHex)
+  }))
+)
+const atomicBeef = Uint8Array.from(transaction.toAtomicBEEF(true))
+const transactionIdHex = transaction.id('hex')
+vectors.multilateralPayment.atomicBeefHex = toHex(atomicBeef)
+vectors.multilateralPayment.syntheticTxidHex = transactionIdHex
+vectors.multilateralPayment.note =
+  'The input-free Atomic BEEF is an executable transaction fixture; its signed Demand, Delivery, and Receipt bindings are normative vector values.'
+
+vectors.objects.paymentDeliveries = []
+for (const index of vectors.objects.paymentDemands.keys()) {
+  const output = vectors.multilateralPayment.outputs[index]
+  const delivery = {
+    body: {
+      version: 1,
+      demandId: demandIds[index],
+      requestId,
+      buyer: buyer.identityKey,
+      atomicBeef,
+      outputIndex: output.outputIndex,
+      derivationPrefix: fromBase64Url(output.derivationPrefixBase64url),
+      derivationSuffix: fromBase64Url(output.derivationSuffixBase64url)
+    }
+  }
+  await updateRecord(delivery, 'payment-delivery', buyer)
+  vectors.objects.paymentDeliveries.push(delivery)
+}
+
 const receiptIds = []
 for (const [index, receipt] of vectors.objects.paymentReceipts.entries()) {
   receipt.body.demandId = demandIds[index]
   receipt.body.requestId = requestId
+  receipt.body.txid = fromHex(transactionIdHex)
   receiptIds.push(
     await updateRecord(receipt, 'payment-receipt', index === 0 ? publisher : composer)
   )
@@ -117,6 +153,55 @@ for (const [index, fulfillment] of vectors.objects.license.body.fulfillments.ent
   fulfillment.receiptIds = [receiptIds[index]]
 }
 const licenseId = await updateRecord(vectors.objects.license, 'license', publisher)
+
+const completion = {
+  request: vectors.objects.licenseRequest.signed,
+  quote: vectors.objects.quote.signed,
+  atomicBeef,
+  receipts: vectors.objects.paymentReceipts.map(receipt => receipt.signed)
+}
+vectors.httpBinding = {
+  mediaType: 'application/vnd.bsv.lch+cbor',
+  operations: {
+    licenseRequestPreflight: {
+      requestType: 'license-request-preflight',
+      successStatus: 204,
+      payloadCborHex: toHex(encodeDeterministicCbor(vectors.objects.licenseRequest.signed))
+    },
+    quote: {
+      requestType: 'license-request',
+      responseType: 'quote',
+      successStatus: 200
+    },
+    paymentDemandPreflight: {
+      requestType: 'payment-demand',
+      successStatus: 204
+    },
+    paymentDelivery: {
+      requestType: 'payment-delivery',
+      responseType: 'payment-receipt',
+      successStatus: 200,
+      payloadCborHex: toHex(encodeDeterministicCbor(vectors.objects.paymentDeliveries[0].signed))
+    },
+    paymentCompletion: {
+      requestType: 'payment-completion',
+      responseType: 'license',
+      successStatus: 200,
+      payloadCborHex: toHex(encodeDeterministicCbor(completion))
+    },
+    licenseRecovery: {
+      requestType: 'license-recovery',
+      responseType: 'license',
+      successStatus: 200,
+      absentStatus: 404,
+      payloadCborHex: toHex(encodeDeterministicCbor({ requestId }))
+    }
+  },
+  error: {
+    responseType: 'error',
+    payloadCborHex: toHex(encodeDeterministicCbor({ code: 'ERR_LCH_PAYMENT' }))
+  }
+}
 
 const ingredient = vectors.objects.compositionRecord.body.ingredients[0]
 ingredient.sourceLicenseId = licenseId
@@ -162,6 +247,24 @@ vectors.brc77.licenseSignatureHex = toHex(vectors.objects.license.signed.signatu
 vectors.multilateralPayment.outputs.forEach((output, index) => {
   output.demandIdHex = toHex(demandIds[index])
 })
+for (const [index, output] of vectors.multilateralPayment.outputs.entries()) {
+  const keyID = `${output.derivationPrefixBase64url} ${output.derivationSuffixBase64url}`
+  const wallet = new ProtoWallet(new PrivateKey(index === 0 ? 1 : 3))
+  const { publicKey } = await wallet.getPublicKey({
+    protocolID: [2, '3241645161d8'],
+    keyID,
+    counterparty: toHex(buyer.identityKey),
+    forSelf: true
+  })
+  if (publicKey !== output.derivedPublicKeyHex) {
+    throw new Error(`Payee ${index} forSelf BRC-29 derivation does not match its payment output`)
+  }
+  output.receiverDerivation = {
+    counterpartyIdentityKeyHex: toHex(buyer.identityKey),
+    forSelf: true,
+    derivedPublicKeyHex: publicKey
+  }
+}
 
 const editorialTransforms = [
   { placement: 1, kind: 'identity' },

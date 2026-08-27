@@ -64,12 +64,16 @@ export async function validateEndpoint(value: string, policy: EndpointPolicy = {
   } catch (error) {
     throw new LCHError('ERR_LCH_ENDPOINT', 'Endpoint is not an absolute URL', { cause: error })
   }
+  const localOrigin = policy.allowLocalOrigins?.includes(url.origin) === true
   lchAssert(
-    url.protocol === 'https:' && url.username === '' && url.password === '' && url.hash === '',
+    (url.protocol === 'https:' || (localOrigin && url.protocol === 'http:')) &&
+      url.username === '' &&
+      url.password === '' &&
+      url.hash === '',
     'ERR_LCH_ENDPOINT',
     'Endpoint must be HTTPS without userinfo or fragment'
   )
-  if (policy.allowLocalOrigins?.includes(url.origin) === true) return url
+  if (localOrigin) return url
   const directAddress = isPublicAddress(url.hostname)
   if (/^[\d.]+$/u.test(url.hostname) || url.hostname.includes(':')) {
     lchAssert(directAddress, 'ERR_LCH_ENDPOINT', 'Endpoint address is not public')

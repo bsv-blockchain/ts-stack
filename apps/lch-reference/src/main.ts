@@ -1,59 +1,37 @@
-import { PrivateKey, ProtoWallet } from '@bsv/sdk'
-import {
-  LCHIssuer,
-  LCH_MECHANISMS,
-  LCH_PROFILES,
-  LCHPublisher,
-  LCHReader,
-  MemoryContentSink,
-  MemoryLicenseStore,
-  WalletBRC77Signer,
-  WalletBRC78KeyDelivery,
-  matchFinalizedOutputs,
-  objectId,
-  sha256,
-  toHex,
-  type InspectedLCH,
-  type KeyGrant,
-  type LCHValue,
-  type ProtectedAsset,
-  type SegmentedEncryptionDescriptor,
-  type SignedObject
-} from '@bsv/lch'
+import type { WalletInterface } from '@bsv/sdk'
+import { LCH_PROFILES, LCHReader, toHex, type SegmentedEncryptionDescriptor } from '@bsv/lch'
 import {
   EDITORIAL_CASES,
   buildEditorialComposition,
   createToneWav,
-  randomBytes,
   runCoreProfileChecks,
   transformToneWav,
   type EditorialPlacement
 } from './demo.js'
+import { createFixtureWallet } from './fixtureWallet.js'
+import { ReferenceLCHClient, type ReferenceAcquisitionPlan } from './referenceClient.js'
+import { ReferenceLCHServer } from './referenceServer.js'
 import './style.css'
 
 interface DemoAsset {
   name: string
   mediaType: string
   plaintext: Uint8Array
-  protected: ProtectedAsset
-  offer: SignedObject
+  assetId: Uint8Array
   offerId: Uint8Array
   lchBytes: Uint8Array
 }
 
-const creatorWallet = new ProtoWallet(new PrivateKey(11))
-const buyerWallet = new ProtoWallet(new PrivateKey(12))
-const creatorSigner = await WalletBRC77Signer.create({ wallet: creatorWallet })
-const buyerSigner = await WalletBRC77Signer.create({ wallet: buyerWallet })
-const issuer = new LCHIssuer(creatorSigner)
-const content = new MemoryContentSink()
-const licenses = new MemoryLicenseStore()
-const publisher = new LCHPublisher(creatorSigner)
-const reader = new LCHReader(content, licenses)
-const creatorKeyDelivery = new WalletBRC78KeyDelivery(creatorWallet)
-const buyerKeyDelivery = new WalletBRC78KeyDelivery(buyerWallet)
+const issuerWallet = createFixtureWallet(11)
+const recordingWallet = createFixtureWallet(12)
+const compositionWallet = createFixtureWallet(13)
+const fixtureBuyerWallet = createFixtureWallet(14)
+const referenceOrigin = 'https://lch-reference.invalid'
+let buyerWallet: WalletInterface = fixtureBuyerWallet
+let server = await createServer(7, 5)
+let client = createClient(server, buyerWallet)
 let current: DemoAsset | undefined
-let pendingInspection: InspectedLCH | undefined
+let pendingPlan: ReferenceAcquisitionPlan | undefined
 let currentLicenseId: Uint8Array | undefined
 let placements: EditorialPlacement[] = []
 let playerUrl: string | undefined
@@ -62,20 +40,32 @@ let transformUrl: string | undefined
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <header class="topbar">
     <div><strong>LCH reference workbench</strong><small>Draft BRC-170 · neutral open-source test application</small></div>
-    <div class="network"><i></i><span>idle</span></div>
+    <span class="wallet-mode">BRC-100 fixture wallets</span>
+    <div class="network"><i></i><span>fixture wallets ready</span></div>
   </header>
   <main>
     <section class="intro">
       <p class="kicker">REFERENCE IMPLEMENTATION</p>
-      <h1>Exercise the protocol, not a product.</h1>
-      <p>This browser harness publishes, acquires, decrypts, and composes a local test asset. It exposes intermediate identifiers and runs boundary cases for every initial LCH usage profile.</p>
-      <div class="safety"><strong>No live commerce.</strong> Opening never spends. The confirmation step constructs and matches simulated outputs but does not broadcast a transaction.</div>
+      <h1>Create, pay for, play, and compose an LCH asset.</h1>
+      <p>This open reference workbench follows one asset through the draft BRC-170 roles. Every signed object, payment split, recovered key, profile boundary, and composition binding remains inspectable.</p>
+      <div class="safety"><strong>Transaction boundary.</strong> Preflight resolves and verifies the ciphertext, Offer, Quote, and every Payment Demand. Only the separately labelled confirmation asks the selected BRC-100 wallet to create the transaction.</div>
+    </section>
+
+    <section class="flow" aria-label="LCH deployment flow">
+      <div><b>Creator</b><span>plaintext + rights interests</span></div><i>→</i>
+      <div><b>Issuer service</b><span>LCH, Offer, Quote, License</span></div><i>→</i>
+      <div><b>Content host</b><span>verified ciphertext locator</span></div>
+      <div><b>Buyer wallet</b><span>one BRC-100 action</span></div><i>→</i>
+      <div><b>Payee wallets</b><span>7 sat + 5 sat internalized directly</span></div><i>→</i>
+      <div><b>Player</b><span>BRC-78 keys + authenticated media</span></div>
     </section>
 
     <section id="publish" class="panel split">
       <div>
-        <p class="step">1 · PUBLISH</p><h2>Create a protected fixture</h2>
-        <p>Use the deterministic PCM loop for repeatable transform tests, or inspect an audio/video file locally.</p>
+        <p class="step">1 · CREATOR WIZARD</p><h2>Publish a protected asset</h2>
+        <p>Choose media, declare the two reference rights interests, and set the exact split that becomes signed Payment Demands.</p>
+        <div class="fields"><label>Recording controller <input id="recording-price" type="number" min="1" step="1" value="7" /> sat</label><label>Composition controller <input id="composition-price" type="number" min="1" step="1" value="5" /> sat</label></div>
+        <label class="storage">Content adapter <select disabled><option>Detached verified reference store</option></select><span>Production examples replace this ContentSink with CHIRP or UHRP.</span></label>
         <div class="drop"><input id="media-file" type="file" accept="audio/*,video/*" /><label for="media-file">Choose local media<br><span>bytes remain in this browser</span></label></div>
         <button id="tone">Generate PCM test loop</button>
       </div>
@@ -85,16 +75,17 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <section id="acquire" class="panel split">
       <div class="media-stage" id="media-stage"><div class="placeholder">encrypted media</div></div>
       <div>
-        <p class="step">2 · ACQUIRE</p><h2 id="asset-title">Explicit acquisition boundary</h2>
+        <p class="step">2 · PLAYER + WALLET</p><h2 id="asset-title">Verified acquisition</h2>
         <p id="asset-copy">Publish a fixture to enable preflight.</p>
-        <div class="price"><span>SIMULATED QUOTE</span><strong>12 satoshis</strong><code>7 + 5 · reordered outputs</code></div>
+        <div class="price"><span>SIGNED QUOTE</span><strong id="quote-total">12 satoshis</strong><code id="quote-split">7 + 5 · two payee wallets · reordered outputs accepted</code></div>
         <button id="acquire-button" disabled>Preflight &amp; quote</button>
-        <p class="fine">The second click is the explicit confirmation boundary. BRC-78 delivers every required key period after exact output matching.</p>
+        <p class="fine">After confirmation, each payee validates and internalizes its own BRC-29 output. The issuer releases BRC-78 key grants only after both signed receipts arrive.</p>
+        <div id="settlement-receipt" class="receipt settlement"><div class="empty">No wallet transaction or License</div></div>
       </div>
     </section>
 
     <section id="profiles" class="panel">
-      <div class="section-heading"><div><p class="step">3 · PROFILES</p><h2>Initial profile checks</h2><p>These executable scenarios target interoperability boundaries, not a sample business model.</p></div><button id="run-checks" disabled>Run all edge cases</button></div>
+      <div class="section-heading"><div><p class="step">3 · PROFILES</p><h2>Initial profile checks</h2><p>These executable scenarios pin interoperability boundaries across the initial profiles.</p></div><button id="run-checks" disabled>Run all edge cases</button></div>
       <div id="profile-grid" class="profile-grid">
         ${Object.entries(LCH_PROFILES)
           .map(
@@ -121,7 +112,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <pre id="composition-output">Awaiting a licensed source.</pre>
     </section>
   </main>
-  <footer><span>BRC-170 draft · @bsv/lch 0.1.0</span><span>Open reference code · not a storefront or legal determination</span></footer>
+  <footer><span>BRC-170 draft · @bsv/lch 0.1.0</span><span>Open reference code · exact fixtures and conformance cases</span></footer>
 `
 
 const fileInput = document.querySelector<HTMLInputElement>('#media-file')!
@@ -160,80 +151,21 @@ editButtons.forEach(button => {
 
 async function publish(bytes: Uint8Array, mediaType: string, name: string): Promise<void> {
   status('protecting and signing')
-  const protectedAsset = await publisher.protect(bytes, {
-    mediaType,
-    name,
-    rights: [
-      {
-        interest: 'master',
-        holder: { name: 'Reference creator' },
-        controller: creatorSigner.identityKey
-      },
-      {
-        interest: 'composition',
-        holder: { name: 'Reference composer' },
-        controller: creatorSigner.identityKey
-      }
-    ],
-    sink: content,
-    segmentSize: 16 * 1024,
-    keyPeriodSegments: 1
-  })
-  const policyBytes = new TextEncoder().encode(
-    JSON.stringify({
-      '@context': ['http://www.w3.org/ns/odrl.jsonld'],
-      '@type': 'Offer',
-      uid: 'lch:offer:self',
-      profile: 'https://bsv.brc.dev/apps/0170#odrl-profile',
-      permission: [
-        { target: `lch:asset:sha256:${toHex(protectedAsset.assetId)}`, action: 'play' },
-        { target: `lch:asset:sha256:${toHex(protectedAsset.assetId)}`, action: 'derive' }
-      ]
-    })
-  )
-  const offer = await issuer.createOffer({
-    assetId: protectedAsset.assetId,
-    usageProfile: LCH_PROFILES.fixedRender,
-    seller: creatorSigner.identityKey,
-    licenseIssuer: creatorSigner.identityKey,
-    requiredInterests: ['master', 'composition'],
-    policy: {
-      mediaType: 'application/ld+json',
-      digest: await sha256(policyBytes),
-      inline: policyBytes
-    },
-    payment: {
-      protocol: LCH_MECHANISMS.brc105Multipay,
-      endpoint: 'https://seller.example/lch/license',
-      asset: 'BSV',
-      unit: 'satoshi',
-      recoveryPeriodSeconds: 86_400,
-      pricing: { kind: 'fixed', requirements: [] }
-    },
-    keyDelivery: { mechanism: LCH_MECHANISMS.brc78Key },
-    enforcement: {
-      class: 'https://bsv.brc.dev/apps/0170#conformingApplication',
-      connectivity: 'https://bsv.brc.dev/apps/0170#either'
-    },
-    notBefore: Math.floor(Date.now() / 1000),
-    nonce: randomBytes(16)
-  })
-  const offerId = await objectId('offer', offer.body)
-  const wrapped = await publisher.publish(
-    protectedAsset,
-    [{ mode: 'inline', offer } as unknown as Record<string, LCHValue>],
-    true
-  )
+  const recordingPrice = exactPrice('recording-price')
+  const compositionPrice = exactPrice('composition-price')
+  server = await createServer(recordingPrice, compositionPrice)
+  client = createClient(server, buyerWallet)
+  const published = await server.publish({ bytes, mediaType, name })
+  const inspected = await new LCHReader(server.content).inspect(published.lch)
   current = {
     name,
     mediaType,
     plaintext: bytes,
-    protected: protectedAsset,
-    offer,
-    offerId,
-    lchBytes: wrapped.bytes
+    assetId: published.assetId,
+    offerId: published.offerId,
+    lchBytes: published.lch
   }
-  pendingInspection = undefined
+  pendingPlan = undefined
   currentLicenseId = undefined
   placements = []
   acquireButton.disabled = false
@@ -244,24 +176,29 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
   previewButton.disabled = true
   document.querySelector('#clips')!.innerHTML = '<span>no placements</span>'
   document.querySelector('#composition-output')!.textContent = 'Awaiting a licensed source.'
+  document.querySelector('#settlement-receipt')!.innerHTML =
+    '<div class="empty">No wallet transaction or License</div>'
   document.querySelector('#profile-output')!.textContent = 'No checks have run.'
   resetProfileCards()
   document.querySelector('#asset-title')!.textContent = name
   document.querySelector('#asset-copy')!.textContent =
-    `${mediaType} · ${bytes.length.toLocaleString()} plaintext bytes · ${wrapped.bytes.length.toLocaleString()} wrapped bytes`
+    `${mediaType} · ${bytes.length.toLocaleString()} plaintext bytes · ${published.lch.length.toLocaleString()} detached-header bytes`
+  document.querySelector('#quote-total')!.textContent =
+    `${recordingPrice + compositionPrice} satoshis`
+  document.querySelector('#quote-split')!.textContent =
+    `${recordingPrice} + ${compositionPrice} · two payee wallets · reordered outputs accepted`
   document.querySelector('#publish-receipt')!.innerHTML = receiptRows([
-    ['ASSET ID', short(toHex(protectedAsset.assetId))],
-    ['OFFER ID', short(toHex(offerId))],
+    ['ASSET ID', short(toHex(published.assetId))],
+    ['OFFER ID', short(toHex(published.offerId))],
     [
       'KEY PERIODS',
       String(
-        (
-          (protectedAsset.asset.representation as Record<string, LCHValue>)
-            .encryption as unknown as SegmentedEncryptionDescriptor
-        ).keyPeriods.length
+        (inspected.representation.encryption as unknown as SegmentedEncryptionDescriptor).keyPeriods
+          .length
       )
     ],
-    ['CONTENT ADAPTER', 'verified in-memory'],
+    ['CONTENT ADAPTER', 'detached + digest verified'],
+    ['PAYMENT SPLIT', `${recordingPrice} / ${compositionPrice} sat`],
     ['USAGE PROFILE', 'fixed-render-v1']
   ])
   document.querySelector('#media-stage')!.innerHTML =
@@ -272,99 +209,56 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
 async function acquire(): Promise<void> {
   if (current === undefined) return
   acquireButton.disabled = true
-  if (pendingInspection === undefined) {
-    acquireButton.textContent = 'Validating ciphertext…'
-    const inspected = await reader.inspect(current.lchBytes)
-    await reader.resolve(inspected)
-    pendingInspection = inspected
-    acquireButton.textContent = 'Confirm 12 satoshis'
+  try {
+    if (pendingPlan === undefined) {
+      acquireButton.textContent = 'Validating Offer, Quote & Demands…'
+      pendingPlan = await client.prepare(current.lchBytes)
+      acquireButton.textContent = `Confirm ${pendingPlan.totalSatoshis} satoshis in wallet`
+      acquireButton.disabled = false
+      status('preflight passed · no transaction created · confirmation required')
+      return
+    }
+    const plan = pendingPlan
+    acquireButton.textContent = 'Creating wallet transaction…'
+    const result = await client.acquire(plan)
+    pendingPlan = undefined
+    currentLicenseId = result.licenseId
+    const plaintext = result.plaintext
+    if (playerUrl !== undefined) URL.revokeObjectURL(playerUrl)
+    playerUrl = URL.createObjectURL(
+      new Blob([plaintext.slice().buffer], { type: current.mediaType })
+    )
+    const element = current.mediaType.startsWith('video/') ? 'video' : 'audio'
+    document.querySelector('#media-stage')!.innerHTML =
+      `<${element} controls src="${playerUrl}"></${element}><div class="verified">authenticated segments · signed license</div>`
+    acquireButton.textContent = 'Licensed asset ready'
+    checksButton.disabled = false
+    editButtons.forEach(button => (button.disabled = false))
+    const receiptState =
+      buyerWallet === fixtureBuyerWallet
+        ? `${recordingWallet.receivedSatoshis} sat recording + ${compositionWallet.receivedSatoshis} sat composition`
+        : `${result.receipts.length} signed payee receipts`
+    document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+      ['TRANSACTION', short(result.transactionId)],
+      ['RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`],
+      ['COMPOSITION WALLET', `${compositionWallet.receivedSatoshis} sat internalized`],
+      ['PAYEE RECEIPTS', String(result.receipts.length)],
+      ['LICENSE', short(toHex(result.licenseId))],
+      ['RECOVERY', result.recovered ? 'verified' : 'not verified']
+    ])
+    status(
+      `transaction ${short(result.transactionId)} · ${receiptState} · license recovery verified`
+    )
+    await runChecks()
+  } catch (error) {
+    const requiresRecovery = client.hasPendingPayment()
+    if (!requiresRecovery) pendingPlan = undefined
+    acquireButton.textContent = requiresRecovery
+      ? 'Retry delivery & License recovery'
+      : 'Preflight & quote'
     acquireButton.disabled = false
-    status('preflight passed · explicit confirmation required')
-    return
+    status(error instanceof Error ? error.message : 'acquisition failed')
   }
-  const inspected = pendingInspection
-  pendingInspection = undefined
-  acquireButton.textContent = 'Applying simulated payment…'
-  const scripts = [randomBytes(25), randomBytes(25)]
-  matchFinalizedOutputs(
-    [
-      { demandId: new Uint8Array(32).fill(1), satoshis: 7n, lockingScript: scripts[0] },
-      { demandId: new Uint8Array(32).fill(2), satoshis: 5n, lockingScript: scripts[1] }
-    ],
-    [
-      { satoshis: 5n, lockingScript: scripts[1] },
-      { satoshis: 7n, lockingScript: scripts[0] }
-    ]
-  )
-  const recoveredKeys = new Map<string, Uint8Array>()
-  const keyGrants: KeyGrant[] = []
-  for (const [keyIdHex, cek] of current.protected.keys) {
-    const keyId = Uint8Array.from(keyIdHex.match(/../gu) ?? [], pair => Number.parseInt(pair, 16))
-    const payload = await creatorKeyDelivery.deliver(toHex(buyerSigner.identityKey), keyId, cek)
-    const recovered = await buyerKeyDelivery.recover(payload)
-    recoveredKeys.set(toHex(recovered.keyId), recovered.cek)
-    keyGrants.push({ keyId, delivery: LCH_MECHANISMS.brc78Key, payload })
-  }
-  const agreementBytes = new TextEncoder().encode(
-    JSON.stringify({
-      '@context': ['http://www.w3.org/ns/odrl.jsonld'],
-      '@type': 'Agreement',
-      uid: 'lch:license:self',
-      profile: 'https://bsv.brc.dev/apps/0170#odrl-profile',
-      permission: [
-        { target: `lch:asset:sha256:${toHex(current.protected.assetId)}`, action: 'play' },
-        { target: `lch:asset:sha256:${toHex(current.protected.assetId)}`, action: 'derive' }
-      ]
-    })
-  )
-  const requestBody: Record<string, LCHValue> = {
-    version: 1,
-    assetId: current.protected.assetId,
-    offerId: current.offerId,
-    buyer: buyerSigner.identityKey,
-    action: 'play',
-    selection: { type: 'all' },
-    acceptedPolicyDigest: current.offer.body.policy as Record<string, LCHValue>,
-    requestNonce: randomBytes(16),
-    createdAt: Math.floor(Date.now() / 1000)
-  }
-  const requestId = await objectId('license-request', requestBody)
-  const license = await issuer.issueLicense({
-    assetId: current.protected.assetId,
-    offerId: current.offerId,
-    requestId,
-    issuer: creatorSigner.identityKey,
-    subject: buyerSigner.identityKey,
-    issuedAt: Math.floor(Date.now() / 1000),
-    agreement: {
-      mediaType: 'application/ld+json',
-      digest: await sha256(agreementBytes),
-      inline: agreementBytes
-    },
-    selection: { type: 'all' },
-    fulfillments: [{ dutyUid: 'urn:lch:duty:reference', receiptIds: [new Uint8Array(32).fill(3)] }],
-    keyGrants,
-    encryption: (current.protected.asset.representation as Record<string, LCHValue>)
-      .encryption as unknown as SegmentedEncryptionDescriptor
-  })
-  currentLicenseId = await objectId('license', license.body)
-  await licenses.put({
-    assetId: toHex(current.protected.assetId),
-    offerId: toHex(current.offerId),
-    license,
-    storedAt: BigInt(Math.floor(Date.now() / 1000))
-  })
-  const plaintext = await reader.decrypt(inspected, recoveredKeys)
-  if (playerUrl !== undefined) URL.revokeObjectURL(playerUrl)
-  playerUrl = URL.createObjectURL(new Blob([plaintext.slice().buffer], { type: current.mediaType }))
-  const element = current.mediaType.startsWith('video/') ? 'video' : 'audio'
-  document.querySelector('#media-stage')!.innerHTML =
-    `<${element} controls src="${playerUrl}"></${element}><div class="verified">authenticated segments · signed license</div>`
-  acquireButton.textContent = 'Licensed fixture ready'
-  checksButton.disabled = false
-  editButtons.forEach(button => (button.disabled = false))
-  status(`license ${short(toHex(currentLicenseId))} stored`)
-  await runChecks()
 }
 
 async function runChecks(): Promise<void> {
@@ -372,7 +266,7 @@ async function runChecks(): Promise<void> {
   checksButton.disabled = true
   status('running profile edge cases')
   try {
-    const checks = await runCoreProfileChecks(current.protected.assetId, currentLicenseId)
+    const checks = await runCoreProfileChecks(current.assetId, currentLicenseId)
     checks.forEach(check => {
       const card = document.querySelector<HTMLElement>(`[data-profile="${check.profile}"]`)!
       card.classList.add('passed')
@@ -430,17 +324,58 @@ function previewLastEdit(): void {
 
 async function buildComposition(): Promise<void> {
   if (current === undefined || currentLicenseId === undefined || placements.length === 0) return
-  const record = await buildEditorialComposition(
-    current.protected.assetId,
-    currentLicenseId,
-    placements
-  )
+  const record = await buildEditorialComposition(current.assetId, currentLicenseId, placements)
   document.querySelector('#composition-output')!.textContent = JSON.stringify(
     diagnostic(record),
     null,
     2
   )
   status(`${placements.length} distinct C2PA ingredient bindings built`)
+}
+
+async function createServer(
+  recordingSatoshis: number,
+  compositionSatoshis: number
+): Promise<ReferenceLCHServer> {
+  return ReferenceLCHServer.create({
+    issuerWallet,
+    publicBaseUrl: referenceOrigin,
+    payees: [
+      {
+        wallet: recordingWallet,
+        satoshis: recordingSatoshis,
+        dutyUid: 'urn:lch:duty:recording',
+        interest: 'recording',
+        label: 'recording controller'
+      },
+      {
+        wallet: compositionWallet,
+        satoshis: compositionSatoshis,
+        dutyUid: 'urn:lch:duty:composition',
+        interest: 'composition',
+        label: 'composition controller'
+      }
+    ]
+  })
+}
+
+function createClient(
+  referenceServer: ReferenceLCHServer,
+  wallet: WalletInterface
+): ReferenceLCHClient {
+  return new ReferenceLCHClient(wallet, referenceServer.content, {
+    endpointPolicy: {
+      allowLocalOrigins: [referenceOrigin],
+      connect: async (url, init) => referenceServer.http.handle(new Request(url, init))
+    }
+  })
+}
+
+function exactPrice(id: string): number {
+  const value = Number(document.querySelector<HTMLInputElement>(`#${id}`)!.value)
+  if (!Number.isSafeInteger(value) || value <= 0)
+    throw new Error('Prices must be positive integers')
+  return value
 }
 
 function diagnostic(value: unknown): unknown {

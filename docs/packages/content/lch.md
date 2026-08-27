@@ -33,6 +33,8 @@ npm install @bsv/lch @bsv/sdk
 - signed Assets, Offers, Demands, Quotes, Licenses, Authorities, and receipts;
 - explicit BRC-29/BRC-100 multilateral payment construction that matches
   finalized wallet outputs without assuming output order;
+- deterministic-CBOR Fetch client/server bindings, typed acquisition builders,
+  replay-safe Payee receipt handling, and a complete multipay buyer workflow;
 - bounded authority chains with fresh, network-scoped revocation observations;
 - HTTPS endpoint policy plus UHRP and CHIRP content source and sink adapters;
 - browser IndexedDB and in-memory license stores; and
@@ -47,20 +49,43 @@ the returned signed License and key grants. Recovery is available for the
 Offer's exact declared recovery period.
 
 ```typescript
-const acquisition = issuer.preflight(offer, {
+const buyer = await LCHMultipayBuyer.create(wallet, { endpointPolicy })
+const request = await buyer.createRequest({
+  offerId,
+  assetId,
+  action: 'play',
   selection: { type: 'all' },
-  units: 1n
+  acceptedPolicyDigest,
+  createdAt: BigInt(Math.floor(Date.now() / 1000))
 })
+const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity)
+
+// Display plan.totalSatoshis, plan.demands, action, Selection, and terms first.
 
 // Application UI must obtain consent before this boundary.
-const payment = await createMultipayTransaction(wallet, acquisition.demands)
-const license = await deliverDemand(payment)
-await licenseStore.put(license)
+const funded = await buyer.createPayment(plan)
+await durableRecoveryStore.put(funded)
+
+const receipts = []
+for (const delivery of funded.deliveries) {
+  receipts.push(await buyer.deliver(funded, delivery))
+}
+const license = await buyer.complete(funded, receipts)
 ```
 
 Wallets may add or reorder outputs. The implementation locates every Demand
 output after finalization by its exact locking script and satoshi amount, and
-fails if a match is missing or ambiguous.
+fails if a match is missing or ambiguous. Retain `funded` and successful
+Receipts until completion or `recoveryUntil`; retry delivery with the same
+transaction after ambiguity and never create a replacement automatically.
+
+On the receiving side, `WalletPaymentReceiver` independently derives and
+validates the Payee's BRC-29 output, atomically claims the Demand through a
+`PaymentLedger`, calls that Payee wallet's BRC-100 `internalizeAction`, and
+returns a signed Receipt. `LCHHttpServer` mounts that and the issuer handlers on
+any Fetch-compatible server surface. The executable reference application also
+ships a Node server, creator wizard, player, wallet-module contract, and
+single-process/container/durable deployment examples.
 
 ## Storage and media
 

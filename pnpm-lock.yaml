@@ -61,6 +61,9 @@ importers:
         specifier: workspace:^
         version: link:../../packages/sdk
     devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2

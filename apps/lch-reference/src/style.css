@@ -105,6 +105,24 @@ button:disabled {
   border-radius: 50%;
 }
 
+.wallet-mode {
+  margin-left: auto;
+  padding: 6px 8px;
+  border: 1px solid #d6d9dc;
+  border-radius: 3px;
+  color: #596168;
+  background: #f7f8f8;
+  font:
+    10px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.network {
+  margin-left: 0;
+}
+
 main,
 footer {
   width: min(1120px, calc(100% - 40px));
@@ -161,6 +179,85 @@ p {
 .panel {
   border-top: 1px solid #d4d8db;
   padding: 54px 0;
+}
+
+.flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 10px;
+  padding: 22px 0 42px;
+}
+
+.flow div {
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid #d4d8db;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.flow div:nth-of-type(4) {
+  grid-column: 1;
+}
+
+.flow b,
+.flow span {
+  display: block;
+}
+
+.flow b {
+  margin-bottom: 7px;
+  font-size: 12px;
+}
+
+.flow span {
+  color: #6a7279;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.flow i {
+  align-self: center;
+  color: #91989e;
+  font-style: normal;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 20px 0 10px;
+}
+
+.fields label,
+.storage {
+  display: grid;
+  gap: 7px;
+  color: #5e666d;
+  font-size: 11px;
+}
+
+.fields input,
+.storage select {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #c9cdd1;
+  border-radius: 3px;
+  color: #252a2f;
+  background: #fff;
+}
+
+.storage {
+  margin-bottom: 12px;
+}
+
+.storage span {
+  color: #7a8289;
+  font:
+    10px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
 }
 
 .split {
@@ -240,6 +337,16 @@ p {
 
 .receipt code {
   text-align: right;
+}
+
+.settlement {
+  min-height: 0;
+  margin-top: 18px;
+  padding: 10px 14px;
+}
+
+.settlement > div:not(.empty) {
+  padding: 9px 2px;
 }
 
 .media-stage {
@@ -482,8 +589,18 @@ footer {
 
 @media (max-width: 780px) {
   .split,
-  .profile-grid {
+  .profile-grid,
+  .flow,
+  .fields {
     grid-template-columns: 1fr;
+  }
+
+  .flow i {
+    display: none;
+  }
+
+  .flow div:nth-of-type(4) {
+    grid-column: auto;
   }
 
   .split {

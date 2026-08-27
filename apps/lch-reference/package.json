@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/copy-notices.mjs",
+    "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && node scripts/copy-notices.mjs",
+    "serve": "node dist-server/nodeServer.js",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test --deny-warnings",
     "format:check": "pnpm --workspace-root exec prettier --check \"apps/lch-reference/**/*.{css,html,json,md,mjs,ts}\"",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@7.0.2",
+    "@types/node": "^26.1.2",
     "oxlint": "^1.76.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.1.5",

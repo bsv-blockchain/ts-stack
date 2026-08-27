@@ -41,7 +41,7 @@
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
     "vectors:update": "pnpm build && node scripts/regenerate-brc170-vectors.mjs",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports LCHPublisher,LCHReader,LCHIssuer,LCHComposer,encodeDeterministicCbor,parseLCH,encryptSegmented --bin lch --bin-args --help",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports LCHPublisher,LCHReader,LCHIssuer,LCHComposer,LCHMultipayBuyer,LCHHttpServer,WalletPaymentReceiver,encodeDeterministicCbor,parseLCH,encryptSegmented --bin lch --bin-args --help",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
