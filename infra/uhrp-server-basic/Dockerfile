@@ -18,8 +18,11 @@ FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbf
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
-# that we don't need at runtime.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# that we don't need at runtime. Alpine 3.24.1's pinned Node image contains
+# OpenSSL 3.5.7-r0, so install the fixed 3.5.8-r0 runtime packages for
+# CVE-2026-14456 in the same layer.
+RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 

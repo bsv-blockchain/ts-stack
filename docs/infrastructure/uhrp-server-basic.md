@@ -2,9 +2,9 @@
 id: infra-uhrp-basic
 title: 'UHRP Server (Basic)'
 kind: infra
-version: '0.1.33'
-last_updated: '2026-08-25'
-last_verified: '2026-08-25'
+version: '0.1.34'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]
@@ -13,6 +13,10 @@ tags: [uhrp, storage, file-server, development, lightweight]
 # UHRP Server (Basic)
 
 > A simple, file-system based UHRP (Universal Host Reference Protocol) host server. Stores files locally on disk and provides HTTP endpoints for UHRP data retrieval and storage.
+
+The 0.1.34 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
+to remediate CVE-2026-14456. Service APIs, storage formats, CHIRP behavior, and
+deployment configuration are unchanged from 0.1.33.
 
 ## What it does
 
