@@ -88,7 +88,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-08-25",
+      "reviewBy": "2026-09-25",
       "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
     },
     {
@@ -188,7 +188,7 @@
         "https://github.com/openapi-ts/openapi-typescript/blob/openapi-typescript%407.13.0/packages/openapi-typescript/package.json"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-08-25",
+      "reviewBy": "2026-09-25",
       "removeWhen": "Remove when a supported openapi-typescript release natively resolves non-vulnerable js-yaml, minimatch, and brace-expansion versions, then regenerate and compare every committed output."
     },
     {
