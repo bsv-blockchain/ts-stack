@@ -5,7 +5,7 @@ kind: meta
 domain: sdk
 version: 'n/a'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'sdk']

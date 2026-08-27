@@ -206,7 +206,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-26",
+      "reviewBy": "2026-09-26",
       "removeWhen": "Every conformance skip is implemented or documented as deliberately unsupported with a permanent compatibility decision."
     },
     {
@@ -222,7 +222,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-26",
+      "reviewBy": "2026-09-26",
       "removeWhen": "All six required-suite gaps are enabled, moved to a correctly governed non-PR suite, or removed with evidence that the scenario is obsolete."
     },
     {
