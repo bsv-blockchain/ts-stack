@@ -1,6 +1,6 @@
 {
   "name": "@bsv/air-gap",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -9,7 +9,7 @@
     "access": "public"
   },
   "description": "One-directional optical air-gap transport: fountain-coded QR parts for arbitrary bytes",
-  "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "type": "commonjs",
   "main": "./dist/index.cjs",

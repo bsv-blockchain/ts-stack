@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-helper",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -26,7 +26,9 @@
   },
   "files": [
     "dist",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "repository": {
     "type": "git",
@@ -51,7 +53,7 @@
     "transactions",
     "ordinals"
   ],
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "type": "commonjs",
   "dependencies": {

@@ -3,10 +3,10 @@ id: pkg-simple
 title: '@bsv/simple'
 kind: package
 domain: helpers
-version: '0.5.1'
+version: '0.5.2'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-14'
-last_verified: '2026-08-14'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/simple'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple'

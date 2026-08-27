@@ -24,6 +24,7 @@ dist/
 # Documentation
 *.md
 !README.md
+!THIRD_PARTY_NOTICES.md
 
 # Test files
 *.test.ts

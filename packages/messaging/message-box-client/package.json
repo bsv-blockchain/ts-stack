@@ -1,6 +1,6 @@
 {
   "name": "@bsv/message-box-client",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -25,7 +25,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "scripts": {
     "build": "pnpm build:ts && pnpm build:umd",
@@ -67,7 +69,7 @@
     },
     "./package.json": "./package.json"
   },
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

@@ -5,14 +5,17 @@ import test from 'node:test'
 
 import {
   REPOSITORY_ROOT,
+  PACKAGE_AUTHOR,
   collectContractFindings,
   compareContractBaseline,
   createContractBaseline,
+  discoverPackageManifests,
   discoverWorkspaceProjects,
   evaluateRepositoryHealth,
   lintScriptExcludesAuthoredCode,
   readJson,
   validateExceptionRegistry,
+  validatePackageAuthorIdentity,
   validateProjectRegistry
 } from './repository-health.mjs'
 import { validateBaseline as validateCiPerformanceBaseline } from './ci-performance.mjs'
@@ -47,7 +50,7 @@ test('workspace discovery exactly matches the 41-project registry', () => {
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
-  assert.equal(projects.generatedArtifacts.length, 13)
+  assert.equal(projects.generatedArtifacts.length, 12)
   assert.ok(projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers'))
   assert.deepEqual(projects.dependencyAutomation.firstParty, {
     pattern: '@bsv/*',
@@ -59,6 +62,18 @@ test('workspace discovery exactly matches the 41-project registry', () => {
     rationale:
       'First-party versions are updated as one release-aware graph after packages are published; generic Dependabot PRs cannot safely coordinate unpublished sibling versions.'
   })
+})
+
+test('every checked-in first-party package manifest uses the current Association name', () => {
+  const manifests = discoverPackageManifests()
+
+  assert.equal(manifests.length, 48)
+  assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
+  assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
+
+  const stale = structuredClone(manifests)
+  stale[0].manifest.author = 'Legacy Association Name'
+  assert.match(validatePackageAuthorIdentity(stale).join('\n'), /must use "BSV Association"/)
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
@@ -244,9 +259,10 @@ test('every public package declares supported runtime and canonical support meta
       { url: 'https://github.com/bsv-blockchain/ts-stack/issues' },
       `${project.path} must point consumers to the shared support tracker`
     )
-    assert.ok(
-      typeof project.manifest.author === 'string' && project.manifest.author.trim().length > 0,
-      `${project.path} must identify an author or organization`
+    assert.equal(
+      project.manifest.author,
+      PACKAGE_AUTHOR,
+      `${project.path} must use the current Association name`
     )
     assert.ok(
       Array.isArray(project.manifest.keywords) &&

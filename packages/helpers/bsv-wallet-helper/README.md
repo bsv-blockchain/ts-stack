@@ -330,7 +330,12 @@ const updated = await ordP2pkh.lock({
 
 ## License
 
-[Open BSV License Version 6](./LICENSE.txt)
+Current TS Stack changes are licensed under the
+[Open BSV License Version 6](./LICENSE.txt). This package also retains code
+under its distinct pre-uniformization Open BSV License Version 6 grant.
+Redistributors must preserve
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
+[`LICENSES/`](./LICENSES/).
 
 ## Contributing
 

@@ -18,18 +18,18 @@ Use the browser-safe default entry point in frontend applications and
 
 ## What can you build?
 
-| Feature | Description |
-|---------|-------------|
-| **Payments** | Send BSV to any identity key via BRC-29 peer-to-peer payments |
+| Feature                       | Description                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| **Payments**                  | Send BSV to any identity key via BRC-29 peer-to-peer payments                       |
 | **Multi-Output Transactions** | Combine P2PKH payments, OP_RETURN data, and PushDrop tokens in a single transaction |
-| **Encrypted Tokens** | Create, transfer, and redeem PushDrop tokens with encrypted payloads |
-| **Inscriptions** | Write text, JSON, or file hashes permanently to the blockchain |
-| **MessageBox P2P** | Send and receive payments and tokens peer-to-peer via MessageBox |
-| **Certification** | Issue and manage BSV certificates with a standalone Certifier |
-| **Verifiable Credentials** | W3C-compatible VCs backed by BSV certificates, with on-chain revocation |
-| **DIDs** | Generate and resolve `did:bsv:` Decentralized Identifiers |
-| **Overlay Networks** | Broadcast to and query SHIP/SLAP overlay services |
-| **Server Wallet** | Run a backend wallet for automated operations and funding flows |
+| **Encrypted Tokens**          | Create, transfer, and redeem PushDrop tokens with encrypted payloads                |
+| **Inscriptions**              | Write text, JSON, or file hashes permanently to the blockchain                      |
+| **MessageBox P2P**            | Send and receive payments and tokens peer-to-peer via MessageBox                    |
+| **Certification**             | Issue and manage BSV certificates with a standalone Certifier                       |
+| **Verifiable Credentials**    | W3C-compatible VCs backed by BSV certificates, with on-chain revocation             |
+| **DIDs**                      | Generate and resolve `did:bsv:` Decentralized Identifiers                           |
+| **Overlay Networks**          | Broadcast to and query SHIP/SLAP overlay services                                   |
+| **Server Wallet**             | Run a backend wallet for automated operations and funding flows                     |
 
 ## Browser vs Server
 
@@ -76,4 +76,6 @@ const did = wallet.getDID()
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+The identified pre-monorepo source remains MIT-licensed; see
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).

@@ -39,7 +39,10 @@ console.log(formattedAmount) // e.g. "$0.04"
 const converter = new CurrencyConverter()
 await converter.initialize()
 
-const value = await converter.convertSatoshisToCurrency(txOutput.satoshis, converter.preferredCurrency)
+const value = await converter.convertSatoshisToCurrency(
+  txOutput.satoshis,
+  converter.preferredCurrency
+)
 const { formattedAmount, hoverText } = formatAmountWithCurrency(value, converter.preferredCurrency)
 // `hoverText` is set for very small amounts (e.g. "< $0.01" / "$0.001").
 ```
@@ -69,13 +72,13 @@ await converter.initialize()
 
 ## API
 
-| Export | Purpose |
-|--------|---------|
-| `CurrencyConverter` | Fetches exchange rates, reads the wallet's preferred currency, and converts between satoshis and fiat |
+| Export                                                 | Purpose                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `CurrencyConverter`                                    | Fetches exchange rates, reads the wallet's preferred currency, and converts between satoshis and fiat                          |
 | `formatAmountWithCurrency(amount, currency, options?)` | Formats a number with currency symbol, thousands separators, and adaptive precision; returns `{ formattedAmount, hoverText? }` |
 
 Supported currencies: `BSV`, `SATS`, `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `INR`, `AUD`, `CAD`, `CHF`, `HKD`, `SGD`, `NZD`, `SEK`, `NOK`, `MXN`.
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+This package is released under the [Open BSV License Version 6](./LICENSE.txt).

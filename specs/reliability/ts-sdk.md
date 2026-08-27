@@ -12,7 +12,7 @@
 - Domain: SDK
 - Criticality tier: 0
 - Reliability Level (current → target): RL2 → RL5
-- Owner / Backup owner: BSV Blockchain SDK team / BSV Blockchain Association
+- Owner / Backup owner: BSV Blockchain SDK team / BSV Association
 
 ## Build and Test
 - Build command: `npm run build` (tsc -b + rspack UMD bundle)

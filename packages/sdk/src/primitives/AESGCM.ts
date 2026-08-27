@@ -1,4 +1,5 @@
 // @ts-nocheck
+// Modified aes-gcm.js lineage; see ../../THIRD_PARTY_NOTICES.md.
 
 // NOTE:
 // Table-based AES is intentionally retained for performance.

@@ -48,6 +48,12 @@ RUN apk add --no-cache --virtual .build-deps g++ make python3 \
 COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
 COPY --from=builder --chown=root:root --chmod=0444 /app/knexfile.js ./knexfile.js
 
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
+
 # The Node process serves HTTP and WebSocket traffic directly. Operators can
 # place a platform/load-balancer proxy in front of the container.
 EXPOSE 8080

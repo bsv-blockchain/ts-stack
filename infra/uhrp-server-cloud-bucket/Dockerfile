@@ -42,6 +42,12 @@ COPY --from=build /app/out ./out
 COPY --from=build /app/package.json ./
 COPY public/ ./public/
 
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
+
 USER node
 
 EXPOSE 8080

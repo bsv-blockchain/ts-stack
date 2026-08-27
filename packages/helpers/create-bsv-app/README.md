@@ -250,4 +250,8 @@ The package is maintained in the [`bsv-blockchain/ts-stack`](https://github.com/
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+Current TS Stack changes are licensed under the Open BSV License Version 6; see
+[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+under its package-specific Open BSV License Version 4 grant. Redistributors
+must preserve [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
+applicable text in [`LICENSES/`](./LICENSES/).

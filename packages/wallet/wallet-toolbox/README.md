@@ -449,4 +449,6 @@ for the full stack-wide policy.
 
 ## License
 
-Released under the [Open BSV License](./LICENSE.txt).
+This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
+[LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.

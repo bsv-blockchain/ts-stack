@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -17,7 +17,9 @@
     "dist",
     "!dist/**/*.tsbuildinfo",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "exports": {
     ".": {
