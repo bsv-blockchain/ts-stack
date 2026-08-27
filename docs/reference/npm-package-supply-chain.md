@@ -12,10 +12,19 @@ tags: [reference, packages, npm, security, releases]
 
 # npm Package Supply Chain
 
-All 30 public packages are released from `.github/workflows/release.yaml`. The
+All 32 public packages are released from `.github/workflows/release.yaml`. The
 workflow is the only supported publication path. It uses the protected
 `npm-production` environment and npm trusted publishing (OIDC); release
 automation must not use a long-lived npm write token.
+
+`@bsv/chirp@0.1.0` is the one-time registry bootstrap exception: npm requires
+the package record to exist before its trusted publisher can be configured.
+The manual release input is fail-closed to single mode and
+`./packages/network/chirp`, reads a one-day `@bsv`-scope token only inside the
+protected publish job, and publishes the same scanned and attested tarball with
+provenance. Remove the input, secret binding, token, and governed exception as
+soon as the package is published and its `release.yaml` / `npm-production`
+trusted-publisher relationship is verified.
 
 ## Release boundary
 
