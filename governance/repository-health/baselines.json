@@ -4,9 +4,9 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 39,
-    "packageAreaProjects": 35,
-    "publicPackages": 32,
+    "projects": 41,
+    "packageAreaProjects": 36,
+    "publicPackages": 33,
     "privatePackageAreaProjects": 3
   },
   "ci": {
@@ -298,6 +298,7 @@
   },
   "publicPackageVersions": {
     "@bsv/chirp": "0.1.0",
+    "@bsv/lch": "0.1.0",
     "@bsv/air-gap": "0.1.1",
     "@bsv/amountinator": "2.1.4",
     "@bsv/wallet-helper": "0.1.6",

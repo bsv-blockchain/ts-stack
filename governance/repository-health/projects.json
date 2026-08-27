@@ -354,6 +354,16 @@
       "release": "none"
     },
     {
+      "path": "apps/lch-reference",
+      "name": "lch-reference-app",
+      "owner": "ts-stack-maintainers",
+      "area": "examples",
+      "profile": "examples",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "none"
+    },
+    {
       "path": "conformance/runner",
       "name": "@bsv/conformance-runner",
       "owner": "ts-stack-maintainers",
@@ -382,6 +392,17 @@
       "criticality": "tier-2",
       "runtimeTargets": ["browser", "node"],
       "release": "none"
+    },
+    {
+      "path": "packages/content/lch",
+      "name": "@bsv/lch",
+      "owner": "ts-stack-maintainers",
+      "area": "content",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
     },
     {
       "path": "packages/helpers/air-gap",

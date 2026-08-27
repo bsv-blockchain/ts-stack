@@ -1,0 +1,12 @@
+{
+  "extends": "../../config/typescript/dual-runtime.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

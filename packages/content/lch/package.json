@@ -1,0 +1,85 @@
+{
+  "name": "@bsv/lch",
+  "version": "0.1.0",
+  "description": "BRC-170 Licensed Content Header reference implementation",
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "lch": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/content/lch/**/*.{json,md,ts}\"",
+    "lint": "oxlint src test --deny-warnings",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/cbor.property.test.ts",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "vectors:update": "pnpm build && node scripts/regenerate-brc170-vectors.mjs",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports LCHPublisher,LCHReader,LCHIssuer,LCHComposer,encodeDeterministicCbor,parseLCH,encryptSegmented --bin lch --bin-args --help",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@bsv/chirp": "^0.1.0",
+    "@bsv/sdk": "^2.4.1"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/chirp": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@bsv/chirp": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/content/lch"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "keywords": [
+    "bsv",
+    "brc-170",
+    "lch",
+    "licensed-content",
+    "odrl",
+    "c2pa"
+  ]
+}

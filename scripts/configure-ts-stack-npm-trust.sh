@@ -20,6 +20,7 @@ PKGS=(
   "@bsv/payment-express-middleware"
   "@bsv/teranode-listener"
   "@bsv/chirp"
+  "@bsv/lch"
   "@bsv/gasp"
   "@bsv/overlay-discovery-services"
   "@bsv/overlay-express"

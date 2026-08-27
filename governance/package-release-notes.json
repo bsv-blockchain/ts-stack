@@ -74,6 +74,13 @@
       "migration": "No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ."
     },
     {
+      "name": "@bsv/lch",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the draft BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed assets and licenses, explicit multilateral acquisition, authority revocation, UHRP and CHIRP content adapters, and whole-placement composition.",
+      "migration": "No consumer migration is required; this is the first release of a new additive package. Applications must keep payment behind explicit user confirmation and fail closed on unknown critical profiles. Draft BRC-170 remains authoritative if the implementation and proposal differ."
+    },
+    {
       "name": "@bsv/did",
       "publishedVersion": "0.2.1",
       "releaseType": "patch",
