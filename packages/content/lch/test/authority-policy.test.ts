@@ -164,6 +164,89 @@ describe('authority and pinned policy validation', () => {
     ).rejects.toMatchObject({ code: 'ERR_LCH_AUTHORITY' })
   })
 
+  it('requires delegated intervals and remaining depth to narrow', async () => {
+    const rootSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(21)),
+      random: length => bytes(21, length)
+    })
+    const delegateSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(22)),
+      random: length => bytes(22, length)
+    })
+    const assetId = bytes(23, 32)
+    const root: AuthorityBody = {
+      version: 1,
+      assetId,
+      grantor: rootSigner.identityKey,
+      grantee: delegateSigner.identityKey,
+      interests: ['master'],
+      capabilities: ['issueOffer'],
+      notBefore: 100,
+      notAfter: 200,
+      mayDelegate: true,
+      remainingDepth: 1,
+      nonce: bytes(24, 16)
+    }
+    const child: AuthorityBody = {
+      ...root,
+      grantor: delegateSigner.identityKey,
+      grantee: bytes(25, 33),
+      notBefore: 101,
+      notAfter: 199,
+      remainingDepth: 0,
+      nonce: bytes(26, 16)
+    }
+    const signedRoot = await signObject(
+      'authority',
+      root as unknown as Record<string, LCHValue>,
+      rootSigner
+    )
+    const validate = async (candidate: AuthorityBody): Promise<void> => {
+      const signedChild = await signObject(
+        'authority',
+        candidate as unknown as Record<string, LCHValue>,
+        delegateSigner
+      )
+      await validateAuthorityChain(
+        [
+          { body: root, signatures: signedRoot.signatures },
+          { body: candidate, signatures: signedChild.signatures }
+        ],
+        {
+          controller: rootSigner.identityKey,
+          actor: candidate.grantee,
+          assetId,
+          interest: 'master',
+          capability: 'issueOffer',
+          now: 150n,
+          network: 'mainnet'
+        },
+        new PublicBRC77Verifier()
+      )
+    }
+
+    await expect(validate(child)).resolves.toBeUndefined()
+    await expect(validate({ ...child, notBefore: 99 })).rejects.toMatchObject({
+      code: 'ERR_LCH_AUTHORITY'
+    })
+    const withoutEnd = { ...child }
+    delete withoutEnd.notAfter
+    await expect(validate(withoutEnd)).rejects.toMatchObject({
+      code: 'ERR_LCH_AUTHORITY'
+    })
+    await expect(validate({ ...child, notAfter: 201 })).rejects.toMatchObject({
+      code: 'ERR_LCH_AUTHORITY'
+    })
+    const withoutDepth = { ...child }
+    delete withoutDepth.remainingDepth
+    await expect(validate(withoutDepth)).rejects.toMatchObject({
+      code: 'ERR_LCH_AUTHORITY'
+    })
+    await expect(validate({ ...child, remainingDepth: 1 })).rejects.toMatchObject({
+      code: 'ERR_LCH_AUTHORITY'
+    })
+  })
+
   it('virtualizes only the top-level policy uid', async () => {
     const policy = {
       '@context': ['http://www.w3.org/ns/odrl.jsonld'],
