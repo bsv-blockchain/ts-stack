@@ -46,9 +46,8 @@ export function unitAmount(
   const size = checkedUint(unitSize, 'ERR_LCH_QUOTE', 'Unit size')
   const minimum = checkedUint(minimumUnits, 'ERR_LCH_QUOTE', 'Minimum units')
   lchAssert(size > 0n, 'ERR_LCH_QUOTE', 'Unit size must be positive')
-  const units = [minimum, (selected + size - 1n) / size].reduce((left, right) =>
-    left > right ? left : right
-  )
+  const roundedUnits = (selected + size - 1n) / size
+  const units = minimum > roundedUnits ? minimum : roundedUnits
   if (maximumUnits !== undefined)
     lchAssert(
       units <= checkedUint(maximumUnits, 'ERR_LCH_QUOTE', 'Maximum units'),
@@ -112,6 +111,6 @@ export function recoveryUntil(
   const period = checkedUint(recoveryPeriodSeconds, 'ERR_LCH_QUOTE', 'Recovery period')
   lchAssert(period >= 86_400n, 'ERR_LCH_QUOTE', 'Recovery period must be at least one day')
   const result = expires + period
-  lchAssert(result <= 0xffff_ffff_ffff_ffffn, 'ERR_LCH_QUOTE', 'Recovery deadline overflows uint64')
+  lchAssert(result <= 0xffffffffffffffffn, 'ERR_LCH_QUOTE', 'Recovery deadline overflows uint64')
   return result
 }

@@ -31,15 +31,17 @@ export function fromHex(value: string): Uint8Array {
 
 export function toBase64Url(bytes: Uint8Array): string {
   let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
+  for (const byte of bytes) binary += String.fromCodePoint(byte)
+  let encoded = btoa(binary).replaceAll('+', '-').replaceAll('/', '_')
+  while (encoded.endsWith('=')) encoded = encoded.slice(0, -1)
+  return encoded
 }
 
 export function fromBase64Url(value: string): Uint8Array {
   lchAssert(/^[\w-]*$/u.test(value), 'ERR_LCH_CBOR', 'Invalid unpadded base64url')
   const standard = value.replaceAll('-', '+').replaceAll('_', '/')
   const binary = atob(standard.padEnd(Math.ceil(standard.length / 4) * 4, '='))
-  return Uint8Array.from(binary, character => character.charCodeAt(0))
+  return Uint8Array.from(binary, character => character.codePointAt(0) ?? 0)
 }
 
 export function objectPreimage(type: LCHObjectType, body: LCHValue): Uint8Array {
@@ -58,7 +60,7 @@ export async function objectIri(type: LCHObjectType, body: LCHValue): Promise<st
 export function uint64be(value: number | bigint): Uint8Array {
   let remaining = typeof value === 'number' ? BigInt(value) : value
   lchAssert(
-    remaining >= 0n && remaining <= 0xffff_ffff_ffff_ffffn,
+    remaining >= 0n && remaining <= 0xffffffffffffffffn,
     'ERR_LCH_CBOR',
     'uint64 out of range'
   )

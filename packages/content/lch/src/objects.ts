@@ -1,5 +1,5 @@
 import { lchAssert } from './errors.js'
-import { objectId, objectIri, objectPreimage, toHex } from './hash.js'
+import { objectPreimage, toHex } from './hash.js'
 import { brc77SignerIdentity } from './signatures.js'
 import type {
   LCHObjectType,
@@ -37,4 +37,4 @@ export async function verifySignedObject(
   lchAssert(matched, 'ERR_LCH_SIGNATURE', 'No valid signature from the required signer')
 }
 
-export { objectId, objectIri }
+export { objectId, objectIri } from './hash.js'

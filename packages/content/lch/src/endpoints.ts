@@ -31,20 +31,20 @@ export function isPublicAddress(address: string): boolean {
   const v4 = ipv4Value(address)
   if (v4 !== undefined) {
     const blocked: Array<[number, number]> = [
-      [0x0000_0000, 8],
-      [0x0a00_0000, 8],
-      [0x6440_0000, 10],
-      [0x7f00_0000, 8],
-      [0xa9fe_0000, 16],
-      [0xac10_0000, 12],
-      [0xc000_0000, 24],
-      [0xc000_0200, 24],
-      [0xc0a8_0000, 16],
-      [0xc612_0000, 15],
-      [0xc633_6400, 24],
-      [0xcb00_7100, 24],
-      [0xe000_0000, 4],
-      [0xf000_0000, 4]
+      [0x00000000, 8],
+      [0x0a000000, 8],
+      [0x64400000, 10],
+      [0x7f000000, 8],
+      [0xa9fe0000, 16],
+      [0xac100000, 12],
+      [0xc0000000, 24],
+      [0xc0000200, 24],
+      [0xc0a80000, 16],
+      [0xc6120000, 15],
+      [0xc6336400, 24],
+      [0xcb007100, 24],
+      [0xe0000000, 4],
+      [0xf0000000, 4]
     ]
     return !blocked.some(([start, bits]) => inV4Range(v4, start, bits))
   }

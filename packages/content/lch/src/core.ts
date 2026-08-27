@@ -1,4 +1,4 @@
-import { LCH_MECHANISMS, LCH_VERSION } from './constants.js'
+import { LCH_VERSION } from './constants.js'
 import {
   decryptSegmented,
   encryptSegmented,
@@ -25,6 +25,8 @@ import type {
   SegmentedEncryptionDescriptor,
   SignedObject
 } from './types.js'
+
+const ALL_SELECTION: Selection = { type: 'all' }
 
 export interface RightsInterest extends Record<string, LCHValue> {
   interest: string
@@ -61,7 +63,7 @@ export class LCHPublisher {
     const unsafeName =
       options.name.includes('/') ||
       options.name.includes('\\') ||
-      options.name.includes(String.fromCharCode(0))
+      options.name.includes(String.fromCodePoint(0))
     lchAssert(
       options.name.length > 0 && !unsafeName && options.name !== '.' && options.name !== '..',
       'ERR_LCH_FRAMING',
@@ -197,7 +199,7 @@ export class LCHReader {
   async decrypt(
     inspected: InspectedLCH,
     keys: ReadonlyMap<string, Uint8Array>,
-    selection: Selection = { type: 'all' }
+    selection: Selection = ALL_SELECTION
   ): Promise<Uint8Array> {
     const ciphertext = await this.resolve(inspected)
     const descriptor = mapValue(inspected.representation.encryption, 'encryption descriptor')
@@ -416,7 +418,7 @@ function validateAssetShape(asset: Record<string, LCHValue>): void {
   const unsafeName =
     asset.name.includes('/') ||
     asset.name.includes('\\') ||
-    asset.name.includes(String.fromCharCode(0))
+    asset.name.includes(String.fromCodePoint(0))
   lchAssert(
     !unsafeName && asset.name !== '.' && asset.name !== '..',
     'ERR_LCH_FRAMING',
@@ -463,22 +465,24 @@ async function verifyHeaderAuthorization(
     'ERR_LCH_AUTHORITY',
     'Asset rights are absent'
   )
-  const controllers = rights.map(right => {
-    const map = mapValue(right, 'rights interest')
-    const holder = mapValue(map.holder, 'rights holder')
-    const controller = map.controller
-    lchAssert(
-      typeof map.interest === 'string' &&
-        map.interest.length > 0 &&
-        typeof holder.name === 'string' &&
-        holder.name.length > 0 &&
-        controller instanceof Uint8Array &&
-        controller.length === 33,
-      'ERR_LCH_AUTHORITY',
-      'Rights interest or Controller is invalid'
-    )
-    return toHex(controller)
-  })
+  const controllers = new Set(
+    rights.map(right => {
+      const map = mapValue(right, 'rights interest')
+      const holder = mapValue(map.holder, 'rights holder')
+      const controller = map.controller
+      lchAssert(
+        typeof map.interest === 'string' &&
+          map.interest.length > 0 &&
+          typeof holder.name === 'string' &&
+          holder.name.length > 0 &&
+          controller instanceof Uint8Array &&
+          controller.length === 33,
+        'ERR_LCH_AUTHORITY',
+        'Rights interest or Controller is invalid'
+      )
+      return toHex(controller)
+    })
+  )
   const body = { ...header }
   delete body.signatures
   const preimage = objectPreimage('header', body)
@@ -492,7 +496,7 @@ async function verifyHeaderAuthorization(
     }
     if (!(await verifier.verify(preimage, signature))) continue
     const authorized =
-      controllers.includes(toHex(signer)) ||
+      controllers.has(toHex(signer)) ||
       (authorize !== undefined && (await authorize(signer, assetId)))
     if (authorized) accepted.push(signer)
   }
@@ -535,4 +539,4 @@ export async function validateOffer(
   return objectIri('offer', offer.body)
 }
 
-export { LCH_MECHANISMS }
+export { LCH_MECHANISMS } from './constants.js'

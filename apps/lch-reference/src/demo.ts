@@ -367,7 +367,7 @@ function encodePcm16MonoWav(samples: Int16Array, sampleRate: number): Uint8Array
   const view = new DataView(bytes.buffer)
   const text = (offset: number, value: string): void => {
     for (let index = 0; index < value.length; index += 1)
-      bytes[offset + index] = value.charCodeAt(index)
+      bytes[offset + index] = value.codePointAt(index) ?? 0
   }
   text(0, 'RIFF')
   view.setUint32(4, bytes.length - 8, true)

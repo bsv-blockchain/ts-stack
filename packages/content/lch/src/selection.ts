@@ -10,11 +10,20 @@ function asBigInt(value: number | bigint): bigint {
   return BigInt(value)
 }
 
+function compareRangeStarts(
+  left: readonly [bigint, bigint],
+  right: readonly [bigint, bigint]
+): number {
+  if (left[0] < right[0]) return -1
+  if (left[0] > right[0]) return 1
+  return 0
+}
+
 export function normalizeRanges(ranges: readonly RangeTuple[]): RangeTuple[] {
   lchAssert(ranges.length > 0, 'ERR_LCH_SELECTION', 'Selection ranges cannot be empty')
   const sorted = ranges
     .map(([start, end]) => [asBigInt(start), asBigInt(end)] as const)
-    .sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0))
+    .sort(compareRangeStarts)
   const normalized: Array<[bigint, bigint]> = []
   for (const [start, end] of sorted) {
     lchAssert(

@@ -41,7 +41,7 @@ button:hover {
 }
 
 button:disabled {
-  color: #8a9198;
+  color: #5f666d;
   background: #e5e7e9;
   border-color: #d6d9dc;
   cursor: not-allowed;
@@ -334,7 +334,7 @@ p {
 }
 
 .profile-grid article > span {
-  color: #707880;
+  color: #555d64;
   background: #eceeef;
   border-radius: 10px;
   padding: 3px 7px;

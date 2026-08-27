@@ -3,6 +3,8 @@ import { lchAssert } from './errors.js'
 import { fetchLCH, type EndpointPolicy } from './endpoints.js'
 import type { ContentSink, ContentSource, LicenseStore, StoredLicense } from './types.js'
 
+export type CHIRPInteger = number | bigint | string
+
 export interface CHIRPDownloadAdapter {
   download(
     locator: string,
@@ -13,8 +15,8 @@ export interface CHIRPDownloadAdapter {
 export interface CHIRPUploadAdapter {
   publish(options: {
     source: Uint8Array
-    retentionSeconds: number | bigint | string
-    logicalLength: number | bigint | string
+    retentionSeconds: CHIRPInteger
+    logicalLength: CHIRPInteger
     mediaType?: string
   }): Promise<{ chirpURL: string }>
 }
@@ -111,7 +113,7 @@ async function readBoundedBody(response: Response, maximum: number): Promise<Uin
 export class CHIRPContentSink implements ContentSink {
   constructor(
     private readonly uploader: CHIRPUploadAdapter,
-    private readonly retentionSeconds: number | bigint | string,
+    private readonly retentionSeconds: CHIRPInteger,
     private readonly mediaType = 'application/octet-stream'
   ) {}
 
@@ -217,7 +219,7 @@ export class IndexedDBLicenseStore implements LicenseStore {
       const request = indexedDB.open(this.databaseName, 1)
       request.onupgradeneeded = () => request.result.createObjectStore(this.storeName)
       request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
+      request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'))
     })
   }
 }
@@ -232,7 +234,8 @@ async function transactionPromise(
     const transaction = database.transaction(storeName, mode)
     const request = action(transaction.objectStore(storeName))
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-    transaction.onabort = () => reject(transaction.error)
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'))
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
   })
 }

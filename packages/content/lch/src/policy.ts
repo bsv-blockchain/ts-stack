@@ -116,7 +116,10 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 function arrayOfObjects(value: unknown): Array<Record<string, unknown>> {
-  const values = value === undefined ? [] : Array.isArray(value) ? value : [value]
+  let values: unknown[]
+  if (value === undefined) values = []
+  else if (Array.isArray(value)) values = value
+  else values = [value]
   lchAssert(
     values.every(item => item !== null && typeof item === 'object' && !Array.isArray(item)),
     'ERR_LCH_POLICY',

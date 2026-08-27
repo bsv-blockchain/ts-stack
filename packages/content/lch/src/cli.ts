@@ -69,12 +69,14 @@ export async function runLCHCLI(runtime: LCHCLIRuntime): Promise<void> {
 
 const invokedPath = process.argv[1]
 if (invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href) {
-  runLCHCLI({
-    args: process.argv.slice(2),
-    read: async path => new Uint8Array(await readFile(path)),
-    write: message => process.stdout.write(message)
-  }).catch(error => {
+  try {
+    await runLCHCLI({
+      args: process.argv.slice(2),
+      read: async path => new Uint8Array(await readFile(path)),
+      write: message => process.stdout.write(message)
+    })
+  } catch (error) {
     process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n')
     process.exitCode = 1
-  })
+  }
 }

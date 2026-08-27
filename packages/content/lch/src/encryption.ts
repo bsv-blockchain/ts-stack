@@ -8,6 +8,8 @@ import type {
   Selection
 } from './types.js'
 
+const ALL_SELECTION: Selection = { type: 'all' }
+
 export interface SegmentedEncryptionOptions {
   segmentSize?: number
   keyPeriodSegments?: number
@@ -265,7 +267,7 @@ export async function decryptSegmented(
   ciphertext: Uint8Array,
   descriptor: SegmentedEncryptionDescriptor,
   keys: ReadonlyMap<string, Uint8Array>,
-  selection: Selection = { type: 'all' }
+  selection: Selection = ALL_SELECTION
 ): Promise<Uint8Array> {
   validateEncryptionDescriptor(descriptor)
   lchAssert(

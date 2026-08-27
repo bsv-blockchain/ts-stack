@@ -4,7 +4,7 @@ import type { LCHValue } from './types.js'
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder('utf-8', { fatal: true })
-const MAX_UINT64 = 0xffff_ffff_ffff_ffffn
+const MAX_UINT64 = 0xffffffffffffffffn
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const length = parts.reduce((total, part) => total + part.length, 0)
@@ -34,7 +34,7 @@ function encodeHead(major: number, input: number | bigint): Uint8Array {
   if (value <= 0xffffn) {
     return Uint8Array.of((major << 5) | 25, Number(value >> 8n), Number(value & 0xffn))
   }
-  if (value <= 0xffff_ffffn) {
+  if (value <= 0xffffffffn) {
     return Uint8Array.of(
       (major << 5) | 26,
       Number((value >> 24n) & 0xffn),
@@ -111,12 +111,7 @@ class Decoder {
     this.offset += 1
     const major = head >> 5
     const additional = head & 31
-    if (major === 7) {
-      if (additional === 20) return false
-      if (additional === 21) return true
-      if (additional === 22) return null
-      throw new LCHError('ERR_LCH_CBOR', 'Unsupported CBOR simple or floating-point value')
-    }
+    if (major === 7) return this.decodeSimple(additional)
     const length = this.readLength(additional)
     if (major === 0) return length <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(length) : length
     lchAssert(
@@ -126,42 +121,55 @@ class Decoder {
     )
     const count = Number(length)
     if (major === 2) return this.read(count)
-    if (major === 3) {
-      let text: string
-      try {
-        text = textDecoder.decode(this.read(count))
-      } catch (error) {
-        throw new LCHError('ERR_LCH_CBOR', 'CBOR text is not valid UTF-8', { cause: error })
-      }
-      lchAssert(text.normalize('NFC') === text, 'ERR_LCH_CBOR', 'CBOR text must be NFC')
-      return text
-    }
-    if (major === 4) {
-      const result: LCHValue[] = []
-      for (let index = 0; index < count; index += 1) result.push(this.decode(depth + 1))
-      return result
-    }
-    if (major === 5) {
-      const result: Record<string, LCHValue> = Object.create(null) as Record<string, LCHValue>
-      let previousKey: Uint8Array | undefined
-      for (let index = 0; index < count; index += 1) {
-        const start = this.offset
-        const key = this.decode(depth + 1)
-        const encodedKey = this.bytes.slice(start, this.offset)
-        lchAssert(typeof key === 'string', 'ERR_LCH_CBOR', 'LCH CBOR map keys must be text')
-        if (previousKey !== undefined) {
-          lchAssert(
-            compareBytes(previousKey, encodedKey) < 0,
-            'ERR_LCH_CBOR',
-            'CBOR map keys are duplicated or unordered'
-          )
-        }
-        previousKey = encodedKey
-        result[key] = this.decode(depth + 1)
-      }
-      return result
-    }
+    if (major === 3) return this.decodeText(count)
+    if (major === 4) return this.decodeArray(count, depth)
+    if (major === 5) return this.decodeMap(count, depth)
     throw new LCHError('ERR_LCH_CBOR', `Unsupported CBOR major type ${major}`)
+  }
+
+  private decodeSimple(additional: number): LCHValue {
+    if (additional === 20) return false
+    if (additional === 21) return true
+    if (additional === 22) return null
+    throw new LCHError('ERR_LCH_CBOR', 'Unsupported CBOR simple or floating-point value')
+  }
+
+  private decodeText(count: number): string {
+    let text: string
+    try {
+      text = textDecoder.decode(this.read(count))
+    } catch (error) {
+      throw new LCHError('ERR_LCH_CBOR', 'CBOR text is not valid UTF-8', { cause: error })
+    }
+    lchAssert(text.normalize('NFC') === text, 'ERR_LCH_CBOR', 'CBOR text must be NFC')
+    return text
+  }
+
+  private decodeArray(count: number, depth: number): LCHValue[] {
+    const result: LCHValue[] = []
+    for (let index = 0; index < count; index += 1) result.push(this.decode(depth + 1))
+    return result
+  }
+
+  private decodeMap(count: number, depth: number): Record<string, LCHValue> {
+    const result: Record<string, LCHValue> = Object.create(null) as Record<string, LCHValue>
+    let previousKey: Uint8Array | undefined
+    for (let index = 0; index < count; index += 1) {
+      const start = this.offset
+      const key = this.decode(depth + 1)
+      const encodedKey = this.bytes.slice(start, this.offset)
+      lchAssert(typeof key === 'string', 'ERR_LCH_CBOR', 'LCH CBOR map keys must be text')
+      if (previousKey !== undefined) {
+        lchAssert(
+          compareBytes(previousKey, encodedKey) < 0,
+          'ERR_LCH_CBOR',
+          'CBOR map keys are duplicated or unordered'
+        )
+      }
+      previousKey = encodedKey
+      result[key] = this.decode(depth + 1)
+    }
+    return result
   }
 
   done(): boolean {
@@ -192,7 +200,7 @@ class Decoder {
       const bytes = this.read(8)
       let value = 0n
       for (const byte of bytes) value = (value << 8n) | BigInt(byte)
-      lchAssert(value > 0xffff_ffffn, 'ERR_LCH_CBOR', 'Non-shortest CBOR length')
+      lchAssert(value > 0xffffffffn, 'ERR_LCH_CBOR', 'Non-shortest CBOR length')
       return value
     }
     throw new LCHError('ERR_LCH_CBOR', 'Indefinite-length or reserved CBOR item')

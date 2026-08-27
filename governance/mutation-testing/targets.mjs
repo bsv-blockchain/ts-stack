@@ -532,8 +532,8 @@ export function buildMutationTargets(repositoryRoot) {
           repositoryRoot,
           'packages/content/lch',
           'src/cbor.ts',
-          '    if (major === 5) {',
-          '    throw new LCHError'
+          '  private decodeMap(',
+          '  done(): boolean'
         ),
         sourceLineRange(
           repositoryRoot,

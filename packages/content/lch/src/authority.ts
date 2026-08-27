@@ -153,7 +153,7 @@ async function verifyRevocation(
   )
   const outpoint = /^([\da-f]{64})\.(\d+)$/u.exec(body.revocationOutpoint)
   lchAssert(
-    outpoint !== null && BigInt(outpoint[2]) <= 0xffff_ffffn,
+    outpoint !== null && BigInt(outpoint[2]) <= 0xffffffffn,
     'ERR_LCH_REVOCATION',
     'Revocation outpoint is invalid'
   )
