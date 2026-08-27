@@ -16,7 +16,9 @@ RUN npm run build \
 
 FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
-RUN apk add --no-cache nginx \
+# The pinned base contains OpenSSL 3.5.7-r0. Install the reviewed 3.5.8-r0
+# runtime fix for CVE-2026-14456 together with nginx.
+RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 nginx \
  && chown -R node:node /var/lib/nginx
 
 COPY ./nginx.conf /etc/nginx/nginx.conf
