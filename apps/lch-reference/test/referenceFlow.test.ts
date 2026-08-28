@@ -46,6 +46,7 @@ describe('reference creator, server, wallet, and player flow', () => {
 
     const plan = await client.prepare(published.lch)
     expect(plan.totalSatoshis).toBe(12n)
+    expect(plan.readiness).toHaveLength(2)
     expect(plan.demands.map(demand => demand.body.endpoint)).toEqual(
       server.payeeEndpoints.map(item => item.endpoint)
     )
@@ -111,7 +112,7 @@ describe('reference creator, server, wallet, and player flow', () => {
     })
     const plan = await client.prepare(published.lch)
     now = plan.expiresAt
-    await expect(client.acquire(plan)).rejects.toThrow(/expired before transaction creation/u)
+    await expect(client.acquire(plan)).rejects.toThrow(/expired before readiness refresh/u)
     expect(recordingPayee.receivedSatoshis).toBe(0)
     expect(compositionPayee.receivedSatoshis).toBe(0)
   })
@@ -162,6 +163,13 @@ describe('reference creator, server, wallet, and player flow', () => {
     const plan = await client.prepare(published.lch)
     await expect(client.acquire(plan)).rejects.toMatchObject({ code: 'ERR_LCH_DELIVERY' })
     expect(client.hasPendingPayment()).toBe(true)
+    expect(client.pendingPayment()).toMatchObject({
+      transactionState: 'finalized',
+      settlementState: 'pending-payee-receipts',
+      receipts: 1,
+      requiredReceipts: 2,
+      recoveryUntil: plan.recoveryUntil
+    })
     expect(buyer.createdActions).toBe(1)
     expect(recordingPayee.receivedSatoshis).toBe(7)
     expect(compositionPayee.receivedSatoshis).toBe(0)

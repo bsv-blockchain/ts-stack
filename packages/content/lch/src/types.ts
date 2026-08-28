@@ -13,6 +13,7 @@ export type LCHObjectType =
   | 'license-request'
   | 'quote'
   | 'payment-demand'
+  | 'payment-readiness'
   | 'payment-delivery'
   | 'payment-receipt'
   | 'license'
@@ -135,3 +136,9 @@ export interface PaymentDemand {
   satoshis: bigint
   lockingScript: Uint8Array
 }
+
+/**
+ * The strongest transaction lifecycle state directly established by the
+ * wallet result. Later states require separately authenticated evidence.
+ */
+export type LCHTransactionState = 'finalized' | 'broadcast' | 'accepted' | 'mined'

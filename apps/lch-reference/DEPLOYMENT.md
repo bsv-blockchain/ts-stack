@@ -91,6 +91,8 @@ A durable topology separates four concerns:
 
 The Payment Ledger claim must be atomic across replicas. The same Demand and same finalized transaction must return the same Receipt; a second transaction for that Demand must fail. Content-encryption keys and wallet credentials require encryption at rest, access separation, backup, rotation, and audit controls appropriate to the deployment.
 
+The reference client records the wallet result as **finalized** only. Operators must attach separate authenticated evidence before describing it as **broadcast**, **accepted** by a transaction processor, or **mined** with SPV evidence. If a Payee delivery fails after finalization, the application retains the transaction, signed Deliveries, and partial Receipts and presents a pending settlement through `recoveryUntil`; it does not offer a second purchase action.
+
 `LCHAcquisitionTransport` lets a buyer route those same operations through an application-owned asynchronous inbox or message-box adapter. The BRC-170 v1 portable wire binding remains deterministic-CBOR HTTP. A gateway can enqueue internally while preserving the exact HTTP acknowledgement and recovery contract. A native message-box protocol needs a separately registered profile defining addressing, authentication, correlation, reply polling, expiry, and replay behavior; the adapter cannot silently replace signed Payment Deliveries or Payee Receipts.
 
 ## Container reference

@@ -4,6 +4,7 @@ import {
   validateLicenseRequest,
   validatePaymentDemand,
   validatePaymentReceipt,
+  validatePaymentReadiness,
   validateQuote,
   type LicenseRequestOptions,
   type PaymentCompletion
@@ -13,13 +14,14 @@ import { fromHex, objectId, toHex } from './hash.js'
 import { createMultipayTransaction } from './walletPayment.js'
 import { PublicBRC77Verifier, WalletBRC77Signer } from './signatures.js'
 import { verifySignedObject } from './objects.js'
-import type { LCHSigner, LCHValue, SignedObject } from './types.js'
+import type { LCHSigner, LCHTransactionState, LCHValue, SignedObject } from './types.js'
 
 export interface LCHMultipayPlan {
   request: SignedObject
   requestId: Uint8Array
   quote: SignedObject
   demands: SignedObject[]
+  readiness: SignedObject[]
   issuer: Uint8Array
   endpoint: string
   totalSatoshis: bigint
@@ -38,6 +40,7 @@ export interface LCHFundedMultipay {
   plan: LCHMultipayPlan
   atomicBeef: Uint8Array
   deliveries: LCHMultipayDelivery[]
+  transactionState: Extract<LCHTransactionState, 'finalized'>
 }
 
 export interface LCHMultipayBuyerOptions extends LCHHttpClientOptions {
@@ -56,7 +59,7 @@ export interface LCHMultipayBuyerOptions extends LCHHttpClientOptions {
 export interface LCHAcquisitionTransport {
   preflightLicense(endpoint: string, request: SignedObject): Promise<void>
   quote(endpoint: string, request: SignedObject): Promise<SignedObject>
-  preflightDemand(endpoint: string, demand: SignedObject): Promise<void>
+  preflightDemand(endpoint: string, demand: SignedObject): Promise<SignedObject>
   deliver(endpoint: string, delivery: SignedObject): Promise<SignedObject>
   complete(endpoint: string, completion: PaymentCompletion): Promise<SignedObject>
   recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined>
@@ -103,6 +106,7 @@ export class LCHMultipayBuyer {
       allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
     })
     const demands = signedArray(quote.body.demands)
+    const readiness = await this.obtainReadiness(demands)
     let totalSatoshis = 0n
     for (const demand of demands) {
       await validatePaymentDemand(demand, undefined, {
@@ -110,7 +114,6 @@ export class LCHMultipayBuyer {
       })
       equal(demand.body.requestId, requestId, 'Demand Request ID')
       totalSatoshis += uint(demand.body.satoshis, 'Demand amount')
-      await this.transport.preflightDemand(memberString(demand.body, 'endpoint'), demand)
     }
     if (totalSatoshis !== uint(quote.body.totalSatoshis, 'Quote total'))
       throw new Error('Quote total does not equal its Payment Demands')
@@ -119,6 +122,7 @@ export class LCHMultipayBuyer {
       requestId,
       quote,
       demands,
+      readiness,
       issuer,
       endpoint,
       totalSatoshis,
@@ -128,8 +132,10 @@ export class LCHMultipayBuyer {
   }
 
   async createPayment(plan: LCHMultipayPlan): Promise<LCHFundedMultipay> {
-    if (this.now() >= plan.expiresAt)
+    const now = this.now()
+    if (now >= plan.expiresAt)
       throw new Error('The signed Quote expired before transaction creation')
+    await this.validatePlanReadiness(plan.demands, plan.readiness, now)
     const demands = await Promise.all(
       plan.demands.map(async demand => ({
         demand,
@@ -163,7 +169,18 @@ export class LCHMultipayBuyer {
         delivery
       })
     }
-    return { plan, atomicBeef: payment.atomicBeef, deliveries }
+    return {
+      plan,
+      atomicBeef: payment.atomicBeef,
+      deliveries,
+      transactionState: payment.transactionState
+    }
+  }
+
+  async refreshReadiness(plan: LCHMultipayPlan): Promise<LCHMultipayPlan> {
+    if (this.now() >= plan.expiresAt)
+      throw new Error('The signed Quote expired before readiness refresh')
+    return { ...plan, readiness: await this.obtainReadiness(plan.demands) }
   }
 
   async deliver(payment: LCHFundedMultipay, item: LCHMultipayDelivery): Promise<SignedObject> {
@@ -223,6 +240,43 @@ export class LCHMultipayBuyer {
 
   recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined> {
     return this.transport.recover(endpoint, requestId)
+  }
+
+  private async obtainReadiness(demands: readonly SignedObject[]): Promise<SignedObject[]> {
+    const readiness: SignedObject[] = []
+    for (const demand of demands) {
+      const ready = await this.transport.preflightDemand(
+        memberString(demand.body, 'endpoint'),
+        demand
+      )
+      await validatePaymentReadiness(ready, demand, this.now(), new PublicBRC77Verifier(), {
+        allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
+      })
+      readiness.push(ready)
+    }
+    return readiness
+  }
+
+  private async validatePlanReadiness(
+    demands: readonly SignedObject[],
+    readiness: readonly SignedObject[],
+    now: bigint
+  ): Promise<void> {
+    if (readiness.length !== demands.length)
+      throw new Error('Payment plan requires one current Readiness per Demand')
+    const available = new Map(
+      readiness.map(item => [toHex(memberBytes(item.body, 'demandId', 32)), item] as const)
+    )
+    if (available.size !== readiness.length)
+      throw new Error('Payment plan has a repeated Readiness')
+    for (const demand of demands) {
+      const demandId = await objectId('payment-demand', demand.body)
+      const ready = available.get(toHex(demandId))
+      if (ready === undefined) throw new Error('Payment plan is missing a Demand Readiness')
+      await validatePaymentReadiness(ready, demand, now, new PublicBRC77Verifier(), {
+        allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
+      })
+    }
   }
 }
 

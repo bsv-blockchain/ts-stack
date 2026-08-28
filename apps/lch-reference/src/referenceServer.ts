@@ -354,11 +354,12 @@ export class ReferenceLCHServer {
     return quote
   }
 
-  async preflightDemand(demand: SignedObject): Promise<void> {
+  async preflightDemand(demand: SignedObject): Promise<SignedObject> {
     const demandId = toHex(await objectId('payment-demand', demand.body))
     const runtime = this.demandIndex.get(demandId)
     if (runtime === undefined) throw new Error('Payment Demand is unknown')
     await runtime.payee.receiver.preflight(demand)
+    return this.createReadiness(runtime.payee, runtime.demand, hex(demandId))
   }
 
   async receivePayment(delivery: SignedObject): Promise<SignedObject> {
@@ -369,11 +370,33 @@ export class ReferenceLCHServer {
     return runtime.payee.receiver.receive(runtime.demand, delivery)
   }
 
-  private async preflightDemandFor(payee: PayeeRuntime, demand: SignedObject): Promise<void> {
+  private async preflightDemandFor(
+    payee: PayeeRuntime,
+    demand: SignedObject
+  ): Promise<SignedObject> {
     const demandId = toHex(await objectId('payment-demand', demand.body))
     const runtime = this.demandIndex.get(demandId)
     if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
     await runtime.payee.receiver.preflight(demand)
+    return this.createReadiness(payee, runtime.demand, hex(demandId))
+  }
+
+  private createReadiness(
+    payee: PayeeRuntime,
+    demand: SignedObject,
+    demandId: Uint8Array
+  ): Promise<SignedObject> {
+    const issuedAt = this.now()
+    const expiresAt = BigInt(demand.body.expiresAt as number | bigint)
+    const readyUntil = issuedAt + 60n < expiresAt ? issuedAt + 60n : expiresAt
+    return payee.payee.createReadiness({
+      demandId,
+      requestId: bytes(demand.body.requestId, 32, 'Request ID'),
+      buyer: bytes(demand.body.buyer, 33, 'Buyer identity'),
+      issuedAt,
+      readyUntil,
+      recoveryUntil: BigInt(demand.body.recoveryUntil as number | bigint)
+    })
   }
 
   private async receivePaymentFor(

@@ -13,6 +13,7 @@ import {
   validateLicenseRequest,
   validatePaymentDemand,
   validatePaymentReceipt,
+  validatePaymentReadiness,
   validateQuote
 } from '../src/index.js'
 
@@ -67,6 +68,20 @@ describe('typed acquisition messages', () => {
     await expect(validateQuote(quote, request, issuerSigner.identityKey)).resolves.toEqual(
       await objectId('quote', quote.body)
     )
+    const readiness = await new LCHPayee(payeeSigner).createReadiness({
+      demandId: await objectId('payment-demand', demand.body),
+      requestId,
+      buyer: buyerSigner.identityKey,
+      issuedAt: 1_000,
+      readyUntil: 1_100,
+      recoveryUntil: demand.body.recoveryUntil as number | bigint
+    })
+    await expect(validatePaymentReadiness(readiness, demand, 1_050)).resolves.toEqual(
+      await objectId('payment-readiness', readiness.body)
+    )
+    await expect(validatePaymentReadiness(readiness, demand, 1_100)).rejects.toMatchObject({
+      code: 'ERR_LCH_PAYMENT'
+    })
     const dishonestTotal = await signObject(
       'quote',
       { ...quote.body, totalSatoshis: 13 },

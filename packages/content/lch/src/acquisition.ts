@@ -70,6 +70,17 @@ export interface PaymentDeliveryOptions {
   critical?: string[]
 }
 
+export interface PaymentReadinessOptions {
+  demandId: Uint8Array
+  requestId: Uint8Array
+  payee?: Uint8Array
+  buyer: Uint8Array
+  issuedAt: LCHUint
+  readyUntil: LCHUint
+  recoveryUntil: LCHUint
+  critical?: string[]
+}
+
 export interface PaymentReceiptOptions {
   demandId: Uint8Array
   requestId: Uint8Array
@@ -244,6 +255,43 @@ export class LCHPayee {
         outputIndex: options.outputIndex,
         satoshis: options.satoshis,
         receivedAt: options.receivedAt,
+        ...(options.critical === undefined ? {} : { critical: options.critical })
+      },
+      this.signer
+    )
+  }
+
+  async createReadiness(options: PaymentReadinessOptions): Promise<SignedObject> {
+    bytes(options.demandId, 32, 'Demand ID')
+    bytes(options.requestId, 32, 'Request ID')
+    const payee = options.payee ?? this.signer.identityKey
+    bytes(payee, 33, 'Payee identity')
+    lchAssert(
+      toHex(payee) === toHex(this.signer.identityKey),
+      'ERR_LCH_SIGNATURE',
+      'Payment Readiness signer is not the payee'
+    )
+    bytes(options.buyer, 33, 'Buyer identity')
+    const issuedAt = uint(options.issuedAt, 'Readiness issue time', 'ERR_LCH_PAYMENT')
+    const readyUntil = uint(options.readyUntil, 'Readiness deadline', 'ERR_LCH_PAYMENT')
+    const recovery = uint(options.recoveryUntil, 'Recovery deadline', 'ERR_LCH_PAYMENT')
+    lchAssert(
+      issuedAt < readyUntil && readyUntil <= recovery,
+      'ERR_LCH_PAYMENT',
+      'Payment Readiness deadlines are invalid'
+    )
+    extensions(options.critical)
+    return signObject(
+      'payment-readiness',
+      {
+        version: 1,
+        demandId: options.demandId,
+        requestId: options.requestId,
+        payee,
+        buyer: options.buyer,
+        issuedAt: options.issuedAt,
+        readyUntil: options.readyUntil,
+        recoveryUntil: options.recoveryUntil,
         ...(options.critical === undefined ? {} : { critical: options.critical })
       },
       this.signer
@@ -447,6 +495,51 @@ export async function validatePaymentDelivery(
   memberBytes(delivery.body, 'atomicBeef', undefined, 'Atomic BEEF')
   outputIndex(delivery.body.outputIndex)
   return objectId('payment-delivery', delivery.body)
+}
+
+export async function validatePaymentReadiness(
+  readiness: SignedObject,
+  demand: SignedObject,
+  now: LCHUint,
+  verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+  options: AcquisitionValidationOptions = {}
+): Promise<Uint8Array> {
+  const demandId = await validatePaymentDemand(demand, verifier, options)
+  const payee = memberBytes(readiness.body, 'payee', 33, 'Payee identity')
+  await verifySignedObject('payment-readiness', readiness, verifier, payee)
+  equalId(readiness.body.demandId, demandId, 'Readiness Demand ID')
+  equalId(
+    readiness.body.requestId,
+    memberBytes(demand.body, 'requestId', 32, 'Demand Request ID'),
+    'Readiness Request ID'
+  )
+  equalId(
+    readiness.body.payee,
+    memberBytes(demand.body, 'payee', 33, 'Demand Payee'),
+    'Readiness Payee'
+  )
+  equalId(
+    readiness.body.buyer,
+    memberBytes(demand.body, 'buyer', 33, 'Demand buyer identity'),
+    'Readiness buyer identity'
+  )
+  const issuedAt = uint(readiness.body.issuedAt, 'Readiness issue time', 'ERR_LCH_PAYMENT')
+  const readyUntil = uint(readiness.body.readyUntil, 'Readiness deadline', 'ERR_LCH_PAYMENT')
+  const current = uint(now, 'Readiness validation time', 'ERR_LCH_PAYMENT')
+  const expiresAt = uint(demand.body.expiresAt, 'Demand expiry', 'ERR_LCH_QUOTE')
+  const recovery = uint(demand.body.recoveryUntil, 'Demand recovery deadline', 'ERR_LCH_QUOTE')
+  lchAssert(
+    issuedAt <= current && current < readyUntil && readyUntil <= expiresAt,
+    'ERR_LCH_PAYMENT',
+    'Payment Readiness is not currently valid'
+  )
+  lchAssert(
+    uint(readiness.body.recoveryUntil, 'Readiness recovery deadline', 'ERR_LCH_PAYMENT') ===
+      recovery,
+    'ERR_LCH_PAYMENT',
+    'Payment Readiness recovery deadline does not match the Demand'
+  )
+  return objectId('payment-readiness', readiness.body)
 }
 
 export async function validatePaymentReceipt(

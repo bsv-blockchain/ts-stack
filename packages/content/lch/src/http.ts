@@ -12,6 +12,7 @@ export type LCHHttpMessageType =
   | 'license-request'
   | 'quote'
   | 'payment-demand'
+  | 'payment-readiness'
   | 'payment-delivery'
   | 'payment-receipt'
   | 'payment-completion'
@@ -22,7 +23,7 @@ export type LCHHttpMessageType =
 export interface LCHHttpHandlers {
   preflightLicense?(request: SignedObject): Promise<void>
   quote?(request: SignedObject): Promise<SignedObject>
-  preflightDemand?(demand: SignedObject): Promise<void>
+  preflightDemand?(demand: SignedObject): Promise<SignedObject>
   paymentDelivery?(delivery: SignedObject): Promise<SignedObject>
   complete?(completion: PaymentCompletion): Promise<SignedObject>
   recover?(requestId: Uint8Array): Promise<SignedObject | undefined>
@@ -84,8 +85,8 @@ export class LCHHttpServer {
       return cborResponse('quote', quote as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-demand') {
-      await required(this.options.handlers.preflightDemand, type)(signed(value))
-      return new Response(null, { status: 204, headers })
+      const readiness = await required(this.options.handlers.preflightDemand, type)(signed(value))
+      return cborResponse('payment-readiness', readiness as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-delivery') {
       const receipt = await required(this.options.handlers.paymentDelivery, type)(signed(value))
@@ -145,8 +146,16 @@ export class LCHHttpAcquisitionClient {
     )
   }
 
-  async preflightDemand(endpoint: string, demand: SignedObject): Promise<void> {
-    await this.post(endpoint, 'payment-demand', demand as unknown as LCHValue, 204)
+  async preflightDemand(endpoint: string, demand: SignedObject): Promise<SignedObject> {
+    return signed(
+      await this.post(
+        endpoint,
+        'payment-demand',
+        demand as unknown as LCHValue,
+        200,
+        'payment-readiness'
+      )
+    )
   }
 
   async deliver(endpoint: string, delivery: SignedObject): Promise<SignedObject> {

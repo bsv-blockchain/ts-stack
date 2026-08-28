@@ -47,6 +47,11 @@ describe('LCH HTTP binding', () => {
       { version: 1, payee: signer.identityKey },
       signer
     )
+    const readiness = await signObject(
+      'payment-readiness',
+      { version: 1, payee: signer.identityKey },
+      signer
+    )
     const delivery = await signObject(
       'payment-delivery',
       { version: 1, buyer: signer.identityKey },
@@ -59,7 +64,7 @@ describe('LCH HTTP binding', () => {
     )
     const license = await signObject('license', { version: 1, issuer: signer.identityKey }, signer)
     const preflightLicense = jest.fn(async () => undefined)
-    const preflightDemand = jest.fn(async () => undefined)
+    const preflightDemand = jest.fn(async () => readiness)
     const quoteHandler = jest.fn(async () => quote)
     const paymentDelivery = jest.fn(async () => receipt)
     const complete = jest.fn(async () => license)
@@ -83,7 +88,7 @@ describe('LCH HTTP binding', () => {
     })
     await client.preflightLicense(endpoint, request)
     await expect(client.quote(endpoint, request)).resolves.toEqual(quote)
-    await client.preflightDemand(endpoint, demand)
+    await expect(client.preflightDemand(endpoint, demand)).resolves.toEqual(readiness)
     await expect(client.deliver(endpoint, delivery)).resolves.toEqual(receipt)
     const completion: PaymentCompletion = {
       request,

@@ -2,7 +2,7 @@ import { P2PKH, PublicKey, Transaction, type AtomicBEEF, type WalletInterface } 
 import { lchAssert } from './errors.js'
 import { toBase64Url, toHex } from './hash.js'
 import { checkedSatoshis, matchFinalizedOutputs } from './payment.js'
-import type { PaymentDemand, PaymentOutput } from './types.js'
+import type { LCHTransactionState, PaymentDemand, PaymentOutput } from './types.js'
 
 export const BRC29_PAYMENT_PROTOCOL = [2, '3241645161d8'] as const
 
@@ -24,6 +24,7 @@ export interface MultipayRemittance {
 export interface MultipayResult {
   atomicBeef: Uint8Array
   remittances: MultipayRemittance[]
+  transactionState: Extract<LCHTransactionState, 'finalized'>
 }
 
 export interface MultipayWalletOptions {
@@ -119,6 +120,7 @@ export async function createMultipayTransaction(
   )
   return {
     atomicBeef: Uint8Array.from(action.tx),
+    transactionState: 'finalized',
     remittances: planned.map(({ demand, suffix }) => {
       const outputIndex = matches.get(toHex(demand.demandId))
       lchAssert(

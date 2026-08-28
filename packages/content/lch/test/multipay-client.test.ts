@@ -116,6 +116,14 @@ describe('recovery-safe multipay buyer', () => {
                   const demandId = await objectId('payment-demand', demand.body)
                   if (demands.get(toHex(demandId))?.payee !== payee)
                     throw new Error('unknown Demand')
+                  return new LCHPayee(payee.signer).createReadiness({
+                    demandId,
+                    requestId: demand.body.requestId as Uint8Array,
+                    buyer: demand.body.buyer as Uint8Array,
+                    issuedAt: 1_000,
+                    readyUntil: 1_100,
+                    recoveryUntil: demand.body.recoveryUntil as number | bigint
+                  })
                 },
                 paymentDelivery: async delivery => {
                   const demandId = delivery.body.demandId as Uint8Array
@@ -164,6 +172,7 @@ describe('recovery-safe multipay buyer', () => {
     })
     const plan = await buyer.quote(endpoint, request, issuerSigner.identityKey)
     expect(plan.totalSatoshis).toBe(12n)
+    expect(plan.readiness).toHaveLength(2)
 
     const payment = await buyer.createPayment(plan)
     expect(buyerWallet.createdActions()).toBe(1)
@@ -196,6 +205,7 @@ describe('recovery-safe multipay buyer', () => {
         requestId: bytes(1, 32),
         quote: await signObject('quote', { version: 1 }, signer),
         demands: [],
+        readiness: [],
         issuer: signer.identityKey,
         endpoint: 'https://multipay.test/lch',
         totalSatoshis: 0n,
@@ -243,7 +253,7 @@ describe('recovery-safe multipay buyer', () => {
       quote: async () => {
         throw new Error('unused')
       },
-      preflightDemand: async () => undefined,
+      preflightDemand: async () => demand,
       deliver: async () =>
         new LCHPayee(payeeSigner).createReceipt({
           demandId: receiptDemandId,
@@ -270,6 +280,7 @@ describe('recovery-safe multipay buyer', () => {
         requestId,
         quote,
         demands: [demand],
+        readiness: [],
         issuer: buyerSigner.identityKey,
         endpoint: 'https://issuer.test/licenses',
         totalSatoshis: 7n,
@@ -277,6 +288,7 @@ describe('recovery-safe multipay buyer', () => {
         recoveryUntil: 88_400n
       },
       atomicBeef,
+      transactionState: 'finalized' as const,
       deliveries: [
         {
           demandId,

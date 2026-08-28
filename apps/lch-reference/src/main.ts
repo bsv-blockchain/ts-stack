@@ -216,7 +216,12 @@ async function acquire(): Promise<void> {
       pendingPlan = await client.prepare(current.lchBytes)
       acquireButton.textContent = `Confirm ${pendingPlan.totalSatoshis} satoshis in wallet`
       acquireButton.disabled = false
-      status('preflight passed · no transaction created · confirmation required')
+      document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+        ['SIGNED READINESS', `${pendingPlan.readiness.length} / ${pendingPlan.demands.length}`],
+        ['TRANSACTION', 'not created'],
+        ['NEXT STEP', 'explicit wallet confirmation']
+      ])
+      status('signed readiness passed · no transaction created · confirmation required')
       return
     }
     const plan = pendingPlan
@@ -254,12 +259,21 @@ async function acquire(): Promise<void> {
     )
     await runChecks()
   } catch (error) {
-    const requiresRecovery = client.hasPendingPayment()
+    const pending = client.pendingPayment()
+    const requiresRecovery = pending !== undefined
     if (!requiresRecovery) pendingPlan = undefined
     acquireButton.textContent = requiresRecovery
       ? 'Retry delivery & License recovery'
       : 'Preflight & quote'
     acquireButton.disabled = false
+    if (pending !== undefined)
+      document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+        ['TRANSACTION', short(pending.transactionId)],
+        ['TRANSACTION STATE', `${pending.transactionState} · broadcast not established`],
+        ['SETTLEMENT', pending.settlementState],
+        ['PAYEE RECEIPTS', `${pending.receipts} / ${pending.requiredReceipts}`],
+        ['RECOVERY UNTIL', new Date(Number(pending.recoveryUntil) * 1_000).toISOString()]
+      ])
     status(error instanceof Error ? error.message : 'acquisition failed')
   }
 }

@@ -45,6 +45,7 @@ export const LCH_OBJECT_TYPES = [
   'license-request',
   'quote',
   'payment-demand',
+  'payment-readiness',
   'payment-delivery',
   'payment-receipt',
   'license',

@@ -1,4 +1,4 @@
-import type { WalletInterface } from '@bsv/sdk'
+import { Transaction, type AtomicBEEF, type WalletInterface } from '@bsv/sdk'
 import {
   LCHMultipayBuyer,
   LCHReader,
@@ -12,6 +12,7 @@ import {
   type InspectedLCH,
   type LCHFundedMultipay,
   type LCHMultipayPlan,
+  type LCHTransactionState,
   type LCHValue,
   type SignedObject
 } from '@bsv/lch'
@@ -30,6 +31,16 @@ export interface ReferenceAcquisitionResult {
   receipts: SignedObject[]
   transactionId: string
   recovered: boolean
+}
+
+export interface ReferencePendingPayment {
+  requestId: string
+  transactionId: string
+  transactionState: LCHTransactionState
+  settlementState: 'pending-payee-receipts'
+  receipts: number
+  requiredReceipts: number
+  recoveryUntil: bigint
 }
 
 export class ReferenceLCHClient {
@@ -90,7 +101,7 @@ export class ReferenceLCHClient {
       throw new Error('Another wallet transaction still requires delivery or License recovery')
     this.recoveryState ??= {
       requestId,
-      payment: await multipay.createPayment(plan),
+      payment: await multipay.createPayment(await multipay.refreshReadiness(plan)),
       receipts: new Map()
     }
     const { payment, receipts: recoveredReceipts } = this.recoveryState
@@ -135,6 +146,21 @@ export class ReferenceLCHClient {
 
   hasPendingPayment(): boolean {
     return this.recoveryState !== undefined
+  }
+
+  pendingPayment(): ReferencePendingPayment | undefined {
+    const state = this.recoveryState
+    if (state === undefined) return undefined
+    const transaction = Transaction.fromAtomicBEEF(state.payment.atomicBeef as AtomicBEEF)
+    return {
+      requestId: state.requestId,
+      transactionId: transaction.id('hex'),
+      transactionState: state.payment.transactionState,
+      settlementState: 'pending-payee-receipts',
+      receipts: state.receipts.size,
+      requiredReceipts: state.payment.deliveries.length,
+      recoveryUntil: state.payment.plan.recoveryUntil
+    }
   }
 }
 
