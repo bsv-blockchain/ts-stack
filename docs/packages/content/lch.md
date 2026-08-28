@@ -5,8 +5,8 @@ kind: package
 domain: content
 npm: '@bsv/lch'
 version: '0.1.0'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch'
 status: experimental
@@ -15,7 +15,7 @@ tags: ['content', 'licensing', 'brc-170', 'odrl', 'c2pa', 'chirp', 'uhrp']
 
 # @bsv/lch
 
-> Browser- and Node-compatible reference implementation of the draft BRC-170
+> Browser- and Node-compatible reference implementation of published BRC-170
 > Licensed Content Header protocol.
 
 ## Install
@@ -109,6 +109,13 @@ never satisfies a Demand. The executable reference
 application also ships a Node server, creator wizard, player, wallet-module
 contract, and collapsed, federated, container, and durable deployment examples.
 
+The issuer is a coordinator, not an implicit payment custodian. Every Demand
+names the Payee identity, amount, BRC-29 derivation, settlement profile, and
+endpoint. A drummer, composer, label, or publisher can each run an independent
+wallet, endpoint, Payment Ledger, and availability provider. The Quote binds
+their signed Demands into one buyer-authorized transaction without moving
+those wallets into the issuer service.
+
 ## Storage and media
 
 `UniversalContentSource` resolves `chirp:`, `uhrp:`, and bounded HTTPS
@@ -119,6 +126,20 @@ uploader, downloader, routes, or identifiers.
 Media players and DAWs remain application code. The package supplies verified
 bytes and selection/composition semantics; it does not choose codecs, decode
 media, draw waveforms, build catalogues, or define recommendation behavior.
+
+For large licensed media, use `CHIRPContentSink` with a `CHIRPUploader` and
+configure `UniversalContentSource` with a `CHIRPDownloader`. CHIRP validates
+Merkle objects, logical length, and the complete-stream content hash; LCH then
+independently validates the exact ciphertext length and digest before segment
+authentication and decryption. Storage hosts see ciphertext and do not become
+LCH issuers or Payees.
+
+The 0.1 LCH publisher and reader use bounded `Uint8Array` representations and
+assemble the complete resolved ciphertext in memory. Configure
+`maximumBytes` for assets using this path. CHIRP supports verified streaming,
+but a progressive LCH player additionally needs a segment-aware adapter that
+authenticates complete encryption records and enforces the licensed Selection;
+raw CHIRP chunks are ciphertext, not authenticated playable plaintext.
 
 ## Composition boundary
 
@@ -160,9 +181,24 @@ future profiles.
 - Treat ODRL/C2PA mappings as evidence and policy description, not as a
   substitute for payment settlement or authority validation.
 
+## Production readiness
+
+Replace every fixture wallet and in-memory content, issuer, license, Payment
+Ledger, Authorization, evidence, and Delivery store before real purchases.
+Persist finalized Atomic BEEF and signed Deliveries before fan-out; retry and
+recover the same transaction through `recoveryUntil`; keep every endpoint
+independently routable; and validate restart, duplicate, conflict, offline,
+provider-outage, and lost-response cases. The
+[production CHIRP and LCH guide](../../guides/chirp-lch-production.md) includes
+copyable combined-layer flows, role ownership, a failure matrix, server and
+wallet topology, rollout/rollback guidance, observability, and an agent
+implementation contract.
+
 ## Reference
 
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch#readme)
-- [Draft BRC-170 proposal](https://github.com/bsv-blockchain/BRCs/pull/236)
+- [Published BRC-170](https://bsv.brc.dev/apps/0170)
+- [BRC-170 source](https://github.com/bsv-blockchain/BRCs/blob/master/apps/0170.md)
+- [Production CHIRP and LCH guide](../../guides/chirp-lch-production.md)
 - [Reference application](https://github.com/bsv-blockchain/ts-stack/tree/main/apps/lch-reference)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch)

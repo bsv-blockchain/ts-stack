@@ -1,6 +1,6 @@
 # @bsv/lch
 
-Reference implementation of the draft BRC-170 Licensed Content Header protocol. It provides deterministic CBOR and object identifiers, `.lch` framing, segmented AES-256-GCM, BRC-77 signatures, BRC-78 key delivery, UHRP/CHIRP-aware content adapters, policy/profile checks, multilateral output matching, authority revocation validation, license storage, and whole-placement composition.
+Reference implementation of [BRC-170](https://bsv.brc.dev/apps/0170), the Licensed Content Header protocol. It provides deterministic CBOR and object identifiers, `.lch` framing, segmented AES-256-GCM, BRC-77 signatures, BRC-78 key delivery, UHRP/CHIRP-aware content adapters, policy/profile checks, multilateral output matching, authority revocation validation, license storage, and whole-placement composition.
 
 The package keeps acquisition explicit. Inspecting or opening a header never spends money. Applications call preflight, quote, wallet payment, Payee delivery, completion, and recovery as separate steps. `LCHMultipayBuyer.createPayment` is the explicit transaction boundary; it delegates to `createMultipayTransaction`, which invokes the buyer wallet's `createAction`.
 
@@ -64,7 +64,16 @@ The wallet call uses BRC-100 `internalizeAction` with the `wallet payment` proto
 
 `LCHHttpServer` is a standard Fetch `Request`/`Response` handler, so issuer, Payee, evidence-provider, and Delivery-provider handlers can be mounted independently in Node, edge, serverless, message-box gateways, or tests without framework coupling. Its deterministic-CBOR message types cover License Request preflight, quote, Payment Demand readiness and authorization, direct Payment Delivery, transaction evidence, durable store and authenticated Payee retrieval, Payment Completion, and License recovery. `WalletAuthorizedOutputPayee`, `LCHSettlementService`, and the validation functions expose the same boundaries without HTTP coupling.
 
-The executable creator/server/player example, connected-wallet module contract, CHIRP/UHRP storage substitutions, container build, and durable deployment topology are in [`apps/lch-reference`](../../../apps/lch-reference/README.md).
+The executable creator/server/player example, connected-wallet module contract, CHIRP/UHRP storage substitutions, container build, and durable deployment topology are in [`apps/lch-reference`](../../../apps/lch-reference/README.md). The [production CHIRP and LCH guide](https://github.com/bsv-blockchain/ts-stack/blob/main/docs/guides/chirp-lch-production.md) adds end-to-end integration code, role ownership, persistence, recovery, security, observability, rollout, and an agent implementation contract.
+
+The 0.1 publisher and reader accept bounded `Uint8Array` representations.
+`UniversalContentSource` defaults to a 512 MiB maximum, and the complete
+`resolve()`/`decrypt()` path assembles ciphertext in memory. CHIRP itself can
+stream verified ranges, but exposing LCH plaintext progressively requires a
+segment-aware adapter that authenticates complete encryption records and
+enforces the licensed selection; that adapter is outside the 0.1 API. Configure
+an explicit application limit and do not treat raw CHIRP ciphertext chunks as
+authenticated plaintext.
 
 Application-specific catalogue, streaming index, royalty weighting, waveform, timeline, and social metadata belong in non-critical application data or separately registered profiles. The v1 whole-placement resolver supports repeats and arbitrary editorial transforms conservatively: any nonempty derivative selection activates the ingredient's complete declared source selection. Edit metadata does not alter permission or settlement semantics. A future mapping profile is needed only for deterministic selective mapping; an unknown mapping fails closed.
 
@@ -73,7 +82,17 @@ public-address DNS resolver and an address-pinning connector. Browser
 applications should use an equivalently constrained authenticated gateway
 rather than treating a preflight DNS lookup as protection against rebinding.
 
-See BRC-170 for the normative protocol. If this implementation and the BRC differ, the BRC is authoritative.
+## Production integration gate
+
+Before enabling real purchases, replace fixture wallets, memory content and
+license stores, in-process issuer state, Payee ledgers, evidence claims, and
+Delivery retention with durable role-scoped implementations. Persist the
+funded transaction before fan-out, test recovery by Request ID, keep every
+Payee independently routable, pin server connections against DNS rebinding,
+and retain signed state through `recoveryUntil`. The complete checklist and
+failure matrix are in the [production guide](https://github.com/bsv-blockchain/ts-stack/blob/main/docs/guides/chirp-lch-production.md).
+
+See [BRC-170](https://bsv.brc.dev/apps/0170) for the normative protocol. If this implementation and the BRC differ, the BRC is authoritative.
 
 ## License
 

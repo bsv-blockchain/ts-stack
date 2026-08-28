@@ -1,6 +1,6 @@
 # BRC-170 LCH reference workbench
 
-This open-source reference application exercises `@bsv/lch` and draft BRC-170 as a complete creator-to-player path.
+This open-source reference application exercises `@bsv/lch` and published [BRC-170](https://bsv.brc.dev/apps/0170) as a complete creator-to-player path.
 
 The creator wizard encrypts a local asset into authenticated segments, stores detached ciphertext through a `ContentSink`, signs an inline Offer, and declares a two-wallet compensation split. The player performs a non-spending preflight, obtains a signed Quote, Payment Demands, short-lived Payment Readiness leases, and any Payee-authorized destinations, then stops at an explicit confirmation boundary. Confirmation refreshes readiness and asks a BRC-100 `WalletInterface` to create one BRC-105/BRC-29 transaction.
 
@@ -24,3 +24,10 @@ PORT=4173 LCH_PUBLIC_BASE_URL=http://127.0.0.1:4173 pnpm --filter lch-reference-
 ```
 
 The browser and server bundles incorporate `@bsv/sdk` and `@bsv/lch`. The new profile adds no dependency. The build copies the scoped `THIRD_PARTY_NOTICES.md` and exact `LICENSES/` archive into `dist/licenses/`; those files must remain alongside deployed copies.
+
+Use [DEPLOYMENT.md](./DEPLOYMENT.md) to replace every fixture and in-memory
+boundary, connect production wallets and content storage, separate financial
+roles, add persistence and recovery, and validate a rollout. The broader
+[production CHIRP and LCH guide](../../docs/guides/chirp-lch-production.md)
+explains when to combine the protocols, provides copyable consumer flows, and
+includes failure, security, observability, and agent checklists.

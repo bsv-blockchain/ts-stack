@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 status: stable
 tags: ['packages']
@@ -45,7 +45,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 
 **Licensed, encrypted, attributable creative content and composition.**
 
-- [@bsv/lch](./content/lch.md) — Draft BRC-170 framing, rights, acquisition, key delivery, provenance, and whole-placement composition
+- [@bsv/lch](./content/lch.md) — BRC-170 framing, rights, acquisition, key delivery, provenance, and whole-placement composition
 
 ### Overlays
 
