@@ -73,4 +73,15 @@ describe('segmented AES-GCM', () => {
       })
     ).rejects.toMatchObject({ code: 'ERR_LCH_KEY' })
   })
+
+  it('uses secure randomness by default and rejects a descriptor with an uncovered segment', async () => {
+    const encrypted = await encryptSegmented(Uint8Array.of(1, 2, 3), { segmentSize: 2 })
+    await expect(
+      decryptSegmented(
+        encrypted.ciphertext,
+        { ...encrypted.descriptor, keyPeriods: [] },
+        encrypted.keys
+      )
+    ).rejects.toMatchObject({ code: 'ERR_LCH_KEY' })
+  })
 })

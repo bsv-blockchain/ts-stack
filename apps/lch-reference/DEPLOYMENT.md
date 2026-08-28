@@ -12,29 +12,35 @@ flowchart LR
   P -->|createAction: one Atomic BEEF| BW[Buyer BRC-100 wallet]
   BW -->|BRC-29 output A| WA[Recording-controller wallet]
   BW -->|BRC-29 output B| WB[Composition-controller wallet]
-  P -->|signed Payment Delivery| WA
-  P -->|signed Payment Delivery| WB
-  WA -->|internalizeAction + signed receipt| I
-  WB -->|internalizeAction + signed receipt| I
+  P -->|signed Payment Delivery| DA[Drummer delivery service]
+  P -->|signed Payment Delivery| DB[Composer delivery service]
+  DA -->|internalizeAction| WA
+  DB -->|internalizeAction| WB
+  DA -->|signed Receipt| P
+  DB -->|signed Receipt| P
+  P -->|Atomic BEEF + all Receipts| I
   I -->|signed License + BRC-78 grants| P
   P -->|authenticated range reads| H
 ```
 
 Money is received by the Payee wallets named in the signed Payment Demands. `WalletPaymentReceiver` derives the expected receiving key with BRC-29, validates the exact finalized output, and calls that Payee wallet's BRC-100 `internalizeAction`. The issuer only receives value when it is explicitly one of the Payees. The reference split is 7 satoshis to the recording controller and 5 satoshis to the composition controller.
 
+The issuer endpoint is `${PUBLIC_BASE_URL}/api/lch`. The two reference Payees deliberately publish different delivery paths, `${PUBLIC_BASE_URL}/api/lch/payees/recording` and `${PUBLIC_BASE_URL}/api/lch/payees/composition`. They share a process only to keep the fixture runnable. The package interoperability test places the issuer, drummer, and composer at three distinct HTTPS origins with three independent `LCHHttpServer` instances. A deployed Demand can therefore name `https://payments.drummer.example/lch` while the downstream work uses `https://licenses.publisher.example/lch`; neither origin receives or controls the other's wallet merely because both Demands appear in one Quote.
+
 ## HTTP surface
 
 The executable Node server exposes:
 
-| Method | Path                | Purpose                                                                                       |
-| ------ | ------------------- | --------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/health`       | Wallet mode and acquisition endpoint                                                          |
-| `POST` | `/api/assets`       | Creator publication input (`name`, `mediaType`, base64 bytes); returns IDs and `lchBase64url` |
-| `POST` | `/api/lch`          | Deterministic-CBOR LCH acquisition binding                                                    |
-| `GET`  | `/content/{sha256}` | Detached ciphertext, including one HTTP byte range                                            |
-| `GET`  | `/*`                | Reference workbench and third-party notices                                                   |
+| Method | Path                         | Purpose                                                                                       |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`                | Wallet mode and acquisition endpoint                                                          |
+| `POST` | `/api/assets`                | Creator publication input (`name`, `mediaType`, base64 bytes); returns IDs and `lchBase64url` |
+| `POST` | `/api/lch`                   | Issuer preflight, Quote, completion, and recovery                                             |
+| `POST` | `/api/lch/payees/{interest}` | Independently routed Payee preflight and Payment Delivery                                     |
+| `GET`  | `/content/{sha256}`          | Detached ciphertext, including one HTTP byte range                                            |
+| `GET`  | `/*`                         | Reference workbench and third-party notices                                                   |
 
-The acquisition endpoint accepts the exact media types implemented by `LCHHttpServer`: license-request preflight, License Request, Payment Demand preflight, Payment Delivery, Payment Completion, and license recovery. Bodies are bounded and error responses use stable LCH error codes.
+The issuer and Payee endpoints accept the role-appropriate exact media types implemented by `LCHHttpServer`. Bodies are bounded and error responses use stable LCH error codes. Sending a drummer Demand to the composition endpoint fails even in the collapsed fixture topology.
 
 Publication example:
 
@@ -60,7 +66,7 @@ export async function createLCHWallets() {
 
 Every value must implement the BRC-100 `WalletInterface`. The issuer wallet signs Offers, Quotes, Licenses, and BRC-78 key envelopes. The two Payee wallets sign their Demands and Receipts and receive funds through `internalizeAction`. A player supplies its own `WalletClient` or other `WalletInterface` to `ReferenceLCHClient`; its `createAction` is the only transaction-creation boundary.
 
-The module belongs in the operator's secret-bearing runtime, not in the public image. It may open local wallet-toolbox instances, connect to separately isolated BRC-100 wallet services, or wrap another conforming wallet substrate. Run each financial role with an independently controlled identity in deployments that require separate accounting or authority.
+The module belongs in the operator's secret-bearing runtime, not in the public image. It may open local wallet-toolbox instances, connect to separately isolated BRC-100 wallet services, or wrap another conforming wallet substrate. Run each financial role with an independently controlled identity in deployments that require separate accounting or authority. A federated deployment normally runs a separate wallet module and Payment Ledger beside each Payee endpoint rather than loading every wallet into the issuer process.
 
 ## Content storage
 
@@ -74,16 +80,18 @@ The LCH header, Offer, Quote, License, and content locator remain independent of
 
 ## Deployment shapes
 
-The single-process server is the smallest executable topology. It contains the static workbench, issuer handlers, Payee handlers, and reference content store. It is appropriate for protocol development and interoperability testing.
+The single-process server is the smallest executable topology. It contains the static workbench, issuer handlers, independently routed Payee handlers, and reference content store. It is appropriate for protocol development and interoperability testing.
 
 A durable topology separates four concerns:
 
-1. Stateless issuer/API replicas terminate the LCH HTTP binding.
-2. A transactional store holds request IDs, immutable Quotes/Demands, Payment Ledger claims, receipts, issued Licenses, and wrapped content-encryption keys.
-3. Each Payee role calls its independently operated BRC-100 wallet service.
-4. CHIRP/UHRP providers retain ciphertext; the API retains only locators and verified metadata.
+1. Stateless issuer/API replicas terminate the Offer endpoint and persist Requests, Quotes, completion state, Licenses, and wrapped content-encryption keys.
+2. Every Payee operates its signed Demand endpoint, atomic Payment Ledger, Demand state, and BRC-100 receiving wallet independently.
+3. The buyer persists the funded Atomic BEEF, signed Deliveries, and partial Receipt set before fan-out and until License recovery completes or `recoveryUntil` passes.
+4. CHIRP/UHRP providers retain ciphertext; the issuer retains only locators and verified metadata.
 
 The Payment Ledger claim must be atomic across replicas. The same Demand and same finalized transaction must return the same Receipt; a second transaction for that Demand must fail. Content-encryption keys and wallet credentials require encryption at rest, access separation, backup, rotation, and audit controls appropriate to the deployment.
+
+`LCHAcquisitionTransport` lets a buyer route those same operations through an application-owned asynchronous inbox or message-box adapter. The BRC-170 v1 portable wire binding remains deterministic-CBOR HTTP. A gateway can enqueue internally while preserving the exact HTTP acknowledgement and recovery contract. A native message-box protocol needs a separately registered profile defining addressing, authentication, correlation, reply polling, expiry, and replay behavior; the adapter cannot silently replace signed Payment Deliveries or Payee Receipts.
 
 ## Container reference
 

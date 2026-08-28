@@ -5,6 +5,7 @@ import {
   LCHHttpAcquisitionClient,
   LCHHttpServer,
   WalletBRC77Signer,
+  encodeDeterministicCbor,
   signObject,
   type PaymentCompletion
 } from '../src/index.js'
@@ -12,6 +13,25 @@ import {
 const bytes = (value: number, length: number): Uint8Array => new Uint8Array(length).fill(value)
 
 describe('LCH HTTP binding', () => {
+  it('answers CORS preflight and rejects wrong methods and unregistered message types', async () => {
+    const endpoint = 'https://lch.test/acquisition'
+    const server = new LCHHttpServer({ handlers: {}, allowOrigin: 'https://player.test' })
+    const options = await server.handle(new Request(endpoint, { method: 'OPTIONS' }))
+    expect(options.status).toBe(204)
+    expect(options.headers.get('access-control-allow-origin')).toBe('https://player.test')
+    await expect(server.handle(new Request(endpoint))).resolves.toMatchObject({ status: 405 })
+    const unsupported = await server.handle(
+      new Request(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/vnd.bsv.lch+cbor; type=future-transport'
+        },
+        body: encodeDeterministicCbor(null).slice().buffer
+      })
+    )
+    expect(unsupported.status).toBe(415)
+  })
+
   it('routes every acquisition message as bounded deterministic CBOR', async () => {
     const signer = await WalletBRC77Signer.create({
       wallet: new ProtoWallet(new PrivateKey(71))

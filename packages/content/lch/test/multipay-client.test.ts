@@ -10,6 +10,8 @@ import {
 } from '@bsv/sdk'
 import {
   LCHHttpServer,
+  LCHHttpAcquisitionClient,
+  LCHBuyer,
   LCHMultipayBuyer,
   LCHPayee,
   LCHQuoteIssuer,
@@ -19,6 +21,7 @@ import {
   toHex,
   validateLicenseRequest,
   type PaymentCompletion,
+  type LCHAcquisitionTransport,
   type SignedObject
 } from '../src/index.js'
 
@@ -30,14 +33,24 @@ describe('recovery-safe multipay buyer', () => {
     const issuerSigner = await walletSigner(122)
     const payees = await Promise.all(
       [
-        { key: 123, satoshis: 7, dutyUid: 'urn:lch:duty:recording' },
-        { key: 124, satoshis: 5, dutyUid: 'urn:lch:duty:composition' }
+        {
+          key: 123,
+          satoshis: 7,
+          dutyUid: 'urn:lch:duty:recording',
+          endpoint: 'https://drummer.test/payments'
+        },
+        {
+          key: 124,
+          satoshis: 5,
+          dutyUid: 'urn:lch:duty:composition',
+          endpoint: 'https://composer.test/payments'
+        }
       ].map(async item => ({
         ...item,
         signer: await walletSigner(item.key)
       }))
     )
-    const endpoint = 'https://multipay.test/lch'
+    const endpoint = 'https://issuer.test/licenses'
     const offerId = bytes(1, 32)
     const assetId = bytes(2, 32)
     const demands = new Map<string, { demand: SignedObject; payee: (typeof payees)[number] }>()
@@ -57,7 +70,7 @@ describe('recovery-safe multipay buyer', () => {
                 offerId,
                 dutyUid: payee.dutyUid,
                 buyer: buyerIdentity,
-                endpoint,
+                endpoint: payee.endpoint,
                 satoshis: payee.satoshis,
                 expiresAt: 2_000,
                 recoveryPeriodSeconds: 86_400
@@ -77,21 +90,6 @@ describe('recovery-safe multipay buyer', () => {
             recoveryPeriodSeconds: 86_400
           })
         },
-        preflightDemand: async () => undefined,
-        paymentDelivery: async delivery => {
-          const demandId = delivery.body.demandId as Uint8Array
-          const runtime = demands.get(toHex(demandId))
-          if (runtime === undefined) throw new Error('unknown Demand')
-          const transaction = Transaction.fromAtomicBEEF(delivery.body.atomicBeef as AtomicBEEF)
-          return new LCHPayee(runtime.payee.signer).createReceipt({
-            demandId,
-            requestId: delivery.body.requestId as Uint8Array,
-            txid: Uint8Array.from(transaction.id('array')),
-            outputIndex: delivery.body.outputIndex as number,
-            satoshis: runtime.payee.satoshis,
-            receivedAt: 1_100
-          })
-        },
         complete: async (completion: PaymentCompletion) => {
           issuedLicense = await signObject(
             'license',
@@ -107,12 +105,54 @@ describe('recovery-safe multipay buyer', () => {
         recover: async () => issuedLicense
       }
     })
-    const buyer = await LCHMultipayBuyer.create(buyerWallet.wallet, {
-      now: () => 1_000n,
+    const payeeServers = new Map(
+      payees.map(
+        payee =>
+          [
+            payee.endpoint,
+            new LCHHttpServer({
+              handlers: {
+                preflightDemand: async demand => {
+                  const demandId = await objectId('payment-demand', demand.body)
+                  if (demands.get(toHex(demandId))?.payee !== payee)
+                    throw new Error('unknown Demand')
+                },
+                paymentDelivery: async delivery => {
+                  const demandId = delivery.body.demandId as Uint8Array
+                  const runtime = demands.get(toHex(demandId))
+                  if (runtime?.payee !== payee) throw new Error('unknown Demand')
+                  const transaction = Transaction.fromAtomicBEEF(
+                    delivery.body.atomicBeef as AtomicBEEF
+                  )
+                  return new LCHPayee(payee.signer).createReceipt({
+                    demandId,
+                    requestId: delivery.body.requestId as Uint8Array,
+                    txid: Uint8Array.from(transaction.id('array')),
+                    outputIndex: delivery.body.outputIndex as number,
+                    satoshis: payee.satoshis,
+                    receivedAt: 1_100
+                  })
+                }
+              }
+            })
+          ] as const
+      )
+    )
+    const routedHttp = new LCHHttpAcquisitionClient({
       endpointPolicy: {
-        allowLocalOrigins: ['https://multipay.test'],
-        connect: async (url, init) => server.handle(new Request(url, init))
+        allowLocalOrigins: ['https://issuer.test', 'https://drummer.test', 'https://composer.test'],
+        connect: async (url, init) => {
+          const destinationUrl = url.toString()
+          const destination =
+            destinationUrl === endpoint ? server : payeeServers.get(destinationUrl)
+          if (destination === undefined) throw new Error(`unknown destination ${url}`)
+          return destination.handle(new Request(url, init))
+        }
       }
+    })
+    const buyer = new LCHMultipayBuyer(buyerWallet.wallet, await walletSigner(121), {
+      now: () => 1_000n,
+      transport: routedHttp
     })
     const request = await buyer.createRequest({
       offerId,
@@ -128,6 +168,9 @@ describe('recovery-safe multipay buyer', () => {
     const payment = await buyer.createPayment(plan)
     expect(buyerWallet.createdActions()).toBe(1)
     expect(payment.deliveries).toHaveLength(2)
+    expect(payment.deliveries.map(item => item.endpoint)).toEqual(
+      payees.map(payee => payee.endpoint)
+    )
     const receipts = await Promise.all(
       payment.deliveries.map(delivery => buyer.deliver(payment, delivery))
     )
@@ -160,6 +203,108 @@ describe('recovery-safe multipay buyer', () => {
         recoveryUntil: 3_000n
       })
     ).rejects.toThrow(/expired before transaction creation/u)
+  })
+
+  it('rejects independently returned Receipts that do not match the funded plan', async () => {
+    const buyerSigner = await walletSigner(141)
+    const payeeSigner = await walletSigner(142)
+    const requestId = bytes(1, 32)
+    const demand = await new LCHPayee(payeeSigner).createDemand({
+      requestId,
+      offerId: bytes(2, 32),
+      dutyUid: 'urn:lch:duty:distributed',
+      buyer: buyerSigner.identityKey,
+      endpoint: 'https://drummer.test/payments',
+      satoshis: 7,
+      expiresAt: 2_000,
+      recoveryPeriodSeconds: 86_400
+    })
+    const demandId = await objectId('payment-demand', demand.body)
+    const transaction = new Transaction(
+      1,
+      [],
+      [{ satoshis: 7, lockingScript: LockingScript.fromHex('51') }]
+    )
+    const atomicBeef = Uint8Array.from(transaction.toAtomicBEEF(true))
+    const delivery = await new LCHBuyer(buyerSigner).createPaymentDelivery({
+      demandId,
+      requestId,
+      atomicBeef,
+      outputIndex: 0,
+      derivationPrefix: demand.body.derivationPrefix as Uint8Array,
+      derivationSuffix: bytes(3, 32)
+    })
+    let receiptDemandId = demandId
+    let receiptRequestId = requestId
+    let receiptOutputIndex = 1
+    let receiptSatoshis = 7
+    const transport: LCHAcquisitionTransport = {
+      preflightLicense: async () => undefined,
+      quote: async () => {
+        throw new Error('unused')
+      },
+      preflightDemand: async () => undefined,
+      deliver: async () =>
+        new LCHPayee(payeeSigner).createReceipt({
+          demandId: receiptDemandId,
+          requestId: receiptRequestId,
+          txid: Uint8Array.from(transaction.id('array')),
+          outputIndex: receiptOutputIndex,
+          satoshis: receiptSatoshis,
+          receivedAt: 1_100
+        }),
+      complete: async () => {
+        throw new Error('unused')
+      },
+      recover: async () => undefined
+    }
+    const request = await signObject(
+      'license-request',
+      { version: 1, buyer: buyerSigner.identityKey },
+      buyerSigner
+    )
+    const quote = await signObject('quote', { version: 1 }, buyerSigner)
+    const funded = {
+      plan: {
+        request,
+        requestId,
+        quote,
+        demands: [demand],
+        issuer: buyerSigner.identityKey,
+        endpoint: 'https://issuer.test/licenses',
+        totalSatoshis: 7n,
+        expiresAt: 2_000n,
+        recoveryUntil: 88_400n
+      },
+      atomicBeef,
+      deliveries: [
+        {
+          demandId,
+          payee: payeeSigner.identityKey,
+          endpoint: 'https://drummer.test/payments',
+          delivery
+        }
+      ]
+    }
+    const buyer = new LCHMultipayBuyer(actionWallet(143).wallet, buyerSigner, { transport })
+    await expect(buyer.deliver(funded, funded.deliveries[0]!)).rejects.toThrow(
+      /output index does not match/u
+    )
+    receiptOutputIndex = 0
+    receiptSatoshis = 8
+    await expect(buyer.deliver(funded, funded.deliveries[0]!)).rejects.toThrow(
+      /amount does not match/u
+    )
+    receiptSatoshis = 7
+    receiptDemandId = bytes(9, 32)
+    const unknownDelivery = { ...funded.deliveries[0]!, demandId: receiptDemandId }
+    await expect(buyer.deliver(funded, unknownDelivery)).rejects.toThrow(/unknown Demand/u)
+    receiptDemandId = demandId
+    receiptRequestId = bytes(8, 32)
+    const wrongRequestReceipt = await transport.deliver('', delivery)
+    await expect(buyer.complete(funded, [wrongRequestReceipt])).rejects.toThrow(
+      /Receipt Request ID does not match/u
+    )
   })
 })
 

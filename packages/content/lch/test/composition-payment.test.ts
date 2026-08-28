@@ -14,6 +14,12 @@ import {
 const id = (value: number): Uint8Array => new Uint8Array(32).fill(value)
 
 describe('composition and payment invariants', () => {
+  it('walks an empty composition without inventing source obligations', async () => {
+    await expect(
+      walkComposition({ assetId: id(8), selection: { type: 'all' } }, async () => undefined)
+    ).resolves.toEqual([])
+  })
+
   it('builds only the pinned whole-placement mapping', () => {
     const record = new LCHComposer(id(9))
       .addWholePlacement({

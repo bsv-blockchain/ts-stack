@@ -34,7 +34,8 @@ npm install @bsv/lch @bsv/sdk
 - explicit BRC-29/BRC-100 multilateral payment construction that matches
   finalized wallet outputs without assuming output order;
 - deterministic-CBOR Fetch client/server bindings, typed acquisition builders,
-  replay-safe Payee receipt handling, and a complete multipay buyer workflow;
+  replay-safe Payee receipt handling, an injectable acquisition transport, and
+  a complete multipay buyer workflow across independently routed Payees;
 - bounded authority chains with fresh, network-scoped revocation observations;
 - HTTPS endpoint policy plus UHRP and CHIRP content source and sink adapters;
 - browser IndexedDB and in-memory license stores; and
@@ -79,13 +80,20 @@ fails if a match is missing or ambiguous. Retain `funded` and successful
 Receipts until completion or `recoveryUntil`; retry delivery with the same
 transaction after ambiguity and never create a replacement automatically.
 
+The issuer endpoint coordinates Quote, completion, and recovery. Every signed
+Demand selects its own Payee endpoint. Those endpoints can be different
+origins and operators, and the buyer fans the persisted transaction out to
+them independently. `LCHAcquisitionTransport` defaults to the HTTP binding and
+also gives applications a stable seam for an asynchronous inbox or message-box
+adapter without changing signed objects or recovery behavior.
+
 On the receiving side, `WalletPaymentReceiver` independently derives and
 validates the Payee's BRC-29 output, atomically claims the Demand through a
 `PaymentLedger`, calls that Payee wallet's BRC-100 `internalizeAction`, and
 returns a signed Receipt. `LCHHttpServer` mounts that and the issuer handlers on
-any Fetch-compatible server surface. The executable reference application also
-ships a Node server, creator wizard, player, wallet-module contract, and
-single-process/container/durable deployment examples.
+independent Fetch-compatible server surfaces. The executable reference
+application also ships a Node server, creator wizard, player, wallet-module
+contract, and collapsed, federated, container, and durable deployment examples.
 
 ## Storage and media
 

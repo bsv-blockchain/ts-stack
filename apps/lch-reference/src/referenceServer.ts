@@ -32,6 +32,7 @@ export interface ReferencePayeeOptions {
   dutyUid: string
   interest: string
   label: string
+  endpoint?: string
 }
 
 export interface ReferenceLCHServerOptions {
@@ -54,7 +55,8 @@ export interface ReferencePublishedAsset {
   acquisitionEndpoint: string
 }
 
-interface PayeeRuntime extends ReferencePayeeOptions {
+interface PayeeRuntime extends Omit<ReferencePayeeOptions, 'endpoint'> {
+  endpoint: string
   identityKey: Uint8Array
   payee: LCHPayee
   receiver: WalletPaymentReceiver
@@ -100,8 +102,9 @@ export class ReferenceContentStore implements ContentSink, ContentSource {
 
 export class ReferenceLCHServer {
   readonly acquisitionEndpoint: string
+  readonly payeeEndpoints: ReadonlyArray<{ label: string; endpoint: string }>
   readonly content: ReferenceContentStore
-  readonly http: LCHHttpServer
+  readonly http: Pick<LCHHttpServer, 'handle'>
 
   private readonly now: () => bigint
   private readonly issuer: LCHIssuer
@@ -132,16 +135,36 @@ export class ReferenceLCHServer {
     this.quoteIssuer = quoteIssuer
     this.keyDelivery = keyDelivery
     this.payees = payees
-    this.http = new LCHHttpServer({
+    this.payeeEndpoints = payees.map(({ label, endpoint }) => ({ label, endpoint }))
+    const issuerHttp = new LCHHttpServer({
       handlers: {
         preflightLicense: request => this.preflightLicense(request),
         quote: request => this.quote(request),
-        preflightDemand: demand => this.preflightDemand(demand),
-        paymentDelivery: delivery => this.receivePayment(delivery),
         complete: completion => this.complete(completion),
         recover: requestId => this.recover(requestId)
       }
     })
+    const payeeHttp = new Map(
+      payees.map(
+        payee =>
+          [
+            payee.endpoint,
+            new LCHHttpServer({
+              handlers: {
+                preflightDemand: demand => this.preflightDemandFor(payee, demand),
+                paymentDelivery: delivery => this.receivePaymentFor(payee, delivery)
+              }
+            })
+          ] as const
+      )
+    )
+    this.http = {
+      handle: request => {
+        const endpoint = requestEndpoint(request.url)
+        const handler = endpoint === this.acquisitionEndpoint ? issuerHttp : payeeHttp.get(endpoint)
+        return handler?.handle(request) ?? Promise.resolve(new Response(null, { status: 404 }))
+      }
+    }
   }
 
   static async create(options: ReferenceLCHServerOptions): Promise<ReferenceLCHServer> {
@@ -152,17 +175,19 @@ export class ReferenceLCHServer {
     const payees = await Promise.all(
       options.payees.map(async payeeOptions => {
         const signer = await WalletBRC77Signer.create({ wallet: payeeOptions.wallet })
+        const endpoint =
+          payeeOptions.endpoint ??
+          `${options.publicBaseUrl}/api/lch/payees/${encodeURIComponent(payeeOptions.interest)}`
         return {
           ...payeeOptions,
+          endpoint,
           identityKey: signer.identityKey,
           payee: new LCHPayee(signer),
           receiver: new WalletPaymentReceiver({
             wallet: payeeOptions.wallet,
             signer,
             now,
-            allowInsecureLocalOrigins: isLocalHttp(options.publicBaseUrl)
-              ? [new URL(options.publicBaseUrl).origin]
-              : []
+            allowInsecureLocalOrigins: isLocalHttp(endpoint) ? [new URL(endpoint).origin] : []
           })
         }
       })
@@ -237,7 +262,7 @@ export class ReferenceLCHServer {
           requirements: this.payees.map(payee => ({
             dutyUid: payee.dutyUid,
             payee: payee.identityKey,
-            endpoint: this.acquisitionEndpoint,
+            endpoint: payee.endpoint,
             satoshis: payee.satoshis,
             interest: payee.interest
           }))
@@ -304,7 +329,7 @@ export class ReferenceLCHServer {
         offerId: asset.offerId,
         dutyUid: payee.dutyUid,
         buyer,
-        endpoint: this.acquisitionEndpoint,
+        endpoint: payee.endpoint,
         satoshis: payee.satoshis,
         expiresAt,
         recoveryPeriodSeconds: 86_400,
@@ -341,6 +366,24 @@ export class ReferenceLCHServer {
     if (!(demandId instanceof Uint8Array)) throw new Error('Payment Delivery has no Demand ID')
     const runtime = this.demandIndex.get(toHex(demandId))
     if (runtime === undefined) throw new Error('Payment Demand is unknown')
+    return runtime.payee.receiver.receive(runtime.demand, delivery)
+  }
+
+  private async preflightDemandFor(payee: PayeeRuntime, demand: SignedObject): Promise<void> {
+    const demandId = toHex(await objectId('payment-demand', demand.body))
+    const runtime = this.demandIndex.get(demandId)
+    if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
+    await runtime.payee.receiver.preflight(demand)
+  }
+
+  private async receivePaymentFor(
+    payee: PayeeRuntime,
+    delivery: SignedObject
+  ): Promise<SignedObject> {
+    const demandId = delivery.body.demandId
+    if (!(demandId instanceof Uint8Array)) throw new Error('Payment Delivery has no Demand ID')
+    const runtime = this.demandIndex.get(toHex(demandId))
+    if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
     return runtime.payee.receiver.receive(runtime.demand, delivery)
   }
 
@@ -450,6 +493,11 @@ export class ReferenceLCHServer {
     if (!['play', 'derive'].includes(request.body.action as string))
       throw new Error('Requested action is not offered')
   }
+}
+
+function requestEndpoint(value: string): string {
+  const url = new URL(value)
+  return `${url.origin}${url.pathname}${url.search}`
 }
 
 export function referenceApiResponse(value: ReferencePublishedAsset): Response {

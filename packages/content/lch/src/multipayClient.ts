@@ -42,12 +42,30 @@ export interface LCHFundedMultipay {
 
 export interface LCHMultipayBuyerOptions extends LCHHttpClientOptions {
   now?: () => bigint
+  transport?: LCHAcquisitionTransport
+}
+
+/**
+ * Transport boundary for acquisition coordination.
+ *
+ * The signed Offer endpoint and every signed Payment Demand endpoint are
+ * independent destinations. HTTP is the default BRC-170 binding, while an
+ * application can supply a message-box or other registered binding without
+ * changing the signed objects or the recovery-safe payment workflow.
+ */
+export interface LCHAcquisitionTransport {
+  preflightLicense(endpoint: string, request: SignedObject): Promise<void>
+  quote(endpoint: string, request: SignedObject): Promise<SignedObject>
+  preflightDemand(endpoint: string, demand: SignedObject): Promise<void>
+  deliver(endpoint: string, delivery: SignedObject): Promise<SignedObject>
+  complete(endpoint: string, completion: PaymentCompletion): Promise<SignedObject>
+  recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined>
 }
 
 /** A complete non-custodial BRC-170 multipay buyer workflow. */
 export class LCHMultipayBuyer {
   private readonly buyer: LCHBuyer
-  private readonly http: LCHHttpAcquisitionClient
+  private readonly transport: LCHAcquisitionTransport
   private readonly now: () => bigint
   private readonly allowInsecureLocalOrigins: readonly string[]
 
@@ -57,7 +75,7 @@ export class LCHMultipayBuyer {
     options: LCHMultipayBuyerOptions = {}
   ) {
     this.buyer = new LCHBuyer(signer)
-    this.http = new LCHHttpAcquisitionClient(options)
+    this.transport = options.transport ?? new LCHHttpAcquisitionClient(options)
     this.now = options.now ?? (() => BigInt(Math.floor(Date.now() / 1000)))
     this.allowInsecureLocalOrigins = options.endpointPolicy?.allowLocalOrigins ?? []
   }
@@ -79,8 +97,8 @@ export class LCHMultipayBuyer {
     issuer: Uint8Array
   ): Promise<LCHMultipayPlan> {
     const requestId = await validateLicenseRequest(request)
-    await this.http.preflightLicense(endpoint, request)
-    const quote = await this.http.quote(endpoint, request)
+    await this.transport.preflightLicense(endpoint, request)
+    const quote = await this.transport.quote(endpoint, request)
     await validateQuote(quote, request, issuer, undefined, {
       allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
     })
@@ -92,7 +110,7 @@ export class LCHMultipayBuyer {
       })
       equal(demand.body.requestId, requestId, 'Demand Request ID')
       totalSatoshis += uint(demand.body.satoshis, 'Demand amount')
-      await this.http.preflightDemand(memberString(demand.body, 'endpoint'), demand)
+      await this.transport.preflightDemand(memberString(demand.body, 'endpoint'), demand)
     }
     if (totalSatoshis !== uint(quote.body.totalSatoshis, 'Quote total'))
       throw new Error('Quote total does not equal its Payment Demands')
@@ -149,7 +167,7 @@ export class LCHMultipayBuyer {
   }
 
   async deliver(payment: LCHFundedMultipay, item: LCHMultipayDelivery): Promise<SignedObject> {
-    const receipt = await this.http.deliver(item.endpoint, item.delivery)
+    const receipt = await this.transport.deliver(item.endpoint, item.delivery)
     await validatePaymentReceipt(receipt)
     equal(receipt.body.demandId, item.demandId, 'Receipt Demand ID')
     equal(receipt.body.requestId, payment.plan.requestId, 'Receipt Request ID')
@@ -196,7 +214,7 @@ export class LCHMultipayBuyer {
       atomicBeef: payment.atomicBeef,
       receipts: [...receipts]
     }
-    const license = await this.http.complete(payment.plan.endpoint, completion)
+    const license = await this.transport.complete(payment.plan.endpoint, completion)
     await verifySignedObject('license', license, new PublicBRC77Verifier(), payment.plan.issuer)
     equal(license.body.requestId, payment.plan.requestId, 'License Request ID')
     equal(license.body.subject, this.signer.identityKey, 'License subject')
@@ -204,7 +222,7 @@ export class LCHMultipayBuyer {
   }
 
   recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined> {
-    return this.http.recover(endpoint, requestId)
+    return this.transport.recover(endpoint, requestId)
   }
 }
 

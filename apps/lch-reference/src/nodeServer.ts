@@ -71,6 +71,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       status: 'ready',
       walletMode,
       acquisitionEndpoint: lch.acquisitionEndpoint,
+      payeeEndpoints: lch.payeeEndpoints,
       contentAdapter: 'reference-memory'
     })
     return
@@ -79,9 +80,9 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     await publishAsset(request, response)
     return
   }
-  if (request.method === 'POST' && url.pathname === '/api/lch') {
+  if (request.method === 'POST' && isLCHPath(url.pathname)) {
     const body = await requestBytes(request, 16 * 1024 * 1024)
-    const fetchRequest = new Request(new URL('/api/lch', publicBaseUrl), {
+    const fetchRequest = new Request(new URL(url.pathname, publicBaseUrl), {
       method: 'POST',
       headers: requestHeaders(request),
       body: body.slice().buffer
@@ -89,11 +90,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     await sendFetchResponse(response, await lch.http.handle(fetchRequest))
     return
   }
-  if (request.method === 'OPTIONS' && url.pathname === '/api/lch') {
+  if (request.method === 'OPTIONS' && isLCHPath(url.pathname)) {
     await sendFetchResponse(
       response,
       await lch.http.handle(
-        new Request(new URL('/api/lch', publicBaseUrl), {
+        new Request(new URL(url.pathname, publicBaseUrl), {
           method: 'OPTIONS',
           headers: requestHeaders(request)
         })
@@ -110,6 +111,10 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
   response.writeHead(405, { allow: 'GET, HEAD, POST, OPTIONS' }).end()
+}
+
+function isLCHPath(pathname: string): boolean {
+  return pathname === '/api/lch' || pathname.startsWith('/api/lch/payees/')
 }
 
 async function loadWallets(moduleSpecifier: string | undefined): Promise<WalletSet> {

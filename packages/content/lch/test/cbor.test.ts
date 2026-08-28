@@ -68,6 +68,9 @@ describe('deterministic LCH CBOR', () => {
       'CBOR map keys are duplicated or unordered'
     ],
     [Uint8Array.of(0xa1, 0x00, 0x00), 'LCH CBOR map keys must be text'],
+    [Uint8Array.of(0xc0, 0x00), 'Unsupported CBOR major type 6'],
+    [Uint8Array.of(0xf9, 0x00, 0x00), 'Unsupported CBOR simple or floating-point value'],
+    [Uint8Array.of(0x61, 0xff), 'CBOR text is not valid UTF-8'],
     [Uint8Array.of(0x00, 0x00), 'Trailing bytes after CBOR value']
   ])('rejects non-canonical input with its stable protocol error', (bytes, message) => {
     expectCborError(bytes, message)

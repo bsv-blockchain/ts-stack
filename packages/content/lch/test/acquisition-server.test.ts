@@ -117,9 +117,110 @@ describe('typed acquisition messages', () => {
       })
     ).resolves.toBeInstanceOf(Uint8Array)
   })
+
+  it('validates optional term acceptances, critical identifiers, and absolute endpoints', async () => {
+    const buyerSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(46))
+    })
+    const payeeSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(47))
+    })
+    await expect(
+      new LCHBuyer(buyerSigner).createRequest({
+        offerId: bytes(1, 32),
+        assetId: bytes(2, 32),
+        action: 'play',
+        selection: { type: 'all' },
+        acceptedPolicyDigest: bytes(3, 32),
+        acceptedHumanTermDigests: [bytes(4, 32)],
+        createdAt: 1,
+        critical: ['https://example.test/lch/critical-v1']
+      })
+    ).resolves.toBeDefined()
+    await expect(
+      new LCHBuyer(buyerSigner).createRequest({
+        offerId: bytes(1, 32),
+        assetId: bytes(2, 32),
+        action: 'play',
+        selection: { type: 'all' },
+        acceptedPolicyDigest: bytes(3, 32),
+        createdAt: 1,
+        critical: ['https://example.test/repeated', 'https://example.test/repeated']
+      })
+    ).rejects.toMatchObject({ code: 'ERR_LCH_PROFILE_UNSUPPORTED' })
+    await expect(
+      new LCHBuyer(buyerSigner).createRequest({
+        offerId: bytes(1, 32),
+        assetId: bytes(2, 32),
+        action: 'play',
+        selection: { type: 'all' },
+        acceptedPolicyDigest: bytes(3, 32),
+        createdAt: 1,
+        critical: ['not-an-absolute-identifier']
+      })
+    ).rejects.toMatchObject({ code: 'ERR_LCH_PROFILE_UNSUPPORTED' })
+
+    const demand = await new LCHPayee(payeeSigner).createDemand({
+      requestId: bytes(5, 32),
+      offerId: bytes(6, 32),
+      dutyUid: 'urn:lch:duty:endpoint',
+      buyer: buyerSigner.identityKey,
+      endpoint: 'https://payee.example/lch',
+      satoshis: 1,
+      expiresAt: 2_000,
+      recoveryPeriodSeconds: 86_400
+    })
+    const malformedEndpoint = await signObject(
+      'payment-demand',
+      { ...demand.body, endpoint: 'not-an-absolute-url' },
+      payeeSigner
+    )
+    await expect(
+      validatePaymentDemand(malformedEndpoint, undefined, {
+        allowInsecureLocalOrigins: ['https://payee.example']
+      })
+    ).rejects.toMatchObject({ code: 'ERR_LCH_ENDPOINT' })
+  })
 })
 
 describe('wallet-backed payee receiver', () => {
+  it('preflights with the receiver clock and rejects malformed Atomic BEEF', async () => {
+    const buyerSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(48))
+    })
+    const payeeSigner = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(49))
+    })
+    const receiver = new WalletPaymentReceiver({
+      wallet: {
+        getPublicKey: async () => ({ publicKey: new PrivateKey(50).toPublicKey().toString() }),
+        internalizeAction: async () => ({ accepted: true })
+      } as never,
+      signer: payeeSigner
+    })
+    const requestId = bytes(10, 32)
+    const demand = await new LCHPayee(payeeSigner).createDemand({
+      requestId,
+      offerId: bytes(11, 32),
+      dutyUid: 'urn:lch:duty:preflight',
+      buyer: buyerSigner.identityKey,
+      endpoint: 'https://payee.example/lch',
+      satoshis: 1,
+      expiresAt: 4_000_000_000,
+      recoveryPeriodSeconds: 86_400
+    })
+    await expect(receiver.preflight(demand)).resolves.toBeUndefined()
+    const delivery = await new LCHBuyer(buyerSigner).createPaymentDelivery({
+      demandId: await objectId('payment-demand', demand.body),
+      requestId,
+      atomicBeef: bytes(12, 3),
+      outputIndex: 0,
+      derivationPrefix: demand.body.derivationPrefix as Uint8Array,
+      derivationSuffix: bytes(13, 32)
+    })
+    await expect(receiver.receive(demand, delivery)).rejects.toThrow(/could not be parsed/u)
+  })
+
   it('derives, verifies, internalizes, receipts, and idempotently redelivers one output', async () => {
     const buyerSigner = await WalletBRC77Signer.create({
       wallet: new ProtoWallet(new PrivateKey(51)),

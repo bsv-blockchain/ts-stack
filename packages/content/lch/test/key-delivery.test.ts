@@ -9,12 +9,13 @@ describe('BRC-78 CEK delivery', () => {
     const recipient = (await recipientWallet.getPublicKey({ identityKey: true })).publicKey
     const cek = new Uint8Array(32).fill(9)
     const keyId = await keyIdFor(cek)
-    const sender = new WalletBRC78KeyDelivery(senderWallet, length =>
-      new Uint8Array(length).fill(4)
-    )
+    const sender = new WalletBRC78KeyDelivery(senderWallet)
     const receiver = new WalletBRC78KeyDelivery(recipientWallet)
     const payload = await sender.deliver(recipient, keyId, cek)
     expect(payload.slice(0, 4)).toEqual(Uint8Array.of(0x42, 0x42, 0x10, 0x33))
     await expect(receiver.recover(payload)).resolves.toEqual({ keyId, cek })
+    const tampered = payload.slice()
+    tampered[tampered.length - 1] ^= 1
+    await expect(receiver.recover(tampered)).rejects.toMatchObject({ code: 'ERR_LCH_KEY' })
   })
 })

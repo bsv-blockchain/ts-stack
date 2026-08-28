@@ -239,7 +239,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/content/lch.md](../packages/content/lch.md)
 - Source: [packages/content/lch](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch)
-- Release note: Introduces the draft BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed acquisition objects, deterministic-CBOR HTTP client/server bindings, replay-safe direct Payee wallet receipts, an explicit recovery-safe multipay buyer workflow, UHRP and CHIRP content adapters, authority revocation, and whole-placement composition.
+- Release note: Introduces the draft BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed acquisition objects, deterministic-CBOR HTTP client/server bindings, independently routed and replay-safe direct Payee wallet receipts, an injectable acquisition transport, an explicit recovery-safe multipay buyer workflow, UHRP and CHIRP content adapters, authority revocation, and whole-placement composition.
 - Migration: No consumer migration is required; this is the first release of a new additive package. Applications must keep createPayment behind explicit wallet authorization, persist its funded transaction and successful Receipts through the recovery deadline, retry ambiguous delivery with that same transaction, and fail closed on unknown critical profiles. Distributors must retain THIRD_PARTY_NOTICES.md with the package. Draft BRC-170 remains authoritative if the implementation and proposal differ.
 
 CLI entry points: `{"lch":"./dist/cli.js"}`.

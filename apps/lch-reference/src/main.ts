@@ -56,7 +56,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div><b>Issuer service</b><span>LCH, Offer, Quote, License</span></div><i>→</i>
       <div><b>Content host</b><span>verified ciphertext locator</span></div>
       <div><b>Buyer wallet</b><span>one BRC-100 action</span></div><i>→</i>
-      <div><b>Payee wallets</b><span>7 sat + 5 sat internalized directly</span></div><i>→</i>
+      <div><b>Payee endpoints</b><span>independent Delivery + wallet receipt</span></div><i>→</i>
       <div><b>Player</b><span>BRC-78 keys + authenticated media</span></div>
     </section>
 
@@ -77,9 +77,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div>
         <p class="step">2 · PLAYER + WALLET</p><h2 id="asset-title">Verified acquisition</h2>
         <p id="asset-copy">Publish a fixture to enable preflight.</p>
-        <div class="price"><span>SIGNED QUOTE</span><strong id="quote-total">12 satoshis</strong><code id="quote-split">7 + 5 · two payee wallets · reordered outputs accepted</code></div>
+        <div class="price"><span>SIGNED QUOTE</span><strong id="quote-total">12 satoshis</strong><code id="quote-split">7 + 5 · two signed delivery routes · one transaction</code></div>
         <button id="acquire-button" disabled>Preflight &amp; quote</button>
-        <p class="fine">After confirmation, each payee validates and internalizes its own BRC-29 output. The issuer releases BRC-78 key grants only after both signed receipts arrive.</p>
+        <p class="fine">After confirmation, the retained transaction fans out to each signed Payee endpoint. Each Payee validates and internalizes its own BRC-29 output. The issuer releases BRC-78 key grants only after both signed receipts arrive.</p>
         <div id="settlement-receipt" class="receipt settlement"><div class="empty">No wallet transaction or License</div></div>
       </div>
     </section>
@@ -186,7 +186,7 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
   document.querySelector('#quote-total')!.textContent =
     `${recordingPrice + compositionPrice} satoshis`
   document.querySelector('#quote-split')!.textContent =
-    `${recordingPrice} + ${compositionPrice} · two payee wallets · reordered outputs accepted`
+    `${recordingPrice} + ${compositionPrice} · two signed delivery routes · one transaction`
   document.querySelector('#publish-receipt')!.innerHTML = receiptRows([
     ['ASSET ID', short(toHex(published.assetId))],
     ['OFFER ID', short(toHex(published.offerId))],
@@ -199,6 +199,7 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
     ],
     ['CONTENT ADAPTER', 'detached + digest verified'],
     ['PAYMENT SPLIT', `${recordingPrice} / ${compositionPrice} sat`],
+    ['PAYEE ROUTES', server.payeeEndpoints.map(item => endpointLabel(item.endpoint)).join(' + ')],
     ['USAGE PROFILE', 'fixed-render-v1']
   ])
   document.querySelector('#media-stage')!.innerHTML =
@@ -241,7 +242,9 @@ async function acquire(): Promise<void> {
     document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
       ['TRANSACTION', short(result.transactionId)],
       ['RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`],
+      ['RECORDING ENDPOINT', endpointLabel(server.payeeEndpoints[0]!.endpoint)],
       ['COMPOSITION WALLET', `${compositionWallet.receivedSatoshis} sat internalized`],
+      ['COMPOSITION ENDPOINT', endpointLabel(server.payeeEndpoints[1]!.endpoint)],
       ['PAYEE RECEIPTS', String(result.receipts.length)],
       ['LICENSE', short(toHex(result.licenseId))],
       ['RECOVERY', result.recovered ? 'verified' : 'not verified']
@@ -412,6 +415,11 @@ function fragment(value: string): string {
 
 function short(value: string): string {
   return `${value.slice(0, 12)}…${value.slice(-8)}`
+}
+
+function endpointLabel(value: string): string {
+  const url = new URL(value)
+  return `${url.host}${url.pathname}`
 }
 
 function status(message: string): void {

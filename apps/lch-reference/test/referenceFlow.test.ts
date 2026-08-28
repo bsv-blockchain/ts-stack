@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LCHHttpAcquisitionClient } from '@bsv/lch'
 import { createFixtureWallet } from '../src/fixtureWallet.js'
 import { ReferenceLCHClient } from '../src/referenceClient.js'
 import { ReferenceLCHServer } from '../src/referenceServer.js'
@@ -45,6 +46,18 @@ describe('reference creator, server, wallet, and player flow', () => {
 
     const plan = await client.prepare(published.lch)
     expect(plan.totalSatoshis).toBe(12n)
+    expect(plan.demands.map(demand => demand.body.endpoint)).toEqual(
+      server.payeeEndpoints.map(item => item.endpoint)
+    )
+    const http = new LCHHttpAcquisitionClient({
+      endpointPolicy: {
+        allowLocalOrigins: [baseUrl],
+        connect: async (url, init) => server.http.handle(new Request(url, init))
+      }
+    })
+    await expect(
+      http.preflightDemand(server.payeeEndpoints[1]!.endpoint, plan.demands[0]!)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_DELIVERY' })
     expect(recordingPayee.receivedSatoshis).toBe(0)
     expect(compositionPayee.receivedSatoshis).toBe(0)
 

@@ -42,6 +42,8 @@ The typed client-side builders are `LCHBuyer`, `LCHMultipayBuyer`, `LCHHttpAcqui
 
 `LCHMultipayBuyer` splits the irreversible and retryable stages deliberately. `createPayment` returns the Atomic BEEF and every signed Delivery immediately after `createAction`; persist that value before network delivery. Call `deliver` for each Payee and retain each Receipt, then call `complete`. After an ambiguous failure, retry those methods with the same funded payment—never call `createPayment` again for that Quote.
 
+The Offer endpoint coordinates Quote, completion, and License recovery. Each Payment Demand carries its own Payee-selected endpoint, and `LCHMultipayBuyer` preflights and delivers to those destinations independently. They can be different origins, processes, operators, and wallet substrates; the issuer never becomes a payment proxy merely because it assembled the Quote. `LCHAcquisitionTransport` is the injectable client boundary. Its default is `LCHHttpAcquisitionClient`; a message-box adapter can implement the same methods while preserving the signed objects, per-Demand routing, response authentication, persistence-before-fan-out rule, and idempotent recovery. Native asynchronous wire semantics remain profile work rather than hidden behavior in the core objects.
+
 The receiving side uses `LCHPayee`, `WalletPaymentReceiver`, and `LCHHttpServer`. `WalletPaymentReceiver` verifies the buyer signature, Demand binding, recovery deadline, exact amount, and BRC-29-derived locking script. It then invokes the receiving Payee wallet directly:
 
 ```ts
@@ -56,7 +58,7 @@ const receipt = await receiver.receive(signedDemand, signedDelivery)
 
 The wallet call uses BRC-100 `internalizeAction` with the `wallet payment` protocol and exact BRC-29 remittance. The issuer has no implicit custody role: value goes to each identity named in the Payment Demands. The `PaymentLedger` interface makes redelivery idempotent and rejects a conflicting transaction for an already claimed Demand; horizontally scaled servers must back it with an atomic durable store.
 
-`LCHHttpServer` is a standard Fetch `Request`/`Response` handler, so it can be mounted in Node, edge, serverless, or test transports without framework coupling. Its deterministic-CBOR message types cover License Request preflight, quote, Payment Demand preflight, Payment Delivery, Payment Completion, and license recovery.
+`LCHHttpServer` is a standard Fetch `Request`/`Response` handler, so issuer and Payee handlers can be mounted independently in Node, edge, serverless, message-box gateways, or tests without framework coupling. Its deterministic-CBOR message types cover License Request preflight, quote, Payment Demand preflight, Payment Delivery, Payment Completion, and license recovery.
 
 The executable creator/server/player example, connected-wallet module contract, CHIRP/UHRP storage substitutions, container build, and durable deployment topology are in [`apps/lch-reference`](../../../apps/lch-reference/README.md).
 
