@@ -15,6 +15,10 @@ import {
   LCHMultipayBuyer,
   LCHPayee,
   LCHQuoteIssuer,
+  LCHSettlementService,
+  LCH_SETTLEMENT_PROFILES,
+  LCH_TRANSACTION_EVIDENCE_POLICIES,
+  WalletAuthorizedOutputPayee,
   WalletBRC77Signer,
   objectId,
   signObject,
@@ -328,6 +332,164 @@ describe('recovery-safe multipay buyer', () => {
     await expect(buyer.complete(funded, [wrongRequestReceipt])).rejects.toThrow(
       /Receipt Request ID does not match/u
     )
+  })
+
+  it('falls back to authorized-output evidence when a Payee goes offline', async () => {
+    const buyerSigner = await walletSigner(151)
+    const payeeWallet = new ProtoWallet(new PrivateKey(152))
+    const payeeSigner = await WalletBRC77Signer.create({ wallet: payeeWallet })
+    const providerSigner = await walletSigner(153)
+    const issuerSigner = await walletSigner(154)
+    const offerId = bytes(1, 32)
+    const assetId = bytes(2, 32)
+    const request = await new LCHBuyer(buyerSigner).createRequest({
+      offerId,
+      assetId,
+      action: 'play',
+      selection: { type: 'all' },
+      acceptedPolicyDigest: bytes(3, 32),
+      createdAt: 1_000
+    })
+    const requestId = await objectId('license-request', request.body)
+    const demand = await new LCHPayee(payeeSigner).createDemand({
+      requestId,
+      offerId,
+      dutyUid: 'urn:lch:duty:offline-drummer',
+      buyer: buyerSigner.identityKey,
+      endpoint: 'https://drummer.test/payments',
+      satoshis: 7,
+      expiresAt: 2_000,
+      recoveryPeriodSeconds: 86_400,
+      settlementProfile: LCH_SETTLEMENT_PROFILES.authorizedOutput
+    })
+    const demandId = await objectId('payment-demand', demand.body)
+    const authorization = await new WalletAuthorizedOutputPayee({
+      wallet: payeeWallet,
+      signer: payeeSigner,
+      now: () => 1_000n,
+      random: length => bytes(4, length)
+    }).authorize(demand, {
+      evidenceProvider: providerSigner.identityKey,
+      evidenceEndpoint: 'https://processor.test/evidence',
+      deliveryProvider: providerSigner.identityKey,
+      deliveryEndpoint: 'https://availability.test/store',
+      retrievalEndpoint: 'https://availability.test/retrieve'
+    })
+    const transaction = new Transaction(
+      1,
+      [],
+      [
+        {
+          satoshis: 7,
+          lockingScript: LockingScript.fromHex(
+            toHex(authorization.body.lockingScript as Uint8Array)
+          )
+        }
+      ]
+    )
+    const atomicBeef = Uint8Array.from(transaction.toAtomicBEEF(true))
+    const delivery = await new LCHBuyer(buyerSigner).createPaymentDelivery({
+      demandId,
+      requestId,
+      atomicBeef,
+      outputIndex: 0,
+      derivationPrefix: authorization.body.derivationPrefix as Uint8Array,
+      derivationSuffix: authorization.body.derivationSuffix as Uint8Array
+    })
+    const authorizationId = await objectId('payment-authorization', authorization.body)
+    const service = new LCHSettlementService(providerSigner)
+    const acknowledgement = await service.createDeliveryAcknowledgement({
+      authorizationId,
+      deliveryId: await objectId('payment-delivery', delivery.body),
+      demandId,
+      requestId,
+      payee: payeeSigner.identityKey,
+      storedAt: 1_050,
+      availableUntil: 88_400,
+      retrievalEndpoint: 'https://availability.test/retrieve'
+    })
+    const evidence = await service.createTransactionEvidence({
+      authorizationId,
+      txid: Uint8Array.from(transaction.id('array')),
+      state: 'accepted',
+      policy: LCH_TRANSACTION_EVIDENCE_POLICIES.signedProcessorAcceptance,
+      observedAt: 1_050
+    })
+    const quote = await signObject('quote', { version: 1 }, issuerSigner)
+    let payeeOnline = false
+    const transport: LCHAcquisitionTransport = {
+      preflightLicense: async () => undefined,
+      quote: async () => quote,
+      preflightDemand: async () => demand,
+      authorizePayment: async () => authorization,
+      deliver: async () => {
+        if (!payeeOnline) throw new Error('Payee is offline')
+        return new LCHPayee(payeeSigner).createReceipt({
+          demandId,
+          requestId,
+          txid: Uint8Array.from(transaction.id('array')),
+          outputIndex: 0,
+          satoshis: 7,
+          receivedAt: 1_050
+        })
+      },
+      storeDelivery: async (endpoint, storedAuthorization, storedDelivery) => {
+        expect(endpoint).toBe('https://availability.test/store')
+        expect(storedAuthorization).toEqual(authorization)
+        expect(storedDelivery).toEqual(delivery)
+        return acknowledgement
+      },
+      attestTransaction: async (endpoint, attestedAuthorization, beef) => {
+        expect(endpoint).toBe('https://processor.test/evidence')
+        expect(attestedAuthorization).toEqual(authorization)
+        expect(beef).toEqual(atomicBeef)
+        return evidence
+      },
+      complete: async (_endpoint, completion) => {
+        expect(completion.receipts).toHaveLength(0)
+        expect(completion.authorizedOutputs).toHaveLength(1)
+        return signObject(
+          'license',
+          { version: 1, requestId, subject: buyerSigner.identityKey },
+          issuerSigner
+        )
+      },
+      recover: async () => undefined
+    }
+    const item = {
+      demandId,
+      payee: payeeSigner.identityKey,
+      endpoint: 'https://drummer.test/payments',
+      delivery
+    }
+    const funded = {
+      plan: {
+        request,
+        requestId,
+        quote,
+        demands: [demand],
+        readiness: [],
+        authorizations: [authorization],
+        issuer: issuerSigner.identityKey,
+        endpoint: 'https://issuer.test/licenses',
+        totalSatoshis: 7n,
+        expiresAt: 2_000n,
+        recoveryUntil: 88_400n
+      },
+      atomicBeef,
+      transactionState: 'finalized' as const,
+      deliveries: [item]
+    }
+    const buyer = new LCHMultipayBuyer(actionWallet(155).wallet, buyerSigner, { transport })
+    const offlineSettlement = await buyer.settleDelivery(funded, item)
+    expect(offlineSettlement.type).toBe('authorized-output')
+    if (offlineSettlement.type !== 'authorized-output') throw new Error('unexpected settlement')
+    await expect(buyer.complete(funded, [], [offlineSettlement.evidence])).resolves.toMatchObject({
+      body: { requestId, subject: buyerSigner.identityKey }
+    })
+
+    payeeOnline = true
+    await expect(buyer.settleDelivery(funded, item)).resolves.toMatchObject({ type: 'receipt' })
   })
 })
 
