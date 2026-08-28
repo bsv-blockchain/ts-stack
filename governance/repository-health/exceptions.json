@@ -49,7 +49,7 @@
         ".github/dependabot.yml"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-27",
       "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
@@ -132,7 +132,7 @@
       "category": "override",
       "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
       "owner": "ts-stack-maintainers",
-      "reason": "Stryker 9.6.1 is current but its current typed-rest-client 2.3.1 dependency pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 is the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "reason": "The workspace uses Stryker 9.6.1, and the current Stryker 10.0.0 release still depends on typed-rest-client ~2.3.0. typed-rest-client 2.3.1 pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 remains the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
@@ -140,7 +140,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-27",
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {
