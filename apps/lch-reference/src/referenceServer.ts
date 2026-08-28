@@ -213,19 +213,15 @@ export class ReferenceLCHServer {
     const retrievalHttp = new LCHHttpServer({
       handlers: { retrieveDelivery: request => this.retrieveDelivery(request) }
     })
+    const endpointHandlers = new Map(payeeHttp)
+    endpointHandlers.set(this.acquisitionEndpoint, issuerHttp)
+    endpointHandlers.set(this.evidenceEndpoint, evidenceHttp)
+    endpointHandlers.set(this.deliveryEndpoint, deliveryHttp)
+    endpointHandlers.set(this.retrievalEndpoint, retrievalHttp)
     this.http = {
       handle: request => {
         const endpoint = requestEndpoint(request.url)
-        const handler =
-          endpoint === this.acquisitionEndpoint
-            ? issuerHttp
-            : endpoint === this.evidenceEndpoint
-              ? evidenceHttp
-              : endpoint === this.deliveryEndpoint
-                ? deliveryHttp
-                : endpoint === this.retrievalEndpoint
-                  ? retrievalHttp
-                  : payeeHttp.get(endpoint)
+        const handler = endpointHandlers.get(endpoint)
         return handler?.handle(request) ?? Promise.resolve(new Response(null, { status: 404 }))
       }
     }
@@ -687,54 +683,20 @@ export class ReferenceLCHServer {
     if (quoteRecord === undefined) throw new Error('Quote is unknown')
     equalObject(completion.quote, quoteRecord.quote, 'Quote')
     const transaction = Transaction.fromAtomicBEEF(completion.atomicBeef as AtomicBEEF)
-    const txid = transaction.id('hex')
-    const receipts = new Map<string, SignedObject>()
-    const authorizedOutputs = new Map<string, AuthorizedOutputEvidence>()
     const outputIndices = new Set<number>()
-    for (const receipt of completion.receipts) {
-      await validatePaymentReceipt(receipt)
-      const demandId = bytes(receipt.body.demandId, 32, 'Receipt Demand ID')
-      const demandIdHex = toHex(demandId)
-      const runtime = quoteRecord.demands.get(demandIdHex)
-      if (runtime === undefined) throw new Error('Receipt is not required by the Quote')
-      equal(receipt.body.requestId, requestId, 'Receipt Request ID')
-      equal(receipt.body.payee, runtime.demand.body.payee, 'Receipt Payee')
-      if (toHex(bytes(receipt.body.txid, 32, 'Receipt transaction ID')) !== txid)
-        throw new Error('Receipt transaction does not match Atomic BEEF')
-      const outputIndex = Number(receipt.body.outputIndex)
-      if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndices.has(outputIndex))
-        throw new Error('Receipt output index is invalid or duplicated')
-      const output = transaction.outputs[outputIndex]
-      if (
-        output?.satoshis === undefined ||
-        BigInt(output.satoshis) !== BigInt(runtime.payee.satoshis) ||
-        BigInt(receipt.body.satoshis as number | bigint) !== BigInt(runtime.payee.satoshis)
-      )
-        throw new Error('Receipt amount does not match the Demand')
-      outputIndices.add(outputIndex)
-      if (receipts.has(demandIdHex)) throw new Error('Payment Receipt is duplicated')
-      receipts.set(demandIdHex, receipt)
-    }
-    for (const bundle of completion.authorizedOutputs ?? []) {
-      const demandId = bytes(bundle.authorization.body.demandId, 32, 'Authorization Demand ID')
-      const demandIdHex = toHex(demandId)
-      const runtime = quoteRecord.demands.get(demandIdHex)
-      if (runtime === undefined) throw new Error('Authorized output is not required by the Quote')
-      if (receipts.has(demandIdHex) || authorizedOutputs.has(demandIdHex))
-        throw new Error('Payment Demand has more than one settlement proof')
-      await validateAuthorizedOutputEvidence(
-        bundle,
-        runtime.demand,
-        completion.atomicBeef,
-        undefined,
-        this.validationOptions()
-      )
-      const outputIndex = Number(bundle.delivery.body.outputIndex)
-      if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndices.has(outputIndex))
-        throw new Error('Authorized output index is invalid or duplicated')
-      outputIndices.add(outputIndex)
-      authorizedOutputs.set(demandIdHex, bundle)
-    }
+    const receipts = await this.validateReceiptProofs(
+      completion,
+      quoteRecord,
+      transaction,
+      requestId,
+      outputIndices
+    )
+    const authorizedOutputs = await this.validateAuthorizedOutputProofs(
+      completion,
+      quoteRecord,
+      receipts,
+      outputIndices
+    )
     if (receipts.size + authorizedOutputs.size !== quoteRecord.demands.size)
       throw new Error('A required settlement proof is missing')
     const existing = this.licenses.get(key)
@@ -809,6 +771,70 @@ export class ReferenceLCHServer {
     })
     this.licenses.set(key, license)
     return license
+  }
+
+  private async validateReceiptProofs(
+    completion: PaymentCompletion,
+    quoteRecord: QuoteRecord,
+    transaction: Transaction,
+    requestId: Uint8Array,
+    outputIndices: Set<number>
+  ): Promise<Map<string, SignedObject>> {
+    const receipts = new Map<string, SignedObject>()
+    const txid = transaction.id('hex')
+    for (const receipt of completion.receipts) {
+      await validatePaymentReceipt(receipt)
+      const demandId = bytes(receipt.body.demandId, 32, 'Receipt Demand ID')
+      const demandIdHex = toHex(demandId)
+      const runtime = quoteRecord.demands.get(demandIdHex)
+      if (runtime === undefined) throw new Error('Receipt is not required by the Quote')
+      equal(receipt.body.requestId, requestId, 'Receipt Request ID')
+      equal(receipt.body.payee, runtime.demand.body.payee, 'Receipt Payee')
+      if (toHex(bytes(receipt.body.txid, 32, 'Receipt transaction ID')) !== txid)
+        throw new Error('Receipt transaction does not match Atomic BEEF')
+      const outputIndex = Number(receipt.body.outputIndex)
+      uniqueOutputIndex(outputIndex, outputIndices, 'Receipt')
+      const output = transaction.outputs[outputIndex]
+      if (
+        output?.satoshis === undefined ||
+        BigInt(output.satoshis) !== BigInt(runtime.payee.satoshis) ||
+        BigInt(receipt.body.satoshis as number | bigint) !== BigInt(runtime.payee.satoshis)
+      )
+        throw new Error('Receipt amount does not match the Demand')
+      outputIndices.add(outputIndex)
+      if (receipts.has(demandIdHex)) throw new Error('Payment Receipt is duplicated')
+      receipts.set(demandIdHex, receipt)
+    }
+    return receipts
+  }
+
+  private async validateAuthorizedOutputProofs(
+    completion: PaymentCompletion,
+    quoteRecord: QuoteRecord,
+    receipts: ReadonlyMap<string, SignedObject>,
+    outputIndices: Set<number>
+  ): Promise<Map<string, AuthorizedOutputEvidence>> {
+    const authorizedOutputs = new Map<string, AuthorizedOutputEvidence>()
+    for (const bundle of completion.authorizedOutputs ?? []) {
+      const demandId = bytes(bundle.authorization.body.demandId, 32, 'Authorization Demand ID')
+      const demandIdHex = toHex(demandId)
+      const runtime = quoteRecord.demands.get(demandIdHex)
+      if (runtime === undefined) throw new Error('Authorized output is not required by the Quote')
+      if (receipts.has(demandIdHex) || authorizedOutputs.has(demandIdHex))
+        throw new Error('Payment Demand has more than one settlement proof')
+      await validateAuthorizedOutputEvidence(
+        bundle,
+        runtime.demand,
+        completion.atomicBeef,
+        undefined,
+        this.validationOptions()
+      )
+      const outputIndex = Number(bundle.delivery.body.outputIndex)
+      uniqueOutputIndex(outputIndex, outputIndices, 'Authorized output')
+      outputIndices.add(outputIndex)
+      authorizedOutputs.set(demandIdHex, bundle)
+    }
+    return authorizedOutputs
   }
 
   async recover(requestId: Uint8Array): Promise<SignedObject | undefined> {
@@ -915,6 +941,11 @@ function equalObject(value: SignedObject, expected: SignedObject, name: string):
     toHex(encodeDeterministicCbor(expected as unknown as LCHValue))
   )
     throw new Error(`${name} does not match`)
+}
+
+function uniqueOutputIndex(value: number, used: ReadonlySet<number>, name: string): void {
+  if (!Number.isSafeInteger(value) || value < 0 || used.has(value))
+    throw new Error(`${name} index is invalid or duplicated`)
 }
 
 function hex(value: string): Uint8Array {

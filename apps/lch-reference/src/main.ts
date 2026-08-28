@@ -15,7 +15,11 @@ import {
   type EditorialPlacement
 } from './demo.js'
 import { createFixtureWallet } from './fixtureWallet.js'
-import { ReferenceLCHClient, type ReferenceAcquisitionPlan } from './referenceClient.js'
+import {
+  ReferenceLCHClient,
+  type ReferenceAcquisitionPlan,
+  type ReferenceAcquisitionResult
+} from './referenceClient.js'
 import { ReferenceLCHServer } from './referenceServer.js'
 import './style.css'
 
@@ -236,108 +240,117 @@ async function acquire(): Promise<void> {
   acquireButton.disabled = true
   try {
     if (pendingPlan === undefined) {
-      acquireButton.textContent = 'Validating Offer, Quote & Demands…'
-      pendingPlan = await client.prepare(current.lchBytes)
-      acquireButton.textContent = `Confirm ${pendingPlan.totalSatoshis} satoshis in wallet`
-      acquireButton.disabled = false
-      document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
-        ['SIGNED READINESS', `${pendingPlan.readiness.length} / ${pendingPlan.demands.length}`],
-        [
-          'SIGNED DESTINATIONS',
-          `${pendingPlan.authorizations.length} authorized-output / ${pendingPlan.demands.length} total`
-        ],
-        [
-          'FALLBACK PROVIDERS',
-          pendingPlan.authorizations.length === 0
-            ? 'none selected'
-            : pendingPlan.authorizations
-                .map(
-                  item =>
-                    `${endpointLabel(String(item.body.evidenceEndpoint))} + ${endpointLabel(String(item.body.deliveryEndpoint))}`
-                )
-                .join(', ')
-        ],
-        ['TRANSACTION', 'not created'],
-        ['NEXT STEP', 'explicit wallet confirmation']
-      ])
-      status('signed readiness passed · no transaction created · confirmation required')
+      await prepareAcquisition(current)
       return
     }
-    const plan = pendingPlan
-    acquireButton.textContent = 'Creating wallet transaction…'
-    if (offlineRecording.checked) server.setPayeeOfflineAfterNextReadiness('recording controller')
-    const result = await client.acquire(plan)
-    pendingPlan = undefined
-    currentLicenseId = result.licenseId
-    const plaintext = result.plaintext
-    if (playerUrl !== undefined) URL.revokeObjectURL(playerUrl)
-    playerUrl = URL.createObjectURL(
-      new Blob([plaintext.slice().buffer], { type: current.mediaType })
-    )
-    const element = current.mediaType.startsWith('video/') ? 'video' : 'audio'
-    document.querySelector('#media-stage')!.innerHTML =
-      `<${element} controls src="${playerUrl}"></${element}><div class="verified">authenticated segments · signed license</div>`
-    acquireButton.textContent = 'Licensed asset ready'
-    checksButton.disabled = false
-    editButtons.forEach(button => (button.disabled = false))
-    recoveryButton.disabled = result.authorizedOutputs.length === 0
-    const receiptState =
-      buyerWallet === fixtureBuyerWallet
-        ? `${recordingWallet.receivedSatoshis} sat recording + ${compositionWallet.receivedSatoshis} sat composition`
-        : `${result.receipts.length} signed payee receipts`
-    document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
-      ['TRANSACTION', short(result.transactionId)],
-      ['TRANSACTION EVIDENCE', result.transactionState],
-      ['RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`],
-      ['RECORDING ENDPOINT', endpointLabel(server.payeeEndpoints[0]!.endpoint)],
-      ['COMPOSITION WALLET', `${compositionWallet.receivedSatoshis} sat internalized`],
-      ['COMPOSITION ENDPOINT', endpointLabel(server.payeeEndpoints[1]!.endpoint)],
-      ['PAYEE RECEIPTS', String(result.receipts.length)],
-      ['AUTHORIZED OUTPUT PROOFS', String(result.authorizedOutputs.length)],
-      [
-        'DELIVERY AVAILABILITY',
-        result.authorizedOutputs.length === 0 ? 'not used' : 'signed through recovery deadline'
-      ],
-      [
-        'LATE PAYEE RECOVERY',
-        result.authorizedOutputs.length === 0 ? 'not needed' : 'stored Delivery available'
-      ],
-      ['LICENSE', short(toHex(result.licenseId))],
-      ['RECOVERY', result.recovered ? 'verified' : 'not verified']
-    ])
-    status(
-      `transaction ${short(result.transactionId)} · ${receiptState} · license recovery verified`
-    )
-    const settlementCard = document.querySelector<HTMLElement>(
-      `[data-profile="${LCH_SETTLEMENT_PROFILES.authorizedOutput}"]`
-    )!
-    settlementCard.classList.add('passed')
-    settlementCard.querySelector('span')!.textContent = 'pass'
-    settlementCard.querySelector('ul')!.innerHTML = result.authorizedOutputs.length
-      ? '<li>Payee offline after signed readiness</li><li>exact output independently verified</li><li>accepted transaction + durable Delivery attested</li><li>License issued before late wallet internalization</li>'
-      : '<li>online Payee Receipt remains valid</li><li>fallback was not needed</li>'
-    await runChecks()
+    await completeAcquisition(current, pendingPlan)
   } catch (error) {
-    const pending = client.pendingPayment()
-    const requiresRecovery = pending !== undefined
-    if (!requiresRecovery) pendingPlan = undefined
-    acquireButton.textContent = requiresRecovery
-      ? 'Retry delivery & License recovery'
-      : 'Preflight & quote'
-    acquireButton.disabled = false
-    if (pending !== undefined)
-      document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
-        ['TRANSACTION', short(pending.transactionId)],
-        ['TRANSACTION STATE', `${pending.transactionState} · broadcast not established`],
-        ['SETTLEMENT', pending.settlementState],
-        [
-          'SETTLEMENT PROOFS',
-          `${pending.receipts + pending.authorizedOutputs} / ${pending.requiredProofs}`
-        ],
-        ['RECOVERY UNTIL', new Date(Number(pending.recoveryUntil) * 1_000).toISOString()]
-      ])
-    status(error instanceof Error ? error.message : 'acquisition failed')
+    renderAcquisitionError(error)
   }
+}
+
+async function prepareAcquisition(asset: DemoAsset): Promise<void> {
+  acquireButton.textContent = 'Validating Offer, Quote & Demands…'
+  pendingPlan = await client.prepare(asset.lchBytes)
+  acquireButton.textContent = `Confirm ${pendingPlan.totalSatoshis} satoshis in wallet`
+  acquireButton.disabled = false
+  const providers = pendingPlan.authorizations.map(
+    item =>
+      `${endpointLabel(String(item.body.evidenceEndpoint))} + ${endpointLabel(String(item.body.deliveryEndpoint))}`
+  )
+  document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+    ['SIGNED READINESS', `${pendingPlan.readiness.length} / ${pendingPlan.demands.length}`],
+    [
+      'SIGNED DESTINATIONS',
+      `${pendingPlan.authorizations.length} authorized-output / ${pendingPlan.demands.length} total`
+    ],
+    ['FALLBACK PROVIDERS', providers.length === 0 ? 'none selected' : providers.join(', ')],
+    ['TRANSACTION', 'not created'],
+    ['NEXT STEP', 'explicit wallet confirmation']
+  ])
+  status('signed readiness passed · no transaction created · confirmation required')
+}
+
+async function completeAcquisition(
+  asset: DemoAsset,
+  plan: ReferenceAcquisitionPlan
+): Promise<void> {
+  acquireButton.textContent = 'Creating wallet transaction…'
+  if (offlineRecording.checked) server.setPayeeOfflineAfterNextReadiness('recording controller')
+  const result = await client.acquire(plan)
+  pendingPlan = undefined
+  currentLicenseId = result.licenseId
+  renderLicensedAsset(asset, result)
+  await runChecks()
+}
+
+function renderLicensedAsset(asset: DemoAsset, result: ReferenceAcquisitionResult): void {
+  if (playerUrl !== undefined) URL.revokeObjectURL(playerUrl)
+  playerUrl = URL.createObjectURL(
+    new Blob([result.plaintext.slice().buffer], { type: asset.mediaType })
+  )
+  const element = asset.mediaType.startsWith('video/') ? 'video' : 'audio'
+  document.querySelector('#media-stage')!.innerHTML =
+    `<${element} controls src="${playerUrl}"></${element}><div class="verified">authenticated segments · signed license</div>`
+  acquireButton.textContent = 'Licensed asset ready'
+  checksButton.disabled = false
+  editButtons.forEach(button => (button.disabled = false))
+  recoveryButton.disabled = result.authorizedOutputs.length === 0
+  const receiptState =
+    buyerWallet === fixtureBuyerWallet
+      ? `${recordingWallet.receivedSatoshis} sat recording + ${compositionWallet.receivedSatoshis} sat composition`
+      : `${result.receipts.length} signed payee receipts`
+  document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+    ['TRANSACTION', short(result.transactionId)],
+    ['TRANSACTION EVIDENCE', result.transactionState],
+    ['RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`],
+    ['RECORDING ENDPOINT', endpointLabel(server.payeeEndpoints[0]!.endpoint)],
+    ['COMPOSITION WALLET', `${compositionWallet.receivedSatoshis} sat internalized`],
+    ['COMPOSITION ENDPOINT', endpointLabel(server.payeeEndpoints[1]!.endpoint)],
+    ['PAYEE RECEIPTS', String(result.receipts.length)],
+    ['AUTHORIZED OUTPUT PROOFS', String(result.authorizedOutputs.length)],
+    [
+      'DELIVERY AVAILABILITY',
+      result.authorizedOutputs.length === 0 ? 'not used' : 'signed through recovery deadline'
+    ],
+    [
+      'LATE PAYEE RECOVERY',
+      result.authorizedOutputs.length === 0 ? 'not needed' : 'stored Delivery available'
+    ],
+    ['LICENSE', short(toHex(result.licenseId))],
+    ['RECOVERY', result.recovered ? 'verified' : 'not verified']
+  ])
+  status(`transaction ${short(result.transactionId)} · ${receiptState} · license recovery verified`)
+  const settlementCard = document.querySelector<HTMLElement>(
+    `[data-profile="${LCH_SETTLEMENT_PROFILES.authorizedOutput}"]`
+  )!
+  settlementCard.classList.add('passed')
+  settlementCard.querySelector('span')!.textContent = 'pass'
+  settlementCard.querySelector('ul')!.innerHTML = result.authorizedOutputs.length
+    ? '<li>Payee offline after signed readiness</li><li>exact output independently verified</li><li>accepted transaction + durable Delivery attested</li><li>License issued before late wallet internalization</li>'
+    : '<li>online Payee Receipt remains valid</li><li>fallback was not needed</li>'
+}
+
+function renderAcquisitionError(error: unknown): void {
+  const pending = client.pendingPayment()
+  const requiresRecovery = pending !== undefined
+  if (!requiresRecovery) pendingPlan = undefined
+  acquireButton.textContent = requiresRecovery
+    ? 'Retry delivery & License recovery'
+    : 'Preflight & quote'
+  acquireButton.disabled = false
+  if (pending !== undefined)
+    document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
+      ['TRANSACTION', short(pending.transactionId)],
+      ['TRANSACTION STATE', `${pending.transactionState} · broadcast not established`],
+      ['SETTLEMENT', pending.settlementState],
+      [
+        'SETTLEMENT PROOFS',
+        `${pending.receipts + pending.authorizedOutputs} / ${pending.requiredProofs}`
+      ],
+      ['RECOVERY UNTIL', new Date(Number(pending.recoveryUntil) * 1_000).toISOString()]
+    ])
+  status(error instanceof Error ? error.message : 'acquisition failed')
 }
 
 async function recoverRecordingPayment(): Promise<void> {
