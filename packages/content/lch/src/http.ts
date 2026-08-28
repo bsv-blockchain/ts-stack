@@ -3,6 +3,12 @@ import { LCH_LIMITS } from './constants.js'
 import { fetchLCH, type EndpointPolicy } from './endpoints.js'
 import { LCHError, lchAssert, type LCHErrorCode } from './errors.js'
 import type { PaymentCompletion } from './acquisition.js'
+import type {
+  AuthorizedOutputEvidence,
+  PaymentDeliveryStoreRequest,
+  StoredPaymentDelivery,
+  TransactionEvidenceRequest
+} from './settlement.js'
 import type { LCHValue, SignedObject } from './types.js'
 
 export const LCH_CBOR_MEDIA_TYPE = 'application/vnd.bsv.lch+cbor'
@@ -13,8 +19,16 @@ export type LCHHttpMessageType =
   | 'quote'
   | 'payment-demand'
   | 'payment-readiness'
+  | 'payment-authorization-request'
+  | 'payment-authorization'
   | 'payment-delivery'
   | 'payment-receipt'
+  | 'payment-delivery-store'
+  | 'payment-delivery-retrieval'
+  | 'payment-delivery-stored'
+  | 'payment-delivery-ack'
+  | 'transaction-evidence-request'
+  | 'transaction-evidence'
   | 'payment-completion'
   | 'license'
   | 'license-recovery'
@@ -24,7 +38,11 @@ export interface LCHHttpHandlers {
   preflightLicense?(request: SignedObject): Promise<void>
   quote?(request: SignedObject): Promise<SignedObject>
   preflightDemand?(demand: SignedObject): Promise<SignedObject>
+  authorizePayment?(demand: SignedObject): Promise<SignedObject>
   paymentDelivery?(delivery: SignedObject): Promise<SignedObject>
+  storeDelivery?(request: PaymentDeliveryStoreRequest): Promise<SignedObject>
+  retrieveDelivery?(request: SignedObject): Promise<StoredPaymentDelivery | undefined>
+  attestTransaction?(request: TransactionEvidenceRequest): Promise<SignedObject>
   complete?(completion: PaymentCompletion): Promise<SignedObject>
   recover?(requestId: Uint8Array): Promise<SignedObject | undefined>
 }
@@ -88,9 +106,45 @@ export class LCHHttpServer {
       const readiness = await required(this.options.handlers.preflightDemand, type)(signed(value))
       return cborResponse('payment-readiness', readiness as unknown as LCHValue, 200, headers)
     }
+    if (type === 'payment-authorization-request') {
+      const authorization = await required(
+        this.options.handlers.authorizePayment,
+        type
+      )(signed(value))
+      return cborResponse(
+        'payment-authorization',
+        authorization as unknown as LCHValue,
+        200,
+        headers
+      )
+    }
     if (type === 'payment-delivery') {
       const receipt = await required(this.options.handlers.paymentDelivery, type)(signed(value))
       return cborResponse('payment-receipt', receipt as unknown as LCHValue, 200, headers)
+    }
+    if (type === 'payment-delivery-store') {
+      const acknowledgement = await required(
+        this.options.handlers.storeDelivery,
+        type
+      )(deliveryStoreRequest(value))
+      return cborResponse(
+        'payment-delivery-ack',
+        acknowledgement as unknown as LCHValue,
+        200,
+        headers
+      )
+    }
+    if (type === 'payment-delivery-retrieval') {
+      const stored = await required(this.options.handlers.retrieveDelivery, type)(signed(value))
+      if (stored === undefined) return errorResponse(404, 'ERR_LCH_DELIVERY', headers)
+      return cborResponse('payment-delivery-stored', stored as unknown as LCHValue, 200, headers)
+    }
+    if (type === 'transaction-evidence-request') {
+      const evidence = await required(
+        this.options.handlers.attestTransaction,
+        type
+      )(transactionEvidenceRequest(value))
+      return cborResponse('transaction-evidence', evidence as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-completion') {
       const license = await required(this.options.handlers.complete, type)(completion(value))
@@ -166,6 +220,68 @@ export class LCHHttpAcquisitionClient {
         delivery as unknown as LCHValue,
         200,
         'payment-receipt'
+      )
+    )
+  }
+
+  async authorizePayment(endpoint: string, demand: SignedObject): Promise<SignedObject> {
+    return signed(
+      await this.post(
+        endpoint,
+        'payment-authorization-request',
+        demand as unknown as LCHValue,
+        200,
+        'payment-authorization'
+      )
+    )
+  }
+
+  async storeDelivery(
+    endpoint: string,
+    authorization: SignedObject,
+    delivery: SignedObject
+  ): Promise<SignedObject> {
+    return signed(
+      await this.post(
+        endpoint,
+        'payment-delivery-store',
+        { authorization, delivery } as unknown as LCHValue,
+        200,
+        'payment-delivery-ack'
+      )
+    )
+  }
+
+  async attestTransaction(
+    endpoint: string,
+    authorization: SignedObject,
+    atomicBeef: Uint8Array
+  ): Promise<SignedObject> {
+    return signed(
+      await this.post(
+        endpoint,
+        'transaction-evidence-request',
+        { authorization, atomicBeef } as unknown as LCHValue,
+        200,
+        'transaction-evidence'
+      )
+    )
+  }
+
+  async retrieveDelivery(
+    endpoint: string,
+    request: SignedObject
+  ): Promise<StoredPaymentDelivery | undefined> {
+    const response = await this.request(
+      endpoint,
+      'payment-delivery-retrieval',
+      request as unknown as LCHValue
+    )
+    if (response.status === 404) return undefined
+    await requireResponse(response, 200, 'payment-delivery-stored', this.maximumResponseBytes)
+    return storedPaymentDelivery(
+      decodeDeterministicCbor(
+        await boundedBytes(response, this.maximumResponseBytes, 'ERR_LCH_DELIVERY')
       )
     )
   }
@@ -355,18 +471,77 @@ function completion(value: LCHValue): PaymentCompletion {
     'Payment Completion is not a map'
   )
   lchAssert(
-    value.atomicBeef instanceof Uint8Array &&
-      Array.isArray(value.receipts) &&
-      value.receipts.length > 0,
+    value.atomicBeef instanceof Uint8Array && Array.isArray(value.receipts),
     'ERR_LCH_PAYMENT',
     'Payment Completion is incomplete'
+  )
+  const receipts = value.receipts.map(signed)
+  const authorizedOutputs =
+    value.authorizedOutputs === undefined
+      ? undefined
+      : authorizedOutputArray(value.authorizedOutputs)
+  lchAssert(
+    receipts.length + (authorizedOutputs?.length ?? 0) > 0,
+    'ERR_LCH_PAYMENT',
+    'Payment Completion has no settlement proofs'
   )
   return {
     request: signed(value.request),
     quote: signed(value.quote),
     atomicBeef: value.atomicBeef,
-    receipts: value.receipts.map(signed)
+    receipts,
+    ...(authorizedOutputs === undefined ? {} : { authorizedOutputs })
   }
+}
+
+function transactionEvidenceRequest(value: LCHValue): TransactionEvidenceRequest {
+  const map = record(value, 'Transaction evidence request')
+  lchAssert(
+    map.atomicBeef instanceof Uint8Array && map.atomicBeef.length > 0,
+    'ERR_LCH_PAYMENT',
+    'Transaction evidence request has no Atomic BEEF'
+  )
+  return { authorization: signed(map.authorization), atomicBeef: map.atomicBeef }
+}
+
+function deliveryStoreRequest(value: LCHValue): PaymentDeliveryStoreRequest {
+  const map = record(value, 'Payment Delivery store request')
+  return { authorization: signed(map.authorization), delivery: signed(map.delivery) }
+}
+
+function storedPaymentDelivery(value: LCHValue): StoredPaymentDelivery {
+  const map = record(value, 'Stored Payment Delivery')
+  return {
+    authorization: signed(map.authorization),
+    delivery: signed(map.delivery),
+    deliveryAcknowledgement: signed(map.deliveryAcknowledgement)
+  }
+}
+
+function authorizedOutputArray(value: LCHValue): AuthorizedOutputEvidence[] {
+  lchAssert(Array.isArray(value), 'ERR_LCH_PAYMENT', 'Authorized-output evidence is not an array')
+  return value.map(item => {
+    const map = record(item, 'Authorized-output evidence')
+    return {
+      authorization: signed(map.authorization),
+      delivery: signed(map.delivery),
+      transactionEvidence: signed(map.transactionEvidence),
+      deliveryAcknowledgement: signed(map.deliveryAcknowledgement)
+    }
+  })
+}
+
+function record(value: LCHValue | undefined, name: string): Record<string, LCHValue> {
+  lchAssert(
+    value !== undefined &&
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Uint8Array),
+    'ERR_LCH_FRAMING',
+    `${name} is not a map`
+  )
+  return value
 }
 
 function recoveryRequest(value: LCHValue): Uint8Array {

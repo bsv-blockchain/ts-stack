@@ -179,7 +179,7 @@ p {
 
 .flow {
   display: grid;
-  grid-template-columns: 1fr auto 1fr auto 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   padding: 22px 0 42px;
 }
@@ -190,10 +190,6 @@ p {
   border: 1px solid #d4d8db;
   border-radius: 4px;
   background: #fff;
-}
-
-.flow div:nth-of-type(4) {
-  grid-column: 1;
 }
 
 .flow b,
@@ -212,12 +208,6 @@ p {
   line-height: 1.45;
 }
 
-.flow i {
-  align-self: center;
-  color: #91989e;
-  font-style: normal;
-}
-
 .fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -234,6 +224,7 @@ p {
 }
 
 .fields input,
+.fields select,
 .storage select {
   width: 100%;
   padding: 9px;
@@ -292,6 +283,20 @@ p {
     SFMono-Regular,
     Menlo,
     monospace;
+}
+
+.offline-case {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 14px 0 8px;
+  color: #4e565d;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.offline-case input {
+  margin-top: 2px;
 }
 
 .receipt {
@@ -589,14 +594,6 @@ footer {
   .flow,
   .fields {
     grid-template-columns: 1fr;
-  }
-
-  .flow i {
-    display: none;
-  }
-
-  .flow div:nth-of-type(4) {
-    grid-column: auto;
   }
 
   .split {

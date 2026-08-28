@@ -14,33 +14,42 @@ flowchart LR
   BW -->|BRC-29 output B| WB[Composition-controller wallet]
   P -->|signed Payment Delivery| DA[Drummer delivery service]
   P -->|signed Payment Delivery| DB[Composer delivery service]
+  P -->|authorized Delivery| DS[Durable Delivery provider]
+  P -->|exact Atomic BEEF| TE[Transaction evidence provider]
   DA -->|internalizeAction| WA
   DB -->|internalizeAction| WB
+  DS -->|authenticated late retrieval| DA
+  TE -->|signed accepted evidence| P
   DA -->|signed Receipt| P
   DB -->|signed Receipt| P
-  P -->|Atomic BEEF + all Receipts| I
+  P -->|Atomic BEEF + one proof per Demand| I
   I -->|signed License + BRC-78 grants| P
   P -->|authenticated range reads| H
 ```
 
-Money is received by the Payee wallets named in the signed Payment Demands. `WalletPaymentReceiver` derives the expected receiving key with BRC-29, validates the exact finalized output, and calls that Payee wallet's BRC-100 `internalizeAction`. The issuer only receives value when it is explicitly one of the Payees. The reference split is 7 satoshis to the recording controller and 5 satoshis to the composition controller.
+Money is received by the Payee wallets named in the signed Payment Demands. `WalletPaymentReceiver` derives the expected receiving key with BRC-29, validates the exact finalized output, and calls that Payee wallet's BRC-100 `internalizeAction`. The issuer only receives value when it is explicitly one of the Payees. The reference split is 7 satoshis to the recording controller and 5 satoshis to the composition controller. Under authorized-output settlement, License issuance can precede the Payee wallet call, but the value is still locked to the exact Payee-derived script; the durable provider retains the Delivery so that wallet can internalize the same output later.
 
-The issuer endpoint is `${PUBLIC_BASE_URL}/api/lch`. The two reference Payees deliberately publish different delivery paths, `${PUBLIC_BASE_URL}/api/lch/payees/recording` and `${PUBLIC_BASE_URL}/api/lch/payees/composition`. They share a process only to keep the fixture runnable. The package interoperability test places the issuer, drummer, and composer at three distinct HTTPS origins with three independent `LCHHttpServer` instances. A deployed Demand can therefore name `https://payments.drummer.example/lch` while the downstream work uses `https://licenses.publisher.example/lch`; neither origin receives or controls the other's wallet merely because both Demands appear in one Quote.
+The issuer endpoint is `${PUBLIC_BASE_URL}/api/lch`. The two reference Payees deliberately publish different delivery paths, `${PUBLIC_BASE_URL}/api/lch/payees/recording` and `${PUBLIC_BASE_URL}/api/lch/payees/composition`. The authorized-output fixture also exposes `${PUBLIC_BASE_URL}/api/lch/evidence`, `${PUBLIC_BASE_URL}/api/lch/delivery-store`, and `${PUBLIC_BASE_URL}/api/lch/delivery-retrieval`. They share a process and fixture issuer identity only to keep every role runnable and inspectable. A deployed Demand can name `https://payments.drummer.example/lch`, authorize `https://availability.drummer.example/lch`, and use `https://processor.example/evidence`, while the downstream work uses `https://licenses.publisher.example/lch`. None of those origins receives or controls another role's wallet merely because the evidence appears in one completion.
+
+`receipt-complete-v1` keeps the narrowest trust boundary: no License until the Payee wallet validates, internalizes, and signs. `authorized-output-v1` improves post-payment availability by letting the Payee pre-authorize an exact destination plus independent evidence and storage providers. It exposes more linkable metadata, depends on those providers, accepts processor policy before mining, and can release keys before wallet internalization. An offline Payee without that explicit Authorization remains pending. Production UIs should present that choice to the Payee when configuring its Demand service, not silently select fallback for buyers.
 
 ## HTTP surface
 
 The executable Node server exposes:
 
-| Method | Path                         | Purpose                                                                                       |
-| ------ | ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/health`                | Wallet mode and acquisition endpoint                                                          |
-| `POST` | `/api/assets`                | Creator publication input (`name`, `mediaType`, base64 bytes); returns IDs and `lchBase64url` |
-| `POST` | `/api/lch`                   | Issuer preflight, Quote, completion, and recovery                                             |
-| `POST` | `/api/lch/payees/{interest}` | Independently routed Payee preflight and Payment Delivery                                     |
-| `GET`  | `/content/{sha256}`          | Detached ciphertext, including one HTTP byte range                                            |
-| `GET`  | `/*`                         | Reference workbench and third-party notices                                                   |
+| Method | Path                          | Purpose                                                                                       |
+| ------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`                 | Wallet mode and acquisition endpoint                                                          |
+| `POST` | `/api/assets`                 | Creator publication input (`name`, `mediaType`, base64 bytes); returns IDs and `lchBase64url` |
+| `POST` | `/api/lch`                    | Issuer preflight, Quote, completion, and recovery                                             |
+| `POST` | `/api/lch/payees/{interest}`  | Independently routed Payee preflight and Payment Delivery                                     |
+| `POST` | `/api/lch/evidence`           | Exact-transaction evaluation and signed accepted evidence                                     |
+| `POST` | `/api/lch/delivery-store`     | Durable signed Delivery storage and retention acknowledgement                                 |
+| `POST` | `/api/lch/delivery-retrieval` | Payee-signed authenticated retrieval of its stored Delivery                                   |
+| `GET`  | `/content/{sha256}`           | Detached ciphertext, including one HTTP byte range                                            |
+| `GET`  | `/*`                          | Reference workbench and third-party notices                                                   |
 
-The issuer and Payee endpoints accept the role-appropriate exact media types implemented by `LCHHttpServer`. Bodies are bounded and error responses use stable LCH error codes. Sending a drummer Demand to the composition endpoint fails even in the collapsed fixture topology.
+The endpoints accept only their role-appropriate exact media types implemented by `LCHHttpServer`. Bodies are bounded and error responses use stable LCH error codes. Sending a drummer Demand to the composition endpoint, a Delivery to the evidence endpoint, or a retrieval request signed by another identity fails even in the collapsed fixture topology.
 
 Publication example:
 
@@ -85,15 +94,16 @@ The single-process server is the smallest executable topology. It contains the s
 A durable topology separates four concerns:
 
 1. Stateless issuer/API replicas terminate the Offer endpoint and persist Requests, Quotes, completion state, Licenses, and wrapped content-encryption keys.
-2. Every Payee operates its signed Demand endpoint, atomic Payment Ledger, Demand state, and BRC-100 receiving wallet independently.
-3. The buyer persists the funded Atomic BEEF, signed Deliveries, and partial Receipt set before fan-out and until License recovery completes or `recoveryUntil` passes.
-4. CHIRP/UHRP providers retain ciphertext; the issuer retains only locators and verified metadata.
+2. Every Payee operates its signed Demand endpoint, atomic Payment Ledger, Demand and Authorization state, and BRC-100 receiving wallet independently.
+3. Authorized Delivery providers atomically store exact signed Deliveries through their promised recovery deadlines; evidence providers atomically bind each Authorization to one accepted transaction under the named policy.
+4. The buyer persists the funded Atomic BEEF, signed Deliveries, Receipts, Authorizations, and fallback evidence before fan-out and until License recovery completes or `recoveryUntil` passes.
+5. CHIRP/UHRP providers retain ciphertext; the issuer retains only locators and verified metadata.
 
-The Payment Ledger claim must be atomic across replicas. The same Demand and same finalized transaction must return the same Receipt; a second transaction for that Demand must fail. Content-encryption keys and wallet credentials require encryption at rest, access separation, backup, rotation, and audit controls appropriate to the deployment.
+The Payment Ledger and Authorization-to-transaction claims must be atomic across replicas. The same Demand and transaction must return the same Receipt or evidence; a second transaction for that Demand or Authorization must fail. Stored Deliveries must survive process and zone loss through `availableUntil`. Content-encryption keys and wallet credentials require encryption at rest, access separation, backup, rotation, and audit controls appropriate to the deployment.
 
-The reference client records the wallet result as **finalized** only. Operators must attach separate authenticated evidence before describing it as **broadcast**, **accepted** by a transaction processor, or **mined** with SPV evidence. If a Payee delivery fails after finalization, the application retains the transaction, signed Deliveries, and partial Receipts and presents a pending settlement through `recoveryUntil`; it does not offer a second purchase action.
+The reference client records the wallet result as **finalized** only. The initial authorized-output evidence provider can separately sign **accepted** under `signed-processor-acceptance-v1`; it does not claim broadcast or mined state. A mined profile needs explicit SPV evidence. If direct and authorized fallback delivery fail after finalization, the application retains the transaction and all partial proofs and presents a pending settlement through `recoveryUntil`; it does not offer a second purchase action.
 
-`LCHAcquisitionTransport` lets a buyer route those same operations through an application-owned asynchronous inbox or message-box adapter. The BRC-170 v1 portable wire binding remains deterministic-CBOR HTTP. A gateway can enqueue internally while preserving the exact HTTP acknowledgement and recovery contract. A native message-box protocol needs a separately registered profile defining addressing, authentication, correlation, reply polling, expiry, and replay behavior; the adapter cannot silently replace signed Payment Deliveries or Payee Receipts.
+`LCHAcquisitionTransport` lets a buyer route those same operations through an application-owned asynchronous inbox or message-box adapter. The BRC-170 v1 portable wire binding remains deterministic-CBOR HTTP. A gateway can enqueue internally while preserving the exact acknowledgement, identity, retention, and recovery contract. A native message-box protocol needs a separately registered profile defining addressing, authentication, correlation, reply polling, expiry, retention, and replay behavior; the adapter cannot silently replace signed Deliveries, Receipts, Authorizations, or provider evidence.
 
 ## Container reference
 

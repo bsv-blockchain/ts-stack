@@ -21,6 +21,15 @@ export const LCH_MECHANISMS = {
   wholePlacement: `${LCH_IRI}#whole-placement-v1`
 } as const
 
+export const LCH_SETTLEMENT_PROFILES = {
+  receiptComplete: `${LCH_IRI}#receipt-complete-v1`,
+  authorizedOutput: `${LCH_IRI}#authorized-output-v1`
+} as const
+
+export const LCH_TRANSACTION_EVIDENCE_POLICIES = {
+  signedProcessorAcceptance: `${LCH_IRI}#signed-processor-acceptance-v1`
+} as const
+
 export const LCH_LIMITS = {
   headerBytes: 16 * 1024 * 1024,
   cborDepth: 64,
@@ -46,7 +55,11 @@ export const LCH_OBJECT_TYPES = [
   'quote',
   'payment-demand',
   'payment-readiness',
+  'payment-authorization',
   'payment-delivery',
+  'payment-delivery-retrieval',
+  'transaction-evidence',
+  'payment-delivery-ack',
   'payment-receipt',
   'license',
   'composition-record'

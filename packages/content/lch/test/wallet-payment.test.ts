@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals'
-import { LockingScript, PrivateKey, Transaction } from '@bsv/sdk'
+import { LockingScript, P2PKH, PrivateKey, Transaction } from '@bsv/sdk'
 import { createMultipayTransaction } from '../src/index.js'
 
 describe('wallet multilateral payment integration', () => {
@@ -46,5 +46,35 @@ describe('wallet multilateral payment integration', () => {
     )
     expect(result.remittances.map(item => item.outputIndex)).toEqual([2, 0])
     expect(createAction.mock.calls[0][0]).not.toHaveProperty('options.randomizeOutputs')
+  })
+
+  it('rejects a Payee-authorized script mismatch before creating a wallet action', async () => {
+    const publicKeys = [new PrivateKey(21).toPublicKey(), new PrivateKey(22).toPublicKey()]
+    let key = 0
+    const getPublicKey = jest.fn(async () => ({ publicKey: publicKeys[key++]!.toString() }))
+    const createAction = jest.fn()
+    await expect(
+      createMultipayTransaction({ getPublicKey, createAction } as never, [
+        {
+          demandId: new Uint8Array(32).fill(1),
+          payee: new Uint8Array(33).fill(2),
+          satoshis: 7n,
+          derivationPrefix: new Uint8Array(32).fill(3),
+          dutyUid: 'recording',
+          authorizedOutput: {
+            derivationSuffix: new Uint8Array(32).fill(4),
+            lockingScript: new P2PKH().lock(publicKeys[1]!.toAddress()).toUint8Array()
+          }
+        },
+        {
+          demandId: new Uint8Array(32).fill(5),
+          payee: new Uint8Array(33).fill(6),
+          satoshis: 5n,
+          derivationPrefix: new Uint8Array(32).fill(7),
+          dutyUid: 'composition'
+        }
+      ])
+    ).rejects.toThrow(/does not match the Payee Authorization/u)
+    expect(createAction).not.toHaveBeenCalled()
   })
 })

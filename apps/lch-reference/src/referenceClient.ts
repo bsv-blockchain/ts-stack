@@ -8,6 +8,7 @@ import {
   toHex,
   validateOffer,
   type ContentSource,
+  type AuthorizedOutputEvidence,
   type EndpointPolicy,
   type InspectedLCH,
   type LCHFundedMultipay,
@@ -29,7 +30,9 @@ export interface ReferenceAcquisitionResult {
   licenseId: Uint8Array
   plaintext: Uint8Array
   receipts: SignedObject[]
+  authorizedOutputs: AuthorizedOutputEvidence[]
   transactionId: string
+  transactionState: LCHTransactionState
   recovered: boolean
 }
 
@@ -37,9 +40,10 @@ export interface ReferencePendingPayment {
   requestId: string
   transactionId: string
   transactionState: LCHTransactionState
-  settlementState: 'pending-payee-receipts'
+  settlementState: 'pending-settlement-proofs'
   receipts: number
-  requiredReceipts: number
+  authorizedOutputs: number
+  requiredProofs: number
   recoveryUntil: bigint
 }
 
@@ -51,6 +55,7 @@ export class ReferenceLCHClient {
     requestId: string
     payment: LCHFundedMultipay
     receipts: Map<string, SignedObject>
+    authorizedOutputs: Map<string, AuthorizedOutputEvidence>
   }
 
   constructor(
@@ -102,18 +107,24 @@ export class ReferenceLCHClient {
     this.recoveryState ??= {
       requestId,
       payment: await multipay.createPayment(await multipay.refreshReadiness(plan)),
-      receipts: new Map()
+      receipts: new Map(),
+      authorizedOutputs: new Map()
     }
-    const { payment, receipts: recoveredReceipts } = this.recoveryState
+    const {
+      payment,
+      receipts: recoveredReceipts,
+      authorizedOutputs: recoveredAuthorizedOutputs
+    } = this.recoveryState
     for (const delivery of payment.deliveries) {
       const demandId = toHex(delivery.demandId)
-      if (!recoveredReceipts.has(demandId))
-        recoveredReceipts.set(demandId, await multipay.deliver(payment, delivery))
+      if (recoveredReceipts.has(demandId) || recoveredAuthorizedOutputs.has(demandId)) continue
+      const settlement = await multipay.settleDelivery(payment, delivery)
+      if (settlement.type === 'receipt') recoveredReceipts.set(demandId, settlement.receipt)
+      else recoveredAuthorizedOutputs.set(demandId, settlement.evidence)
     }
-    const receipts = payment.deliveries.map(delivery =>
-      recoveredReceipts.get(toHex(delivery.demandId))!
-    )
-    const license = await multipay.complete(payment, receipts)
+    const receipts = [...recoveredReceipts.values()]
+    const authorizedOutputs = [...recoveredAuthorizedOutputs.values()]
+    const license = await multipay.complete(payment, receipts, authorizedOutputs)
     equal(license.body.assetId, plan.inspected.assetId, 'License Asset ID')
     equal(license.body.offerId, plan.offerId, 'License Offer ID')
 
@@ -139,7 +150,9 @@ export class ReferenceLCHClient {
       licenseId,
       plaintext,
       receipts,
-      transactionId: toHex(memberBytes(receipts[0]!.body, 'txid', 32)),
+      authorizedOutputs,
+      transactionId: Transaction.fromAtomicBEEF(payment.atomicBeef as AtomicBEEF).id('hex'),
+      transactionState: authorizedOutputs.length > 0 ? 'accepted' : payment.transactionState,
       recovered: true
     }
   }
@@ -155,10 +168,12 @@ export class ReferenceLCHClient {
     return {
       requestId: state.requestId,
       transactionId: transaction.id('hex'),
-      transactionState: state.payment.transactionState,
-      settlementState: 'pending-payee-receipts',
+      transactionState:
+        state.authorizedOutputs.size > 0 ? 'accepted' : state.payment.transactionState,
+      settlementState: 'pending-settlement-proofs',
       receipts: state.receipts.size,
-      requiredReceipts: state.payment.deliveries.length,
+      authorizedOutputs: state.authorizedOutputs.size,
+      requiredProofs: state.payment.deliveries.length,
       recoveryUntil: state.payment.plan.recoveryUntil
     }
   }

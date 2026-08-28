@@ -5,6 +5,7 @@ import { signObject, verifySignedObject } from './objects.js'
 import { recoveryUntil } from './payment.js'
 import { normalizeSelection } from './selection.js'
 import { PublicBRC77Verifier } from './signatures.js'
+import { LCH_SETTLEMENT_PROFILES } from './constants.js'
 import type {
   LCHSignatureVerifier,
   LCHSigner,
@@ -13,6 +14,7 @@ import type {
   Selection,
   SignedObject
 } from './types.js'
+import type { AuthorizedOutputEvidence } from './settlement.js'
 
 const MAX_UINT64 = 0xffffffffffffffffn
 
@@ -42,6 +44,7 @@ export interface PaymentDemandOptions {
   challengeNonce?: Uint8Array
   expiresAt: LCHUint
   recoveryPeriodSeconds: LCHUint
+  settlementProfile?: string
   critical?: string[]
   allowInsecureLocalEndpoint?: boolean
 }
@@ -92,11 +95,20 @@ export interface PaymentReceiptOptions {
   critical?: string[]
 }
 
+export interface PaymentDeliveryRetrievalOptions {
+  authorizationId: Uint8Array
+  payee?: Uint8Array
+  requestedAt: LCHUint
+  nonce?: Uint8Array
+  critical?: string[]
+}
+
 export interface PaymentCompletion {
   request: SignedObject
   quote: SignedObject
   atomicBeef: Uint8Array
   receipts: SignedObject[]
+  authorizedOutputs?: AuthorizedOutputEvidence[]
 }
 
 export interface AcquisitionValidationOptions {
@@ -207,6 +219,13 @@ export class LCHPayee {
     bytes(challengeNonce, 16, 'Challenge nonce')
     const expiresAt = uint(options.expiresAt, 'Demand expiry', 'ERR_LCH_QUOTE')
     const recovery = recoveryUntil(expiresAt, options.recoveryPeriodSeconds)
+    const settlementProfile = options.settlementProfile ?? LCH_SETTLEMENT_PROFILES.receiptComplete
+    lchAssert(
+      settlementProfile === LCH_SETTLEMENT_PROFILES.receiptComplete ||
+        settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
+      'ERR_LCH_PROFILE_UNSUPPORTED',
+      'Payment Demand settlement profile is unsupported'
+    )
     extensions(options.critical)
     return signObject(
       'payment-demand',
@@ -223,6 +242,7 @@ export class LCHPayee {
         challengeNonce,
         expiresAt: options.expiresAt,
         recoveryUntil: recovery,
+        settlementProfile,
         ...(options.critical === undefined ? {} : { critical: options.critical })
       },
       this.signer
@@ -297,6 +317,33 @@ export class LCHPayee {
       this.signer
     )
   }
+
+  async createDeliveryRetrieval(options: PaymentDeliveryRetrievalOptions): Promise<SignedObject> {
+    bytes(options.authorizationId, 32, 'Payment Authorization ID')
+    const payee = options.payee ?? this.signer.identityKey
+    bytes(payee, 33, 'Payee identity')
+    lchAssert(
+      toHex(payee) === toHex(this.signer.identityKey),
+      'ERR_LCH_SIGNATURE',
+      'Delivery Retrieval signer is not the Payee'
+    )
+    uint(options.requestedAt, 'Delivery retrieval time', 'ERR_LCH_PAYMENT')
+    const nonce = options.nonce ?? this.random(16)
+    bytes(nonce, 16, 'Delivery retrieval nonce')
+    extensions(options.critical)
+    return signObject(
+      'payment-delivery-retrieval',
+      {
+        version: 1,
+        authorizationId: options.authorizationId,
+        payee,
+        requestedAt: options.requestedAt,
+        nonce,
+        ...(options.critical === undefined ? {} : { critical: options.critical })
+      },
+      this.signer
+    )
+  }
 }
 
 export class LCHQuoteIssuer {
@@ -321,6 +368,12 @@ export class LCHQuoteIssuer {
       equalId(demand.body.requestId, options.requestId, 'Demand Request ID')
       equalId(demand.body.offerId, options.offerId, 'Demand Offer ID')
       equalId(demand.body.buyer, options.buyer, 'Demand buyer identity')
+      lchAssert(
+        demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.receiptComplete ||
+          demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
+        'ERR_LCH_PROFILE_UNSUPPORTED',
+        'Payment Demand settlement profile is unsupported'
+      )
       lchAssert(
         uint(demand.body.expiresAt, 'Demand expiry', 'ERR_LCH_QUOTE') === expiresAt &&
           uint(demand.body.recoveryUntil, 'Demand recovery deadline', 'ERR_LCH_QUOTE') === recovery,
@@ -395,6 +448,13 @@ export async function validatePaymentDemand(
   const expires = uint(demand.body.expiresAt, 'Demand expiry', 'ERR_LCH_QUOTE')
   const recovery = uint(demand.body.recoveryUntil, 'Demand recovery deadline', 'ERR_LCH_QUOTE')
   lchAssert(expires < recovery, 'ERR_LCH_QUOTE', 'Demand recovery window is empty')
+  const settlementProfile = demand.body.settlementProfile
+  lchAssert(
+    settlementProfile === LCH_SETTLEMENT_PROFILES.receiptComplete ||
+      settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Payment Demand settlement profile is unsupported'
+  )
   return objectId('payment-demand', demand.body)
 }
 

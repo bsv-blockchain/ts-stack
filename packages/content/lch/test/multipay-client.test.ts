@@ -206,6 +206,7 @@ describe('recovery-safe multipay buyer', () => {
         quote: await signObject('quote', { version: 1 }, signer),
         demands: [],
         readiness: [],
+        authorizations: [],
         issuer: signer.identityKey,
         endpoint: 'https://multipay.test/lch',
         totalSatoshis: 0n,
@@ -254,6 +255,9 @@ describe('recovery-safe multipay buyer', () => {
         throw new Error('unused')
       },
       preflightDemand: async () => demand,
+      authorizePayment: async () => {
+        throw new Error('unused')
+      },
       deliver: async () =>
         new LCHPayee(payeeSigner).createReceipt({
           demandId: receiptDemandId,
@@ -264,6 +268,12 @@ describe('recovery-safe multipay buyer', () => {
           receivedAt: 1_100
         }),
       complete: async () => {
+        throw new Error('unused')
+      },
+      storeDelivery: async () => {
+        throw new Error('unused')
+      },
+      attestTransaction: async () => {
         throw new Error('unused')
       },
       recover: async () => undefined
@@ -281,6 +291,7 @@ describe('recovery-safe multipay buyer', () => {
         quote,
         demands: [demand],
         readiness: [],
+        authorizations: [],
         issuer: buyerSigner.identityKey,
         endpoint: 'https://issuer.test/licenses',
         totalSatoshis: 7n,

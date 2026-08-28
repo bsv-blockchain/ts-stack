@@ -53,6 +53,9 @@ const publisher = await signer(1)
 const buyer = await signer(2)
 const composer = await signer(3)
 const replacements = []
+const receiptCompleteProfile = 'https://bsv.brc.dev/apps/0170#receipt-complete-v1'
+const authorizedOutputProfile = 'https://bsv.brc.dev/apps/0170#authorized-output-v1'
+const acceptancePolicy = 'https://bsv.brc.dev/apps/0170#signed-processor-acceptance-v1'
 
 async function updateRecord(record, type, objectSigner) {
   const oldHex = record.idHex
@@ -94,7 +97,26 @@ for (const [index, demand] of vectors.objects.paymentDemands.entries()) {
   demand.body.requestId = requestId
   demand.body.buyer = buyer.identityKey
   demand.body.recoveryUntil = recovery
+  demand.body.settlementProfile = receiptCompleteProfile
   demandIds.push(await updateRecord(demand, 'payment-demand', index === 0 ? publisher : composer))
+}
+
+vectors.objects.paymentReadiness = []
+for (const [index, demand] of vectors.objects.paymentDemands.entries()) {
+  const readiness = {
+    body: {
+      version: 1,
+      demandId: demandIds[index],
+      requestId,
+      payee: demand.body.payee,
+      buyer: buyer.identityKey,
+      issuedAt: demand.body.expiresAt - 120,
+      readyUntil: demand.body.expiresAt - 60,
+      recoveryUntil: recovery
+    }
+  }
+  await updateRecord(readiness, 'payment-readiness', index === 0 ? publisher : composer)
+  vectors.objects.paymentReadiness.push(readiness)
 }
 
 vectors.objects.quote.body.offerId = offerId
@@ -150,9 +172,146 @@ for (const [index, receipt] of vectors.objects.paymentReceipts.entries()) {
 vectors.objects.license.body.offerId = offerId
 vectors.objects.license.body.requestId = requestId
 for (const [index, fulfillment] of vectors.objects.license.body.fulfillments.entries()) {
+  fulfillment.settlementProfile = receiptCompleteProfile
   fulfillment.receiptIds = [receiptIds[index]]
 }
 const licenseId = await updateRecord(vectors.objects.license, 'license', publisher)
+
+const authorizedDemand = {
+  body: {
+    ...vectors.objects.paymentDemands[0].body,
+    settlementProfile: authorizedOutputProfile,
+    challengeNonce: fromHex('101112131415161718191a1b1c1d1e1f')
+  }
+}
+const authorizedDemandId = await updateRecord(authorizedDemand, 'payment-demand', publisher)
+const authorizedOutput = vectors.multilateralPayment.outputs[0]
+const authorization = {
+  body: {
+    version: 1,
+    settlementProfile: authorizedOutputProfile,
+    demandId: authorizedDemandId,
+    requestId,
+    payee: publisher.identityKey,
+    buyer: buyer.identityKey,
+    satoshis: authorizedDemand.body.satoshis,
+    derivationPrefix: fromBase64Url(authorizedOutput.derivationPrefixBase64url),
+    derivationSuffix: fromBase64Url(authorizedOutput.derivationSuffixBase64url),
+    lockingScript: fromHex(authorizedOutput.lockingScriptHex),
+    authorizedAt: authorizedDemand.body.expiresAt - 120,
+    authorizedUntil: authorizedDemand.body.expiresAt,
+    recoveryUntil: recovery,
+    evidenceProvider: composer.identityKey,
+    evidenceEndpoint: 'https://processor.example/lch/evidence',
+    evidencePolicy: acceptancePolicy,
+    minimumTransactionState: 'accepted',
+    deliveryProvider: composer.identityKey,
+    deliveryEndpoint: 'https://availability.example/lch/store',
+    retrievalEndpoint: 'https://availability.example/lch/retrieve'
+  }
+}
+const authorizationId = await updateRecord(authorization, 'payment-authorization', publisher)
+const authorizedDelivery = {
+  body: {
+    ...vectors.objects.paymentDeliveries[0].body,
+    demandId: authorizedDemandId,
+    derivationPrefix: authorization.body.derivationPrefix,
+    derivationSuffix: authorization.body.derivationSuffix
+  }
+}
+const authorizedDeliveryId = await updateRecord(authorizedDelivery, 'payment-delivery', buyer)
+const transactionEvidence = {
+  body: {
+    version: 1,
+    authorizationId,
+    txid: fromHex(transactionIdHex),
+    provider: composer.identityKey,
+    state: 'accepted',
+    policy: acceptancePolicy,
+    observedAt: authorizedDemand.body.expiresAt - 30
+  }
+}
+await updateRecord(transactionEvidence, 'transaction-evidence', composer)
+const deliveryAcknowledgement = {
+  body: {
+    version: 1,
+    authorizationId,
+    deliveryId: authorizedDeliveryId,
+    demandId: authorizedDemandId,
+    requestId,
+    payee: publisher.identityKey,
+    provider: composer.identityKey,
+    storedAt: authorizedDemand.body.expiresAt - 30,
+    availableUntil: recovery,
+    retrievalEndpoint: authorization.body.retrievalEndpoint
+  }
+}
+await updateRecord(deliveryAcknowledgement, 'payment-delivery-ack', composer)
+const deliveryRetrieval = {
+  body: {
+    version: 1,
+    authorizationId,
+    payee: publisher.identityKey,
+    requestedAt: authorizedDemand.body.expiresAt + 60,
+    nonce: fromHex('202122232425262728292a2b2c2d2e2f')
+  }
+}
+await updateRecord(deliveryRetrieval, 'payment-delivery-retrieval', publisher)
+const authorizedQuote = {
+  body: {
+    ...vectors.objects.quote.body,
+    demands: [authorizedDemand.signed, vectors.objects.paymentDemands[1].signed]
+  }
+}
+await updateRecord(authorizedQuote, 'quote', publisher)
+const authorizedOutputEvidence = {
+  authorization: authorization.signed,
+  delivery: authorizedDelivery.signed,
+  transactionEvidence: transactionEvidence.signed,
+  deliveryAcknowledgement: deliveryAcknowledgement.signed
+}
+const authorizedCompletion = {
+  request: vectors.objects.licenseRequest.signed,
+  quote: authorizedQuote.signed,
+  atomicBeef,
+  receipts: [vectors.objects.paymentReceipts[1].signed],
+  authorizedOutputs: [authorizedOutputEvidence]
+}
+vectors.settlementProfiles = {
+  receiptComplete: {
+    identifier: receiptCompleteProfile,
+    requiredEvidence: 'payee receipt'
+  },
+  authorizedOutput: {
+    identifier: authorizedOutputProfile,
+    evidencePolicy: acceptancePolicy,
+    demand: authorizedDemand,
+    quote: authorizedQuote,
+    authorization,
+    delivery: authorizedDelivery,
+    transactionEvidence,
+    deliveryAcknowledgement,
+    deliveryRetrieval,
+    storedDelivery: {
+      authorization: authorization.signed,
+      delivery: authorizedDelivery.signed,
+      deliveryAcknowledgement: deliveryAcknowledgement.signed
+    },
+    completionCborHex: toHex(encodeDeterministicCbor(authorizedCompletion)),
+    expected: {
+      payeeOfflineAfterReadiness: 'license issuance succeeds with complete bundle',
+      lateRetrieval: 'same Delivery internalized once; late Receipt does not change License',
+      wrongScript: 'ERR_LCH_PAYMENT',
+      wrongAmount: 'ERR_LCH_PAYMENT',
+      broadcastOnly: 'ERR_LCH_PAYMENT',
+      wrongEvidenceProvider: 'ERR_LCH_PAYMENT',
+      insufficientRetention: 'ERR_LCH_DELIVERY',
+      deliveryProviderUnavailable: 'pending settlement',
+      conflictingAcceptedTransaction: 'ERR_LCH_PAYMENT',
+      bundleForReceiptCompleteDemand: 'ERR_LCH_PROFILE_UNSUPPORTED'
+    }
+  }
+}
 
 const completion = {
   request: vectors.objects.licenseRequest.signed,
@@ -175,7 +334,16 @@ vectors.httpBinding = {
     },
     paymentDemandPreflight: {
       requestType: 'payment-demand',
-      successStatus: 204
+      responseType: 'payment-readiness',
+      successStatus: 200,
+      responseCborHex: toHex(encodeDeterministicCbor(vectors.objects.paymentReadiness[0].signed))
+    },
+    paymentAuthorization: {
+      requestType: 'payment-authorization-request',
+      responseType: 'payment-authorization',
+      successStatus: 200,
+      requestCborHex: toHex(encodeDeterministicCbor(authorizedDemand.signed)),
+      responseCborHex: toHex(encodeDeterministicCbor(authorization.signed))
     },
     paymentDelivery: {
       requestType: 'payment-delivery',
@@ -183,11 +351,43 @@ vectors.httpBinding = {
       successStatus: 200,
       payloadCborHex: toHex(encodeDeterministicCbor(vectors.objects.paymentDeliveries[0].signed))
     },
+    paymentDeliveryStore: {
+      requestType: 'payment-delivery-store',
+      responseType: 'payment-delivery-ack',
+      successStatus: 200,
+      payloadCborHex: toHex(
+        encodeDeterministicCbor({
+          authorization: authorization.signed,
+          delivery: authorizedDelivery.signed
+        })
+      )
+    },
+    paymentDeliveryRetrieval: {
+      requestType: 'payment-delivery-retrieval',
+      responseType: 'payment-delivery-stored',
+      successStatus: 200,
+      absentStatus: 404,
+      payloadCborHex: toHex(encodeDeterministicCbor(deliveryRetrieval.signed))
+    },
+    transactionEvidence: {
+      requestType: 'transaction-evidence-request',
+      responseType: 'transaction-evidence',
+      successStatus: 200,
+      payloadCborHex: toHex(
+        encodeDeterministicCbor({ authorization: authorization.signed, atomicBeef })
+      )
+    },
     paymentCompletion: {
       requestType: 'payment-completion',
       responseType: 'license',
       successStatus: 200,
       payloadCborHex: toHex(encodeDeterministicCbor(completion))
+    },
+    authorizedOutputCompletion: {
+      requestType: 'payment-completion',
+      responseType: 'license',
+      successStatus: 200,
+      payloadCborHex: toHex(encodeDeterministicCbor(authorizedCompletion))
     },
     licenseRecovery: {
       requestType: 'license-recovery',

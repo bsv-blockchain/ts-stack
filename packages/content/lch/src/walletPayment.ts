@@ -12,6 +12,10 @@ export interface MultipayDemand {
   satoshis: bigint
   derivationPrefix: Uint8Array
   dutyUid: string
+  authorizedOutput?: {
+    derivationSuffix: Uint8Array
+    lockingScript: Uint8Array
+  }
 }
 
 export interface MultipayRemittance {
@@ -59,7 +63,7 @@ export async function createMultipayTransaction(
     )
     lchAssert(demand.dutyUid.length > 0, 'ERR_LCH_PAYMENT', 'Demand duty UID is absent')
     const satoshis = checkedSatoshis(demand.satoshis)
-    const suffix = random(32)
+    const suffix = demand.authorizedOutput?.derivationSuffix ?? random(32)
     lchAssert(
       suffix.length === 32,
       'ERR_LCH_PAYMENT',
@@ -72,6 +76,14 @@ export async function createMultipayTransaction(
       counterparty: toHex(demand.payee)
     })
     const lockingScript = new P2PKH().lock(PublicKey.fromString(publicKey).toAddress())
+    if (demand.authorizedOutput !== undefined) {
+      lchAssert(
+        demand.authorizedOutput.lockingScript.length > 0 &&
+          toHex(lockingScript.toUint8Array()) === toHex(demand.authorizedOutput.lockingScript),
+        'ERR_LCH_PAYMENT',
+        'Wallet-derived output does not match the Payee Authorization'
+      )
+    }
     planned.push({
       demand,
       suffix,

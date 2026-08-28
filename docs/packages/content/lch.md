@@ -30,12 +30,15 @@ npm install @bsv/lch @bsv/sdk
 - strict deterministic CBOR, typed object identifiers, and `.lch` framing;
 - segmented AES-256-GCM with authenticated range decryption and key periods;
 - BRC-77 public signatures and BRC-78 peer-specific key envelopes;
-- signed Assets, Offers, Demands, Quotes, Licenses, Authorities, and receipts;
+- signed Assets, Offers, Demands, readiness leases, destination Authorizations,
+  transaction evidence, Delivery acknowledgements, Licenses, Authorities, and
+  receipts;
 - explicit BRC-29/BRC-100 multilateral payment construction that matches
   finalized wallet outputs without assuming output order;
 - deterministic-CBOR Fetch client/server bindings, typed acquisition builders,
-  replay-safe Payee receipt handling, an injectable acquisition transport, and
-  a complete multipay buyer workflow across independently routed Payees;
+  replay-safe Payee receipt handling, authorized-output fallback and late
+  retrieval, an injectable acquisition transport, and a complete multipay
+  buyer workflow across independently routed Payees and providers;
 - bounded authority chains with fresh, network-scoped revocation observations;
 - HTTPS endpoint policy plus UHRP and CHIRP content source and sink adapters;
 - browser IndexedDB and in-memory license stores; and
@@ -68,22 +71,30 @@ const funded = await buyer.createPayment(plan)
 await durableRecoveryStore.put(funded)
 
 const receipts = []
+const authorizedOutputs = []
 for (const delivery of funded.deliveries) {
-  receipts.push(await buyer.deliver(funded, delivery))
+  const proof = await buyer.settleDelivery(funded, delivery)
+  if (proof.type === 'receipt') receipts.push(proof.receipt)
+  else authorizedOutputs.push(proof.evidence)
 }
-const license = await buyer.complete(funded, receipts)
+const license = await buyer.complete(funded, receipts, authorizedOutputs)
 ```
 
 Wallets may add or reorder outputs. The implementation locates every Demand
 output after finalization by its exact locking script and satoshi amount, and
-fails if a match is missing or ambiguous. Retain `funded` and successful
-Receipts until completion or `recoveryUntil`; retry delivery with the same
-transaction after ambiguity and never create a replacement automatically.
+fails if a match is missing or ambiguous. Retain `funded`, Receipts,
+Authorizations, and provider evidence until completion or `recoveryUntil`;
+retry with the same transaction after ambiguity and never create a replacement
+automatically.
 
 The issuer endpoint coordinates Quote, completion, and recovery. Every signed
-Demand selects its own Payee endpoint. Those endpoints can be different
-origins and operators, and the buyer fans the persisted transaction out to
-them independently. `LCHAcquisitionTransport` defaults to the HTTP binding and
+Demand selects its own Payee endpoint and settlement profile.
+`receipt-complete-v1` requires Payee wallet internalization and a Receipt.
+`authorized-output-v1` permits a Payee to sign its exact BRC-29 destination,
+accepted-transaction provider, and durable Delivery provider before payment.
+The fallback releases a License only after all signed evidence verifies; the
+Payee later retrieves and internalizes the same Delivery. Those endpoints can
+be different origins and operators. `LCHAcquisitionTransport` defaults to the HTTP binding and
 also gives applications a stable seam for an asynchronous inbox or message-box
 adapter without changing signed objects or recovery behavior.
 
@@ -91,7 +102,10 @@ On the receiving side, `WalletPaymentReceiver` independently derives and
 validates the Payee's BRC-29 output, atomically claims the Demand through a
 `PaymentLedger`, calls that Payee wallet's BRC-100 `internalizeAction`, and
 returns a signed Receipt. `LCHHttpServer` mounts that and the issuer handlers on
-independent Fetch-compatible server surfaces. The executable reference
+independent Fetch-compatible server surfaces. `WalletAuthorizedOutputPayee`
+and `LCHSettlementService` expose the opt-in provider roles. Silence, a
+finalized transaction, insufficient retention, or an unknown evidence policy
+never satisfies a Demand. The executable reference
 application also ships a Node server, creator wizard, player, wallet-module
 contract, and collapsed, federated, container, and durable deployment examples.
 
@@ -138,7 +152,11 @@ future profiles.
 - Authenticate every segment before exposing plaintext. Whole-asset grants
   must include every key period intersecting the licensed selection.
 - Keep the scoped `THIRD_PARTY_NOTICES.md` in the npm artifact. The package
-  incorporates no third-party source; peer packages retain their own notices.
+  incorporates no third-party source and the authorized-output profile adds no
+  dependency; peer packages retain their own notices.
+- Prefer receipt-complete when a Payee does not accept disclosure of its exact
+  destination, dependence on named providers, accepted-before-mined evidence,
+  or License release before wallet internalization.
 - Treat ODRL/C2PA mappings as evidence and policy description, not as a
   substitute for payment settlement or authority validation.
 

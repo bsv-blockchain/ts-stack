@@ -1,5 +1,11 @@
 import type { WalletInterface } from '@bsv/sdk'
-import { LCH_PROFILES, LCHReader, toHex, type SegmentedEncryptionDescriptor } from '@bsv/lch'
+import {
+  LCH_PROFILES,
+  LCH_SETTLEMENT_PROFILES,
+  LCHReader,
+  toHex,
+  type SegmentedEncryptionDescriptor
+} from '@bsv/lch'
 import {
   EDITORIAL_CASES,
   buildEditorialComposition,
@@ -52,11 +58,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </section>
 
     <section class="flow" aria-label="LCH deployment flow">
-      <div><b>Creator</b><span>plaintext + rights interests</span></div><i>→</i>
-      <div><b>Issuer service</b><span>LCH, Offer, Quote, License</span></div><i>→</i>
+      <div><b>Creator</b><span>plaintext + rights interests</span></div>
       <div><b>Content host</b><span>verified ciphertext locator</span></div>
-      <div><b>Buyer wallet</b><span>one BRC-100 action</span></div><i>→</i>
-      <div><b>Payee endpoints</b><span>independent Delivery + wallet receipt</span></div><i>→</i>
+      <div><b>Issuer service</b><span>LCH, Offer, Quote, License</span></div>
+      <div><b>Buyer wallet</b><span>one BRC-100 action</span></div>
+      <div><b>Payee endpoints</b><span>readiness, authorization, Receipt</span></div>
+      <div><b>Evidence provider</b><span>signed processor acceptance</span></div>
+      <div><b>Delivery provider</b><span>retention + Payee retrieval</span></div>
       <div><b>Player</b><span>BRC-78 keys + authenticated media</span></div>
     </section>
 
@@ -65,6 +73,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p class="step">1 · CREATOR WIZARD</p><h2>Publish a protected asset</h2>
         <p>Choose media, declare the two reference rights interests, and set the exact split that becomes signed Payment Demands.</p>
         <div class="fields"><label>Recording controller <input id="recording-price" type="number" min="1" step="1" value="7" /> sat</label><label>Composition controller <input id="composition-price" type="number" min="1" step="1" value="5" /> sat</label></div>
+        <label class="storage">Recording settlement profile <select id="recording-settlement"><option value="${LCH_SETTLEMENT_PROFILES.authorizedOutput}" selected>authorized-output-v1 · offline-capable</option><option value="${LCH_SETTLEMENT_PROFILES.receiptComplete}">receipt-complete-v1 · Payee Receipt required</option></select><span>This Payee choice is signed in its Demand; an unknown profile fails before payment.</span></label>
         <label class="storage">Content adapter <select disabled><option>Detached verified reference store</option></select><span>Production examples replace this ContentSink with CHIRP or UHRP.</span></label>
         <div class="drop"><input id="media-file" type="file" accept="audio/*,video/*" /><label for="media-file">Choose local media<br><span>bytes remain in this browser</span></label></div>
         <button id="tone">Generate PCM test loop</button>
@@ -79,7 +88,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p id="asset-copy">Publish a fixture to enable preflight.</p>
         <div class="price"><span>SIGNED QUOTE</span><strong id="quote-total">12 satoshis</strong><code id="quote-split">7 + 5 · two signed delivery routes · one transaction</code></div>
         <button id="acquire-button" disabled>Preflight &amp; quote</button>
-        <p class="fine">After confirmation, the retained transaction fans out to each signed Payee endpoint. Each Payee validates and internalizes its own BRC-29 output. The issuer releases BRC-78 key grants only after both signed receipts arrive.</p>
+        <label class="offline-case"><input id="offline-recording" type="checkbox" checked /> Take the recording controller offline immediately after its refreshed readiness is signed</label>
+        <p class="fine">The composition controller uses receipt-complete-v1. The recording controller opts into authorized-output-v1: its exact BRC-29 destination, evidence provider, and durable Delivery route are signed before payment. Silence alone never releases a License.</p>
+        <button id="recover-recording" class="secondary" disabled>Bring recording controller online and recover stored Delivery</button>
         <div id="settlement-receipt" class="receipt settlement"><div class="empty">No wallet transaction or License</div></div>
       </div>
     </section>
@@ -93,6 +104,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
               `<article data-profile="${iri}"><span>pending</span><h3>${profileLabel(name)}</h3><code>${fragment(iri)}</code><ul><li>awaiting licensed fixture</li></ul></article>`
           )
           .join('')}
+        <article data-profile="${LCH_SETTLEMENT_PROFILES.authorizedOutput}"><span>pending</span><h3>Authorized output settlement</h3><code>authorized-output-v1</code><ul><li>awaiting acquisition case</li></ul></article>
       </div>
       <pre id="profile-output">No checks have run.</pre>
     </section>
@@ -121,6 +133,9 @@ const acquireButton = document.querySelector<HTMLButtonElement>('#acquire-button
 const checksButton = document.querySelector<HTMLButtonElement>('#run-checks')!
 const manifestButton = document.querySelector<HTMLButtonElement>('#manifest')!
 const previewButton = document.querySelector<HTMLButtonElement>('#preview-edit')!
+const recoveryButton = document.querySelector<HTMLButtonElement>('#recover-recording')!
+const offlineRecording = document.querySelector<HTMLInputElement>('#offline-recording')!
+const recordingSettlement = document.querySelector<HTMLSelectElement>('#recording-settlement')!
 const editButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-edit]')]
 
 fileInput.addEventListener('change', () => {
@@ -141,6 +156,12 @@ acquireButton.addEventListener('click', () => void acquire())
 checksButton.addEventListener('click', () => void runChecks())
 manifestButton.addEventListener('click', () => void buildComposition())
 previewButton.addEventListener('click', previewLastEdit)
+recoveryButton.addEventListener('click', () => void recoverRecordingPayment())
+recordingSettlement.addEventListener('change', () => {
+  const authorized = recordingSettlement.value === LCH_SETTLEMENT_PROFILES.authorizedOutput
+  offlineRecording.disabled = !authorized
+  if (!authorized) offlineRecording.checked = false
+})
 editButtons.forEach(button => {
   button.addEventListener('click', () => {
     const index = Number(button.dataset.edit)
@@ -153,7 +174,8 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
   status('protecting and signing')
   const recordingPrice = exactPrice('recording-price')
   const compositionPrice = exactPrice('composition-price')
-  server = await createServer(recordingPrice, compositionPrice)
+  const recordingSettlementProfile = recordingSettlement.value
+  server = await createServer(recordingPrice, compositionPrice, recordingSettlementProfile)
   client = createClient(server, buyerWallet)
   const published = await server.publish({ bytes, mediaType, name })
   const inspected = await new LCHReader(server.content).inspect(published.lch)
@@ -174,6 +196,7 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
   editButtons.forEach(button => (button.disabled = true))
   manifestButton.disabled = true
   previewButton.disabled = true
+  recoveryButton.disabled = true
   document.querySelector('#clips')!.innerHTML = '<span>no placements</span>'
   document.querySelector('#composition-output')!.textContent = 'Awaiting a licensed source.'
   document.querySelector('#settlement-receipt')!.innerHTML =
@@ -199,6 +222,7 @@ async function publish(bytes: Uint8Array, mediaType: string, name: string): Prom
     ],
     ['CONTENT ADAPTER', 'detached + digest verified'],
     ['PAYMENT SPLIT', `${recordingPrice} / ${compositionPrice} sat`],
+    ['RECORDING SETTLEMENT', fragment(recordingSettlementProfile)],
     ['PAYEE ROUTES', server.payeeEndpoints.map(item => endpointLabel(item.endpoint)).join(' + ')],
     ['USAGE PROFILE', 'fixed-render-v1']
   ])
@@ -218,6 +242,21 @@ async function acquire(): Promise<void> {
       acquireButton.disabled = false
       document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
         ['SIGNED READINESS', `${pendingPlan.readiness.length} / ${pendingPlan.demands.length}`],
+        [
+          'SIGNED DESTINATIONS',
+          `${pendingPlan.authorizations.length} authorized-output / ${pendingPlan.demands.length} total`
+        ],
+        [
+          'FALLBACK PROVIDERS',
+          pendingPlan.authorizations.length === 0
+            ? 'none selected'
+            : pendingPlan.authorizations
+                .map(
+                  item =>
+                    `${endpointLabel(String(item.body.evidenceEndpoint))} + ${endpointLabel(String(item.body.deliveryEndpoint))}`
+                )
+                .join(', ')
+        ],
         ['TRANSACTION', 'not created'],
         ['NEXT STEP', 'explicit wallet confirmation']
       ])
@@ -226,6 +265,7 @@ async function acquire(): Promise<void> {
     }
     const plan = pendingPlan
     acquireButton.textContent = 'Creating wallet transaction…'
+    if (offlineRecording.checked) server.setPayeeOfflineAfterNextReadiness('recording controller')
     const result = await client.acquire(plan)
     pendingPlan = undefined
     currentLicenseId = result.licenseId
@@ -240,23 +280,42 @@ async function acquire(): Promise<void> {
     acquireButton.textContent = 'Licensed asset ready'
     checksButton.disabled = false
     editButtons.forEach(button => (button.disabled = false))
+    recoveryButton.disabled = result.authorizedOutputs.length === 0
     const receiptState =
       buyerWallet === fixtureBuyerWallet
         ? `${recordingWallet.receivedSatoshis} sat recording + ${compositionWallet.receivedSatoshis} sat composition`
         : `${result.receipts.length} signed payee receipts`
     document.querySelector('#settlement-receipt')!.innerHTML = receiptRows([
       ['TRANSACTION', short(result.transactionId)],
+      ['TRANSACTION EVIDENCE', result.transactionState],
       ['RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`],
       ['RECORDING ENDPOINT', endpointLabel(server.payeeEndpoints[0]!.endpoint)],
       ['COMPOSITION WALLET', `${compositionWallet.receivedSatoshis} sat internalized`],
       ['COMPOSITION ENDPOINT', endpointLabel(server.payeeEndpoints[1]!.endpoint)],
       ['PAYEE RECEIPTS', String(result.receipts.length)],
+      ['AUTHORIZED OUTPUT PROOFS', String(result.authorizedOutputs.length)],
+      [
+        'DELIVERY AVAILABILITY',
+        result.authorizedOutputs.length === 0 ? 'not used' : 'signed through recovery deadline'
+      ],
+      [
+        'LATE PAYEE RECOVERY',
+        result.authorizedOutputs.length === 0 ? 'not needed' : 'stored Delivery available'
+      ],
       ['LICENSE', short(toHex(result.licenseId))],
       ['RECOVERY', result.recovered ? 'verified' : 'not verified']
     ])
     status(
       `transaction ${short(result.transactionId)} · ${receiptState} · license recovery verified`
     )
+    const settlementCard = document.querySelector<HTMLElement>(
+      `[data-profile="${LCH_SETTLEMENT_PROFILES.authorizedOutput}"]`
+    )!
+    settlementCard.classList.add('passed')
+    settlementCard.querySelector('span')!.textContent = 'pass'
+    settlementCard.querySelector('ul')!.innerHTML = result.authorizedOutputs.length
+      ? '<li>Payee offline after signed readiness</li><li>exact output independently verified</li><li>accepted transaction + durable Delivery attested</li><li>License issued before late wallet internalization</li>'
+      : '<li>online Payee Receipt remains valid</li><li>fallback was not needed</li>'
     await runChecks()
   } catch (error) {
     const pending = client.pendingPayment()
@@ -271,10 +330,33 @@ async function acquire(): Promise<void> {
         ['TRANSACTION', short(pending.transactionId)],
         ['TRANSACTION STATE', `${pending.transactionState} · broadcast not established`],
         ['SETTLEMENT', pending.settlementState],
-        ['PAYEE RECEIPTS', `${pending.receipts} / ${pending.requiredReceipts}`],
+        [
+          'SETTLEMENT PROOFS',
+          `${pending.receipts + pending.authorizedOutputs} / ${pending.requiredProofs}`
+        ],
         ['RECOVERY UNTIL', new Date(Number(pending.recoveryUntil) * 1_000).toISOString()]
       ])
     status(error instanceof Error ? error.message : 'acquisition failed')
+  }
+}
+
+async function recoverRecordingPayment(): Promise<void> {
+  recoveryButton.disabled = true
+  try {
+    server.setPayeeOnline('recording controller', true)
+    const receipts = await server.recoverStoredPayments('recording controller')
+    updateReceiptRow('RECORDING WALLET', `${recordingWallet.receivedSatoshis} sat internalized`)
+    updateReceiptRow(
+      'LATE PAYEE RECOVERY',
+      `${receipts.length} Receipt${receipts.length === 1 ? '' : 's'} · internalized once`
+    )
+    status(
+      `${receipts.length} late Receipt${receipts.length === 1 ? '' : 's'} recovered · recording wallet internalized ${recordingWallet.receivedSatoshis} sat`
+    )
+    recoveryButton.textContent = 'Stored Delivery recovered by recording controller'
+  } catch (error) {
+    recoveryButton.disabled = false
+    status(error instanceof Error ? error.message : 'late Delivery recovery failed')
   }
 }
 
@@ -352,7 +434,8 @@ async function buildComposition(): Promise<void> {
 
 async function createServer(
   recordingSatoshis: number,
-  compositionSatoshis: number
+  compositionSatoshis: number,
+  recordingSettlementProfile: string = LCH_SETTLEMENT_PROFILES.authorizedOutput
 ): Promise<ReferenceLCHServer> {
   return ReferenceLCHServer.create({
     issuerWallet,
@@ -363,7 +446,8 @@ async function createServer(
         satoshis: recordingSatoshis,
         dutyUid: 'urn:lch:duty:recording',
         interest: 'recording',
-        label: 'recording controller'
+        label: 'recording controller',
+        settlementProfile: recordingSettlementProfile
       },
       {
         wallet: compositionWallet,
@@ -409,6 +493,14 @@ function receiptRows(rows: Array<[string, string]>): string {
   return rows
     .map(([label, value]) => `<div><span>${label}</span><code>${value}</code></div>`)
     .join('')
+}
+
+function updateReceiptRow(label: string, value: string): void {
+  const row = [...document.querySelectorAll<HTMLElement>('#settlement-receipt > div')].find(
+    candidate => candidate.querySelector('span')?.textContent === label
+  )
+  const code = row?.querySelector('code')
+  if (code !== null && code !== undefined) code.textContent = value
 }
 
 function resetProfileCards(): void {

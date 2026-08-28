@@ -8,6 +8,7 @@ import {
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { WalletInterface } from '@bsv/sdk'
+import { LCH_SETTLEMENT_PROFILES } from '@bsv/lch'
 import { createFixtureWallet } from './fixtureWallet.js'
 import { ReferenceLCHServer, referenceApiResponse } from './referenceServer.js'
 
@@ -37,7 +38,8 @@ const lch = await ReferenceLCHServer.create({
       satoshis: environmentInteger('LCH_RECORDING_SATOSHIS', 7),
       dutyUid: 'urn:lch:duty:recording',
       interest: 'recording',
-      label: 'recording controller'
+      label: 'recording controller',
+      settlementProfile: LCH_SETTLEMENT_PROFILES.authorizedOutput
     },
     {
       wallet: wallets.compositionWallet,
@@ -71,6 +73,9 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       status: 'ready',
       walletMode,
       acquisitionEndpoint: lch.acquisitionEndpoint,
+      evidenceEndpoint: lch.evidenceEndpoint,
+      deliveryEndpoint: lch.deliveryEndpoint,
+      retrievalEndpoint: lch.retrievalEndpoint,
       payeeEndpoints: lch.payeeEndpoints,
       contentAdapter: 'reference-memory'
     })
@@ -114,7 +119,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 }
 
 function isLCHPath(pathname: string): boolean {
-  return pathname === '/api/lch' || pathname.startsWith('/api/lch/payees/')
+  return pathname === '/api/lch' || pathname.startsWith('/api/lch/')
 }
 
 async function loadWallets(moduleSpecifier: string | undefined): Promise<WalletSet> {

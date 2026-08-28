@@ -11,9 +11,17 @@ import {
 } from './acquisition.js'
 import { LCHHttpAcquisitionClient, type LCHHttpClientOptions } from './http.js'
 import { fromHex, objectId, toHex } from './hash.js'
+import { LCH_SETTLEMENT_PROFILES } from './constants.js'
 import { createMultipayTransaction } from './walletPayment.js'
 import { PublicBRC77Verifier, WalletBRC77Signer } from './signatures.js'
 import { verifySignedObject } from './objects.js'
+import {
+  validateAuthorizedOutputEvidence,
+  validateDeliveryAcknowledgement,
+  validatePaymentAuthorization,
+  validateTransactionEvidence,
+  type AuthorizedOutputEvidence
+} from './settlement.js'
 import type { LCHSigner, LCHTransactionState, LCHValue, SignedObject } from './types.js'
 
 export interface LCHMultipayPlan {
@@ -22,6 +30,7 @@ export interface LCHMultipayPlan {
   quote: SignedObject
   demands: SignedObject[]
   readiness: SignedObject[]
+  authorizations: SignedObject[]
   issuer: Uint8Array
   endpoint: string
   totalSatoshis: bigint
@@ -35,6 +44,10 @@ export interface LCHMultipayDelivery {
   endpoint: string
   delivery: SignedObject
 }
+
+export type LCHMultipaySettlement =
+  | { type: 'receipt'; receipt: SignedObject }
+  | { type: 'authorized-output'; evidence: AuthorizedOutputEvidence }
 
 export interface LCHFundedMultipay {
   plan: LCHMultipayPlan
@@ -60,7 +73,18 @@ export interface LCHAcquisitionTransport {
   preflightLicense(endpoint: string, request: SignedObject): Promise<void>
   quote(endpoint: string, request: SignedObject): Promise<SignedObject>
   preflightDemand(endpoint: string, demand: SignedObject): Promise<SignedObject>
+  authorizePayment(endpoint: string, demand: SignedObject): Promise<SignedObject>
   deliver(endpoint: string, delivery: SignedObject): Promise<SignedObject>
+  storeDelivery(
+    endpoint: string,
+    authorization: SignedObject,
+    delivery: SignedObject
+  ): Promise<SignedObject>
+  attestTransaction(
+    endpoint: string,
+    authorization: SignedObject,
+    atomicBeef: Uint8Array
+  ): Promise<SignedObject>
   complete(endpoint: string, completion: PaymentCompletion): Promise<SignedObject>
   recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined>
 }
@@ -107,6 +131,7 @@ export class LCHMultipayBuyer {
     })
     const demands = signedArray(quote.body.demands)
     const readiness = await this.obtainReadiness(demands)
+    const authorizations = await this.obtainAuthorizations(demands)
     let totalSatoshis = 0n
     for (const demand of demands) {
       await validatePaymentDemand(demand, undefined, {
@@ -123,6 +148,7 @@ export class LCHMultipayBuyer {
       quote,
       demands,
       readiness,
+      authorizations,
       issuer,
       endpoint,
       totalSatoshis,
@@ -136,6 +162,11 @@ export class LCHMultipayBuyer {
     if (now >= plan.expiresAt)
       throw new Error('The signed Quote expired before transaction creation')
     await this.validatePlanReadiness(plan.demands, plan.readiness, now)
+    const authorizationByDemand = await this.validatePlanAuthorizations(
+      plan.demands,
+      plan.authorizations,
+      now
+    )
     const demands = await Promise.all(
       plan.demands.map(async demand => ({
         demand,
@@ -143,12 +174,25 @@ export class LCHMultipayBuyer {
         payee: memberBytes(demand.body, 'payee', 33),
         satoshis: uint(demand.body.satoshis, 'Demand amount'),
         derivationPrefix: memberBytes(demand.body, 'derivationPrefix', 32),
-        dutyUid: memberString(demand.body, 'dutyUid')
+        dutyUid: memberString(demand.body, 'dutyUid'),
+        authorization: authorizationByDemand.get(
+          toHex(await objectId('payment-demand', demand.body))
+        )
       }))
     )
     const payment = await createMultipayTransaction(
       this.wallet,
-      demands.map(({ demand: _demand, ...item }) => item)
+      demands.map(({ demand: _demand, authorization, ...item }) => ({
+        ...item,
+        ...(authorization === undefined
+          ? {}
+          : {
+              authorizedOutput: {
+                derivationSuffix: memberBytes(authorization.body, 'derivationSuffix', 32),
+                lockingScript: memberBytesAny(authorization.body, 'lockingScript')
+              }
+            })
+      }))
     )
     const deliveries: LCHMultipayDelivery[] = []
     for (const remittance of payment.remittances) {
@@ -206,10 +250,15 @@ export class LCHMultipayBuyer {
 
   async complete(
     payment: LCHFundedMultipay,
-    receipts: readonly SignedObject[]
+    receipts: readonly SignedObject[],
+    authorizedOutputs: readonly AuthorizedOutputEvidence[] = []
   ): Promise<SignedObject> {
-    if (receipts.length !== payment.deliveries.length)
-      throw new Error('Payment Completion requires one Receipt per Delivery')
+    if (receipts.length + authorizedOutputs.length !== payment.deliveries.length)
+      throw new Error(
+        authorizedOutputs.length === 0
+          ? 'Payment Completion requires one Receipt per Delivery'
+          : 'Payment Completion requires one settlement proof per Delivery'
+      )
     const expected = new Map(
       payment.deliveries.map(delivery => [toHex(delivery.demandId), delivery] as const)
     )
@@ -225,11 +274,30 @@ export class LCHMultipayBuyer {
       equal(receipt.body.payee, delivery.payee, 'Receipt Payee')
       seen.add(demandIdHex)
     }
+    for (const bundle of authorizedOutputs) {
+      const demandId = memberBytes(bundle.authorization.body, 'demandId', 32)
+      const demandIdHex = toHex(demandId)
+      const delivery = expected.get(demandIdHex)
+      if (delivery === undefined || seen.has(demandIdHex))
+        throw new Error('Payment Completion has an unexpected or repeated authorized output')
+      const demand = await demandById(payment.plan.demands, demandId)
+      if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput)
+        throw new Error('Payment Demand does not permit authorized-output settlement')
+      await validateAuthorizedOutputEvidence(
+        bundle,
+        demand,
+        payment.atomicBeef,
+        new PublicBRC77Verifier(),
+        { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+      )
+      seen.add(demandIdHex)
+    }
     const completion: PaymentCompletion = {
       request: payment.plan.request,
       quote: payment.plan.quote,
       atomicBeef: payment.atomicBeef,
-      receipts: [...receipts]
+      receipts: [...receipts],
+      authorizedOutputs: [...authorizedOutputs]
     }
     const license = await this.transport.complete(payment.plan.endpoint, completion)
     await verifySignedObject('license', license, new PublicBRC77Verifier(), payment.plan.issuer)
@@ -240,6 +308,81 @@ export class LCHMultipayBuyer {
 
   recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined> {
     return this.transport.recover(endpoint, requestId)
+  }
+
+  async collectAuthorizedOutputEvidence(
+    payment: LCHFundedMultipay,
+    item: LCHMultipayDelivery
+  ): Promise<AuthorizedOutputEvidence> {
+    const demand = await demandById(payment.plan.demands, item.demandId)
+    const authorization = payment.plan.authorizations.find(
+      candidate => toHex(memberBytes(candidate.body, 'demandId', 32)) === toHex(item.demandId)
+    )
+    if (authorization === undefined)
+      throw new Error('Payment plan has no Authorization for this Delivery')
+    await validatePaymentAuthorization(
+      authorization,
+      demand,
+      undefined,
+      new PublicBRC77Verifier(),
+      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+    )
+    const deliveryAcknowledgement = await this.transport.storeDelivery(
+      memberString(authorization.body, 'deliveryEndpoint'),
+      authorization,
+      item.delivery
+    )
+    await validateDeliveryAcknowledgement(
+      deliveryAcknowledgement,
+      authorization,
+      item.delivery,
+      await objectId('payment-authorization', authorization.body),
+      await objectId('payment-delivery', item.delivery.body),
+      new PublicBRC77Verifier(),
+      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+    )
+    const transactionEvidence = await this.transport.attestTransaction(
+      memberString(authorization.body, 'evidenceEndpoint'),
+      authorization,
+      payment.atomicBeef
+    )
+    await validateTransactionEvidence(
+      transactionEvidence,
+      authorization,
+      await objectId('payment-authorization', authorization.body),
+      Transaction.fromAtomicBEEF(payment.atomicBeef as AtomicBEEF),
+      new PublicBRC77Verifier()
+    )
+    const bundle = {
+      authorization,
+      delivery: item.delivery,
+      transactionEvidence,
+      deliveryAcknowledgement
+    }
+    await validateAuthorizedOutputEvidence(
+      bundle,
+      demand,
+      payment.atomicBeef,
+      new PublicBRC77Verifier(),
+      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+    )
+    return bundle
+  }
+
+  async settleDelivery(
+    payment: LCHFundedMultipay,
+    item: LCHMultipayDelivery
+  ): Promise<LCHMultipaySettlement> {
+    try {
+      return { type: 'receipt', receipt: await this.deliver(payment, item) }
+    } catch (error) {
+      const demand = await demandById(payment.plan.demands, item.demandId)
+      if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput) throw error
+      return {
+        type: 'authorized-output',
+        evidence: await this.collectAuthorizedOutputEvidence(payment, item)
+      }
+    }
   }
 
   private async obtainReadiness(demands: readonly SignedObject[]): Promise<SignedObject[]> {
@@ -255,6 +398,53 @@ export class LCHMultipayBuyer {
       readiness.push(ready)
     }
     return readiness
+  }
+
+  private async obtainAuthorizations(demands: readonly SignedObject[]): Promise<SignedObject[]> {
+    const authorizations: SignedObject[] = []
+    for (const demand of demands) {
+      if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput) continue
+      const authorization = await this.transport.authorizePayment(
+        memberString(demand.body, 'endpoint'),
+        demand
+      )
+      await validatePaymentAuthorization(
+        authorization,
+        demand,
+        this.now(),
+        new PublicBRC77Verifier(),
+        { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+      )
+      authorizations.push(authorization)
+    }
+    return authorizations
+  }
+
+  private async validatePlanAuthorizations(
+    demands: readonly SignedObject[],
+    authorizations: readonly SignedObject[],
+    now: bigint
+  ): Promise<Map<string, SignedObject>> {
+    const available = new Map(
+      authorizations.map(item => [toHex(memberBytes(item.body, 'demandId', 32)), item] as const)
+    )
+    if (available.size !== authorizations.length)
+      throw new Error('Payment plan has a repeated Authorization')
+    for (const demand of demands) {
+      const demandId = await objectId('payment-demand', demand.body)
+      const demandIdHex = toHex(demandId)
+      const authorization = available.get(demandIdHex)
+      if (demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput) {
+        if (authorization === undefined)
+          throw new Error('Payment plan is missing a required Payment Authorization')
+        await validatePaymentAuthorization(authorization, demand, now, new PublicBRC77Verifier(), {
+          allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
+        })
+      } else if (authorization !== undefined) {
+        throw new Error('Payment plan has an Authorization for a receipt-only Demand')
+      }
+    }
+    return available
   }
 
   private async validatePlanReadiness(
@@ -318,6 +508,12 @@ function memberBytes(body: Record<string, LCHValue>, key: string, length: number
   const value = body[key]
   if (!(value instanceof Uint8Array) || value.length !== length)
     throw new Error(`${key} is invalid`)
+  return value
+}
+
+function memberBytesAny(body: Record<string, LCHValue>, key: string): Uint8Array {
+  const value = body[key]
+  if (!(value instanceof Uint8Array) || value.length === 0) throw new Error(`${key} is invalid`)
   return value
 }
 

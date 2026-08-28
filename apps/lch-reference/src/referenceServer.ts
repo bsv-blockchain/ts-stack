@@ -1,14 +1,19 @@
 import { Transaction, type AtomicBEEF, type WalletInterface } from '@bsv/sdk'
 import {
   LCHHttpServer,
+  LCHError,
   LCHIssuer,
   LCHPayee,
   LCHPublisher,
   LCHQuoteIssuer,
   LCHReader,
+  LCHSettlementService,
   LCH_MECHANISMS,
   LCH_PROFILES,
+  LCH_SETTLEMENT_PROFILES,
+  LCH_TRANSACTION_EVIDENCE_POLICIES,
   WalletBRC77Signer,
+  WalletAuthorizedOutputPayee,
   WalletBRC78KeyDelivery,
   WalletPaymentReceiver,
   encodeDeterministicCbor,
@@ -17,13 +22,21 @@ import {
   toBase64Url,
   toHex,
   validateLicenseRequest,
+  validateAuthorizedOutputEvidence,
+  validatePaymentAuthorization,
+  validatePaymentDelivery,
+  validatePaymentDeliveryRetrieval,
   validatePaymentReceipt,
+  type AuthorizedOutputEvidence,
   type ContentSink,
   type ContentSource,
   type LCHValue,
   type PaymentCompletion,
+  type PaymentDeliveryStoreRequest,
   type ProtectedAsset,
-  type SignedObject
+  type SignedObject,
+  type StoredPaymentDelivery,
+  type TransactionEvidenceRequest
 } from '@bsv/lch'
 
 export interface ReferencePayeeOptions {
@@ -33,6 +46,7 @@ export interface ReferencePayeeOptions {
   interest: string
   label: string
   endpoint?: string
+  settlementProfile?: string
 }
 
 export interface ReferenceLCHServerOptions {
@@ -60,6 +74,22 @@ interface PayeeRuntime extends Omit<ReferencePayeeOptions, 'endpoint'> {
   identityKey: Uint8Array
   payee: LCHPayee
   receiver: WalletPaymentReceiver
+  authorizer: WalletAuthorizedOutputPayee
+  online: boolean
+  offlineAfterNextReadiness: boolean
+}
+
+interface StoredDelivery {
+  authorization: SignedObject
+  delivery: SignedObject
+  acknowledgement: SignedObject
+  payee: PayeeRuntime
+}
+
+interface DeliveryClaim {
+  authorizationBytes: Uint8Array
+  deliveryBytes: Uint8Array
+  completion: Promise<SignedObject>
 }
 
 interface AssetRecord extends ReferencePublishedAsset {
@@ -102,6 +132,9 @@ export class ReferenceContentStore implements ContentSink, ContentSource {
 
 export class ReferenceLCHServer {
   readonly acquisitionEndpoint: string
+  readonly evidenceEndpoint: string
+  readonly deliveryEndpoint: string
+  readonly retrievalEndpoint: string
   readonly payeeEndpoints: ReadonlyArray<{ label: string; endpoint: string }>
   readonly content: ReferenceContentStore
   readonly http: Pick<LCHHttpServer, 'handle'>
@@ -111,12 +144,19 @@ export class ReferenceLCHServer {
   private readonly publisher: LCHPublisher
   private readonly quoteIssuer: LCHQuoteIssuer
   private readonly keyDelivery: WalletBRC78KeyDelivery
+  private readonly settlementService: LCHSettlementService
   private readonly payees: PayeeRuntime[]
   private readonly assets = new Map<string, AssetRecord>()
   private readonly offers = new Map<string, AssetRecord>()
   private readonly quotes = new Map<string, QuoteRecord>()
   private readonly demandIndex = new Map<string, { demand: SignedObject; payee: PayeeRuntime }>()
   private readonly licenses = new Map<string, SignedObject>()
+  private readonly storedDeliveries = new Map<string, StoredDelivery>()
+  private readonly deliveryClaims = new Map<string, DeliveryClaim>()
+  private readonly transactionEvidence = new Map<string, SignedObject>()
+  private readonly acceptedTransactions = new Map<string, string>()
+  private availabilityProviderOnline = true
+  private evidenceProviderOnline = true
 
   private constructor(
     options: ReferenceLCHServerOptions,
@@ -125,15 +165,20 @@ export class ReferenceLCHServer {
     publisher: LCHPublisher,
     quoteIssuer: LCHQuoteIssuer,
     keyDelivery: WalletBRC78KeyDelivery,
+    settlementService: LCHSettlementService,
     payees: PayeeRuntime[]
   ) {
     this.acquisitionEndpoint = `${options.publicBaseUrl}/api/lch`
+    this.evidenceEndpoint = `${options.publicBaseUrl}/api/lch/evidence`
+    this.deliveryEndpoint = `${options.publicBaseUrl}/api/lch/delivery-store`
+    this.retrievalEndpoint = `${options.publicBaseUrl}/api/lch/delivery-retrieval`
     this.content = new ReferenceContentStore(options.publicBaseUrl)
     this.now = options.now ?? (() => BigInt(Math.floor(Date.now() / 1000)))
     this.issuer = issuer
     this.publisher = publisher
     this.quoteIssuer = quoteIssuer
     this.keyDelivery = keyDelivery
+    this.settlementService = settlementService
     this.payees = payees
     this.payeeEndpoints = payees.map(({ label, endpoint }) => ({ label, endpoint }))
     const issuerHttp = new LCHHttpServer({
@@ -152,16 +197,35 @@ export class ReferenceLCHServer {
             new LCHHttpServer({
               handlers: {
                 preflightDemand: demand => this.preflightDemandFor(payee, demand),
+                authorizePayment: demand => this.authorizePaymentFor(payee, demand),
                 paymentDelivery: delivery => this.receivePaymentFor(payee, delivery)
               }
             })
           ] as const
       )
     )
+    const evidenceHttp = new LCHHttpServer({
+      handlers: { attestTransaction: request => this.attestTransaction(request) }
+    })
+    const deliveryHttp = new LCHHttpServer({
+      handlers: { storeDelivery: request => this.storeDelivery(request) }
+    })
+    const retrievalHttp = new LCHHttpServer({
+      handlers: { retrieveDelivery: request => this.retrieveDelivery(request) }
+    })
     this.http = {
       handle: request => {
         const endpoint = requestEndpoint(request.url)
-        const handler = endpoint === this.acquisitionEndpoint ? issuerHttp : payeeHttp.get(endpoint)
+        const handler =
+          endpoint === this.acquisitionEndpoint
+            ? issuerHttp
+            : endpoint === this.evidenceEndpoint
+              ? evidenceHttp
+              : endpoint === this.deliveryEndpoint
+                ? deliveryHttp
+                : endpoint === this.retrievalEndpoint
+                  ? retrievalHttp
+                  : payeeHttp.get(endpoint)
         return handler?.handle(request) ?? Promise.resolve(new Response(null, { status: 404 }))
       }
     }
@@ -180,9 +244,19 @@ export class ReferenceLCHServer {
           `${options.publicBaseUrl}/api/lch/payees/${encodeURIComponent(payeeOptions.interest)}`
         return {
           ...payeeOptions,
+          settlementProfile:
+            payeeOptions.settlementProfile ?? LCH_SETTLEMENT_PROFILES.receiptComplete,
           endpoint,
           identityKey: signer.identityKey,
           payee: new LCHPayee(signer),
+          authorizer: new WalletAuthorizedOutputPayee({
+            wallet: payeeOptions.wallet,
+            signer,
+            now,
+            allowInsecureLocalOrigins: isLocalHttp(endpoint) ? [new URL(endpoint).origin] : []
+          }),
+          online: true,
+          offlineAfterNextReadiness: false,
           receiver: new WalletPaymentReceiver({
             wallet: payeeOptions.wallet,
             signer,
@@ -199,6 +273,7 @@ export class ReferenceLCHServer {
       new LCHPublisher(issuerSigner),
       new LCHQuoteIssuer(issuerSigner),
       new WalletBRC78KeyDelivery(options.issuerWallet),
+      new LCHSettlementService(issuerSigner),
       payees
     )
   }
@@ -303,6 +378,41 @@ export class ReferenceLCHServer {
     return record === undefined ? undefined : publicAsset(record)
   }
 
+  setPayeeOnline(label: string, online: boolean): void {
+    this.payeeByLabel(label).online = online
+  }
+
+  setPayeeOfflineAfterNextReadiness(label: string, enabled = true): void {
+    this.payeeByLabel(label).offlineAfterNextReadiness = enabled
+  }
+
+  setAvailabilityProviderOnline(online: boolean): void {
+    this.availabilityProviderOnline = online
+  }
+
+  setEvidenceProviderOnline(online: boolean): void {
+    this.evidenceProviderOnline = online
+  }
+
+  async recoverStoredPayments(label: string): Promise<SignedObject[]> {
+    const payee = this.payeeByLabel(label)
+    if (!payee.online) throw new Error('Payee endpoint is offline')
+    const receipts: SignedObject[] = []
+    for (const stored of this.storedDeliveries.values()) {
+      if (stored.payee !== payee) continue
+      const request = await payee.payee.createDeliveryRetrieval({
+        authorizationId: await objectId('payment-authorization', stored.authorization.body),
+        requestedAt: this.now()
+      })
+      const retrieved = await this.retrieveDelivery(request)
+      if (retrieved === undefined) throw new Error('Stored Payment Delivery is unavailable')
+      receipts.push(
+        await payee.receiver.receive(this.demandFor(retrieved.delivery), retrieved.delivery)
+      )
+    }
+    return receipts
+  }
+
   async preflightLicense(request: SignedObject): Promise<void> {
     const requestId = await validateLicenseRequest(request)
     const asset = this.requestAsset(request)
@@ -333,6 +443,7 @@ export class ReferenceLCHServer {
         satoshis: payee.satoshis,
         expiresAt,
         recoveryPeriodSeconds: 86_400,
+        settlementProfile: payee.settlementProfile,
         allowInsecureLocalEndpoint: isLocalHttp(this.acquisitionEndpoint)
       })
       const demandId = toHex(await objectId('payment-demand', demand.body))
@@ -358,6 +469,7 @@ export class ReferenceLCHServer {
     const demandId = toHex(await objectId('payment-demand', demand.body))
     const runtime = this.demandIndex.get(demandId)
     if (runtime === undefined) throw new Error('Payment Demand is unknown')
+    if (!runtime.payee.online) throw new Error('Payee endpoint is offline')
     await runtime.payee.receiver.preflight(demand)
     return this.createReadiness(runtime.payee, runtime.demand, hex(demandId))
   }
@@ -367,6 +479,7 @@ export class ReferenceLCHServer {
     if (!(demandId instanceof Uint8Array)) throw new Error('Payment Delivery has no Demand ID')
     const runtime = this.demandIndex.get(toHex(demandId))
     if (runtime === undefined) throw new Error('Payment Demand is unknown')
+    if (!runtime.payee.online) throw new Error('Payee endpoint is offline')
     return runtime.payee.receiver.receive(runtime.demand, delivery)
   }
 
@@ -377,8 +490,34 @@ export class ReferenceLCHServer {
     const demandId = toHex(await objectId('payment-demand', demand.body))
     const runtime = this.demandIndex.get(demandId)
     if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
+    if (!payee.online) throw new Error('Payee endpoint is offline')
     await runtime.payee.receiver.preflight(demand)
-    return this.createReadiness(payee, runtime.demand, hex(demandId))
+    const readiness = await this.createReadiness(payee, runtime.demand, hex(demandId))
+    if (payee.offlineAfterNextReadiness) {
+      payee.offlineAfterNextReadiness = false
+      payee.online = false
+    }
+    return readiness
+  }
+
+  private async authorizePaymentFor(
+    payee: PayeeRuntime,
+    demand: SignedObject
+  ): Promise<SignedObject> {
+    const demandId = toHex(await objectId('payment-demand', demand.body))
+    const runtime = this.demandIndex.get(demandId)
+    if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
+    if (!payee.online) throw new Error('Payee endpoint is offline')
+    return payee.authorizer.authorize(demand, {
+      evidenceProvider: this.issuerIdentity,
+      evidenceEndpoint: this.evidenceEndpoint,
+      evidencePolicy: LCH_TRANSACTION_EVIDENCE_POLICIES.signedProcessorAcceptance,
+      minimumTransactionState: 'accepted',
+      deliveryProvider: this.issuerIdentity,
+      deliveryEndpoint: this.deliveryEndpoint,
+      retrievalEndpoint: this.retrievalEndpoint,
+      allowInsecureLocalEndpoint: isLocalHttp(this.acquisitionEndpoint)
+    })
   }
 
   private createReadiness(
@@ -407,7 +546,138 @@ export class ReferenceLCHServer {
     if (!(demandId instanceof Uint8Array)) throw new Error('Payment Delivery has no Demand ID')
     const runtime = this.demandIndex.get(toHex(demandId))
     if (runtime?.payee !== payee) throw new Error('Payment Demand belongs to another endpoint')
+    if (!payee.online) throw new Error('Payee endpoint is offline')
     return runtime.payee.receiver.receive(runtime.demand, delivery)
+  }
+
+  private async storeDelivery(request: PaymentDeliveryStoreRequest): Promise<SignedObject> {
+    if (!this.availabilityProviderOnline) throw new Error('Delivery provider is unavailable')
+    const demandId = bytes(request.authorization.body.demandId, 32, 'Authorization Demand ID')
+    const runtime = this.demandIndex.get(toHex(demandId))
+    if (runtime === undefined) throw new Error('Payment Authorization refers to an unknown Demand')
+    const authorizationId = await validatePaymentAuthorization(
+      request.authorization,
+      runtime.demand,
+      undefined,
+      undefined,
+      this.validationOptions()
+    )
+    await validatePaymentDelivery(request.delivery)
+    equal(request.delivery.body.demandId, demandId, 'Delivery Demand ID')
+    const key = toHex(authorizationId)
+    const existing = this.storedDeliveries.get(key)
+    if (existing !== undefined) {
+      equalObject(existing.authorization, request.authorization, 'Stored Payment Authorization')
+      equalObject(existing.delivery, request.delivery, 'Stored Payment Delivery')
+      return existing.acknowledgement
+    }
+    const authorizationBytes = encodeDeterministicCbor(request.authorization as unknown as LCHValue)
+    const deliveryBytes = encodeDeterministicCbor(request.delivery as unknown as LCHValue)
+    const claimed = this.deliveryClaims.get(key)
+    if (claimed !== undefined) {
+      equal(authorizationBytes, claimed.authorizationBytes, 'Stored Payment Authorization')
+      equal(deliveryBytes, claimed.deliveryBytes, 'Stored Payment Delivery')
+      return claimed.completion
+    }
+
+    // Claim the byte-exact Authorization/Delivery pair synchronously. This keeps
+    // concurrent requests idempotent and rejects a second Delivery before the
+    // acknowledgement signer yields.
+    const completion = Promise.resolve().then(async (): Promise<SignedObject> => {
+      const acknowledgement = await this.settlementService.createDeliveryAcknowledgement({
+        authorizationId,
+        deliveryId: await objectId('payment-delivery', request.delivery.body),
+        demandId,
+        requestId: bytes(request.delivery.body.requestId, 32, 'Delivery Request ID'),
+        payee: runtime.payee.identityKey,
+        storedAt: this.now(),
+        availableUntil: BigInt(request.authorization.body.recoveryUntil as number | bigint),
+        retrievalEndpoint: this.retrievalEndpoint,
+        allowInsecureLocalEndpoint: isLocalHttp(this.retrievalEndpoint)
+      })
+      this.storedDeliveries.set(key, {
+        authorization: request.authorization,
+        delivery: request.delivery,
+        acknowledgement,
+        payee: runtime.payee
+      })
+      return acknowledgement
+    })
+    const claim = { authorizationBytes, deliveryBytes, completion }
+    this.deliveryClaims.set(key, claim)
+    try {
+      return await completion
+    } catch (error) {
+      if (this.deliveryClaims.get(key) === claim) this.deliveryClaims.delete(key)
+      throw error
+    }
+  }
+
+  private async attestTransaction(request: TransactionEvidenceRequest): Promise<SignedObject> {
+    if (!this.evidenceProviderOnline)
+      throw new Error('Transaction evidence provider is unavailable')
+    const demandId = bytes(request.authorization.body.demandId, 32, 'Authorization Demand ID')
+    const runtime = this.demandIndex.get(toHex(demandId))
+    if (runtime === undefined) throw new Error('Payment Authorization refers to an unknown Demand')
+    const authorizationId = await validatePaymentAuthorization(
+      request.authorization,
+      runtime.demand,
+      undefined,
+      undefined,
+      this.validationOptions()
+    )
+    const key = toHex(authorizationId)
+    const transaction = Transaction.fromAtomicBEEF(request.atomicBeef as AtomicBEEF)
+    const matchingOutputs = transaction.outputs.filter(
+      output =>
+        output.satoshis !== undefined &&
+        BigInt(output.satoshis) === BigInt(runtime.payee.satoshis) &&
+        toHex(output.lockingScript.toUint8Array()) ===
+          toHex(bytes(request.authorization.body.lockingScript, undefined, 'Authorized script'))
+    )
+    if (matchingOutputs.length !== 1)
+      throw new LCHError(
+        'ERR_LCH_PAYMENT',
+        'Accepted transaction does not contain exactly one authorized output'
+      )
+    const txid = transaction.id('hex')
+    const accepted = this.acceptedTransactions.get(key)
+    if (accepted !== undefined && accepted !== txid)
+      throw new LCHError(
+        'ERR_LCH_PAYMENT',
+        'Payment Authorization was already bound to another accepted transaction'
+      )
+    const existing = this.transactionEvidence.get(key)
+    if (existing !== undefined) return existing
+    this.acceptedTransactions.set(key, txid)
+    const evidence = await this.settlementService.createTransactionEvidence({
+      authorizationId,
+      txid: hex(txid),
+      state: 'accepted',
+      policy: LCH_TRANSACTION_EVIDENCE_POLICIES.signedProcessorAcceptance,
+      observedAt: this.now()
+    })
+    this.transactionEvidence.set(key, evidence)
+    return evidence
+  }
+
+  private async retrieveDelivery(
+    request: SignedObject
+  ): Promise<StoredPaymentDelivery | undefined> {
+    const authorizationId = bytes(request.body.authorizationId, 32, 'Retrieval Authorization ID')
+    const stored = this.storedDeliveries.get(toHex(authorizationId))
+    if (stored === undefined) return undefined
+    await validatePaymentDeliveryRetrieval(request, stored.authorization)
+    const requestedAt = BigInt(request.body.requestedAt as number | bigint)
+    const authorizedAt = BigInt(stored.authorization.body.authorizedAt as number | bigint)
+    const availableUntil = BigInt(stored.acknowledgement.body.availableUntil as number | bigint)
+    if (requestedAt < authorizedAt || requestedAt >= availableUntil)
+      throw new Error('Delivery retrieval time is outside the retained window')
+    return {
+      authorization: stored.authorization,
+      delivery: stored.delivery,
+      deliveryAcknowledgement: stored.acknowledgement
+    }
   }
 
   async complete(completion: PaymentCompletion): Promise<SignedObject> {
@@ -419,6 +689,7 @@ export class ReferenceLCHServer {
     const transaction = Transaction.fromAtomicBEEF(completion.atomicBeef as AtomicBEEF)
     const txid = transaction.id('hex')
     const receipts = new Map<string, SignedObject>()
+    const authorizedOutputs = new Map<string, AuthorizedOutputEvidence>()
     const outputIndices = new Set<number>()
     for (const receipt of completion.receipts) {
       await validatePaymentReceipt(receipt)
@@ -444,7 +715,28 @@ export class ReferenceLCHServer {
       if (receipts.has(demandIdHex)) throw new Error('Payment Receipt is duplicated')
       receipts.set(demandIdHex, receipt)
     }
-    if (receipts.size !== quoteRecord.demands.size) throw new Error('A Payment Receipt is missing')
+    for (const bundle of completion.authorizedOutputs ?? []) {
+      const demandId = bytes(bundle.authorization.body.demandId, 32, 'Authorization Demand ID')
+      const demandIdHex = toHex(demandId)
+      const runtime = quoteRecord.demands.get(demandIdHex)
+      if (runtime === undefined) throw new Error('Authorized output is not required by the Quote')
+      if (receipts.has(demandIdHex) || authorizedOutputs.has(demandIdHex))
+        throw new Error('Payment Demand has more than one settlement proof')
+      await validateAuthorizedOutputEvidence(
+        bundle,
+        runtime.demand,
+        completion.atomicBeef,
+        undefined,
+        this.validationOptions()
+      )
+      const outputIndex = Number(bundle.delivery.body.outputIndex)
+      if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndices.has(outputIndex))
+        throw new Error('Authorized output index is invalid or duplicated')
+      outputIndices.add(outputIndex)
+      authorizedOutputs.set(demandIdHex, bundle)
+    }
+    if (receipts.size + authorizedOutputs.size !== quoteRecord.demands.size)
+      throw new Error('A required settlement proof is missing')
     const existing = this.licenses.get(key)
     if (existing !== undefined) return existing
 
@@ -485,10 +777,30 @@ export class ReferenceLCHServer {
       },
       selection: selection(completion.request.body.selection),
       fulfillments: await Promise.all(
-        [...quoteRecord.demands].map(async ([demandId, runtime]) => ({
-          dutyUid: runtime.demand.body.dutyUid as string,
-          receiptIds: [await objectId('payment-receipt', receipts.get(demandId)!.body)]
-        }))
+        [...quoteRecord.demands].map(async ([demandId, runtime]) => {
+          const receipt = receipts.get(demandId)
+          const bundle = authorizedOutputs.get(demandId)
+          return {
+            dutyUid: runtime.demand.body.dutyUid as string,
+            settlementProfile: runtime.demand.body.settlementProfile as string,
+            ...(receipt === undefined
+              ? {
+                  authorizationId: await objectId(
+                    'payment-authorization',
+                    bundle!.authorization.body
+                  ),
+                  transactionEvidenceId: await objectId(
+                    'transaction-evidence',
+                    bundle!.transactionEvidence.body
+                  ),
+                  deliveryAcknowledgementId: await objectId(
+                    'payment-delivery-ack',
+                    bundle!.deliveryAcknowledgement.body
+                  )
+                }
+              : { receiptIds: [await objectId('payment-receipt', receipt.body)] })
+          }
+        })
       ),
       keyGrants,
       encryption: (
@@ -501,6 +813,24 @@ export class ReferenceLCHServer {
 
   async recover(requestId: Uint8Array): Promise<SignedObject | undefined> {
     return this.licenses.get(toHex(requestId))
+  }
+
+  private payeeByLabel(label: string): PayeeRuntime {
+    const payee = this.payees.find(candidate => candidate.label === label)
+    if (payee === undefined) throw new Error(`Unknown Payee: ${label}`)
+    return payee
+  }
+
+  private demandFor(delivery: SignedObject): SignedObject {
+    const demandId = bytes(delivery.body.demandId, 32, 'Delivery Demand ID')
+    const runtime = this.demandIndex.get(toHex(demandId))
+    if (runtime === undefined) throw new Error('Payment Delivery refers to an unknown Demand')
+    return runtime.demand
+  }
+
+  private validationOptions(): { allowInsecureLocalOrigins: string[] } {
+    const origin = new URL(this.acquisitionEndpoint).origin
+    return { allowInsecureLocalOrigins: isLocalHttp(this.acquisitionEndpoint) ? [origin] : [] }
   }
 
   private requestAsset(request: SignedObject): AssetRecord {
@@ -560,8 +890,12 @@ function selection(value: LCHValue | undefined): { type: 'all' } {
   return { type: 'all' }
 }
 
-function bytes(value: unknown, length: number, name: string): Uint8Array {
-  if (!(value instanceof Uint8Array) || value.length !== length)
+function bytes(value: unknown, length: number | undefined, name: string): Uint8Array {
+  if (
+    !(value instanceof Uint8Array) ||
+    value.length === 0 ||
+    (length !== undefined && value.length !== length)
+  )
     throw new Error(`${name} is invalid`)
   return value
 }

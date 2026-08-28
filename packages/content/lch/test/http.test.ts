@@ -52,6 +52,11 @@ describe('LCH HTTP binding', () => {
       { version: 1, payee: signer.identityKey },
       signer
     )
+    const authorization = await signObject(
+      'payment-authorization',
+      { version: 1, payee: signer.identityKey },
+      signer
+    )
     const delivery = await signObject(
       'payment-delivery',
       { version: 1, buyer: signer.identityKey },
@@ -62,11 +67,34 @@ describe('LCH HTTP binding', () => {
       { version: 1, payee: signer.identityKey },
       signer
     )
+    const evidence = await signObject(
+      'transaction-evidence',
+      { version: 1, provider: signer.identityKey },
+      signer
+    )
+    const acknowledgement = await signObject(
+      'payment-delivery-ack',
+      { version: 1, provider: signer.identityKey },
+      signer
+    )
+    const retrieval = await signObject(
+      'payment-delivery-retrieval',
+      { version: 1, payee: signer.identityKey },
+      signer
+    )
     const license = await signObject('license', { version: 1, issuer: signer.identityKey }, signer)
     const preflightLicense = jest.fn(async () => undefined)
     const preflightDemand = jest.fn(async () => readiness)
     const quoteHandler = jest.fn(async () => quote)
     const paymentDelivery = jest.fn(async () => receipt)
+    const authorizePayment = jest.fn(async () => authorization)
+    const storeDelivery = jest.fn(async () => acknowledgement)
+    const attestTransaction = jest.fn(async () => evidence)
+    const retrieveDelivery = jest.fn(async () => ({
+      authorization,
+      delivery,
+      deliveryAcknowledgement: acknowledgement
+    }))
     const complete = jest.fn(async () => license)
     const recover = jest.fn(async () => license)
     const server = new LCHHttpServer({
@@ -74,7 +102,11 @@ describe('LCH HTTP binding', () => {
         preflightLicense,
         quote: quoteHandler,
         preflightDemand,
+        authorizePayment,
         paymentDelivery,
+        storeDelivery,
+        attestTransaction,
+        retrieveDelivery,
         complete,
         recover
       }
@@ -89,7 +121,19 @@ describe('LCH HTTP binding', () => {
     await client.preflightLicense(endpoint, request)
     await expect(client.quote(endpoint, request)).resolves.toEqual(quote)
     await expect(client.preflightDemand(endpoint, demand)).resolves.toEqual(readiness)
+    await expect(client.authorizePayment(endpoint, demand)).resolves.toEqual(authorization)
     await expect(client.deliver(endpoint, delivery)).resolves.toEqual(receipt)
+    await expect(client.storeDelivery(endpoint, authorization, delivery)).resolves.toEqual(
+      acknowledgement
+    )
+    await expect(client.attestTransaction(endpoint, authorization, bytes(9, 4))).resolves.toEqual(
+      evidence
+    )
+    await expect(client.retrieveDelivery(endpoint, retrieval)).resolves.toEqual({
+      authorization,
+      delivery,
+      deliveryAcknowledgement: acknowledgement
+    })
     const completion: PaymentCompletion = {
       request,
       quote,
@@ -102,6 +146,10 @@ describe('LCH HTTP binding', () => {
     expect(quoteHandler).toHaveBeenCalledWith(request)
     expect(preflightDemand).toHaveBeenCalledWith(demand)
     expect(paymentDelivery).toHaveBeenCalledWith(delivery)
+    expect(authorizePayment).toHaveBeenCalledWith(demand)
+    expect(storeDelivery).toHaveBeenCalledWith({ authorization, delivery })
+    expect(attestTransaction).toHaveBeenCalledWith({ authorization, atomicBeef: bytes(9, 4) })
+    expect(retrieveDelivery).toHaveBeenCalledWith(retrieval)
     expect(complete.mock.calls[0]?.[0]).toEqual(completion)
   })
 
