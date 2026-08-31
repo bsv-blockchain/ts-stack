@@ -107,8 +107,8 @@ describeWithSpecOpEnvironments('specOps tests', () => {
 
     const r = await setup.wallet.balanceAndUtxos('default')
 
-    expect(r.total).toBeGreaterThan(true)
-    expect(r.utxos).toHaveLength(true)
+    expect(r.total).toBeGreaterThan(0)
+    expect(r.utxos).toHaveLength(0)
 
     await setup.wallet.destroy()
   })

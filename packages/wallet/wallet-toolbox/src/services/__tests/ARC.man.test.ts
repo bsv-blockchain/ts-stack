@@ -26,7 +26,7 @@ describe('ARC manual integration tests', () => {
     const beef = Beef.fromString(testnetDoubleSpendBeef)
     const txids = [beef.txs.slice(-1)[0].txid]
     const r = await arc.postBeef(beef, txids)
-    expect(r.status).toBe(true)
+    expect(r.status).toBe('error')
     expect(r.txidResults[0].doubleSpend).toBe(true)
   })
 
