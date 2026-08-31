@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms-permission-module",
-  "version": "1.1.4",
+  "version": "2.0.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -51,7 +51,7 @@
   "peerDependencies": {
     "@bsv/btms": "^1.1.0",
     "@bsv/sdk": "^2.1.6",
-    "@bsv/wallet-toolbox-client": "^2.3.3"
+    "@bsv/wallet-toolbox-client": "^3.0.0"
   },
   "devDependencies": {
     "@bsv/btms": "workspace:^",

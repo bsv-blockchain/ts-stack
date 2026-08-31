@@ -12,6 +12,33 @@
 
 const TAG = '[ArcSSE]'
 
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '[::1]' ||
+    normalized.endsWith('.localhost')
+  )
+}
+
+function normalizeArcadeBaseUrl(baseUrl: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(baseUrl)
+  } catch {
+    throw new TypeError('Arcade SSE base URL must be absolute.')
+  }
+  if (parsed.username !== '' || parsed.password !== '' || parsed.search !== '' || parsed.hash !== '') {
+    throw new TypeError('Arcade SSE base URL cannot include credentials, query, or fragment.')
+  }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname))) {
+    throw new TypeError('Arcade SSE base URL requires HTTPS except on localhost.')
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '')
+  return parsed.toString().replace(/\/$/, '')
+}
+
 export interface ArcSSEEvent {
   txid: string
   txStatus: string
@@ -54,24 +81,21 @@ export class ArcSSEClient {
   private connected = false
   private connecting = false
 
-  constructor (private readonly options: ArcSSEClientOptions) {
+  constructor(private readonly options: ArcSSEClientOptions) {
     this._lastEventId = options.lastEventId
-    let base = options.baseUrl
-    while (base.endsWith('/')) {
-      base = base.slice(0, -1)
-    }
+    const base = normalizeArcadeBaseUrl(options.baseUrl)
     this.url = `${base}/events?callbackToken=${encodeURIComponent(options.callbackToken)}`
     this.displayUrl = `${base}/events?callbackToken=<redacted>`
   }
 
-  get lastEventId (): string | undefined {
+  get lastEventId(): string | undefined {
     return this._lastEventId
   }
 
   /**
    * Open the SSE connection. Events will be dispatched via onEvent as they arrive.
    */
-  connect (): void {
+  connect(): void {
     if (this.es != null) {
       console.log(`${TAG} already connected`)
       return
@@ -90,7 +114,10 @@ export class ArcSSEClient {
 
     this.es = new ESClass(this.url, {
       headers,
-      debug: true,
+      // Third-party EventSource debug output can include both the URL's
+      // callback token and Authorization headers. Keep it disabled even when
+      // application logging is otherwise enabled.
+      debug: false,
       pollingInterval: 0 // Don't auto-reconnect on close — we manage lifecycle
     })
 
@@ -110,9 +137,8 @@ export class ArcSSEClient {
       }
 
       console.log(`${TAG} event: txid=${data.txid} status=${data.txStatus}`)
-      const receivedEventId = typeof event.lastEventId === 'string' && event.lastEventId !== ''
-        ? event.lastEventId
-        : undefined
+      const receivedEventId =
+        typeof event.lastEventId === 'string' && event.lastEventId !== '' ? event.lastEventId : undefined
       data.eventId = receivedEventId
       let processing: void | Promise<void>
       try {
@@ -137,7 +163,10 @@ export class ArcSSEClient {
     })
 
     this.es.addEventListener('error', (event: any) => {
-      console.log(`${TAG} error:`, JSON.stringify(event))
+      // EventSource implementations can attach request URLs or headers to the
+      // error object. Do not serialize it: those fields carry callback/API
+      // credentials for this connection.
+      console.log(`${TAG} connection error`)
       this.connected = false
       this.connecting = false
       const message = typeof event.message === 'string' && event.message !== '' ? event.message : 'SSE error'
@@ -146,7 +175,7 @@ export class ArcSSEClient {
   }
 
   /** Close the connection and clean up */
-  close (): void {
+  close(): void {
     if (this.es != null) {
       console.log(`${TAG} closing`)
       this.es.close()
@@ -161,7 +190,7 @@ export class ArcSSEClient {
    * If not connected, opens a new connection with catchup from lastEventId.
    * Returns immediately — events arrive asynchronously via onEvent callback.
    */
-  async fetchEvents (): Promise<number> {
+  async fetchEvents(): Promise<number> {
     if (this.es == null && !this.connecting) {
       this.connect()
     } else if (this.es != null && !this.connected && !this.connecting) {

@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.10.4'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '3.0.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -27,7 +27,18 @@ legacy ambiguity and an OTP-verified phone-number change that always rolls the
 presentation key. The same registered number is valid. A pin is ignored unless
 normal verified lineage resolution remains ambiguous and the outpoint is one
 of the wallet's verified candidates. Applications must persist
-`saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
+`saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds,
+storing the entire snapshot in an OS Keychain or comparably protected store.
+
+Snapshots intentionally carry everything needed to restore sensitive wallet
+state; possession of a snapshot is possession of the wallet. Never place one in
+ordinary browser/mobile storage, logs, analytics, crash reports, clipboard
+data, or unprotected backups. Remote storage and credential-bearing Arcade SSE
+endpoints require HTTPS except for explicit loopback development, and SSE
+dependency debug logging is disabled to protect callback and API credentials.
+Spending approvals are one operation per prompt,
+and spending-token accounting reads every action page before authorizing a
+spend.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related

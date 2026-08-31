@@ -6,6 +6,24 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Prevent spending approvals from being cached or coalesced, account for every
+  paginated action before enforcing a spending token, and require HTTPS for
+  non-loopback remote storage and Arcade SSE endpoints. Arcade SSE dependency
+  debug logging is disabled so callback tokens and authorization headers do not
+  reach device logs. Snapshot formats and APIs remain
+  unchanged; documentation now makes their security boundary explicit:
+  possession of a self-contained snapshot is possession of the wallet, so the
+  entire value belongs in an OS Keychain, hardware-backed keystore, or
+  comparably trusted secret store. These changes are coordinated across the
+  Node, browser, and React Native packages.
+  The reviewed Vite raw ceiling advances by 1,000 bytes to 1,608,500, covering
+  the measured 1,608,439-byte bundle. Esbuild advances by 1,000 raw bytes to
+  1,254,000, 100 gzip bytes to 345,600, and 200 Brotli bytes to 277,500,
+  covering measured outputs of 1,253,769, 345,572, and 277,361 bytes. The Hermes
+  raw ceiling advances by 500 bytes to 3,367,500, covering the measured
+  3,367,479-byte bytecode. Existing Vite compressed and remaining mobile
+  ceilings cover the other measured outputs.
+
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final
   page previously returned only that page's length, so a client paging a large

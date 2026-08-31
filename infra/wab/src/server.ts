@@ -10,6 +10,8 @@ import { log } from "./logger";
 import { configureHttpServer } from "./security/edgePolicy";
 import type { Server } from "node:http";
 import { validateWABAdminConfig } from "./security/adminAuth";
+import { validatePresentationKeyVaultConfig } from "./security/presentationKeyVault";
+import { reconcilePresentationKeyVault } from "./security/presentationKeyReconciliation";
 
 const PORT = process.env.PORT || 8080;
 const tracer = trace.getTracer("@bsv/wab-server");
@@ -21,6 +23,12 @@ async function startServer(): Promise<Server | undefined> {
             validateWABAdminConfig();
             await migrateLatest();
             log.info({ operation: "migrate", outcome: "ok" }, "migrations applied");
+            validatePresentationKeyVaultConfig();
+            const vaultResult = await reconcilePresentationKeyVault(db);
+            log.info(
+                { operation: "presentation-key-vault", outcome: "ok", ...vaultResult },
+                "presentation-key vault reconciled"
+            );
             const server = app.listen(PORT, () => {
                 span.setStatus({ code: SpanStatusCode.OK });
                 log.info(

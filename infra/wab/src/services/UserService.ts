@@ -11,6 +11,92 @@ import { User, AuthMethodEntity, PaymentEntity } from "../types";
 import { Curve, Random, RPuzzle, Utils } from '@bsv/sdk'
 import { log } from "../logger";
 import { parsePublicWalletChain } from "../config/network";
+import {
+    decryptPresentationKey,
+    encryptPresentationKey,
+    isRedactedPresentationKey,
+    presentationKeyVaultMode,
+    presentationKeyLookup
+} from "../security/presentationKeyVault";
+
+export interface UserStorageRow extends User {
+    presentationKeyLookup?: string | null;
+    presentationKeyCiphertext?: string | null;
+    pendingPresentationKeyLookup?: string | null;
+    pendingPresentationKeyCiphertext?: string | null;
+}
+
+export function storedPresentationKeyColumns(key: string): Record<string, string | null> {
+    const mode = presentationKeyVaultMode();
+    if (mode === "legacy") {
+        return {
+            presentationKey: key,
+            presentationKeyLookup: null,
+            presentationKeyCiphertext: null
+        };
+    }
+    const lookup = presentationKeyLookup(key);
+    return {
+        presentationKey: mode === "dual-write" ? key : `encrypted_${lookup.slice(0, 54)}`,
+        presentationKeyLookup: lookup,
+        presentationKeyCiphertext: encryptPresentationKey(key)
+    };
+}
+
+export function storedPendingPresentationKeyColumns(key: string): Record<string, string | null> {
+    const mode = presentationKeyVaultMode();
+    if (mode === "legacy") {
+        return {
+            pendingPresentationKey: key,
+            pendingPresentationKeyLookup: null,
+            pendingPresentationKeyCiphertext: null
+        };
+    }
+    return {
+        pendingPresentationKey: mode === "dual-write" ? key : null,
+        pendingPresentationKeyLookup: presentationKeyLookup(key),
+        pendingPresentationKeyCiphertext: encryptPresentationKey(key)
+    };
+}
+
+export function hydrateUserRow(row: UserStorageRow | undefined): User | undefined {
+    if (row == null) return undefined;
+    const mode = presentationKeyVaultMode();
+    let presentationKey = row.presentationKey;
+    if (mode === "encrypted") {
+        if (row.presentationKeyCiphertext == null) {
+            const isShamirPlaceholder = row.userIdHash != null && row.presentationKey.startsWith("shamir_");
+            if (!isShamirPlaceholder) {
+                throw new Error("Encrypted mode requires presentation-key ciphertext on every legacy account.");
+            }
+        } else {
+            presentationKey = decryptPresentationKey(row.presentationKeyCiphertext);
+        }
+    } else if (isRedactedPresentationKey(presentationKey)) {
+        if (mode === "dual-write" && row.presentationKeyCiphertext != null) {
+            presentationKey = decryptPresentationKey(row.presentationKeyCiphertext);
+        } else {
+            throw new Error("The presentation key is redacted but the vault is not in encrypted mode.");
+        }
+    }
+    let pendingPresentationKey = row.pendingPresentationKey;
+    if (mode === "encrypted") {
+        if (row.pendingPresentationKeyCiphertext != null) {
+            pendingPresentationKey = decryptPresentationKey(row.pendingPresentationKeyCiphertext);
+        } else if (row.pendingPresentationKey != null) {
+            throw new Error("Encrypted mode requires ciphertext for a pending presentation key.");
+        }
+    }
+    return {
+        id: row.id,
+        presentationKey,
+        pendingPresentationKey,
+        umpTokenOutpoint: row.umpTokenOutpoint,
+        userIdHash: row.userIdHash,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt
+    };
+}
 
 function insertedIdFromResult(insertResult: unknown): number | undefined {
     const candidate = Array.isArray(insertResult) ? insertResult[0] : insertResult;
@@ -39,7 +125,7 @@ export class UserService {
     static async createUser(presentationKey: string): Promise<User> {
         // Note: SQLite does not support RETURNING. Knex will return the inserted row id as a number in SQLite,
         // while in MySQL it may return an object when specifying returning columns.
-        const insertResult: unknown = await db("users").insert({ presentationKey });
+        const insertResult: unknown = await db("users").insert(storedPresentationKeyColumns(presentationKey));
 
         const insertedId = insertedIdFromResult(insertResult);
         if (insertedId === undefined) throw new Error("User creation failed");
@@ -54,14 +140,18 @@ export class UserService {
      * Retrieve user by ID
      */
     static async getUserById(id: number): Promise<User | undefined> {
-        return db<User>("users").where({ id }).first();
+        return hydrateUserRow(await db<UserStorageRow>("users").where({ id }).first());
     }
 
     /**
      * Retrieve user by presentationKey
      */
     static async getUserByPresentationKey(key: string): Promise<User | undefined> {
-        return db<User>("users").where({ presentationKey: key }).first();
+        const query = db<UserStorageRow>("users").where({ presentationKey: key });
+        if (presentationKeyVaultMode() !== "legacy") {
+            query.orWhere({ presentationKeyLookup: presentationKeyLookup(key) });
+        }
+        return hydrateUserRow(await query.first());
     }
 
     static async setUMPTokenOutpoint(userId: number, outpoint: string | null): Promise<void> {
@@ -72,14 +162,18 @@ export class UserService {
      * Delete a user (and cascade the other records)
      */
     static async deleteUserByPresentationKey(key: string): Promise<void> {
-        await db("users").where({ presentationKey: key }).del();
+        const query = db("users").where({ presentationKey: key });
+        if (presentationKeyVaultMode() !== "legacy") {
+            query.orWhere({ presentationKeyLookup: presentationKeyLookup(key) });
+        }
+        await query.del();
     }
 
     /**
      * Retrieve user by userIdHash (for Shamir flow)
      */
     static async getUserByUserIdHash(userIdHash: string): Promise<User | undefined> {
-        return db<User>("users").where({ userIdHash }).first();
+        return hydrateUserRow(await db<UserStorageRow>("users").where({ userIdHash }).first());
     }
 
     /**

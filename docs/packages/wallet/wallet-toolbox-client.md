@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.10.4'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '3.0.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -20,6 +20,14 @@ It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
 IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across short final and out-of-range pages.
+Wallet snapshots are intentionally self-contained and carry everything needed
+to restore sensitive wallet state; possession of a snapshot is possession of
+the wallet. Store the entire value only through browser or extension storage
+backed by an OS Keychain or a comparably trusted secret store, never ordinary
+localStorage, logs, analytics, or unprotected sync. Remote storage and
+credential-bearing Arcade SSE require HTTPS except for explicit loopback
+development; SSE dependency debugging is disabled to keep credentials out of
+logs.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

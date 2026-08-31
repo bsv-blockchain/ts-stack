@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-27",
+  "lastReviewed": "2026-08-31",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -62,9 +62,9 @@
     {
       "name": "@bsv/btms-permission-module",
       "publishedVersion": "1.1.1",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No consumer migration is required; permission-module APIs and token semantics are unchanged."
+      "releaseType": "major",
+      "summary": "Prevents mixed issuance-and-spend actions from bypassing user authorization: issuance is auto-approved only when the action contains no caller-supplied inputs and carries an exact issuance marker. Retains the governed package-quality contract.",
+      "migration": "Upgrade the peer dependency to @bsv/wallet-toolbox-client 3.x. Applications that intentionally combine issuance outputs with inputs must now surface the normal user approval flow; pure issuance remains auto-approved."
     },
     {
       "name": "@bsv/chirp",
@@ -90,9 +90,9 @@
     {
       "name": "@bsv/fund-wallet",
       "publishedVersion": "1.4.1",
-      "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract, and retains the imported fund-metanet source's hash-pinned ISC provenance and notice from its exact source and npm publication. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No consumer migration is required; wallet funding APIs and transaction behavior are unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+      "releaseType": "major",
+      "summary": "Removes private-key command-line arguments so wallet secrets cannot leak through shell history or process inspection, adds a non-echoing interactive secret prompt, and preserves protected-stdin automation. Retains the governed package-quality and provenance contract.",
+      "migration": "Replace --private-key/--privateKey with the interactive secret prompt. Automation must provide exactly one private-key line on standard input from a protected file descriptor; funding APIs and transaction behavior are otherwise unchanged."
     },
     {
       "name": "@bsv/gasp",
@@ -196,29 +196,29 @@
       "name": "@bsv/wallet-relay",
       "publishedVersion": "0.2.2",
       "releaseType": "minor",
-      "summary": "Adds the strict package contract and preserves wallet RPC, encrypted relay payloads, signatures, and transaction bytes across number-array, Uint8Array, Buffer, and historical numeric-key JSON runtimes. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No wallet RPC migration is required; upgrade to @bsv/sdk 2.4.1 or later. Existing relay sessions and number arrays remain valid, and host applications continue to provide their matching Express runtime and type graph."
+      "summary": "Enforces signed pairing metadata before relay resolution, requires HTTPS outside loopback development for pairing origins and directly configured relay APIs, and rejects privileged wallet methods when no explicit approval callback is configured. Retains portable wallet RPC byte handling and the strict package contract.",
+      "migration": "Enable signed QR codes and distribute only HTTPS pairing origins and relay API URLs. Root-relative API paths and loopback HTTP remain supported. Configure onApprovalRequired for every method not deliberately listed in autoApproveMethods; unsigned pairing URIs and implicit approval are no longer accepted."
     },
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.0",
-      "releaseType": "patch",
-      "summary": "Retains BRC-95 and BRC-100 compatibility and stable bounded pagination, removes an obsolete exported JSight application bundle that lacked its required third-party license companion, preserves the package's earlier Open BSV grant in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No runtime consumer migration is required. Canonical AtomicBEEF, number-array behavior, and pagination contracts are unchanged; upgrade to @bsv/sdk 2.4.2 or later. Documentation users should use docs/storage.md instead of the removed JSight export. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
+      "releaseType": "major",
+      "summary": "Prevents reuse or coalescing of spending approvals, paginates complete spending history, requires HTTPS for remote wallet storage and credential-bearing Arcade SSE outside loopback development, prevents SSE dependency debug logs from exposing credentials, and documents snapshots as wallet-equivalent secrets. Retains the existing self-contained snapshot API and formats plus BRC-95, BRC-100, and canonical AtomicBEEF compatibility.",
+      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but applications must store each complete snapshot in an OS Keychain, hardware-backed keystore, or comparably trusted secret store because possession of it grants wallet access."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.10.0",
-      "releaseType": "patch",
-      "summary": "Carries the browser Wallet Toolbox internalization and BRC-100 compatibility fixes, stable IndexedDB totals, preserves earlier Open BSV grants in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No consumer migration is required. Browser exports, wire types, canonical AtomicBEEF behavior, and pagination contracts are unchanged; use @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
+      "releaseType": "major",
+      "summary": "Carries the Wallet Toolbox spending-authorization, complete-accounting, remote-storage and Arcade SSE transport hardening, and SSE credential-log prevention into the browser package while documenting snapshots as wallet-equivalent secrets and preserving snapshot, browser-export, and byte-boundary contracts.",
+      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot only through browser or extension storage backed by an OS Keychain or comparably trusted secret store."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.10.0",
-      "releaseType": "patch",
-      "summary": "Carries the mobile Wallet Toolbox internalization and BRC-100 compatibility fixes, preserves earlier Open BSV grants in the distribution notice archive, and standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No consumer migration is required. React Native exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
+      "releaseType": "major",
+      "summary": "Carries the Wallet Toolbox spending-authorization, complete-accounting, remote-storage and Arcade SSE transport hardening, and SSE credential-log prevention into the React Native package while documenting snapshots as wallet-equivalent secrets and preserving snapshot, mobile-export, and byte-boundary contracts.",
+      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot in the iOS Keychain, Android Keystore-backed encrypted storage, or a comparably trusted secret store."
     },
     {
       "name": "create-bsv-app",

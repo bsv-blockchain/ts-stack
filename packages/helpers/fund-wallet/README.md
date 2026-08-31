@@ -19,18 +19,22 @@ fund-metanet --help
 
 ## Usage
 
-### Command-Line Mode (Recommended)
+### Command-Line Mode
 
 Run the tool with command-line arguments for quick, non-interactive funding:
 
 ```bash
-fund-metanet --chain <network> --private-key <hex> [OPTIONS]
+fund-metanet --chain <network> [OPTIONS]
 ```
 
 #### Required Arguments
 
 - `--chain <network>` - Network to use: `test` or `main`
-- `--private-key <hex>` - Wallet private key as exactly 32 bytes (64 hexadecimal characters)
+
+After validating the non-secret options, the CLI reads the wallet private key
+from a non-echoing prompt. Private keys are deliberately rejected in process
+arguments because command lines can be retained in shell history and exposed
+through process inspection.
 
 #### Optional Arguments
 
@@ -67,7 +71,6 @@ npx --package @bsv/fund-wallet fund-metanet --help
 ```bash
 npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
-  --private-key 0123456789abcdef... \
   --satoshis 1000
 ```
 
@@ -77,8 +80,7 @@ Omit the `--satoshis` argument to check the balance without funding:
 
 ```bash
 npx --package @bsv/fund-wallet fund-metanet \
-  --chain main \
-  --private-key 0123456789abcdef...
+  --chain main
 ```
 
 ### Use a custom storage provider
@@ -86,7 +88,6 @@ npx --package @bsv/fund-wallet fund-metanet \
 ```bash
 npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
-  --private-key 0123456789abcdef... \
   --storage-url https://store-us-1.bsvb.tech \
   --satoshis 500
 ```
@@ -96,9 +97,21 @@ npx --package @bsv/fund-wallet fund-metanet \
 ```bash
 npx --package @bsv/fund-wallet fund-metanet \
   --chain test \
-  --private-key 0123456789abcdef... \
   --satoshis 10000
 ```
+
+### Automation
+
+For unattended operation, provide the key as a single line on standard input
+from a protected file descriptor or secret-mounted file. The shell never sees
+the key as an argument:
+
+```bash
+fund-metanet --chain main --satoshis 1000 < /run/secrets/bsv-wallet-key
+```
+
+Restrict the secret file to the service account that runs the command and do
+not store it in the repository.
 
 ## Requirements
 
@@ -127,7 +140,8 @@ npx --package @bsv/fund-wallet fund-metanet \
   certificate verification.
 - Use test network for development and testing
 - Never share your private keys
-- Avoid placing private keys in shell history; use an appropriate secret-injection mechanism for automation.
+- Private keys are never accepted as command-line arguments and are not echoed by the interactive prompt.
+- For automation, use a protected standard-input file descriptor or secret-mounted file.
 
 ## Error Messages
 

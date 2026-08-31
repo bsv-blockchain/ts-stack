@@ -10,8 +10,9 @@ import { WALLET_METHOD_NAMES } from '../types.js'
 
 export interface WalletRelayClientOptions {
   /**
-   * Base URL for the relay API. Can be the bare host (`http://localhost:3001`)
-   * or include the `/api` prefix — `/api` is appended automatically if missing.
+   * Base URL for the relay API. Absolute URLs require HTTPS except on loopback;
+   * same-origin root-relative paths are also accepted. The URL can include the
+   * `/api` prefix — `/api` is appended automatically if missing.
    * Default: '/api'
    */
   apiUrl?: string
@@ -71,6 +72,50 @@ interface PersistedSession {
   savedAt: number
 }
 
+function isLoopbackRelayHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '[::1]' ||
+    normalized.endsWith('.localhost')
+  )
+}
+
+function normalizeRelayApiUrl(apiUrl: string): string {
+  let normalized: string
+  if (apiUrl.startsWith('/') && !apiUrl.startsWith('//')) {
+    if (apiUrl.includes('\\') || apiUrl.includes('?') || apiUrl.includes('#')) {
+      throw new TypeError('Relay API path cannot include backslashes, query, or fragment.')
+    }
+    normalized = apiUrl.replace(/\/+$/, '')
+  } else {
+    let parsed: URL
+    try {
+      parsed = new URL(apiUrl)
+    } catch {
+      throw new TypeError('Relay API URL must be absolute or a root-relative path.')
+    }
+    if (
+      parsed.username !== '' ||
+      parsed.password !== '' ||
+      parsed.search !== '' ||
+      parsed.hash !== ''
+    ) {
+      throw new TypeError('Relay API URL cannot include credentials, query, or fragment.')
+    }
+    if (
+      parsed.protocol !== 'https:' &&
+      !(parsed.protocol === 'http:' && isLoopbackRelayHost(parsed.hostname))
+    ) {
+      throw new TypeError('Relay API URL requires HTTPS except on localhost.')
+    }
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '')
+    normalized = parsed.toString().replace(/\/$/, '')
+  }
+  return normalized.endsWith('/api') ? normalized : `${normalized}/api`
+}
+
 /**
  * Frontend counterpart to WalletRelayService.
  *
@@ -108,8 +153,7 @@ export class WalletRelayClient {
   private _walletProxy: Pick<WalletInterface, WalletMethodName> | null = null
 
   constructor(options?: WalletRelayClientOptions) {
-    const raw = (options?.apiUrl ?? '/api').replace(/\/$/, '')
-    this._apiUrl = raw.endsWith('/api') ? raw : `${raw}/api`
+    this._apiUrl = normalizeRelayApiUrl(options?.apiUrl ?? '/api')
     this._pollInterval = options?.pollInterval ?? 3000
     this._connectedPollInterval = options?.connectedPollInterval ?? 10000
     this._persistSession = options?.persistSession ?? true

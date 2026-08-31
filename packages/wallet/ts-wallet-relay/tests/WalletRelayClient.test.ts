@@ -52,6 +52,39 @@ afterEach(() => {
 })
 
 describe('WalletRelayClient session lifecycle', () => {
+  it('requires authenticated transport for absolute relay API URLs', () => {
+    expect(() => new WalletRelayClient({ apiUrl: 'http://relay.example' })).toThrow(
+      'requires HTTPS'
+    )
+    expect(() => new WalletRelayClient({ apiUrl: '//relay.example' })).toThrow(
+      'absolute or a root-relative path'
+    )
+    expect(() => new WalletRelayClient({ apiUrl: '/relay\\@evil.example' })).toThrow(
+      'cannot include backslashes'
+    )
+    expect(() => new WalletRelayClient({ apiUrl: 'https://user@relay.example' })).toThrow(
+      'cannot include credentials'
+    )
+    expect(() => new WalletRelayClient({ apiUrl: 'https://relay.example?target=other' })).toThrow(
+      'cannot include credentials'
+    )
+    expect(() => new WalletRelayClient({ apiUrl: 'https://relay.example/#fragment' })).toThrow(
+      'cannot include credentials'
+    )
+  })
+
+  it.each([
+    ['http://localhost:3001', 'http://localhost:3001/api/session'],
+    ['http://wallet.localhost:3001/relay/', 'http://wallet.localhost:3001/relay/api/session'],
+    ['/relay/', '/relay/api/session']
+  ])('permits loopback or same-origin relay API URL %s', async (apiUrl, expected) => {
+    fetchMock.mockResolvedValueOnce(response(pendingSession))
+    const client = new WalletRelayClient({ apiUrl })
+    await client.createSession()
+    expect(fetchMock).toHaveBeenCalledWith(expected)
+    client.destroy()
+  })
+
   it('normalizes the API URL, creates a session, persists it, and notifies callers', async () => {
     const onSessionChange = jest.fn()
     fetchMock.mockResolvedValueOnce(response(pendingSession))

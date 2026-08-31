@@ -37,6 +37,7 @@ Additionally, the WAB provides a **faucet** feature that can make a one-time BSV
 7. **CI/CD** – Example GitHub Actions workflow to build, push, and deploy to **Google Cloud Run** with **Cloud SQL**.
 8. **UMP support pinning** – An authenticated operator can select one UMP outpoint as a legacy-ambiguity fallback.
 9. **Verified phone changes** – Authenticated wallets can verify the same or a new number, rotate their presentation key, and retain reversible ownership history.
+10. **Optional presentation-key vault** – A staged, rolling-upgrade-compatible mode can AES-256-GCM encrypt presentation keys at rest and index them with a keyed lookup digest without changing the client API.
 
 ---
 
@@ -168,6 +169,11 @@ DB_PORT=3306
 # Other environment-specific config
 PORT=3000
 
+# Optional presentation-key defense in depth. Omit both for legacy mode.
+# Read "Staged presentation-key encryption" before changing an existing server.
+WAB_PRESENTATION_KEY_ENCRYPTION_MODE=dual-write
+WAB_PRESENTATION_KEY_ENCRYPTION_KEY=<64 hex characters from a secret manager>
+
 # Optional, explicit reverse-proxy hop count. Omit when directly reachable.
 TRUST_PROXY_HOPS=1
 
@@ -187,6 +193,35 @@ TRUST_PROXY_HOPS=1
 ```
 
 _(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)_
+
+### Staged presentation-key encryption
+
+WAB must be able to return a presentation key after successful authentication;
+the server and its runtime encryption key therefore remain inside the trusted
+boundary. This feature is defense in depth against a database-only disclosure,
+not protection from a fully compromised WAB process. The HTTP API and key values
+returned to legacy clients do not change in any mode.
+
+The schema migration only adds nullable sidecar columns. It never rewrites an
+existing row, does not require an encryption key, and can be applied while the
+old WAB version is still serving traffic. Roll out the feature in three stages:
+
+1. Deploy the additive schema/new binary in `legacy` mode (the default when no
+   vault key is configured). Existing plaintext reads and writes continue.
+2. Generate a separate 32-byte random key, keep it in the deployment secret
+   manager, and use `dual-write`. Startup idempotently backfills keyed lookup
+   digests and AES-256-GCM ciphertext while retaining plaintext for old
+   replicas. When the mode variable is omitted, configuring a valid key also
+   selects `dual-write`.
+3. After every old replica is drained and a dual-write startup has completed,
+   explicitly switch every replica to `encrypted`. Startup reconciles any final
+   legacy writes and redacts the plaintext columns before accepting traffic.
+
+Do not start an old binary after stage 3. Returning from `encrypted` to a prior
+binary requires first restoring plaintext with a controlled rollback using the
+same vault key. Back up the vault key separately from the database; losing it
+after redaction makes those account credentials unrecoverable. A malformed key
+always fails startup, and `dual-write`/`encrypted` refuse to start without one.
 
 All state-changing routes are rate-limited and return HTTP 429 with
 `ERR_RATE_LIMITED`. Defaults are 10 authentication attempts per 15 minutes,
@@ -412,6 +447,9 @@ TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
 TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
 PORT=8080
+# Optional; begin with dual-write during a rolling upgrade.
+WAB_PRESENTATION_KEY_ENCRYPTION_MODE=dual-write
+WAB_PRESENTATION_KEY_ENCRYPTION_KEY=<64 hex characters from a secret manager>
 ```
 
 You configure these either in **GitHub Secrets** or in the Cloud Run deploy command (`--set-env-vars`).

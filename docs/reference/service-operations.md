@@ -262,8 +262,8 @@ Incident handling follows this evidence-preserving sequence:
 ### wab
 
 - Configuration: required `BSV_NETWORK`, `DB_HOST`, `DB_NAME`, `DB_PASS`, `DB_PORT`, `DB_USER`, `SERVER_PRIVATE_KEY`, `SHARE_ENCRYPTION_KEY`, `STORAGE_URL`; optional
-  `COMMISSION_FEE`, `DB_CLIENT`, `PORT`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, `WAB_ADMIN_RATE_LIMIT_MAX`, `WAB_ADMIN_RATE_LIMIT_WINDOW_MS`, `WAB_ADMIN_TOKEN`; secret-bearing
-  `DB_PASS`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `SHARE_ENCRYPTION_KEY`, `TWILIO_AUTH_TOKEN`, `WAB_ADMIN_TOKEN`.
+  `COMMISSION_FEE`, `DB_CLIENT`, `PORT`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, `WAB_ADMIN_RATE_LIMIT_MAX`, `WAB_ADMIN_RATE_LIMIT_WINDOW_MS`, `WAB_ADMIN_TOKEN`, `WAB_PRESENTATION_KEY_ENCRYPTION_KEY`, `WAB_PRESENTATION_KEY_ENCRYPTION_MODE`; secret-bearing
+  `DB_PASS`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`, `SHARE_ENCRYPTION_KEY`, `TWILIO_AUTH_TOKEN`, `WAB_ADMIN_TOKEN`, `WAB_PRESENTATION_KEY_ENCRYPTION_KEY`.
 - Telemetry: CJS bootstrap
   `src/telemetry.ts`, logger
   `src/logger.ts`, preload
@@ -272,6 +272,7 @@ Incident handling follows this evidence-preserving sequence:
 - start and complete an authentication challenge
 - pin a verified legacy UMP outpoint and clear the pin after recovery
 - verify, commit, and if necessary restore a phone-number association change
+- reconcile presentation-key ciphertext and keyed lookups before listen
 - store, retrieve, update, and delete encrypted shares
 - link, unlink, and delete an identity safely
 - Alerts:
@@ -279,11 +280,11 @@ Incident handling follows this evidence-preserving sequence:
 - share encryption, retrieval, or deletion failures repeat
 - database migration or pool failures consume error budget
 - State: Authentication, identity-link, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
-- Migration/startup: Migrations complete before listen; verify rollback compatibility before rollout.
-- Backup/restore: Take an encrypted database snapshot and test identity/share recovery without logging secrets.
+- Migration/startup: Migrations complete before listen. The presentation-key vault uses additive nullable columns, legacy then dual-write rollout, and an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.
+- Backup/restore: Take an encrypted database snapshot, retain the presentation-key vault key separately, and test identity/share and presentation-key recovery without logging secrets.
 - RPO starting point: 15 minutes for authentication and encrypted share state.
 - RTO starting point: 4 hours from a verified encrypted backup and independently retained encryption keys.
-- Restore validation: Verify migration state, authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
+- Restore validation: Verify migration and vault reconciliation state, legacy-client authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.
 - Scaling: Multiple replicas require shared rate limits and any authentication challenge/session state to remain database-backed.
 - Disruption: Preserve at least one ready replica after shared abuse-control state is verified.

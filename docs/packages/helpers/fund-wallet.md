@@ -3,10 +3,10 @@ id: pkg-fund-wallet
 title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: '1.4.4'
+version: '2.0.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/fund-wallet'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet'
@@ -29,19 +29,16 @@ npm install @bsv/fund-wallet
 ```bash
 # Check balance only
 npx fund-metanet \
-  --chain main \
-  --private-key 0123456789abcdef...
+  --chain main
 
 # Fund with 10,000 satoshis
 npx fund-metanet \
   --chain test \
-  --private-key <hex> \
   --satoshis 10000
 
 # Custom storage provider
 npx fund-metanet \
   --chain main \
-  --private-key <hex> \
   --storage-url https://custom-store.example.com \
   --satoshis 5000
 
@@ -55,7 +52,7 @@ npx fund-metanet
 - **CLI-only tool** — No TypeScript programmatic API; command-line only
 - **Balance check** — Query remote wallet balance without signing
 - **Funding** — Send satoshis from local Metanet Desktop wallet to remote wallet
-- **Private key support** — Hex-encoded private keys for local source wallet
+- **Protected private-key input** — Non-echoing prompt on a TTY or one line from protected stdin for automation
 - **Network selection** — Support for testnet or mainnet
 - **Custom storage** — Specify custom storage provider URL
 - **Interactive mode** — Prompts if no arguments provided
@@ -67,8 +64,7 @@ npx fund-metanet
 
 ```bash
 npx fund-metanet \
-  --chain main \
-  --private-key <hex>
+  --chain main
 ```
 
 ### Fund wallet (Metanet Desktop must be running)
@@ -76,7 +72,6 @@ npx fund-metanet \
 ```bash
 npx fund-metanet \
   --chain test \
-  --private-key <hex> \
   --satoshis 10000
 ```
 
@@ -85,7 +80,6 @@ npx fund-metanet \
 ```bash
 npx fund-metanet \
   --chain main \
-  --private-key <hex> \
   --storage-url https://custom-store.example.com \
   --satoshis 5000
 ```

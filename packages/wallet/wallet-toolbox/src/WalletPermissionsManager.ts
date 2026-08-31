@@ -536,6 +536,14 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   private readonly mintsInFlight: Map<string, Promise<void>> = new Map()
 
+  /**
+   * Monotonic nonce used to keep spending prompts one-to-one with the wallet
+   * operations they authorize. Unlike capability permissions, spending
+   * requests must never share a pending approval merely because their amounts
+   * happen to match.
+   */
+  private spendingRequestSequence = 0
+
   private readonly manifestCache: Map<
     string,
     {
@@ -966,7 +974,7 @@ export class WalletPermissionsManager implements WalletInterface {
         }
       }
 
-      this.cachePermission(key, expiry)
+      if (request.type !== 'spending') this.cachePermission(key, expiry)
       this.markRecentGrant(request)
     }
   }
@@ -1529,19 +1537,11 @@ export class WalletPermissionsManager implements WalletInterface {
       // We skip spending permission entirely
       return true
     }
-    const cacheKey = this.buildRequestKey({ type: 'spending', originator, spending: { satoshis } })
-    // Spending keys are amount-scoped. The recent-grant window this adds sits
-    // inside the pre-existing permissionCache window grantPermission already
-    // wrote for spending, so accounting exposure is unchanged.
-    if (await this.hasRecentOrPendingGrant(cacheKey)) {
-      return true
-    }
     const token = await this.findSpendingToken(originator, lookupValues)
     if (token?.authorizedAmount) {
       // Check how much has been spent so far
       const spentSoFar = await this.querySpentSince(token)
       if (spentSoFar + satoshis <= token.authorizedAmount) {
-        this.cachePermission(cacheKey, token.expiry)
         return true
       } else {
         // Renew if possible
@@ -3001,14 +3001,26 @@ export class WalletPermissionsManager implements WalletInterface {
     let total = 0
 
     for (const labelOrigin of labelOrigins) {
-      const { actions } = await this.underlying.listActions(
-        {
-          labels: [`admin originator ${labelOrigin}`, `admin month ${this.getCurrentMonthYearUTC()}`],
-          labelQueryMode: 'all'
-        },
-        this.adminOriginator
-      )
-      total += actions.reduce((a, e) => a - e.satoshis, 0)
+      let offset = 0
+      let totalActions = 0
+      do {
+        const result = await this.underlying.listActions(
+          {
+            labels: [`admin originator ${labelOrigin}`, `admin month ${this.getCurrentMonthYearUTC()}`],
+            labelQueryMode: 'all',
+            limit: 10000,
+            offset
+          },
+          this.adminOriginator
+        )
+        total += result.actions.reduce((a, e) => a - e.satoshis, 0)
+        offset += result.actions.length
+        totalActions = result.totalActions
+
+        // A provider that reports more results but returns an empty page must
+        // not trap the wallet in an infinite accounting loop.
+        if (result.actions.length === 0) break
+      } while (offset < totalActions)
     }
 
     return total
@@ -5233,6 +5245,10 @@ export class WalletPermissionsManager implements WalletInterface {
 
   private buildActiveRequestKey(r: PermissionRequest): string {
     const base = this.buildRequestKey(r)
+    if (r.type === 'spending') {
+      this.spendingRequestSequence += 1
+      return `${base}:request:${this.spendingRequestSequence}`
+    }
     if (r.type === 'protocol' || r.type === 'basket' || r.type === 'certificate') {
       return `${base}:${r.usageType ?? ''}`
     }

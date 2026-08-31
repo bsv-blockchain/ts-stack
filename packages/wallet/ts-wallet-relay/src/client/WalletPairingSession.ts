@@ -8,6 +8,7 @@ import type {
   WalletMethodName
 } from '../types.js'
 import { encryptEnvelope, decryptEnvelope, type CryptoParams } from '../shared/crypto.js'
+import { verifyPairingSignature } from '../shared/pairingUri.js'
 
 export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -63,7 +64,7 @@ export interface WalletPairingSessionOptions {
   /**
    * Called for every implemented method that is not in autoApproveMethods.
    * Return true to approve, false to send a 4001 User Rejected response.
-   * If omitted, all implemented methods are auto-approved.
+   * If omitted, methods outside autoApproveMethods are rejected.
    */
   onApprovalRequired?: (method: string, params: unknown) => Promise<boolean>
 
@@ -113,6 +114,7 @@ export class WalletPairingSession {
   private requestHandler: RequestHandler | null = null
   private readonly implementedMethods: ReadonlySet<string>
   private readonly autoApproveMethods: ReadonlySet<string>
+  private pairingVerified = false
 
   private readonly listeners: {
     connected: Array<() => void>
@@ -187,12 +189,38 @@ export class WalletPairingSession {
    * ```
    */
   async resolveRelay(): Promise<string> {
+    await this.verifyPairingBoundary()
     const res = await fetch(`${this.params.origin}/api/session/${this.params.topic}`)
     if (!res.ok) throw new Error(`Failed to resolve relay from origin: HTTP ${res.status}`)
     const data = (await res.json()) as { relay?: string; status?: string }
     if (!data.relay) throw new Error('Origin server did not return a relay URL')
     this._resolvedRelay = data.relay
     return data.relay
+  }
+
+  /** Enforces the signed HTTPS pairing boundary before making any network request. */
+  private async verifyPairingBoundary(): Promise<void> {
+    if (this.pairingVerified) return
+
+    let origin: URL
+    try {
+      origin = new URL(this.params.origin)
+    } catch {
+      throw new Error('Pairing origin is invalid')
+    }
+    const isLoopback =
+      origin.hostname === 'localhost' ||
+      origin.hostname === '127.0.0.1' ||
+      origin.hostname === '[::1]'
+    if (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && isLoopback)) {
+      throw new Error(
+        'Pairing origin must use HTTPS (HTTP is allowed only for loopback development)'
+      )
+    }
+    if (!(await verifyPairingSignature(this.params))) {
+      throw new Error('Pairing signature is missing or invalid')
+    }
+    this.pairingVerified = true
   }
 
   /**
@@ -363,8 +391,17 @@ export class WalletPairingSession {
 
     // Approval gate
     const needsApproval = !this.autoApproveMethods.has(request.method)
-    if (needsApproval && this.options.onApprovalRequired) {
-      const approved = await this.options.onApprovalRequired(request.method, request.params)
+    if (needsApproval) {
+      const approvalHandler = this.options.onApprovalRequired
+      if (!approvalHandler) {
+        await sendResponse({
+          id: request.id,
+          seq: request.seq,
+          error: { code: 4001, message: 'Approval required but no approval handler is configured' }
+        })
+        return
+      }
+      const approved = await approvalHandler(request.method, request.params)
       if (!approved) {
         await sendResponse({
           id: request.id,

@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.10.4'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '3.0.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -18,6 +18,14 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
+Wallet snapshots are intentionally self-contained and carry everything needed
+to restore sensitive wallet state; possession of a snapshot is possession of
+the wallet. Store the entire value in the iOS Keychain, Android Keystore-backed
+encrypted storage, or a comparably trusted secret store, never ordinary
+AsyncStorage, logs, analytics, or unprotected backups. Remote storage and
+credential-bearing Arcade SSE require HTTPS except for explicit loopback
+development; SSE dependency debugging is disabled to keep credentials out of
+device logs.
 Related mobile `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

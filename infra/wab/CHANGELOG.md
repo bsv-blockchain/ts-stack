@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Add an optional, staged defense-in-depth vault for presentation-key bearer
+  credentials and phone-change history. The additive schema, legacy fallback,
+  dual-write backfill, and unchanged HTTP API support rolling upgrades from
+  existing WAB servers; operators explicitly enable final plaintext redaction.
 - Add bearer-authenticated, rate-limited operator routes to pin a WAB account
   to a verified UMP outpoint and restore a disputed phone-association transfer.
 - Require current-account knowledge plus Twilio OTP possession before a phone

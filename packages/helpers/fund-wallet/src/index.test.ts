@@ -26,6 +26,14 @@ function makeIO(): CliIO & { logs: unknown[][]; errors: unknown[][] } {
   }
 }
 
+function makeSecretPrompt(privateKey = VALID_PRIVATE_KEY): PromptSession {
+  return {
+    ask: vi.fn(),
+    askSecret: vi.fn().mockResolvedValue(privateKey),
+    close: vi.fn()
+  }
+}
+
 function makeRuntime(amount = 0) {
   const remoteWallet = {
     isAuthenticated: vi.fn().mockResolvedValue({ authenticated: true }),
@@ -73,43 +81,30 @@ describe('parseCliArguments', () => {
     expect(parseCliArguments([])).toEqual({ kind: 'interactive' })
   })
 
-  it('requires a chain and private key', () => {
+  it('requires a chain and rejects private keys in process arguments', () => {
     expect(parseCliArguments(['--private-key', VALID_PRIVATE_KEY])).toMatchObject({
       kind: 'error',
       message: expect.stringContaining('--chain')
     })
-    expect(parseCliArguments(['--chain', 'main'])).toMatchObject({
+    expect(
+      parseCliArguments(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY])
+    ).toMatchObject({
       kind: 'error',
-      message: expect.stringContaining('--private-key')
+      message: expect.stringContaining('not accepted in command-line arguments')
+    })
+    expect(
+      parseCliArguments(['--chain', 'main', `--private-key=${VALID_PRIVATE_KEY}`])
+    ).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('not accepted in command-line arguments')
     })
   })
 
-  it('rejects invalid chains, keys, URLs, credentials, and amounts', () => {
-    const base = ['--chain', 'main', '--private-key', VALID_PRIVATE_KEY]
-    expect(parseCliArguments(['--chain', 'stn', '--private-key', VALID_PRIVATE_KEY])).toMatchObject(
-      {
-        kind: 'error',
-        message: expect.stringContaining('Invalid network')
-      }
-    )
-    expect(parseCliArguments(['--chain', 'main', '--private-key', 'bad'])).toMatchObject({
+  it('rejects invalid chains, URLs, credentials, and amounts', () => {
+    const base = ['--chain', 'main']
+    expect(parseCliArguments(['--chain', 'stn'])).toMatchObject({
       kind: 'error',
-      message: expect.stringContaining('Invalid private key')
-    })
-    expect(parseCliArguments(['--chain', 'main', '--private-key', '0'.repeat(64)])).toMatchObject({
-      kind: 'error',
-      message: expect.stringContaining('Invalid private key')
-    })
-    expect(
-      parseCliArguments([
-        '--chain',
-        'main',
-        '--private-key',
-        'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'
-      ])
-    ).toMatchObject({
-      kind: 'error',
-      message: expect.stringContaining('Invalid private key')
+      message: expect.stringContaining('Invalid network')
     })
     for (const url of [
       'http://store.example.com',
@@ -134,26 +129,21 @@ describe('parseCliArguments', () => {
       parseCliArguments([
         '--network',
         'test',
-        '--privateKey',
-        VALID_PRIVATE_KEY,
         '--storageURL',
         'https://storage.example.com',
         '--satoshis',
         '1000'
       ])
     ).toEqual({
-      kind: 'run',
+      kind: 'prompt-key',
       options: {
         chain: 'test',
         storageURL: 'https://storage.example.com',
-        privateKey: VALID_PRIVATE_KEY,
         amount: 1000
       }
     })
-    expect(
-      parseCliArguments(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY])
-    ).toMatchObject({
-      kind: 'run',
+    expect(parseCliArguments(['--chain', 'main'])).toMatchObject({
+      kind: 'prompt-key',
       options: { storageURL: DEFAULT_STORAGE_URL, amount: 0 }
     })
   })
@@ -280,35 +270,38 @@ describe('runCli', () => {
 
   it('runs validated CLI arguments and reports funding failures', async () => {
     const success = makeRuntime()
+    const successPrompt = makeSecretPrompt()
     expect(
-      await runCli(
-        ['--chain', 'main', '--private-key', VALID_PRIVATE_KEY],
-        success.dependencies,
-        makeIO()
-      )
+      await runCli(['--chain', 'main'], success.dependencies, makeIO(), () => successPrompt)
     ).toBe(0)
     expect(success.dependencies.createDestinationWallet).toHaveBeenCalledOnce()
+    expect(successPrompt.askSecret).toHaveBeenCalledOnce()
 
     const failed = makeRuntime()
     vi.mocked(failed.dependencies.createDestinationWallet).mockRejectedValueOnce(
       new Error('storage unavailable')
     )
     const io = makeIO()
-    expect(
-      await runCli(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY], failed.dependencies, io)
-    ).toBe(1)
+    const failedPrompt = makeSecretPrompt()
+    expect(await runCli(['--chain', 'main'], failed.dependencies, io, () => failedPrompt)).toBe(1)
     expect(io.errors.flat().join(' ')).toContain('storage unavailable')
+  })
+
+  it('rejects invalid private keys obtained from the secure prompt', async () => {
+    const runtime = makeRuntime()
+    const io = makeIO()
+    expect(
+      await runCli(['--chain', 'main'], runtime.dependencies, io, () => makeSecretPrompt('bad'))
+    ).toBe(1)
+    expect(io.errors.flat().join(' ')).toContain('Invalid private key')
+    expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
   })
 
   it('collects interactive defaults, closes the prompt, and validates input', async () => {
     const runtime = makeRuntime()
     const prompt: PromptSession = {
-      ask: vi
-        .fn()
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce(VALID_PRIVATE_KEY)
-        .mockResolvedValueOnce(''),
+      ask: vi.fn().mockResolvedValueOnce('').mockResolvedValueOnce('').mockResolvedValueOnce(''),
+      askSecret: vi.fn().mockResolvedValue(VALID_PRIVATE_KEY),
       close: vi.fn()
     }
     expect(await runCli([], runtime.dependencies, makeIO(), () => prompt)).toBe(0)
@@ -320,11 +313,8 @@ describe('runCli', () => {
     expect(prompt.close).toHaveBeenCalledOnce()
 
     const invalidPrompt: PromptSession = {
-      ask: vi
-        .fn()
-        .mockResolvedValueOnce('main')
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce(''),
+      ask: vi.fn().mockResolvedValueOnce('main').mockResolvedValueOnce(''),
+      askSecret: vi.fn().mockResolvedValue(''),
       close: vi.fn()
     }
     expect(await runCli([], runtime.dependencies, makeIO(), () => invalidPrompt)).toBe(1)
