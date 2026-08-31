@@ -498,6 +498,22 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'ecpm-permission': {
+      packageDirectory: 'packages/wallet/ecpm-permission-module',
+      manifest: 'packages/wallet/ecpm-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts',
+      // Keep the defensive infinity checks in production, but omit them from mutation:
+      // canonical compressed points and nonzero PrivateKey scalars cannot reach either branch.
+      mutate: [
+        'src/EcpmPermissionModule.ts:37-203',
+        'src/EcpmPermissionModule.ts:207-289',
+        'src/EcpmPermissionModule.ts:293-298'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/EcpmPermissionModule*.test.ts'], {
+        esm: true
+      })
+    },
     'chirp-codec': {
       packageDirectory: 'packages/network/chirp',
       manifest: 'packages/network/chirp/package.json',

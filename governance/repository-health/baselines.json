@@ -4,9 +4,9 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 41,
-    "packageAreaProjects": 36,
-    "publicPackages": 33,
+    "projects": 42,
+    "packageAreaProjects": 37,
+    "publicPackages": 34,
     "privatePackageAreaProjects": 3
   },
   "ci": {
@@ -326,9 +326,10 @@
     "@bsv/verifast": "0.3.5",
     "@bsv/btms": "1.2.2",
     "@bsv/btms-permission-module": "1.1.4",
+    "@bsv/ecpm-permission-module": "0.1.0",
     "@bsv/wallet-relay": "0.3.6",
-    "@bsv/wallet-toolbox-client": "2.10.4",
-    "@bsv/wallet-toolbox-mobile": "2.10.4",
-    "@bsv/wallet-toolbox": "2.10.4"
+    "@bsv/wallet-toolbox-client": "2.11.0",
+    "@bsv/wallet-toolbox-mobile": "2.11.0",
+    "@bsv/wallet-toolbox": "2.11.0"
   }
 }

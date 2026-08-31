@@ -67,11 +67,35 @@ export type LineItemType = 'input' | 'output' | 'fee'
 /** Security level for DPACP protocol permissions. */
 export type SecurityLevel = 0 | 1 | 2
 
+/** A wallet request routed to a BRC-98/99/111 permission module. */
+export interface PermissionsModuleRequest {
+  method: string
+  args: object
+  originator: string
+}
+
+/**
+ * Invokes the underlying BRC-100 method with module-transformed arguments.
+ * A semantic module can omit this call and return its own conforming result.
+ */
+export type PermissionsModuleNext = (args: object) => Promise<unknown>
+
 /**
  * A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
  * Modules are registered in the config mapped by their scheme ID.
  */
 export interface PermissionsModule {
+  /**
+   * Optionally owns the complete execution of a P-module request.
+   *
+   * This is the semantic-extension hook for schemes whose behavior cannot be
+   * expressed by argument and response transformation alone. The handler may
+   * call `next` once to invoke the underlying BRC-100 method, or return a result
+   * directly. When present, `onRequest` and `onResponse` are not invoked for the
+   * delegated request.
+   */
+  handleRequest?: (req: PermissionsModuleRequest, next: PermissionsModuleNext) => Promise<unknown>
+
   /**
    * Transforms the request before it's passed to the underlying wallet.
    * Can check and enforce permissions, throw errors, or modify any arguments as needed prior to invocation.
@@ -79,7 +103,7 @@ export interface PermissionsModule {
    * @param req - The incoming request with method, args, and originator
    * @returns Transformed arguments that will be passed to the underlying wallet
    */
-  onRequest: (req: { method: string; args: object; originator: string }) => Promise<{ args: object }>
+  onRequest: (req: PermissionsModuleRequest) => Promise<{ args: object }>
 
   /**
    * Transforms the response from the underlying wallet before returning to caller.
@@ -657,12 +681,20 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error(`Unsupported P-module scheme: p ${schemeID}`)
     }
 
+    const request = { method, args, originator }
+    if (module.handleRequest != null) {
+      let nextCalled = false
+      return (await module.handleRequest(request, async transformedArgs => {
+        if (nextCalled) {
+          throw new Error(`P-module p ${schemeID} called its underlying wallet operation more than once`)
+        }
+        nextCalled = true
+        return await underlyingCall(transformedArgs, originator)
+      })) as T
+    }
+
     // Transform request with module
-    const transformedReq = await module.onRequest({
-      method,
-      args,
-      originator
-    })
+    const transformedReq = await module.onRequest(request)
 
     // Call underlying method with transformed request
     const results = await underlyingCall(transformedReq.args, originator)

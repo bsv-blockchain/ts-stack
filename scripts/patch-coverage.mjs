@@ -53,6 +53,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/,
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
   /packages\/wallet\/btms\/src\/types\.ts$/,
+  /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
   // CHIRP's package entry point is a pure re-export barrel and its types module
   // emits declarations only. The executable CLI remains instrumented and is
   // intentionally not part of this exact exclusion.

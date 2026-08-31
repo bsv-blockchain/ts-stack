@@ -111,6 +111,13 @@
       "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager."
     },
     {
+      "name": "@bsv/ecpm-permission-module",
+      "path": "packages/wallet/ecpm-permission-module",
+      "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled."
+    },
+    {
       "name": "@bsv/wallet-toolbox-client",
       "path": "packages/wallet/wallet-toolbox/client",
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",

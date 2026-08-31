@@ -40,7 +40,7 @@ Clients PUT files with authentication, retrieve files via public GET, and query 
 | Type              | Requirement                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
 | Database          | None; filesystem-based storage                                                                      |
-| External services | Wallet Storage (WALLET_STORAGE_URL), ARC (optional for payment transactions)                        |
+| External services | Wallet Storage (WALLET_STORAGE_URL)                                                                |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
@@ -65,7 +65,7 @@ None.
 | -------------------------- | -------- | --------------------------------------------------------------------------------------------- |
 | PRICE_PER_GB_MO            | No       | Monthly storage price per GB (e.g., `0.03`)                                                   |
 | HOSTING_DOMAIN             | No       | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
-| BSV_NETWORK                | No       | Target blockchain network (e.g., `mainnet` or `testnet`)                                      |
+| BSV_NETWORK                | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                         |
 | WALLET_STORAGE_URL         | No       | Wallet storage endpoint for key derivation (e.g., `https://store-us-1.bsvb.tech`)             |
 | SERVER_PRIVATE_KEY         | Yes      | 256-bit hex private key for server identity                                                   |
 | HTTP_PORT                  | No       | Express server port (default: 8080)                                                           |

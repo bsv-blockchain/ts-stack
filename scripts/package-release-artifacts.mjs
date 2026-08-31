@@ -166,13 +166,16 @@ function governedProjects(registry) {
   return registry.projects.filter(project => project.release === 'npm-oidc')
 }
 
-async function loadGovernedProjects() {
+export async function loadGovernedProjects(expectedCount) {
   const registry = await readJson(
     path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
   )
   const projects = governedProjects(registry)
-  if (projects.length !== 33) {
-    throw new Error(`expected 33 governed npm packages, found ${projects.length}`)
+  if (!Number.isSafeInteger(expectedCount) || expectedCount < 1) {
+    throw new Error(`invalid governed npm package count ${JSON.stringify(expectedCount)}`)
+  }
+  if (projects.length !== expectedCount) {
+    throw new Error(`expected ${expectedCount} governed npm packages, found ${projects.length}`)
   }
   return await Promise.all(
     projects.map(async project => {
@@ -999,7 +1002,8 @@ async function stageArtifacts(arguments_) {
   if (filter && requested.length > 0) {
     throw new Error('--filter and --package cannot be used together')
   }
-  const [governed, policy] = await Promise.all([loadGovernedProjects(), readJson(POLICY_PATH)])
+  const policy = await readJson(POLICY_PATH)
+  const governed = await loadGovernedProjects(policy.publicPackageCount)
   const source = await sourceMetadata(policy)
   await ensureEmptyOutputDirectory(outputDirectory)
   const governedNames = new Set(governed.map(project => project.name))
@@ -1283,11 +1287,11 @@ async function verifyArtifacts(manifestOption) {
   const manifestPath = path.resolve(REPOSITORY_ROOT, manifestOption)
   const releaseRoot = path.dirname(manifestPath)
   const manifest = await readJson(manifestPath)
-  const [{ stdout: currentCommit }, governed, policy] = await Promise.all([
+  const [{ stdout: currentCommit }, policy] = await Promise.all([
     run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT }),
-    loadGovernedProjects(),
     readJson(POLICY_PATH)
   ])
+  const governed = await loadGovernedProjects(policy.publicPackageCount)
   validateManifestEnvelope(manifest, currentCommit.trim(), policy)
 
   const context = {

@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.10.4'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '2.11.0'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -130,6 +130,18 @@ console.log(publicKey)
 ```
 
 `setup.wallet` is the BRC-100 wallet. The surrounding `setup` object exposes the constructed `rootKey`, `identityKey`, `keyDeriver`, `storage`, `services`, and `monitor` so wallet builders can inspect or replace pieces while developing.
+
+## Permission modules
+
+`WalletPermissionsManager` registers BRC-98/99/111 modules by the scheme after
+the `p` prefix. Existing modules can transform calls with `onRequest` and
+`onResponse`. A semantic module can instead implement
+`handleRequest(request, next)` and return the conforming BRC-100 result itself;
+if it needs the underlying wallet operation, `next` is guarded to one call.
+
+The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
+this hook to implement point multiplication under `p ecpm` while keeping
+`getPublicKey` as the public wallet method.
 
 ## Action Flow
 

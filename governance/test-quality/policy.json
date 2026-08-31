@@ -41,6 +41,7 @@
       "packages/overlays/gasp-core/package.json",
       "packages/overlays/btms-backend/package.json",
       "packages/wallet/btms-permission-module/package.json",
+      "packages/wallet/ecpm-permission-module/package.json",
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json"
     ],
@@ -424,6 +425,17 @@
           "Only canonical positive decimal safe integers are admitted as permissioned token amounts.",
           "Session approval is cached independently for each arbitrary originator.",
           "Array-shaped request arguments are rejected at the authorization boundary."
+        ]
+      },
+      {
+        "path": "packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts",
+        "manifest": "packages/wallet/ecpm-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-derived secret scalars applied to untrusted caller-supplied secp256k1 points",
+        "target": "BRC-98 ECPM apply/remove inversion across independently generated wallet roots and finite curve points",
+        "invariants": [
+          "Applying and then removing one module-derived scalar returns every generated finite input point exactly.",
+          "Neither randomized root material nor the corresponding derived scalar is exposed in the wallet result."
         ]
       },
       {
