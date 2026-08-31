@@ -1,6 +1,8 @@
 import * as bsv from '@bsv/sdk'
 import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
+import { StorageProvider } from '../StorageProvider'
+import { StorageReaderWriter } from '../StorageReaderWriter'
 
 import * as dotenv from 'dotenv'
 
@@ -34,6 +36,11 @@ describe('WalletStorageManager tests', () => {
     await expect(provider.prepareNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
     await expect(provider.activateNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
     await expect(provider.armNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+
+    expect((StorageProvider.prototype as any).supportsNoSendExpiryPersistence.call(provider)).toBe(false)
+    await expect(
+      StorageReaderWriter.prototype.compareAndSetNoSendExpiryState.call(manager, 1, 'signed', 'reclaiming')
+    ).rejects.toThrow('BRC-177 atomic lifecycle persistence')
 
     const persistence = jest.spyOn(provider as any, 'supportsNoSendExpiryPersistence').mockReturnValue(false)
     try {

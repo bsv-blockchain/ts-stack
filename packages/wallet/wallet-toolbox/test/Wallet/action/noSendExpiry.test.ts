@@ -241,6 +241,28 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   }
 
+  async function expectProcessFailure(
+    mutate: (
+      ctx: WalletHarness,
+      args: Parameters<WalletStorageManager['processAction']>[0]
+    ) =>
+      | Parameters<WalletStorageManager['processAction']>[0]
+      | Promise<Parameters<WalletStorageManager['processAction']>[0]>,
+    message: string
+  ): Promise<void> {
+    const ctx = await createHarness()
+    try {
+      const process = ctx.storage.processAction.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'processAction').mockImplementation(async args => {
+        return await process(args.isNoSend ? await mutate(ctx, args) : args)
+      })
+      await expect(ctx.wallet.createAction(protectedArgs(3600))).rejects.toThrow(message)
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  }
+
   test('pre-funds, releases noSend, atomically reclaims, and finalizes after proof', async () => {
     const ctx = await createHarness()
     try {
@@ -594,6 +616,163 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('abort remains fail-closed across unsigned, released, and recipient-broadcast races', async () => {
+    const unsigned = await createHarness()
+    try {
+      const created = await unsigned.wallet.createAction(protectedArgs(3600, false))
+      const target = verifyOne(
+        await unsigned.active.findTransactions({ partial: { reference: created.signableTransaction!.reference } })
+      )
+      const compareAndSet = unsigned.active.compareAndSetNoSendExpiryState.bind(unsigned.active)
+      jest
+        .spyOn(unsigned.active, 'compareAndSetNoSendExpiryState')
+        .mockImplementation(async (transactionId, expected, next, trx) =>
+          expected === 'unsigned' && next === 'cancelled'
+            ? false
+            : await compareAndSet(transactionId, expected, next, trx)
+        )
+      await expect(unsigned.wallet.abortAction({ reference: target.reference })).rejects.toThrow(
+        'changed while it was being aborted'
+      )
+    } finally {
+      jest.restoreAllMocks()
+      await unsigned.destroy()
+    }
+
+    const released = await createHarness()
+    try {
+      const created = await released.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await released.active.findTransactions({ partial: { txid: created.txid } }))
+      const compareAndSet = released.active.compareAndSetNoSendExpiryState.bind(released.active)
+      jest
+        .spyOn(released.active, 'compareAndSetNoSendExpiryState')
+        .mockImplementation(async (transactionId, expected, next, trx) =>
+          expected === 'signed' && next === 'revocation-requested'
+            ? false
+            : await compareAndSet(transactionId, expected, next, trx)
+        )
+      await expect(released.wallet.abortAction({ reference: target.reference })).rejects.toThrow(
+        'changed while early revocation was requested'
+      )
+    } finally {
+      jest.restoreAllMocks()
+      await released.destroy()
+    }
+
+    const requested = await createHarness()
+    try {
+      const created = await requested.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await requested.active.findTransactions({ partial: { txid: created.txid } }))
+      await requested.active.updateTransaction(target.transactionId, { noSendExpiryState: 'revocation-requested' })
+      await expect(requested.wallet.abortAction({ reference: target.reference })).resolves.toEqual({ aborted: true })
+    } finally {
+      await requested.destroy()
+    }
+
+    const broadcast = await createHarness()
+    try {
+      const created = await broadcast.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await broadcast.active.findTransactions({ partial: { txid: created.txid } }))
+      const posted = await services.postBeef(Beef.fromBinary(created.tx!), [created.txid!])
+      expect(posted[0].status).toBe('success')
+
+      await expect(broadcast.wallet.abortAction({ reference: target.reference })).resolves.toEqual({ aborted: false })
+      expect(
+        verifyOne(await broadcast.active.findTransactions({ partial: { txid: created.txid } })).noSendExpiryState
+      ).toBe('broadcast')
+    } finally {
+      await broadcast.destroy()
+    }
+  })
+
+  test('monitor CAS losses and incomplete proof state defer without violating lifecycle ownership', async () => {
+    const unsigned = await createHarness()
+    try {
+      const created = await unsigned.wallet.createAction(protectedArgs(3600, false))
+      const target = verifyOne(
+        await unsigned.active.findTransactions({ partial: { reference: created.signableTransaction!.reference } })
+      )
+      await unsigned.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const compareAndSet = unsigned.active.compareAndSetNoSendExpiryState.bind(unsigned.active)
+      jest
+        .spyOn(unsigned.active, 'compareAndSetNoSendExpiryState')
+        .mockImplementation(async (transactionId, expected, next, trx) =>
+          expected === 'unsigned' && next === 'cancelled'
+            ? false
+            : await compareAndSet(transactionId, expected, next, trx)
+        )
+      await expect(processNoSendExpiryLifecycle(unsigned.active)).resolves.toMatchObject({ cancelled: 0 })
+    } finally {
+      jest.restoreAllMocks()
+      await unsigned.destroy()
+    }
+
+    const activation = await createHarness()
+    try {
+      const created = await activation.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await activation.active.findTransactions({ partial: { txid: created.txid } }))
+      await activation.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const compareAndSet = activation.active.compareAndSetNoSendExpiryState.bind(activation.active)
+      jest
+        .spyOn(activation.active, 'compareAndSetNoSendExpiryState')
+        .mockImplementation(async (transactionId, expected, next, trx) =>
+          expected === 'revocation-requested' && next === 'reclaiming'
+            ? false
+            : await compareAndSet(transactionId, expected, next, trx)
+        )
+      await expect(processNoSendExpiryLifecycle(activation.active)).resolves.toMatchObject({ reclaimActivated: 0 })
+      expect(
+        verifyOne(await activation.active.findTransactions({ partial: { txid: created.txid } })).noSendExpiryState
+      ).toBe('revocation-requested')
+    } finally {
+      jest.restoreAllMocks()
+      await activation.destroy()
+    }
+
+    const conflicted = await createHarness()
+    try {
+      const created = await conflicted.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await conflicted.active.findTransactions({ partial: { txid: created.txid } }))
+      await conflicted.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const spent = jest.spyOn(services, 'isUtxo').mockResolvedValueOnce(false)
+      await processNoSendExpiryLifecycle(conflicted.active)
+      spent.mockRestore()
+      const offline = jest.spyOn(services, 'getStatusForTxids').mockResolvedValueOnce({
+        status: 'error',
+        results: [],
+        name: 'offline'
+      })
+      await expect(processNoSendExpiryLifecycle(conflicted.active)).resolves.toMatchObject({ deferred: 1 })
+      offline.mockRestore()
+      expect(
+        verifyOne(await conflicted.active.findTransactions({ partial: { txid: created.txid } })).noSendExpiryState
+      ).toBe('conflicted')
+    } finally {
+      jest.restoreAllMocks()
+      await conflicted.destroy()
+    }
+
+    const proofless = await createHarness()
+    try {
+      const created = await proofless.wallet.createAction(protectedArgs(3600))
+      let target = verifyOne(await proofless.active.findTransactions({ partial: { txid: created.txid } }))
+      await proofless.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      await processNoSendExpiryLifecycle(proofless.active)
+      target = verifyOne(await proofless.active.findTransactions({ partial: { txid: created.txid } }))
+      const reclaim = verifyOne(
+        await proofless.active.findTransactions({ partial: { txid: target.noSendExpiryReclaimTxid } })
+      )
+      await proofless.active.updateTransaction(reclaim.transactionId, { status: 'completed' })
+
+      await expect(processNoSendExpiryLifecycle(proofless.active)).resolves.toMatchObject({ deferred: 1 })
+      expect(
+        verifyOne(await proofless.active.findTransactions({ partial: { txid: created.txid } })).noSendExpiryState
+      ).toBe('reclaiming')
+    } finally {
+      await proofless.destroy()
+    }
+  })
+
   test('timestamp expiry remains the exact absolute deadline after pre-funding', async () => {
     const ctx = await createHarness()
     try {
@@ -655,6 +834,89 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('cleans up a failed funding release and accepts binary input BEEF from storage', async () => {
+    const failed = await createHarness()
+    try {
+      const abort = jest.spyOn(failed.storage, 'abortAction')
+      jest.spyOn(failed.storage, 'processAction').mockRejectedValueOnce(new Error('simulated funding release failure'))
+
+      await expect(failed.wallet.createAction(protectedArgs(3600))).rejects.toThrow('simulated funding release failure')
+      expect(abort).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.restoreAllMocks()
+      await failed.destroy()
+    }
+
+    const binary = await createHarness()
+    try {
+      const prepare = binary.storage.prepareNoSendExpiry.bind(binary.storage)
+      jest.spyOn(binary.storage, 'prepareNoSendExpiry').mockImplementationOnce(async args => {
+        const result = await prepare(args)
+        return {
+          ...result,
+          funding: {
+            ...result.funding,
+            inputBeef: Uint8Array.from(result.funding.inputBeef!)
+          }
+        }
+      })
+
+      await expect(binary.wallet.createAction(protectedArgs(3600))).resolves.toMatchObject({
+        txid: expect.any(String)
+      })
+    } finally {
+      jest.restoreAllMocks()
+      await binary.destroy()
+    }
+  })
+
+  test('rejects protected release races at every storage revalidation boundary', async () => {
+    await expectProcessFailure((_ctx, args) => ({ ...args, isNoSend: false }), 'must remain noSend')
+    await expectProcessFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryState: 'signed' })
+      return args
+    }, 'not armed for signature release')
+    await expectProcessFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      return args
+    }, 'has expired')
+    await expectProcessFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { status: 'failed' })
+      return args
+    }, 'invalid transaction status')
+    await expectProcessFailure((ctx, args) => {
+      const compareAndSet = ctx.active.compareAndSetNoSendExpiryState.bind(ctx.active)
+      jest
+        .spyOn(ctx.active, 'compareAndSetNoSendExpiryState')
+        .mockImplementation(async (transactionId, expected, next, trx) =>
+          expected === 'unsigned' && next === 'signed' ? false : await compareAndSet(transactionId, expected, next, trx)
+        )
+      return args
+    }, 'changed before signature release')
+  })
+
+  test('preserves exact-anchor semantics when the active storage charges a commission', async () => {
+    const ctx = await createHarness()
+    try {
+      ctx.active.commissionSatoshis = 5
+      ctx.active.commissionPubKeyHex = ctx.wallet.identityKey
+
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      const targetTx = Transaction.fromAtomicBEEF(created.tx!)
+      const outputs = await ctx.active.findOutputs({ partial: { transactionId: target.transactionId } })
+
+      expect(targetTx.inputs).toHaveLength(1)
+      expect(outputs.filter(output => output.purpose === 'storage-commission')).toHaveLength(1)
+      expect(outputs.filter(output => output.change)).toHaveLength(0)
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
   test('rejects corrupted activation state before constructing a protected transaction', async () => {
     await expectActivationFailure(
       (_ctx, args) => ({ ...args, target: { ...args.target, labels: [] } }),
@@ -703,6 +965,25 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       }),
       'safely schedulable'
     )
+
+    const ctx = await createHarness()
+    try {
+      const activate = ctx.storage.activateNoSendExpiry.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'activateNoSendExpiry').mockImplementationOnce(async args => {
+        const result = await activate(args)
+        return {
+          ...result,
+          action: {
+            ...result.action,
+            inputs: [...result.action.inputs, ...result.action.inputs]
+          }
+        }
+      })
+      await expect(ctx.wallet.createAction(protectedArgs(3600))).rejects.toThrow('exactly one managed anchor input')
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
   })
 
   test('rejects malformed or stale pre-signed reclaim material before arming', async () => {

@@ -200,7 +200,23 @@ describe('StorageIdb tests', () => {
         status: 'nosend',
         txid: '16'.repeat(32)
       })
-      await storage.updateTransaction(transactionId, { noSendExpiryState: 'signed' })
+      const reclaimTxid = '17'.repeat(32)
+      await storage.updateTransaction(transactionId, {
+        noSendExpiryState: 'signed',
+        noSendExpiryReclaimTxid: reclaimTxid
+      })
+
+      expect((storage as any).supportsNoSendExpiryPersistence()).toBe(true)
+      expect(
+        (await storage.findTransactions({ partial: { noSendExpiryState: 'signed' } })).map(
+          transaction => transaction.transactionId
+        )
+      ).toContain(transactionId)
+      expect(
+        (await storage.findTransactions({ partial: { noSendExpiryReclaimTxid: reclaimTxid } })).map(
+          transaction => transaction.transactionId
+        )
+      ).toContain(transactionId)
 
       const contenders = await Promise.all([
         storage.compareAndSetNoSendExpiryState(transactionId, 'signed', 'reclaiming'),
@@ -208,8 +224,13 @@ describe('StorageIdb tests', () => {
       ])
       expect(contenders.filter(Boolean)).toHaveLength(1)
       await expect(storage.compareAndSetNoSendExpiryState(transactionId, 'signed', 'conflicted')).resolves.toBe(false)
+      await storage.transaction(async trx => {
+        await expect(
+          storage.compareAndSetNoSendExpiryState(transactionId, 'reclaiming', 'conflicted', trx)
+        ).resolves.toBe(true)
+      })
       const [transaction] = await storage.findTransactions({ partial: { transactionId } })
-      expect(transaction.noSendExpiryState).toBe('reclaiming')
+      expect(transaction.noSendExpiryState).toBe('conflicted')
     } finally {
       await resetStorage(storage)
     }
