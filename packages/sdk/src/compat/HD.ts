@@ -1,4 +1,5 @@
 // @ts-nocheck
+// Modified bsv 1.5.6 lineage; see ../../THIRD_PARTY_NOTICES.md.
 import {
   fromBase58Check,
   toBase58Check,

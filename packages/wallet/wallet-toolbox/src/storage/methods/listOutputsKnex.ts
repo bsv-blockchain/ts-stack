@@ -24,6 +24,28 @@ function normalizeKnexListOffset(offset: number): {
     : { offset, orderBy: 'asc' }
 }
 
+function inferShortPageTotal(
+  outputsLength: number,
+  limit: number,
+  skipped: number
+): number | undefined {
+  if (limit > 0 && outputsLength >= limit) return undefined
+  // An empty page proves only that the offset is at or past the end.
+  if (outputsLength === 0 && skipped > 0) return undefined
+  return skipped + outputsLength
+}
+
+async function resolveKnexListTotal(
+  outputsLength: number,
+  limit: number,
+  skipped: number,
+  countTotal: () => Promise<number>
+): Promise<number> {
+  return (
+    inferShortPageTotal(outputsLength, limit, skipped) ?? (await countTotal())
+  )
+}
+
 async function resolveKnexBasketId(
   storage: StorageKnex,
   userId: number,
@@ -357,14 +379,18 @@ export async function listOutputs(
       return specOp.resultFromOutputs(dsk, auth, vargs, specOpTags, outputs)
     }
   }
-  if (!limit || outputs.length < limit) {
-    result.totalOutputs = outputs.length
-  } else {
-    const total = verifyOne(
-      (await qcount) as Array<{ total: number | string }>
-    ).total
-    result.totalOutputs = Number(total)
-  }
+  const skipped = specOp?.ignoreLimit ? 0 : offset
+  result.totalOutputs = await resolveKnexListTotal(
+    outputs.length,
+    limit,
+    skipped,
+    async () => {
+      const total = verifyOne(
+        (await qcount) as Array<{ total: number | string }>
+      ).total
+      return Number(total)
+    }
+  )
   const { labelsByTransactionId, tagsByOutputId } =
     await loadKnexOutputAssociations(
       k,

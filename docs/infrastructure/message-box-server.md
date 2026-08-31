@@ -4,7 +4,7 @@ title: 'Message-box Server'
 kind: infra
 version: '1.1.39'
 last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+last_verified: '2026-08-25'
 review_cadence_days: 30
 status: stable
 tags: [messaging, overlay, store-and-forward, authentication]
@@ -155,8 +155,8 @@ Migrations tracked in `src/migrations/`:
 - `2025-01-31-001-notification-permissions.ts` – Firebase notification permissions
 - `2025-01-31-002-device-registrations.ts` – Device registration tracking
 - `2026-07-26-001-message-permission-scope.ts` – Enforce one box-wide or sender-specific permission per scope
-- `2026-07-26-002-list-query-indexes.ts` – Add list-query indexes for sender and recipient access paths
-- `2026-08-04-001-resource-safety.ts` – Add message quota, retention, and resource-safety state
+- `2026-07-26-002-list-query-indexes.ts` – Add indexes for bounded inbox and sender-list queries
+- `2026-08-04-001-resource-safety.ts` – Add retained-state accounting and resource-safety fields
 
 ## Health checks
 

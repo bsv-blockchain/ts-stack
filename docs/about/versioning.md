@@ -4,7 +4,7 @@ title: 'Versioning Policy'
 kind: meta
 version: '2.0.0'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [about, versioning, semver, releases]

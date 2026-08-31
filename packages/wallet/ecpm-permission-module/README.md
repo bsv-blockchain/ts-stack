@@ -70,7 +70,9 @@ cached and pending authorization state.
 
 Security level 0 primary-key requests do not prompt. Levels 1 and 2 require
 the authorization callback, with level 2 grants scoped to the counterparty.
-Every privileged request requires authorization regardless of security level.
+Every privileged request requires authorization regardless of security level,
+and cached or in-flight privileged grants are scoped to the exact approved
+`privilegedReason`. Changing the reason requires a separate authorization.
 `seekPermission: false` fails unless an applicable grant is already cached.
 
 ## Security model

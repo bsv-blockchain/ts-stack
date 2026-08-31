@@ -4,7 +4,7 @@ title: 'Test Quality and Skip Governance'
 kind: reference
 version: '1.1.0'
 last_updated: '2026-07-26'
-last_verified: '2026-07-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, testing]

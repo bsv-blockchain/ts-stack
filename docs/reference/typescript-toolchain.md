@@ -3,8 +3,8 @@ id: typescript-toolchain
 title: 'TypeScript Compiler and Tooling Boundary'
 kind: reference
 version: '1.1.0'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, typescript, compiler, testing, toolchain]
@@ -67,8 +67,8 @@ requires:
 - the independently locked TypeScript 5.9.3 codegen boundary; and
 - repository-wide fan-out when the toolchain policy or checker changes.
 
-The current governed inventory is 43 native compiler profiles plus one isolated
-codegen API profile. It also discovers all 121 tracked `tsconfig` files, resolves
+The current governed inventory is 46 native compiler profiles plus one isolated
+codegen API profile. It also discovers all 128 tracked `tsconfig` files, resolves
 their complete `extends` chains, rejects missing or circular configurations,
 and requires every project to use one of nine approved runtime profiles. Seven
 deployable services have self-contained `tsconfig` files because their npm and
@@ -135,6 +135,6 @@ later stable API becomes available. Remove `@typescript/typescript6` only after
 every API consumer has a supported native replacement and the full matrix
 passes without it.
 
-This migration changes development manifests in all 30 public packages. Record
+This migration changes development manifests in all 33 public packages. Record
 them for the final coordinated patch release, but do not publish from a
 workstation.

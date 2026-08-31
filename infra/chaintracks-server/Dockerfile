@@ -29,9 +29,11 @@ FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbf
 WORKDIR /app
 
 # Install better-sqlite3 native build tools (see builder stage). The pinned
-# base is refreshed by reviewed Dependabot changes instead of mutating it with
-# a time-dependent apk upgrade. The toolchain is removed after npm ci below.
-RUN apk add --no-cache --virtual .build-deps g++ make python3
+# base contains OpenSSL 3.5.7-r0, so install the reviewed 3.5.8-r0 fix for
+# CVE-2026-14456 alongside the disposable toolchain. The toolchain is removed
+# after npm ci below while the fixed runtime libraries remain.
+RUN apk add --no-cache --virtual .build-deps g++ make python3 \
+ && apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0
 
 # Copy package files
 COPY package*.json ./
@@ -46,6 +48,12 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
 
 # Create directory for bulk headers and give the non-root node user ownership
 RUN mkdir -p /app/public/headers && chown -R node:node /app

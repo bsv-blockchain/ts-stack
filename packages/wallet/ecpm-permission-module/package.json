@@ -46,7 +46,7 @@
     "wallet",
     "BSV"
   ],
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
     "@bsv/sdk": "^2.4.1",

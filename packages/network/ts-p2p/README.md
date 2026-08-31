@@ -496,6 +496,8 @@ For questions, bug reports, or feature requests:
 
 ## License
 
-This project is licensed under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+The recovered pre-monorepo MIT notice is retained in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain ecosystem. Let's build the future of BSV Blockchain together!

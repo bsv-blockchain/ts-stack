@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -21,7 +21,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "exports": {
     ".": {
@@ -61,7 +63,7 @@
     "Express",
     "Middleware"
   ],
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

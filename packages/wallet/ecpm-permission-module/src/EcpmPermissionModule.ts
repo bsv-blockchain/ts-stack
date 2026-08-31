@@ -253,13 +253,14 @@ export class EcpmPermissionModule implements PermissionsModule {
 
   private authorizationScope(request: EcpmAuthorizationRequest): string {
     const counterparty = request.securityLevel === 2 ? request.counterparty : '*'
-    return [
+    return JSON.stringify([
       request.originator,
       request.securityLevel,
       request.logicalProtocolID,
       counterparty,
-      request.privileged ? 'privileged' : 'primary'
-    ].join('\u0000')
+      request.privileged ? 'privileged' : 'primary',
+      request.privileged ? request.privilegedReason : null
+    ])
   }
 
   private async selectKeyDeriver(parsed: ParsedEcpmRequest): Promise<EcpmKeyDeriver> {

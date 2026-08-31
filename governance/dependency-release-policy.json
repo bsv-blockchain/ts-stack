@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-13",
+  "lastReviewed": "2026-08-30",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,10 +144,10 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-08-13",
-    "method": "Rechecked all retained root and standalone overrides against their current natural dependency graphs, refreshed the root lock against the current advisory database, and reproduced the updated nanoid and image-size findings before selecting the narrowest compatible override and committed parser patch.",
+    "reviewedAt": "2026-08-30",
+    "method": "Rechecked retained root and standalone overrides against the frozen locks, current package metadata, and the current advisory audit. Verified that typed-rest-client 2.3.1 still pins qs 6.15.1, Google and OpenTelemetry paths still request gaxios 6.x or 7.1.3, and teeny-request still permits uuid 9.x.",
     "retainedCount": 20,
-    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. The nanoid override selects 3.3.18, the first 3.x release patched after GHSA-2v37-7h3g-55p8 was expanded on 2026-08-13. No override can be removed safely in this wave.",
+    "result": "All 20 retained overrides still prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The expired qs, gaxios, and uuid entries remain necessary; the frozen graph resolves their reviewed patched versions and the high-severity audit reports only the two governed image-size advisories.",
     "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [
@@ -173,7 +173,7 @@
       "source": "tools/codegen/node/package.json",
       "selector": "@redocly/openapi-core@1.34.17",
       "value": {
-        "js-yaml": "4.3.0",
+        "js-yaml": "4.3.1",
         "minimatch": "10.2.5"
       },
       "exceptionId": "openapi-typescript-redocly-overrides"

@@ -1,0 +1,993 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-08-27",
+  "owner": "ts-stack-maintainers",
+  "policy": {
+    "firstPartyLicense": "LicenseRef-Open-BSV-License-6",
+    "canonicalLicenseFile": "LICENSE.txt",
+    "noticeFile": "THIRD_PARTY_NOTICES.md",
+    "licensesDirectory": "LICENSES",
+    "releaseRequiresAllClearances": true,
+    "evidenceFilesRequired": true,
+    "licenseContinuityFile": "governance/license-continuity.json",
+    "licenseProvenanceFile": "governance/license-evidence/provenance.json",
+    "forbiddenUnlicensedArtifacts": [
+      "packages/messaging/ts-paymail/docs/specs/original-mb-specs",
+      "packages/messaging/ts-paymail/docs/specs/tokenized/transactionNegotation.md",
+      "packages/sdk/docs/swagger/index.html",
+      "packages/sdk/docs/swagger.png",
+      "packages/sdk/docs/swagger/swagger-ui.version",
+      "packages/helpers/ts-templates/src/__tests/dstas-fixtures.ts",
+      "packages/overlays/topics/src/dstas/__tests/dstas-fixture.ts",
+      "packages/wallet/wallet-toolbox/docs/open-rpc/index.html"
+    ]
+  },
+  "evidenceFiles": [
+    {
+      "id": "docs-site-bundled-materials",
+      "path": "governance/docs-site-bundled-materials.json",
+      "sha256": "90468e6f7ecd26ec72a3d5622a074e5ec7995395496d612f506c38efb9f6d06f"
+    },
+    {
+      "id": "license-continuity",
+      "path": "governance/license-continuity.json",
+      "sha256": "182747fed1f2144068ca6f65d5fd658e8fcb5e23c033c467e9bd14a54bac0d32"
+    },
+    {
+      "id": "license-provenance",
+      "path": "governance/license-evidence/provenance.json",
+      "sha256": "800ea84aac403614c42dc8664999d65b0540a31721903206eda7d6e639e21e5c"
+    },
+    {
+      "id": "preuniformization-root-policy",
+      "path": "governance/license-evidence/pre-uniformization-root-policy.md",
+      "sha256": "7090c2ca85f9674366bc56fedf03dc0b4f2e222348aad820e5c7ceedb7ac4771"
+    }
+  ],
+  "licenseTexts": [
+    {
+      "id": "BIP-0032-BSD-2-Clause",
+      "path": "LICENSES/BIP-0032-BSD-2-Clause.txt",
+      "sha256": "730b9a4d695db1614ef97e23aed7fa9396e137c52a0fb34f48c852d6f328c12d",
+      "source": "https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki"
+    },
+    {
+      "id": "BIP-0039-MIT",
+      "path": "LICENSES/BIP-0039-MIT.txt",
+      "sha256": "50bca400f439896751ebc7e2294f74f2bd18ea034c96f3cef00eac94bf1e03ef",
+      "source": "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki"
+    },
+    {
+      "id": "Boost-1.0",
+      "path": "LICENSES/Boost-1.0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "source": "https://github.com/boostorg/boost/blob/boost-1.85.0/LICENSE_1_0.txt"
+    },
+    {
+      "id": "LLVM-Apache-2.0-WITH-LLVM-exception",
+      "path": "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+      "source": "https://github.com/emscripten-core/emscripten/blob/4.0.23/system/lib/libcxx/LICENSE.TXT"
+    },
+    {
+      "id": "aes-gcm.js-ISC",
+      "path": "LICENSES/aes-gcm.js-ISC.txt",
+      "sha256": "c262517a79c53b2892431e5575620d7040153273b14fff07fca45e86d1d844d7",
+      "source": "https://registry.npmjs.org/aes-gcm.js/-/aes-gcm.js-1.0.0.tgz"
+    },
+    {
+      "id": "bdk-1.2.2",
+      "path": "LICENSES/bdk-1.2.2.txt",
+      "sha256": "f60e7b9abd7deb2b9ba55923ceaa190cecd06a8effa111a148175a3bc6d22d47",
+      "source": "https://github.com/bitcoin-sv/bdk/blob/6d1e8092e8a9917d2544cddc9e20c6dc38242d93/LICENCE.txt"
+    },
+    {
+      "id": "bitcoin-sv-879fc8b4",
+      "path": "LICENSES/bitcoin-sv-879fc8b4.txt",
+      "sha256": "d869a62568556cc7f61304b768074b40d7511ddb414f4e546101f860ee0ea853",
+      "source": "https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/LICENSE"
+    },
+    {
+      "id": "bn.js-MIT",
+      "path": "LICENSES/bn.js-MIT.txt",
+      "sha256": "445739f5b5eb63e5aeff5aeb0f35a45080a421615dce0d97f9939aeea498acdd",
+      "source": "https://github.com/indutny/bn.js/blob/v5.2.1/LICENSE"
+    },
+    {
+      "id": "brorand-MIT",
+      "path": "LICENSES/brorand-MIT.txt",
+      "sha256": "f6f4c7491b09da49f894844128c00720df758aaab418d05672c017f305e53fbd",
+      "source": "https://github.com/indutny/brorand/blob/master/README.md#license"
+    },
+    {
+      "id": "bsv-1.5.6-MIT",
+      "path": "LICENSES/bsv-1.5.6-MIT.txt",
+      "sha256": "186708a3b62c17c6508a41ef49350fbdbbe34609316cb06984a6de17a9c5adbc",
+      "source": "https://www.npmjs.com/package/bsv/v/1.5.6"
+    },
+    {
+      "id": "bsv-2.0.10-MIT",
+      "path": "LICENSES/bsv-2.0.10-MIT.txt",
+      "sha256": "9573a5d96c7b2c757be3479fcf0a889cef4f4aecb2b19e68b891cefddc6f3d3b",
+      "source": "https://github.com/moneybutton/bsv/blob/feab6d528c4013f6332b33169e771a95bc201285/LICENSE"
+    },
+    {
+      "id": "closure-library-Apache-2.0",
+      "path": "LICENSES/closure-library-Apache-2.0.txt",
+      "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+      "source": "https://github.com/google/closure-library/blob/8598d87242af59aac233270742c8984e2b2bdbe0/LICENSE"
+    },
+    {
+      "id": "elliptic-MIT",
+      "path": "LICENSES/elliptic-MIT.txt",
+      "sha256": "7261b3ab93df04c6d8f3398f87275d28f0e87d88cbd0033b788fb50402de03c5",
+      "source": "https://github.com/indutny/elliptic/blob/master/README.md#license"
+    },
+    {
+      "id": "emscripten-4.0.23",
+      "path": "LICENSES/emscripten-4.0.23.txt",
+      "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+      "source": "https://github.com/emscripten-core/emscripten/blob/4.0.23/LICENSE"
+    },
+    {
+      "id": "hash.js-MIT",
+      "path": "LICENSES/hash.js-MIT.txt",
+      "sha256": "7261b3ab93df04c6d8f3398f87275d28f0e87d88cbd0033b788fb50402de03c5",
+      "source": "https://github.com/indutny/hash.js/blob/master/README.md#license"
+    },
+    {
+      "id": "hmac-drbg-MIT",
+      "path": "LICENSES/hmac-drbg-MIT.txt",
+      "sha256": "2587ff6443c524b3427871376cbf7d755bbd0512b9e8142e601f9e447c599f75",
+      "source": "https://github.com/indutny/hmac-drbg/blob/master/README.md#license"
+    },
+    {
+      "id": "libsecp256k1-MIT",
+      "path": "LICENSES/libsecp256k1-MIT.txt",
+      "sha256": "a735999c7e5649df6fcda6fb06ab97435851c392b1b93494ae8725f37441632f",
+      "source": "https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/secp256k1/COPYING"
+    },
+    {
+      "id": "minimalistic-crypto-utils-MIT",
+      "path": "LICENSES/minimalistic-crypto-utils-MIT.txt",
+      "sha256": "2587ff6443c524b3427871376cbf7d755bbd0512b9e8142e601f9e447c599f75",
+      "source": "https://github.com/indutny/minimalistic-crypto-utils/blob/master/README.md#license"
+    },
+    {
+      "id": "musl-COPYRIGHT",
+      "path": "LICENSES/musl-COPYRIGHT.txt",
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "source": "https://github.com/emscripten-core/emscripten/blob/4.0.23/system/lib/libc/musl/COPYRIGHT"
+    },
+    {
+      "id": "noble-hashes-MIT",
+      "path": "LICENSES/noble-hashes-MIT.txt",
+      "sha256": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec",
+      "source": "https://github.com/paulmillr/noble-hashes/blob/1.8.0/LICENSE"
+    },
+    {
+      "id": "python-mnemonic-MIT",
+      "path": "LICENSES/python-mnemonic-MIT.txt",
+      "sha256": "d5e3c7c62a84e80073201e2f6e5130e9e6804fa05f8ac4f8b26a13c7d3969697",
+      "source": "https://github.com/trezor/python-mnemonic/blob/master/LICENSE"
+    },
+    {
+      "id": "runar-MIT",
+      "path": "LICENSES/runar-MIT.txt",
+      "sha256": "d476b8293f1cf84c2f6c5333a28c80a19907efeb7372e69f4cabf16f2094debd",
+      "source": "https://github.com/icellan/runar/blob/c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf/LICENSE"
+    },
+    {
+      "id": "simple-MIT",
+      "path": "LICENSES/simple-MIT.txt",
+      "sha256": "fe2bbadf04c1cd7be85369c60192ed73396e0bdf237608807e24d8e155fff94c",
+      "source": "git:c4bf280d6b5e28e161d4771a408d10784702bbf7^:packages/helpers/simple/LICENSE"
+    },
+    {
+      "id": "sjcl-BSD-2-Clause",
+      "path": "LICENSES/sjcl-BSD-2-Clause.txt",
+      "sha256": "ef430277d3cca1d3e7cdb6d4a61d7ff1eb208c4c2058602d2b361aaab60cd9c0",
+      "source": "https://github.com/bitwiseshiftleft/sjcl/blob/master/LICENSE.txt"
+    },
+    {
+      "id": "teranode-Open-BSV-License-6",
+      "path": "LICENSES/Teranode-Open-BSV-License-6.txt",
+      "sha256": "bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0",
+      "source": "https://github.com/bsv-blockchain/teranode/blob/2355e57b80af962327930ea32568a1b322361542/LICENSE"
+    },
+    {
+      "id": "chaintracks-server-MIT",
+      "path": "LICENSES/chaintracks-server-MIT.txt",
+      "sha256": "b5cb3c8cb17e656cb837a94db2a2f9986c3f38a75dac3d247ae013fd167cc11e",
+      "source": "https://github.com/bsv-blockchain/chaintracks-server/blob/eef334c910acc24d162d3bae75d518c01f7cdde1/package.json"
+    },
+    {
+      "id": "fund-metanet-ISC",
+      "path": "LICENSES/fund-metanet-ISC.txt",
+      "sha256": "a2b9ea6a440bb333838ff46b4b4f184d343aa73673f926ce82d0954c5ffcaa6f",
+      "source": "https://github.com/sirdeggen/fund-metanet/blob/82650ae0bdd49c7013001fd81b05fdcc7c47f42f/package.json"
+    },
+    {
+      "id": "messagebox-server-ISC",
+      "path": "LICENSES/messagebox-server-ISC.txt",
+      "sha256": "4fbda5c703e19a72ae3729c8f1f5f61e8b7ad2fb136f7bad01c48902c13ce727",
+      "source": "https://github.com/p2ppsr/messagebox-server/blob/2ca683e28e1eb0fddfbecc0e7f5b9943e6625075/package.json"
+    },
+    {
+      "id": "ts-p2p-MIT",
+      "path": "LICENSES/ts-p2p-MIT.txt",
+      "sha256": "401e78db5347ae36ee63e5ed38f6f78a8e7a107dd3274ec89ac1284dc3383bc9",
+      "source": "https://github.com/bsv-blockchain/ts-p2p/blob/f2b10f6e3a29a771c7ce811bf66be87f2a41a08a/package.json"
+    },
+    {
+      "id": "Open-BSV-4-standard-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-standard-pre-2026.txt",
+      "sha256": "d9eb0f893884e83bf1d2de7a28b1e944af37f3e04f3fbef8bc06230ad926ef6a",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/sdk/LICENSE.txt"
+    },
+    {
+      "id": "Open-BSV-4-wallet-client-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-wallet-client-pre-2026.txt",
+      "sha256": "c4f6a3ca5c169ebfaba88747696e370b35705f9b276450b2ae768400919c5ab1",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/wallet/wallet-toolbox/client/license.md"
+    },
+    {
+      "id": "Open-BSV-4-wallet-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-wallet-pre-2026.txt",
+      "sha256": "4d618174402ba25005d71ce752b72662cc829cd04768a727cec2a66134a6a3d9",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/wallet/wallet-toolbox/license.md"
+    },
+    {
+      "id": "Open-BSV-4-402-pay-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-402-pay-pre-2026.txt",
+      "sha256": "d9eb0f893884e83bf1d2de7a28b1e944af37f3e04f3fbef8bc06230ad926ef6a",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/middleware/402-pay/LICENSE.md"
+    },
+    {
+      "id": "Open-BSV-4-verifast-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-verifast-pre-2026.txt",
+      "sha256": "a13f62f7c673b87275c7e0f8cce307cad28a435bc77f8e68b5c97aaffe9e481d",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/verifast/LICENSE.txt"
+    },
+    {
+      "id": "Open-BSV-4-paymail-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-paymail-pre-2026.txt",
+      "sha256": "3fdb5febe3823ad73d716b751e0a5267c03d7ceeb40e1a6aa8d5006b99b42d31",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/messaging/ts-paymail/LICENSE.txt"
+    },
+    {
+      "id": "Open-BSV-4-create-bsv-app-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-4-create-bsv-app-pre-2026.txt",
+      "sha256": "aa49a4c07f1afff68f8778fe707a3b7cf1aa96e4be9737a5ff5405fd1477991c",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/helpers/create-bsv-app/LICENSE.txt"
+    },
+    {
+      "id": "Open-BSV-5-overlay-server-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-5-overlay-server-pre-2026.txt",
+      "sha256": "f11c687c54d5b0a28fc3bb5cac13ca9b4aa08ec3386c5d6410486eb116d736e1",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/infra/overlay-server/LICENSE.md"
+    },
+    {
+      "id": "Open-BSV-6-wallet-helper-pre-uniformization",
+      "path": "LICENSES/Open-BSV-License-6-wallet-helper-pre-2026.txt",
+      "sha256": "bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0",
+      "source": "https://github.com/bsv-blockchain/ts-stack/blob/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/helpers/bsv-wallet-helper/LICENSE.md"
+    }
+  ],
+  "materials": [
+    {
+      "id": "bn-js",
+      "name": "bn.js",
+      "version": "5.2.1 lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "bn.js-MIT",
+      "copyright": ["Copyright (c) 2015 Fedor Indutny"],
+      "source": "https://github.com/indutny/bn.js/tree/v5.2.1",
+      "incorporation": "modified and translated source",
+      "paths": [
+        "packages/sdk/src/primitives/BigNumber.ts",
+        "packages/sdk/src/primitives/K256.ts",
+        "packages/sdk/src/primitives/Mersenne.ts",
+        "packages/sdk/src/primitives/MontgomoryMethod.ts",
+        "packages/sdk/src/primitives/ReductionContext.ts"
+      ]
+    },
+    {
+      "id": "elliptic",
+      "name": "elliptic",
+      "version": "6.x lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "elliptic-MIT",
+      "copyright": ["Copyright Fedor Indutny, 2014"],
+      "source": "https://github.com/indutny/elliptic",
+      "incorporation": "modified and translated source",
+      "paths": [
+        "packages/sdk/src/primitives/BasePoint.ts",
+        "packages/sdk/src/primitives/Curve.ts",
+        "packages/sdk/src/primitives/ECDSA.ts",
+        "packages/sdk/src/primitives/JacobianPoint.ts",
+        "packages/sdk/src/primitives/Point.ts",
+        "packages/sdk/src/primitives/Polynomial.ts",
+        "packages/sdk/src/primitives/Signature.ts"
+      ]
+    },
+    {
+      "id": "hash-js",
+      "name": "hash.js",
+      "version": "1.x lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "hash.js-MIT",
+      "copyright": ["Copyright Fedor Indutny, 2014"],
+      "source": "https://github.com/indutny/hash.js",
+      "incorporation": "modified and translated source",
+      "paths": ["packages/sdk/src/primitives/Hash.ts"]
+    },
+    {
+      "id": "hmac-drbg",
+      "name": "hmac-drbg",
+      "version": "1.0.1 lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "hmac-drbg-MIT",
+      "copyright": ["Copyright Fedor Indutny, 2017"],
+      "source": "https://github.com/indutny/hmac-drbg",
+      "incorporation": "modified and translated source",
+      "paths": ["packages/sdk/src/primitives/DRBG.ts"]
+    },
+    {
+      "id": "minimalistic-crypto-utils",
+      "name": "minimalistic-crypto-utils",
+      "version": "1.0.1 lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "minimalistic-crypto-utils-MIT",
+      "copyright": ["Copyright Fedor Indutny, 2017"],
+      "source": "https://github.com/indutny/minimalistic-crypto-utils",
+      "incorporation": "modified and translated source",
+      "paths": ["packages/sdk/src/primitives/utils.ts"]
+    },
+    {
+      "id": "brorand",
+      "name": "brorand",
+      "version": "1.1.0 lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "brorand-MIT",
+      "copyright": ["Copyright Fedor Indutny, 2014"],
+      "source": "https://github.com/indutny/brorand",
+      "incorporation": "modified source lineage",
+      "paths": ["packages/sdk/src/primitives/Random.ts"]
+    },
+    {
+      "id": "noble-hashes",
+      "name": "@noble/hashes",
+      "version": "1.8.0",
+      "licenseExpression": "MIT",
+      "licenseText": "noble-hashes-MIT",
+      "copyright": ["Copyright (c) 2022 Paul Miller (paulmillr.com)"],
+      "source": "https://github.com/paulmillr/noble-hashes/tree/1.8.0",
+      "incorporation": "inlined and modified PBKDF2, HMAC, SHA-256 and SHA-512 helpers",
+      "paths": ["packages/sdk/src/primitives/Hash.ts"]
+    },
+    {
+      "id": "closure-library",
+      "name": "Google Closure Library",
+      "version": "8598d87242af59aac233270742c8984e2b2bdbe0",
+      "licenseExpression": "Apache-2.0",
+      "licenseText": "closure-library-Apache-2.0",
+      "copyright": ["Copyright 2008 The Closure Library Authors"],
+      "source": "https://github.com/google/closure-library/blob/8598d87242af59aac233270742c8984e2b2bdbe0/closure/goog/crypt/crypt.js",
+      "incorporation": "modified UTF-8 encoding helper",
+      "paths": ["packages/sdk/src/primitives/Hash.ts"]
+    },
+    {
+      "id": "sjcl",
+      "name": "Stanford Javascript Crypto Library",
+      "version": "1.x lineage",
+      "licenseExpression": "BSD-2-Clause",
+      "licenseText": "sjcl-BSD-2-Clause",
+      "copyright": [
+        "Copyright (c) 2009-2015, Emily Stark, Mike Hamburg and Dan Boneh at Stanford University"
+      ],
+      "source": "https://github.com/bitwiseshiftleft/sjcl/blob/master/core/aes.js",
+      "incorporation": "modified and translated AES implementation",
+      "paths": ["packages/sdk/src/compat/ECIES.ts"]
+    },
+    {
+      "id": "aes-gcm-js",
+      "name": "aes-gcm.js",
+      "version": "1.0.0",
+      "licenseExpression": "ISC",
+      "licenseText": "aes-gcm.js-ISC",
+      "copyright": ["Copyright (c) 2019 Taner Mansur"],
+      "source": "https://registry.npmjs.org/aes-gcm.js/-/aes-gcm.js-1.0.0.tgz",
+      "incorporation": "direct TypeScript translation, subsequently modified",
+      "paths": ["packages/sdk/src/primitives/AESGCM.ts"]
+    },
+    {
+      "id": "bip-0039",
+      "name": "BIP 39 specification and English word list",
+      "version": "bitcoin/bips master snapshot",
+      "licenseExpression": "MIT",
+      "licenseText": "BIP-0039-MIT",
+      "copyright": ["Authors: Marek Palatinus, Pavol Rusnak, Aaron Voisine, and Sean Bowe"],
+      "source": "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki",
+      "incorporation": "specification implementation and byte-identical English word list",
+      "paths": [
+        "packages/sdk/src/compat/Mnemonic.ts",
+        "packages/sdk/src/compat/bip-39-wordlist-en.ts"
+      ]
+    },
+    {
+      "id": "bsv-1.5.6",
+      "name": "bsv",
+      "version": "1.5.6",
+      "licenseExpression": "MIT",
+      "licenseText": "bsv-1.5.6-MIT",
+      "copyright": [
+        "Copyright (c) 2018-2019 Yours Inc.",
+        "Copyright (c) 2013-2017 BitPay, Inc. and the additional upstream authors listed in the license text"
+      ],
+      "source": "https://www.npmjs.com/package/bsv/v/1.5.6",
+      "incorporation": "source-only sighash test vectors",
+      "paths": ["packages/sdk/src/primitives/__tests/sighash.vectors.ts"]
+    },
+    {
+      "id": "bsv-2.0.10",
+      "name": "bsv",
+      "version": "2.0.10 at feab6d528c4013f6332b33169e771a95bc201285",
+      "licenseExpression": "MIT",
+      "licenseText": "bsv-2.0.10-MIT",
+      "copyright": [
+        "Copyright (c) 2016-2020 Yours Inc.",
+        "Copyright (c) 2013-2017 BitPay, Inc. and the additional upstream authors listed in the license text"
+      ],
+      "source": "https://github.com/moneybutton/bsv/tree/feab6d528c4013f6332b33169e771a95bc201285",
+      "incorporation": "modified compatibility, primitive, script, and test source lineage",
+      "paths": [
+        "packages/sdk/src/compat/ECIES.ts",
+        "packages/sdk/src/compat/HD.ts",
+        "packages/sdk/src/compat/Mnemonic.ts",
+        "packages/sdk/src/compat/__tests/ECIES.test.ts",
+        "packages/sdk/src/compat/__tests/HD.test.ts",
+        "packages/sdk/src/compat/__tests/Mnemonic.test.ts",
+        "packages/sdk/src/primitives/ReaderUint8Array.ts",
+        "packages/sdk/src/primitives/Signature.ts",
+        "packages/sdk/src/primitives/utils.ts",
+        "packages/sdk/src/primitives/__tests/Reader.test.ts",
+        "packages/sdk/src/primitives/__tests/ReaderUint8Array.test.ts",
+        "packages/sdk/src/primitives/__tests/Writer.test.ts",
+        "packages/sdk/src/primitives/__tests/WriterUint8Array.test.ts",
+        "packages/sdk/src/script/OP.ts",
+        "packages/sdk/src/script/__tests/Script.test.ts"
+      ]
+    },
+    {
+      "id": "bip-0032-vectors",
+      "name": "BIP 32 specification test vectors",
+      "version": "bitcoin/bips master snapshot",
+      "licenseExpression": "BSD-2-Clause",
+      "licenseText": "BIP-0032-BSD-2-Clause",
+      "copyright": ["Author: Pieter Wuille"],
+      "source": "https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki",
+      "incorporation": "source-only specification test vectors",
+      "paths": ["packages/sdk/src/compat/__tests/HD.test.ts"]
+    },
+    {
+      "id": "python-mnemonic-vectors",
+      "name": "python-mnemonic BIP 39 test vectors",
+      "version": "master lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "python-mnemonic-MIT",
+      "copyright": ["Copyright (c) 2013-2016 Pavol Rusnak"],
+      "source": "https://github.com/trezor/python-mnemonic/blob/master/vectors.json",
+      "incorporation": "source-only reformatted test vectors",
+      "paths": ["packages/sdk/src/compat/__tests/Mnemonic.vectors.ts"]
+    },
+    {
+      "id": "bitcoin-sv-test-material",
+      "name": "bitcoin-sv node test material",
+      "version": "90a1a00e62b93c095b9ead39bbbd922873e1e6a9 and 172c8fa38cce30cf4df0327b33c7418ea6289de8",
+      "licenseExpression": "LicenseRef-Open-BSV-License-5 AND MIT",
+      "licenseText": "bitcoin-sv-879fc8b4",
+      "copyright": ["Copyright holders listed in the accompanying bitcoin-sv license"],
+      "source": "https://github.com/bitcoin-sv/bitcoin-sv",
+      "incorporation": "source-only fixtures and adapted tests",
+      "paths": [
+        "packages/sdk/src/script/__tests/ChronicleOpcodes.test.ts",
+        "packages/sdk/src/script/__tests/fixtures/bitcoin-sv"
+      ]
+    },
+    {
+      "id": "teranode-test-material",
+      "name": "Teranode consensus test material",
+      "version": "2355e57b80af962327930ea32568a1b322361542",
+      "licenseExpression": "LicenseRef-Open-BSV-License-6",
+      "licenseText": "teranode-Open-BSV-License-6",
+      "copyright": ["BSV Association"],
+      "source": "https://github.com/bsv-blockchain/teranode/tree/2355e57b80af962327930ea32568a1b322361542/test/consensus/testdata",
+      "incorporation": "source-only fixtures",
+      "paths": ["packages/sdk/src/script/__tests/fixtures/teranode"]
+    },
+    {
+      "id": "bdk-wasm",
+      "name": "Bitcoin Development Kit (BDK)",
+      "version": "1.2.2 at 6d1e8092e8a9917d2544cddc9e20c6dc38242d93",
+      "licenseExpression": "LicenseRef-Open-BSV-License-Legacy AND MIT",
+      "licenseText": "bdk-1.2.2",
+      "copyright": ["Copyright holders listed in the accompanying BDK license"],
+      "source": "https://github.com/bitcoin-sv/bdk/tree/6d1e8092e8a9917d2544cddc9e20c6dc38242d93",
+      "incorporation": "compiled into bundled JavaScript and WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "bitcoin-sv-wasm",
+      "name": "bitcoin-sv node",
+      "version": "879fc8b42168dd0e608dafd51b39c6dabad37d4d",
+      "licenseExpression": "LicenseRef-Open-BSV-License-5 AND MIT",
+      "licenseText": "bitcoin-sv-879fc8b4",
+      "copyright": ["Copyright holders listed in the accompanying bitcoin-sv license"],
+      "source": "https://github.com/bitcoin-sv/bitcoin-sv/tree/879fc8b42168dd0e608dafd51b39c6dabad37d4d",
+      "incorporation": "compiled into bundled WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "libsecp256k1-wasm",
+      "name": "libsecp256k1",
+      "version": "bitcoin-sv vendored snapshot at 879fc8b42168dd0e608dafd51b39c6dabad37d4d",
+      "licenseExpression": "MIT",
+      "licenseText": "libsecp256k1-MIT",
+      "copyright": ["Copyright (c) 2013 Pieter Wuille"],
+      "source": "https://github.com/bitcoin-sv/bitcoin-sv/tree/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/secp256k1",
+      "incorporation": "compiled into bundled WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "emscripten-wasm",
+      "name": "Emscripten",
+      "version": "4.0.23",
+      "licenseExpression": "MIT OR NCSA",
+      "licenseText": "emscripten-4.0.23",
+      "copyright": ["Copyright (c) 2010-2014 Emscripten authors"],
+      "source": "https://github.com/emscripten-core/emscripten/tree/4.0.23",
+      "incorporation": "generated JavaScript glue and compiled runtime support",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "musl-wasm",
+      "name": "musl libc and its documented incorporated components",
+      "version": "Emscripten 4.0.23 snapshot",
+      "licenseExpression": "MIT AND LicenseRef-musl-third-party",
+      "licenseText": "musl-COPYRIGHT",
+      "copyright": ["Copyright (c) 2005-2020 Rich Felker, et al."],
+      "source": "https://github.com/emscripten-core/emscripten/blob/4.0.23/system/lib/libc/musl/COPYRIGHT",
+      "incorporation": "compiled into bundled WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "llvm-runtime-wasm",
+      "name": "LLVM libc++, libc++abi and compiler runtime",
+      "version": "Emscripten 4.0.23 snapshot",
+      "licenseExpression": "Apache-2.0 WITH LLVM-exception",
+      "licenseText": "LLVM-Apache-2.0-WITH-LLVM-exception",
+      "copyright": ["LLVM Project contributors"],
+      "source": "https://github.com/emscripten-core/emscripten/tree/4.0.23/system/lib/libcxx",
+      "incorporation": "compiled into bundled WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "boost-wasm",
+      "name": "Boost",
+      "version": "1.85.0",
+      "licenseExpression": "BSL-1.0",
+      "licenseText": "Boost-1.0",
+      "copyright": ["Boost contributors"],
+      "source": "https://github.com/boostorg/boost/tree/boost-1.85.0",
+      "incorporation": "compiled headers and code in bundled WebAssembly",
+      "paths": ["packages/verifast/src/wasm"]
+    },
+    {
+      "id": "legacy-simple",
+      "name": "pre-monorepo @bsv/simple source",
+      "version": "imported at 6ca7a507 lineage",
+      "licenseExpression": "MIT",
+      "licenseText": "simple-MIT",
+      "copyright": ["Copyright (c) 2026 Matias Jackson"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/commit/6ca7a507cf920e5fc747727d5d708e7fc85c51c2",
+      "incorporation": "modified source",
+      "paths": ["packages/helpers/simple/src"]
+    },
+    {
+      "id": "legacy-chaintracks-server",
+      "name": "pre-monorepo chaintracks-server source",
+      "version": "eef334c910acc24d162d3bae75d518c01f7cdde1",
+      "licenseExpression": "MIT",
+      "licenseText": "chaintracks-server-MIT",
+      "copyright": ["Copyright (c) 2025-2026 chaintracks-server contributors"],
+      "source": "https://github.com/bsv-blockchain/chaintracks-server/tree/eef334c910acc24d162d3bae75d518c01f7cdde1",
+      "incorporation": "modified source with public MIT grant recovered from the exact source manifest",
+      "paths": ["infra/chaintracks-server/public/headers", "infra/chaintracks-server/src"]
+    },
+    {
+      "id": "runar-r1k1-wallet-artifact",
+      "name": "Runar R1K1Wallet contract artifact",
+      "version": "c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf",
+      "licenseExpression": "MIT",
+      "licenseText": "runar-MIT",
+      "copyright": ["Copyright (c) 2025 Rúnar Contributors"],
+      "source": "https://github.com/icellan/runar/blob/c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf/examples/ts/r1-k1-wallet/R1K1Wallet.runar.ts",
+      "incorporation": "compiled locking script artifact, gzip-compressed and base64-encoded",
+      "paths": ["packages/helpers/ts-templates/src/R1K1Wallet.artifact.ts"]
+    },
+    {
+      "id": "legacy-message-box-server",
+      "name": "pre-monorepo message-box-server source",
+      "version": "2ca683e28e1eb0fddfbecc0e7f5b9943e6625075",
+      "licenseExpression": "ISC",
+      "licenseText": "messagebox-server-ISC",
+      "copyright": ["Copyright (c) 2025-2026 messagebox-server contributors"],
+      "source": "https://github.com/p2ppsr/messagebox-server/tree/2ca683e28e1eb0fddfbecc0e7f5b9943e6625075",
+      "incorporation": "modified source with public ISC grant recovered from the initial and exact-import manifests",
+      "paths": ["infra/message-box-server/src"]
+    },
+    {
+      "id": "legacy-fund-wallet",
+      "name": "pre-monorepo fund-metanet/fund-wallet source",
+      "version": "fund-metanet 1.3.1 at 82650ae0bdd49c7013001fd81b05fdcc7c47f42f",
+      "licenseExpression": "ISC",
+      "licenseText": "fund-metanet-ISC",
+      "copyright": ["Copyright (c) 2025 Darren Kellenschwiler (deggen)"],
+      "source": "https://github.com/sirdeggen/fund-metanet/tree/82650ae0bdd49c7013001fd81b05fdcc7c47f42f",
+      "incorporation": "modified source from the exact npm-published ISC revision",
+      "paths": ["packages/helpers/fund-wallet/src"]
+    },
+    {
+      "id": "legacy-ts-p2p",
+      "name": "pre-monorepo ts-p2p/teranode-listener source",
+      "version": "f2b10f6e3a29a771c7ce811bf66be87f2a41a08a",
+      "licenseExpression": "MIT",
+      "licenseText": "ts-p2p-MIT",
+      "copyright": ["Copyright (c) 2025 BSV Blockchain Association"],
+      "source": "https://github.com/bsv-blockchain/ts-p2p/tree/f2b10f6e3a29a771c7ce811bf66be87f2a41a08a",
+      "incorporation": "modified source with public MIT grant and rightsholder attribution recovered from npm",
+      "paths": ["packages/network/ts-p2p/src"]
+    },
+    {
+      "id": "preuniform-open-bsv4-standard",
+      "name": "TS Stack pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-standard-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": [
+        "infra/uhrp-server-basic",
+        "infra/uhrp-server-cloud-bucket",
+        "infra/uhrp-server-cloud-bucket/notifier",
+        "infra/wab",
+        "infra/wallet-infra",
+        "packages/helpers/ts-templates",
+        "packages/messaging/authsocket-client",
+        "packages/messaging/authsocket",
+        "packages/messaging/message-box-client",
+        "packages/middleware/auth-express-middleware",
+        "packages/middleware/payment-express-middleware",
+        "packages/overlays/gasp-core",
+        "packages/overlays/overlay-discovery-services",
+        "packages/overlays/overlay-express",
+        "packages/overlays/overlay",
+        "packages/sdk"
+      ]
+    },
+    {
+      "id": "preuniform-open-bsv4-wallet-client",
+      "name": "Wallet Toolbox client/mobile pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-wallet-client-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/wallet/wallet-toolbox",
+      "incorporation": "license continuity for client and mobile source present before the 2026 license-file uniformization",
+      "paths": ["packages/wallet/wallet-toolbox/client", "packages/wallet/wallet-toolbox/mobile"]
+    },
+    {
+      "id": "preuniform-open-bsv4-wallet",
+      "name": "Wallet Toolbox pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-wallet-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/wallet/wallet-toolbox",
+      "incorporation": "license continuity for wallet source present before the 2026 license-file uniformization",
+      "paths": ["packages/wallet/wallet-toolbox", "packages/wallet/wallet-toolbox-examples"]
+    },
+    {
+      "id": "preuniform-open-bsv4-402-pay",
+      "name": "402-pay pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-402-pay-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/middleware/402-pay",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["packages/middleware/402-pay"]
+    },
+    {
+      "id": "preuniform-open-bsv4-verifast",
+      "name": "VeriFast pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-verifast-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/verifast",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["packages/verifast"]
+    },
+    {
+      "id": "preuniform-open-bsv4-paymail",
+      "name": "Paymail pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-paymail-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/messaging/ts-paymail",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["packages/messaging/ts-paymail"]
+    },
+    {
+      "id": "preuniform-open-bsv4-create-bsv-app",
+      "name": "create-bsv-app pre-uniformization Open BSV License version 4 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-4",
+      "licenseText": "Open-BSV-4-create-bsv-app-pre-uniformization",
+      "copyright": ["Copyright (c) 2023 BSV Blockchain Association (Bitcoin Association)"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/helpers/create-bsv-app",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["packages/helpers/create-bsv-app"]
+    },
+    {
+      "id": "preuniform-open-bsv5-overlay-server",
+      "name": "Overlay Server pre-uniformization Open BSV License Version 5 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-5",
+      "licenseText": "Open-BSV-5-overlay-server-pre-uniformization",
+      "copyright": ["BSV Association"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/infra/overlay-server",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["infra/overlay-server"]
+    },
+    {
+      "id": "preuniform-open-bsv6-wallet-helper",
+      "name": "Wallet Helper pre-uniformization Open BSV License Version 6 source",
+      "version": "snapshot d215223af67b2b08ef628e8e07f5cff8b60ec9b3",
+      "licenseExpression": "LicenseRef-Open-BSV-License-6",
+      "licenseText": "Open-BSV-6-wallet-helper-pre-uniformization",
+      "copyright": ["BSV Association"],
+      "source": "https://github.com/bsv-blockchain/ts-stack/tree/d215223af67b2b08ef628e8e07f5cff8b60ec9b3/packages/helpers/bsv-wallet-helper",
+      "incorporation": "license continuity for source present before the 2026 license-file uniformization",
+      "paths": ["packages/helpers/bsv-wallet-helper"]
+    }
+  ],
+  "distributions": [
+    {
+      "path": ".",
+      "materials": "all"
+    },
+    {
+      "path": "packages/sdk",
+      "packageName": "@bsv/sdk",
+      "materials": [
+        "aes-gcm-js",
+        "bip-0032-vectors",
+        "bip-0039",
+        "bitcoin-sv-test-material",
+        "bn-js",
+        "brorand",
+        "bsv-1.5.6",
+        "bsv-2.0.10",
+        "closure-library",
+        "elliptic",
+        "hash-js",
+        "hmac-drbg",
+        "minimalistic-crypto-utils",
+        "noble-hashes",
+        "python-mnemonic-vectors",
+        "sjcl",
+        "teranode-test-material",
+        "preuniform-open-bsv4-standard"
+      ]
+    },
+    {
+      "path": "packages/helpers/did-client",
+      "packageName": "@bsv/did-client",
+      "inherits": "packages/sdk",
+      "reason": "UMD bundle incorporates @bsv/sdk"
+    },
+    {
+      "path": "packages/messaging/authsocket-client",
+      "packageName": "@bsv/authsocket-client",
+      "inherits": "packages/sdk",
+      "reason": "UMD bundle incorporates @bsv/sdk"
+    },
+    {
+      "path": "packages/messaging/message-box-client",
+      "packageName": "@bsv/message-box-client",
+      "inherits": "packages/sdk",
+      "reason": "UMD bundle incorporates @bsv/sdk"
+    },
+    {
+      "path": "packages/verifast",
+      "packageName": "@bsv/verifast",
+      "materials": [
+        "bdk-wasm",
+        "bitcoin-sv-wasm",
+        "boost-wasm",
+        "emscripten-wasm",
+        "libsecp256k1-wasm",
+        "llvm-runtime-wasm",
+        "musl-wasm",
+        "preuniform-open-bsv4-verifast"
+      ]
+    },
+    {
+      "path": "packages/helpers/simple",
+      "packageName": "@bsv/simple",
+      "materials": ["legacy-simple"]
+    },
+    {
+      "path": "packages/helpers/fund-wallet",
+      "packageName": "@bsv/fund-wallet",
+      "materials": ["legacy-fund-wallet"]
+    },
+    {
+      "path": "packages/network/ts-p2p",
+      "packageName": "@bsv/teranode-listener",
+      "materials": ["legacy-ts-p2p"]
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox",
+      "packageName": "@bsv/wallet-toolbox",
+      "materials": ["preuniform-open-bsv4-wallet"]
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/client",
+      "packageName": "@bsv/wallet-toolbox-client",
+      "inherits": "packages/wallet/wallet-toolbox",
+      "reason": "browser build compiles wallet-toolbox source",
+      "materials": ["preuniform-open-bsv4-wallet-client"]
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/mobile",
+      "packageName": "@bsv/wallet-toolbox-mobile",
+      "inherits": "packages/wallet/wallet-toolbox",
+      "reason": "mobile build compiles wallet-toolbox source",
+      "materials": ["preuniform-open-bsv4-wallet-client"]
+    },
+    {
+      "path": "packages/helpers/ts-templates",
+      "packageName": "@bsv/templates",
+      "materials": ["preuniform-open-bsv4-standard", "runar-r1k1-wallet-artifact"]
+    },
+    {
+      "path": "packages/messaging/authsocket",
+      "packageName": "@bsv/authsocket",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/middleware/auth-express-middleware",
+      "packageName": "@bsv/auth-express-middleware",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/middleware/payment-express-middleware",
+      "packageName": "@bsv/payment-express-middleware",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/overlays/gasp-core",
+      "packageName": "@bsv/gasp",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/overlays/overlay-discovery-services",
+      "packageName": "@bsv/overlay-discovery-services",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/overlays/overlay-express",
+      "packageName": "@bsv/overlay-express",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/overlays/overlay",
+      "packageName": "@bsv/overlay",
+      "materials": ["preuniform-open-bsv4-standard"]
+    },
+    {
+      "path": "packages/middleware/402-pay",
+      "packageName": "@bsv/402-pay",
+      "materials": ["preuniform-open-bsv4-402-pay"]
+    },
+    {
+      "path": "packages/messaging/ts-paymail",
+      "packageName": "@bsv/paymail",
+      "materials": ["preuniform-open-bsv4-paymail"]
+    },
+    {
+      "path": "packages/helpers/create-bsv-app",
+      "packageName": "create-bsv-app",
+      "materials": ["preuniform-open-bsv4-create-bsv-app"]
+    },
+    {
+      "path": "packages/helpers/bsv-wallet-helper",
+      "packageName": "@bsv/wallet-helper",
+      "materials": ["preuniform-open-bsv6-wallet-helper"]
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox-examples",
+      "packageName": "@bsv/wallet-toolbox-examples",
+      "materials": ["preuniform-open-bsv4-wallet"]
+    },
+    {
+      "path": "infra/chaintracks-server",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/message-box-server",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/overlay-server",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/uhrp-server-basic",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/uhrp-server-cloud-bucket",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/wab",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/wallet-infra",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    }
+  ],
+  "clearances": [
+    {
+      "id": "aes-gcm-js-exact-notice",
+      "status": "cleared",
+      "materials": ["aes-gcm-js"],
+      "finding": "The exact npm publication and upstream history identify aes-gcm.js@1.0.0, Taner Mansur, and an express ISC grant; the derived notice and immutable evidence are retained.",
+      "acceptedEvidence": "governance/license-evidence/provenance.json record aes-gcm-js, the registry-pinned npm tarball, and LICENSES/aes-gcm.js-ISC.txt."
+    },
+    {
+      "id": "legacy-import-notices",
+      "status": "cleared",
+      "materials": [
+        "legacy-chaintracks-server",
+        "legacy-fund-wallet",
+        "legacy-message-box-server",
+        "legacy-ts-p2p"
+      ],
+      "finding": "The four subtree imports were traced to their original repositories and exact commits; their MIT/ISC declarations, authorship or contributor histories, and available npm publication records are retained with scoped notices.",
+      "acceptedEvidence": "governance/license-evidence/provenance.json records legacy-chaintracks-server, legacy-fund-wallet, legacy-message-box-server, and legacy-ts-p2p, plus their registry-pinned license texts."
+    },
+    {
+      "id": "2026-stack-license-uniformization-authority",
+      "status": "cleared",
+      "materials": [],
+      "finding": "The uniformization changed 107 total paths, including 55 license or policy texts; all 28 preexisting license/policy files are inventoried and every prior grant remains scoped to its snapshot code, so no blanket retroactive relicensing authority is relied upon.",
+      "acceptedEvidence": "governance/license-continuity.json, governance/license-evidence/pre-uniformization-root-policy.md, and the nine hash-pinned historical Open BSV texts."
+    }
+  ]
+}

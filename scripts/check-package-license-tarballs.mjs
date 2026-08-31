@@ -6,6 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 import { LICENSE_FILE, REPOSITORY_ROOT } from './package-license-policy.mjs'
+import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.mjs'
 
 const registry = JSON.parse(
   fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'), 'utf8')
@@ -56,6 +57,20 @@ async function verifyPackage(project) {
         `expected ${expectedLicenseSize}`
     )
   }
+  for (const requiredFile of expectedThirdPartyFilesForPackage(project.name)) {
+    const matches = packed.files?.filter(file => file.path === requiredFile) ?? []
+    const sourcePath = path.join(projectDirectory, requiredFile)
+    if (matches.length !== 1) {
+      errors.push(`${project.path} tarball must contain exactly one ${requiredFile}`)
+    } else if (!fs.existsSync(sourcePath)) {
+      errors.push(`${project.path} source is missing ${requiredFile}`)
+    } else if (matches[0].size !== fs.statSync(sourcePath).size) {
+      errors.push(
+        `${project.path} tarball ${requiredFile} has size ${matches[0].size}, ` +
+          `expected ${fs.statSync(sourcePath).size}`
+      )
+    }
+  }
   return errors
 }
 
@@ -74,8 +89,8 @@ async function mapWithConcurrency(items, concurrency, operation) {
 }
 
 const errors = (await mapWithConcurrency(packages, 8, verifyPackage)).flat()
-if (packages.length !== 31) {
-  errors.push(`Expected 31 public npm packages, found ${packages.length}`)
+if (packages.length !== 32) {
+  errors.push(`Expected 32 public npm packages, found ${packages.length}`)
 }
 
 if (errors.length > 0) {
@@ -84,6 +99,6 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Verified ${packages.length} public package tarballs include the canonical ` +
-      `${LICENSE_FILE}.`
+      `${LICENSE_FILE} and every scoped third-party notice payload.`
   )
 }

@@ -2,9 +2,9 @@
 id: infra-uhrp-basic
 title: 'UHRP Server (Basic)'
 kind: infra
-version: '0.1.32'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+version: '0.1.34'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]
@@ -13,6 +13,10 @@ tags: [uhrp, storage, file-server, development, lightweight]
 # UHRP Server (Basic)
 
 > A simple, file-system based UHRP (Universal Host Reference Protocol) host server. Stores files locally on disk and provides HTTP endpoints for UHRP data retrieval and storage.
+
+The 0.1.34 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
+to remediate CVE-2026-14456. Service APIs, storage formats, CHIRP behavior, and
+deployment configuration are unchanged from 0.1.33.
 
 ## What it does
 
@@ -105,7 +109,7 @@ Files stored in `./public` or configured data directory.
 # Build and start
 npm run build && npm start
 
-# Or build the checked-in multi-stage production image
+# Or build the repository's digest-pinned, multi-stage Node 24 image
 docker build -t uhrp-lite:local .
 docker run -d \
   -e SERVER_PRIVATE_KEY=<256-bit-hex> \
@@ -116,9 +120,9 @@ docker run -d \
   uhrp-lite:local
 ```
 
-The Dockerfile compiles TypeScript in a disposable Node 24 build stage, runs
-the built server as the unprivileged `node` user, and probes `/ready`.
-No compose file or external database is required.
+The container runs as the unprivileged `node` user and probes `/ready` before
+it is considered healthy. The service remains filesystem-based with no
+external database; mount durable storage at `/app/public`.
 
 ## Migrations
 
@@ -127,10 +131,9 @@ None; stateless server with files stored directly on disk with JSON metadata.
 ## Health checks
 
 - `GET /health` and `GET /healthz` report process liveness.
-- `GET /ready` returns 200 only after startup completes and 503 while the
-  process is starting or shutting down.
-- The container health check probes `/ready`. Operators must additionally
-  monitor disk space and object-directory accessibility.
+- `GET /ready` returns 200 only after wallet-backed authentication and payment
+  middleware initialization completes.
+- Monitor disk space and the mounted object directory separately.
 
 ## Spec conformance
 

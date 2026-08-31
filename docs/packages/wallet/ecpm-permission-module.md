@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/ecpm-permission-module'
 version: '0.1.0'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc98', 'ecpm', 'cryptography']
@@ -90,8 +90,10 @@ host for a privileged deriver and fails closed when no provider is available.
   compressed, finite secp256k1 points.
 - Security level 0 ordinary calls do not prompt. Levels 1 and 2 require the
   authorization callback; level 2 grants are scoped to the counterparty.
-- Every privileged call requires authorization, and `seekPermission: false`
-  fails unless an applicable grant is already cached.
+- Every privileged call requires authorization. Cached and concurrent grants
+  are scoped to the exact approved `privilegedReason`, so a different reason
+  cannot reuse the approval. `seekPermission: false` fails unless an applicable
+  grant is already cached.
 - The application receives only `{ publicKey }`, never the derived scalar or
   either key-derivation provider.
 

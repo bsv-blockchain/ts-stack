@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-09",
+  "lastReviewed": "2026-08-30",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -17,21 +17,6 @@
       "created": "2026-07-25",
       "reviewBy": "2026-10-23",
       "removeWhen": "Remove only after an explicit operator governance decision replaces maintainer/admin facilitation and the replacement remains practical for maintainer-authored changes."
-    },
-    {
-      "id": "scorecard-release-token-permission",
-      "category": "security",
-      "target": "OpenSSF Scorecard TokenPermissionsID #189 for the npm release version-sync job",
-      "owner": "ts-stack-maintainers",
-      "reason": "The protected first-party release job requires contents write access to push its generated version-sync branch and pull-requests write access to open the reviewable sync PR after OIDC publication; every other workflow and job defaults to no token permissions and declares only its own minimum scope.",
-      "evidence": [
-        ".github/workflows/release.yaml",
-        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/189",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
-      ],
-      "created": "2026-07-25",
-      "reviewBy": "2026-08-24",
-      "removeWhen": "Remove when version synchronization can use a narrower first-party credential or a separate trusted mechanism without losing protected-environment review, provenance, or atomic release reconciliation."
     },
     {
       "id": "scorecard-release-lockfile-refresh",
@@ -64,7 +49,7 @@
         ".github/dependabot.yml"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
@@ -103,7 +88,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-08-25",
+      "reviewBy": "2026-09-25",
       "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
     },
     {
@@ -120,7 +105,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove service by service when its complete supported Google and OpenTelemetry graph natively resolves gaxios 7.3.0 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -139,7 +124,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove from each remaining service when its supported cloud client closure natively resolves uuid 11.1.1 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -147,7 +132,7 @@
       "category": "override",
       "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
       "owner": "ts-stack-maintainers",
-      "reason": "Stryker 9.6.1 is current but its current typed-rest-client 2.3.1 dependency pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 is the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "reason": "The supported Stryker 9.6.1 graph and current Stryker 10.0.0 both retain the typed-rest-client 2.3.x line, whose current 2.3.1 release pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 remains the narrowest compatible remediation.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
@@ -155,7 +140,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {
@@ -185,7 +170,7 @@
         "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
       ],
       "created": "2026-08-09",
-      "reviewBy": "2026-08-23",
+      "reviewBy": "2026-09-23",
       "removeWhen": "Replace the patch and exact audit exclusions when Metro supports an image-size release that fixes both advisories, then rerun the frozen audit and mobile platform contract."
     },
     {
@@ -197,13 +182,14 @@
       "evidence": [
         "tools/codegen/node/package.json#overrides",
         "tools/codegen/node/package-lock.json",
+        "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
         "https://github.com/advisories/GHSA-52cp-r559-cp3m",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
         "https://github.com/openapi-ts/openapi-typescript/blob/openapi-typescript%407.13.0/packages/openapi-typescript/package.json"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-08-25",
+      "reviewBy": "2026-09-25",
       "removeWhen": "Remove when a supported openapi-typescript release natively resolves non-vulnerable js-yaml, minimatch, and brace-expansion versions, then regenerate and compare every committed output."
     },
     {
@@ -221,7 +207,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-26",
+      "reviewBy": "2026-09-26",
       "removeWhen": "Every conformance skip is implemented or documented as deliberately unsupported with a permanent compatibility decision."
     },
     {
@@ -237,7 +223,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-26",
+      "reviewBy": "2026-09-26",
       "removeWhen": "All six required-suite gaps are enabled, moved to a correctly governed non-PR suite, or removed with evidence that the scenario is obsolete."
     },
     {
@@ -251,10 +237,10 @@
         "sonar-project.properties#sonar.cpd.exclusions",
         ".sonarcloud.properties",
         "governance/repository-health/projects.json#generatedArtifacts",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+        "https://github.com/bsv-blockchain/ts-stack/issues/402"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
+      "reviewBy": "2026-09-23",
       "removeWhen": "The Sonar backlog wave proves precise source, test, generated, vendored, and coverage boundaries and removes broad exclusions without hiding real findings."
     },
     {

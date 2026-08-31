@@ -101,14 +101,6 @@
       "reviewPolicy": "Verify pinned inputs, hashes, ABI tests, browser and Node consumer tests, and package size; do not hand-edit generated glue or binaries."
     },
     {
-      "path": "packages/wallet/wallet-toolbox/docs/open-rpc/index.html",
-      "owner": "ts-stack-maintainers",
-      "sourceInputs": ["packages/wallet/wallet-toolbox/src/storage/**"],
-      "generator": "JSight OpenRPC documentation export",
-      "analysisPolicy": "exclude-generated",
-      "reviewPolicy": "Review the StorageClient contract and the regenerated documentation artifact together."
-    },
-    {
       "path": "infra/uhrp-server-basic/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
       "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
@@ -584,6 +576,17 @@
       "runtimeTargets": ["node"],
       "declarationDependencies": ["@types/express"],
       "hostPeerDependencies": ["express"],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/network/chirp",
+      "name": "@bsv/chirp",
+      "owner": "ts-stack-maintainers",
+      "area": "network",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {

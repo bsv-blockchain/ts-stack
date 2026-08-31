@@ -89,6 +89,9 @@ jobs:
       - name: Verify package license payloads
         run: pnpm license:pack-check
 
+      - name: Require incorporated-material rights clearance
+        run: pnpm license:release-check
+
       - name: Verify package artifacts and clean consumers
         run: pnpm -r --if-present --filter '!@bsv/ts-stack' run pack:check
 

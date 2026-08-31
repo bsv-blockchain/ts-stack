@@ -11,7 +11,7 @@
 - Domain: Broadcast
 - Criticality tier: 1
 - Reliability Level (current → target): RL3 → RL4
-- Owner / Backup owner: BSV Blockchain Association / Unknown
+- Owner / Backup owner: BSV Association / Unknown
 
 ## Build and Test
 - Build command: `go build ./...` (or `task build`)

@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.34'
-last_updated: '2026-08-24'
-last_verified: '2026-08-24'
+version: '0.2.36'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -12,7 +12,11 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 
 # UHRP Server (Cloud Bucket)
 
-> A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in a cloud bucket with billing/micropayment support and notifier-driven advertising for overlay network discovery.
+> A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
+
+The 0.2.36 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
+to remediate CVE-2026-14456. Service APIs, bucket layouts, CHIRP behavior, and
+deployment configuration are unchanged from 0.2.35.
 
 ## What it does
 
@@ -36,8 +40,8 @@ the bucket notifier to trigger authenticated hosting advertisements.
 
 | Type              | Requirement                                                                                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Database          | None; Google Cloud Storage is the object and metadata store                                                              |
-| External services | Google Cloud Storage bucket and Wallet Storage                                                                           |
+| Database          | None; Google Cloud Storage is the object and metadata source of truth                                                    |
+| External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional)                                             |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
@@ -51,6 +55,8 @@ the bucket notifier to trigger authenticated hosting advertisements.
 | GET      | /list               | List the authenticated uploader's objects                  |
 | GET      | /find               | Find authenticated uploader metadata                       |
 | POST     | /renew              | Authenticated ownership/payment renewal                    |
+| GET      | /health, /healthz   | Public process liveness                                    |
+| GET      | /ready              | Public initialization readiness                            |
 
 ## WebSocket endpoints
 
@@ -123,20 +129,19 @@ Follows GCP 12-factor patterns: stateless design, cloud bucket for file storage,
 
 ## Migrations
 
-None. The cloud bucket and object metadata are the storage authority.
+No database migrations. Google Cloud Storage is the durable source of truth.
 
 ## Health checks
 
 - `GET /health` and `GET /healthz` report process liveness.
-- `GET /ready` returns 200 after initialization and 503 while the process is
-  starting or shutting down.
-- The checked-in container health check probes `/ready`.
+- `GET /ready` returns 200 only after wallet-backed authentication and payment
+  middleware initialization completes; the container health check uses it.
 
 ## Spec conformance
 
 - **UHRP** – Implements UHRP host protocol for file storage, retrieval, and metadata
 - **BRC-103** – Mutual authentication on upload, list, find, and renewal workflows
-- **BRC-100** – Wallet-backed pricing and payment verification for upload and renewal
+- **BRC-100** – Payment verification for uploads (optional)
 - **Google Cloud** – Follows Cloud Run best practices (health checks, graceful shutdown, 12-factor)
 
 ## Integration with ts-stack

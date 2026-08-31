@@ -7,7 +7,8 @@ describe('HD', () => {
     expect(HD.fromRandom().toPublic().toString().slice(0, 4)).toEqual('xpub')
   })
 
-  // test vectors: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
+  // BSD-2-Clause test vectors: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
+  // Full notice: ../../../THIRD_PARTY_NOTICES.md
   const vector1master = '000102030405060708090a0b0c0d0e0f'
   const vector1mPublic =
     'xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8'

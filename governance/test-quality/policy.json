@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-31",
+  "lastReviewed": "2026-08-26",
   "ownerDefinitions": ["ts-stack-maintainers"],
   "propertyTesting": {
     "library": "fast-check",
@@ -11,7 +11,7 @@
     "workflow": ".github/workflows/property-tests.yml",
     "replayEnvironment": ["FAST_CHECK_NUM_RUNS", "FAST_CHECK_SEED", "FAST_CHECK_PATH"],
     "owner": "ts-stack-maintainers",
-    "reviewBy": "2026-08-26",
+    "reviewBy": "2026-09-26",
     "manifests": [
       "packages/sdk/package.json",
       "packages/wallet/wallet-toolbox/package.json",
@@ -41,7 +41,8 @@
       "packages/overlays/gasp-core/package.json",
       "packages/overlays/btms-backend/package.json",
       "packages/wallet/btms-permission-module/package.json",
-      "packages/wallet/ecpm-permission-module/package.json"
+      "packages/wallet/ecpm-permission-module/package.json",
+      "packages/network/chirp/package.json"
     ],
     "suites": [
       {
@@ -435,6 +436,17 @@
           "Applying and then removing one module-derived scalar returns every generated finite input point exactly.",
           "Neither randomized root material nor the corresponding derived scalar is exposed in the wallet result."
         ]
+      },
+      {
+        "path": "packages/network/chirp/test/codec.property.test.ts",
+        "manifest": "packages/network/chirp/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted CHIRP binary manifests and arbitrary source bytes crossing the content-addressed storage boundary",
+        "target": "Canonical CompactSize framing and deterministic profile-one closure construction over arbitrary bounded content",
+        "invariants": [
+          "Every unsigned 64-bit value round-trips through the shortest canonical CompactSize representation.",
+          "Every bounded byte source produces a deterministic root identifier and a hash-, length-, and content-verified closure."
+        ]
       }
     ],
     "exclusions": [
@@ -443,42 +455,42 @@
         "kind": "adapter-or-composition",
         "rationale": "This package orchestrates wallet, PushDrop, DID, and overlay APIs; its independent codecs and advertisement boundaries are governed in @bsv/did and the overlay suites.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       },
       {
         "manifest": "packages/helpers/simple/package.json",
         "kind": "adapter-or-composition",
         "rationale": "This convenience facade composes wallet, DID, Message Box, overlay, and token clients without owning an independent wire codec or authorization parser.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       },
       {
         "manifest": "packages/messaging/ts-paymail/docs/examples/package.json",
         "kind": "example-or-platform",
         "rationale": "This private documentation example has no reusable runtime boundary; the Paymail address and protocol parser is governed in the parent package.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       },
       {
         "manifest": "packages/wallet/wallet-toolbox-examples/package.json",
         "kind": "example-or-platform",
         "rationale": "This private examples workspace demonstrates governed wallet-toolbox APIs and does not define an independent parser or security decision.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       },
       {
         "manifest": "packages/wallet/wallet-toolbox/client/package.json",
         "kind": "adapter-or-composition",
         "rationale": "This client surface exposes wallet-toolbox behavior whose authenticated binary framing and storage invariants are governed in the parent package.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       },
       {
         "manifest": "packages/wallet/wallet-toolbox/mobile/package.json",
         "kind": "example-or-platform",
         "rationale": "This React Native platform harness exercises the governed wallet and relay packages but does not own an independent arbitrary-input boundary.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
+        "reviewBy": "2026-09-26"
       }
     ]
   },
@@ -497,7 +509,7 @@
       "cadence": "Run the relevant suite before a release that changes its boundary and during an operator investigation; do not batch-run all operator suites.",
       "invocation": "pnpm --filter @bsv/wallet-toolbox test:manual -- <path>",
       "lastRunEvidence": null,
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "id": "wallet-public-live",
@@ -513,7 +525,7 @@
       "cadence": "Weekly and before a release that changes the Go Chaintracks client.",
       "invocation": "pnpm --filter @bsv/wallet-toolbox test:live -- <path>",
       "lastRunEvidence": null,
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "id": "overlay-public-live",
@@ -528,7 +540,7 @@
       "cadence": "Weekly and before a release that changes Overlay provider integration.",
       "invocation": "pnpm --filter @bsv/overlay-express test:live",
       "lastRunEvidence": null,
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "id": "sdk-resource",
@@ -543,7 +555,7 @@
       "cadence": "Before an SDK release that changes AES-GCM length handling and on a monthly resource-test run.",
       "invocation": "pnpm --filter @bsv/sdk test:resource",
       "lastRunEvidence": null,
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     }
   ],
   "manualRules": [
@@ -580,7 +592,7 @@
       "owner": "ts-stack-maintainers",
       "reason": "A valid case requires deterministic certificate and PushDrop signatures from subject and certifier wallets; the current helpers only construct invalid boundary fixtures.",
       "removeWhen": "Add deterministic certificate-construction helpers and assert admission plus decrypted public attributes.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "packages/wallet/wallet-toolbox/src/storage/__test/StorageIdb.test.ts",
@@ -589,7 +601,7 @@
       "owner": "ts-stack-maintainers",
       "reason": "The IndexedDB wallet scenario passes alone but leaves a handle open when run with the complete Jest suite.",
       "removeWhen": "Identify and close the leaked handle, give the scenario a behavioral name, and enable it in the required suite.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     }
   ],
   "conformanceSkipGroups": [
@@ -599,7 +611,7 @@
       "expectedSkips": 4,
       "owner": "ts-stack-maintainers",
       "removeWhen": "Delete the four obsolete signature vectors after cross-language consumers confirm the replacement deterministic vectors.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/regressions/beef-v2-txid-panic.json",
@@ -607,7 +619,7 @@
       "expectedSkips": 1,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The Go SDK handles empty BEEF consistently and the vector can become required.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/regressions/bip276-hex-decode.json",
@@ -615,7 +627,7 @@
       "expectedSkips": 3,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The TypeScript stack exposes an equivalent BIP276 contract or the vectors are formally marked unsupported for TypeScript.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/regressions/privatekey-modular-reduction.json",
@@ -623,7 +635,7 @@
       "expectedSkips": 2,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The Go SDK validates and reduces private-key scalars consistently with the TypeScript SDK.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/sdk/crypto/ecies.json",
@@ -631,7 +643,7 @@
       "expectedSkips": 1,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The ECIES dispatcher validates the wrong-key error shape directly or the obsolete duplicate vector is removed.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/sdk/scripts/evaluation.json",
@@ -639,7 +651,7 @@
       "expectedSkips": 37,
       "owner": "ts-stack-maintainers",
       "removeWhen": "Each node-context, consensus, or flag-sensitive script case is implemented or formally classified as outside the standalone evaluator contract.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/sync/brc40-user-state.json",
@@ -647,7 +659,7 @@
       "expectedSkips": 24,
       "owner": "ts-stack-maintainers",
       "removeWhen": "A seeded producer/consumer sync harness validates BRC-40 state, merge, and offset behavior.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/abortaction.json",
@@ -655,7 +667,7 @@
       "expectedSkips": 6,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness creates deterministic in-flight actions before abort vectors execute.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/acquirecertificate.json",
@@ -663,7 +675,7 @@
       "expectedSkips": 5,
       "owner": "ts-stack-maintainers",
       "removeWhen": "Vectors use valid deterministic signatures and an ephemeral issuance endpoint.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/createaction.json",
@@ -671,7 +683,7 @@
       "expectedSkips": 90,
       "owner": "ts-stack-maintainers",
       "removeWhen": "A deterministic funded mock-chain wallet supplies change UTXOs for createAction vectors.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/discoverbyattributes.json",
@@ -679,7 +691,7 @@
       "expectedSkips": 1,
       "owner": "ts-stack-maintainers",
       "removeWhen": "A deterministic overlay lookup fixture returns matching certifier attributes.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/discoverbyidentitykey.json",
@@ -687,7 +699,7 @@
       "expectedSkips": 2,
       "owner": "ts-stack-maintainers",
       "removeWhen": "A deterministic overlay lookup fixture returns certifier identity records.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/internalizeaction.json",
@@ -695,7 +707,7 @@
       "expectedSkips": 8,
       "owner": "ts-stack-maintainers",
       "removeWhen": "Placeholder byte arrays are replaced with valid deterministic BEEF fixtures.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/listactions.json",
@@ -703,7 +715,7 @@
       "expectedSkips": 1,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness seeds the expected action before the list request.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/listcertificates.json",
@@ -711,7 +723,7 @@
       "expectedSkips": 1,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness seeds the expected certificate before the list request.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/provecertificate.json",
@@ -719,7 +731,7 @@
       "expectedSkips": 7,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness seeds deterministic certificates and proof keys.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/relinquishcertificate.json",
@@ -727,7 +739,7 @@
       "expectedSkips": 4,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness seeds deterministic certificates before relinquishment.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/relinquishoutput.json",
@@ -735,7 +747,7 @@
       "expectedSkips": 6,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness seeds deterministic outputs before relinquishment.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     },
     {
       "path": "conformance/vectors/wallet/brc100/signaction.json",
@@ -743,7 +755,7 @@
       "expectedSkips": 8,
       "owner": "ts-stack-maintainers",
       "removeWhen": "The wallet harness creates and retains deterministic in-flight actions for signing.",
-      "reviewBy": "2026-08-26"
+      "reviewBy": "2026-09-26"
     }
   ]
 }

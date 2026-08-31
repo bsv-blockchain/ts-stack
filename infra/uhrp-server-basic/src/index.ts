@@ -32,10 +32,12 @@ import {
   securityHeaders
 } from './security/edgePolicy'
 import { createServiceHealth } from './serviceHealth'
+import { getChirpCommitPrice } from './chirp/routes'
+import { startChirpGarbageCollector } from './chirp/store'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
-type HttpRouteMethod = 'get' | 'put' | 'post' | 'patch' | 'delete'
+type HttpRouteMethod = 'get' | 'head' | 'put' | 'post' | 'patch' | 'delete'
 
 const closeHttpServer = async (server: Server): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
@@ -63,7 +65,7 @@ app.use(initialDoubleSlashCompatibility)
 app.use(securityHeaders({ environmentPrefix: 'UHRP' }))
 app.use(corsPolicy({
   environmentPrefix: 'UHRP',
-  methods: ['GET', 'PUT', 'POST', 'OPTIONS']
+  methods: ['GET', 'HEAD', 'PUT', 'POST', 'OPTIONS']
 }))
 app.use(concurrencyLimit('UHRP', profileValue(resourceProfile, {
   small: 16,
@@ -146,6 +148,13 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     const paymentMiddleware = createPaymentMiddleware({
       wallet,
       calculateRequestPrice: async (req) => {
+        if (/^\/chirp\/v1\/uploads\/[^/]+\/commit$/.test(req.path)) {
+          try {
+            return await getChirpCommitPrice(req as any)
+          } catch {
+            return 0
+          }
+        }
         if (req.url === '/upload') {
           const { fileSize, retentionPeriod } = (req.body as any) || {}
           if (!fileSize || !retentionPeriod) return 0
@@ -203,6 +212,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       })
     })
 
+    const stopChirpGarbageCollector = startChirpGarbageCollector()
     serviceHealth.markReady()
     const server = app.listen(HTTP_PORT, () => {
       const idKey = PrivateKey
@@ -224,6 +234,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     const shutdown = (signal: NodeJS.Signals): Promise<void> => {
       shutdownPromise ??= (async () => {
         serviceHealth.markNotReady()
+        stopChirpGarbageCollector()
         log.info({ operation: 'shutdown', signal }, 'UHRP basic shutdown started')
         await closeHttpServer(server)
         await destroyWallet()

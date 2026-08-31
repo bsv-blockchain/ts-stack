@@ -4,7 +4,7 @@ title: 'Reference'
 kind: meta
 version: 'n/a'
 last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, api, index]
@@ -21,7 +21,7 @@ Quick reference material for API details and protocol indices.
 - **[Dependency and release policy](./dependency-policy.md)** — Runtime baseline, supply-chain controls, advisory handling, and release rules
 - **[Duplication governance](./duplication-governance.md)** — Reviewed consolidation boundaries, ownership, expiry, and required equivalence evidence
 - **[Generated stack facts](./stack-facts.md)** — Current source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals
-- **[Licensing policy](./licensing.md)** — Uniform Open BSV License Version 6 declarations, package files, and drift controls
+- **[Licensing policy](./licensing.md)** — Scoped first-party licensing, incorporated-material notices, rights clearance, and release controls
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification
 - **[Package API, declarations, and migrations](./package-api-migrations.md)** — Generated entry points, declaration targets, source candidates, release notes, and migration guidance for all 30 public packages
 - **[Release and operations guide](./release-operations.md)** — Scope, preflight, publication, deployment, failure handling, and rollback

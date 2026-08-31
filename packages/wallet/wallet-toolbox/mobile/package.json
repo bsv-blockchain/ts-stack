@@ -34,14 +34,16 @@
   "files": [
     "out",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/wallet/wallet-toolbox/mobile"
   },
-  "author": "Tone Engel",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "keywords": [
     "bsv",

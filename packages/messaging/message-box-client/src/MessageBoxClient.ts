@@ -18,7 +18,7 @@
  * See BRC-2 for details on the encryption scheme: https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0002.md
  *
  * @module MessageBoxClient
- * @author BSV Blockchain Association
+ * @author BSV Association
  * @license Open BSV License
  */
 

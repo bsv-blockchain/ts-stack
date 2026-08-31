@@ -5,7 +5,7 @@ kind: package
 domain: wallet
 version: '1.1.157'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples'
 status: stable

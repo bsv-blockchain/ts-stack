@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO='bsv-blockchain/ts-stack'
 FILE='release.yaml'
+ENVIRONMENT='npm-production'
 PKGS=(
   "@bsv/amountinator"
   "@bsv/wallet-helper"
@@ -18,6 +19,7 @@ PKGS=(
   "@bsv/auth-express-middleware"
   "@bsv/payment-express-middleware"
   "@bsv/teranode-listener"
+  "@bsv/chirp"
   "@bsv/gasp"
   "@bsv/overlay-discovery-services"
   "@bsv/overlay-express"
@@ -160,7 +162,7 @@ for pkg in "${PKGS[@]}"; do
   has_target=0
   ids_to_revoke=""
   if [[ -n "${trust:-}" ]] && [[ "$trust" != "[]" ]]; then
-    has_target=$(echo "$trust" | jq -r --arg repo "$REPO" --arg file "$FILE" 'map(select(.repository == $repo and .file == $file and .type == "github")) | length')
+    has_target=$(echo "$trust" | jq -r --arg repo "$REPO" --arg file "$FILE" --arg environment "$ENVIRONMENT" 'map(select(.repository == $repo and .file == $file and .environment == $environment and .type == "github")) | length')
     ids_to_revoke=$(echo "$trust" | jq -r '.[].id')
   else
     echo "No trust entries found (creating new one)"
@@ -173,7 +175,7 @@ for pkg in "${PKGS[@]}"; do
       if [[ -n "$ids_to_revoke" ]]; then
         echo "[dry-run] would revoke: ${ids_to_revoke//$'\n'/, }"
       fi
-      echo "[dry-run] would add: trust github ${pkg} --repository ${REPO} --file ${FILE} --yes"
+      echo "[dry-run] would add: trust github ${pkg} --repository ${REPO} --file ${FILE} --environment ${ENVIRONMENT} --yes"
     fi
     rm -f /tmp/ts-stack-trust-err.txt
     echo
@@ -198,7 +200,7 @@ for pkg in "${PKGS[@]}"; do
   fi
 
   echo "Applying target trust"
-  if run_npm_capture "trust github for ${pkg}" trust github "$pkg" --repository "$REPO" --file "$FILE" --yes >/dev/null; then
+  if run_npm_capture "trust github for ${pkg}" trust github "$pkg" --repository "$REPO" --file "$FILE" --environment "$ENVIRONMENT" --yes >/dev/null; then
     echo "OK"
   else
     echo "FAILED"

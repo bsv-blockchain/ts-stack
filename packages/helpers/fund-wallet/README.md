@@ -46,6 +46,7 @@ npx --package @bsv/fund-wallet fund-metanet
 ```
 
 The tool will prompt you for:
+
 1. Network (test or main)
 2. Storage URL
 3. Private key
@@ -137,7 +138,9 @@ npx --package @bsv/fund-wallet fund-metanet \
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+The recovered pre-monorepo ISC notice is retained in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 
 ## Related Projects
 

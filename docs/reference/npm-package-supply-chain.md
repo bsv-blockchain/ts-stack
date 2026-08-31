@@ -4,7 +4,7 @@ title: 'npm Package Supply Chain'
 kind: reference
 version: '1.0.0'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [reference, packages, npm, security, releases]
@@ -12,7 +12,7 @@ tags: [reference, packages, npm, security, releases]
 
 # npm Package Supply Chain
 
-All 30 public packages are released from `.github/workflows/release.yaml`. The
+All 32 public packages are released from `.github/workflows/release.yaml`. The
 workflow is the only supported publication path. It uses the protected
 `npm-production` environment and npm trusted publishing (OIDC); release
 automation must not use a long-lived npm write token.

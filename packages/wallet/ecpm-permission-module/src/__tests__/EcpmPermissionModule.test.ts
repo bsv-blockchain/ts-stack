@@ -35,6 +35,14 @@ const execute = async (
     throw new Error('underlying wallet must not be called')
   })
 
+const observe = <T>(
+  promise: Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> =>
+  promise.then(
+    value => ({ ok: true, value }),
+    error => ({ ok: false, error })
+  )
+
 describe('EcpmPermissionModule', () => {
   it('applies and removes the same derived scalar without exposing it', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(11))
@@ -203,10 +211,11 @@ describe('EcpmPermissionModule', () => {
       protocolID: [1, `p ecpm apply ${point(3)} mental poker deal`]
     })
 
-    const first = execute(module, args)
-    const second = execute(module, args)
+    const first = observe(execute(module, args))
+    const second = observe(execute(module, args))
     resolveAuthorization(true)
-    await Promise.all([first, second])
+    const outcomes = await Promise.all([first, second])
+    expect(outcomes.every(outcome => outcome.ok)).toBe(true)
     await execute(
       module,
       requestArgs(point(4), 'apply', {
@@ -287,6 +296,72 @@ describe('EcpmPermissionModule', () => {
         privilegedReason: 'Protect the private card mask'
       })
     )
+  })
+
+  it('scopes cached privileged grants to the exact approved reason', async () => {
+    const privileged = new CachedKeyDeriver(new PrivateKey(72))
+    const authorize = jest.fn(async () => true)
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(73)),
+      authorize,
+      privilegedKeyDeriver: async () => privileged
+    })
+    const privilegedArgs = (privilegedReason: string): GetPublicKeyArgs =>
+      requestArgs(point(10), 'apply', { privileged: true, privilegedReason })
+
+    await execute(module, privilegedArgs('Protect the private card mask'))
+    await execute(module, privilegedArgs('Protect the private card mask'))
+    await execute(module, privilegedArgs('Protect the shuffle nonce'))
+
+    expect(authorize).toHaveBeenCalledTimes(2)
+    expect(authorize).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ privilegedReason: 'Protect the private card mask' })
+    )
+    expect(authorize).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ privilegedReason: 'Protect the shuffle nonce' })
+    )
+  })
+
+  it('does not share pending privileged authorization across different reasons', async () => {
+    const resolvers: Array<(approved: boolean) => void> = []
+    const authorize = jest.fn(
+      async () =>
+        await new Promise<boolean>(resolve => {
+          resolvers.push(resolve)
+        })
+    )
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(74)),
+      authorize,
+      privilegedKeyDeriver: async () => new CachedKeyDeriver(new PrivateKey(75))
+    })
+    const first = observe(
+      execute(
+        module,
+        requestArgs(point(11), 'apply', {
+          privileged: true,
+          privilegedReason: 'Protect the private card mask'
+        })
+      )
+    )
+    const second = observe(
+      execute(
+        module,
+        requestArgs(point(11), 'apply', {
+          privileged: true,
+          privilegedReason: 'Protect the shuffle nonce'
+        })
+      )
+    )
+
+    expect(authorize).toHaveBeenCalledTimes(2)
+    expect(resolvers).toHaveLength(2)
+    resolvers[0]!(true)
+    resolvers[1]!(true)
+    const outcomes = await Promise.all([first, second])
+    expect(outcomes.every(outcome => outcome.ok)).toBe(true)
   })
 
   it.each<[string, RegExp]>([

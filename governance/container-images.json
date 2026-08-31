@@ -10,7 +10,19 @@
       "discoveryReference": "node",
       "references": ["node", "public.ecr.aws/docker/library/node"],
       "refreshOwner": "dependabot-docker",
-      "verification": "Resolve each reference through its registry and require the same multi-platform digest before merge."
+      "verification": "Resolve each reference through its registry and require the same multi-platform digest before merge.",
+      "runtimePackagePins": [
+        {
+          "name": "libcrypto3",
+          "version": "3.5.8-r0",
+          "reason": "CVE-2026-14456"
+        },
+        {
+          "name": "libssl3",
+          "version": "3.5.8-r0",
+          "reason": "CVE-2026-14456"
+        }
+      ]
     }
   ],
   "components": [
@@ -20,6 +32,7 @@
       "title": "BSV Chaintracks Server",
       "description": "Chaintracks service and bulk-header API for BSV applications",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server",
       "release": "ghcr-keyless"
     },
@@ -29,6 +42,7 @@
       "title": "BSV Message Box Server",
       "description": "Authenticated message-box and payment service for BSV applications",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server",
       "release": "ghcr-keyless"
     },
@@ -38,6 +52,7 @@
       "title": "BSV Overlay Server",
       "description": "Reference overlay-services deployment for distributed BSV applications",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server",
       "release": "ghcr-keyless"
     },
@@ -47,6 +62,7 @@
       "title": "BSV UHRP Basic Server",
       "description": "Filesystem-backed UHRP content service",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic",
       "release": "ghcr-keyless"
     },
@@ -56,6 +72,7 @@
       "title": "BSV UHRP Cloud Bucket Server",
       "description": "Cloud-bucket-backed UHRP storage service",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket",
       "release": "ghcr-keyless"
     },
@@ -65,6 +82,7 @@
       "title": "Wallet Authentication Backend",
       "description": "Multi-factor authentication backend for BSV wallets",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab",
       "release": "ghcr-and-aws-marketplace-keyless"
     },
@@ -74,6 +92,7 @@
       "title": "BSV Wallet Infrastructure",
       "description": "Wallet storage and management service for BSV applications",
       "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra",
       "release": "ghcr-keyless"
     }

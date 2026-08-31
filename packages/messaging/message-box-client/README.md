@@ -287,4 +287,7 @@ or package-manager locks.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+The UMD bundle incorporates separately licensed SDK material; keep
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
+with the bundle.

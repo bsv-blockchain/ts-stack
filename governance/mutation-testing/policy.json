@@ -326,6 +326,16 @@
       "minimumScore": 85,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "chirp-codec",
+      "manifest": "packages/network/chirp/package.json",
+      "propertyTest": "packages/network/chirp/test/codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted CHIRP binary manifests and arbitrary source bytes crossing the content-addressed storage boundary",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

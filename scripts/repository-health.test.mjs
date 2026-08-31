@@ -5,14 +5,17 @@ import test from 'node:test'
 
 import {
   REPOSITORY_ROOT,
+  PACKAGE_AUTHOR,
   collectContractFindings,
   compareContractBaseline,
   createContractBaseline,
+  discoverPackageManifests,
   discoverWorkspaceProjects,
   evaluateRepositoryHealth,
   lintScriptExcludesAuthoredCode,
   readJson,
   validateExceptionRegistry,
+  validatePackageAuthorIdentity,
   validateProjectRegistry
 } from './repository-health.mjs'
 import { validateBaseline as validateCiPerformanceBaseline } from './ci-performance.mjs'
@@ -37,17 +40,17 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
   )
 })
 
-test('workspace discovery exactly matches the 39-project registry', () => {
+test('workspace discovery exactly matches the 40-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 39)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 32)
+  assert.equal(discovered.length, 40)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 33)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
-  assert.equal(projects.generatedArtifacts.length, 13)
+  assert.equal(projects.generatedArtifacts.length, 12)
   assert.ok(projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers'))
   assert.deepEqual(projects.dependencyAutomation.firstParty, {
     pattern: '@bsv/*',
@@ -61,12 +64,24 @@ test('workspace discovery exactly matches the 39-project registry', () => {
   })
 })
 
+test('every checked-in first-party package manifest uses the current Association name', () => {
+  const manifests = discoverPackageManifests()
+
+  assert.equal(manifests.length, 49)
+  assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
+  assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
+
+  const stale = structuredClone(manifests)
+  stale[0].manifest.author = 'Legacy Association Name'
+  assert.match(validatePackageAuthorIdentity(stale).join('\n'), /must use "BSV Association"/)
+})
+
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-08-09' })
+  const result = evaluateRepositoryHealth({ today: '2026-08-30' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 39)
-  assert.equal(result.publicPackages, 32)
+  assert.equal(result.projects.length, 40)
+  assert.equal(result.publicPackages, 33)
   assert.equal(result.findings.length, 0)
 })
 
@@ -213,7 +228,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 32)
+  assert.equal(publicPackages.length, 33)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -244,9 +259,10 @@ test('every public package declares supported runtime and canonical support meta
       { url: 'https://github.com/bsv-blockchain/ts-stack/issues' },
       `${project.path} must point consumers to the shared support tracker`
     )
-    assert.ok(
-      typeof project.manifest.author === 'string' && project.manifest.author.trim().length > 0,
-      `${project.path} must identify an author or organization`
+    assert.equal(
+      project.manifest.author,
+      PACKAGE_AUTHOR,
+      `${project.path} must use the current Association name`
     )
     assert.ok(
       Array.isArray(project.manifest.keywords) &&
@@ -266,7 +282,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 32)
+  assert.equal(publicProjects.length, 33)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),

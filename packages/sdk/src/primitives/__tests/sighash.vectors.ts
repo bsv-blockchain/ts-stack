@@ -1,3 +1,4 @@
+// bsv 1.5.6/Bitcoin lineage test material (MIT); see ../../../THIRD_PARTY_NOTICES.md.
 export default [
   ['raw_transaction, script, input_index, hashType, signature_hash (result)'],
   [
