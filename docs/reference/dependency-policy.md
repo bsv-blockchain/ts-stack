@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -172,7 +172,7 @@ npm or infrastructure release workflows, the read-only verification workflow:
   from major migration projects, versions younger than the repository's
   24-hour release-age floor, supported peer ranges, coordinated runtime/tool
   migrations, the TypeScript compiler-API bridge, and forward vendor builds;
-- reconciles all 30 source manifests, recorded published baselines, and npm
+- reconciles all public source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
   publication decision;
 - installs every published package with lifecycle scripts disabled and runs

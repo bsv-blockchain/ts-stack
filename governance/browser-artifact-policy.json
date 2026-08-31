@@ -83,6 +83,13 @@
       "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry."
     },
     {
+      "name": "@bsv/lch",
+      "path": "packages/content/lch",
+      "budget": "packages/content/lch/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The browser entry contains protocol codecs, crypto, acquisition, composition, and storage adapters; the Node CLI and optional C2PA implementation remain outside the browser graph."
+    },
+    {
       "name": "@bsv/sdk",
       "path": "packages/sdk",
       "budget": "packages/sdk/browser-budget.json",

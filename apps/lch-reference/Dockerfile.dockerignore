@@ -1,0 +1,7 @@
+.git
+**/node_modules
+**/dist
+**/dist-server
+**/coverage
+**/.turbo
+**/.DS_Store

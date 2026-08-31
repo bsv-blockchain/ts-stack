@@ -120,8 +120,26 @@ Storage hosts must use HTTPS unless `allowInsecureHTTP` (or the CLI's
 - `mediaType` is untrusted advisory metadata. CHIRP integrity is not author
   authenticity or permission to execute content.
 
-The BRC-167 serialization is authoritative if package behavior and the
-standard ever disagree.
+## Production integration
+
+Set `resilienceLevel` to the number of complete hosts required for a successful
+publication, retain resumable checkpoints until every intended host commits,
+and monitor root retention and renewal. A root advertisement means the host
+validated and retains the complete transitive closure; do not describe a
+partial cache as a complete host. Readers should bound logical bytes, object
+bytes and count, depth, retries, concurrency, redirects, and cache use, and
+server-side readers should enforce a connection-pinned public-address policy.
+
+For licensed media, publish LCH ciphertext through `CHIRPContentSink` and put
+the returned `chirp:` locator in the LCH Asset representation. CHIRP then owns
+verified availability while LCH independently owns encryption, rights,
+payment, keys, and composition. See the
+[production CHIRP and LCH guide](https://github.com/bsv-blockchain/ts-stack/blob/main/docs/guides/chirp-lch-production.md)
+for the complete topology, persistence model, failure matrix, deployment gate,
+and agent implementation contract.
+
+See [BRC-167](https://bsv.brc.dev/overlays/0167) for the normative protocol. If
+package behavior and the standard differ, the standard is authoritative.
 
 ## License
 

@@ -3,7 +3,7 @@ id: about-doc-agent
 title: 'Documentation Maintenance'
 kind: meta
 version: '2.1.0'
-last_updated: '2026-07-30'
+last_updated: '2026-08-30'
 last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
@@ -32,11 +32,11 @@ generated facts, examples, and operational claims must agree with source.
 - Contribution policy: the root
   [`CONTRIBUTING.md`](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md).
 - Deferred final QA:
-  [issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400);
-  release/external assurance:
-  [issue #401](https://github.com/bsv-blockchain/ts-stack/issues/401); and
+  [issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400); and
   analysis/CI follow-up:
   [issue #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
+- Completed release and external-assurance program:
+  [issue #401](https://github.com/bsv-blockchain/ts-stack/issues/401).
 
 Do not copy source-manifest tables into prose. Run `pnpm docs:facts` and link to
 [Generated Stack Facts](../reference/stack-facts.md).

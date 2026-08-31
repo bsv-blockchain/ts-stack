@@ -42,7 +42,8 @@
       "packages/overlays/btms-backend/package.json",
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
-      "packages/network/chirp/package.json"
+      "packages/network/chirp/package.json",
+      "packages/content/lch/package.json"
     ],
     "suites": [
       {
@@ -446,6 +447,17 @@
         "invariants": [
           "Every unsigned 64-bit value round-trips through the shortest canonical CompactSize representation.",
           "Every bounded byte source produces a deterministic root identifier and a hash-, length-, and content-verified closure."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/cbor.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted BRC-170 deterministic CBOR objects crossing signature, identifier, payment, policy, and persistence boundaries",
+        "target": "Canonical deterministic CBOR round trips over arbitrary bounded supported values",
+        "invariants": [
+          "Every supported value round-trips to the identical deterministic byte sequence.",
+          "Text and map keys remain normalized and canonical across independent encode and decode passes."
         ]
       }
     ],

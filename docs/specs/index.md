@@ -3,8 +3,8 @@ id: specs-index
 title: Specifications
 kind: meta
 version: 'n/a'
-last_updated: '2026-04-28'
-last_verified: '2026-08-26'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 status: stable
 tags: ['specs']
@@ -18,27 +18,29 @@ This section documents the protocols and standards that the ts-stack implements.
 
 ## Quick Reference
 
-| Spec                                              | Format             | Version | Implementations                               | Purpose                                                  |
-| ------------------------------------------------- | ------------------ | ------- | --------------------------------------------- | -------------------------------------------------------- |
-| [BRC-100 Wallet](./brc-100-wallet.md)             | JSON Schema        | 1.0.0   | @bsv/wallet-toolbox, @bsv/sdk                 | Standard wallet interface for signing and key management |
-| [BRC-31 Auth](./brc-31-auth.md)                   | AsyncAPI 3.0       | 1.0.0   | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104)      |
-| [BRC-29 Peer Payment](./brc-29-peer-payment.md)   | AsyncAPI 3.0       | 1.0.0   | @bsv/paymail, @bsv/message-box-client         | P2P payment derivation and transmission                  |
-| [BRC-121 / 402](./brc-121-402.md)                 | OpenAPI 3.1        | 1.0.0   | @bsv/402-pay                                  | HTTP micropayment protocol                               |
-| [Overlay HTTP](./overlay-http.md)                 | OpenAPI 3.1        | 1.0.0   | @bsv/overlay, @bsv/overlay-express            | Transaction routing and topic management                 |
-| [Message Box HTTP](./message-box-http.md)         | OpenAPI 3.1        | 1.0.0   | @bsv/message-box-client                       | Store-and-forward messaging API                          |
-| [AuthSocket](./authsocket.md)                     | AsyncAPI 3.0       | 1.0.0   | @bsv/authsocket                               | Authenticated WebSocket for live messaging               |
-| [ARC Broadcast](./arc-broadcast.md)               | OpenAPI 3.1        | 1.0.0   | @bsv/sdk                                      | Miner-facing transaction broadcast                       |
-| [Merkle Service](./merkle-service.md)             | OpenAPI 3.1        | 1.0.0   | @bsv/sdk                                      | SPV proof delivery service                               |
-| [Storage Adapter](./storage-adapter.md)           | OpenAPI 3.1        | 1.0.0   | @bsv/wallet-toolbox                           | Remote wallet storage interface                          |
-| [GASP Sync](./gasp-sync.md)                       | AsyncAPI 3.0       | 1.0.0   | @bsv/gasp                                     | Transaction graph synchronization                        |
-| [UHRP](./uhrp.md)                                 | OpenAPI 3.1        | 1.0.0   | @bsv/overlay-topics                           | Content-addressed file storage                           |
-| [Air-Gap Optical (BRC-141)](./air-gap-optical.md) | Markdown wire spec | 1.0.0   | @bsv/air-gap                                  | One-directional optical air-gap transport (experimental) |
+| Spec                                                            | Format             | Version | Implementations                               | Purpose                                                  |
+| --------------------------------------------------------------- | ------------------ | ------- | --------------------------------------------- | -------------------------------------------------------- |
+| [BRC-100 Wallet](./brc-100-wallet.md)                           | JSON Schema        | 1.0.0   | @bsv/wallet-toolbox, @bsv/sdk                 | Standard wallet interface for signing and key management |
+| [BRC-31 Auth](./brc-31-auth.md)                                 | AsyncAPI 3.0       | 1.0.0   | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104)      |
+| [BRC-29 Peer Payment](./brc-29-peer-payment.md)                 | AsyncAPI 3.0       | 1.0.0   | @bsv/paymail, @bsv/message-box-client         | P2P payment derivation and transmission                  |
+| [BRC-121 / 402](./brc-121-402.md)                               | OpenAPI 3.1        | 1.0.0   | @bsv/402-pay                                  | HTTP micropayment protocol                               |
+| [Overlay HTTP](./overlay-http.md)                               | OpenAPI 3.1        | 1.0.0   | @bsv/overlay, @bsv/overlay-express            | Transaction routing and topic management                 |
+| [Message Box HTTP](./message-box-http.md)                       | OpenAPI 3.1        | 1.0.0   | @bsv/message-box-client                       | Store-and-forward messaging API                          |
+| [AuthSocket](./authsocket.md)                                   | AsyncAPI 3.0       | 1.0.0   | @bsv/authsocket                               | Authenticated WebSocket for live messaging               |
+| [ARC Broadcast](./arc-broadcast.md)                             | OpenAPI 3.1        | 1.0.0   | @bsv/sdk                                      | Miner-facing transaction broadcast                       |
+| [Merkle Service](./merkle-service.md)                           | OpenAPI 3.1        | 1.0.0   | @bsv/sdk                                      | SPV proof delivery service                               |
+| [Storage Adapter](./storage-adapter.md)                         | OpenAPI 3.1        | 1.0.0   | @bsv/wallet-toolbox                           | Remote wallet storage interface                          |
+| [GASP Sync](./gasp-sync.md)                                     | AsyncAPI 3.0       | 1.0.0   | @bsv/gasp                                     | Transaction graph synchronization                        |
+| [UHRP](./uhrp.md)                                               | OpenAPI 3.1        | 1.0.0   | @bsv/overlay-topics                           | Content-addressed file storage                           |
+| [CHIRP (BRC-167)](../packages/network/chirp.md)                 | Published BRC      | 1       | @bsv/chirp                                    | Chunked, verified, resilient large-object storage        |
+| [Air-Gap Optical (BRC-141)](./air-gap-optical.md)               | Markdown wire spec | 1.0.0   | @bsv/air-gap                                  | One-directional optical air-gap transport (experimental) |
+| [Licensed Content Header (BRC-170)](../packages/content/lch.md) | Published BRC      | 1       | @bsv/lch                                      | Licensed encrypted content, acquisition, and composition |
 
 ## About BRCs
 
 **BRC** = BSV Request for Comments. BRCs are numbered sequentially (there is no categorical grouping by number range). Each BRC solves a specific interoperability problem. Implementations reference the spec by number so different teams build compatible systems without central coordination.
 
-The authoritative BRC repository is at [github.com/bitcoin-sv/BRCs](https://github.com/bitcoin-sv/BRCs). The machine-readable contracts for BRCs implemented in ts-stack live in the [`/specs`](https://github.com/bsv-blockchain/ts-stack/tree/main/specs) directory as OpenAPI 3.1, AsyncAPI 3.0, and JSON Schema files.
+The authoritative BRC repository is at [github.com/bsv-blockchain/BRCs](https://github.com/bsv-blockchain/BRCs). Published rendered specifications include [BRC-167](https://bsv.brc.dev/overlays/0167) and [BRC-170](https://bsv.brc.dev/apps/0170). The machine-readable contracts for BRCs implemented in ts-stack live in the [`/specs`](https://github.com/bsv-blockchain/ts-stack/tree/main/specs) directory as OpenAPI 3.1, AsyncAPI 3.0, and JSON Schema files.
 
 ## By Use Case
 
@@ -74,6 +76,15 @@ The authoritative BRC repository is at [github.com/bitcoin-sv/BRCs](https://gith
 
 - Use [Merkle Service](./merkle-service.md) for SPV proof delivery
 - Implement via `@bsv/sdk` or external Merkle Service
+
+**I'm publishing or licensing large media**
+
+- Use [BRC-167](https://bsv.brc.dev/overlays/0167) and `@bsv/chirp` for
+  progressive, verified storage over UHRP
+- Use [BRC-170](https://bsv.brc.dev/apps/0170) and `@bsv/lch` for encryption,
+  rights, acquisition, direct-to-Payee settlement, and composition
+- Follow the [production CHIRP and LCH guide](../guides/chirp-lch-production.md)
+  for the combined architecture and recovery model
 
 ## Learning Path
 
