@@ -2,7 +2,7 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.0'
+version: '1.3.1'
 last_updated: '2026-08-30'
 last_verified: '2026-08-30'
 review_cadence_days: 30
@@ -139,15 +139,13 @@ frozen graph stayed clean without it. The machine-readable registry now maps
 every remaining selector and exact value to its exception. CI rejects a new,
 changed, stale, expired, unowned, or upstream-unlinked override.
 
-Wave 39 repeated the removal rehearsal by regenerating every standalone lock
-without its `gaxios`, `uuid`, and `brace-expansion` substitutions and checking
-the natural dependency graph. It also rechecked the root Jest/minimatch,
-typed-rest-client/qs, and isolated Redocly closures, then refreshed affected
-locks for the current `brace-expansion`, `fast-uri`, `ip-address`, and
-`socket.io-parser` advisories. All 19 remaining selectors still prevent a
-reproduced vulnerable resolution or preserve the governed reproducible
-generator, so none can be removed safely yet. The method, result, count, and next rehearsal are enforced in
-`governance/dependency-release-policy.json`.
+Wave 40 rechecked all 20 selectors against the frozen graphs, current upstream
+manifests, and the advisory audit. The supported graphs still select exact
+`gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their registered
+substitutions. New upstream majors can remove some legacy paths only through a
+coordinated Stryker or Google Cloud migration, so no selector can be removed
+safely in isolation. The method, result, count, and next rehearsal are enforced
+in `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with

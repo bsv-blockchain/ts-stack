@@ -29,10 +29,14 @@ describe('StorageIdb tests', () => {
     try {
       const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
       const db = storage.db
-      expect(r).toBe('4')
+      expect(r).toBe('5')
       expect(db).toBeTruthy()
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('userId_basketId')).toBe(true)
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('txid_vout_userId')).toBe(true)
+      expect(db?.transaction('transactions').objectStore('transactions')
+        .indexNames.contains('noSendExpiryState')).toBe(true)
+      expect(db?.transaction('transactions').objectStore('transactions')
+        .indexNames.contains('noSendExpiryReclaimTxid')).toBe(true)
       expect(db?.transaction('certificates').objectStore('certificates')
         .indexNames.contains('userId_basketId')).toBe(false)
     } finally {
@@ -58,11 +62,15 @@ describe('StorageIdb tests', () => {
 
     try {
       const upgraded = await storage.initDB('version 2 upgrade test', '42'.repeat(32))
-      expect(upgraded.version).toBe(4)
+      expect(upgraded.version).toBe(5)
       expect(upgraded.transaction('outputs').objectStore('outputs')
         .indexNames.contains('userId_basketId')).toBe(true)
       expect(upgraded.transaction('outputs').objectStore('outputs')
         .indexNames.contains('txid_vout_userId')).toBe(true)
+      expect(upgraded.transaction('transactions').objectStore('transactions')
+        .indexNames.contains('noSendExpiryState')).toBe(true)
+      expect(upgraded.transaction('transactions').objectStore('transactions')
+        .indexNames.contains('noSendExpiryReclaimTxid')).toBe(true)
       upgraded.close()
     } finally {
       await resetStorage(storage)
@@ -179,6 +187,29 @@ describe('StorageIdb tests', () => {
         const locked = await storage.findOutputsByOutpointsForUpdate(userId, [outpoint], trx, true)
         expect(locked[`${txid}.0`]?.outputId).toBe(outputId)
       })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('atomically compares and sets BRC-177 expiry state', async () => {
+    const storage = await makeStorage()
+    try {
+      const userId = await insertUser(storage)
+      const transactionId = await insertTransaction(storage, userId, {
+        status: 'nosend',
+        txid: '16'.repeat(32)
+      })
+      await storage.updateTransaction(transactionId, { noSendExpiryState: 'signed' })
+
+      const contenders = await Promise.all([
+        storage.compareAndSetNoSendExpiryState(transactionId, 'signed', 'reclaiming'),
+        storage.compareAndSetNoSendExpiryState(transactionId, 'signed', 'reclaiming')
+      ])
+      expect(contenders.filter(Boolean)).toHaveLength(1)
+      await expect(storage.compareAndSetNoSendExpiryState(transactionId, 'signed', 'conflicted')).resolves.toBe(false)
+      const [transaction] = await storage.findTransactions({ partial: { transactionId } })
+      expect(transaction.noSendExpiryState).toBe('reclaiming')
     } finally {
       await resetStorage(storage)
     }

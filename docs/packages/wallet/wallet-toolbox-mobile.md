@@ -18,6 +18,10 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
+The built-in BRC-177 `p nosend expiry` module delegates durable expiry
+monitoring and pre-signed reclaim submission to its 2.11-compatible active
+remote storage service, so mobile process suspension does not restart or lose
+an expiry.
 Related mobile `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

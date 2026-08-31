@@ -16,6 +16,7 @@ import { TaskMineBlock } from './tasks/TaskMineBlock'
 
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
 import { TaskCheckNoSends } from './tasks/TaskCheckNoSends'
+import { TaskNoSendExpiry } from './tasks/TaskNoSendExpiry'
 import { TaskUnFail } from './tasks/TaskUnFail'
 import { TaskReviewUtxos } from './tasks/TaskReviewUtxos'
 import { TaskReviewDoubleSpends } from './tasks/TaskReviewDoubleSpends'
@@ -225,6 +226,7 @@ export class Monitor {
       new TaskClock(this),
       new TaskNewHeader(this),
       new TaskMonitorCallHistory(this),
+      new TaskNoSendExpiry(this),
       new TaskSendWaiting(this),
       new TaskCheckForProofs(this),
       new TaskCheckNoSends(this),
@@ -252,6 +254,7 @@ export class Monitor {
       new TaskClock(this),
       new TaskNewHeader(this),
       new TaskMonitorCallHistory(this),
+      new TaskNoSendExpiry(this),
       new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond), // Check every 8 seconds but must be 7 seconds old
       new TaskCheckForProofs(this, 2 * Monitor.oneHour), // Every two hours if no block found
       new TaskCheckNoSends(this),
@@ -279,6 +282,7 @@ export class Monitor {
       new TaskClock(this),
       new TaskNewHeader(this),
       new TaskMonitorCallHistory(this),
+      new TaskNoSendExpiry(this),
       new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond), // Check every 8 seconds but must be 7 seconds old
       new TaskCheckForProofs(this, 2 * Monitor.oneHour), // Every two hours if no block found
       new TaskCheckNoSends(this),
@@ -453,6 +457,7 @@ export class Monitor {
     // TaskCheckNoSends.checkNow flag was designed for this signal
     // (see TaskCheckNoSends.ts:22-25) but was never wired.
     TaskCheckNoSends.checkNow = true
+    TaskNoSendExpiry.checkNow = true
   }
 
   /**

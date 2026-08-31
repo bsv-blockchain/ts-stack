@@ -19,6 +19,12 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
+Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
+pre-funds expiring `noSend` actions, stores a signed reclaim durably across
+active/backup storage and restarts, and lets the authoritative local or remote
+monitor reclaim an unbroadcast action after its time or block-height deadline.
+See [Expiring noSend actions](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/no-send-expiry.md).
+
 Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
 matching count on every page, including short final and out-of-range pages.
 

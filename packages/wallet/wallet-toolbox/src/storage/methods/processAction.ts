@@ -25,7 +25,7 @@ import {
   verifyTruthy
 } from '../../utility/utilityHelpers'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
-import { WERR_INTERNAL, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
@@ -84,7 +84,7 @@ async function processActionCore(
       storage,
       'wallet.storage.process_action.validate',
       parent,
-      async () => await validateCommitNewTxToStorageArgs(storage, userId, args)
+      async () => await validateCommitNewTxToStorageArgs(storage, auth, args)
     )
     logger?.log('validated new tx updates to storage')
     ;({ req } = await traceProcessStep(
@@ -381,9 +381,10 @@ interface ValidCommitNewTxToStorageArgs {
 
 async function validateCommitNewTxToStorageArgs(
   storage: StorageProvider,
-  userId: number,
+  auth: AuthId,
   params: StorageProcessActionArgs
 ): Promise<ValidCommitNewTxToStorageArgs> {
+  const userId = verifyId(auth.userId)
   if (!params.reference || !params.txid || params.rawTx == null) {
     throw new WERR_INVALID_OPERATION('One or more expected params are undefined.')
   }
@@ -409,6 +410,22 @@ async function validateCommitNewTxToStorageArgs(
       partial: { userId, reference: params.reference }
     })
   )
+  if (transaction.noSendExpiryState != null) {
+    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+    if (!params.isNoSend || params.isSendWith) {
+      throw new WERR_INVALID_OPERATION('BRC-177 protected actions must remain noSend and cannot use sendWith')
+    }
+    if (transaction.noSendExpiryState !== 'unsigned' || transaction.noSendExpiryReclaimRawTx == null) {
+      throw new WERR_INVALID_OPERATION('BRC-177 protected action is not armed for signature release')
+    }
+    const deadline = verifyInteger(transaction.noSendExpiryDeadline)
+    const expired = transaction.noSendExpiryMode === 'blockheight'
+      ? (await storage.getServices().getHeight()) >= deadline
+      : Math.floor(Date.now() / 1000) >= deadline
+    if (expired) {
+      throw new WERR_INVALID_OPERATION('BRC-177 protected action has expired')
+    }
+  }
   if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
   if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
   // Transaction must have unsigned or unprocessed status
@@ -480,6 +497,10 @@ async function validateCommitNewTxToStorageArgs(
     },
     postStatus
   }
+  if (transaction.noSendExpiryState != null) {
+    vargs.transactionUpdate.noSendExpiryState = 'signed'
+    vargs.transactionUpdate.noSendExpiryReleasedAt = Date.now()
+  }
 
   // update outputs with txid, script offsets and lengths, drop long output scripts from outputs table
   // outputs spendable will be updated for change to true and all others to !!o.tracked when tx has been broadcast
@@ -501,12 +522,36 @@ async function commitNewTxToStorage(
 ): Promise<CommitNewTxResults> {
   let log = vargs.log
 
+  const blockheightExpired = vargs.transaction.noSendExpiryState != null &&
+    vargs.transaction.noSendExpiryMode === 'blockheight' &&
+    (await storage.getServices().getHeight()) >= verifyInteger(vargs.transaction.noSendExpiryDeadline)
+  if (blockheightExpired) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
+  }
+
   log = stampLog(log, 'start storage commitNewTxToStorage')
 
   let req: EntityProvenTxReq | undefined
 
   await storage.transaction(async trx => {
     log = stampLog(log, '... storage commitNewTxToStorage storage transaction start')
+
+    if (vargs.transaction.noSendExpiryState != null) {
+      const current = verifyOne(await storage.findTransactions({
+        partial: { transactionId: vargs.transactionId, userId },
+        trx
+      }))
+      if (current.noSendExpiryState !== 'unsigned') {
+        throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
+      }
+      if (current.noSendExpiryMode !== 'blockheight' &&
+        Math.floor(Date.now() / 1000) >= verifyInteger(current.noSendExpiryDeadline)) {
+        throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
+      }
+      if (!await storage.compareAndSetNoSendExpiryState(current.transactionId, 'unsigned', 'signed', trx)) {
+        throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
+      }
+    }
 
     // Create initial 'nosend' proven_tx_req record to store signed, valid rawTx and input beef
     req = await vargs.req.insertOrMerge(storage, trx)
@@ -519,7 +564,9 @@ async function commitNewTxToStorage(
 
     log = stampLog(log, '... storage commitNewTxToStorage outputs updated')
 
-    await storage.updateTransaction(vargs.transactionId, vargs.transactionUpdate, trx)
+    const transactionUpdate = { ...vargs.transactionUpdate }
+    delete transactionUpdate.noSendExpiryState
+    await storage.updateTransaction(vargs.transactionId, transactionUpdate, trx)
 
     log = stampLog(log, '... storage commitNewTxToStorage storage transaction end')
   })

@@ -49,7 +49,7 @@
         ".github/dependabot.yml"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-09-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
@@ -140,7 +140,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-09-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {

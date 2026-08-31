@@ -55,6 +55,7 @@ import {
   RenewActionBatchResult,
   StorageCapabilities
 } from './ActionBatch.interfaces'
+import type { Brc177NoSendExpiry } from '../utility/brc177NoSendExpiry'
 
 /**
  * This is the `WalletStorage` interface implemented by a class such as `WalletStorageManager`,
@@ -85,6 +86,9 @@ export interface WalletStorage {
   abortAction: (args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
   processAction: (args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  prepareNoSendExpiry?: (args: Validation.ValidCreateActionArgs) => Promise<StoragePrepareNoSendExpiryResult>
+  activateNoSendExpiry?: (args: StorageActivateNoSendExpiryArgs) => Promise<StorageActivateNoSendExpiryResult>
+  armNoSendExpiry?: (args: StorageArmNoSendExpiryArgs) => Promise<void>
   getCapabilities: () => Promise<StorageCapabilities>
   beginActionBatch: (args: BeginActionBatchArgs) => Promise<BeginActionBatchResult>
   extendActionBatch: (args: ExtendActionBatchArgs) => Promise<ExtendActionBatchResult>
@@ -178,6 +182,15 @@ export interface WalletStorageWriter extends WalletStorageReader {
   abortAction: (auth: AuthId, args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (auth: AuthId, args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
   processAction: (auth: AuthId, args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  prepareNoSendExpiry?: (
+    auth: AuthId,
+    args: Validation.ValidCreateActionArgs
+  ) => Promise<StoragePrepareNoSendExpiryResult>
+  activateNoSendExpiry?: (
+    auth: AuthId,
+    args: StorageActivateNoSendExpiryArgs
+  ) => Promise<StorageActivateNoSendExpiryResult>
+  armNoSendExpiry?: (auth: AuthId, args: StorageArmNoSendExpiryArgs) => Promise<void>
   getCapabilities: () => Promise<StorageCapabilities>
   beginActionBatch: (auth: AuthId, args: BeginActionBatchArgs) => Promise<BeginActionBatchResult>
   extendActionBatch: (auth: AuthId, args: ExtendActionBatchArgs) => Promise<ExtendActionBatchResult>
@@ -295,6 +308,38 @@ export interface StorageCreateActionResult {
   version: number
   lockTime: number
   reference: string
+}
+
+export interface StoragePrepareNoSendExpiryResult {
+  funding: StorageCreateActionResult
+  anchorSatoshis: number
+  anchorVout: number
+  reclaimFee: number
+  reclaimSatoshis: number
+}
+
+export interface StorageActivateNoSendExpiryArgs {
+  target: Validation.ValidCreateActionArgs
+  fundingReference: string
+  fundingTxid: string
+  anchorVout: number
+}
+
+export interface StorageActivateNoSendExpiryResult {
+  action: StorageCreateActionResult
+  expiry: Brc177NoSendExpiry
+  deadline: number
+  anchorTxid: string
+  anchorVout: number
+}
+
+export interface StorageArmNoSendExpiryArgs {
+  reference: string
+  reclaimTxid: string
+  reclaimRawTx: number[] | Uint8Array
+  reclaimDerivationPrefix: string
+  reclaimDerivationSuffix: string
+  reclaimSatoshis: number
 }
 
 export interface StorageProcessActionArgs {

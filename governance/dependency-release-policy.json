@@ -49,7 +49,7 @@
         "classification": "toolchain-bridge",
         "rationale": "TypeScript 7 owns every native CLI build while compiler-API consumers use the official TypeScript 6 compatibility package until a stable TypeScript 7 API exists.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-27",
+        "reviewBy": "2026-09-30",
         "removeWhen": "All compiler-API consumers support the native TypeScript 7 API and the complete declaration, Jest, conformance, browser, mobile, infrastructure, and packed-consumer matrix passes without the alias."
       },
       {
@@ -128,7 +128,7 @@
         "classification": "coordinated-major-hold",
         "rationale": "The isolated OpenAPI code generator is pinned to its tested compiler API and generated-output reproducibility boundary.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-25",
+        "reviewBy": "2026-09-30",
         "removeWhen": "The generator and Redocly closure support the new compiler and deterministic codegen remains byte-for-byte clean."
       }
     ]

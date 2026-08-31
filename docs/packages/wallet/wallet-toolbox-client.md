@@ -18,6 +18,10 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
+The built-in BRC-177 `p nosend expiry` module works with local IndexedDB or a
+2.11-compatible remote storage service; the active provider owns durable
+expiry monitoring, synchronized lifecycle state, and pre-signed reclaim
+submission.
 IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across short final and out-of-range pages.
 Related browser `noSend` chains retain local action batching, while unrelated
