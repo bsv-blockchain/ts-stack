@@ -3,7 +3,7 @@ import { ProvenTxReqStatus, TrxToken } from '../../sdk'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { StatusForTxidResult } from '../../sdk/WalletServices.interfaces'
 import { parseTxScriptOffsets } from '../../utility/parseTxScriptOffsets'
-import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../../utility/utilityHelpers'
+import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../../utility/utilityHelpers'
 import { asArray } from '../../utility/utilityHelpers.noBuffer'
 import type { Brc177NoSendExpiryState } from '../../utility/brc177NoSendExpiry'
 import type { StorageProvider } from '../StorageProvider'
@@ -25,12 +25,15 @@ const ACTIVE_STATES: Brc177NoSendExpiryState[] = [
 ]
 const QUERY_PAGE_SIZE = 100
 const STATUS_BATCH_SIZE = 100
+const RECLAIM_RETRY_BASE_MSECS = 30_000
+const RECLAIM_RETRY_MAX_MSECS = 60 * 60_000
 
 export interface NoSendExpiryLifecycleResult {
   inspected: number
   cancelled: number
   observed: number
   reclaimActivated: number
+  reclaimRetried: number
   reclaimed: number
   targetWon: number
   deferred: number
@@ -43,6 +46,7 @@ function emptyResult(): NoSendExpiryLifecycleResult {
     cancelled: 0,
     observed: 0,
     reclaimActivated: 0,
+    reclaimRetried: 0,
     reclaimed: 0,
     targetWon: 0,
     deferred: 0,
@@ -556,6 +560,135 @@ function recordRaceResult(result: NoSendExpiryLifecycleResult, race: Awaited<Ret
   else result.deferred++
 }
 
+function reclaimRetryDelay(rebroadcastAttempts: number): number {
+  return Math.min(RECLAIM_RETRY_BASE_MSECS * 2 ** Math.min(rebroadcastAttempts, 30), RECLAIM_RETRY_MAX_MSECS)
+}
+
+type RejectedReclaimRecovery = 'not-applicable' | 'deferred' | 'retried'
+
+/**
+ * A processor may reject a reclaim even though the same anchor later becomes a
+ * conclusive UTXO again (for example, after a conflicting mempool spend is
+ * evicted). Re-submit only the already validated, pre-signed reclaim and never
+ * release its anchor or output based on a rejection response.
+ */
+async function retryRejectedReclaim(
+  storage: StorageProvider,
+  target: TableTransaction,
+  targetStatus: StatusForTxidResult['status'] | undefined
+): Promise<RejectedReclaimRecovery> {
+  if (
+    targetStatus !== 'unknown' ||
+    target.noSendExpiryObservedAt != null ||
+    target.noSendExpiryReclaimTxid == null
+  ) {
+    return 'not-applicable'
+  }
+
+  const reclaim = verifyOneOrNone(
+    await storage.findTransactions({
+      partial: { userId: target.userId, txid: target.noSendExpiryReclaimTxid }
+    })
+  )
+  const req = await EntityProvenTxReq.fromStorageTxid(storage, target.noSendExpiryReclaimTxid)
+  if (
+    reclaim?.status !== 'failed' ||
+    reclaim.provenTxId != null ||
+    req == null ||
+    (req.status !== 'invalid' && req.status !== 'doubleSpend')
+  ) {
+    return 'not-applicable'
+  }
+
+  const retryAfter = verifyTruthy(req.updated_at).getTime() + reclaimRetryDelay(req.rebroadcastAttempts)
+  if (Date.now() < retryAfter) return 'deferred'
+
+  const anchor = verifyOne(
+    await storage.findOutputs({
+      partial: {
+        userId: target.userId,
+        txid: target.noSendExpiryAnchorTxid,
+        vout: target.noSendExpiryAnchorVout
+      }
+    })
+  )
+  let anchorIsUtxo: boolean
+  try {
+    anchorIsUtxo = await storage.getServices().isUtxo(anchor)
+  } catch {
+    return 'deferred'
+  }
+  if (!anchorIsUtxo) return 'deferred'
+
+  const sendable = await storage.transaction(async trx => {
+    if (!(await storage.compareAndSetNoSendExpiryState(target.transactionId, 'reclaiming', 'reclaiming', trx))) {
+      return undefined
+    }
+    const currentTarget = verifyOne(
+      await storage.findTransactions({
+        partial: { transactionId: target.transactionId, userId: target.userId },
+        trx
+      })
+    )
+    if (
+      currentTarget.noSendExpiryState !== 'reclaiming' ||
+      currentTarget.status === 'completed' ||
+      currentTarget.provenTxId != null ||
+      currentTarget.noSendExpiryObservedAt != null ||
+      currentTarget.noSendExpiryReclaimTxid == null
+    ) {
+      return undefined
+    }
+    const currentReclaim = verifyOneOrNone(
+      await storage.findTransactions({
+        partial: { userId: currentTarget.userId, txid: currentTarget.noSendExpiryReclaimTxid },
+        trx
+      })
+    )
+    const currentReq = await EntityProvenTxReq.fromStorageTxid(storage, currentTarget.noSendExpiryReclaimTxid, trx)
+    const currentAnchor = verifyOne(
+      await storage.findOutputs({
+        partial: {
+          userId: currentTarget.userId,
+          txid: currentTarget.noSendExpiryAnchorTxid,
+          vout: currentTarget.noSendExpiryAnchorVout
+        },
+        trx
+      })
+    )
+    if (
+      currentReclaim?.status !== 'failed' ||
+      currentReclaim.provenTxId != null ||
+      currentReq == null ||
+      (currentReq.status !== 'invalid' && currentReq.status !== 'doubleSpend') ||
+      currentAnchor.spendable ||
+      currentAnchor.spentBy !== currentReclaim.transactionId
+    ) {
+      return undefined
+    }
+
+    // Generic transaction APIs deliberately prohibit un-failing a row. This
+    // narrowly scoped recovery is safe because it revives only the same signed
+    // reclaim while retaining its input reservation and quarantined output.
+    await storage.updateTransaction(currentReclaim.transactionId, { status: 'unprocessed' }, trx)
+    currentReq.status = 'unsent'
+    currentReq.attempts = 0
+    currentReq.rebroadcastAttempts = currentReq.rebroadcastAttempts + 1
+    currentReq.notified = false
+    currentReq.addHistoryNote({
+      what: 'brc177-reclaim-retry',
+      targetTxid: currentTarget.txid,
+      retry: currentReq.rebroadcastAttempts
+    })
+    await currentReq.updateStorageDynamicProperties(storage, trx)
+    return currentReq
+  })
+  if (sendable == null) return 'deferred'
+
+  await storage.attemptToPostReqsToNetwork([sendable]).catch(() => undefined)
+  return 'retried'
+}
+
 async function processReclaimRace(
   storage: StorageProvider,
   transaction: TableTransaction,
@@ -565,7 +698,14 @@ async function processReclaimRace(
   if (isKnownOrMined(targetStatus) && (await noteTargetObservedDuringRace(storage, transaction))) {
     result.observed++
   }
-  recordRaceResult(result, await reconcileRace(storage, transaction))
+  const race = await reconcileRace(storage, transaction)
+  if (race !== 'deferred') {
+    recordRaceResult(result, race)
+    return
+  }
+  const recovery = await retryRejectedReclaim(storage, transaction, targetStatus)
+  if (recovery === 'retried') result.reclaimRetried++
+  else result.deferred++
 }
 
 async function processObservationOrRace(

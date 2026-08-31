@@ -18,9 +18,10 @@ attention to changes that materially alter behavior or extend functionality.
   accepted transaction, contain no wallet change, and retain a pre-signed
   reclaim across restarts, synchronized storage, devices, and keyless remote
   monitors. Atomic lifecycle transitions, active-storage ownership,
-  fail-closed status checks, quarantined race outputs, and locally validated
-  proof finality prevent duplicate reclaim activation and unsafe state
-  regression. Wallet Permissions Manager authorizes module use and spending
+  fail-closed status checks, backoff-controlled recovery of terminally rejected
+  reclaims, quarantined race outputs, and locally validated proof finality
+  prevent duplicate reclaim activation and unsafe state regression. Wallet
+  Permissions Manager authorizes module use and spending
   before prefunding, attributes the funding fee to the requesting originator,
   and rechecks the current monthly ledger before releasing the protected
   action. Existing actions and ordinary `noSend` calls are unchanged. The

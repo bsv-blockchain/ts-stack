@@ -516,6 +516,112 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('a terminally rejected reclaim retries once after backoff when chain evidence is safe', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      let target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+
+      const initialPost = jest
+        .spyOn(ctx.active, 'attemptToPostReqsToNetwork')
+        .mockRejectedValueOnce(new Error('processor disconnected before submission'))
+      await processNoSendExpiryLifecycle(ctx.active)
+      initialPost.mockRestore()
+
+      target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      const reclaim = verifyOne(
+        await ctx.active.findTransactions({ partial: { txid: target.noSendExpiryReclaimTxid } })
+      )
+      const req = verifyOne(await ctx.active.findProvenTxReqs({ partial: { txid: target.noSendExpiryReclaimTxid } }))
+      await ctx.active.updateTransactionStatus('failed', reclaim.transactionId)
+      await ctx.active.updateProvenTxReq(req.provenTxReqId, { status: 'invalid' })
+
+      const backedOff = await processNoSendExpiryLifecycle(ctx.active)
+      expect(backedOff).toMatchObject({ reclaimRetried: 0, deferred: 1 })
+      expect(
+        verifyOne(await ctx.active.findTransactions({ partial: { transactionId: reclaim.transactionId } })).status
+      ).toBe('failed')
+
+      await ctx.active.updateProvenTxReq(req.provenTxReqId, {
+        updated_at: new Date(Date.now() - 31_000)
+      })
+      const spentAnchor = jest.spyOn(services, 'isUtxo').mockResolvedValueOnce(false)
+      const stillConflicted = await processNoSendExpiryLifecycle(ctx.active)
+      spentAnchor.mockRestore()
+      expect(stillConflicted).toMatchObject({ reclaimRetried: 0, deferred: 1 })
+
+      const retries = await Promise.all([
+        processNoSendExpiryLifecycle(ctx.active),
+        processNoSendExpiryLifecycle(ctx.active)
+      ])
+      expect(retries.reduce((sum, run) => sum + run.reclaimRetried, 0)).toBe(1)
+      expect(await services.storage.getTransaction(target.noSendExpiryReclaimTxid!)).toBeDefined()
+
+      const retriedReclaim = verifyOne(
+        await ctx.active.findTransactions({ partial: { transactionId: reclaim.transactionId } })
+      )
+      const retriedReq = verifyOne(await ctx.active.findProvenTxReqs({ partial: { provenTxReqId: req.provenTxReqId } }))
+      const anchor = verifyOne(
+        await ctx.active.findOutputs({
+          partial: {
+            userId: target.userId,
+            txid: target.noSendExpiryAnchorTxid,
+            vout: target.noSendExpiryAnchorVout
+          }
+        })
+      )
+      const reclaimOutput = verifyOne(
+        await ctx.active.findOutputs({ partial: { transactionId: reclaim.transactionId, vout: 0 } })
+      )
+      expect(retriedReclaim.status).toBe('unproven')
+      expect(retriedReq.status).toBe('unmined')
+      expect(retriedReq.rebroadcastAttempts).toBe(1)
+      expect(anchor).toMatchObject({ spendable: false, spentBy: reclaim.transactionId })
+      expect(reclaimOutput.spendable).toBe(false)
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  })
+
+  test('a rejected reclaim never resumes after any target-broadcast observation', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      let target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const initialPost = jest
+        .spyOn(ctx.active, 'attemptToPostReqsToNetwork')
+        .mockRejectedValueOnce(new Error('processor disconnected before submission'))
+      await processNoSendExpiryLifecycle(ctx.active)
+      initialPost.mockRestore()
+
+      target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      const reclaim = verifyOne(
+        await ctx.active.findTransactions({ partial: { txid: target.noSendExpiryReclaimTxid } })
+      )
+      const req = verifyOne(await ctx.active.findProvenTxReqs({ partial: { txid: target.noSendExpiryReclaimTxid } }))
+      await ctx.active.updateTransactionStatus('failed', reclaim.transactionId)
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryObservedAt: Date.now() })
+      await ctx.active.updateProvenTxReq(req.provenTxReqId, {
+        status: 'invalid',
+        updated_at: new Date(Date.now() - 31_000)
+      })
+
+      const isUtxo = jest.spyOn(services, 'isUtxo')
+      const run = await processNoSendExpiryLifecycle(ctx.active)
+      expect(run).toMatchObject({ reclaimRetried: 0, deferred: 1 })
+      expect(isUtxo).not.toHaveBeenCalled()
+      expect(
+        verifyOne(await ctx.active.findTransactions({ partial: { transactionId: reclaim.transactionId } })).status
+      ).toBe('failed')
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  })
+
   test('unsigned expiry survives restart semantics and releases the anchor without broadcasting', async () => {
     const ctx = await createHarness()
     try {
@@ -790,6 +896,29 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('arming rejects a blockheight deadline reached after reclaim signature validation', async () => {
+    const ctx = await createHarness()
+    try {
+      const height = await services.getHeight()
+      const arm = ctx.storage.armNoSendExpiry.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'armNoSendExpiry').mockImplementationOnce(async args => {
+        const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+        await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: height })
+        return await arm(args)
+      })
+
+      await expect(
+        ctx.wallet.createAction({
+          ...protectedArgs(3600),
+          labels: [`p nosend expiry blockheight ${height + 10}`]
+        })
+      ).rejects.toThrow('expired before it could be armed')
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  })
+
   test('signAction cannot release an armed transaction at or after its deadline', async () => {
     const ctx = await createHarness()
     try {
@@ -805,6 +934,36 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       expect(unchanged.noSendExpiryState).toBe('unsigned')
       expect(unchanged.txid).toBeUndefined()
     } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('signAction binds its observed blockheight to the row revalidated by the release CAS', async () => {
+    const ctx = await createHarness()
+    try {
+      const height = await services.getHeight()
+      const created = await ctx.wallet.createAction({
+        ...protectedArgs(3600, false),
+        labels: [`p nosend expiry blockheight ${height + 10}`]
+      })
+      const reference = created.signableTransaction!.reference
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference } }))
+      const getHeight = services.getHeight.bind(services)
+      jest.spyOn(services, 'getHeight').mockImplementationOnce(async () => {
+        const observed = await getHeight()
+        await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: observed })
+        return observed
+      })
+
+      await expect(ctx.wallet.signAction({ reference, spends: {}, options: { noSend: true } })).rejects.toThrow(
+        'expired before signature release'
+      )
+      expect(
+        verifyOne(await ctx.active.findTransactions({ partial: { transactionId: target.transactionId } }))
+          .noSendExpiryState
+      ).toBe('unsigned')
+    } finally {
+      jest.restoreAllMocks()
       await ctx.destroy()
     }
   })

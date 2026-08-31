@@ -551,9 +551,17 @@ async function commitNewTxToStorage(
 ): Promise<CommitNewTxResults> {
   let log = vargs.log
 
-  const blockheightExpired = vargs.transaction.noSendExpiryState != null &&
-    vargs.transaction.noSendExpiryMode === 'blockheight' &&
-    (await storage.getServices().getHeight()) >= verifyInteger(vargs.transaction.noSendExpiryDeadline)
+  // The chain tip and the storage transaction cannot share one atomic
+  // transaction, particularly for IndexedDB where awaiting network I/O may
+  // auto-commit the write transaction. Capture the wallet's canonical height
+  // immediately before the write transaction and bind that exact observation
+  // to the row revalidated under the lifecycle CAS below.
+  const observedBlockheight =
+    vargs.transaction.noSendExpiryState != null && vargs.transaction.noSendExpiryMode === 'blockheight'
+      ? await storage.getServices().getHeight()
+      : undefined
+  const blockheightExpired =
+    observedBlockheight != null && observedBlockheight >= verifyInteger(vargs.transaction.noSendExpiryDeadline)
   if (blockheightExpired) {
     throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
   }
@@ -573,10 +581,12 @@ async function commitNewTxToStorage(
       if (current.noSendExpiryState !== 'unsigned') {
         throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
       }
-      if (current.noSendExpiryMode !== 'blockheight' &&
-        Math.floor(Date.now() / 1000) >= verifyInteger(current.noSendExpiryDeadline)) {
-        throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
-      }
+      const deadline = verifyInteger(current.noSendExpiryDeadline)
+      const expired =
+        current.noSendExpiryMode === 'blockheight'
+          ? observedBlockheight == null || observedBlockheight >= deadline
+          : Math.floor(Date.now() / 1000) >= deadline
+      if (expired) throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
       if (!await storage.compareAndSetNoSendExpiryState(current.transactionId, 'unsigned', 'signed', trx)) {
         throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
       }

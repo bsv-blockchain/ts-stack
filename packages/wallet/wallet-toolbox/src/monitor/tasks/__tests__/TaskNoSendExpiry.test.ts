@@ -58,6 +58,7 @@ describe('TaskNoSendExpiry', () => {
       cancelled: 0,
       observed: 0,
       reclaimActivated: 0,
+      reclaimRetried: 0,
       reclaimed: 0,
       targetWon: 0,
       deferred: 0,
@@ -74,13 +75,14 @@ describe('TaskNoSendExpiry', () => {
       cancelled: 1,
       observed: 2,
       reclaimActivated: 3,
+      reclaimRetried: 4,
       reclaimed: 4,
       targetWon: 5,
       deferred: 6,
       errors: 1
     })
     await expect(second.task.runTask()).resolves.toBe(
-      'BRC-177 inspected=7 cancelled=1 observed=2 activated=3 reclaimed=4 targetWon=5 deferred=6 errors=1\n'
+      'BRC-177 inspected=7 cancelled=1 observed=2 activated=3 retried=4 reclaimed=4 targetWon=5 deferred=6 errors=1\n'
     )
   })
 })

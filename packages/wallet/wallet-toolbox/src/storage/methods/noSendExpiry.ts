@@ -4,6 +4,7 @@ import {
   StorageActivateNoSendExpiryArgs,
   StorageActivateNoSendExpiryResult,
   StorageArmNoSendExpiryArgs,
+  StorageCreateTransactionSdkOutput,
   StoragePrepareNoSendExpiryResult,
   TrxToken
 } from '../../sdk/WalletStorage.interfaces'
@@ -65,6 +66,27 @@ export function makeNoSendExpiryFundingArgs(
   }) as Brc177ValidCreateActionArgs
   args.brc177 = { kind: 'funding', anchorSatoshis }
   return args
+}
+
+export function selectNoSendExpiryFundingAnchor(
+  outputs: StorageCreateTransactionSdkOutput[],
+  anchorSatoshis: number
+): StorageCreateTransactionSdkOutput {
+  const anchors = outputs.filter(
+    output => output.providedBy === 'storage' && output.purpose === 'change' && output.satoshis === anchorSatoshis
+  )
+  // Required outputs precede generated change when randomization is disabled.
+  // Select by the exact amount and fixed-output vout rather than response-array
+  // order. An ordinary generated change output can coincidentally have the same
+  // amount, so requiring amount uniqueness would reject a valid funding plan.
+  const anchor = anchors.reduce<(typeof anchors)[number] | undefined>(
+    (selected, output) => (selected == null || output.vout < selected.vout ? output : selected),
+    undefined
+  )
+  if (anchor == null) {
+    throw new WERR_INVALID_OPERATION('BRC-177 funding plan did not contain its exact revocation anchor')
+  }
+  return anchor
 }
 
 function feeForSize(storage: StorageProvider, size: number, minimumSatsPerKb = 0): number {
@@ -135,10 +157,7 @@ export async function prepareNoSendExpiry(
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
   const funding = await createAction(storage, auth, fundingArgs)
-  const anchor = funding.outputs.find(output => output.providedBy === 'storage' && output.purpose === 'change')
-  if (anchor?.satoshis !== anchorSatoshis) {
-    throw new WERR_INVALID_OPERATION('BRC-177 funding plan did not contain its exact revocation anchor')
-  }
+  const anchor = selectNoSendExpiryFundingAnchor(funding.outputs, anchorSatoshis)
   return {
     funding,
     anchorSatoshis,
@@ -353,7 +372,9 @@ async function validateArmSnapshot(
   reference: string,
   args: StorageArmNoSendExpiryArgs,
   reclaim: Transaction,
-  trx?: TrxToken
+  trx?: TrxToken,
+  observedBlockheight?: number,
+  enforceBlockheight = false
 ): Promise<TableTransaction> {
   const target = verifyOne(
     await storage.findTransactions({
@@ -372,8 +393,11 @@ async function validateArmSnapshot(
   ) {
     throw new WERR_INVALID_OPERATION('BRC-177 action metadata is incomplete')
   }
-  const now = Math.floor(Date.now() / 1000)
-  if (target.noSendExpiryMode !== 'blockheight' && target.noSendExpiryDeadline <= now) {
+  const expired =
+    target.noSendExpiryMode === 'blockheight'
+      ? enforceBlockheight && (observedBlockheight == null || observedBlockheight >= target.noSendExpiryDeadline)
+      : target.noSendExpiryDeadline <= Math.floor(Date.now() / 1000)
+  if (expired) {
     throw new WERR_INVALID_OPERATION('BRC-177 action expired before it could be armed')
   }
   const anchor = verifyOne(
@@ -407,9 +431,22 @@ export async function armNoSendExpiry(
   // the atomic section before publishing the armed state.
   const snapshot = await validateArmSnapshot(storage, userId, args.reference, args, reclaim)
   await verifyReclaimSignature(storage, snapshot, rawTx, args.reclaimTxid)
+  // Keep chain I/O outside the IndexedDB write transaction, but carry the
+  // freshest observed height into the atomic snapshot/CAS validation.
+  const observedBlockheight =
+    snapshot.noSendExpiryMode === 'blockheight' ? await storage.getServices().getHeight() : undefined
 
   await storage.transaction(async trx => {
-    const target = await validateArmSnapshot(storage, userId, args.reference, args, reclaim, trx)
+    const target = await validateArmSnapshot(
+      storage,
+      userId,
+      args.reference,
+      args,
+      reclaim,
+      trx,
+      observedBlockheight,
+      true
+    )
     if (!(await storage.compareAndSetNoSendExpiryState(target.transactionId, 'preparing', 'unsigned', trx))) {
       throw new WERR_INVALID_OPERATION('BRC-177 action changed before it could be armed')
     }

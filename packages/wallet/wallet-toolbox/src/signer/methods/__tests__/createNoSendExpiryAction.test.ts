@@ -1,6 +1,10 @@
 import { Validation } from '@bsv/sdk'
 import { targetForStorage } from '../createNoSendExpiryAction'
-import { makeNoSendExpiryFundingArgs, validateNoSendExpiryRequest } from '../../../storage/methods/noSendExpiry'
+import {
+  makeNoSendExpiryFundingArgs,
+  selectNoSendExpiryFundingAnchor,
+  validateNoSendExpiryRequest
+} from '../../../storage/methods/noSendExpiry'
 
 describe('createNoSendExpiryAction storage boundary', () => {
   test('keeps unlocking scripts and logger objects on the signer side', () => {
@@ -52,6 +56,28 @@ describe('createNoSendExpiryAction storage boundary', () => {
 
     expect(funding.labels).toEqual(['admin brc177 funding', 'admin originator app.example', 'admin month 2026-08'])
     expect(makeNoSendExpiryFundingArgs(5001).labels).toEqual(['admin brc177 funding'])
+  })
+
+  test('selects the fixed exact-value anchor independently of result ordering and equal-value change', () => {
+    const output = (vout: number, satoshis: number, purpose = 'change') => ({
+      vout,
+      satoshis,
+      providedBy: 'storage' as const,
+      purpose,
+      lockingScript: '',
+      outputDescription: '',
+      tags: []
+    })
+    const generatedCollision = output(7, 5001)
+    const fixedAnchor = output(1, 5001)
+    const serviceCharge = output(0, 5001, 'storage-commission')
+
+    expect(
+      selectNoSendExpiryFundingAnchor([generatedCollision, serviceCharge, fixedAnchor, output(8, 99)], 5001)
+    ).toBe(fixedAnchor)
+    expect(() => selectNoSendExpiryFundingAnchor([serviceCharge, output(2, 99)], 5001)).toThrow(
+      'exact revocation anchor'
+    )
   })
 
   test.each([

@@ -83,9 +83,14 @@ reclaim output remains unavailable for wallet funding until a locally
 validated Merkle proof establishes that the reclaim won. A processor rejection
 does not release the anchor: the lifecycle remains quarantined for proof
 reconciliation because another submission may already have reached the network.
-A conclusive spent-anchor verdict is likewise quarantined; if the conflicting
-spend later disappears, reclaim resumes only after fresh explicit `unknown`
-target and unspent-anchor verdicts.
+If the reclaim was terminally rejected, the target has never been observed, and
+later checks still report the target as explicitly `unknown` and the anchor as
+conclusively unspent, the monitor revives and resubmits that same pre-signed
+reclaim after a persistent exponential backoff (30 seconds, doubling to one
+hour). It never creates a different spend or releases the anchor during
+recovery. A conclusive spent-anchor verdict is likewise quarantined; if the
+conflicting spend later disappears, reclaim resumes only after fresh explicit
+`unknown` target and unspent-anchor verdicts.
 
 Seeing the protected transaction as known or mined permanently stops a new
 reclaim and moves it into ordinary proof tracking. If a reclaim was already
@@ -93,6 +98,28 @@ submitted when the target appears, the monitor stops further reclaim retries
 but retains both transactions for proof tracking. Only a locally validated
 proof finalizes either winner. A processor status by itself is never reported
 as final.
+
+An observed target's `broadcast` state is intentionally sticky: BRC-177 makes
+expiry a deadline for broadcast, not confirmation, so an automatic timeout
+must not later double-spend a target that a recipient submitted on time. If an
+operator establishes that `known` was a status-provider false positive, recovery
+is therefore an explicit, security-sensitive repair rather than a timer:
+
+1. stop every monitor and storage writer and snapshot each synchronized store;
+2. verify independently that neither target nor reclaim has a validated proof,
+   that trusted services report the target `unknown`, and that the anchor is an
+   unspent output on the canonical chain;
+3. remove or repair the provider that produced the false observation;
+4. change only the protected row's lifecycle from `broadcast` to `conflicted`
+   in the active store and every synchronized copy, leaving transaction status,
+   request records, `spentBy`, and output spendability untouched; and
+5. restart exactly one authoritative monitor and retain the snapshot until the
+   resulting race is proven.
+
+A stale synchronized copy still carrying the higher-ranked `broadcast` state
+can restore it during merge, so all copies must be repaired together. If any
+proof or anchor-spend evidence is ambiguous, do not reset the lifecycle; repair
+status/proof services and let ordinary reconciliation remain fail-closed.
 
 `abortAction` cancels an unreleased action locally. For a released action it
 durably requests immediate revocation through the same guarded reclaim path;

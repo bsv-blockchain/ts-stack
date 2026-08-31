@@ -41,7 +41,8 @@ export class TaskNoSendExpiry extends WalletMonitorTask {
     if (result.inspected === 0) return ''
     return (
       `BRC-177 inspected=${result.inspected} cancelled=${result.cancelled} observed=${result.observed} ` +
-      `activated=${result.reclaimActivated} reclaimed=${result.reclaimed} targetWon=${result.targetWon} ` +
+      `activated=${result.reclaimActivated} retried=${result.reclaimRetried} ` +
+      `reclaimed=${result.reclaimed} targetWon=${result.targetWon} ` +
       `deferred=${result.deferred} errors=${result.errors}\n`
     )
   }
