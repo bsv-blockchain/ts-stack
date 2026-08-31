@@ -197,6 +197,50 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     } as const
   }
 
+  async function expectArmFailure(
+    mutate: (
+      ctx: WalletHarness,
+      args: Parameters<WalletStorageManager['armNoSendExpiry']>[0]
+    ) =>
+      | Parameters<WalletStorageManager['armNoSendExpiry']>[0]
+      | Promise<Parameters<WalletStorageManager['armNoSendExpiry']>[0]>,
+    message: string
+  ): Promise<void> {
+    const ctx = await createHarness()
+    try {
+      const arm = ctx.storage.armNoSendExpiry.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'armNoSendExpiry').mockImplementationOnce(async args => {
+        return await arm(await mutate(ctx, args))
+      })
+      await expect(ctx.wallet.createAction(protectedArgs(3600))).rejects.toThrow(message)
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  }
+
+  async function expectActivationFailure(
+    mutate: (
+      ctx: WalletHarness,
+      args: Parameters<WalletStorageManager['activateNoSendExpiry']>[0]
+    ) =>
+      | Parameters<WalletStorageManager['activateNoSendExpiry']>[0]
+      | Promise<Parameters<WalletStorageManager['activateNoSendExpiry']>[0]>,
+    message: string
+  ): Promise<void> {
+    const ctx = await createHarness()
+    try {
+      const activate = ctx.storage.activateNoSendExpiry.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'activateNoSendExpiry').mockImplementationOnce(async args => {
+        return await activate(await mutate(ctx, args))
+      })
+      await expect(ctx.wallet.createAction(protectedArgs(3600))).rejects.toThrow(message)
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  }
+
   test('pre-funds, releases noSend, atomically reclaims, and finalizes after proof', async () => {
     const ctx = await createHarness()
     try {
@@ -586,6 +630,135 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('signAction cannot weaken the protected noSend release policy', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600, false))
+      const reference = created.signableTransaction!.reference
+
+      await expect(
+        ctx.wallet.signAction({
+          reference,
+          spends: {},
+          options: { noSend: true, sendWith: ['03'.repeat(32)] }
+        })
+      ).rejects.toThrow('options.sendWith')
+      await expect(
+        ctx.wallet.signAction({ reference, spends: {}, options: { noSend: true, returnTXIDOnly: true } })
+      ).rejects.toThrow('options.returnTXIDOnly')
+
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference } }))
+      expect(target.noSendExpiryState).toBe('unsigned')
+      await expect(ctx.wallet.abortAction({ reference })).resolves.toEqual({ aborted: true })
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('rejects corrupted activation state before constructing a protected transaction', async () => {
+    await expectActivationFailure(
+      (_ctx, args) => ({ ...args, target: { ...args.target, labels: [] } }),
+      'BRC-177 noSend expiry label'
+    )
+    await expectActivationFailure(async (ctx, args) => {
+      const funding = verifyOne(await ctx.active.findTransactions({ partial: { txid: args.fundingTxid } }))
+      await ctx.active.updateTransaction(funding.transactionId, { status: 'failed' })
+      return args
+    }, 'funding transaction was not accepted')
+    await expectActivationFailure(async (ctx, args) => {
+      const anchor = verifyOne(
+        await ctx.active.findOutputs({ partial: { txid: args.fundingTxid, vout: args.anchorVout } })
+      )
+      await ctx.active.updateOutput(anchor.outputId, { spendable: false })
+      return args
+    }, 'anchor is not available')
+    await expectActivationFailure(async (ctx, args) => {
+      const anchor = verifyOne(
+        await ctx.active.findOutputs({ partial: { txid: args.fundingTxid, vout: args.anchorVout } })
+      )
+      await ctx.active.updateOutput(anchor.outputId, { satoshis: anchor.satoshis + 1 })
+      return args
+    }, 'no longer exactly funds')
+    await expectActivationFailure(
+      (_ctx, args) => ({
+        ...args,
+        target: {
+          ...args.target,
+          labels: [`p nosend expiry timestamp ${Math.floor(Date.now() / 1000) - 1}`]
+        }
+      }),
+      'timestamp later than the current time'
+    )
+    await expectActivationFailure(
+      async (_ctx, args) => ({
+        ...args,
+        target: { ...args.target, labels: [`p nosend expiry blockheight ${await services.getHeight()}`] }
+      }),
+      'blockheight later than the current best-chain height'
+    )
+    await expectActivationFailure(
+      (_ctx, args) => ({
+        ...args,
+        target: { ...args.target, labels: [`p nosend expiry seconds ${Number.MAX_SAFE_INTEGER}`] }
+      }),
+      'safely schedulable'
+    )
+  })
+
+  test('rejects malformed or stale pre-signed reclaim material before arming', async () => {
+    await expectArmFailure((_ctx, args) => ({ ...args, reclaimDerivationPrefix: '***' }), '16-byte base64')
+    await expectArmFailure(
+      (_ctx, args) => ({ ...args, reclaimDerivationPrefix: Utils.toBase64([1]) }),
+      'canonical 16-byte base64'
+    )
+    await expectArmFailure((_ctx, args) => ({ ...args, reclaimRawTx: Array(1001).fill(0) }), 'at most 1000 bytes')
+    await expectArmFailure(
+      (_ctx, args) => ({ ...args, reclaimRawTx: [1, 0, 0, 0, 1] }),
+      'valid serialized reclaim transaction'
+    )
+    await expectArmFailure((_ctx, args) => {
+      const rawTx = [...asArray(args.reclaimRawTx), 0]
+      return { ...args, reclaimRawTx: rawTx, reclaimTxid: Transaction.fromBinary(rawTx).id('hex') }
+    }, 'valid signature for the revocation anchor')
+    await expectArmFailure((_ctx, args) => ({ ...args, reclaimTxid: '00'.repeat(32) }), 'hash of reclaimRawTx')
+    await expectArmFailure(
+      (_ctx, args) => ({ ...args, reclaimSatoshis: args.reclaimSatoshis - 1 }),
+      'exact BRC-177 reclaim amount'
+    )
+    await expectArmFailure((_ctx, args) => {
+      const reclaim = Transaction.fromBinary(asArray(args.reclaimRawTx))
+      reclaim.outputs[0].lockingScript = Script.fromHex('51')
+      return {
+        ...args,
+        reclaimRawTx: reclaim.toUint8Array(),
+        reclaimTxid: reclaim.id('hex')
+      }
+    }, 'canonical P2PKH')
+    await expectArmFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryState: 'signed' })
+      return args
+    }, 'not waiting to be armed')
+    await expectArmFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryAnchorTxid: undefined })
+      return args
+    }, 'metadata is incomplete')
+    await expectArmFailure(async (ctx, args) => {
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { reference: args.reference } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      return args
+    }, 'expired before it could be armed')
+    await expectArmFailure((ctx, args) => {
+      jest.spyOn(ctx.active, 'getRawTxOfKnownValidTransaction').mockResolvedValue(undefined)
+      return args
+    }, 'anchor source transaction is unavailable')
+    await expectArmFailure((ctx, args) => {
+      jest.spyOn(ctx.active, 'compareAndSetNoSendExpiryState').mockResolvedValueOnce(false)
+      return args
+    }, 'changed before it could be armed')
+  })
+
   test('service ambiguity defers reclaim and malformed option combinations fail before pre-funding', async () => {
     const ctx = await createHarness()
     try {
@@ -675,6 +848,20 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       ).rejects.toThrow('safely schedulable')
       expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
+      await expect(
+        ctx.wallet.createAction({
+          ...protectedArgs(3600),
+          outputs: [
+            {
+              satoshis: 1,
+              lockingScript: '51',
+              outputDescription: 'Too-small protected recipient output'
+            }
+          ]
+        })
+      ).rejects.toThrow('leaves at least')
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
+
       const created = await ctx.wallet.createAction(protectedArgs(3600))
       const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
       await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
@@ -746,6 +933,37 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       expect(run).toMatchObject({ inspected: 2, reclaimActivated: 1, deferred: 1, errors: 1 })
       expect(await services.storage.getTransaction(malformedTarget.noSendExpiryReclaimTxid!)).toBeUndefined()
       expect(await services.storage.getTransaction(healthyTarget.noSendExpiryReclaimTxid!)).toBeDefined()
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('incomplete and undated lifecycle records fail closed without throwing from the monitor pass', async () => {
+    const ctx = await createHarness()
+    try {
+      const incomplete = await ctx.wallet.createAction(protectedArgs(3600))
+      const missingDeadline = await ctx.wallet.createAction(protectedArgs(3600))
+      const incompleteTarget = verifyOne(await ctx.active.findTransactions({ partial: { txid: incomplete.txid } }))
+      const missingDeadlineTarget = verifyOne(
+        await ctx.active.findTransactions({ partial: { txid: missingDeadline.txid } })
+      )
+      await ctx.active.updateTransaction(incompleteTarget.transactionId, {
+        noSendExpiryDeadline: 0,
+        noSendExpiryReclaimRawTx: null as any
+      })
+      await ctx.active.updateTransaction(missingDeadlineTarget.transactionId, {
+        noSendExpiryDeadline: null as any
+      })
+
+      const run = await processNoSendExpiryLifecycle(ctx.active)
+
+      expect(run).toMatchObject({ inspected: 2, reclaimActivated: 0, deferred: 1, errors: 1 })
+      expect(await services.storage.getTransaction(incompleteTarget.noSendExpiryReclaimTxid!)).toBeUndefined()
+      expect(
+        verifyOne(
+          await ctx.active.findTransactions({ partial: { transactionId: missingDeadlineTarget.transactionId } })
+        ).noSendExpiryState
+      ).toBe('signed')
     } finally {
       await ctx.destroy()
     }

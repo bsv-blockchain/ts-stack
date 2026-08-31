@@ -15,7 +15,9 @@ describe('BRC-177 noSend expiry labels', () => {
   })
 
   test('ignores labels outside the reserved module', () => {
+    expect(parseBrc177NoSendExpiryLabels(undefined)).toBeUndefined()
     expect(parseBrc177NoSendExpiryLabels(['application label'])).toBeUndefined()
+    expect(hasBrc177NoSendExpiryLabel(undefined)).toBe(false)
     expect(hasBrc177NoSendExpiryLabel(['application label'])).toBe(false)
   })
 
@@ -41,10 +43,20 @@ describe('BRC-177 noSend expiry labels', () => {
   })
 
   test('orders synchronized lifecycle states without allowing unsafe regression', () => {
-    expect(brc177NoSendExpiryStateRank('cancelled')).toBeGreaterThan(brc177NoSendExpiryStateRank('unsigned'))
-    expect(brc177NoSendExpiryStateRank('signed')).toBeGreaterThan(brc177NoSendExpiryStateRank('cancelled'))
-    expect(brc177NoSendExpiryStateRank('revocation-requested')).toBeGreaterThan(brc177NoSendExpiryStateRank('signed'))
-    expect(brc177NoSendExpiryStateRank('reclaiming')).toBeGreaterThan(brc177NoSendExpiryStateRank('broadcast'))
-    expect(brc177NoSendExpiryStateRank('target-won')).toBeGreaterThan(brc177NoSendExpiryStateRank('reclaimed'))
+    expect(
+      [
+        undefined,
+        'preparing',
+        'unsigned',
+        'cancelled',
+        'signed',
+        'revocation-requested',
+        'conflicted',
+        'broadcast',
+        'reclaiming',
+        'reclaimed',
+        'target-won'
+      ].map(state => brc177NoSendExpiryStateRank(state as any))
+    ).toEqual([-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
   })
 })

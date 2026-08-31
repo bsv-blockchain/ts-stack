@@ -1,6 +1,6 @@
 import { Validation } from '@bsv/sdk'
 import { targetForStorage } from '../createNoSendExpiryAction'
-import { makeNoSendExpiryFundingArgs } from '../../../storage/methods/noSendExpiry'
+import { makeNoSendExpiryFundingArgs, validateNoSendExpiryRequest } from '../../../storage/methods/noSendExpiry'
 
 describe('createNoSendExpiryAction storage boundary', () => {
   test('keeps unlocking scripts and logger objects on the signer side', () => {
@@ -51,5 +51,35 @@ describe('createNoSendExpiryAction storage boundary', () => {
     ])
 
     expect(funding.labels).toEqual(['admin brc177 funding', 'admin originator app.example', 'admin month 2026-08'])
+    expect(makeNoSendExpiryFundingArgs(5001).labels).toEqual(['admin brc177 funding'])
+  })
+
+  test.each([
+    [{ outputs: [] }, 'outputs'],
+    [{ options: { noSend: false } }, 'options.noSend'],
+    [{ options: { sendWith: ['01'.repeat(32)] } }, 'options.sendWith'],
+    [{ options: { noSendChange: [{ txid: '02'.repeat(32), vout: 0 }] } }, 'options.noSendChange'],
+    [{ options: { returnTXIDOnly: true } }, 'options.returnTXIDOnly']
+  ])('rejects invalid protected action shape %#', (override, parameter) => {
+    const valid = Validation.validateCreateActionArgs({
+      description: 'protected action',
+      labels: ['p nosend expiry seconds 30'],
+      outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'recipient' }],
+      options: { noSend: true }
+    })
+    const args = {
+      ...valid,
+      ...override,
+      options: { ...valid.options, ...('options' in override ? override.options : {}) }
+    }
+    expect(() => validateNoSendExpiryRequest(args as Validation.ValidCreateActionArgs)).toThrow(parameter)
+  })
+
+  test('leaves an ordinary valid action outside BRC-177', () => {
+    const args = Validation.validateCreateActionArgs({
+      description: 'ordinary action',
+      outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'recipient' }]
+    })
+    expect(validateNoSendExpiryRequest(args)).toBeUndefined()
   })
 })

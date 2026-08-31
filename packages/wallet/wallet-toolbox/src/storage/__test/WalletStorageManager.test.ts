@@ -26,6 +26,35 @@ describe('WalletStorageManager tests', () => {
   const kp = _tu.getKeyPair(root.repeat(8))
   const fredsAddress = kp.address
 
+  test('BRC-177 storage entry points fail closed when authority or persistence support is absent', async () => {
+    const { activeStorage: provider, storage: manager } = ctxs[0]
+    const inactive = { userId: 1, isActive: false }
+    const active = { userId: 1, isActive: true }
+
+    await expect(provider.prepareNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+    await expect(provider.activateNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+    await expect(provider.armNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+
+    const persistence = jest.spyOn(provider as any, 'supportsNoSendExpiryPersistence').mockReturnValue(false)
+    try {
+      expect(await provider.getCapabilities()).not.toHaveProperty('brc177NoSendExpiry')
+      await expect(provider.prepareNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+      await expect(provider.activateNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+      await expect(provider.armNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+    } finally {
+      persistence.mockRestore()
+    }
+
+    const writer = jest.spyOn(manager, 'runAsWriter').mockImplementation(async callback => await callback({} as any))
+    try {
+      await expect(manager.prepareNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+      await expect(manager.activateNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+      await expect(manager.armNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+    } finally {
+      writer.mockRestore()
+    }
+  })
+
   test('1_runAsReader runAsWriter runAsSync interlock correctly', async () => {
     const { storage } = await _tu.createSQLiteTestSetup1Wallet({
       databaseName: 'syncTest1'

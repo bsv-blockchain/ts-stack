@@ -105,6 +105,19 @@ describe('Transaction class method tests', () => {
     // New setters
     tx.version = 2
     tx.lockTime = 5000
+    tx.noSendExpiryMode = 'timestamp'
+    tx.noSendExpiryValue = 2_000_000_000
+    tx.noSendExpiryDeadline = 2_000_000_000
+    tx.noSendExpiryState = 'signed'
+    tx.noSendExpiryAnchorTxid = '11'.repeat(32)
+    tx.noSendExpiryAnchorVout = 1
+    tx.noSendExpiryReleasedAt = 123
+    tx.noSendExpiryObservedAt = 456
+    tx.noSendExpiryReclaimTxid = '22'.repeat(32)
+    tx.noSendExpiryReclaimRawTx = [7, 8, 9]
+    tx.noSendExpiryReclaimDerivationPrefix = 'prefix'
+    tx.noSendExpiryReclaimDerivationSuffix = 'suffix'
+    tx.noSendExpiryReclaimSatoshis = 700
 
     expect(tx.transactionId).toBe(123)
     expect(tx.userId).toBe(456)
@@ -122,6 +135,19 @@ describe('Transaction class method tests', () => {
     // Check new properties
     expect(tx.version).toBe(2) // Ensure version is set correctly
     expect(tx.lockTime).toBe(5000) // Ensure lockTime is set correctly
+    expect(tx.noSendExpiryMode).toBe('timestamp')
+    expect(tx.noSendExpiryValue).toBe(2_000_000_000)
+    expect(tx.noSendExpiryDeadline).toBe(2_000_000_000)
+    expect(tx.noSendExpiryState).toBe('signed')
+    expect(tx.noSendExpiryAnchorTxid).toBe('11'.repeat(32))
+    expect(tx.noSendExpiryAnchorVout).toBe(1)
+    expect(tx.noSendExpiryReleasedAt).toBe(123)
+    expect(tx.noSendExpiryObservedAt).toBe(456)
+    expect(tx.noSendExpiryReclaimTxid).toBe('22'.repeat(32))
+    expect(tx.noSendExpiryReclaimRawTx).toEqual([7, 8, 9])
+    expect(tx.noSendExpiryReclaimDerivationPrefix).toBe('prefix')
+    expect(tx.noSendExpiryReclaimDerivationSuffix).toBe('suffix')
+    expect(tx.noSendExpiryReclaimSatoshis).toBe(700)
   })
 
   // Test: `getBsvTx` returns parsed transaction
