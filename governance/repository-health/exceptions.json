@@ -49,7 +49,7 @@
         ".github/dependabot.yml"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-27",
       "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
@@ -96,7 +96,7 @@
       "category": "override",
       "target": "All seven standalone service manifests and the cloud-bucket notifier override transitive gaxios 6.x/7.1.3 with 7.3.0",
       "owner": "ts-stack-maintainers",
-      "reason": "Current supported Google client and OpenTelemetry dependency graphs still select gaxios releases whose obsolete rimraf/glob/minimatch chain reaches high-severity GHSA-mh99-v99m-4gvg. Selecting current gaxios 7.3.0 removes that path without changing a service's direct API; frozen locks, service tests, and hosted image builds verify compatibility.",
+      "reason": "The 2026-08-30 removal rehearsal regenerated every standalone service lock without the gaxios override. The natural Google client and OpenTelemetry graphs still select gaxios 6.7.1 or 7.1.3 rather than the governed 7.3.0 line. Retaining 7.3.0 removes the obsolete rimraf/glob/minimatch path associated with high-severity GHSA-mh99-v99m-4gvg without changing a service's direct API; frozen locks, service tests, and hosted image builds verify compatibility.",
       "evidence": [
         "governance/dependency-release-policy.json#overrideRegistry",
         "infra/*/package-lock.json",
@@ -105,7 +105,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove service by service when its complete supported Google and OpenTelemetry graph natively resolves gaxios 7.3.0 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -113,7 +113,7 @@
       "category": "override",
       "target": "Message Box, UHRP cloud-bucket, and its notifier manifests override transitive uuid releases below 11.1.1",
       "owner": "ts-stack-maintainers",
-      "reason": "The supported cloud-storage dependency closures still contain teeny-request and Google client paths that permit uuid releases affected by GHSA-w5hq-g745-h8pq. The override is retained only in the two graphs where removing it reproduces the advisory; it was deleted from the other five service manifests.",
+      "reason": "The 2026-08-30 removal rehearsal regenerated the Message Box, UHRP cloud-bucket, and notifier locks without the uuid override. Their natural teeny-request and Google client closures still resolve uuid 9.0.1, which npm audit identifies under GHSA-w5hq-g745-h8pq, instead of the reviewed 11.1.1 line. The override remains limited to those three manifests.",
       "evidence": [
         "governance/dependency-release-policy.json#overrideRegistry",
         "infra/message-box-server/package-lock.json",
@@ -124,7 +124,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove from each remaining service when its supported cloud client closure natively resolves uuid 11.1.1 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -132,7 +132,7 @@
       "category": "override",
       "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
       "owner": "ts-stack-maintainers",
-      "reason": "Stryker 9.6.1 is current but its current typed-rest-client 2.3.1 dependency pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 is the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "reason": "The workspace uses Stryker 9.6.1, and the current Stryker 10.0.0 release still depends on typed-rest-client ~2.3.0. typed-rest-client 2.3.1 pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 remains the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
@@ -140,7 +140,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-27",
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {

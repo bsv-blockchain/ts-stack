@@ -326,6 +326,16 @@
       "minimumScore": 85,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lch-cbor",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/cbor.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted BRC-170 deterministic CBOR objects crossing signature, identifier, payment, policy, and persistence boundaries",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

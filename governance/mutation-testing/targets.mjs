@@ -508,6 +508,53 @@ export function buildMutationTargets(repositoryRoot) {
         ['<rootDir>/test/codec.property.test.ts', '<rootDir>/test/primitives.test.ts'],
         { esm: true }
       )
+    },
+    'lch-cbor': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/cbor.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          'function compareBytes(',
+          'function encode('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  const entries = Object.entries(value)',
+          'export function encodeDeterministicCbor('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  private decodeMap(',
+          '  done(): boolean'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  private readLength(',
+          '  private read('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          'export function decodeDeterministicCbor(',
+          '}'
+        )
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/cbor.property.test.ts', '<rootDir>/test/cbor.test.ts'],
+        { esm: true }
+      )
     }
   }
 }

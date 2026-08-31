@@ -89,8 +89,8 @@ async function mapWithConcurrency(items, concurrency, operation) {
 }
 
 const errors = (await mapWithConcurrency(packages, 8, verifyPackage)).flat()
-if (packages.length !== 32) {
-  errors.push(`Expected 32 public npm packages, found ${packages.length}`)
+if (packages.length !== 33) {
+  errors.push(`Expected 33 public npm packages, found ${packages.length}`)
 }
 
 if (errors.length > 0) {

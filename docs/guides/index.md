@@ -3,8 +3,8 @@ id: guides-overview
 title: 'Guides'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 status: stable
 tags: [guides, tutorials, how-to]
@@ -50,12 +50,22 @@ the exact packed workspace artifacts.
 
 **Time:** ~10 minutes | **Level:** Intermediate
 
+### 6. [Build Production CHIRP and LCH Applications](./chirp-lch-production.md)
+
+Publish large verified ciphertext, license it, pay independently operated
+rights controllers, recover safely after transaction creation, and deploy the
+creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
+
+**Time:** ~45 minutes | **Level:** Advanced
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions
 2. Learn **P2P Messaging** to understand identity and authentication
 3. Explore **Overlay Node** for understanding data indexing and discovery
 4. Master **HTTP 402 Payments** to monetize your services
+5. Use **Production CHIRP and LCH Applications** for large licensed media,
+   multilateral settlement, and resilient content delivery
 
 ## Quick Links
 

@@ -3,8 +3,8 @@ id: about-versioning
 title: 'Versioning Policy'
 kind: meta
 version: '2.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [about, versioning, semver, releases]
@@ -88,7 +88,7 @@ Package documentation frontmatter versions describe the package version
 verified by that page. Cross-stack version and support facts come from the
 generated pages. The [Package API, Declarations, and Migration
 Ledger](../reference/package-api-migrations.md) is the uniform release-note
-authority for all 30 public packages, including packages that retain an
+authority for every public package, including packages that retain an
 additional historical `CHANGELOG.md`.
 
 A package change updates:

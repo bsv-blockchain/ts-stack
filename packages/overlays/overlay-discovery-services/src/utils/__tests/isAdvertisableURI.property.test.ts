@@ -20,8 +20,11 @@ const nameSegment = fc.stringMatching(/^[a-z]{1,8}$/)
 const serviceName = fc
   .tuple(fc.constantFrom('tm_', 'ls_'), fc.array(nameSegment, { minLength: 1, maxLength: 5 }))
   .map(([prefix, segments]) => `${prefix}${segments.join('_')}`)
+const asciiDnsLabel = fc
+  .stringMatching(/^[a-z][a-z0-9-]{0,12}[a-z0-9]$|^[a-z]$/)
+  .filter(label => !label.startsWith('xn--'))
 const hostname = fc
-  .array(fc.stringMatching(/^[a-z][a-z0-9-]{0,12}[a-z0-9]$|^[a-z]$/), {
+  .array(asciiDnsLabel, {
     minLength: 1,
     maxLength: 4
   })
@@ -78,6 +81,7 @@ describe('overlay discovery boundary properties', () => {
       'https://%',
       'https+bsvauth://%',
       'wss://%',
+      'https://xn--0.org',
       'https://localhost',
       'wss://localhost',
       'https://example.org/path',

@@ -27,12 +27,12 @@ describe('WhatsOnChainServices tests', () => {
 
   test('getHeaderByHash', async () => {
     const header = await woc.getHeaderByHash('000000000000000001b3e99847d57ff3e0bfc4222cea5c29f10bf24387a250a2')
-    expect(header?.height).toBe(true)
+    expect(header?.height).toBe(781348)
   })
 
   test('getChainTipHeight', async () => {
     const height = await woc.getChainTipHeight()
-    expect(height).toBeGreaterThan(true)
+    expect(height).toBeGreaterThan(600000)
   })
 
   const stopOldListenersToken: StopListenerToken = { stop: undefined }
@@ -43,7 +43,7 @@ describe('WhatsOnChainServices tests', () => {
   test.skip('0 listenForOldBlockHeaders', async () => {
     // The service this depends on appears to be deprecated...
     const height = await woc.getChainTipHeight()
-    expect(height).toBeGreaterThan(true)
+    expect(height).toBeGreaterThan(600000)
 
     const headersOld: BlockHeader[] = []
     const errorsOld: Array<{ code: number; message: string }> = []
@@ -60,7 +60,7 @@ describe('WhatsOnChainServices tests', () => {
     )
     expect(okOld).toBe(true)
     expect(errorsOld).toHaveLength(0)
-    expect(headersOld.length).toBeGreaterThanOrEqual(true)
+    expect(headersOld.length).toBeGreaterThanOrEqual(4)
   })
 
   const stopNewListenersToken: StopListenerToken = { stop: undefined }
@@ -68,7 +68,7 @@ describe('WhatsOnChainServices tests', () => {
   test.skip('1 listenForNewBlockHeaders', async () => {
     // The service this depends on appears to be deprecated...
     const height = await woc.getChainTipHeight()
-    expect(height).toBeGreaterThan(true)
+    expect(height).toBeGreaterThan(600000)
 
     // Comment out this line to just wait for next new header...
     // setTimeout(() => woc.stopNewListener(), 5000)
