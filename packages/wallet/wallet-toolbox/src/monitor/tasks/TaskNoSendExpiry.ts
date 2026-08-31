@@ -9,7 +9,11 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  */
 export class TaskNoSendExpiry extends WalletMonitorTask {
   static readonly taskName = 'NoSendExpiry'
-  static checkNow = false
+  private static checkNow = false
+
+  static requestCheck(): void {
+    TaskNoSendExpiry.checkNow = true
+  }
 
   constructor(
     monitor: Monitor,

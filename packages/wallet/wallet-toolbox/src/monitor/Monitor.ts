@@ -457,7 +457,7 @@ export class Monitor {
     // TaskCheckNoSends.checkNow flag was designed for this signal
     // (see TaskCheckNoSends.ts:22-25) but was never wired.
     TaskCheckNoSends.checkNow = true
-    TaskNoSendExpiry.checkNow = true
+    TaskNoSendExpiry.requestCheck()
   }
 
   /**

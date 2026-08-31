@@ -32,6 +32,7 @@ import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
 import { parseTxScriptOffsets, TxScriptOffsets } from '../../utility/parseTxScriptOffsets'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { TableOutput } from '../schema/tables/TableOutput'
+import { TableCommission } from '../schema/tables/TableCommission'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { WalletError } from '../../sdk/WalletError'
 import { classifyReqStatus } from '../storageProviderHelpers'
@@ -379,13 +380,14 @@ interface ValidCommitNewTxToStorageArgs {
   postStatus?: ReqTxStatus
 }
 
-async function validateCommitNewTxToStorageArgs(
-  storage: StorageProvider,
-  auth: AuthId,
-  params: StorageProcessActionArgs
-): Promise<ValidCommitNewTxToStorageArgs> {
-  const userId = verifyId(auth.userId)
-  if (!params.reference || !params.txid || params.rawTx == null) {
+function parseProcessActionTransaction(params: StorageProcessActionArgs): {
+  reference: string
+  txid: string
+  rawTx: number[]
+  tx: BsvTransaction
+} {
+  const { reference, txid } = params
+  if (!reference || !txid || params.rawTx == null) {
     throw new WERR_INVALID_OPERATION('One or more expected params are undefined.')
   }
   const rawTx = asArray(params.rawTx)
@@ -395,9 +397,66 @@ async function validateCommitNewTxToStorageArgs(
   } catch {
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
-  if (params.txid !== tx.id('hex')) {
+  if (txid !== tx.id('hex')) {
     throw new WERR_INVALID_OPERATION("Hash of serialized transaction doesn't match expected txid")
   }
+  return { reference, txid, rawTx, tx }
+}
+
+async function validateNoSendExpiryRelease(
+  storage: StorageProvider,
+  auth: AuthId,
+  params: StorageProcessActionArgs,
+  transaction: TableTransaction
+): Promise<void> {
+  if (transaction.noSendExpiryState == null) return
+  if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+  if (!params.isNoSend || params.isSendWith) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected actions must remain noSend and cannot use sendWith')
+  }
+  if (transaction.noSendExpiryState !== 'unsigned' || transaction.noSendExpiryReclaimRawTx == null) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action is not armed for signature release')
+  }
+  const deadline = verifyInteger(transaction.noSendExpiryDeadline)
+  const expired =
+    transaction.noSendExpiryMode === 'blockheight'
+      ? (await storage.getServices().getHeight()) >= deadline
+      : Math.floor(Date.now() / 1000) >= deadline
+  if (expired) throw new WERR_INVALID_OPERATION('BRC-177 protected action has expired')
+}
+
+function validatePlannedTransaction(transaction: TableTransaction): void {
+  if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
+  if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
+  if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') {
+    throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`)
+  }
+}
+
+function validateCommissionOutput(
+  storage: StorageProvider,
+  tx: BsvTransaction,
+  commissionRows: TableCommission[]
+): void {
+  if (storage.commissionSatoshis <= 0) return
+  const commission = verifyOneOrNone(commissionRows)
+  if (commission == null) throw new WERR_INTERNAL()
+  const commissionValid = tx.outputs.some(
+    output =>
+      output.satoshis === commission.satoshis && output.lockingScript.toHex() === asString(commission.lockingScript)
+  )
+  if (!commissionValid) {
+    throw new WERR_INVALID_OPERATION('Transaction did not include an output to cover service fee.')
+  }
+}
+
+async function validateCommitNewTxToStorageArgs(
+  storage: StorageProvider,
+  auth: AuthId,
+  params: StorageProcessActionArgs
+): Promise<ValidCommitNewTxToStorageArgs> {
+  const userId = verifyId(auth.userId)
+  const { reference, txid, rawTx, tx } = parseProcessActionTransaction(params)
   const services = storage.getServices()
   if (!(await services.nLockTimeIsFinal(tx))) {
     throw new WERR_INVALID_OPERATION(`This transaction is not final.
@@ -407,31 +466,11 @@ async function validateCommitNewTxToStorageArgs(
   const txScriptOffsets = parseTxScriptOffsets(rawTx)
   const transaction = verifyOne(
     await storage.findTransactions({
-      partial: { userId, reference: params.reference }
+      partial: { userId, reference }
     })
   )
-  if (transaction.noSendExpiryState != null) {
-    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
-    if (!params.isNoSend || params.isSendWith) {
-      throw new WERR_INVALID_OPERATION('BRC-177 protected actions must remain noSend and cannot use sendWith')
-    }
-    if (transaction.noSendExpiryState !== 'unsigned' || transaction.noSendExpiryReclaimRawTx == null) {
-      throw new WERR_INVALID_OPERATION('BRC-177 protected action is not armed for signature release')
-    }
-    const deadline = verifyInteger(transaction.noSendExpiryDeadline)
-    const expired = transaction.noSendExpiryMode === 'blockheight'
-      ? (await storage.getServices().getHeight()) >= deadline
-      : Math.floor(Date.now() / 1000) >= deadline
-    if (expired) {
-      throw new WERR_INVALID_OPERATION('BRC-177 protected action has expired')
-    }
-  }
-  if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
-  if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
-  // Transaction must have unsigned or unprocessed status
-  if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') {
-    throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`)
-  }
+  await validateNoSendExpiryRelease(storage, auth, params, transaction)
+  validatePlannedTransaction(transaction)
   const transactionId = verifyId(transaction.transactionId)
   // These reads are independent once the planned transaction is resolved.
   // Running them together removes two network-database round trips from every
@@ -443,19 +482,9 @@ async function validateCommitNewTxToStorageArgs(
       : Promise.resolve([])
   ])
 
-  const commission = verifyOneOrNone(commissionRows)
-  if (storage.commissionSatoshis > 0) {
-    // A commission is required...
-    if (commission == null) throw new WERR_INTERNAL()
-    const commissionValid = tx.outputs.some(
-      x => x.satoshis === commission.satoshis && x.lockingScript.toHex() === asString(commission.lockingScript)
-    )
-    if (!commissionValid) {
-      throw new WERR_INVALID_OPERATION('Transaction did not include an output to cover service fee.')
-    }
-  }
+  validateCommissionOutput(storage, tx, commissionRows)
 
-  const req = EntityProvenTxReq.fromTxid(params.txid, rawTx, transaction.inputBEEF)
+  const req = EntityProvenTxReq.fromTxid(txid, rawTx, transaction.inputBEEF)
   req.addNotifyTransactionId(transactionId)
 
   // "Processing" a transaction is the final step of creating a new one.
@@ -474,8 +503,8 @@ async function validateCommitNewTxToStorageArgs(
 
   req.status = status.req
   const vargs: ValidCommitNewTxToStorageArgs = {
-    reference: params.reference,
-    txid: params.txid,
+    reference,
+    txid,
     rawTx,
     isSendWith: !!params.sendWith && params.sendWith.length > 0,
     isDelayed: params.isDelayed,
@@ -490,7 +519,7 @@ async function validateCommitNewTxToStorageArgs(
     outputUpdates: [],
     // update txid, status in transactions table and drop rawTransaction value
     transactionUpdate: {
-      txid: params.txid,
+      txid,
       rawTx: undefined,
       inputBEEF: undefined,
       status: status.tx

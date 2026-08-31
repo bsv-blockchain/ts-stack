@@ -215,7 +215,7 @@ async function noteTargetObservedDuringRace(storage: StorageProvider, transactio
     }
     if (current.txid != null) {
       const req = await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
-      if (req != null && req.status === 'nosend') {
+      if (req?.status === 'nosend') {
         req.status = 'unmined'
         req.addHistoryNote({ what: 'brc177-target-observed-during-reclaim-race' })
         await req.updateStorageDynamicProperties(storage, trx)
@@ -550,6 +550,24 @@ function isKnownOrMined(status: StatusForTxidResult['status'] | undefined): bool
   return status === 'known' || status === 'mined'
 }
 
+function recordRaceResult(result: NoSendExpiryLifecycleResult, race: Awaited<ReturnType<typeof reconcileRace>>): void {
+  if (race === 'reclaimed') result.reclaimed++
+  else if (race === 'target') result.targetWon++
+  else result.deferred++
+}
+
+async function processReclaimRace(
+  storage: StorageProvider,
+  transaction: TableTransaction,
+  targetStatus: StatusForTxidResult['status'] | undefined,
+  result: NoSendExpiryLifecycleResult
+): Promise<void> {
+  if (isKnownOrMined(targetStatus) && (await noteTargetObservedDuringRace(storage, transaction))) {
+    result.observed++
+  }
+  recordRaceResult(result, await reconcileRace(storage, transaction))
+}
+
 async function processObservationOrRace(
   storage: StorageProvider,
   transaction: TableTransaction,
@@ -564,13 +582,7 @@ async function processObservationOrRace(
     return true
   }
   if (transaction.noSendExpiryState === 'reclaiming') {
-    if (isKnownOrMined(targetStatus)) {
-      if (await noteTargetObservedDuringRace(storage, transaction)) result.observed++
-    }
-    const race = await reconcileRace(storage, transaction)
-    if (race === 'reclaimed') result.reclaimed++
-    else if (race === 'target') result.targetWon++
-    else result.deferred++
+    await processReclaimRace(storage, transaction, targetStatus, result)
     return true
   }
   const stateCanObserve =

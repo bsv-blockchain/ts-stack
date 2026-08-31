@@ -26,7 +26,7 @@ attention to changes that materially alter behavior or extend functionality.
   action. Existing actions and ordinary `noSend` calls are unchanged. The
   macOS reference fixtures measure 1,658,802 raw / 388,052 gzip / 304,787
   Brotli bytes with Vite, 1,294,883 raw / 354,950 gzip / 284,733 Brotli bytes
-  with esbuild, and 3,465,269 raw / 1,404,047 gzip / 1,088,637 Brotli bytes as
+  with esbuild, and 3,465,269 raw / 1,404,044 gzip / 1,088,905 Brotli bytes as
   optimized Hermes bytecode. The reviewed ceilings advance to 1,660,000 /
   390,000 / 307,000 Vite bytes, 1,296,000 / 357,000 / 287,000 esbuild bytes,
   and 3,470,000 / 1,406,000 / 1,090,000 Hermes bytes; Metro remains within its

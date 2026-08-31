@@ -595,7 +595,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
         'Active storage does not support BRC-177'
       )
       capabilities.mockRestore()
-      expect((await services.storage.getUnminedTransactions()).length).toBe(initiallyUnmined)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(initiallyUnmined)
 
       await expect(
         ctx.storage.prepareNoSendExpiry(
@@ -612,7 +612,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           })
         )
       ).rejects.toThrow('BRC-177 noSend expiry label')
-      expect((await services.storage.getUnminedTransactions()).length).toBe(initiallyUnmined)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(initiallyUnmined)
 
       const arm = ctx.storage.armNoSendExpiry.bind(ctx.storage)
       const tamper = jest.spyOn(ctx.storage, 'armNoSendExpiry').mockImplementationOnce(async args => {
@@ -634,7 +634,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           options: { noSend: false }
         })
       ).rejects.toThrow('options.noSend')
-      expect((await services.storage.getUnminedTransactions()).length).toBe(unminedBefore)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       const malformedOptions = [
         { noSend: true, sendWith: ['03'.repeat(32)] },
@@ -649,7 +649,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           })
         ).rejects.toThrow()
       }
-      expect((await services.storage.getUnminedTransactions()).length).toBe(unminedBefore)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       await expect(
         ctx.wallet.createAction({
@@ -657,7 +657,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           labels: [`p nosend expiry timestamp ${Math.floor(Date.now() / 1000) - 1}`]
         })
       ).rejects.toThrow('timestamp later than the current time')
-      expect((await services.storage.getUnminedTransactions()).length).toBe(unminedBefore)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       await expect(
         ctx.wallet.createAction({
@@ -665,7 +665,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           labels: [`p nosend expiry blockheight ${await services.getHeight()}`]
         })
       ).rejects.toThrow('blockheight later than the current best-chain height')
-      expect((await services.storage.getUnminedTransactions()).length).toBe(unminedBefore)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       await expect(
         ctx.wallet.createAction({
@@ -673,7 +673,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           labels: [`p nosend expiry seconds ${Number.MAX_SAFE_INTEGER}`]
         })
       ).rejects.toThrow('safely schedulable')
-      expect((await services.storage.getUnminedTransactions()).length).toBe(unminedBefore)
+      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       const created = await ctx.wallet.createAction(protectedArgs(3600))
       const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))

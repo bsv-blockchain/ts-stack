@@ -580,6 +580,60 @@ async function persistNewOutput(
   return describeNewOutput(o, tags, txBaskets)
 }
 
+async function createRequiredOutput(
+  storage: StorageProvider,
+  userId: number,
+  xo: XValidCreateActionOutput,
+  ctx: CreateTransactionSdkContext,
+  txBaskets: Record<string, TableOutputBasket>,
+  trx?: TrxToken
+): Promise<{ o: TableOutput; tags: string[] }> {
+  const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
+  if (xo.purpose === 'service-charge') {
+    const lockingScript = asArray(xo.lockingScript)
+    const now = new Date()
+    await storage.insertCommission(
+      {
+        userId,
+        transactionId: ctx.transactionId,
+        lockingScript,
+        satoshis: xo.satoshis,
+        isRedeemed: false,
+        keyOffset: verifyTruthy(xo.keyOffset),
+        created_at: now,
+        updated_at: now,
+        commissionId: 0
+      },
+      trx
+    )
+    o.lockingScript = lockingScript
+    o.providedBy = 'storage'
+    o.purpose = 'storage-commission'
+    o.type = 'custom'
+    o.spendable = false
+    return { o, tags: [] }
+  }
+  if (xo.purpose === 'change') {
+    o.basketId = ctx.changeBasket.basketId
+    o.change = true
+    o.derivationPrefix = verifyTruthy(ctx.derivationPrefix)
+    o.derivationSuffix = verifyTruthy(xo.derivationSuffix)
+    o.providedBy = 'storage'
+    o.purpose = 'change'
+    o.type = 'P2PKH'
+    o.spendable = true
+    return { o, tags: [] }
+  }
+  o.lockingScript = asArray(xo.lockingScript)
+  o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
+  o.customInstructions = xo.customInstructions
+  o.outputDescription = xo.outputDescription
+  o.providedBy = xo.providedBy
+  o.purpose = xo.purpose || ''
+  o.type = 'custom'
+  return { o, tags: xo.tags }
+}
+
 async function createNewOutputs(
   storage: StorageProvider,
   userId: number,
@@ -602,52 +656,7 @@ async function createNewOutputs(
   const newOutputs: Array<{ o: TableOutput; tags: string[] }> = []
 
   for (const xo of ctx.xoutputs) {
-    const lockingScript = xo.purpose === 'change' ? undefined : asArray(xo.lockingScript)
-    if (xo.purpose === 'service-charge') {
-      const now = new Date()
-      await storage.insertCommission(
-        {
-          userId,
-          transactionId: ctx.transactionId,
-          lockingScript: verifyTruthy(lockingScript),
-          satoshis: xo.satoshis,
-          isRedeemed: false,
-          keyOffset: verifyTruthy(xo.keyOffset),
-          created_at: now,
-          updated_at: now,
-          commissionId: 0
-        },
-        trx
-      )
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = verifyTruthy(lockingScript)
-      o.providedBy = 'storage'
-      o.purpose = 'storage-commission'
-      o.type = 'custom'
-      o.spendable = false
-      newOutputs.push({ o, tags: [] })
-    } else if (xo.purpose === 'change') {
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.basketId = ctx.changeBasket.basketId
-      o.change = true
-      o.derivationPrefix = verifyTruthy(ctx.derivationPrefix)
-      o.derivationSuffix = verifyTruthy(xo.derivationSuffix)
-      o.providedBy = 'storage'
-      o.purpose = 'change'
-      o.type = 'P2PKH'
-      o.spendable = true
-      newOutputs.push({ o, tags: [] })
-    } else {
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = verifyTruthy(lockingScript)
-      o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
-      o.customInstructions = xo.customInstructions
-      o.outputDescription = xo.outputDescription
-      o.providedBy = xo.providedBy
-      o.purpose = xo.purpose || ''
-      o.type = 'custom'
-      newOutputs.push({ o, tags: xo.tags })
-    }
+    newOutputs.push(await createRequiredOutput(storage, userId, xo, ctx, txBaskets, trx))
   }
 
   for (const o of changeOutputs) {

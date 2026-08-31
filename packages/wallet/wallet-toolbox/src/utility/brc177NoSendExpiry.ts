@@ -100,7 +100,7 @@ export function parseBrc177NoSendExpiryLabels(labels: string[] | undefined): Brc
   const label = matching[0]
   const remainder = label.slice(BRC177_NO_SEND_EXPIRY_PREFIX.length)
   const separator = remainder.indexOf(' ')
-  if (separator <= 0 || separator === remainder.length - 1 || remainder.indexOf(' ', separator + 1) !== -1) {
+  if (separator <= 0 || separator === remainder.length - 1 || remainder.includes(' ', separator + 1)) {
     throw new WERR_INVALID_PARAMETER('labels', 'a valid BRC-177 noSend expiry label')
   }
 

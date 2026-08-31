@@ -136,7 +136,7 @@ export async function prepareNoSendExpiry(
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
   const funding = await createAction(storage, auth, fundingArgs)
   const anchor = funding.outputs.find(output => output.providedBy === 'storage' && output.purpose === 'change')
-  if (anchor == null || anchor.satoshis !== anchorSatoshis) {
+  if (anchor?.satoshis !== anchorSatoshis) {
     throw new WERR_INVALID_OPERATION('BRC-177 funding plan did not contain its exact revocation anchor')
   }
   return {
@@ -406,7 +406,7 @@ export async function armNoSendExpiry(
   // no database request is pending, then revalidate the complete snapshot in
   // the atomic section before publishing the armed state.
   const snapshot = await validateArmSnapshot(storage, userId, args.reference, args, reclaim)
-  await verifyReclaimSignature(storage, snapshot, rawTx, args.reclaimTxid, undefined)
+  await verifyReclaimSignature(storage, snapshot, rawTx, args.reclaimTxid)
 
   await storage.transaction(async trx => {
     const target = await validateArmSnapshot(storage, userId, args.reference, args, reclaim, trx)

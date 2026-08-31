@@ -1230,7 +1230,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const store = dbTrx.objectStore('transactions')
     try {
       const transaction = await store.get(transactionId)
-      if (transaction == null || transaction.noSendExpiryState !== expected) return false
+      if (transaction?.noSendExpiryState !== expected) return false
       await (store.put as (value: TableTransaction) => Promise<IDBValidKey>)({
         ...transaction,
         noSendExpiryState: next,
