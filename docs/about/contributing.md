@@ -3,8 +3,8 @@ id: about-contributing
 title: 'Contributing'
 kind: meta
 version: '2.0.0'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [about, contributing, development, community]
@@ -44,8 +44,11 @@ must be reported privately under the
 Current focused follow-up programs are:
 
 - [Deferred final QA: coverage, fuzzing, conformance, and runtime validation](https://github.com/bsv-blockchain/ts-stack/issues/400);
-- [Authorized package/image release and external assurance](https://github.com/bsv-blockchain/ts-stack/issues/401); and
 - [Sonar administration and CI efficiency review](https://github.com/bsv-blockchain/ts-stack/issues/402).
+
+The completed
+[package/image release and external-assurance program](https://github.com/bsv-blockchain/ts-stack/issues/401)
+retains its closeout evidence but is no longer an active tracker.
 
 The completed modernization history remains in retired
 [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324); it is no
