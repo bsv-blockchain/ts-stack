@@ -27,12 +27,16 @@ export async function verifySignedObject(
   const preimage = objectPreimage(type, object.body)
   let matched = false
   for (const signature of object.signatures) {
-    if (
-      requiredSigner !== undefined &&
-      toHex(brc77SignerIdentity(signature)) !== toHex(requiredSigner)
-    )
-      continue
-    if (await verifier.verify(preimage, signature)) matched = true
+    try {
+      if (
+        requiredSigner !== undefined &&
+        toHex(brc77SignerIdentity(signature)) !== toHex(requiredSigner)
+      )
+        continue
+      if (await verifier.verify(preimage, signature)) matched = true
+    } catch {
+      // A malformed co-signature is invalid, not fatal to another valid signature.
+    }
   }
   lchAssert(matched, 'ERR_LCH_SIGNATURE', 'No valid signature from the required signer')
 }

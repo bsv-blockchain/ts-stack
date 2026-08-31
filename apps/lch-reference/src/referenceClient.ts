@@ -13,6 +13,7 @@ import {
   type InspectedLCH,
   type LCHFundedMultipay,
   type LCHMultipayPlan,
+  type SegmentedEncryptionDescriptor,
   type LCHTransactionState,
   type LCHValue,
   type SignedObject
@@ -89,7 +90,13 @@ export class ReferenceLCHClient {
       createdAt: this.now()
     })
     const issuer = memberBytes(offer.body, 'licenseIssuer', 33)
-    const paymentPlan = await multipay.quote(endpoint, request, issuer)
+    const encryption = memberMap(inspected.representation, 'encryption')
+    const keyDelivery = memberMap(offer.body, 'keyDelivery')
+    const paymentPlan = await multipay.quote(endpoint, request, issuer, {
+      type: 'segmented',
+      encryption: encryption as unknown as SegmentedEncryptionDescriptor,
+      delivery: memberString(keyDelivery, 'mechanism')
+    })
     return {
       ...paymentPlan,
       bytes,

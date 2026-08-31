@@ -40,7 +40,7 @@ const plaintext = await reader.decrypt(inspected, protectedAsset.keys)
 
 The typed client-side builders are `LCHBuyer`, `LCHMultipayBuyer`, `LCHHttpAcquisitionClient`, `validateQuote`, `createMultipayTransaction`, and `WalletBRC78KeyDelivery`. A player first builds and signs a License Request, preflights it, validates the signed Quote and each embedded Demand, and shows the exact total and split. After an explicit confirmation it creates one multilateral wallet transaction, obtains one profile-valid settlement proof per Demand, completes issuance, and verifies recovery of the resulting License.
 
-`LCHMultipayBuyer` splits the irreversible and retryable stages deliberately. Quote preparation obtains a short-lived signed Payment Readiness from every Payee, and `refreshReadiness` renews those leases before an explicit wallet confirmation. `createPayment` refuses missing or expired readiness and returns the finalized Atomic BEEF and every signed Delivery immediately after `createAction`; persist that value before network delivery. “Finalized” means signed transaction bytes exist—it does not by itself claim broadcast, processor acceptance, or mining. Call `settleDelivery` for each Payee, retain the returned Receipt or authorized-output evidence, then call `complete` with both proof arrays. After an ambiguous failure, expose the transaction as pending settlement and retry those methods with the same funded payment—never call `createPayment` again for that Quote.
+`LCHMultipayBuyer` splits the irreversible and retryable stages deliberately. Quote preparation obtains a short-lived signed Payment Readiness from every Payee, and `refreshReadiness` renews those leases before an explicit wallet confirmation. Its required key-grant expectation comes from the verified Asset encryption descriptor and the selected Offer key-delivery mechanism; use `{ type: 'none' }` only for a profile that returns no keys. `createPayment` refuses missing or expired readiness and returns the finalized Atomic BEEF and every signed Delivery immediately after `createAction`; persist that value before network delivery. “Finalized” means signed transaction bytes exist—it does not by itself claim broadcast, processor acceptance, or mining. Call `settleDelivery` for each Payee, retain the returned Receipt or authorized-output evidence, then call `complete` with both proof arrays. `settleDelivery` enters authorized-output fallback only when the Payee transport fails; a returned but invalid Receipt is a protocol failure and never triggers fallback. `complete` binds the License to the request, Quote, exact settlement evidence, and expected key periods before returning it. After an ambiguous failure, expose the transaction as pending settlement and retry those methods with the same funded payment—never call `createPayment` again for that Quote.
 
 The Offer endpoint coordinates Quote, completion, and License recovery. Each Payment Demand carries its own Payee-selected endpoint and explicit settlement profile. `#receipt-complete-v1` is the baseline: the Payee must internalize its output and sign a Receipt before License issuance. `#authorized-output-v1` is an opt-in availability profile. Before payment, the Payee signs the exact BRC-29 suffix and locking script plus a transaction-evidence provider and durable Delivery provider. The buyer independently derives and compares that script before `createAction`. `settleDelivery` attempts ordinary Payee delivery first and, only for an authorized-output Demand, obtains signed processor acceptance and a signed retention acknowledgement when direct delivery fails. `collectAuthorizedOutputEvidence` exposes that fallback step separately for recovery orchestration. The issuer can release the License only after the complete bundle verifies. The Payee can later retrieve that exact signed Delivery and internalize it idempotently.
 
@@ -75,12 +75,26 @@ enforces the licensed selection; that adapter is outside the 0.1 API. Configure
 an explicit application limit and do not treat raw CHIRP ciphertext chunks as
 authenticated plaintext.
 
+For `uhrp:` locators, `UniversalContentSource` tries each unique resolved host
+until one returns a valid bounded response. Every candidate still passes the
+endpoint policy independently; an unavailable or rejected host does not weaken
+SSRF, redirect, or address-pinning checks for the next candidate.
+
 Application-specific catalogue, streaming index, royalty weighting, waveform, timeline, and social metadata belong in non-critical application data or separately registered profiles. The v1 whole-placement resolver supports repeats and arbitrary editorial transforms conservatively: any nonempty derivative selection activates the ingredient's complete declared source selection. Edit metadata does not alter permission or settlement semantics. A future mapping profile is needed only for deterministic selective mapping; an unknown mapping fails closed.
+
+`walkComposition` retains each direct placement, expands the same Asset and
+normalized Selection once in a shared provenance DAG, and applies cycle, depth,
+and total traversal bounds. Duty fulfillment and aggregation still follow each
+ODRL Duty UID and policy rule; provenance-node or Payee equality alone never
+deduplicates payment obligations.
 
 Server-side HTTPS resolution must provide an endpoint policy with a
 public-address DNS resolver and an address-pinning connector. Browser
 applications should use an equivalently constrained authenticated gateway
 rather than treating a preflight DNS lookup as protection against rebinding.
+Literal-address checks operate on the URL parser's canonical hostname,
+including hexadecimal IPv4-mapped and transition IPv6 forms, and fail closed
+for non-global IANA special-purpose ranges.
 
 ## Production integration gate
 

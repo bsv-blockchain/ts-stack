@@ -5,8 +5,8 @@ kind: package
 domain: content
 npm: '@bsv/lch'
 version: '0.1.0'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch'
 status: experimental
@@ -40,9 +40,11 @@ npm install @bsv/lch @bsv/sdk
   retrieval, an injectable acquisition transport, and a complete multipay
   buyer workflow across independently routed Payees and providers;
 - bounded authority chains with fresh, network-scoped revocation observations;
-- HTTPS endpoint policy plus UHRP and CHIRP content source and sink adapters;
+- canonical-literal and DNS-pinned HTTPS endpoint policy plus failover-capable
+  UHRP and CHIRP content source and sink adapters;
 - browser IndexedDB and in-memory license stores; and
-- whole-placement composition records with cycle and depth checks.
+- whole-placement composition records with cycle, shared-DAG, depth, and total
+  traversal checks.
 
 ## Acquisition is explicit
 
@@ -62,7 +64,11 @@ const request = await buyer.createRequest({
   acceptedPolicyDigest,
   createdAt: BigInt(Math.floor(Date.now() / 1000))
 })
-const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity)
+const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity, {
+  type: 'segmented',
+  encryption: inspected.representation.encryption,
+  delivery: selectedOffer.keyDelivery.mechanism
+})
 
 // Display plan.totalSatoshis, plan.demands, action, Selection, and terms first.
 
@@ -98,6 +104,14 @@ be different origins and operators. `LCHAcquisitionTransport` defaults to the HT
 also gives applications a stable seam for an asynchronous inbox or message-box
 adapter without changing signed objects or recovery behavior.
 
+The final `quote` argument is required buyer-side License context taken from
+the verified Asset and selected Offer. `complete` binds the returned License to
+the request and Quote, matches every fulfillment to the exact submitted proof,
+and checks that every and only the selected encryption key periods use the
+Offer's chosen delivery mechanism. Use `{ type: 'none' }` only for a profile
+that genuinely returns no key grants; it is not a shortcut around encrypted
+Asset validation.
+
 On the receiving side, `WalletPaymentReceiver` independently derives and
 validates the Payee's BRC-29 output, atomically claims the Demand through a
 `PaymentLedger`, calls that Payee wallet's BRC-100 `internalizeAction`, and
@@ -121,7 +135,9 @@ those wallets into the issuer service.
 `UniversalContentSource` resolves `chirp:`, `uhrp:`, and bounded HTTPS
 locators. `CHIRPContentSink` and `UHRPContentSink` publish encrypted bytes
 through the existing storage libraries. No LCH API changes the existing UHRP
-uploader, downloader, routes, or identifiers.
+uploader, downloader, routes, or identifiers. A `uhrp:` read tries each unique
+resolved host in order without bypassing bounded-response, redirect, SSRF, or
+address-pinning checks.
 
 Media players and DAWs remain application code. The package supplies verified
 bytes and selection/composition semantics; it does not choose codecs, decode
@@ -153,6 +169,12 @@ declared source selection. A separately registered critical mapping profile is
 needed only for deterministic selective mapping or proportional allocation; a
 consumer that does not implement one must fail closed.
 
+`walkComposition` retains every directly declared placement, expands an
+identical `(Asset ID, Selection)` provenance node once, and rejects cycles,
+unsupported depth, or an excessive flattened traversal. Applications still
+evaluate and aggregate ODRL Duties by their UIDs and policy rules; matching a
+Payee or provenance node alone does not deduplicate payment obligations.
+
 Integer time windows are half-open: `notBefore` is inclusive and `notAfter` is
 exclusive. Fractional edit values such as playback rates use exact integer
 ratios because deterministic LCH CBOR prohibits floats.
@@ -169,7 +191,9 @@ future profiles.
 - Permit local HTTP endpoints only through an explicit development override.
 - Resolve DNS again for redirects and connections, and use the endpoint
   policy's address-pinning connector to prevent rebinding; do not forward
-  credentials across origins.
+  credentials across origins. Test the URL parser's canonical hexadecimal
+  spelling of IPv4-mapped and transition IPv6 literals, not only dotted input
+  spellings, and fail closed for non-global IANA special-purpose ranges.
 - Authenticate every segment before exposing plaintext. Whole-asset grants
   must include every key period intersecting the licensed selection.
 - Keep the scoped `THIRD_PARTY_NOTICES.md` in the npm artifact. The package

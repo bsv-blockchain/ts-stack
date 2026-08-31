@@ -49,7 +49,7 @@ let transformUrl: string | undefined
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <header class="topbar">
-    <div><strong>LCH reference workbench</strong><small>Draft BRC-170 · neutral open-source test application</small></div>
+    <div><strong>LCH reference workbench</strong><small>Published BRC-170 · neutral open-source test application</small></div>
     <span class="wallet-mode">BRC-100 fixture wallets</span>
     <div class="network"><i></i><span>fixture wallets ready</span></div>
   </header>
@@ -57,7 +57,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <section class="intro">
       <p class="kicker">REFERENCE IMPLEMENTATION</p>
       <h1>Create, pay for, play, and compose an LCH asset.</h1>
-      <p>This open reference workbench follows one asset through the draft BRC-170 roles. Every signed object, payment split, recovered key, profile boundary, and composition binding remains inspectable.</p>
+      <p>This open reference workbench follows one asset through the published BRC-170 roles. Every signed object, payment split, recovered key, profile boundary, and composition binding remains inspectable.</p>
       <div class="safety"><strong>Transaction boundary.</strong> Preflight resolves and verifies the ciphertext, Offer, Quote, and every Payment Demand. Only the separately labelled confirmation asks the selected BRC-100 wallet to create the transaction.</div>
     </section>
 
@@ -128,7 +128,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <pre id="composition-output">Awaiting a licensed source.</pre>
     </section>
   </main>
-  <footer><span>BRC-170 draft · @bsv/lch 0.1.0</span><span>Open reference code · exact fixtures and conformance cases</span></footer>
+  <footer><span>Published BRC-170 · @bsv/lch 0.1.0</span><span>Open reference code · exact fixtures and conformance cases</span></footer>
 `
 
 const fileInput = document.querySelector<HTMLInputElement>('#media-file')!

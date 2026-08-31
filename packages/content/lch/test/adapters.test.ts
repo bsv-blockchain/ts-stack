@@ -100,6 +100,47 @@ describe('bounded content and endpoint adapters', () => {
     })
   })
 
+  it('tries every resolved UHRP host until one succeeds', async () => {
+    const uhrp = {
+      resolve: jest.fn(async () => [
+        'https://unavailable.example/object',
+        'https://storage.example/object'
+      ])
+    } as unknown as StorageDownloader
+    const connect = jest.fn(async (url: URL) =>
+      url.hostname === 'unavailable.example'
+        ? new Response('unavailable', { status: 503 })
+        : new Response(Uint8Array.of(7, 8))
+    )
+    const source = new UniversalContentSource({
+      uhrp,
+      endpointPolicy: { resolve: publicResolver, connect },
+      maximumBytes: 2
+    })
+    await expect(source.read('uhrp://example')).resolves.toEqual(Uint8Array.of(7, 8))
+    expect(connect.mock.calls.map(call => call[0].hostname)).toEqual([
+      'unavailable.example',
+      'storage.example'
+    ])
+  })
+
+  it('returns one stable error after exhausting resolved UHRP hosts', async () => {
+    const uhrp = {
+      resolve: jest.fn(async () => ['uhrp://recursive', 'https://unavailable.example/object'])
+    } as unknown as StorageDownloader
+    const source = new UniversalContentSource({
+      uhrp,
+      endpointPolicy: {
+        resolve: publicResolver,
+        connect: async () => new Response('unavailable', { status: 503 })
+      }
+    })
+    await expect(source.read('uhrp://example')).rejects.toMatchObject({
+      code: 'ERR_LCH_CONTENT_UNAVAILABLE',
+      message: 'Every resolved UHRP host failed'
+    })
+  })
+
   it('publishes through CHIRP and legacy UHRP sinks', async () => {
     const publish = jest.fn(async () => ({ chirpURL: 'chirp://root' }))
     const chirp = new CHIRPContentSink({ publish }, 86_400, 'audio/wav')
@@ -143,6 +184,8 @@ describe('license stores', () => {
 
   it('stores, lists, and deletes through IndexedDB', async () => {
     const records = new Map<string, unknown>()
+    const transactions: IDBTransaction[] = []
+    const close = jest.fn()
     const request = (result: unknown): IDBRequest => {
       const value = {} as IDBRequest
       queueMicrotask(() => {
@@ -164,10 +207,14 @@ describe('license stores', () => {
     } as unknown as IDBObjectStore
     const database = {
       createObjectStore: () => objectStore,
-      transaction: () =>
-        ({
+      close,
+      transaction: () => {
+        const transaction = {
           objectStore: () => objectStore
-        }) as IDBTransaction
+        } as IDBTransaction
+        transactions.push(transaction)
+        return transaction
+      }
     } as unknown as IDBDatabase
     Object.defineProperty(globalThis, 'indexedDB', {
       configurable: true,
@@ -191,9 +238,35 @@ describe('license stores', () => {
       license: { body: {}, signatures: [] },
       storedAt: 1n
     }
-    await store.put(record)
-    await expect(store.get('asset')).resolves.toEqual(record)
-    await store.delete('asset', 'offer')
-    await expect(store.get('asset')).resolves.toBeUndefined()
+    const complete = async <T>(operation: Promise<T>): Promise<T> => {
+      for (let attempt = 0; attempt < 10 && transactions.length === 0; attempt += 1)
+        await Promise.resolve()
+      const transaction = transactions.shift()
+      if (transaction === undefined) throw new Error('IndexedDB transaction did not start')
+      await Promise.resolve()
+      transaction.oncomplete?.(new Event('complete'))
+      return operation
+    }
+
+    let putSettled = false
+    const put = store.put(record)
+    void put.then(() => {
+      putSettled = true
+    })
+    for (let attempt = 0; attempt < 10 && transactions.length === 0; attempt += 1)
+      await Promise.resolve()
+    await Promise.resolve()
+    expect(putSettled).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    const putTransaction = transactions.shift()
+    if (putTransaction === undefined) throw new Error('IndexedDB transaction did not start')
+    putTransaction.oncomplete?.(new Event('complete'))
+    await put
+    expect(close).toHaveBeenCalledTimes(1)
+
+    await expect(complete(store.get('asset'))).resolves.toEqual(record)
+    await complete(store.delete('asset', 'offer'))
+    await expect(complete(store.get('asset'))).resolves.toBeUndefined()
+    expect(close).toHaveBeenCalledTimes(4)
   })
 })

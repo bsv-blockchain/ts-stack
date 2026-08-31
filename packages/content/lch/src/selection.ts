@@ -40,15 +40,27 @@ export function normalizeRanges(ranges: readonly RangeTuple[]): RangeTuple[] {
 }
 
 export function normalizeSelection(selection: Selection): Selection {
+  lchAssert(
+    selection !== null &&
+      typeof selection === 'object' &&
+      ['all', 'segments', 'bytes', 'pages', 'media-fragment'].includes(
+        (selection as { type?: unknown }).type as string
+      ),
+    'ERR_LCH_SELECTION',
+    'Selection type is unsupported'
+  )
   if (selection.type === 'all') return selection
   if (selection.type === 'media-fragment') {
     lchAssert(
-      selection.value.length > 0 && selection.value.length <= 4096,
+      typeof selection.value === 'string' &&
+        selection.value.length > 0 &&
+        selection.value.length <= 4096,
       'ERR_LCH_SELECTION',
       'Media fragment is empty or too long'
     )
     return selection
   }
+  lchAssert(Array.isArray(selection.ranges), 'ERR_LCH_SELECTION', 'Selection ranges are absent')
   return { type: selection.type, ranges: normalizeRanges(selection.ranges) }
 }
 
@@ -75,11 +87,17 @@ export function validateNormalizedSelection(selection: Selection): void {
 }
 
 export function selectionsIntersect(left: Selection, right: Selection): boolean {
-  if (left.type === 'all' || right.type === 'all') return true
-  if (left.type !== right.type || left.type === 'media-fragment' || right.type === 'media-fragment')
+  const normalizedLeft = normalizeSelection(left)
+  const normalizedRight = normalizeSelection(right)
+  if (normalizedLeft.type === 'all' || normalizedRight.type === 'all') return true
+  if (
+    normalizedLeft.type !== normalizedRight.type ||
+    normalizedLeft.type === 'media-fragment' ||
+    normalizedRight.type === 'media-fragment'
+  )
     return false
-  const leftRanges = normalizeRanges(left.ranges)
-  const rightRanges = normalizeRanges(right.ranges)
+  const leftRanges = normalizedLeft.ranges
+  const rightRanges = normalizedRight.ranges
   return leftRanges.some(([leftStart, leftEnd]) =>
     rightRanges.some(
       ([rightStart, rightEnd]) =>
@@ -89,12 +107,13 @@ export function selectionsIntersect(left: Selection, right: Selection): boolean 
 }
 
 export function selectionQuantity(selection: Selection): bigint {
+  const normalized = normalizeSelection(selection)
   lchAssert(
-    selection.type !== 'all' && selection.type !== 'media-fragment',
+    normalized.type !== 'all' && normalized.type !== 'media-fragment',
     'ERR_LCH_SELECTION',
     'Selection has no integer quantity'
   )
-  return normalizeRanges(selection.ranges).reduce(
+  return normalized.ranges.reduce(
     (total, [start, end]) => total + asBigInt(end) - asBigInt(start),
     0n
   )

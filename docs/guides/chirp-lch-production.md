@@ -4,8 +4,8 @@ title: 'Build Production CHIRP and LCH Applications'
 kind: guide
 domain: content
 version: '1.0.0'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: experimental
 tags: [guide, chirp, lch, uhrp, brc-167, brc-170, storage, payments, wallet]
@@ -152,7 +152,9 @@ const resumableCiphertextSink = {
 `UniversalContentSource` dispatches `chirp:`, `uhrp:`, and bounded HTTPS
 locators. The LCH reader validates the header signer, Asset ID, ciphertext
 length and digest, authenticated encryption segments, and full-plaintext digest
-when the complete selection is decrypted.
+when the complete selection is decrypted. A `uhrp:` read tries each unique
+resolved host in order; every candidate remains subject to the same bounded
+response and endpoint policy.
 
 ```typescript
 import { CHIRPDownloader } from '@bsv/chirp'
@@ -213,7 +215,11 @@ const request = await buyer.createRequest({
   acceptedPolicyDigest,
   createdAt: BigInt(Math.floor(Date.now() / 1000))
 })
-const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity)
+const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity, {
+  type: 'segmented',
+  encryption: inspected.representation.encryption,
+  delivery: selectedOffer.keyDelivery.mechanism
+})
 
 // Display and confirm plan.totalSatoshis and every signed Demand here.
 const freshPlan = await buyer.refreshReadiness(plan)
@@ -240,6 +246,16 @@ await licenseStore.put({
 })
 await recoveryStore.complete(funded.plan.requestId)
 ```
+
+The required key-grant expectation comes from the already verified Asset and
+selected Offer, not from the Quote. On completion the client rejects a signed
+License with a different Asset, Offer, buyer, Selection, segment coverage,
+settlement evidence, key-period set, or key-delivery mechanism. Persist this
+expectation with the funded plan so recovery performs the same checks.
+Authorized-output fallback begins only when the direct Payee transport rejects;
+a syntactically returned Receipt that fails signature, Demand, transaction,
+output-index, or amount validation is a protocol error and MUST NOT be routed
+through fallback providers.
 
 `createPayment()` returns finalized transaction bytes. **Finalized** means the
 wallet produced a signed Atomic BEEF. It does not mean a processor accepted the
@@ -434,6 +450,13 @@ be described as application or C2PA metadata. Any nonempty derivative selection
 activates the placement's complete declared source selection; edit metadata
 does not silently reduce payment or permission requirements.
 
+For nested provenance, `walkComposition` keeps every direct placement, expands
+the same `(Asset ID, Selection)` node once in a shared DAG, and rejects cycles,
+unsupported depth, or excessive total traversal. That graph bound is not a
+payment aggregation rule: applications still evaluate Duty UIDs and the ODRL
+policy's aggregation semantics before deciding whether any obligations are
+identical.
+
 Use a separately registered critical mapping profile only when independent
 implementations need deterministic partial mapping or proportional allocation.
 Catalogue schemas, playlists, timelines, waveform indexes, social metadata,
@@ -459,6 +482,10 @@ Before enabling real purchases, verify all of the following:
 - CHIRP host count and retention satisfy the application's availability goal,
   and renewals are monitored;
 - server endpoint policy prevents SSRF and DNS rebinding at connection time;
+- literal endpoint tests cover the URL parser's canonical IPv4-mapped and
+  transition IPv6 spellings as well as ordinary IPv4 and IPv6 loopback,
+  private, link-local, documentation, and other non-global IANA special-purpose
+  ranges;
 - package, browser, Node, exact-tarball, license, conformance, and integration
   suites pass against the versions being deployed;
 - operators can recover by `requestId` without creating a replacement payment;

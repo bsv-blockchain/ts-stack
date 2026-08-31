@@ -10,8 +10,12 @@ import {
   type PaymentCompletion
 } from './acquisition.js'
 import { LCHHttpAcquisitionClient, type LCHHttpClientOptions } from './http.js'
+import { validateEncryptionDescriptor, validateKeyGrantsForSelection } from './encryption.js'
 import { fromHex, objectId, toHex } from './hash.js'
 import { LCH_SETTLEMENT_PROFILES } from './constants.js'
+import { encodeDeterministicCbor } from './cbor.js'
+import { lchAssert } from './errors.js'
+import { normalizeSelection, validateNormalizedSelection } from './selection.js'
 import { createMultipayTransaction } from './walletPayment.js'
 import { PublicBRC77Verifier, WalletBRC77Signer } from './signatures.js'
 import { verifySignedObject } from './objects.js'
@@ -22,7 +26,23 @@ import {
   validateTransactionEvidence,
   type AuthorizedOutputEvidence
 } from './settlement.js'
-import type { LCHSigner, LCHTransactionState, LCHValue, SignedObject } from './types.js'
+import type {
+  KeyGrant,
+  LCHSigner,
+  LCHTransactionState,
+  LCHValue,
+  SegmentedEncryptionDescriptor,
+  Selection,
+  SignedObject
+} from './types.js'
+
+export type LCHLicenseKeyGrantExpectation =
+  | { type: 'none' }
+  | {
+      type: 'segmented'
+      encryption: SegmentedEncryptionDescriptor
+      delivery: string
+    }
 
 export interface LCHMultipayPlan {
   request: SignedObject
@@ -36,6 +56,7 @@ export interface LCHMultipayPlan {
   totalSatoshis: bigint
   expiresAt: bigint
   recoveryUntil: bigint
+  keyGrants: LCHLicenseKeyGrantExpectation
 }
 
 export interface LCHMultipayDelivery {
@@ -121,8 +142,10 @@ export class LCHMultipayBuyer {
   async quote(
     endpoint: string,
     request: SignedObject,
-    issuer: Uint8Array
+    issuer: Uint8Array,
+    keyGrants: LCHLicenseKeyGrantExpectation
   ): Promise<LCHMultipayPlan> {
+    validateKeyGrantExpectation(keyGrants)
     const requestId = await validateLicenseRequest(request)
     await this.transport.preflightLicense(endpoint, request)
     const quote = await this.transport.quote(endpoint, request)
@@ -153,7 +176,8 @@ export class LCHMultipayBuyer {
       endpoint,
       totalSatoshis,
       expiresAt: uint(quote.body.expiresAt, 'Quote expiry'),
-      recoveryUntil: uint(quote.body.recoveryUntil, 'Quote recovery deadline')
+      recoveryUntil: uint(quote.body.recoveryUntil, 'Quote recovery deadline'),
+      keyGrants
     }
   }
 
@@ -229,6 +253,15 @@ export class LCHMultipayBuyer {
 
   async deliver(payment: LCHFundedMultipay, item: LCHMultipayDelivery): Promise<SignedObject> {
     const receipt = await this.transport.deliver(item.endpoint, item.delivery)
+    await this.validateReceipt(payment, item, receipt)
+    return receipt
+  }
+
+  private async validateReceipt(
+    payment: LCHFundedMultipay,
+    item: LCHMultipayDelivery,
+    receipt: SignedObject
+  ): Promise<void> {
     await validatePaymentReceipt(receipt)
     equal(receipt.body.demandId, item.demandId, 'Receipt Demand ID')
     equal(receipt.body.requestId, payment.plan.requestId, 'Receipt Request ID')
@@ -245,7 +278,6 @@ export class LCHMultipayBuyer {
       uint(receipt.body.satoshis, 'Receipt amount') !== uint(demand.body.satoshis, 'Demand amount')
     )
       throw new Error('Receipt amount does not match the Payment Demand')
-    return receipt
   }
 
   async complete(
@@ -263,15 +295,20 @@ export class LCHMultipayBuyer {
       payment.deliveries.map(delivery => [toHex(delivery.demandId), delivery] as const)
     )
     const seen = new Set<string>()
+    const expectedFulfillments: Array<Record<string, LCHValue>> = []
     for (const receipt of receipts) {
-      await validatePaymentReceipt(receipt)
-      equal(receipt.body.requestId, payment.plan.requestId, 'Receipt Request ID')
       const demandId = memberBytes(receipt.body, 'demandId', 32)
       const demandIdHex = toHex(demandId)
       const delivery = expected.get(demandIdHex)
       if (delivery === undefined || seen.has(demandIdHex))
         throw new Error('Payment Completion has an unexpected or repeated Receipt')
-      equal(receipt.body.payee, delivery.payee, 'Receipt Payee')
+      await this.validateReceipt(payment, delivery, receipt)
+      const demand = await demandById(payment.plan.demands, demandId)
+      expectedFulfillments.push({
+        dutyUid: memberString(demand.body, 'dutyUid'),
+        settlementProfile: memberString(demand.body, 'settlementProfile'),
+        receiptIds: [await objectId('payment-receipt', receipt.body)]
+      })
       seen.add(demandIdHex)
     }
     for (const bundle of authorizedOutputs) {
@@ -290,6 +327,19 @@ export class LCHMultipayBuyer {
         new PublicBRC77Verifier(),
         { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
       )
+      expectedFulfillments.push({
+        dutyUid: memberString(demand.body, 'dutyUid'),
+        settlementProfile: memberString(demand.body, 'settlementProfile'),
+        authorizationId: await objectId('payment-authorization', bundle.authorization.body),
+        transactionEvidenceId: await objectId(
+          'transaction-evidence',
+          bundle.transactionEvidence.body
+        ),
+        deliveryAcknowledgementId: await objectId(
+          'payment-delivery-ack',
+          bundle.deliveryAcknowledgement.body
+        )
+      })
       seen.add(demandIdHex)
     }
     const completion: PaymentCompletion = {
@@ -301,8 +351,58 @@ export class LCHMultipayBuyer {
     }
     const license = await this.transport.complete(payment.plan.endpoint, completion)
     await verifySignedObject('license', license, new PublicBRC77Verifier(), payment.plan.issuer)
+    lchAssert(license.body.version === 1, 'ERR_LCH_LICENSE', 'License version is unsupported')
+    uint(license.body.issuedAt, 'License issuance time')
+    mapValue(license.body.agreement, 'License Agreement')
+    equal(
+      license.body.assetId,
+      memberBytes(payment.plan.request.body, 'assetId', 32),
+      'License Asset ID'
+    )
+    equal(
+      license.body.assetId,
+      memberBytes(payment.plan.quote.body, 'assetId', 32),
+      'License Asset ID'
+    )
+    equal(
+      license.body.offerId,
+      memberBytes(payment.plan.request.body, 'offerId', 32),
+      'License Offer ID'
+    )
+    equal(
+      license.body.offerId,
+      memberBytes(payment.plan.quote.body, 'offerId', 32),
+      'License Offer ID'
+    )
     equal(license.body.requestId, payment.plan.requestId, 'License Request ID')
+    equal(license.body.issuer, payment.plan.issuer, 'License issuer')
+    equal(
+      license.body.subject,
+      memberBytes(payment.plan.request.body, 'buyer', 33),
+      'License subject'
+    )
     equal(license.body.subject, this.signer.identityKey, 'License subject')
+    equalLCHValue(
+      normalizedSelectionValue(license.body.selection, 'License Selection'),
+      normalizedSelectionValue(payment.plan.request.body.selection, 'License Request Selection'),
+      'License Selection'
+    )
+    equalLCHValue(
+      normalizedSelectionValue(license.body.selection, 'License Selection'),
+      normalizedSelectionValue(payment.plan.quote.body.selection, 'Quote Selection'),
+      'License Selection'
+    )
+    equalOptionalSelection(
+      license.body.segmentSelection,
+      payment.plan.quote.body.segmentSelection,
+      'License segment Selection'
+    )
+    validateFulfillments(license.body.fulfillments, expectedFulfillments)
+    validateLicenseKeyGrants(
+      license.body.keyGrants,
+      license.body.segmentSelection ?? license.body.selection,
+      payment.plan.keyGrants
+    )
     return license
   }
 
@@ -373,8 +473,9 @@ export class LCHMultipayBuyer {
     payment: LCHFundedMultipay,
     item: LCHMultipayDelivery
   ): Promise<LCHMultipaySettlement> {
+    let receipt: SignedObject
     try {
-      return { type: 'receipt', receipt: await this.deliver(payment, item) }
+      receipt = await this.transport.deliver(item.endpoint, item.delivery)
     } catch (error) {
       const demand = await demandById(payment.plan.demands, item.demandId)
       if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput) throw error
@@ -383,6 +484,8 @@ export class LCHMultipayBuyer {
         evidence: await this.collectAuthorizedOutputEvidence(payment, item)
       }
     }
+    await this.validateReceipt(payment, item, receipt)
+    return { type: 'receipt', receipt }
   }
 
   private async obtainReadiness(demands: readonly SignedObject[]): Promise<SignedObject[]> {
@@ -523,6 +626,18 @@ function memberString(body: Record<string, LCHValue>, key: string): string {
   return value
 }
 
+function mapValue(value: LCHValue | undefined, name: string): Record<string, LCHValue> {
+  lchAssert(
+    value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Uint8Array),
+    'ERR_LCH_LICENSE',
+    `${name} is invalid`
+  )
+  return value
+}
+
 function uint(value: LCHValue | undefined, name: string): bigint {
   if (typeof value !== 'bigint' && !(typeof value === 'number' && Number.isSafeInteger(value)))
     throw new Error(`${name} is invalid`)
@@ -534,4 +649,137 @@ function uint(value: LCHValue | undefined, name: string): bigint {
 function equal(value: LCHValue | undefined, expected: Uint8Array, name: string): void {
   if (!(value instanceof Uint8Array) || toHex(value) !== toHex(expected))
     throw new Error(`${name} does not match`)
+}
+
+function normalizedSelectionValue(value: LCHValue | undefined, name: string): LCHValue {
+  lchAssert(
+    value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Uint8Array),
+    'ERR_LCH_LICENSE',
+    `${name} is invalid`
+  )
+  const selection = value as unknown as Selection
+  validateNormalizedSelection(selection)
+  return normalizeSelection(selection) as unknown as Record<string, LCHValue>
+}
+
+function equalOptionalSelection(
+  value: LCHValue | undefined,
+  expected: LCHValue | undefined,
+  name: string
+): void {
+  lchAssert(
+    (value === undefined) === (expected === undefined),
+    'ERR_LCH_LICENSE',
+    `${name} does not match`
+  )
+  if (value !== undefined && expected !== undefined)
+    equalLCHValue(
+      normalizedSelectionValue(value, name),
+      normalizedSelectionValue(expected, `Quote ${name}`),
+      name
+    )
+}
+
+function equalLCHValue(value: LCHValue, expected: LCHValue, name: string): void {
+  lchAssert(
+    toHex(encodeDeterministicCbor(value)) === toHex(encodeDeterministicCbor(expected)),
+    'ERR_LCH_LICENSE',
+    `${name} does not match`
+  )
+}
+
+function validateFulfillments(
+  value: LCHValue | undefined,
+  expected: readonly Record<string, LCHValue>[]
+): void {
+  lchAssert(Array.isArray(value), 'ERR_LCH_LICENSE', 'License fulfillments are invalid')
+  const actual = value.map(fulfillment => {
+    lchAssert(
+      fulfillment !== null &&
+        typeof fulfillment === 'object' &&
+        !Array.isArray(fulfillment) &&
+        !(fulfillment instanceof Uint8Array),
+      'ERR_LCH_LICENSE',
+      'License fulfillment is invalid'
+    )
+    return toHex(encodeDeterministicCbor(fulfillment))
+  })
+  const required = expected.map(fulfillment => toHex(encodeDeterministicCbor(fulfillment)))
+  actual.sort()
+  required.sort()
+  lchAssert(
+    actual.length === required.length && actual.every((item, index) => item === required[index]),
+    'ERR_LCH_LICENSE',
+    'License fulfillments do not match the submitted settlement proofs'
+  )
+}
+
+function validateLicenseKeyGrants(
+  value: LCHValue | undefined,
+  selectionValue: LCHValue | undefined,
+  expectation: LCHLicenseKeyGrantExpectation
+): void {
+  lchAssert(Array.isArray(value), 'ERR_LCH_KEY', 'License key grants are invalid')
+  const grants: KeyGrant[] = value.map(item => {
+    lchAssert(
+      item !== null &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        !(item instanceof Uint8Array),
+      'ERR_LCH_KEY',
+      'License key grant is invalid'
+    )
+    const keys = Object.keys(item).sort()
+    lchAssert(
+      keys.join(',') === 'delivery,keyId,payload',
+      'ERR_LCH_KEY',
+      'License key grant fields are invalid'
+    )
+    const keyId = memberBytes(item, 'keyId', 32)
+    const delivery = memberString(item, 'delivery')
+    const payload = memberBytesAny(item, 'payload')
+    return { keyId, delivery, payload }
+  })
+  lchAssert(
+    new Set(grants.map(grant => toHex(grant.keyId))).size === grants.length,
+    'ERR_LCH_KEY',
+    'License contains duplicate Key IDs'
+  )
+  if (expectation.type === 'none') {
+    lchAssert(grants.length === 0, 'ERR_LCH_KEY', 'License returned unexpected key grants')
+    return
+  }
+  const selection = normalizedSelectionValue(
+    selectionValue,
+    'License key Selection'
+  ) as unknown as Selection
+  validateKeyGrantsForSelection(expectation.encryption, selection, grants)
+  lchAssert(
+    grants.every(grant => grant.delivery === expectation.delivery),
+    'ERR_LCH_KEY',
+    'License key delivery mechanism does not match the selected Offer mechanism'
+  )
+}
+
+function validateKeyGrantExpectation(expectation: LCHLicenseKeyGrantExpectation): void {
+  lchAssert(
+    expectation !== null && typeof expectation === 'object',
+    'ERR_LCH_KEY',
+    'License key-grant expectation is invalid'
+  )
+  if (expectation.type === 'none') return
+  lchAssert(
+    expectation.type === 'segmented',
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'License key-grant expectation is unsupported'
+  )
+  validateEncryptionDescriptor(expectation.encryption)
+  lchAssert(
+    typeof expectation.delivery === 'string' && expectation.delivery.length > 0,
+    'ERR_LCH_KEY',
+    'Expected License key-delivery mechanism is absent'
+  )
 }

@@ -1,5 +1,5 @@
 import { StorageDownloader, StorageUploader } from '@bsv/sdk'
-import { lchAssert } from './errors.js'
+import { LCHError, lchAssert } from './errors.js'
 import { fetchLCH, type EndpointPolicy } from './endpoints.js'
 import type { ContentSink, ContentSource, LicenseStore, StoredLicense } from './types.js'
 
@@ -58,16 +58,30 @@ export class UniversalContentSource implements ContentSource {
       const downloader = this.options.uhrp ?? new StorageDownloader({ networkPreset: 'mainnet' })
       const locations = await downloader.resolve(locator)
       lchAssert(locations.length > 0, 'ERR_LCH_CONTENT_UNAVAILABLE', 'No UHRP host resolved')
-      return this.read(locations[0], start, end)
+      let lastFailure: unknown
+      for (const location of new Set(locations)) {
+        try {
+          lchAssert(
+            !location.startsWith('uhrp://'),
+            'ERR_LCH_CONTENT_UNAVAILABLE',
+            'UHRP resolver returned a recursive locator'
+          )
+          return await this.read(location, start, end)
+        } catch (error) {
+          lastFailure = error
+        }
+      }
+      throw new LCHError('ERR_LCH_CONTENT_UNAVAILABLE', 'Every resolved UHRP host failed', {
+        cause: lastFailure
+      })
     }
     const headers = new Headers()
     if (start !== undefined && end !== undefined) headers.set('range', `bytes=${start}-${end - 1n}`)
     const response = await fetchLCH(locator, { headers }, 'content', this.options.endpointPolicy)
-    lchAssert(
-      response.ok,
-      'ERR_LCH_CONTENT_UNAVAILABLE',
-      `Content host returned ${response.status}`
-    )
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new LCHError('ERR_LCH_CONTENT_UNAVAILABLE', `Content host returned ${response.status}`)
+    }
     const declared = response.headers.get('content-length')
     if (declared !== null)
       lchAssert(
@@ -194,23 +208,33 @@ export class IndexedDBLicenseStore implements LicenseStore {
 
   async put(record: StoredLicense): Promise<void> {
     const database = await this.open()
-    await transactionPromise(database, this.storeName, 'readwrite', store =>
-      store.put(record, `${record.assetId}:${record.offerId}`)
-    )
+    try {
+      await transactionPromise(database, this.storeName, 'readwrite', store =>
+        store.put(record, `${record.assetId}:${record.offerId}`)
+      )
+    } finally {
+      database.close()
+    }
   }
 
   async delete(assetId: string, offerId: string): Promise<void> {
     const database = await this.open()
-    await transactionPromise(database, this.storeName, 'readwrite', store =>
-      store.delete(`${assetId}:${offerId}`)
-    )
+    try {
+      await transactionPromise(database, this.storeName, 'readwrite', store =>
+        store.delete(`${assetId}:${offerId}`)
+      )
+    } finally {
+      database.close()
+    }
   }
 
   private async all(): Promise<StoredLicense[]> {
     const database = await this.open()
-    return transactionPromise(database, this.storeName, 'readonly', store =>
-      store.getAll()
-    ) as Promise<StoredLicense[]>
+    try {
+      return await transactionPromise(database, this.storeName, 'readonly', store => store.getAll())
+    } finally {
+      database.close()
+    }
   }
 
   private async open(): Promise<IDBDatabase> {
@@ -224,17 +248,28 @@ export class IndexedDBLicenseStore implements LicenseStore {
   }
 }
 
-async function transactionPromise(
+async function transactionPromise<T>(
   database: IDBDatabase,
   storeName: string,
   mode: IDBTransactionMode,
-  action: (store: IDBObjectStore) => IDBRequest
-): Promise<unknown> {
+  action: (store: IDBObjectStore) => IDBRequest<T>
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(storeName, mode)
     const request = action(transaction.objectStore(storeName))
-    request.onsuccess = () => resolve(request.result)
+    let result: T
+    let requestSucceeded = false
+    request.onsuccess = () => {
+      result = request.result
+      requestSucceeded = true
+    }
     request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'))
+    transaction.oncomplete = () => {
+      if (requestSucceeded) resolve(result)
+      else reject(new Error('IndexedDB transaction completed before its request'))
+    }
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error('IndexedDB transaction failed'))
     transaction.onabort = () =>
       reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
   })

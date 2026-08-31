@@ -26,6 +26,7 @@ import {
   validateLicenseRequest,
   type PaymentCompletion,
   type LCHAcquisitionTransport,
+  type LCHValue,
   type SignedObject
 } from '../src/index.js'
 
@@ -59,6 +60,7 @@ describe('recovery-safe multipay buyer', () => {
     const assetId = bytes(2, 32)
     const demands = new Map<string, { demand: SignedObject; payee: (typeof payees)[number] }>()
     let issuedLicense: SignedObject | undefined
+    let mutateLicense: ((body: Record<string, LCHValue>) => void) | undefined
     const server = new LCHHttpServer({
       handlers: {
         preflightLicense: async request => {
@@ -95,15 +97,32 @@ describe('recovery-safe multipay buyer', () => {
           })
         },
         complete: async (completion: PaymentCompletion) => {
-          issuedLicense = await signObject(
-            'license',
-            {
-              version: 1,
-              requestId: await objectId('license-request', completion.request.body),
-              subject: completion.request.body.buyer!
-            },
-            issuerSigner
-          )
+          const requestId = await objectId('license-request', completion.request.body)
+          const body: Record<string, LCHValue> = {
+            version: 1,
+            assetId,
+            offerId,
+            requestId,
+            issuer: issuerSigner.identityKey,
+            subject: completion.request.body.buyer!,
+            issuedAt: 1_100,
+            agreement: {},
+            selection: completion.request.body.selection!,
+            fulfillments: await Promise.all(
+              completion.receipts.map(async receipt => {
+                const demandId = receipt.body.demandId as Uint8Array
+                const demand = demands.get(toHex(demandId))!.demand
+                return {
+                  dutyUid: demand.body.dutyUid!,
+                  settlementProfile: demand.body.settlementProfile!,
+                  receiptIds: [await objectId('payment-receipt', receipt.body)]
+                }
+              })
+            ),
+            keyGrants: []
+          }
+          mutateLicense?.(body)
+          issuedLicense = await signObject('license', body, issuerSigner)
           return issuedLicense
         },
         recover: async () => issuedLicense
@@ -174,7 +193,7 @@ describe('recovery-safe multipay buyer', () => {
       acceptedPolicyDigest: bytes(3, 32),
       createdAt: 1_000
     })
-    const plan = await buyer.quote(endpoint, request, issuerSigner.identityKey)
+    const plan = await buyer.quote(endpoint, request, issuerSigner.identityKey, { type: 'none' })
     expect(plan.totalSatoshis).toBe(12n)
     expect(plan.readiness).toHaveLength(2)
 
@@ -189,6 +208,26 @@ describe('recovery-safe multipay buyer', () => {
     )
     const license = await buyer.complete(payment, receipts)
     await expect(buyer.recover(endpoint, plan.requestId)).resolves.toEqual(license)
+
+    mutateLicense = body => {
+      body.assetId = bytes(9, 32)
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/License Asset ID/u)
+    mutateLicense = body => {
+      body.selection = { type: 'segments', ranges: [[0, 1]] }
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/License Selection/u)
+    mutateLicense = body => {
+      body.fulfillments = []
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/fulfillments do not match/u)
+    mutateLicense = body => {
+      body.keyGrants = [
+        { keyId: bytes(8, 32), delivery: 'https://example.test/key', payload: bytes(7, 1) }
+      ]
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/unexpected key grants/u)
+    mutateLicense = undefined
     await expect(buyer.complete(payment, receipts.slice(1))).rejects.toThrow(
       /one Receipt per Delivery/u
     )
@@ -215,7 +254,8 @@ describe('recovery-safe multipay buyer', () => {
         endpoint: 'https://multipay.test/lch',
         totalSatoshis: 0n,
         expiresAt: 2_000n,
-        recoveryUntil: 3_000n
+        recoveryUntil: 3_000n,
+        keyGrants: { type: 'none' as const }
       })
     ).rejects.toThrow(/expired before transaction creation/u)
   })
@@ -300,7 +340,8 @@ describe('recovery-safe multipay buyer', () => {
         endpoint: 'https://issuer.test/licenses',
         totalSatoshis: 7n,
         expiresAt: 2_000n,
-        recoveryUntil: 88_400n
+        recoveryUntil: 88_400n,
+        keyGrants: { type: 'none' as const }
       },
       atomicBeef,
       transactionState: 'finalized' as const,
@@ -415,8 +456,14 @@ describe('recovery-safe multipay buyer', () => {
       policy: LCH_TRANSACTION_EVIDENCE_POLICIES.signedProcessorAcceptance,
       observedAt: 1_050
     })
-    const quote = await signObject('quote', { version: 1 }, issuerSigner)
+    const quote = await signObject(
+      'quote',
+      { version: 1, requestId, offerId, assetId, selection: request.body.selection! },
+      issuerSigner
+    )
     let payeeOnline = false
+    let malformedReceipt = false
+    let fallbackCalls = 0
     const transport: LCHAcquisitionTransport = {
       preflightLicense: async () => undefined,
       quote: async () => quote,
@@ -428,12 +475,13 @@ describe('recovery-safe multipay buyer', () => {
           demandId,
           requestId,
           txid: Uint8Array.from(transaction.id('array')),
-          outputIndex: 0,
+          outputIndex: malformedReceipt ? 1 : 0,
           satoshis: 7,
           receivedAt: 1_050
         })
       },
       storeDelivery: async (endpoint, storedAuthorization, storedDelivery) => {
+        fallbackCalls += 1
         expect(endpoint).toBe('https://availability.test/store')
         expect(storedAuthorization).toEqual(authorization)
         expect(storedDelivery).toEqual(delivery)
@@ -448,9 +496,36 @@ describe('recovery-safe multipay buyer', () => {
       complete: async (_endpoint, completion) => {
         expect(completion.receipts).toHaveLength(0)
         expect(completion.authorizedOutputs).toHaveLength(1)
+        const bundle = completion.authorizedOutputs![0]!
         return signObject(
           'license',
-          { version: 1, requestId, subject: buyerSigner.identityKey },
+          {
+            version: 1,
+            assetId,
+            offerId,
+            requestId,
+            issuer: issuerSigner.identityKey,
+            subject: buyerSigner.identityKey,
+            issuedAt: 1_100,
+            agreement: {},
+            selection: request.body.selection!,
+            fulfillments: [
+              {
+                dutyUid: demand.body.dutyUid!,
+                settlementProfile: demand.body.settlementProfile!,
+                authorizationId: await objectId('payment-authorization', bundle.authorization.body),
+                transactionEvidenceId: await objectId(
+                  'transaction-evidence',
+                  bundle.transactionEvidence.body
+                ),
+                deliveryAcknowledgementId: await objectId(
+                  'payment-delivery-ack',
+                  bundle.deliveryAcknowledgement.body
+                )
+              }
+            ],
+            keyGrants: []
+          },
           issuerSigner
         )
       },
@@ -474,7 +549,8 @@ describe('recovery-safe multipay buyer', () => {
         endpoint: 'https://issuer.test/licenses',
         totalSatoshis: 7n,
         expiresAt: 2_000n,
-        recoveryUntil: 88_400n
+        recoveryUntil: 88_400n,
+        keyGrants: { type: 'none' as const }
       },
       atomicBeef,
       transactionState: 'finalized' as const,
@@ -483,12 +559,17 @@ describe('recovery-safe multipay buyer', () => {
     const buyer = new LCHMultipayBuyer(actionWallet(155).wallet, buyerSigner, { transport })
     const offlineSettlement = await buyer.settleDelivery(funded, item)
     expect(offlineSettlement.type).toBe('authorized-output')
+    expect(fallbackCalls).toBe(1)
     if (offlineSettlement.type !== 'authorized-output') throw new Error('unexpected settlement')
     await expect(buyer.complete(funded, [], [offlineSettlement.evidence])).resolves.toMatchObject({
       body: { requestId, subject: buyerSigner.identityKey }
     })
 
     payeeOnline = true
+    malformedReceipt = true
+    await expect(buyer.settleDelivery(funded, item)).rejects.toThrow(/output index does not match/u)
+    expect(fallbackCalls).toBe(1)
+    malformedReceipt = false
     await expect(buyer.settleDelivery(funded, item)).resolves.toMatchObject({ type: 'receipt' })
   })
 })

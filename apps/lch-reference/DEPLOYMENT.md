@@ -177,9 +177,12 @@ application-specific service that supplies the durable boundaries above.
    browser and server artifacts.
 2. Provision durable stores, CHIRP/UHRP retention, independent wallet modules,
    role credentials, endpoint DNS, TLS, backups, and expiry/renewal monitors.
-3. Deploy without public publication traffic. Require `/api/health` to report
-   `status: "ready"`, `walletMode: "connected"`, the expected public endpoints,
-   and a non-memory content adapter in the application-specific health result.
+3. Deploy without public publication traffic. The stock workbench's `/api/health`
+   must report `contentAdapter: "reference-memory"`; it cannot satisfy a durable
+   production readiness gate. A production service built from these handlers must
+   expose its own health contract and verify connected wallets, durable issuer and
+   settlement stores, and its configured CHIRP/UHRP content sink and source before
+   accepting publication or purchase traffic.
 4. Publish and retrieve a small detached LCH, verify the CHIRP closure, and run
    one acquisition through every enabled settlement profile.
 5. Simulate a lost completion response and recover by Request ID. Restart the

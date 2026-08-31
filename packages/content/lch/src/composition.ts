@@ -1,6 +1,10 @@
 import { LCH_LIMITS, LCH_MECHANISMS } from './constants.js'
 import { lchAssert } from './errors.js'
-import { selectionsIntersect, validateNormalizedSelection } from './selection.js'
+import {
+  normalizeSelection,
+  selectionsIntersect,
+  validateNormalizedSelection
+} from './selection.js'
 import { toHex } from './hash.js'
 import type { LCHValue, Selection } from './types.js'
 
@@ -87,27 +91,45 @@ export interface CompositionNode {
   record?: CompositionRecord
 }
 
+function traversalSelectionKey(selection: Selection): string {
+  const normalized = normalizeSelection(selection)
+  if (normalized.type === 'all') return 'all'
+  if (normalized.type === 'media-fragment') return `media-fragment:${normalized.value}`
+  return `${normalized.type}:${normalized.ranges
+    .map(([start, end]) => `${BigInt(start)}-${BigInt(end)}`)
+    .join(',')}`
+}
+
 export async function walkComposition(
   root: CompositionNode,
   load: (assetId: Uint8Array, selection: Selection) => Promise<CompositionNode | undefined>,
   maximumDepth = LCH_LIMITS.compositionDepth
 ): Promise<CompositionIngredient[]> {
   const active = new Set<string>()
+  const expanded = new Set<string>()
   const result: CompositionIngredient[] = []
 
   async function visit(node: CompositionNode, depth: number): Promise<void> {
     lchAssert(depth <= maximumDepth, 'ERR_LCH_CYCLE', 'Composition depth limit exceeded')
     const key = toHex(node.assetId)
     lchAssert(!active.has(key), 'ERR_LCH_CYCLE', 'Composition cycle detected')
+    const expansionKey = `${key}\u0000${traversalSelectionKey(node.selection)}`
+    if (expanded.has(expansionKey)) return
     active.add(key)
     if (node.record !== undefined) {
       for (const ingredient of activeIngredients(node.record, node.selection)) {
+        lchAssert(
+          result.length < LCH_LIMITS.cborEntries,
+          'ERR_LCH_PROVENANCE',
+          'Composition traversal limit exceeded'
+        )
         result.push(ingredient)
         const source = await load(ingredient.sourceAssetId, ingredient.sourceSelection)
         if (source !== undefined) await visit(source, depth + 1)
       }
     }
     active.delete(key)
+    expanded.add(expansionKey)
   }
 
   await visit(root, 0)

@@ -30,7 +30,9 @@ import {
   toHex,
   unitAmount,
   validateOffer,
+  verifySignedObject,
   type LCHValue,
+  type Selection,
   type SignedObject
 } from '../src/index.js'
 
@@ -73,6 +75,15 @@ describe('profiles, selections, prices, and policies', () => {
     expect(fixedTotal([{ satoshis: 3 }, { satoshis: 4n }])).toBe(7n)
     expect(unitAmount(11, 5, 1, 2)).toBe(6n)
     expect(() => unitAmount(1.5, 1, 1, 1)).toThrow()
+  })
+
+  it('fails closed with a stable LCH error for unknown selection types', () => {
+    const unknown = { type: 'future-selection' } as unknown as Selection
+    expect(() => normalizeSelection(unknown)).toThrow('Selection type is unsupported')
+    expect(() => selectionsIntersect({ type: 'all' }, unknown)).toThrow(
+      'Selection type is unsupported'
+    )
+    expect(() => selectionQuantity(unknown)).toThrow('Selection type is unsupported')
   })
 
   it('evaluates pinned policies without rewriting nested placeholders', async () => {
@@ -120,6 +131,23 @@ describe('profiles, selections, prices, and policies', () => {
 })
 
 describe('issuer and acquisition orchestration', () => {
+  it('ignores malformed co-signatures when a required signer is valid', async () => {
+    const signer = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(30)),
+      random: length => bytes(30, length)
+    })
+    const signed = await signObject('offer', { version: 1 }, signer)
+    const other = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(29)),
+      random: length => bytes(29, length)
+    })
+    const otherSigned = await signObject('offer', { version: 1 }, other)
+    signed.signatures.unshift(Uint8Array.of(0), otherSigned.signatures[0])
+    await expect(
+      verifySignedObject('offer', signed, new PublicBRC77Verifier(), signer.identityKey)
+    ).resolves.toBeUndefined()
+  })
+
   it('signs and verifies Offers and exact whole-asset key Licenses', async () => {
     const signer = await WalletBRC77Signer.create({
       wallet: new ProtoWallet(new PrivateKey(31)),

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 import {
   LCHComposer,
   LCH_MECHANISMS,
@@ -103,6 +103,91 @@ describe('composition and payment invariants', () => {
         })
       )
     ).rejects.toMatchObject({ code: 'ERR_LCH_CYCLE' })
+  })
+
+  it('expands a shared provenance node once while retaining direct placements', async () => {
+    const record = (label: number, sources: number[]) => {
+      const composer = new LCHComposer(id(label))
+      sources.forEach((source, index) => {
+        composer.addWholePlacement({
+          sourceAssetId: id(source),
+          sourceLicenseId: id(source + 20),
+          c2paIngredient: {
+            url: `self#jumbf=/c2pa/${label}-${index}`,
+            alg: 'sha256',
+            hash: id(label + index + 1)
+          },
+          relationship: 'componentOf',
+          sourceSelection: { type: 'all' }
+        })
+      })
+      return composer.build()
+    }
+    const records = new Map([
+      [60, record(70, [61, 62])],
+      [61, record(71, [63])],
+      [62, record(72, [63])],
+      [63, record(73, [64])]
+    ])
+    const load = jest.fn(async (assetId: Uint8Array) => ({
+      assetId,
+      selection: { type: 'all' as const },
+      record: records.get(assetId[0])
+    }))
+    const ingredients = await walkComposition(
+      { assetId: id(60), selection: { type: 'all' }, record: records.get(60) },
+      load
+    )
+    expect(ingredients).toHaveLength(5)
+    expect(ingredients.filter(item => item.sourceAssetId[0] === 64)).toHaveLength(1)
+    expect(load).toHaveBeenCalledTimes(5)
+  })
+
+  it('expands the same provenance Asset separately for distinct Selections', async () => {
+    const sharedAsset = id(80)
+    const leafAsset = id(81)
+    const root = new LCHComposer(id(82))
+    const selections = [
+      { type: 'all' as const },
+      { type: 'segments' as const, ranges: [[0, 1]] as const },
+      { type: 'media-fragment' as const, value: 't=0,1' }
+    ]
+    selections.forEach((sourceSelection, index) => {
+      root.addWholePlacement({
+        sourceAssetId: sharedAsset,
+        sourceLicenseId: id(83),
+        c2paIngredient: {
+          url: `self#jumbf=/c2pa/selection-${index}`,
+          alg: 'sha256',
+          hash: id(84 + index)
+        },
+        relationship: 'componentOf',
+        sourceSelection
+      })
+    })
+    const sharedRecord = new LCHComposer(id(88))
+      .addWholePlacement({
+        sourceAssetId: leafAsset,
+        sourceLicenseId: id(89),
+        c2paIngredient: {
+          url: 'self#jumbf=/c2pa/shared-leaf',
+          alg: 'sha256',
+          hash: id(90)
+        },
+        relationship: 'componentOf',
+        sourceSelection: { type: 'all' }
+      })
+      .build()
+    const load = jest.fn(async (assetId: Uint8Array, selection: (typeof selections)[number]) => ({
+      assetId,
+      selection,
+      record: assetId[0] === sharedAsset[0] ? sharedRecord : undefined
+    }))
+    const ingredients = await walkComposition(
+      { assetId: id(91), selection: { type: 'all' }, record: root.build() },
+      load
+    )
+    expect(ingredients.filter(item => item.sourceAssetId[0] === leafAsset[0])).toHaveLength(3)
   })
 
   it('binds the exact C2PA hashed URI and manifest digest', async () => {

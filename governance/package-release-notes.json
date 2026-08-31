@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-27",
+  "lastReviewed": "2026-08-30",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -77,8 +77,8 @@
       "name": "@bsv/lch",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "Introduces the published BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed acquisition objects, deterministic-CBOR HTTP client/server bindings, independently routed and replay-safe Payee receipts, signed readiness and pending settlement, receipt-complete and offline-capable authorized-output settlement profiles, authenticated late Delivery retrieval, an explicit recovery-safe multipay buyer workflow, UHRP and CHIRP content adapters, authority revocation, and whole-placement composition.",
-      "migration": "No consumer migration is required; this is the first release of a new additive package. Applications must keep createPayment behind explicit wallet authorization, persist the funded transaction and every partial settlement proof through recovery, retry with that same transaction, distinguish finalized from accepted evidence, and fail closed on unknown settlement or evidence profiles. Payees should select receipt-complete unless they explicitly accept authorized-output provider, privacy, and pre-internalization key-release tradeoffs. Distributors must retain THIRD_PARTY_NOTICES.md with the package; the new profile adds no dependency. Published BRC-170 remains authoritative if the implementation and standard differ."
+      "summary": "Introduces the published BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed acquisition objects, deterministic-CBOR HTTP client/server bindings, independently routed and replay-safe Payee receipts, signed readiness and pending settlement, receipt-complete and offline-capable authorized-output settlement profiles, authenticated late Delivery retrieval, an explicit recovery-safe multipay buyer workflow with exact License, fulfillment, and key-grant binding, commit-aware IndexedDB persistence, UHRP and CHIRP content adapters with resolved-host failover, authority revocation, bounded DAG composition, deterministic malformed-input handling, and URL-canonical SSRF protection including IPv4-mapped IPv6 literals.",
+      "migration": "No consumer migration is required; this is the first release of a new additive package. Applications must give quote() the verified Asset encryption descriptor and selected Offer key-delivery mechanism, keep createPayment behind explicit wallet authorization, persist the funded transaction and every partial settlement proof through recovery, retry with that same transaction, distinguish finalized from accepted evidence, fail closed on unknown settlement or evidence profiles, and supply an address-pinning connector for DNS endpoints. Payees should select receipt-complete unless they explicitly accept authorized-output provider, privacy, and pre-internalization key-release tradeoffs. Distributors must retain THIRD_PARTY_NOTICES.md with the package; the new profile adds no dependency. Published BRC-170 remains authoritative if the implementation and standard differ."
     },
     {
       "name": "@bsv/did",
