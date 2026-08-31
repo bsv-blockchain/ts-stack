@@ -211,7 +211,7 @@ export class MessageBoxClient {
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
   protected originator?: OriginatorDomainNameStringUnder250Bytes
-  private readonly socketOptions?: MessageBoxClientOptions['socketOptions']
+  private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
@@ -260,6 +260,16 @@ export class MessageBoxClient {
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator
+    // autoConnect is excluded from the forwarded type, so this guard exists for
+    // JavaScript callers who reach past it.
+    const forwardedManagerOptions = socketOptions?.managerOptions as
+      { autoConnect?: boolean } | undefined
+    if (forwardedManagerOptions?.autoConnect === false) {
+      throw new Error(
+        '[MB CLIENT ERROR] socketOptions.managerOptions.autoConnect must not be false: ' +
+          'the live socket is started when it is created and cannot be connected later.'
+      )
+    }
     this.socketOptions = socketOptions
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)

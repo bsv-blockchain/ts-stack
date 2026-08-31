@@ -22,8 +22,10 @@ All notable changes to this project will be documented in this file. The format 
   `{ managerOptions: { transports: ['websocket'] } }`) to reach deployments that
   do not carry Engine.IO's HTTP polling transport, and can also supply
   `requestedCertificates`, `sessionManager`, `maxPendingAuthMessages`, and
-  `onError`. Nothing is forwarded when unset, so default transport negotiation
-  and all HTTP code paths are unchanged.
+  `onError`. `managerOptions.autoConnect` is excluded and rejected: the socket is
+  started when it is created, so disabling auto-connect could never connect.
+  Nothing is forwarded when unset, so default transport negotiation and all HTTP
+  code paths are unchanged.
 
 - Added the `teratestnet` overlay preset. TTN clients must provide an explicit
   Message Box host until a dedicated TTN deployment is available, preventing

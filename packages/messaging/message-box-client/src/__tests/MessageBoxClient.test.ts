@@ -214,6 +214,30 @@ describe('MessageBoxClient', () => {
     expect(Object.keys(options).sort()).toEqual(['originator', 'wallet'])
   }, 10000)
 
+  it('Rejects managerOptions.autoConnect false, which would never connect', () => {
+    // AuthSocketClient exposes no connect(), and MessageBoxClient never starts the
+    // socket itself, so autoConnect: false would sit until the 5s auth timeout.
+    expect(
+      () =>
+        new MessageBoxClient({
+          walletClient: mockWalletClient,
+          host: 'https://message-box-us-1.bsvb.tech',
+          socketOptions: { managerOptions: { autoConnect: false } } as any
+        })
+    ).toThrow(/autoConnect/)
+  })
+
+  it('Allows managerOptions.autoConnect true, which matches the default', () => {
+    expect(
+      () =>
+        new MessageBoxClient({
+          walletClient: mockWalletClient,
+          host: 'https://message-box-us-1.bsvb.tech',
+          socketOptions: { managerOptions: { autoConnect: true } } as any
+        })
+    ).not.toThrow()
+  })
+
   it('Keeps client-owned wallet and originator ahead of socketOptions', async () => {
     const foreignWallet = { id: 'foreign-wallet' }
     const messageBoxClient = new MessageBoxClient({

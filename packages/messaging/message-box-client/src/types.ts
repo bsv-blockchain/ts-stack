@@ -17,6 +17,26 @@ import {
 import type { AuthSocketClientOptions } from '@bsv/authsocket-client'
 
 /**
+ * Socket.IO manager/socket options forwarded to AuthSocketClient.
+ * `autoConnect` is excluded: AuthSocketClient exposes no connect method and the
+ * client never starts the socket itself, so disabling auto-connect would leave
+ * `initializeConnection` waiting for an authentication that cannot arrive.
+ */
+export type MessageBoxForwardedManagerOptions = Omit<
+  NonNullable<AuthSocketClientOptions['managerOptions']>,
+  'autoConnect'
+>
+
+/**
+ * AuthSocketClient options a MessageBoxClient caller may supply.
+ * `wallet` and `originator` are owned by the client and always win.
+ */
+export type MessageBoxSocketOptions = Omit<
+  AuthSocketClientOptions,
+  'wallet' | 'originator' | 'managerOptions'
+> & { managerOptions?: MessageBoxForwardedManagerOptions }
+
+/**
  * Configuration options for initializing a MessageBoxClient.
  */
 export interface MessageBoxClientOptions {
@@ -61,7 +81,7 @@ export interface MessageBoxClientOptions {
    * client's own values always win. Only affects the socket path; HTTP requests
    * are unchanged.
    */
-  socketOptions?: Omit<AuthSocketClientOptions, 'wallet' | 'originator'>
+  socketOptions?: MessageBoxSocketOptions
 }
 
 /**
