@@ -21,6 +21,8 @@ import type {
 } from './types.js'
 
 const ECPM_PATTERN = /^p ecpm (apply|remove) (0[23][0-9a-f]{64}) ([a-z0-9]+(?: [a-z0-9]+)*)$/
+const MAX_ECPM_PROTOCOL_BYTES = 354
+const MAX_LOGICAL_PROTOCOL_BYTES = 273
 const DEFAULT_AUTHORIZATION_TTL = 5 * 60 * 1000
 const MAX_AUTHORIZATION_TTL = 24 * 60 * 60 * 1000
 
@@ -112,6 +114,9 @@ export class EcpmPermissionModule implements PermissionsModule {
     if (!this.isSecurityLevel(securityLevel) || typeof protocolName !== 'string') {
       throw new Error('ECPM: invalid protocolID')
     }
+    if (Utils.toArray(protocolName, 'utf8').length > MAX_ECPM_PROTOCOL_BYTES) {
+      throw new Error('ECPM: outer protocol ID exceeds 354 bytes')
+    }
     const match = ECPM_PATTERN.exec(protocolName)
     if (match == null) {
       throw new Error('ECPM: protocol must be p ecpm <apply|remove> <pointHex> <logicalProtocolID>')
@@ -152,7 +157,7 @@ export class EcpmPermissionModule implements PermissionsModule {
 
   private validateLogicalProtocol(logicalProtocolID: string): void {
     const bytes = Utils.toArray(logicalProtocolID, 'utf8').length
-    if (bytes < 5 || bytes > 273) {
+    if (bytes < 5 || bytes > MAX_LOGICAL_PROTOCOL_BYTES) {
       throw new Error('ECPM: logical protocol ID must be between 5 and 273 bytes')
     }
     if (

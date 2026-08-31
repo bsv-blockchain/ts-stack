@@ -111,15 +111,22 @@ describe('EcpmPermissionModule', () => {
         })
       )
     ).resolves.toHaveProperty('publicKey')
-    await expect(
-      execute(
-        module,
-        requestArgs(original, 'apply', {
-          protocolID: [0, `p ecpm apply ${original} ${'a'.repeat(273)}`],
-          keyID: 'x'.repeat(800)
-        })
-      )
-    ).resolves.toHaveProperty('publicKey')
+    for (const [operation, outerLength] of [
+      ['apply', 353],
+      ['remove', 354]
+    ] as const) {
+      const protocolName = `p ecpm ${operation} ${original} ${'a'.repeat(273)}`
+      expect(protocolName).toHaveLength(outerLength)
+      await expect(
+        execute(
+          module,
+          requestArgs(original, operation, {
+            protocolID: [0, protocolName],
+            keyID: 'x'.repeat(800)
+          })
+        )
+      ).resolves.toHaveProperty('publicKey')
+    }
     for (const privilegedReason of ['abcde', 'x'.repeat(50)]) {
       await expect(
         execute(
@@ -404,6 +411,18 @@ describe('EcpmPermissionModule', () => {
     await expect(
       execute(module, requestArgs(point(2), 'apply', { protocolID: [0, protocolName] }))
     ).rejects.toThrow()
+  })
+
+  it('rejects an ECPM dispatch envelope above 354 bytes', async () => {
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(84))
+    })
+    const protocolName = `p ecpm remove ${point(2)} ${'a'.repeat(274)}`
+
+    expect(protocolName).toHaveLength(355)
+    await expect(
+      execute(module, requestArgs(point(2), 'remove', { protocolID: [0, protocolName] }))
+    ).rejects.toThrow('ECPM: outer protocol ID exceeds 354 bytes')
   })
 
   it('rejects the non-canonical x coordinate before the SDK parser can reduce it', async () => {

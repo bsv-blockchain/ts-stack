@@ -13,6 +13,11 @@ Applications call the existing `getPublicKey` method with:
 p ecpm <apply|remove> <pointHex> <logicalProtocolID>
 ```
 
+The logical protocol ID is 5–273 ASCII bytes. The complete dispatch envelope
+may be 353 bytes for `apply` or 354 bytes for `remove`; this preserves the full
+BRC-43 logical protocol namespace while remaining inside BRC-100's 400-byte
+protocol-string limit.
+
 The security level remains in the normal BRC-43 tuple. The key ID,
 counterparty, privileged selection, privileged reason, and permission behavior
 remain in their existing `getPublicKey` fields.
