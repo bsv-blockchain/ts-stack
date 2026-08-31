@@ -4,7 +4,7 @@ title: 'Release and Operations Guide'
 kind: reference
 version: '1.1.2'
 last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, releases, operations, rollback, npm, containers]

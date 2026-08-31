@@ -4,7 +4,7 @@ title: 'Documentation Maintenance'
 kind: meta
 version: '2.1.0'
 last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [about, documentation, maintenance, automation]

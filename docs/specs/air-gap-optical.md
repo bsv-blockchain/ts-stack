@@ -4,7 +4,7 @@ title: Air-Gap Optical Transport (BRC-141)
 kind: spec
 version: '1.0.0'
 last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: experimental
 tags: ['spec', 'transport', 'air-gap', 'qr', 'optical']

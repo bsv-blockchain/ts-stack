@@ -3,10 +3,10 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.4.2'
+version: '2.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -61,7 +61,8 @@ is useful.
 
 ## What it provides
 
-- `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery
+- `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery,
+  with selectable socket transports
 - encryption through the BRC-100 wallet protocol, enabled by default
 - overlay host advertisement and public-HTTPS discovery
 - sender-specific and box-wide permissions with fee quotes

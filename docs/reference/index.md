@@ -4,7 +4,7 @@ title: 'Reference'
 kind: meta
 version: 'n/a'
 last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, api, index]
