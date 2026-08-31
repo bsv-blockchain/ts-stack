@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]

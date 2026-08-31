@@ -49,7 +49,7 @@
         ".github/dependabot.yml"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
@@ -105,7 +105,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove service by service when its complete supported Google and OpenTelemetry graph natively resolves gaxios 7.3.0 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -124,7 +124,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-29",
-      "reviewBy": "2026-08-28",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove from each remaining service when its supported cloud client closure natively resolves uuid 11.1.1 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
@@ -140,7 +140,7 @@
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-08-27",
+      "reviewBy": "2026-09-30",
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {

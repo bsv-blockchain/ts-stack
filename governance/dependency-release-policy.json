@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-13",
+  "lastReviewed": "2026-08-30",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -49,7 +49,7 @@
         "classification": "toolchain-bridge",
         "rationale": "TypeScript 7 owns every native CLI build while compiler-API consumers use the official TypeScript 6 compatibility package until a stable TypeScript 7 API exists.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-27",
+        "reviewBy": "2026-09-30",
         "removeWhen": "All compiler-API consumers support the native TypeScript 7 API and the complete declaration, Jest, conformance, browser, mobile, infrastructure, and packed-consumer matrix passes without the alias."
       },
       {
@@ -128,7 +128,7 @@
         "classification": "coordinated-major-hold",
         "rationale": "The isolated OpenAPI code generator is pinned to its tested compiler API and generated-output reproducibility boundary.",
         "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-25",
+        "reviewBy": "2026-09-30",
         "removeWhen": "The generator and Redocly closure support the new compiler and deterministic codegen remains byte-for-byte clean."
       }
     ]
@@ -144,10 +144,10 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-08-13",
-    "method": "Rechecked all retained root and standalone overrides against their current natural dependency graphs, refreshed the root lock against the current advisory database, and reproduced the updated nanoid and image-size findings before selecting the narrowest compatible override and committed parser patch.",
+    "reviewedAt": "2026-08-30",
+    "method": "Rechecked all 20 registered root, standalone, and isolated-codegen selectors against the frozen dependency graphs, current upstream package manifests, and the current advisory audit. The exact gcp-metadata 8.1.4 dependency still selects gaxios 7.1.3, teeny-request 9.0.0 still admits uuid 9, and typed-rest-client 2.3.1 still pins qs 6.15.1.",
     "retainedCount": 20,
-    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. The nanoid override selects 3.3.18, the first 3.x release patched after GHSA-2v37-7h3g-55p8 was expanded on 2026-08-13. No override can be removed safely in this wave.",
+    "result": "Every remaining override still prevents a vulnerable natural resolution or preserves the isolated reproducible codegen closure. Current upstream majors can remove some legacy paths only through coordinated Stryker or Google Cloud migrations, not by deleting an override from the supported graph. No selector can be removed safely in this review.",
     "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [

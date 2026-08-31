@@ -4,7 +4,7 @@ title: 'CI Performance Governance'
 kind: reference
 version: '1.1.0'
 last_updated: '2026-07-31'
-last_verified: '2026-07-31'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
