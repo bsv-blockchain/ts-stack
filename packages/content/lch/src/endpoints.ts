@@ -27,24 +27,52 @@ function inV4Range(value: number, start: number, bits: number): boolean {
   return value >>> shift === start >>> shift
 }
 
-function ipv6Words(address: string): number[] | undefined {
+const BLOCKED_IPV4_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x00000000, 8],
+  [0x0a000000, 8],
+  [0x64400000, 10],
+  [0x7f000000, 8],
+  [0xa9fe0000, 16],
+  [0xac100000, 12],
+  [0xc0000000, 24],
+  [0xc0000200, 24],
+  [0xc0586300, 24],
+  [0xc0a80000, 16],
+  [0xc6120000, 15],
+  [0xc6336400, 24],
+  [0xcb007100, 24],
+  [0xe0000000, 4],
+  [0xf0000000, 4]
+]
+
+function isPublicIPv4Value(value: number): boolean {
+  return !BLOCKED_IPV4_RANGES.some(([start, bits]) => inV4Range(value, start, bits))
+}
+
+function normalizedIPv6(address: string): string | undefined {
   const opens = address.startsWith('[')
   const closes = address.endsWith(']')
   if (opens !== closes) return undefined
-  let normalized = address.toLowerCase().replace(/^\[|\]$/gu, '')
+  const normalized = address.toLowerCase().replace(/^\[|\]$/gu, '')
   if (normalized.includes('[') || normalized.includes(']') || normalized.includes('%'))
     return undefined
-  const lastColon = normalized.lastIndexOf(':')
-  if (normalized.includes('.')) {
-    if (lastColon < 0) return undefined
-    const embedded = ipv4Value(normalized.slice(lastColon + 1))
-    if (embedded === undefined) return undefined
-    normalized = `${normalized.slice(0, lastColon)}:${(embedded >>> 16).toString(16)}:${(
-      embedded & 0xffff
-    ).toString(16)}`
-  }
+  return normalized
+}
+
+function expandEmbeddedIPv4(address: string): string | undefined {
+  if (!address.includes('.')) return address
+  const lastColon = address.lastIndexOf(':')
+  if (lastColon < 0) return undefined
+  const embedded = ipv4Value(address.slice(lastColon + 1))
+  if (embedded === undefined) return undefined
+  return `${address.slice(0, lastColon)}:${(embedded >>> 16).toString(16)}:${(
+    embedded & 0xffff
+  ).toString(16)}`
+}
+
+function parseIPv6Words(normalized: string): number[] | undefined {
   const marker = normalized.indexOf('::')
-  if (marker >= 0 && normalized.indexOf('::', marker + 2) >= 0) return undefined
+  if (marker >= 0 && normalized.slice(marker + 2).includes('::')) return undefined
   const leftText = marker < 0 ? normalized : normalized.slice(0, marker)
   const rightText = marker < 0 ? '' : normalized.slice(marker + 2)
   const left = leftText === '' ? [] : leftText.split(':')
@@ -63,6 +91,13 @@ function ipv6Words(address: string): number[] | undefined {
   ]
 }
 
+function ipv6Words(address: string): number[] | undefined {
+  const normalized = normalizedIPv6(address)
+  if (normalized === undefined) return undefined
+  const expanded = expandEmbeddedIPv4(normalized)
+  return expanded === undefined ? undefined : parseIPv6Words(expanded)
+}
+
 function publicEmbeddedIPv4(high: number, low: number): boolean {
   const value = (high * 0x10000 + low) >>> 0
   return isPublicAddress(
@@ -70,58 +105,48 @@ function publicEmbeddedIPv4(high: number, low: number): boolean {
   )
 }
 
-export function isPublicAddress(address: string): boolean {
-  const v4 = ipv4Value(address)
-  if (v4 !== undefined) {
-    const blocked: Array<[number, number]> = [
-      [0x00000000, 8],
-      [0x0a000000, 8],
-      [0x64400000, 10],
-      [0x7f000000, 8],
-      [0xa9fe0000, 16],
-      [0xac100000, 12],
-      [0xc0000000, 24],
-      [0xc0000200, 24],
-      [0xc0586300, 24],
-      [0xc0a80000, 16],
-      [0xc6120000, 15],
-      [0xc6336400, 24],
-      [0xcb007100, 24],
-      [0xe0000000, 4],
-      [0xf0000000, 4]
-    ]
-    return !blocked.some(([start, bits]) => inV4Range(v4, start, bits))
-  }
-  const words = ipv6Words(address)
-  if (words === undefined) return false
-  if (words.slice(0, 5).every(word => word === 0) && words[5] === 0xffff)
-    return publicEmbeddedIPv4(words[6], words[7])
-  if (words.slice(0, 4).every(word => word === 0) && words[4] === 0xffff && words[5] === 0)
-    return publicEmbeddedIPv4(words[6], words[7])
-  if (words.slice(0, 6).every(word => word === 0)) return false
-  if (words[0] === 0x0064 && words[1] === 0xff9b && words.slice(2, 6).every(word => word === 0))
-    return publicEmbeddedIPv4(words[6], words[7])
-  if (words[0] === 0x0064 && words[1] === 0xff9b && words[2] === 1) return false
-  if ((words[0] & 0xe000) !== 0x2000) return false
-  if (words[0] === 0x2002) return publicEmbeddedIPv4(words[1], words[2])
-  if (words[0] === 0x2001 && (words[1] & 0xfe00) === 0) {
-    const anycast =
-      words[1] === 1 &&
-      words.slice(2, 7).every(word => word === 0) &&
-      words[7] >= 1 &&
-      words[7] <= 3
-    const amt = words[1] === 3
-    const as112 = words[1] === 4 && words[2] === 0x0112
-    const orchid = (words[1] & 0xfff0) === 0x0020
-    const drone = (words[1] & 0xfff0) === 0x0030
-    if (!anycast && !amt && !as112 && !orchid && !drone) return false
-  }
-  if (
+function zeroWords(words: readonly number[], start: number, end: number): boolean {
+  return words.slice(start, end).every(word => word === 0)
+}
+
+function embeddedIPv4(words: readonly number[]): readonly [number, number] | undefined {
+  const mapped = zeroWords(words, 0, 5) && words[5] === 0xffff
+  const translated = zeroWords(words, 0, 4) && words[4] === 0xffff && words[5] === 0
+  const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && zeroWords(words, 2, 6)
+  if (mapped || translated || nat64) return [words[6], words[7]]
+  if (words[0] === 0x2002) return [words[1], words[2]]
+  return undefined
+}
+
+function isAllowedIetfAssignment(words: readonly number[]): boolean {
+  const anycast = words[1] === 1 && zeroWords(words, 2, 7) && words[7] >= 1 && words[7] <= 3
+  const amt = words[1] === 3
+  const as112 = words[1] === 4 && words[2] === 0x0112
+  const orchid = (words[1] & 0xfff0) === 0x0020
+  const drone = (words[1] & 0xfff0) === 0x0030
+  return anycast || amt || as112 || orchid || drone
+}
+
+function isDocumentationIPv6(words: readonly number[]): boolean {
+  return (
     (words[0] === 0x2001 && words[1] === 0x0db8) ||
     (words[0] === 0x3fff && (words[1] & 0xf000) === 0)
   )
-    return false
-  return true
+}
+
+export function isPublicAddress(address: string): boolean {
+  const v4 = ipv4Value(address)
+  if (v4 !== undefined) return isPublicIPv4Value(v4)
+  const words = ipv6Words(address)
+  if (words === undefined) return false
+  const embedded = embeddedIPv4(words)
+  if (embedded !== undefined) return publicEmbeddedIPv4(embedded[0], embedded[1])
+  if (zeroWords(words, 0, 6)) return false
+  if (words[0] === 0x0064 && words[1] === 0xff9b && words[2] === 1) return false
+  if ((words[0] & 0xe000) !== 0x2000) return false
+  const ietfAssignment = words[0] === 0x2001 && (words[1] & 0xfe00) === 0
+  if (ietfAssignment && !isAllowedIetfAssignment(words)) return false
+  return !isDocumentationIPv6(words)
 }
 
 export async function validateEndpoint(value: string, policy: EndpointPolicy = {}): Promise<URL> {

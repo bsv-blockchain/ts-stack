@@ -708,8 +708,8 @@ function validateFulfillments(
     return toHex(encodeDeterministicCbor(fulfillment))
   })
   const required = expected.map(fulfillment => toHex(encodeDeterministicCbor(fulfillment)))
-  actual.sort()
-  required.sort()
+  actual.sort((left, right) => left.localeCompare(right))
+  required.sort((left, right) => left.localeCompare(right))
   lchAssert(
     actual.length === required.length && actual.every((item, index) => item === required[index]),
     'ERR_LCH_LICENSE',
@@ -732,7 +732,7 @@ function validateLicenseKeyGrants(
       'ERR_LCH_KEY',
       'License key grant is invalid'
     )
-    const keys = Object.keys(item).sort()
+    const keys = Object.keys(item).sort((left, right) => left.localeCompare(right))
     lchAssert(
       keys.join(',') === 'delivery,keyId,payload',
       'ERR_LCH_KEY',
