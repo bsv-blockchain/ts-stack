@@ -7,7 +7,9 @@ import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 export const PREPARED_BEEF_FORMAT_VERSION = 1
 
 const DEFAULT_MAX_QUEUE_SIZE = 32
+const DEFAULT_MAX_QUEUE_SIZE_PER_USER = 4
 const DEFAULT_MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
+const DEFAULT_MAX_ARTIFACT_TRANSACTIONS = 256
 const DEFAULT_BACKFILL_BATCH_SIZE = 32
 const DEFAULT_BACKFILL_INTERVAL_MS = 100
 // COOK targets normal funding calls, which ordinarily spend one managed-change
@@ -24,8 +26,12 @@ export interface PreparedBeefOptions {
   backfillEnabled?: boolean
   /** Maximum queued roots. New background work is dropped when full. */
   maxQueueSize?: number
+  /** Maximum queued or running roots for one user. */
+  maxQueueSizePerUser?: number
   /** Reject a prepared artifact larger than this many bytes. */
   maxArtifactBytes?: number
+  /** Reject source or prepared BEEF graphs with more transactions. */
+  maxArtifactTransactions?: number
   /** Maximum roots selected by each low-priority backfill pass. */
   backfillBatchSize?: number
   /** Delay between backfill passes. */
@@ -37,7 +43,9 @@ export interface PreparedBeefPolicy {
   writeEnabled: boolean
   backfillEnabled: boolean
   maxQueueSize: number
+  maxQueueSizePerUser: number
   maxArtifactBytes: number
+  maxArtifactTransactions: number
   backfillBatchSize: number
   backfillIntervalMs: number
 }
@@ -58,11 +66,6 @@ export interface PreparedBeefLookupResult {
 export interface PreparedBeefPreparation {
   userId: number
   rootTxids: string[]
-  /**
-   * Optional already-built source. It is retained only until the background
-   * task runs and is never mutated by the coordinator.
-   */
-  sourceBeef?: Beef
 }
 
 /** Knex-owned extension used without adding server cache code to portable providers. */
@@ -71,8 +74,10 @@ export interface PreparedBeefStorage extends Pick<
   'telemetry' | 'getBeefForTransaction' | 'getServices'
 > {
   readonly preparedBeefPolicy: PreparedBeefPolicy
+  preparedBeefReadsEnabled?: () => boolean
   findPreparedBeefs: (userId: number, rootTxids: string[]) => Promise<TablePreparedBeef[]>
   readPreparedBeefProofEpoch: () => Promise<number>
+  readPreparedBeefSourceByteLength: (rootTxid: string) => Promise<number | undefined>
   upsertPreparedBeef: (artifact: TablePreparedBeef, expectedProofEpoch: number) => Promise<boolean>
   findPreparedBeefBackfillRoots: (limit: number, formatVersion: number) => Promise<PreparedBeefRoot[]>
 }
@@ -83,7 +88,9 @@ export function defaultPreparedBeefPolicy(): PreparedBeefPolicy {
     writeEnabled: false,
     backfillEnabled: false,
     maxQueueSize: DEFAULT_MAX_QUEUE_SIZE,
+    maxQueueSizePerUser: DEFAULT_MAX_QUEUE_SIZE_PER_USER,
     maxArtifactBytes: DEFAULT_MAX_ARTIFACT_BYTES,
+    maxArtifactTransactions: DEFAULT_MAX_ARTIFACT_TRANSACTIONS,
     backfillBatchSize: DEFAULT_BACKFILL_BATCH_SIZE,
     backfillIntervalMs: DEFAULT_BACKFILL_INTERVAL_MS
   }
@@ -95,7 +102,13 @@ export function validatePreparedBeefPolicy(options?: PreparedBeefOptions): Prepa
       throw new WERR_INVALID_PARAMETER(`preparedBeef.${name}`, 'a boolean')
     }
   }
-  for (const name of ['maxQueueSize', 'maxArtifactBytes', 'backfillBatchSize'] as const) {
+  for (const name of [
+    'maxQueueSize',
+    'maxQueueSizePerUser',
+    'maxArtifactBytes',
+    'maxArtifactTransactions',
+    'backfillBatchSize'
+  ] as const) {
     if (!Number.isSafeInteger(policy[name]) || policy[name] < 1) {
       throw new WERR_INVALID_PARAMETER(`preparedBeef.${name}`, 'a positive safe integer')
     }
@@ -105,6 +118,9 @@ export function validatePreparedBeefPolicy(options?: PreparedBeefOptions): Prepa
   }
   if (policy.backfillEnabled && !policy.writeEnabled) {
     throw new WERR_INVALID_PARAMETER('preparedBeef.backfillEnabled', 'false unless writeEnabled is true')
+  }
+  if (policy.maxQueueSizePerUser > policy.maxQueueSize) {
+    throw new WERR_INVALID_PARAMETER('preparedBeef.maxQueueSizePerUser', 'no greater than maxQueueSize')
   }
   return policy
 }
@@ -116,6 +132,29 @@ function checksum(bytes: Uint8Array): string {
 function validRootTransaction(beef: Beef, rootTxid: string): boolean {
   const root = beef.findTxid(rootTxid)
   return root != null && !root.isTxidOnly && root.rawTxUint8Array != null
+}
+
+/**
+ * Cheap, conservative work estimate which avoids serializing or verifying a
+ * BEEF. Exact serialized size is still enforced before persistence.
+ */
+function estimatedBeefBytes(beef: Beef): number {
+  let bytes = 16
+  for (const tx of beef.txs) {
+    bytes += 40
+    const rawTx = tx.rawTxUint8Array
+    if (rawTx != null) bytes += rawTx.length
+  }
+  for (const bump of beef.bumps) {
+    bytes += 16
+    for (const level of bump.path) bytes += 8 + level.length * 40
+  }
+  return bytes
+}
+
+function isAdmissibleBeef(beef: Beef, policy: PreparedBeefPolicy): boolean {
+  return beef.txs.length <= policy.maxArtifactTransactions &&
+    estimatedBeefBytes(beef) <= policy.maxArtifactBytes
 }
 
 /**
@@ -135,7 +174,11 @@ export async function lookupPreparedBeefs(
     corruptCount: 0,
     byteLength: 0
   }
-  if (!storage.preparedBeefPolicy.readEnabled || result.missingTxids.length === 0) return result
+  if (
+    !storage.preparedBeefPolicy.readEnabled ||
+    storage.preparedBeefReadsEnabled?.() === false ||
+    result.missingTxids.length === 0
+  ) return result
 
   return await storage.telemetry.withSpan(
     'wallet.storage.prepared_beef.lookup',
@@ -231,7 +274,10 @@ export async function lookupPreparedBeefs(
   )
 }
 
-interface QueueItem extends PreparedBeefPreparation {}
+interface QueueItem {
+  userId: number
+  rootTxids: string[]
+}
 
 /**
  * Bounded, best-effort COOK worker. No foreground caller awaits this queue.
@@ -241,7 +287,8 @@ interface QueueItem extends PreparedBeefPreparation {}
 export class PreparedBeefCoordinator {
   private readonly queue: QueueItem[] = []
   private readonly pendingRoots = new Set<string>()
-  private queuedRoots = 0
+  private readonly pendingRootsByUser = new Map<number, number>()
+  private admittedRoots = 0
   private scheduled = false
   private timer?: ReturnType<typeof setTimeout>
   private running = false
@@ -253,14 +300,27 @@ export class PreparedBeefCoordinator {
 
   enqueue(preparation: PreparedBeefPreparation): boolean {
     if (this.stopped || !this.storage.preparedBeefPolicy.writeEnabled) return false
+    if (!Number.isSafeInteger(preparation.userId) || preparation.userId < 1) return false
+    if (preparation.rootTxids.some(rootTxid => !/^[0-9a-f]{64}$/i.test(rootTxid))) return false
     const key = (rootTxid: string): string => `${preparation.userId}:${rootTxid}`
     const rootTxids = [...new Set(preparation.rootTxids)]
       .filter(rootTxid => !this.pendingRoots.has(key(rootTxid)))
     if (rootTxids.length === 0) return preparation.rootTxids.length > 0
-    if (this.queuedRoots + rootTxids.length > this.storage.preparedBeefPolicy.maxQueueSize) return false
-    this.queue.push({ ...preparation, rootTxids })
-    for (const rootTxid of rootTxids) this.pendingRoots.add(key(rootTxid))
-    this.queuedRoots += rootTxids.length
+    const globalCapacity = this.storage.preparedBeefPolicy.maxQueueSize - this.admittedRoots
+    const userCapacity = this.storage.preparedBeefPolicy.maxQueueSizePerUser -
+      (this.pendingRootsByUser.get(preparation.userId) ?? 0)
+    const admitted = rootTxids.slice(0, Math.max(0, Math.min(globalCapacity, userCapacity)))
+    if (admitted.length === 0) return false
+    // Deliberately retain identifiers only. A canonical source BEEF can carry
+    // megabytes of tenant-controlled proof material and must not sit in a
+    // shared queue while other users wait.
+    this.queue.push({ userId: preparation.userId, rootTxids: admitted })
+    for (const rootTxid of admitted) this.pendingRoots.add(key(rootTxid))
+    this.admittedRoots += admitted.length
+    this.pendingRootsByUser.set(
+      preparation.userId,
+      (this.pendingRootsByUser.get(preparation.userId) ?? 0) + admitted.length
+    )
     this.schedule(0)
     return true
   }
@@ -283,9 +343,7 @@ export class PreparedBeefCoordinator {
 
   async stop(): Promise<void> {
     this.stopped = true
-    this.queue.length = 0
-    this.pendingRoots.clear()
-    this.queuedRoots = 0
+    for (const item of this.queue.splice(0)) this.releaseAdmission(item)
     if (this.timer != null) clearTimeout(this.timer)
     this.timer = undefined
     this.scheduled = false
@@ -317,14 +375,13 @@ export class PreparedBeefCoordinator {
     try {
       item = this.queue.shift()
       if (item != null) {
-        this.queuedRoots -= item.rootTxids.length
         await this.prepare(item)
       } else if (this.backfillStarted) {
         await this.enqueueBackfillBatch()
       }
     } finally {
       if (item != null) {
-        for (const rootTxid of item.rootTxids) this.pendingRoots.delete(`${item.userId}:${rootTxid}`)
+        this.releaseAdmission(item)
       }
       this.running = false
       if (this.queue.length > 0) this.schedule(0)
@@ -348,10 +405,14 @@ export class PreparedBeefCoordinator {
       // A backfill batch may be configured larger than the foreground queue.
       // Admit only what this empty-queue pass can hold, then select the
       // remaining roots after these artifacts have been persisted.
+      const selectedByUser = new Map<number, number>()
       for (const root of roots.slice(0, this.storage.preparedBeefPolicy.maxQueueSize)) {
+        const selected = selectedByUser.get(root.userId) ?? 0
+        if (selected >= this.storage.preparedBeefPolicy.maxQueueSizePerUser) continue
         const txids = byUser.get(root.userId) ?? []
         txids.push(root.rootTxid)
         byUser.set(root.userId, txids)
+        selectedByUser.set(root.userId, selected + 1)
       }
       for (const [userId, rootTxids] of byUser) {
         if (!this.enqueue({ userId, rootTxids })) break
@@ -394,12 +455,24 @@ export class PreparedBeefCoordinator {
         }
         for (const rootTxid of item.rootTxids) {
           try {
-            const source = item.sourceBeef ?? await this.storage.getBeefForTransaction(rootTxid, {
+            const storedBytes = await this.storage.readPreparedBeefSourceByteLength(rootTxid)
+            if (storedBytes != null && storedBytes > this.storage.preparedBeefPolicy.maxArtifactBytes) {
+              throw new Error('prepared BEEF stored source exceeds configured byte limit')
+            }
+            const source = await this.storage.getBeefForTransaction(rootTxid, {
               ignoreStorage: false,
               ignoreServices: true,
               ignoreNewProven: false
             })
+            // Bound attacker-influenced graph work before dependency
+            // selection, proof verification, or exact serialization.
+            if (!isAdmissibleBeef(source, this.storage.preparedBeefPolicy)) {
+              throw new Error('prepared BEEF source exceeds configured resource limits')
+            }
             const exact = beefForTxids(source, [rootTxid])
+            if (exact.txs.length > this.storage.preparedBeefPolicy.maxArtifactTransactions) {
+              throw new Error('prepared BEEF exceeds configured transaction limit')
+            }
             if (!validRootTransaction(exact, rootTxid)) throw new Error('prepared BEEF root is incomplete')
             if (!(await exact.verify(await this.storage.getServices().getChainTracker()))) {
               throw new Error('prepared BEEF failed verification')
@@ -476,5 +549,13 @@ export class PreparedBeefCoordinator {
     const waiters = this.idleWaiters
     this.idleWaiters = []
     for (const resolve of waiters) resolve()
+  }
+
+  private releaseAdmission(item: QueueItem): void {
+    for (const rootTxid of item.rootTxids) this.pendingRoots.delete(`${item.userId}:${rootTxid}`)
+    this.admittedRoots = Math.max(0, this.admittedRoots - item.rootTxids.length)
+    const userRoots = (this.pendingRootsByUser.get(item.userId) ?? 0) - item.rootTxids.length
+    if (userRoots <= 0) this.pendingRootsByUser.delete(item.userId)
+    else this.pendingRootsByUser.set(item.userId, userRoots)
   }
 }

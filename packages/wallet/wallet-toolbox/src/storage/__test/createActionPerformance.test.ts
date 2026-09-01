@@ -60,6 +60,23 @@ describe('createAction funding performance', () => {
     expect(getRawTx.mock.calls[0]).toEqual([expect.any(String), undefined, undefined, expect.anything()])
   })
 
+  test('parameterizes funding-script slices and rejects malicious or unsafe bounds', async () => {
+    const [proven] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+    expect(proven).toBeTruthy()
+
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 1, 8))
+      .resolves.toEqual(proven.rawTx.slice(1, 9))
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(
+      "x' UNION SELECT rawTx FROM proven_tx_reqs--",
+      0,
+      8
+    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, -1, 8))
+      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 0))
+      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+  })
+
   test('rolls back a concurrent bulk-claim conflict before replanning', async () => {
     await replaceFundingCandidates(20, 1_000)
     const original = ctx.activeStorage.markChangeInputsSpent.bind(ctx.activeStorage)
@@ -346,6 +363,79 @@ describe('createAction funding performance', () => {
 
     expect(persist).toHaveBeenCalledTimes(1)
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('retains identifiers only and enforces tenant admission limits', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      maxQueueSize: 4,
+      maxQueueSizePerUser: 1
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: ['a'.repeat(64)]
+    })).toBe(false)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId + 1,
+      rootTxids: ['b'.repeat(64)]
+    })).toBe(true)
+
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('rejects a high-transaction source before proof verification or serialization', async () => {
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      maxArtifactTransactions: 1
+    })
+    const oversized = new Beef()
+    oversized.mergeTxidOnly('c'.repeat(64))
+    oversized.mergeTxidOnly('d'.repeat(64))
+    jest.spyOn(ctx.activeStorage, 'readPreparedBeefSourceByteLength').mockResolvedValue(100)
+    jest.spyOn(ctx.activeStorage, 'getBeefForTransaction').mockResolvedValue(oversized)
+    const tracker = jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker')
+
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: ['c'.repeat(64)]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    expect(tracker).not.toHaveBeenCalled()
+    await expect(ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: 'c'.repeat(64) })
+      .first('state')).resolves.toMatchObject({ state: 'failed' })
+  })
+
+  test('rejects an oversized stored source before loading or parsing its BEEF', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      maxArtifactBytes: 100
+    })
+    jest.spyOn(ctx.activeStorage, 'readPreparedBeefSourceByteLength').mockResolvedValue(101)
+    const load = jest.spyOn(ctx.activeStorage, 'getBeefForTransaction')
+
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    expect(load).not.toHaveBeenCalled()
+    await expect(ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: source.txid })
+      .first('state')).resolves.toMatchObject({ state: 'failed' })
   })
 
   test('keeps canonical createAction compatible when the optional COOK queue is absent', async () => {

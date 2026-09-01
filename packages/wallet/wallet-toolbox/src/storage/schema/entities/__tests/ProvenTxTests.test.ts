@@ -2,6 +2,66 @@ import * as bsv from '@bsv/sdk'
 import { createSyncMap, sdk, sha256Hash } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityProvenTx } from '../EntityProvenTx'
+import { StorageProvider } from '../../../StorageProvider'
+import { toBinaryBaseBlockHeader } from '../../../../services/Services'
+import { doubleSha256BE } from '../../../../utility/utilityHelpers'
+import { asString } from '../../../../utility/utilityHelpers.noBuffer'
+import type { TableProvenTx } from '../../tables/TableProvenTx'
+
+function makeServerVerifiedProof(
+  transaction: bsv.Transaction,
+  height: number,
+  time: number,
+  provenTxId = 1
+): { proof: TableProvenTx, header: number[] } {
+  const txid = transaction.id('hex')
+  const merklePath = new bsv.MerklePath(height, [[{ offset: 0, hash: txid, txid: true }]])
+  const merkleRoot = merklePath.computeRoot(txid)
+  const header = toBinaryBaseBlockHeader({
+    version: 1,
+    previousHash: '0'.repeat(64),
+    merkleRoot,
+    time,
+    bits: 0,
+    nonce: 0
+  })
+  const now = new Date()
+  return {
+    proof: {
+      provenTxId,
+      created_at: now,
+      updated_at: now,
+      txid,
+      height,
+      index: 0,
+      merklePath: merklePath.toBinary(),
+      rawTx: transaction.toBinary(),
+      blockHash: asString(doubleSha256BE(header)),
+      merkleRoot
+    },
+    header
+  }
+}
+
+function makeProofStorage(header: number[]): StorageProvider & {
+  insertProvenTx: jest.Mock
+  updateProvenTx: jest.Mock
+  invalidatePreparedBeefs: jest.Mock
+} {
+  return {
+    getServices: () => ({
+      getChainTracker: async () => ({ isValidRootForHeight: async () => true }),
+      getHeaderForHeight: async () => header
+    }),
+    insertProvenTx: jest.fn(async () => 77),
+    updateProvenTx: jest.fn(async () => 1),
+    invalidatePreparedBeefs: jest.fn(async () => 0)
+  } as unknown as StorageProvider & {
+    insertProvenTx: jest.Mock
+    updateProvenTx: jest.Mock
+    invalidatePreparedBeefs: jest.Mock
+  }
+}
 
 describe('ProvenTx class method tests', () => {
   jest.setTimeout(99999999)
@@ -473,7 +533,7 @@ describe('ProvenTx class method tests', () => {
     expect(tx1.equals(tx2.toApi())).toBe(false)
   })
 
-  test('10_mergeExisting: always returns false', async () => {
+  test('10_mergeExisting: does not rewrite an identical proof', async () => {
     const ctx = ctxs[0]
 
     // Create a ProvenTx entity
@@ -500,7 +560,84 @@ describe('ProvenTx class method tests', () => {
     // Call the mergeExisting method
     const result = await provenTx.mergeExisting(mockStorage, new Date(), provenTx.toApi(), mockSyncMap, mockTrx)
 
-    // Assert that it always returns false
+    // Identical server proof state needs no validation or database write.
     expect(result).toBe(false)
+  })
+
+  test('11_sync rejects a client-authored proof whose raw transaction does not match its txid', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 100, 1)
+    const storage = makeProofStorage(header)
+    const corrupted = { ...proof, rawTx: [...proof.rawTx] }
+    corrupted.rawTx[corrupted.rawTx.length - 1] ^= 1
+
+    await expect(EntityProvenTx.validateSyncProof(storage, corrupted))
+      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.insertProvenTx).not.toHaveBeenCalled()
+    expect(storage.invalidatePreparedBeefs).not.toHaveBeenCalled()
+  })
+
+  test('12_sync accepts a server-verified proof and invalidates derived artifacts', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 101, 2)
+    const storage = makeProofStorage(header)
+    const entity = new EntityProvenTx(proof)
+
+    await EntityProvenTx.validateSyncProof(storage, proof)
+    await entity.mergeNew(storage, 1, createSyncMap())
+
+    expect(storage.insertProvenTx).toHaveBeenCalledWith(expect.objectContaining({ txid: proof.txid }), undefined)
+    expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
+  })
+
+  test('13_sync replaces an existing global proof only after validating the active chain', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const original = makeServerVerifiedProof(transaction, 102, 3, 44)
+    const replacement = makeServerVerifiedProof(transaction, 103, 4, 999)
+    const storage = makeProofStorage(replacement.header)
+    const entity = new EntityProvenTx(original.proof)
+
+    await EntityProvenTx.validateSyncProof(storage, replacement.proof)
+    await expect(entity.mergeExisting(
+      storage,
+      undefined,
+      replacement.proof,
+      createSyncMap()
+    )).resolves.toBe(true)
+
+    expect(storage.updateProvenTx).toHaveBeenCalledWith(44, expect.objectContaining({
+      height: 103,
+      blockHash: replacement.proof.blockHash
+    }), undefined)
+    expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
+  })
+
+  test('14_authenticated remote sync validates proofs before opening its storage transaction', async () => {
+    const transaction = jest.fn()
+    const storage = { transaction } as unknown as StorageProvider
+    const proof = { txid: 'a'.repeat(64) } as TableProvenTx
+    const validation = jest.spyOn(EntityProvenTx, 'validateSyncProof')
+      .mockRejectedValueOnce(new Error('untrusted proof rejected'))
+
+    await expect(StorageProvider.prototype.processSyncChunk.call(
+      storage,
+      {
+        identityKey: 'authenticated-user',
+        fromStorageIdentityKey: 'remote',
+        toStorageIdentityKey: 'server',
+        maxRoughSize: 1,
+        maxItems: 1,
+        offsets: [],
+        reqAuthUserId: 1
+      } as sdk.RequestSyncChunkArgs & { reqAuthUserId: number },
+      { provenTxs: [proof] } as sdk.SyncChunk
+    )).rejects.toThrow('untrusted proof rejected')
+
+    expect(validation).toHaveBeenCalledWith(storage, proof)
+    expect(transaction).not.toHaveBeenCalled()
   })
 })

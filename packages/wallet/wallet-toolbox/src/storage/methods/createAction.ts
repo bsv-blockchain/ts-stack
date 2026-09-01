@@ -1785,16 +1785,10 @@ function appendPreparedBeefPreparation (
   preparations: PreparedBeefPreparation[],
   writeEnabled: boolean,
   userId: number,
-  rootTxids: string[],
-  sourceBeef: Beef,
-  knownTxids: string[]
+  rootTxids: string[]
 ): void {
   if (!writeEnabled) return
-  preparations.push({
-    userId,
-    rootTxids,
-    sourceBeef: knownTxids.length === 0 ? sourceBeef : undefined
-  })
+  preparations.push({ userId, rootTxids })
 }
 
 function enqueuePreparedBeefs (storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
@@ -1836,9 +1830,7 @@ async function loadAllocatedChangeBeef(
         preparations,
         writeEnabled,
         userId,
-        lookup.missingTxids,
-        fetched,
-        options.knownTxids ?? []
+        lookup.missingTxids
       )
       return {
         beef: fetched,
@@ -1854,9 +1846,7 @@ async function loadAllocatedChangeBeef(
       preparations,
       writeEnabled,
       userId,
-      lookup.missingTxids,
-      fetched,
-      options.knownTxids ?? []
+      lookup.missingTxids
     )
   }
   return {

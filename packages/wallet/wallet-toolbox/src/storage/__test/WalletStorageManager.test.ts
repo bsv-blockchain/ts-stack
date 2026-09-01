@@ -490,7 +490,46 @@ describe('WalletStorageManager tests', () => {
     }
   })
 
-  test('5a_reorg invalidates prepared BEEF while replacement proofs are unavailable', async () => {
+  test('5a_reorg fencing closes prepared reads before asynchronous invalidation completes', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefImmediateReorgEpoch', 'legacy')
+    try {
+      ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+
+      const invalidation = ctx.storage.invalidatePreparedBeefsForReorg()
+
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+      await invalidation
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(true)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5b_failed reorg invalidation leaves prepared reads closed', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefFailedReorgEpoch', 'legacy')
+    try {
+      ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+      jest.spyOn(ctx.activeStorage, 'invalidatePreparedBeefs')
+        .mockRejectedValueOnce(new Error('database unavailable'))
+
+      const invalidation = ctx.storage.invalidatePreparedBeefsForReorg()
+
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+      await expect(invalidation).rejects.toThrow('database unavailable')
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+
+      // A later successful invalidation covers the failed generation and is
+      // the explicit recovery path; a process restart is not required.
+      await ctx.storage.invalidatePreparedBeefsForReorg()
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(true)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5c_reorg invalidates prepared BEEF while replacement proofs are unavailable', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefUnavailableReproofEpoch', 'legacy')
     try {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
@@ -513,7 +552,7 @@ describe('WalletStorageManager tests', () => {
     }
   })
 
-  test('5b_height reproof updates proofs and invalidates prepared BEEF atomically', async () => {
+  test('5d_height reproof updates proofs and invalidates prepared BEEF atomically', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefHeightReproofEpoch', 'legacy')
     try {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
@@ -543,7 +582,7 @@ describe('WalletStorageManager tests', () => {
     }
   })
 
-  test('5c_direct reproof persists the replacement proof and invalidates prepared BEEF', async () => {
+  test('5e_direct reproof persists the replacement proof and invalidates prepared BEEF', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefDirectReproofEpoch', 'legacy')
     try {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })

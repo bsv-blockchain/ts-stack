@@ -1,14 +1,103 @@
 import { GetMerklePathResult, WalletServices } from '../../../sdk/WalletServices.interfaces'
 import { TrxToken } from '../../../sdk/WalletStorage.interfaces'
-import { arraysEqual, verifyId, verifyOneOrNone } from '../../../utility/utilityHelpers'
+import { arraysEqual, doubleSha256BE, verifyId, verifyOneOrNone } from '../../../utility/utilityHelpers'
+import { asString } from '../../../utility/utilityHelpers.noBuffer'
 import { TableProvenTx } from '../tables/TableProvenTx'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
-import { MerklePath } from '@bsv/sdk'
+import { MerklePath, Transaction } from '@bsv/sdk'
 import { EntityProvenTxReq } from './EntityProvenTxReq'
-import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
+  private static invalidSyncProof(message: string): never {
+    throw new WERR_INVALID_PARAMETER('provenTx', `a server-verified proof. ${message}`)
+  }
+
+  /**
+   * `proven_txs` is global and txid-unique, while sync callers are merely
+   * authenticated tenants. Never let a tenant establish or replace shared
+   * proof authority without validating the transaction, proof, and active
+   * block header against this server's own services.
+   */
+  static async validateSyncProof(storage: EntityStorage, candidate: TableProvenTx): Promise<void> {
+    if (!/^[0-9a-f]{64}$/i.test(candidate.txid)) {
+      EntityProvenTx.invalidSyncProof('txid must be 32-byte hexadecimal')
+    }
+    if (!Number.isSafeInteger(candidate.height) || candidate.height < 0) {
+      EntityProvenTx.invalidSyncProof('height must be a non-negative safe integer')
+    }
+    if (!Number.isSafeInteger(candidate.index) || candidate.index < 0) {
+      EntityProvenTx.invalidSyncProof('index must be a non-negative safe integer')
+    }
+    if (!Array.isArray(candidate.rawTx) || candidate.rawTx.length === 0) {
+      EntityProvenTx.invalidSyncProof('raw transaction is required')
+    }
+    if (!Array.isArray(candidate.merklePath) || candidate.merklePath.length === 0) {
+      EntityProvenTx.invalidSyncProof('Merkle path is required')
+    }
+
+    try {
+      const parsed = Transaction.fromBinary(candidate.rawTx)
+      const rawTxid = asString(doubleSha256BE(candidate.rawTx))
+      if (parsed.id('hex') !== rawTxid || rawTxid !== candidate.txid.toLowerCase()) {
+        EntityProvenTx.invalidSyncProof('raw transaction hash does not match txid')
+      }
+
+      const proof = MerklePath.fromBinary(candidate.merklePath)
+      if (proof.blockHeight !== candidate.height) {
+        EntityProvenTx.invalidSyncProof('Merkle path height does not match the record')
+      }
+      const leaf = proof.path[0]?.find(item => item.txid === true && item.hash === candidate.txid.toLowerCase())
+      if (leaf == null || leaf.offset !== candidate.index) {
+        EntityProvenTx.invalidSyncProof('Merkle path does not contain the transaction at the recorded index')
+      }
+      const root = proof.computeRoot(candidate.txid.toLowerCase())
+      if (root !== candidate.merkleRoot.toLowerCase()) {
+        EntityProvenTx.invalidSyncProof('computed Merkle root does not match the record')
+      }
+
+      const services = storage.getServices()
+      const chainTracker = await services.getChainTracker()
+      if (!(await chainTracker.isValidRootForHeight(root, candidate.height))) {
+        EntityProvenTx.invalidSyncProof('Merkle root is not active at the recorded height')
+      }
+
+      const header = await services.getHeaderForHeight(candidate.height)
+      if (header.length !== 80) EntityProvenTx.invalidSyncProof('active block header must be 80 bytes')
+      const activeHash = asString(doubleSha256BE(header))
+      const activeMerkleRoot = asString(header.slice(36, 68).reverse())
+      if (activeHash !== candidate.blockHash.toLowerCase() || activeMerkleRoot !== root) {
+        EntityProvenTx.invalidSyncProof('block metadata does not match the active header')
+      }
+    } catch (error) {
+      if (error instanceof WERR_INVALID_PARAMETER) throw error
+      EntityProvenTx.invalidSyncProof('transaction, Merkle path, or active header could not be validated')
+    }
+  }
+
+  private sameProof(candidate: TableProvenTx): boolean {
+    return this.txid.toLowerCase() === candidate.txid.toLowerCase() &&
+      this.height === candidate.height &&
+      this.index === candidate.index &&
+      arraysEqual(this.merklePath, candidate.merklePath) &&
+      arraysEqual(this.rawTx, candidate.rawTx) &&
+      this.blockHash.toLowerCase() === candidate.blockHash.toLowerCase() &&
+      this.merkleRoot.toLowerCase() === candidate.merkleRoot.toLowerCase()
+  }
+
+  private static async invalidatePreparedProofs(
+    storage: EntityStorage,
+    trx?: TrxToken
+  ): Promise<void> {
+    const extension = storage as EntityStorage & {
+      invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number>
+    }
+    if (typeof extension.invalidatePreparedBeefs === 'function') {
+      await extension.invalidatePreparedBeefs(trx)
+    }
+  }
+
   /**
    * Given a txid and optionally its rawTx, create a new ProvenTx object.
    *
@@ -236,8 +325,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
 
   override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.provenTxId = 0
-    // Since these records are a shared resource, the record should be validated before accepting it
     this.provenTxId = await storage.insertProvenTx(this.toApi(), trx)
+    await EntityProvenTx.invalidatePreparedProofs(storage, trx)
   }
 
   override async mergeExisting(
@@ -247,8 +336,20 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    // ProvenTxs are never updated.
-    return false
+    if (this.sameProof(ei)) return false
+    const update: Partial<TableProvenTx> = {
+      updated_at: ei.updated_at,
+      height: ei.height,
+      index: ei.index,
+      merklePath: ei.merklePath,
+      rawTx: ei.rawTx,
+      blockHash: ei.blockHash.toLowerCase(),
+      merkleRoot: ei.merkleRoot.toLowerCase()
+    }
+    await storage.updateProvenTx(this.provenTxId, update, trx)
+    this.api = { ...this.api, ...update }
+    await EntityProvenTx.invalidatePreparedProofs(storage, trx)
+    return true
   }
 
   /**

@@ -131,6 +131,7 @@ export class Monitor {
   chaintracks: ChaintracksClientApi
   chaintracksWithEvents?: ChaintracksClientApi
   reorgSubscriptionPromise?: Promise<string>
+  reorgInvalidationPromise: Promise<void> = Promise.resolve()
   headersSubscriptionPromise?: Promise<string>
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
@@ -518,6 +519,19 @@ export class Monitor {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void {
+    // Close prepared reads synchronously, then invalidate the shared epoch in
+    // the background. Replacement-proof discovery remains aged because it may
+    // require slow/unavailable network services; cache safety does not.
+    const invalidation = this.storage.invalidatePreparedBeefsForReorg()
+    this.reorgInvalidationPromise = invalidation
+    void invalidation.catch(async error_ => {
+      const error = WalletError.fromUnknown(error_)
+      const details = `monitor reorg prepared-BEEF invalidation error ${error.code} ${error.description}`
+      console.log(details)
+      // Never turn diagnostic persistence failure into an unhandled rejection
+      // from the chain-event callback.
+      await this.logEvent('error1', details).catch(() => {})
+    })
     if (deactivatedHeaders != null) {
       for (const header of deactivatedHeaders) {
         this.deactivatedHeaders.push({

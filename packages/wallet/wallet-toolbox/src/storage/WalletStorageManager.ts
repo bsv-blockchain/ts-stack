@@ -28,6 +28,7 @@ import { StorageProvider } from './StorageProvider'
 
 interface PreparedBeefInvalidationExtension {
   invalidatePreparedBeefs: (trx?: sdk.TrxToken) => Promise<number>
+  suspendPreparedBeefReads: () => () => void
 }
 
 async function invalidatePreparedBeefs (storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
@@ -389,6 +390,28 @@ export class WalletStorageManager implements sdk.WalletStorage {
     } finally {
       this.releaseActiveForStorageProvider()
     }
+  }
+
+  /**
+   * Reorg notifications call this before aging or replacement-proof I/O. The
+   * active Knex store closes its in-process prepared-read gate synchronously,
+   * then advances the shared database epoch and stales artifacts. A failed
+   * invalidation deliberately leaves reads suspended so canonical BEEF remains
+   * the safe path until a later invalidation succeeds or the process restarts.
+   */
+  invalidatePreparedBeefsForReorg(): Promise<void> {
+    const active = this.getActive()
+    const extension = active as unknown as Partial<PreparedBeefInvalidationExtension>
+    const release = typeof extension.suspendPreparedBeefReads === 'function'
+      ? extension.suspendPreparedBeefReads.call(active)
+      : undefined
+    return this.runAsStorageProvider(async storage => {
+      await storage.transaction(async trx => {
+        await invalidatePreparedBeefs(storage, trx)
+      })
+    }).then(() => {
+      release?.()
+    })
   }
 
   /**

@@ -25,9 +25,12 @@ service a new dependency.
    canonical builder runs for only those roots.
 4. The action result is completely assembled before any missing roots are
    queued for preparation.
-5. The bounded worker starts on a later event-loop turn. `createAction` and
-   `processAction` never await verification or persistence performed by that
-   worker.
+5. Admission validates and retains only bounded user/root identifiers, never
+   the source BEEF. No graph traversal, hashing, verification, serialization,
+   or persistence occurs in the foreground.
+6. The bounded worker starts on a later event-loop turn. `createAction` and
+   `processAction` never await canonical reload, dependency selection,
+   verification, or persistence performed by that worker.
 
 Prepared reads therefore add an indexed lookup on a cold cache, but that lookup
 runs inside the existing early prefetch window and overlaps normal foreground
@@ -48,14 +51,25 @@ authority:
 
 - the authenticated storage user is part of every read and write key;
 - canonical transaction, proof, and output rows remain the source of truth;
+- proof rows received through authenticated remote sync cannot establish
+  global proof authority on their own: before opening the sync transaction,
+  the server recomputes the transaction ID and Merkle root, checks the path
+  position, and matches the active server header/chain tracker. Configured
+  in-process backup/portable sync remains a trusted operator relationship. Any
+  inserted or replaced proof invalidates prepared artifacts in the same
+  storage transaction;
 - each artifact contains one root transaction plus only its recursive proof
   dependencies;
 - the background worker verifies the exact BEEF against the configured chain
   tracker before writing it;
 - reads enforce format version, state, checksum, byte length, size ceiling, and
   a complete root transaction;
-- proof reorganizations update canonical proof state, advance the proof epoch,
-  and mark ready artifacts stale in one database transaction. A lookup whose
+- a reorganization notification first closes prepared reads synchronously in
+  that server process, then advances the shared proof epoch and marks ready
+  artifacts stale in one database transaction, before the aged replacement-
+  proof task performs network I/O. If invalidation fails, that process keeps
+  prepared reads closed and uses the canonical path until a later invalidation
+  succeeds (or the process restarts). A lookup whose
   query begins after that transaction commits cannot read the old artifact. A
   lookup overlapping the transaction may observe the preceding database
   snapshot, as the canonical builder may, and is ordered before invalidation;
@@ -90,26 +104,36 @@ const setup = await Setup.createWalletKnex({
     readEnabled: false,
     backfillEnabled: false,
     maxQueueSize: 32,
+    maxQueueSizePerUser: 4,
     maxArtifactBytes: 2 * 1024 * 1024,
+    maxArtifactTransactions: 256,
     backfillBatchSize: 32,
     backfillIntervalMs: 100
   }
 })
 ```
 
-| Setting              | Default | Meaning                                                                                           |
-| -------------------- | ------: | ------------------------------------------------------------------------------------------------- |
-| `writeEnabled`       | `false` | Queue and persist verified artifacts after foreground action work.                                |
-| `readEnabled`        | `false` | Use valid artifacts on the `createAction` proof path.                                             |
-| `backfillEnabled`    | `false` | Prepare eligible existing managed-change roots in bounded background passes. Requires writes.     |
-| `maxQueueSize`       |    `32` | Maximum number of roots waiting for background preparation. New work is safely dropped when full. |
-| `maxArtifactBytes`   | `2 MiB` | Maximum accepted serialized artifact size on both read and write.                                 |
-| `backfillBatchSize`  |    `32` | Maximum roots selected in one backfill pass.                                                      |
-| `backfillIntervalMs` |   `100` | Delay between low-priority backfill passes.                                                       |
+| Setting                   | Default | Meaning                                                                                                  |
+| ------------------------- | ------: | -------------------------------------------------------------------------------------------------------- |
+| `writeEnabled`            | `false` | Queue and persist verified artifacts after foreground action work.                                       |
+| `readEnabled`             | `false` | Use valid artifacts on the `createAction` proof path.                                                    |
+| `backfillEnabled`         | `false` | Prepare eligible existing managed-change roots in bounded background passes. Requires writes.            |
+| `maxQueueSize`            |    `32` | Maximum roots queued or running globally. New work is safely dropped when full.                          |
+| `maxQueueSizePerUser`     |     `4` | Maximum roots queued or running for one user, preventing one tenant from consuming the shared worker.    |
+| `maxArtifactBytes`        | `2 MiB` | Maximum estimated source and exact prepared-artifact size.                                               |
+| `maxArtifactTransactions` |   `256` | Maximum transactions in a source or exact prepared graph before expensive worker stages.                 |
+| `backfillBatchSize`       |    `32` | Maximum roots selected in one backfill pass.                                                             |
+| `backfillIntervalMs`      |   `100` | Delay between low-priority backfill passes.                                                              |
 
-The queue is in-process and best effort. A restart, full queue, verification
-failure, or persistence failure loses only an optimization opportunity. A
-later action can rebuild the same artifact from authoritative storage.
+The queue is in-process and best effort. It retains bounded identifiers only,
+applies global and per-user admission quotas, and serializes preparation work.
+Before canonical reload, the worker first asks storage for the root's raw/proof
+byte length, so an oversized no-send `inputBEEF` is never loaded or parsed by
+COOK. It then applies estimated byte and transaction-count limits before
+dependency selection, verification, and exact serialization. A restart,
+full queue, resource rejection, verification failure, or persistence failure
+loses only an optimization opportunity. A later action can rebuild the same
+artifact from authoritative storage.
 
 ## Rollout toward a 50 ms normal-action target
 

@@ -23,7 +23,9 @@ describe('prepared BEEF policy', () => {
       writeEnabled: true,
       backfillEnabled: true,
       maxQueueSize: 7,
+      maxQueueSizePerUser: 2,
       maxArtifactBytes: 1234,
+      maxArtifactTransactions: 12,
       backfillBatchSize: 3,
       backfillIntervalMs: 25
     })).toMatchObject({
@@ -31,7 +33,9 @@ describe('prepared BEEF policy', () => {
       writeEnabled: true,
       backfillEnabled: true,
       maxQueueSize: 7,
+      maxQueueSizePerUser: 2,
       maxArtifactBytes: 1234,
+      maxArtifactTransactions: 12,
       backfillBatchSize: 3,
       backfillIntervalMs: 25
     })
@@ -40,7 +44,11 @@ describe('prepared BEEF policy', () => {
       readEnabled: 1 as unknown as boolean
     })).toThrow('readEnabled')
     expect(() => validatePreparedBeefPolicy({ maxQueueSize: 0 })).toThrow('maxQueueSize')
+    expect(() => validatePreparedBeefPolicy({ maxQueueSize: 2, maxQueueSizePerUser: 3 }))
+      .toThrow('maxQueueSizePerUser')
     expect(() => validatePreparedBeefPolicy({ maxArtifactBytes: 1.5 })).toThrow('maxArtifactBytes')
+    expect(() => validatePreparedBeefPolicy({ maxArtifactTransactions: 0 }))
+      .toThrow('maxArtifactTransactions')
     expect(() => validatePreparedBeefPolicy({ backfillIntervalMs: -1 })).toThrow('backfillIntervalMs')
   })
 })
