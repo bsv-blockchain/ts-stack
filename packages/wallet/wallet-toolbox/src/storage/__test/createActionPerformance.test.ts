@@ -465,6 +465,21 @@ describe('createAction funding performance', () => {
     expect(canonicalBuilder).toHaveBeenCalledWith([source.txid], expect.any(Object))
   })
 
+  test('bypasses prepared storage for an unusually broad lookup', async () => {
+    ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+    const rootTxids = Array.from(
+      { length: 33 },
+      (_, index) => index.toString(16).padStart(64, '0')
+    )
+    const preparedStore = jest.spyOn(ctx.activeStorage, 'findPreparedBeefs')
+
+    const lookup = await ctx.activeStorage.lookupPreparedBeefs(ctx.userId, rootTxids)
+
+    expect(preparedStore).not.toHaveBeenCalled()
+    expect(lookup.hitTxids).toEqual([])
+    expect(lookup.missingTxids).toEqual(rootTxids)
+  })
+
   test('invalidates ready artifacts so a proof reorganization cannot reuse them', async () => {
     const source = await replaceFundingCandidates(1, 5_000)
     ctx.activeStorage.preparedBeefPolicy.writeEnabled = true

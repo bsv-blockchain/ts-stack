@@ -359,13 +359,19 @@ describe('WalletStorageManager tests', () => {
     }
   })
 
-  test('4_processAction queues newly created managed change without waiting for preparation', async () => {
+  test('4_processAction prepares newly created managed change after returning', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefProcessAction', 'legacy')
-    const enqueue = jest.spyOn(ctx.activeStorage, 'enqueuePreparedBeef').mockReturnValue(true)
-    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as bsv.ChainTracker)
+    const persist = jest.spyOn(ctx.activeStorage, 'upsertPreparedBeef')
     try {
       const result = await ctx.wallet.createAction({
-        description: 'queue managed change for prepared BEEF',
+        description: 'prepare managed change with the real COOK worker',
         outputs: [{
           satoshis: 1,
           lockingScript: '51',
@@ -380,9 +386,16 @@ describe('WalletStorageManager tests', () => {
       })
 
       expect(result.txid).toBeTruthy()
-      expect(enqueue).toHaveBeenCalledWith({
-        userId: ctx.userId,
-        rootTxids: [result.txid]
+      expect(persist).not.toHaveBeenCalled()
+
+      await ctx.activeStorage.waitForPreparedBeefTasks()
+
+      await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [result.txid!])).resolves.toEqual([
+        expect.objectContaining({ rootTxid: result.txid, state: 'ready' })
+      ])
+      await expect(ctx.activeStorage.lookupPreparedBeefs(ctx.userId, [result.txid!])).resolves.toMatchObject({
+        hitTxids: [result.txid],
+        missingTxids: []
       })
     } finally {
       await ctx.wallet.destroy()

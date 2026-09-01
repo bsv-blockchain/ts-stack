@@ -10,6 +10,10 @@ const DEFAULT_MAX_QUEUE_SIZE = 32
 const DEFAULT_MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 const DEFAULT_BACKFILL_BATCH_SIZE = 32
 const DEFAULT_BACKFILL_INTERVAL_MS = 100
+// COOK targets normal funding calls, which ordinarily spend one managed-change
+// source. Do not add a broad cache query in front of the canonical builder for
+// unusually fragmented actions; those requests retain the established path.
+const MAX_PREPARED_BEEF_LOOKUP_ROOTS = 32
 
 export interface PreparedBeefOptions {
   /** Read prepared artifacts on the createAction proof path. Default false. */
@@ -84,7 +88,6 @@ export function defaultPreparedBeefPolicy(): PreparedBeefPolicy {
     backfillIntervalMs: DEFAULT_BACKFILL_INTERVAL_MS
   }
 }
-
 export function validatePreparedBeefPolicy(options?: PreparedBeefOptions): PreparedBeefPolicy {
   const policy = { ...defaultPreparedBeefPolicy(), ...options }
   for (const name of ['readEnabled', 'writeEnabled', 'backfillEnabled'] as const) {
@@ -142,8 +145,20 @@ export async function lookupPreparedBeefs(
       attributes: { 'prepared_beef.requested_root_count': result.missingTxids.length }
     },
     async span => {
+      const requestedTxids = result.missingTxids
+      if (requestedTxids.length > MAX_PREPARED_BEEF_LOOKUP_ROOTS) {
+        span.end({
+          attributes: {
+            'prepared_beef.hit_count': 0,
+            'prepared_beef.miss_count': requestedTxids.length,
+            'prepared_beef.corrupt_count': 0,
+            'prepared_beef.bytes': 0,
+            'prepared_beef.lookup_bypassed': true
+          }
+        })
+        return result
+      }
       try {
-        const requestedTxids = result.missingTxids
         const rows = await storage.findPreparedBeefs(userId, requestedTxids)
         const byTxid = new Map(rows.map(row => [row.rootTxid, row]))
         const missing: string[] = []
