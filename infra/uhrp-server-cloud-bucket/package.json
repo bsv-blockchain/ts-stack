@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.37",
+  "version": "0.2.38",
   "overrides": {
     "brace-expansion": "5.0.9",
     "gaxios": "7.3.0",
@@ -31,11 +31,11 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.2.2",
-    "@bsv/payment-express-middleware": "^2.1.5",
-    "@bsv/sdk": "^2.4.1",
-    "@bsv/wallet-toolbox": "^2.10.3",
-    "@bsv/wallet-toolbox-client": "^2.10.3",
+    "@bsv/auth-express-middleware": "^2.2.3",
+    "@bsv/payment-express-middleware": "^2.1.6",
+    "@bsv/sdk": "^2.4.2",
+    "@bsv/wallet-toolbox": "^2.10.4",
+    "@bsv/wallet-toolbox-client": "^2.10.4",
     "@bugsnag/js": "^8.10.0",
     "@bugsnag/plugin-express": "^8.9.0",
     "@google-cloud/storage": "^7.21.0",
