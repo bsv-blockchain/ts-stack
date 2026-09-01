@@ -25,13 +25,13 @@ attention to changes that materially alter behavior or extend functionality.
   before prefunding, attributes the funding fee to the requesting originator,
   and rechecks the current monthly ledger before releasing the protected
   action. Existing actions and ordinary `noSend` calls are unchanged. The
-  current-main macOS reference fixtures measure 1,661,938 raw / 388,676 gzip /
-  305,386 Brotli bytes with Vite, 1,297,416 raw / 355,497 gzip / 285,075 Brotli
-  bytes with esbuild, 1,710,198 raw / 430,529 gzip / 334,202 Brotli bytes with
-  Metro, and 3,473,582 raw / 1,406,126 gzip / 1,090,069 Brotli bytes as
+  current-main macOS reference fixtures measure 1,662,220 raw / 388,763 gzip /
+  305,307 Brotli bytes with Vite, 1,297,621 raw / 355,579 gzip / 285,031 Brotli
+  bytes with esbuild, 1,710,494 raw / 430,613 gzip / 334,490 Brotli bytes with
+  Metro, and 3,474,604 raw / 1,406,878 gzip / 1,090,948 Brotli bytes as
   optimized Hermes bytecode. The reviewed ceilings advance to 1,665,000 /
   390,000 / 307,000 Vite bytes, 1,300,000 / 357,000 / 287,000 esbuild bytes,
-  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,475,000 / 1,407,000 /
+  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,480,000 / 1,410,000 /
   1,095,000 Hermes bytes.
 
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
