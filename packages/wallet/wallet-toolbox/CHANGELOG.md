@@ -13,6 +13,23 @@ attention to changes that materially alter behavior or extend functionality.
   The companion `@bsv/ecpm-permission-module` uses this hook to implement
   `p ecpm` point multiplication without adding a BRC-100 method or wire call.
 
+- Add opt-in prepared BEEF storage for Knex-backed normal `createAction`
+  funding. COOK (Create Once, Output Kept) stores a user-scoped, exact,
+  independently verified and checksummed proof closure, merges valid hits
+  without invoking the canonical builder, and treats every miss or cache
+  failure as the existing canonical path. Missing roots and newly finalized
+  managed-change transactions are queued only after foreground action work is
+  complete; bounded writes, reads, and gradual backfill are separately
+  controlled and default off. Reorganizations stale derived artifacts, a
+  database proof epoch fences in-flight cross-process writes, purge removes
+  unused rows, and prepared data remains outside wallet sync. The
+  Knex worker is excluded from portable bundles. Reviewed Vite ceilings advance
+  to 1,610,000 raw / 379,500 gzip / 297,500 Brotli bytes and esbuild ceilings
+  to 1,255,000 raw / 345,500 gzip / 278,000 Brotli, covering local measurements
+  of 1,609,517 / 379,411 / 297,282 and 1,254,414 / 344,714 / 277,443 bytes.
+  The Hermes raw ceiling advances to 3,373,000 bytes, covering 3,372,554;
+  Metro and compressed Hermes ceilings remain unchanged.
+
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final
   page previously returned only that page's length, so a client paging a large

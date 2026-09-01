@@ -1,4 +1,4 @@
-import { TelemetryEvent, Validation } from '@bsv/sdk'
+import { Beef, ChainTracker, TelemetryEvent, Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
@@ -308,6 +308,248 @@ describe('createAction funding performance', () => {
     expect(serialized).not.toContain('lockingScript')
   })
 
+  test('resolves createAction before cooking a canonical BEEF miss', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: false,
+      writeEnabled: true,
+      maxQueueSize: 1
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+    const persist = jest.spyOn(ctx.activeStorage, 'upsertPreparedBeef')
+    const lookup = jest.spyOn(ctx.activeStorage, 'lookupPreparedBeefs')
+
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, false)
+    )
+
+    expect(result.inputBeef?.length).toBeGreaterThan(0)
+    expect(lookup).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalled()
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: ['f'.repeat(64)]
+    })).toBe(false)
+
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('uses a user-scoped prepared BEEF without invoking the canonical builder', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId + 1, [source.txid])).resolves.toEqual([])
+    await expect(ctx.activeStorage.findPreparedBeefBackfillRoots(10, 1)).resolves.not.toContainEqual({
+      userId: ctx.userId,
+      rootTxid: source.txid
+    })
+    const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
+
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, false)
+    )
+
+    expect(result.inputBeef?.length).toBeGreaterThan(0)
+    expect(canonicalBuilder).not.toHaveBeenCalled()
+  })
+
+  test('discards a partially merged prepared aggregate so canonical fallback stays clean', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    const merge = jest.spyOn(Beef.prototype, 'mergeBeef').mockImplementationOnce(() => {
+      throw new Error('conflicting prepared fragment')
+    })
+
+    const lookup = await ctx.activeStorage.lookupPreparedBeefs(ctx.userId, [source.txid])
+    merge.mockRestore()
+
+    expect(lookup.hitTxids).toEqual([])
+    expect(lookup.missingTxids).toEqual([source.txid])
+    expect(lookup.beef.txs).toHaveLength(0)
+  })
+
+  test('treats corrupt prepared BEEF as a miss and repairs it in the background', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    const corruptChecksum = '0'.repeat(64)
+    await ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: source.txid })
+      .update({ checksum: corruptChecksum })
+    const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
+
+    await expect(ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, false)
+    )).resolves.toMatchObject({ inputBeef: expect.anything() })
+
+    expect(canonicalBuilder).toHaveBeenCalledWith([source.txid], expect.any(Object))
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    const [repaired] = await ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])
+    expect(repaired.checksum).not.toBe(corruptChecksum)
+  })
+
+  test('falls back to the canonical builder when the prepared store is unavailable', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+    jest.spyOn(ctx.activeStorage, 'findPreparedBeefs').mockRejectedValueOnce(new Error('cache unavailable'))
+    const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
+
+    await expect(ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, false)
+    )).resolves.toMatchObject({ inputBeef: expect.anything() })
+
+    expect(canonicalBuilder).toHaveBeenCalledWith([source.txid], expect.any(Object))
+  })
+
+  test('invalidates ready artifacts so a proof reorganization cannot reuse them', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    await expect(ctx.activeStorage.invalidatePreparedBeefs()).resolves.toBe(1)
+
+    ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toEqual([])
+    await expect(ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: source.txid })
+      .first('state', 'formatVersion')).resolves.toMatchObject({ state: 'stale', formatVersion: 0 })
+  })
+
+  test('does not let an in-flight cook overwrite a proof reorganization', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    let verificationStarted!: () => void
+    let releaseVerification!: () => void
+    const started = new Promise<void>(resolve => { verificationStarted = resolve })
+    const release = new Promise<void>(resolve => { releaseVerification = resolve })
+    const isValidRootForHeight = jest.fn(async () => {
+      verificationStarted()
+      await release
+      return true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight
+    } as ChainTracker)
+    const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await started
+    await expect(ctx.activeStorage.invalidatePreparedBeefs()).resolves.toBe(0)
+    releaseVerification()
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    await expect(ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: source.txid })
+      .first()).resolves.toBeUndefined()
+
+    isValidRootForHeight.mockResolvedValue(true)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('backfills settled managed-change roots in bounded background passes', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      backfillEnabled: true,
+      backfillBatchSize: 1,
+      backfillIntervalMs: 0
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as ChainTracker)
+
+    ctx.activeStorage.startPreparedBeefBackfill()
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('suppresses failed backfill roots while allowing an organic retry to repair them', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    const isValidRootForHeight = jest.fn(async () => false)
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight
+    } as ChainTracker)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+    await expect(ctx.activeStorage.knex('prepared_beefs')
+      .where({ userId: ctx.userId, rootTxid: source.txid })
+      .first('state')).resolves.toMatchObject({ state: 'failed' })
+    await expect(ctx.activeStorage.findPreparedBeefBackfillRoots(10, 1)).resolves.not.toContainEqual({
+      userId: ctx.userId,
+      rootTxid: source.txid
+    })
+
+    isValidRootForHeight.mockResolvedValue(true)
+    await ctx.activeStorage.createAction({ userId: ctx.userId }, actionArgs(1_000, false))
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
   test('keeps fallback storage-provider batch methods guarded and user-scoped', async () => {
     await replaceFundingCandidates(2, 1_000)
     const basket = (await ctx.activeStorage.findOutputBaskets({
@@ -366,7 +608,11 @@ describe('createAction funding performance', () => {
     })
   }
 
-  async function replaceFundingCandidates (count: number, satoshis: number, offloadScript = false): Promise<void> {
+  async function replaceFundingCandidates (
+    count: number,
+    satoshis: number,
+    offloadScript = false
+  ): Promise<{ txid: string, transactionId: number }> {
     const basket = (await ctx.activeStorage.findOutputBaskets({
       partial: { userId: ctx.userId, name: 'default' }
     }))[0] as TableOutputBasket
@@ -412,6 +658,7 @@ describe('createAction funding performance', () => {
       }
       await ctx.activeStorage.insertOutput(output)
     }
+    return { txid: source.txid!, transactionId: source.transactionId }
   }
 
   async function replaceFundingCandidatesAcrossSources (

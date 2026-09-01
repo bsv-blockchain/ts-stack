@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-30",
+  "lastReviewed": "2026-08-31",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -217,22 +217,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.10.4",
       "releaseType": "minor",
-      "summary": "Adds the optional semantic handleRequest hook to BRC-98/99/111 permission modules while retaining the existing transformation hooks, BRC-95/BRC-100 compatibility, and stable bounded pagination. It also removes the obsolete JSight application bundle and preserves the package's earlier Open BSV grant in the distribution notice archive.",
-      "migration": "Existing permission modules require no changes because onRequest and onResponse remain supported. Semantic modules may add handleRequest; hosts installing @bsv/ecpm-permission-module register it under the ecpm scheme. Upgrade to @bsv/sdk 2.4.2 or later, use docs/storage.md instead of the removed JSight export, and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
+      "summary": "Adds the optional semantic handleRequest hook to BRC-98/99/111 permission modules and opt-in prepared BEEF storage for Knex-backed normal createAction funding. Prepared proof closures are user-scoped, exact, independently verified, checksummed, persisted after foreground completion, and merged on later hits without invoking the canonical builder. Reads, writes, bounded queueing, and gradual backfill are separately controlled and default off; cache failures retain the canonical path. Reorganizations stale derived rows and fence in-flight cross-process writes with a database proof epoch, purge removes unused rows, and prepared artifacts remain outside wallet sync. Existing transformation hooks, BRC-95/BRC-100 compatibility, and stable pagination remain supported.",
+      "migration": "Existing permission modules require no changes because onRequest and onResponse remain supported. Semantic modules may add handleRequest; hosts installing @bsv/ecpm-permission-module register it under the ecpm scheme. The Knex migration adds rebuildable prepared-BEEF artifact and proof-epoch metadata tables automatically with all COOK controls disabled. Enable writes for a cohort before reads, observe preparation and createAction spans, and enable bounded backfill only after database review. Roll back COOK by disabling readEnabled, writeEnabled, and backfillEnabled. Before downgrading to older code, delete the derived rows because that code cannot advance the proof epoch; after upgrading again, warm writes before reads. Upgrade to @bsv/sdk 2.4.2 or later, use docs/storage.md instead of the removed JSight export, and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.10.4",
       "releaseType": "minor",
-      "summary": "Exports the optional semantic handleRequest permission-module hook for browser and ESM wallet hosts while retaining transformation modules, BRC-100 wire compatibility, stable IndexedDB totals, and the current browser Wallet Toolbox compatibility fixes. It preserves earlier Open BSV grants in the distribution notice archive.",
-      "migration": "Existing permission modules require no changes. Semantic modules may add handleRequest; installing @bsv/ecpm-permission-module requires registration under the ecpm scheme. Use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
+      "summary": "Exports the optional semantic handleRequest permission-module hook and carries the shared prepared-BEEF-aware createAction contract while browser IndexedDB remains on the canonical fallback; compatible remote Knex providers can enable COOK independently. Transformation modules, BRC-100 wire compatibility, stable IndexedDB totals, and browser defaults remain compatible.",
+      "migration": "Existing permission modules require no changes. Semantic modules may add handleRequest; installing @bsv/ecpm-permission-module requires registration under the ecpm scheme. Prepared BEEF persistence and rollout controls apply only to the full package's Knex provider; IndexedDB and remote clients require no configuration change. Use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.10.4",
       "releaseType": "minor",
-      "summary": "Exports the optional semantic handleRequest permission-module hook for React Native wallet hosts while retaining transformation modules, BRC-100 wire compatibility, and the current mobile Wallet Toolbox compatibility fixes. It preserves earlier Open BSV grants in the distribution notice archive.",
-      "migration": "Existing permission modules require no changes. Semantic modules may add handleRequest; mobile hosts can register compatible semantic modules without changing the Wallet interface. Use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
+      "summary": "Exports the optional semantic handleRequest permission-module hook and carries the shared prepared-BEEF-aware createAction contract while mobile storage remains on the canonical fallback; compatible remote Knex providers can enable COOK independently. Transformation modules, BRC-100 wire compatibility, and mobile defaults remain compatible.",
+      "migration": "Existing permission modules require no changes. Semantic modules may add handleRequest; mobile hosts can register compatible semantic modules without changing the Wallet interface. Prepared BEEF persistence and rollout controls apply only to the full package's Knex provider; mobile remote clients require no configuration change. Use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/ when redistributing."
     },
     {
       "name": "create-bsv-app",

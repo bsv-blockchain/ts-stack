@@ -83,6 +83,11 @@ IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across every page, including a short final page or an offset at or past
 the end.
 
+Prepared BEEF (COOK) persistence is a server-side Knex capability. Browser
+IndexedDB keeps the canonical BEEF path, while a compatible remote storage
+server can enable prepared reads and writes without a browser configuration or
+wire-format change.
+
 ## What's excluded vs `@bsv/wallet-toolbox`
 
 | Excluded                      | Why                                     |

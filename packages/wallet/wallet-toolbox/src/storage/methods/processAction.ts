@@ -35,6 +35,13 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { WalletError } from '../../sdk/WalletError'
 import { classifyReqStatus } from '../storageProviderHelpers'
+import { isManagedChangeOutput } from './managedChange'
+import type { PreparedBeefPreparation } from './preparedBeef'
+
+interface PreparedBeefWriterExtension {
+  preparedBeefWritesEnabled: () => boolean
+  enqueuePreparedBeef: (preparation: PreparedBeefPreparation) => boolean
+}
 
 export async function processAction(
   storage: StorageProvider,
@@ -77,6 +84,7 @@ async function processActionCore(
   }
 
   let req: EntityProvenTxReq | undefined
+  let prepareRootTxid: string | undefined
   const txidsOfReqsToShareWithWorld: string[] = [...args.sendWith]
 
   if (args.isNewTx) {
@@ -95,6 +103,12 @@ async function processActionCore(
     ))
     logger?.log('committed new tx updates to storage ')
     if (!req) throw new WERR_INTERNAL()
+    const preparedBeef = storage as unknown as Partial<PreparedBeefWriterExtension>
+    if (
+      typeof preparedBeef.preparedBeefWritesEnabled === 'function' &&
+      preparedBeef.preparedBeefWritesEnabled.call(storage) &&
+      vargs.outputOutputs.some(isManagedChangeOutput)
+    ) prepareRootTxid = req.txid
     // Add the new txid to sendWith unless there are no others to send and the noSend option is set.
     if (args.isNoSend && !args.isSendWith) {
       logger?.log(`noSend txid ${req.txid}`)
@@ -120,6 +134,16 @@ async function processActionCore(
 
   r.sendWithResults = swr
   r.notDelayedResults = ndr
+
+  // Prepare proof material for future spends only after all foreground
+  // processAction work has completed. The bounded coordinator starts later on
+  // the event loop and is never awaited by this request.
+  if (prepareRootTxid != null) {
+    const extension = storage as unknown as Partial<PreparedBeefWriterExtension>
+    if (typeof extension.enqueuePreparedBeef === 'function') {
+      extension.enqueuePreparedBeef.call(storage, { userId, rootTxids: [prepareRootTxid] })
+    }
+  }
 
   logger?.groupEnd()
 

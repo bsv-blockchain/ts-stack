@@ -55,6 +55,7 @@ import type { ManagedChangeInputCandidate } from './availableManagedChange'
 import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
+import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -184,6 +185,7 @@ async function createActionCore(
   // A funding-claim retry is handled below by fetching only any residual roots.
   const allocatedBeefPrefetch = startAllocatedChangeBeefPrefetch(
     storage,
+    userId,
     vargs,
     initialFundingPlan.selected,
     beef,
@@ -259,8 +261,9 @@ async function createActionCore(
     const { allocatedChange, derivationPrefix, outputs, changeVouts, ctx } = persisted
     logger?.log('created new output records')
 
-    const inputBeef = await mergeAllocatedChangeBeefs(
+    const preparedInputBeef = await mergeAllocatedChangeBeefs(
       storage,
+      userId,
       vargs,
       allocatedChange,
       beef,
@@ -293,9 +296,14 @@ async function createActionCore(
       inputs,
       outputs,
       derivationPrefix,
-      inputBeef,
+      inputBeef: preparedInputBeef.inputBeef,
       noSendChangeOutputVouts: vargs.isNoSend ? changeVouts : undefined
     }
+
+    // This is intentionally the last foreground operation. The coordinator
+    // starts on a timer, so the createAction promise and HTTP response can
+    // resolve before any COOK verification or persistence begins.
+    enqueuePreparedBeefs(storage, preparedInputBeef.preparations)
 
     logger?.groupEnd()
     return r
@@ -1661,6 +1669,99 @@ interface AllocatedChangeBeefPrefetchResult {
   error?: unknown
   sourceCount: number
   txids: string[]
+  preparations: PreparedBeefPreparation[]
+}
+
+interface LoadedAllocatedChangeBeef {
+  beef: Beef
+  preparations: PreparedBeefPreparation[]
+  preparedHitCount: number
+  canonicalFetchCount: number
+}
+
+interface PreparedBeefStorageExtension {
+  preparedBeefReadsEnabled: () => boolean
+  preparedBeefWritesEnabled: () => boolean
+  lookupPreparedBeefs: (
+    userId: number,
+    rootTxids: string[],
+    parent?: TelemetrySpan
+  ) => Promise<PreparedBeefLookupResult>
+  enqueuePreparedBeef: (preparation: PreparedBeefPreparation) => boolean
+}
+
+function preparedBeefStorage (storage: StorageProvider): Partial<PreparedBeefStorageExtension> {
+  return storage as unknown as Partial<PreparedBeefStorageExtension>
+}
+
+function enqueuePreparedBeefs (storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
+  const extension = preparedBeefStorage(storage)
+  if (typeof extension.enqueuePreparedBeef !== 'function') return
+  for (const preparation of preparations) extension.enqueuePreparedBeef.call(storage, preparation)
+}
+
+async function loadAllocatedChangeBeef(
+  storage: StorageProvider,
+  userId: number,
+  txids: string[],
+  options: StorageGetBeefOptions,
+  parent?: TelemetrySpan
+): Promise<LoadedAllocatedChangeBeef> {
+  const extension = preparedBeefStorage(storage)
+  const readEnabled = typeof extension.preparedBeefReadsEnabled === 'function' &&
+    extension.preparedBeefReadsEnabled.call(storage)
+  const writeEnabled = typeof extension.preparedBeefWritesEnabled === 'function' &&
+    extension.preparedBeefWritesEnabled.call(storage)
+  const lookup = readEnabled && typeof extension.lookupPreparedBeefs === 'function'
+    ? await extension.lookupPreparedBeefs.call(storage, userId, txids, parent)
+    : {
+        beef: new Beef(),
+        hitTxids: [],
+        missingTxids: [...new Set(txids)],
+        corruptCount: 0,
+        byteLength: 0
+      }
+  const beef = lookup.beef
+  const preparations: PreparedBeefPreparation[] = []
+  if (lookup.missingTxids.length > 0) {
+    const fetched = await storage.getBeefForTransactions(lookup.missingTxids, {
+      ...options,
+      mergeToBeef: undefined
+    })
+    if (lookup.hitTxids.length === 0) {
+      // Preserve the original disabled/cold path without merging into an
+      // otherwise empty BEEF solely for this optimization.
+      if (writeEnabled) {
+        preparations.push({
+          userId,
+          rootTxids: lookup.missingTxids,
+          sourceBeef: (options.knownTxids?.length ?? 0) === 0 ? fetched : undefined
+        })
+      }
+      return {
+        beef: fetched,
+        preparations,
+        preparedHitCount: 0,
+        canonicalFetchCount: lookup.missingTxids.length
+      }
+    }
+    beef.mergeBeef(fetched)
+    if (writeEnabled) {
+      preparations.push({
+        userId,
+        rootTxids: lookup.missingTxids,
+        // A caller's knownTxids may leave placeholders which are unsuitable for
+        // a reusable artifact. Rebuild those roots strictly in the worker.
+        sourceBeef: (options.knownTxids?.length ?? 0) === 0 ? fetched : undefined
+      })
+    }
+  }
+  return {
+    beef,
+    preparations,
+    preparedHitCount: lookup.hitTxids.length,
+    canonicalFetchCount: lookup.missingTxids.length
+  }
 }
 
 function missingAllocatedChangeTxids(
@@ -1680,15 +1781,16 @@ function missingAllocatedChangeTxids(
 
 function startAllocatedChangeBeefPrefetch(
   storage: StorageProvider,
+  userId: number,
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: ManagedChangeInputCandidate[],
   beef: Beef,
   parent?: TelemetrySpan
 ): Promise<AllocatedChangeBeefPrefetchResult> {
-  if (vargs.options.returnTXIDOnly) return Promise.resolve({ sourceCount: 0, txids: [] })
+  if (vargs.options.returnTXIDOnly) return Promise.resolve({ sourceCount: 0, txids: [], preparations: [] })
   const knownTxids = vargs.options.knownTxids ?? []
   const missing = missingAllocatedChangeTxids(allocatedChange, beef, knownTxids)
-  if (missing.length === 0) return Promise.resolve({ sourceCount: 0, txids: [] })
+  if (missing.length === 0) return Promise.resolve({ sourceCount: 0, txids: [], preparations: [] })
   const options: StorageGetBeefOptions = {
     trustSelf: undefined,
     knownTxids,
@@ -1707,18 +1809,25 @@ function startAllocatedChangeBeefPrefetch(
       'beef.storage_batch_count': missing.length === 0 ? 0 : 1
     },
     async span => {
-      const fetched = await storage.getBeefForTransactions(missing, options)
+      const fetched = await loadAllocatedChangeBeef(storage, userId, missing, options, parent)
       span?.end({
         attributes: {
-          'beef.fetched_tx_count': fetched.txs.length,
-          'beef.fetched_bump_count': fetched.bumps.length
+          'beef.fetched_tx_count': fetched.beef.txs.length,
+          'beef.fetched_bump_count': fetched.beef.bumps.length,
+          'beef.prepared_hit_count': fetched.preparedHitCount,
+          'beef.canonical_fetch_count': fetched.canonicalFetchCount
         }
       })
       return fetched
     }
   ).then(
-    prefetched => ({ beef: prefetched, sourceCount: missing.length, txids: missing }),
-    error => ({ error, sourceCount: missing.length, txids: missing })
+    prefetched => ({
+      beef: prefetched.beef,
+      preparations: prefetched.preparations,
+      sourceCount: missing.length,
+      txids: missing
+    }),
+    error => ({ error, preparations: [], sourceCount: missing.length, txids: missing })
   )
 }
 
@@ -1730,12 +1839,13 @@ function sameTxids(left: readonly string[], right: readonly string[]): boolean {
 
 async function mergeAllocatedChangeBeefs(
   storage: StorageProvider,
+  userId: number,
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: TableOutput[],
   beef: Beef,
   prefetch: Promise<AllocatedChangeBeefPrefetchResult>,
   parent?: TelemetrySpan
-): Promise<Uint8Array | undefined> {
+): Promise<{ inputBeef: Uint8Array | undefined; preparations: PreparedBeefPreparation[] }> {
   const options: StorageGetBeefOptions = {
     trustSelf: undefined,
     knownTxids: vargs.options.knownTxids,
@@ -1745,7 +1855,7 @@ async function mergeAllocatedChangeBeefs(
     ignoreNewProven: false,
     minProofLevel: undefined
   }
-  if (vargs.options.returnTXIDOnly) return undefined
+  if (vargs.options.returnTXIDOnly) return { inputBeef: undefined, preparations: [] }
   const knownTxids = vargs.options.knownTxids ?? []
   const requiredBeforePrefetch = missingAllocatedChangeTxids(allocatedChange, beef, knownTxids)
   const prefetched = await traceStorageStep(
@@ -1765,6 +1875,7 @@ async function mergeAllocatedChangeBeefs(
   const usePrefetch = sameTxids(prefetched.txids, requiredBeforePrefetch)
   if (usePrefetch && prefetched.error != null) throw prefetched.error
   if (usePrefetch && prefetched.beef != null) beef.mergeBeef(prefetched.beef)
+  const preparations = usePrefetch ? [...prefetched.preparations] : []
 
   // If a concurrent spender forced the funding claim to be replanned, only
   // the newly selected roots remain. The normal uncontended path is empty.
@@ -1784,7 +1895,9 @@ async function mergeAllocatedChangeBeefs(
     },
     async span => {
       if (missing.length > 0) {
-        fetched = await storage.getBeefForTransactions(missing, { ...options, mergeToBeef: undefined })
+        const loaded = await loadAllocatedChangeBeef(storage, userId, missing, options, parent)
+        fetched = loaded.beef
+        preparations.push(...loaded.preparations)
       }
       span?.end({
         attributes: {
@@ -1810,7 +1923,7 @@ async function mergeAllocatedChangeBeefs(
       })
     }
   )
-  return await traceStorageStep(
+  const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',
     parent,
@@ -1825,4 +1938,5 @@ async function mergeAllocatedChangeBeefs(
       return result
     }
   )
+  return { inputBeef, preparations }
 }

@@ -26,6 +26,18 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
   }
 
   await runPurgeQuery({
+    log: 'unused prepared BEEFs deleted',
+    q: storage
+      .toDb(trx)('prepared_beefs')
+      .whereRaw(
+        'not exists(select outputId from outputs as o where ' +
+        'o.userId = prepared_beefs.userId and o.txid = prepared_beefs.rootTxid and ' +
+        'o.spendable = 1 and o.spentBy is null)'
+      )
+      .delete()
+  }, r)
+
+  await runPurgeQuery({
     log: 'orphan proven_txs deleted',
     q: storage
       .toDb(trx)('proven_txs')

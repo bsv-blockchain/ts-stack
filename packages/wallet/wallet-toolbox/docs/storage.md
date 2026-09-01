@@ -814,6 +814,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export interface StorageKnexOptions extends StorageProviderOptions {
     knex: Knex;
+    preparedBeef?: PreparedBeefOptions;
 }
 ```
 
@@ -825,6 +826,16 @@ Knex database interface initialized with valid connection configuration.
 
 ```ts
 knex: Knex
+```
+
+###### Property preparedBeef
+
+Optional prepared-BEEF (COOK) rollout controls. All controls default off. See
+[Prepared BEEF (COOK)](./prepared-beef.md) for timing, validity, rollout, and
+rollback details.
+
+```ts
+preparedBeef?: PreparedBeefOptions
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

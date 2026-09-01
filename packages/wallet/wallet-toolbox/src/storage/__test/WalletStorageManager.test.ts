@@ -358,6 +358,82 @@ describe('WalletStorageManager tests', () => {
       expect(updatedTx.status).toBe('sending')
     }
   })
+
+  test('4_processAction queues newly created managed change without waiting for preparation', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefProcessAction', 'legacy')
+    const enqueue = jest.spyOn(ctx.activeStorage, 'enqueuePreparedBeef').mockReturnValue(true)
+    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    try {
+      const result = await ctx.wallet.createAction({
+        description: 'queue managed change for prepared BEEF',
+        outputs: [{
+          satoshis: 1,
+          lockingScript: '51',
+          outputDescription: 'prepared BEEF processAction test'
+        }],
+        options: {
+          noSend: true,
+          randomizeOutputs: false,
+          returnTXIDOnly: true,
+          signAndProcess: true
+        }
+      })
+
+      expect(result.txid).toBeTruthy()
+      expect(enqueue).toHaveBeenCalledWith({
+        userId: ctx.userId,
+        rootTxids: [result.txid]
+      })
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5_reproof updates advance the prepared-BEEF proof epoch atomically', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
+        log: '',
+        updated: { update: { height: ptx.height }, logUpdate: '' },
+        unchanged: false,
+        unavailable: false
+      })
+
+      const result = await ctx.storage.reproveHeader(ptx.blockHash)
+
+      expect(reprove).toHaveBeenCalled()
+      expect(result.updated.length).toBeGreaterThan(0)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5a_reorg invalidates prepared BEEF while replacement proofs are unavailable', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefUnavailableReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
+        log: '',
+        updated: undefined,
+        unchanged: false,
+        unavailable: true
+      })
+
+      const result = await ctx.storage.reproveHeader(ptx.blockHash)
+
+      expect(result.updated).toHaveLength(0)
+      expect(result.unavailable).toHaveLength(1)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
 })
 function logger(s: string) {
   process.stdout.write(`${s}\n`)
