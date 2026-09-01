@@ -21,7 +21,7 @@ import {
   transactionColumnsWithoutRawTx
 } from './schema/tables'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
-import { TablePreparedBeef } from './schema/tables/TablePreparedBeef'
+import { TablePreparedBeef } from './schema/tables/TablePreparedBeef.interfaces'
 import { KnexMigrations } from './schema/KnexMigrations'
 import { Knex } from 'knex'
 import { AdminStatsResult, StorageProvider, StorageProviderOptions } from './StorageProvider'

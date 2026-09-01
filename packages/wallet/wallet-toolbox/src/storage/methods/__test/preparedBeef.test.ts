@@ -36,6 +36,9 @@ describe('prepared BEEF policy', () => {
       backfillIntervalMs: 25
     })
     expect(() => validatePreparedBeefPolicy({ backfillEnabled: true })).toThrow('writeEnabled')
+    expect(() => validatePreparedBeefPolicy({
+      readEnabled: 1 as unknown as boolean
+    })).toThrow('readEnabled')
     expect(() => validatePreparedBeefPolicy({ maxQueueSize: 0 })).toThrow('maxQueueSize')
     expect(() => validatePreparedBeefPolicy({ maxArtifactBytes: 1.5 })).toThrow('maxArtifactBytes')
     expect(() => validatePreparedBeefPolicy({ backfillIntervalMs: -1 })).toThrow('backfillIntervalMs')

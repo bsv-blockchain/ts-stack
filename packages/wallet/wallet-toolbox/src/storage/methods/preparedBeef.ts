@@ -1,6 +1,6 @@
 import { Beef, Hash, TelemetrySpan, Utils } from '@bsv/sdk'
 import type { StorageProvider } from '../StorageProvider'
-import type { TablePreparedBeef } from '../schema/tables/TablePreparedBeef'
+import type { TablePreparedBeef } from '../schema/tables/TablePreparedBeef.interfaces'
 import { beefForTxids } from '../../utility/beefForTxids'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
@@ -150,7 +150,7 @@ export async function lookupPreparedBeefs(
         const candidates: Array<{ rootTxid: string; fragment: Beef; byteLength: number }> = []
         for (const rootTxid of requestedTxids) {
           const row = byTxid.get(rootTxid)
-          if (row == null || row.state !== 'ready' || row.formatVersion !== PREPARED_BEEF_FORMAT_VERSION) {
+          if (row?.state !== 'ready' || row.formatVersion !== PREPARED_BEEF_FORMAT_VERSION) {
             missing.push(rootTxid)
             continue
           }

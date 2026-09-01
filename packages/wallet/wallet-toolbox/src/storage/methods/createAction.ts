@@ -1694,6 +1694,22 @@ function preparedBeefStorage (storage: StorageProvider): Partial<PreparedBeefSto
   return storage as unknown as Partial<PreparedBeefStorageExtension>
 }
 
+function appendPreparedBeefPreparation (
+  preparations: PreparedBeefPreparation[],
+  writeEnabled: boolean,
+  userId: number,
+  rootTxids: string[],
+  sourceBeef: Beef,
+  knownTxids: string[]
+): void {
+  if (!writeEnabled) return
+  preparations.push({
+    userId,
+    rootTxids,
+    sourceBeef: knownTxids.length === 0 ? sourceBeef : undefined
+  })
+}
+
 function enqueuePreparedBeefs (storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
   const extension = preparedBeefStorage(storage)
   if (typeof extension.enqueuePreparedBeef !== 'function') return
@@ -1708,10 +1724,8 @@ async function loadAllocatedChangeBeef(
   parent?: TelemetrySpan
 ): Promise<LoadedAllocatedChangeBeef> {
   const extension = preparedBeefStorage(storage)
-  const readEnabled = typeof extension.preparedBeefReadsEnabled === 'function' &&
-    extension.preparedBeefReadsEnabled.call(storage)
-  const writeEnabled = typeof extension.preparedBeefWritesEnabled === 'function' &&
-    extension.preparedBeefWritesEnabled.call(storage)
+  const readEnabled = extension.preparedBeefReadsEnabled?.call(storage) === true
+  const writeEnabled = extension.preparedBeefWritesEnabled?.call(storage) === true
   const lookup = readEnabled && typeof extension.lookupPreparedBeefs === 'function'
     ? await extension.lookupPreparedBeefs.call(storage, userId, txids, parent)
     : {
@@ -1731,13 +1745,14 @@ async function loadAllocatedChangeBeef(
     if (lookup.hitTxids.length === 0) {
       // Preserve the original disabled/cold path without merging into an
       // otherwise empty BEEF solely for this optimization.
-      if (writeEnabled) {
-        preparations.push({
-          userId,
-          rootTxids: lookup.missingTxids,
-          sourceBeef: (options.knownTxids?.length ?? 0) === 0 ? fetched : undefined
-        })
-      }
+      appendPreparedBeefPreparation(
+        preparations,
+        writeEnabled,
+        userId,
+        lookup.missingTxids,
+        fetched,
+        options.knownTxids ?? []
+      )
       return {
         beef: fetched,
         preparations,
@@ -1746,15 +1761,16 @@ async function loadAllocatedChangeBeef(
       }
     }
     beef.mergeBeef(fetched)
-    if (writeEnabled) {
-      preparations.push({
-        userId,
-        rootTxids: lookup.missingTxids,
-        // A caller's knownTxids may leave placeholders which are unsuitable for
-        // a reusable artifact. Rebuild those roots strictly in the worker.
-        sourceBeef: (options.knownTxids?.length ?? 0) === 0 ? fetched : undefined
-      })
-    }
+    // A caller's knownTxids may leave placeholders which are unsuitable for a
+    // reusable artifact. Rebuild those roots strictly in the worker.
+    appendPreparedBeefPreparation(
+      preparations,
+      writeEnabled,
+      userId,
+      lookup.missingTxids,
+      fetched,
+      options.knownTxids ?? []
+    )
   }
   return {
     beef,

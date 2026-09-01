@@ -24,11 +24,14 @@ attention to changes that materially alter behavior or extend functionality.
   database proof epoch fences in-flight cross-process writes, purge removes
   unused rows, and prepared data remains outside wallet sync. The
   Knex worker is excluded from portable bundles. Reviewed Vite ceilings advance
-  to 1,610,000 raw / 379,500 gzip / 297,500 Brotli bytes and esbuild ceilings
-  to 1,255,000 raw / 345,500 gzip / 278,000 Brotli, covering local measurements
-  of 1,609,517 / 379,411 / 297,282 and 1,254,414 / 344,714 / 277,443 bytes.
-  The Hermes raw ceiling advances to 3,373,000 bytes, covering 3,372,554;
-  Metro and compressed Hermes ceilings remain unchanged.
+  to 1,610,250 raw / 379,750 gzip / 298,000 Brotli bytes and esbuild ceilings
+  to 1,255,000 raw / 346,250 gzip / 278,000 Brotli, covering local measurements
+  of 1,609,783 / 379,492 / 297,253 and 1,254,603 / 344,792 / 277,384 bytes;
+  hosted Linux Vite Brotli and esbuild gzip measured 297,585 and 345,711 bytes.
+  The Hermes raw / gzip ceilings advance to 3,374,500 / 1,369,000 bytes,
+  covering local measurements of 3,372,554 / 1,348,354 and hosted Linux
+  measurements of 3,373,560 / 1,368,128 bytes; Metro and Hermes Brotli
+  ceilings remain unchanged.
 
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final

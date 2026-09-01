@@ -331,6 +331,14 @@ describe('createAction funding performance', () => {
     expect(persist).not.toHaveBeenCalled()
     expect(ctx.activeStorage.enqueuePreparedBeef({
       userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: []
+    })).toBe(false)
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
       rootTxids: ['f'.repeat(64)]
     })).toBe(false)
 
@@ -338,6 +346,22 @@ describe('createAction funding performance', () => {
 
     expect(persist).toHaveBeenCalledTimes(1)
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('keeps canonical createAction compatible when the optional COOK queue is absent', async () => {
+    await replaceFundingCandidates(1, 5_000)
+    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    Object.defineProperty(ctx.activeStorage, 'enqueuePreparedBeef', {
+      configurable: true,
+      value: undefined
+    })
+
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId },
+      actionArgs(1_000, false)
+    )
+
+    expect(result.inputBeef?.length).toBeGreaterThan(0)
   })
 
   test('uses a user-scoped prepared BEEF without invoking the canonical builder', async () => {
@@ -518,6 +542,49 @@ describe('createAction funding performance', () => {
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
+  })
+
+  test('stops a failed backfill pass without affecting foreground storage', async () => {
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      backfillEnabled: true,
+      backfillIntervalMs: 0
+    })
+    const findRoots = jest.spyOn(ctx.activeStorage, 'findPreparedBeefBackfillRoots')
+      .mockRejectedValueOnce(new Error('backfill unavailable'))
+
+    ctx.activeStorage.startPreparedBeefBackfill()
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    expect(findRoots).toHaveBeenCalledTimes(1)
+  })
+
+  test('fails closed when prepared-BEEF proof epoch metadata is unavailable', async () => {
+    const source = await replaceFundingCandidates(1, 5_000)
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    await expect(ctx.activeStorage.lookupPreparedBeefs(ctx.userId, [])).resolves.toMatchObject({
+      hitTxids: [],
+      missingTxids: []
+    })
+    await ctx.activeStorage.knex('prepared_beef_metadata').delete()
+
+    expect(ctx.activeStorage.enqueuePreparedBeef({
+      userId: ctx.userId,
+      rootTxids: [source.txid]
+    })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [])).resolves.toEqual([])
+    await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toEqual([])
+    await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).rejects.toThrow(
+      'prepared BEEF proof epoch is unavailable'
+    )
+    await expect(ctx.activeStorage.invalidatePreparedBeefs()).rejects.toThrow(
+      'prepared BEEF proof epoch update failed'
+    )
   })
 
   test('suppresses failed backfill roots while allowing an organic retry to repair them', async () => {
