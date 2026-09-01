@@ -49,7 +49,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
         EntityProvenTx.invalidSyncProof('Merkle path height does not match the record')
       }
       const leaf = proof.path[0]?.find(item => item.txid === true && item.hash === candidate.txid.toLowerCase())
-      if (leaf == null || leaf.offset !== candidate.index) {
+      if (leaf?.offset !== candidate.index) {
         EntityProvenTx.invalidSyncProof('Merkle path does not contain the transaction at the recorded index')
       }
       const root = proof.computeRoot(candidate.txid.toLowerCase())

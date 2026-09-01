@@ -454,84 +454,11 @@ export class PreparedBeefCoordinator {
           return
         }
         for (const rootTxid of item.rootTxids) {
-          try {
-            const storedBytes = await this.storage.readPreparedBeefSourceByteLength(rootTxid)
-            if (storedBytes != null && storedBytes > this.storage.preparedBeefPolicy.maxArtifactBytes) {
-              throw new Error('prepared BEEF stored source exceeds configured byte limit')
-            }
-            const source = await this.storage.getBeefForTransaction(rootTxid, {
-              ignoreStorage: false,
-              ignoreServices: true,
-              ignoreNewProven: false
-            })
-            // Bound attacker-influenced graph work before dependency
-            // selection, proof verification, or exact serialization.
-            if (!isAdmissibleBeef(source, this.storage.preparedBeefPolicy)) {
-              throw new Error('prepared BEEF source exceeds configured resource limits')
-            }
-            const exact = beefForTxids(source, [rootTxid])
-            if (exact.txs.length > this.storage.preparedBeefPolicy.maxArtifactTransactions) {
-              throw new Error('prepared BEEF exceeds configured transaction limit')
-            }
-            if (!validRootTransaction(exact, rootTxid)) throw new Error('prepared BEEF root is incomplete')
-            if (!(await exact.verify(await this.storage.getServices().getChainTracker()))) {
-              throw new Error('prepared BEEF failed verification')
-            }
-            const bytes = exact.toUint8Array()
-            if (bytes.length > this.storage.preparedBeefPolicy.maxArtifactBytes) {
-              throw new Error('prepared BEEF exceeds configured size limit')
-            }
-            const now = new Date()
-            const row: TablePreparedBeef = {
-              created_at: now,
-              updated_at: now,
-              preparedBeefId: 0,
-              userId: item.userId,
-              rootTxid,
-              beef: Array.from(bytes),
-              checksum: checksum(bytes),
-              formatVersion: PREPARED_BEEF_FORMAT_VERSION,
-              state: 'ready',
-              txCount: exact.txs.length,
-              bumpCount: exact.bumps.length,
-              byteLength: bytes.length
-            }
-            if (!(await this.storage.upsertPreparedBeef(row, proofEpoch))) {
-              // Proof state changed after verification. The invalidation won
-              // the race, so do not reintroduce this artifact or suppress a
-              // later backfill retry with a failure marker.
-              rejectedCount++
-              continue
-            }
+          const byteLength = await this.prepareRoot(item.userId, rootTxid, proofEpoch)
+          if (byteLength == null) rejectedCount++
+          else {
             preparedCount++
-            preparedBytes += bytes.length
-          } catch {
-            rejectedCount++
-            // A persistent rejection marker prevents optional backfill from
-            // hot-looping on an unverifiable root. Normal canonical reads can
-            // still queue an organic retry, which replaces this marker after
-            // conditions recover.
-            try {
-              const now = new Date()
-              const bytes = new Uint8Array()
-              await this.storage.upsertPreparedBeef({
-                created_at: now,
-                updated_at: now,
-                preparedBeefId: 0,
-                userId: item.userId,
-                rootTxid,
-                beef: [],
-                checksum: checksum(bytes),
-                formatVersion: PREPARED_BEEF_FORMAT_VERSION,
-                state: 'failed',
-                txCount: 0,
-                bumpCount: 0,
-                byteLength: 0
-              }, proofEpoch)
-            } catch {
-              // Persistence failure remains best effort. The foreground action
-              // has already completed and canonical reads remain authoritative.
-            }
+            preparedBytes += byteLength
           }
         }
         span.end({
@@ -543,6 +470,92 @@ export class PreparedBeefCoordinator {
         })
       }
     )
+  }
+
+  private async prepareRoot(userId: number, rootTxid: string, proofEpoch: number): Promise<number | undefined> {
+    try {
+      return await this.buildAndPersistReadyArtifact(userId, rootTxid, proofEpoch)
+    } catch {
+      // A persistent rejection marker prevents optional backfill from
+      // hot-looping on an unverifiable root. Normal canonical reads can still
+      // queue an organic retry, which replaces this marker after recovery.
+      await this.persistFailureMarker(userId, rootTxid, proofEpoch).catch(() => {
+        // Persistence remains best effort. The foreground action has already
+        // completed and canonical reads remain authoritative.
+      })
+      return undefined
+    }
+  }
+
+  private async buildAndPersistReadyArtifact(
+    userId: number,
+    rootTxid: string,
+    proofEpoch: number
+  ): Promise<number | undefined> {
+    const storedBytes = await this.storage.readPreparedBeefSourceByteLength(rootTxid)
+    if (storedBytes != null && storedBytes > this.storage.preparedBeefPolicy.maxArtifactBytes) {
+      throw new Error('prepared BEEF stored source exceeds configured byte limit')
+    }
+    const source = await this.storage.getBeefForTransaction(rootTxid, {
+      ignoreStorage: false,
+      ignoreServices: true,
+      ignoreNewProven: false
+    })
+    // Bound attacker-influenced graph work before dependency selection, proof
+    // verification, or exact serialization.
+    if (!isAdmissibleBeef(source, this.storage.preparedBeefPolicy)) {
+      throw new Error('prepared BEEF source exceeds configured resource limits')
+    }
+    const exact = beefForTxids(source, [rootTxid])
+    if (exact.txs.length > this.storage.preparedBeefPolicy.maxArtifactTransactions) {
+      throw new Error('prepared BEEF exceeds configured transaction limit')
+    }
+    if (!validRootTransaction(exact, rootTxid)) throw new Error('prepared BEEF root is incomplete')
+    if (!(await exact.verify(await this.storage.getServices().getChainTracker()))) {
+      throw new Error('prepared BEEF failed verification')
+    }
+    const bytes = exact.toUint8Array()
+    if (bytes.length > this.storage.preparedBeefPolicy.maxArtifactBytes) {
+      throw new Error('prepared BEEF exceeds configured size limit')
+    }
+    const now = new Date()
+    const row: TablePreparedBeef = {
+      created_at: now,
+      updated_at: now,
+      preparedBeefId: 0,
+      userId,
+      rootTxid,
+      beef: Array.from(bytes),
+      checksum: checksum(bytes),
+      formatVersion: PREPARED_BEEF_FORMAT_VERSION,
+      state: 'ready',
+      txCount: exact.txs.length,
+      bumpCount: exact.bumps.length,
+      byteLength: bytes.length
+    }
+    // Proof state changed after verification when this returns false. The
+    // invalidation won the race, so do not add a failure marker that suppresses
+    // a later backfill retry.
+    return await this.storage.upsertPreparedBeef(row, proofEpoch) ? bytes.length : undefined
+  }
+
+  private async persistFailureMarker(userId: number, rootTxid: string, proofEpoch: number): Promise<void> {
+    const now = new Date()
+    const bytes = new Uint8Array()
+    await this.storage.upsertPreparedBeef({
+      created_at: now,
+      updated_at: now,
+      preparedBeefId: 0,
+      userId,
+      rootTxid,
+      beef: [],
+      checksum: checksum(bytes),
+      formatVersion: PREPARED_BEEF_FORMAT_VERSION,
+      state: 'failed',
+      txCount: 0,
+      bumpCount: 0,
+      byteLength: 0
+    }, proofEpoch)
   }
 
   private resolveIdle(): void {
