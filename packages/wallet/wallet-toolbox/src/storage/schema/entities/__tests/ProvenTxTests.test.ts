@@ -3,6 +3,7 @@ import { createSyncMap, sdk, sha256Hash } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityProvenTx } from '../EntityProvenTx'
 import { StorageProvider } from '../../../StorageProvider'
+import * as syncProofValidation from '../../../methods/validateSyncProof'
 import { toBinaryBaseBlockHeader } from '../../../../services/Services'
 import { doubleSha256BE } from '../../../../utility/utilityHelpers'
 import { asString } from '../../../../utility/utilityHelpers.noBuffer'
@@ -572,7 +573,7 @@ describe('ProvenTx class method tests', () => {
     const corrupted = { ...proof, rawTx: [...proof.rawTx] }
     corrupted.rawTx[corrupted.rawTx.length - 1] ^= 1
 
-    await expect(EntityProvenTx.validateSyncProof(storage, corrupted))
+    await expect(syncProofValidation.validateSyncProof(storage, corrupted))
       .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
 
     expect(storage.insertProvenTx).not.toHaveBeenCalled()
@@ -586,7 +587,7 @@ describe('ProvenTx class method tests', () => {
     const storage = makeProofStorage(header)
     const entity = new EntityProvenTx(proof)
 
-    await EntityProvenTx.validateSyncProof(storage, proof)
+    await syncProofValidation.validateSyncProof(storage, proof)
     await entity.mergeNew(storage, 1, createSyncMap())
 
     expect(storage.insertProvenTx).toHaveBeenCalledWith(expect.objectContaining({ txid: proof.txid }), undefined)
@@ -601,7 +602,7 @@ describe('ProvenTx class method tests', () => {
     const storage = makeProofStorage(replacement.header)
     const entity = new EntityProvenTx(original.proof)
 
-    await EntityProvenTx.validateSyncProof(storage, replacement.proof)
+    await syncProofValidation.validateSyncProof(storage, replacement.proof)
     await expect(entity.mergeExisting(
       storage,
       undefined,
@@ -616,28 +617,4 @@ describe('ProvenTx class method tests', () => {
     expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
   })
 
-  test('14_authenticated remote sync validates proofs before opening its storage transaction', async () => {
-    const transaction = jest.fn()
-    const storage = { transaction } as unknown as StorageProvider
-    const proof = { txid: 'a'.repeat(64) } as TableProvenTx
-    const validation = jest.spyOn(EntityProvenTx, 'validateSyncProof')
-      .mockRejectedValueOnce(new Error('untrusted proof rejected'))
-
-    await expect(StorageProvider.prototype.processSyncChunk.call(
-      storage,
-      {
-        identityKey: 'authenticated-user',
-        fromStorageIdentityKey: 'remote',
-        toStorageIdentityKey: 'server',
-        maxRoughSize: 1,
-        maxItems: 1,
-        offsets: [],
-        reqAuthUserId: 1
-      } as sdk.RequestSyncChunkArgs & { reqAuthUserId: number },
-      { provenTxs: [proof] } as sdk.SyncChunk
-    )).rejects.toThrow('untrusted proof rejected')
-
-    expect(validation).toHaveBeenCalledWith(storage, proof)
-    expect(transaction).not.toHaveBeenCalled()
-  })
 })

@@ -1311,14 +1311,6 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
-    // StorageServer adds this non-protocol marker after binding the authenticated
-    // tenant. Local manager/portable sync is an explicitly configured trust
-    // relationship; remote tenant data must not establish global proof rows.
-    if ((args as RequestSyncChunkArgs & { reqAuthUserId?: unknown }).reqAuthUserId != null) {
-      for (const proof of chunk.provenTxs ?? []) {
-        await EntityProvenTx.validateSyncProof(this, proof)
-      }
-    }
     // A sync page may contain hundreds of related entities. Keep their lookups,
     // inserts, ID remapping, and sync-state checkpoint in one transaction. This
     // avoids a transaction startup/commit for every record (especially costly

@@ -620,6 +620,24 @@ describe('StorageServer JSON-RPC boundary', () => {
     )
     expect(syncParamsWithoutClaim[0].reqAuthUserId).toBe(7)
 
+    const untrustedProofParams: any[] = [{}, {
+      ...emptyChunk,
+      provenTxs: [{
+        created_at: new Date(),
+        updated_at: new Date(),
+        provenTxId: 1,
+        txid: 'a'.repeat(64),
+        height: 1,
+        index: 0,
+        merklePath: [1],
+        rawTx: [1],
+        blockHash: 'b'.repeat(64),
+        merkleRoot: 'c'.repeat(64)
+      }]
+    }]
+    await expect(invoke(server, 'authorizeRpcCall', 'processSyncChunk', untrustedProofParams, request))
+      .rejects.toThrow('server-verified proof')
+
     await expect(
       invoke(server, 'authorizeRpcCall', 'processSyncChunk', [{ identityKey: 'mallory' }, { ...emptyChunk }], request)
     ).rejects.toThrow('identityKey does not match authentication')
