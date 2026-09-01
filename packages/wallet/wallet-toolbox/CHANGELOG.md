@@ -53,13 +53,17 @@ attention to changes that materially alter behavior or extend functionality.
   queries unless totals are requested. Remote clients also recover from a
   provider's HTTP 413 response ceiling by retrying the read-only sync request
   with a smaller chunk budget and reusing the working limit for later pages.
-  Clean macOS fixtures measure Vite at 1,608,681 raw, 379,257 gzip, and 297,202
-  Brotli bytes; esbuild at 1,253,841 raw, 344,592 gzip, and 277,563 Brotli
-  bytes; and Hermes at 3,369,326 raw bytes locally and 1,366,854 gzip bytes on
-  hosted Linux. The reviewed ceilings for the
-  complete sync feature advance to 1,608,800/379,400/297,300 for Vite,
-  1,253,900/345,600/277,700 for esbuild, and 3,369,500/1,367,000 raw/gzip
-  bytes for Hermes. Metro and the mobile Brotli ceiling remain unchanged.
+  Runtime validation rejects malformed remote totals, and MySQL rollback
+  restores the foreign-key support index before removing the new composites.
+  The retained authenticated candidate-provider benchmark fills a 250-record
+  proof page with three source reads (`10, 80, 160`) on SQLite and MySQL.
+  Clean macOS fixtures measure Vite at 1,609,916 raw, 379,552 gzip, and 297,188
+  Brotli bytes; esbuild at 1,254,827 raw, 344,883 gzip, and 277,729 Brotli
+  bytes; Metro at 1,662,714 raw, 419,740 gzip, and 326,785 Brotli bytes; and
+  Hermes at 3,371,236 raw, 1,347,950 gzip, and 1,061,946 Brotli bytes. The
+  reviewed ceilings advance to 1,611,000/380,000/297,500 for Vite,
+  1,256,000/346,000/278,200 for esbuild, and 3,373,000/1,368,000 raw/gzip for
+  Hermes. Metro and the Hermes Brotli ceiling remain unchanged.
 
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication

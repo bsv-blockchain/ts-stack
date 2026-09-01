@@ -255,6 +255,33 @@ describe('KnexMigrations tests', () => {
     }
   })
 
+  test('5aa MySQL uses the wallet sync source indexes', async () => {
+    if (!env.runMySQL) return
+    const knex = knexs.find(candidate => candidate.client.config.client === 'mysql2')
+    if (knex == null) throw new Error('RUNMYSQL requires a MySQL knex connection')
+
+    const [indexRows] = (await knex.raw(
+      "SHOW INDEX FROM transactions WHERE Key_name IN ('idx_transactions_user_proven_tx', 'idx_transactions_user_txid')"
+    )) as [Array<{ Key_name: string }>, unknown]
+    expect([...new Set(indexRows.map(row => row.Key_name))].sort()).toEqual([
+      'idx_transactions_user_proven_tx',
+      'idx_transactions_user_txid'
+    ])
+
+    const [provenPlan] = (await knex.raw(
+      'EXPLAIN SELECT * FROM transactions FORCE INDEX (idx_transactions_user_proven_tx) ' +
+        'WHERE userId = ? AND provenTxId = ?',
+      [1, 1]
+    )) as [Array<{ key: string | null }>, unknown]
+    expect(provenPlan.some(step => step.key === 'idx_transactions_user_proven_tx')).toBe(true)
+
+    const [txidPlan] = (await knex.raw(
+      'EXPLAIN SELECT * FROM transactions FORCE INDEX (idx_transactions_user_txid) WHERE userId = ? AND txid = ?',
+      [1, '00'.repeat(32)]
+    )) as [Array<{ key: string | null }>, unknown]
+    expect(txidPlan.some(step => step.key === 'idx_transactions_user_txid')).toBe(true)
+  })
+
   test('5b upgrades only exact untouched managed-change defaults', async () => {
     const localSQLiteFile = await _tu.newTmpFile('migratemanagedchange.sqlite', false, false, false)
     const knex = _tu.createLocalSQLite(localSQLiteFile)
@@ -296,6 +323,11 @@ describe('KnexMigrations tests', () => {
   })
 
   test.each([
+    {
+      migrationName: WALLET_SYNC_SOURCE_INDEX_MIGRATION,
+      supportIndex: 'transactions_userid_foreign',
+      addedIndexes: ['idx_transactions_user_proven_tx', 'idx_transactions_user_txid']
+    },
     {
       migrationName: '2026-02-27-001 add listOutputs path indexes',
       supportIndex: 'outputs_userid_foreign',
@@ -340,6 +372,7 @@ describe('KnexMigrations tests', () => {
   })
 
   test.each([
+    WALLET_SYNC_SOURCE_INDEX_MIGRATION,
     '2026-02-27-001 add listOutputs path indexes',
     '2026-02-27-002 add createAction path indexes'
   ])('7 preserves an existing MySQL foreign-key support index while rolling back %s', async migrationName => {
@@ -364,6 +397,7 @@ describe('KnexMigrations tests', () => {
   })
 
   test.each([
+    WALLET_SYNC_SOURCE_INDEX_MIGRATION,
     '2026-02-27-001 add listOutputs path indexes',
     '2026-02-27-002 add createAction path indexes'
   ])('8 rolls back %s without MySQL support-index repair on SQLite', async migrationName => {

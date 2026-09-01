@@ -69,6 +69,18 @@ serialized RPC response exceeds the service ceiling, remote clients retry the
 read-only request with a smaller chunk budget and remember the working limit
 for the rest of the session.
 
+Run the authenticated candidate-provider sync benchmark with:
+
+```sh
+pnpm bench:storage-sync
+```
+
+Set `WALLET_TOOLBOX_BENCH_MYSQL=true`, `MYSQL_CONNECTION`, and optionally
+`WALLET_TOOLBOX_BENCH_MYSQL_DATABASE` to exercise the same fixture through a
+MySQL-backed provider. The benchmark reports HTTP p50/p95 latency and the
+source-query limits used to fill a 250-record page; it is observational rather
+than a cross-machine latency SLA.
+
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.

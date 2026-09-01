@@ -186,6 +186,21 @@ export class KnexMigrations implements MigrationSource<string> {
         })
       },
       async down(knex) {
+        // MySQL may discard the automatically-created userId index after one
+        // of these wider indexes becomes able to support the foreign key.
+        // Restore it before removing both migration-owned indexes.
+        if ((await determineDBType(knex)) === 'MySQL') {
+          const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [
+            'transactions',
+            'transactions_userid_foreign'
+          ])
+          const indexes = result[0] as unknown[]
+          if (indexes.length === 0) {
+            await knex.schema.alterTable('transactions', table => {
+              table.index(['userId'], 'transactions_userid_foreign')
+            })
+          }
+        }
         await knex.schema.alterTable('transactions', table => {
           table.dropIndex(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
           table.dropIndex(['userId', 'txid'], 'idx_transactions_user_txid')

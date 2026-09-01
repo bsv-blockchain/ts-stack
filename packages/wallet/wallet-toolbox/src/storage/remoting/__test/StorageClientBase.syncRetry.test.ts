@@ -1,6 +1,8 @@
 import { type WalletInterface } from '@bsv/sdk'
 import { type RequestSyncChunkArgs, type SyncChunk } from '../../../sdk/WalletStorage.interfaces'
+import { StorageClient as FullStorageClient } from '../StorageClient'
 import { StorageClientBase } from '../StorageClientBase'
+import { StorageClient as MobileStorageClient } from '../StorageMobile'
 
 class RetryingStorageClient extends StorageClientBase {
   calls: RequestSyncChunkArgs[] = []
@@ -70,5 +72,52 @@ describe('StorageClientBase sync response retry', () => {
       1_250_000,
       625_000
     ])
+  })
+
+  test.each([
+    ['full client', FullStorageClient],
+    ['mobile client', MobileStorageClient]
+  ])('%s retries an actual HTTP 413 response and accepts a legacy response without totals', async (_name, Client) => {
+    const client = new Client({} as WalletInterface, 'https://storage.example.test')
+    const budgets: number[] = []
+    const requests: RequestSyncChunkArgs[] = []
+    const fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        id: number
+        params: [RequestSyncChunkArgs]
+      }
+      budgets.push(request.params[0].maxRoughSize)
+      requests.push(request.params[0])
+      if (budgets.length === 1) {
+        return new Response('', { status: 413, statusText: 'Payload Too Large' })
+      }
+      return new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: request.id,
+          result: {
+            fromStorageIdentityKey: request.params[0].fromStorageIdentityKey,
+            toStorageIdentityKey: request.params[0].toStorageIdentityKey,
+            userIdentityKey: request.params[0].identityKey
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    })
+    Reflect.set(client, 'authClient', { fetch })
+    const args = { ...makeArgs(), syncStateId: 42, includeTotals: true }
+
+    const chunk = await client.getSyncChunk(args)
+
+    expect(chunk.totals).toBeUndefined()
+    expect(budgets).toEqual([10_000_000, 5_000_000])
+    expect(requests).toEqual([
+      expect.objectContaining({ syncStateId: 42, includeTotals: true }),
+      expect.objectContaining({ syncStateId: 42, includeTotals: true })
+    ])
+    expect(args.maxRoughSize).toBe(10_000_000)
   })
 })
