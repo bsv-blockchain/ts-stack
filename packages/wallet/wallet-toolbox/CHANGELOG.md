@@ -25,13 +25,14 @@ attention to changes that materially alter behavior or extend functionality.
   before prefunding, attributes the funding fee to the requesting originator,
   and rechecks the current monthly ledger before releasing the protected
   action. Existing actions and ordinary `noSend` calls are unchanged. The
-  macOS reference fixtures measure 1,658,802 raw / 388,052 gzip / 304,787
-  Brotli bytes with Vite, 1,294,883 raw / 354,950 gzip / 284,733 Brotli bytes
-  with esbuild, and 3,465,269 raw / 1,404,044 gzip / 1,088,905 Brotli bytes as
-  optimized Hermes bytecode. The reviewed ceilings advance to 1,660,000 /
-  390,000 / 307,000 Vite bytes, 1,296,000 / 357,000 / 287,000 esbuild bytes,
-  and 3,470,000 / 1,406,000 / 1,090,000 Hermes bytes; Metro remains within its
-  existing ceilings at 1,707,158 raw / 429,877 gzip / 334,010 Brotli bytes.
+  current-main macOS reference fixtures measure 1,661,938 raw / 388,676 gzip /
+  305,386 Brotli bytes with Vite, 1,297,416 raw / 355,497 gzip / 285,075 Brotli
+  bytes with esbuild, 1,710,198 raw / 430,529 gzip / 334,202 Brotli bytes with
+  Metro, and 3,473,582 raw / 1,406,126 gzip / 1,090,069 Brotli bytes as
+  optimized Hermes bytecode. The reviewed ceilings advance to 1,665,000 /
+  390,000 / 307,000 Vite bytes, 1,300,000 / 357,000 / 287,000 esbuild bytes,
+  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,475,000 / 1,407,000 /
+  1,095,000 Hermes bytes.
 
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final
