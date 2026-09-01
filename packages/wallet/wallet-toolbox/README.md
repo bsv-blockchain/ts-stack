@@ -57,7 +57,29 @@ The toolbox publishes three npm packages from this repo:
 Wallet storage replication applies each received page and its durable sync
 checkpoint in one provider transaction. IndexedDB and Knex therefore avoid
 per-record transaction startup, and a failed page rolls back without advancing
-the checkpoint. The sync wire format and persisted schemas are unchanged.
+the checkpoint. Sources fill each bounded page with adaptive, size-aware reads,
+and Knex storage adds user-scoped proof lookup indexes. Clients may set
+`includeTotals` on a sync-chunk request to receive optional source record totals
+for exact progress reporting. Older providers ignore the hint, and totals are
+not counted unless requested. New clients also send the writer-local sync-state
+identifier selected during provider registration. New providers use it to
+disambiguate legacy duplicate checkpoints, while either side remains compatible
+with older protocol peers. When a provider rejects a sync page because its
+serialized RPC response exceeds the service ceiling, remote clients retry the
+read-only request with a smaller chunk budget and remember the working limit
+for the rest of the session.
+
+Run the authenticated candidate-provider sync benchmark with:
+
+```sh
+pnpm bench:storage-sync
+```
+
+Set `WALLET_TOOLBOX_BENCH_MYSQL=true`, `MYSQL_CONNECTION`, and optionally
+`WALLET_TOOLBOX_BENCH_MYSQL_DATABASE` to exercise the same fixture through a
+MySQL-backed provider. The benchmark reports HTTP p50/p95 latency and the
+source-query limits used to fill a 250-record page; it is observational rather
+than a cross-machine latency SLA.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages

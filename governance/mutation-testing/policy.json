@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-31",
-  "reviewBy": "2026-08-31",
+  "lastReviewed": "2026-08-31",
+  "reviewBy": "2026-09-30",
   "owner": "ts-stack-maintainers",
   "tool": {
     "package": "@stryker-mutator/core",

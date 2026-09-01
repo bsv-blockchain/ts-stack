@@ -16,6 +16,7 @@ export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor cr
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
 export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed change liquidity defaults'
+export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -174,6 +175,36 @@ export class KnexMigrations implements MigrationSource<string> {
       async down() {
         // Intentionally irreversible. Restoring 32-satoshi liquidity units on
         // rollback would actively re-fragment wallets that already migrated.
+      }
+    }
+
+    migrations[WALLET_SYNC_SOURCE_INDEX_MIGRATION] = {
+      async up(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.index(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
+          table.index(['userId', 'txid'], 'idx_transactions_user_txid')
+        })
+      },
+      async down(knex) {
+        // MySQL may discard the automatically-created userId index after one
+        // of these wider indexes becomes able to support the foreign key.
+        // Restore it before removing both migration-owned indexes.
+        if ((await determineDBType(knex)) === 'MySQL') {
+          const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [
+            'transactions',
+            'transactions_userid_foreign'
+          ])
+          const indexes = result[0] as unknown[]
+          if (indexes.length === 0) {
+            await knex.schema.alterTable('transactions', table => {
+              table.index(['userId'], 'transactions_userid_foreign')
+            })
+          }
+        }
+        await knex.schema.alterTable('transactions', table => {
+          table.dropIndex(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
+          table.dropIndex(['userId', 'txid'], 'idx_transactions_user_txid')
+        })
       }
     }
 

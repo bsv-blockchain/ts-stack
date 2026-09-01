@@ -306,6 +306,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     maxItems?: number
   ): RequestSyncChunkArgs {
     const a: RequestSyncChunkArgs = {
+      syncStateId: this.id,
       identityKey: forIdentityKey,
       maxRoughSize: maxRoughSize || 10000000,
       maxItems: maxItems || 1000,

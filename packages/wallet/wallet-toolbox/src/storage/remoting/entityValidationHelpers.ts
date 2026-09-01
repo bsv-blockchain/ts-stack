@@ -1,4 +1,4 @@
-import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
+import { SyncChunk, SyncChunkTotals } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 
 /**
@@ -75,11 +75,47 @@ export function validateEntities<T extends EntityTimeStamp>(entities: T[], dateF
   return entities
 }
 
+const syncChunkTotalRecordNames = [
+  'provenTxs',
+  'outputBaskets',
+  'outputTags',
+  'txLabels',
+  'transactions',
+  'outputs',
+  'txLabelMaps',
+  'outputTagMaps',
+  'certificates',
+  'certificateFields',
+  'commissions',
+  'provenTxReqs'
+] as const
+
+function validateSyncChunkTotals(totals: SyncChunkTotals): void {
+  if (typeof totals !== 'object' || totals == null || typeof totals.records !== 'object' || totals.records == null) {
+    throw new TypeError('Invalid sync chunk totals')
+  }
+  if (!Number.isSafeInteger(totals.totalRecords) || totals.totalRecords < 0) {
+    throw new TypeError('Invalid sync chunk totalRecords')
+  }
+  let calculatedTotal = 0
+  for (const name of syncChunkTotalRecordNames) {
+    const count = totals.records[name]
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new TypeError(`Invalid sync chunk total for ${name}`)
+    }
+    calculatedTotal += count
+  }
+  if (!Number.isSafeInteger(calculatedTotal) || calculatedTotal !== totals.totalRecords) {
+    throw new TypeError('Sync chunk record totals do not equal totalRecords')
+  }
+}
+
 /**
  * Validate all entity arrays within a `SyncChunk` received from a remote storage call.
  * Normalises timestamps, nulls, and binary fields in-place.
  */
 export function validateSyncChunkEntities(r: SyncChunk): SyncChunk {
+  if (r.totals != null) validateSyncChunkTotals(r.totals)
   if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
   if (r.certificates != null) r.certificates = validateEntities(r.certificates)
   if (r.commissions != null) r.commissions = validateEntities(r.commissions)

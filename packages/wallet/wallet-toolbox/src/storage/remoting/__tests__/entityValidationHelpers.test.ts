@@ -238,6 +238,62 @@ describe('entityValidationHelpers', () => {
       expect(result.provenTxs).toBeUndefined()
     })
 
+    test('preserves optional progress totals for remoted chunks', () => {
+      const chunk: SyncChunk = {
+        ...baseChunk(),
+        totals: {
+          totalRecords: 12,
+          records: {
+            provenTxs: 1,
+            outputBaskets: 1,
+            outputTags: 1,
+            txLabels: 1,
+            transactions: 1,
+            outputs: 1,
+            txLabelMaps: 1,
+            outputTagMaps: 1,
+            certificates: 1,
+            certificateFields: 1,
+            commissions: 1,
+            provenTxReqs: 1
+          }
+        }
+      }
+
+      expect(validateSyncChunkEntities(chunk).totals).toEqual(chunk.totals)
+    })
+
+    test.each([
+      ['negative count', { totalRecords: 0, records: { provenTxs: -1 } }],
+      ['unsafe count', { totalRecords: 0, records: { provenTxs: Number.MAX_SAFE_INTEGER + 1 } }],
+      ['missing record count', { totalRecords: 0, records: { provenTxs: undefined } }],
+      ['mismatched aggregate', { totalRecords: 1, records: {} }]
+    ])('rejects malformed remote progress totals: %s', (_name, malformedTotals) => {
+      const zeroRecords = {
+        provenTxs: 0,
+        outputBaskets: 0,
+        outputTags: 0,
+        txLabels: 0,
+        transactions: 0,
+        outputs: 0,
+        txLabelMaps: 0,
+        outputTagMaps: 0,
+        certificates: 0,
+        certificateFields: 0,
+        commissions: 0,
+        provenTxReqs: 0
+      }
+      const chunk = {
+        ...baseChunk(),
+        totals: {
+          ...malformedTotals,
+          records: { ...zeroRecords, ...malformedTotals.records }
+        }
+      } as SyncChunk
+
+      expect(() => validateSyncChunkEntities(chunk)).toThrow(TypeError)
+    })
+
     test('validates the user entity when present', () => {
       const chunk: SyncChunk = {
         ...baseChunk(),

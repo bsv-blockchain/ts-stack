@@ -251,6 +251,96 @@ describe('StorageIdb tests', () => {
     }
   })
 
+  test('uses the registered sync state id when legacy provider identities collide', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '06'.repeat(33)
+      const userId = await insertUser(storage, identityKey)
+      const now = new Date()
+      const sourceIdentityKey = 'shared-local-storage-identity'
+      const legacy: TableSyncState = {
+        syncStateId: 0,
+        userId,
+        storageIdentityKey: sourceIdentityKey,
+        storageName: 'metanet-wallet',
+        status: 'unknown',
+        init: false,
+        refNum: 'legacy-colliding-sync-state',
+        syncMap: JSON.stringify(createSyncMap()),
+        created_at: now,
+        updated_at: now
+      }
+      const selected: TableSyncState = {
+        ...legacy,
+        syncStateId: 0,
+        storageName: 'BSV Desktop Wallet',
+        refNum: 'selected-colliding-sync-state'
+      }
+      await storage.insertSyncState(legacy)
+      await storage.insertSyncState(selected)
+
+      const registered = await storage.findOrInsertSyncStateAuth(
+        { identityKey, userId },
+        sourceIdentityKey,
+        selected.storageName
+      )
+      expect(registered.isNew).toBe(false)
+      expect(registered.syncState.syncStateId).toBe(selected.syncStateId)
+      await expect(storage.findOrInsertSyncStateAuth(
+        { identityKey, userId },
+        sourceIdentityKey,
+        'Unrecognized local provider'
+      )).rejects.toThrow('Storage identity has conflicting sync states')
+
+      const args = {
+        syncStateId: registered.syncState.syncStateId,
+        identityKey,
+        maxRoughSize: 1000,
+        maxItems: 1000,
+        offsets: [],
+        since: undefined,
+        fromStorageIdentityKey: sourceIdentityKey,
+        toStorageIdentityKey: 'remote-storage'
+      }
+      const chunk = {
+        fromStorageIdentityKey: sourceIdentityKey,
+        toStorageIdentityKey: 'remote-storage',
+        userIdentityKey: identityKey
+      }
+
+      await expect(storage.processSyncChunk(args, chunk)).resolves.toMatchObject({
+        inserts: 0,
+        updates: 0
+      })
+      await expect(storage.processSyncChunk({ ...args, syncStateId: undefined }, chunk))
+        .rejects.toThrow('Result must exist and be unique')
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('renames a registered storage provider without duplicating its sync state', async () => {
+    const storage = await makeStorage()
+    try {
+      const identityKey = '07'.repeat(33)
+      const userId = await insertUser(storage, identityKey)
+      const auth = { identityKey, userId }
+      const sourceIdentityKey = 'stable-storage-identity'
+
+      const first = await storage.findOrInsertSyncStateAuth(auth, sourceIdentityKey, 'Old local name')
+      const renamed = await storage.findOrInsertSyncStateAuth(auth, sourceIdentityKey, 'New local name')
+
+      expect(first.isNew).toBe(true)
+      expect(renamed.isNew).toBe(false)
+      expect(renamed.syncState.syncStateId).toBe(first.syncState.syncStateId)
+      expect(renamed.syncState.storageName).toBe('New local name')
+      await expect(storage.findSyncStates({ partial: { userId, storageIdentityKey: sourceIdentityKey } }))
+        .resolves.toHaveLength(1)
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
   test('preserves the original error when aborting an IndexedDB transaction', async () => {
     const storage = await makeStorage()
     try {
