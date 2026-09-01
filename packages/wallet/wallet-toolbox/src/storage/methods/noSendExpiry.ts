@@ -366,16 +366,21 @@ async function verifyReclaimSignature(
   }
 }
 
+interface ArmSnapshotValidationOptions {
+  trx?: TrxToken
+  observedBlockheight?: number
+  enforceBlockheight?: boolean
+}
+
 async function validateArmSnapshot(
   storage: StorageProvider,
   userId: number,
   reference: string,
   args: StorageArmNoSendExpiryArgs,
   reclaim: Transaction,
-  trx?: TrxToken,
-  observedBlockheight?: number,
-  enforceBlockheight = false
+  options: ArmSnapshotValidationOptions = {}
 ): Promise<TableTransaction> {
+  const { trx, observedBlockheight, enforceBlockheight = false } = options
   const target = verifyOne(
     await storage.findTransactions({
       partial: { userId, reference },
@@ -437,16 +442,11 @@ export async function armNoSendExpiry(
     snapshot.noSendExpiryMode === 'blockheight' ? await storage.getServices().getHeight() : undefined
 
   await storage.transaction(async trx => {
-    const target = await validateArmSnapshot(
-      storage,
-      userId,
-      args.reference,
-      args,
-      reclaim,
+    const target = await validateArmSnapshot(storage, userId, args.reference, args, reclaim, {
       trx,
       observedBlockheight,
-      true
-    )
+      enforceBlockheight: true
+    })
     if (!(await storage.compareAndSetNoSendExpiryState(target.transactionId, 'preparing', 'unsigned', trx))) {
       throw new WERR_INVALID_OPERATION('BRC-177 action changed before it could be armed')
     }
