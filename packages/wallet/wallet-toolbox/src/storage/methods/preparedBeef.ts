@@ -164,6 +164,18 @@ function isAdmissibleBeef(beef: Beef, policy: PreparedBeefPolicy): boolean {
     estimatedBeefBytes(beef) <= policy.maxArtifactBytes
 }
 
+async function exceedsPreparedLookupByteBudget(
+  storage: PreparedBeefStorage,
+  userId: number,
+  rootTxids: string[]
+): Promise<boolean> {
+  if (rootTxids.length <= 1) return false
+  const lookupBytes = await storage.readPreparedBeefLookupByteLength(userId, rootTxids)
+  return !Number.isSafeInteger(lookupBytes) ||
+    lookupBytes < 0 ||
+    lookupBytes > storage.preparedBeefPolicy.maxLookupBytes
+}
+
 /**
  * Read and validate prepared artifacts without performing chain or service
  * work. A malformed, stale, oversized, or unsupported row is a cache miss.
@@ -213,24 +225,17 @@ export async function lookupPreparedBeefs(
         // single-query hit path. Fragmented calls receive a cheap aggregate
         // byte preflight so the optimization never pulls an unbounded set of
         // blobs into the foreground merely to fall back afterward.
-        if (requestedTxids.length > 1) {
-          const lookupBytes = await storage.readPreparedBeefLookupByteLength(userId, requestedTxids)
-          if (
-            !Number.isSafeInteger(lookupBytes) ||
-            lookupBytes < 0 ||
-            lookupBytes > storage.preparedBeefPolicy.maxLookupBytes
-          ) {
-            span.end({
-              attributes: {
-                'prepared_beef.hit_count': 0,
-                'prepared_beef.miss_count': requestedTxids.length,
-                'prepared_beef.corrupt_count': 0,
-                'prepared_beef.bytes': 0,
-                'prepared_beef.lookup_bypassed': true
-              }
-            })
-            return result
-          }
+        if (await exceedsPreparedLookupByteBudget(storage, userId, requestedTxids)) {
+          span.end({
+            attributes: {
+              'prepared_beef.hit_count': 0,
+              'prepared_beef.miss_count': requestedTxids.length,
+              'prepared_beef.corrupt_count': 0,
+              'prepared_beef.bytes': 0,
+              'prepared_beef.lookup_bypassed': true
+            }
+          })
+          return result
         }
         const rows = await storage.findPreparedBeefs(userId, requestedTxids)
         const byTxid = new Map(rows.map(row => [row.rootTxid, row]))
