@@ -13,6 +13,27 @@ attention to changes that materially alter behavior or extend functionality.
   The companion `@bsv/ecpm-permission-module` uses this hook to implement
   `p ecpm` point multiplication without adding a BRC-100 method or wire call.
 
+- Add the built-in BRC-177 `p nosend expiry` module for seconds, Unix timestamp,
+  and block-height deadlines. Protected actions are prefunded through an
+  accepted transaction, contain no wallet change, and retain a pre-signed
+  reclaim across restarts, synchronized storage, devices, and keyless remote
+  monitors. Atomic lifecycle transitions, active-storage ownership,
+  fail-closed status checks, backoff-controlled recovery of terminally rejected
+  reclaims, quarantined race outputs, and locally validated proof finality
+  prevent duplicate reclaim activation and unsafe state regression. Wallet
+  Permissions Manager authorizes module use and spending
+  before prefunding, attributes the funding fee to the requesting originator,
+  and rechecks the current monthly ledger before releasing the protected
+  action. Existing actions and ordinary `noSend` calls are unchanged. The
+  current-main macOS reference fixtures measure 1,662,220 raw / 388,763 gzip /
+  305,307 Brotli bytes with Vite, 1,297,621 raw / 355,579 gzip / 285,031 Brotli
+  bytes with esbuild, 1,710,494 raw / 430,613 gzip / 334,490 Brotli bytes with
+  Metro, and 3,474,604 raw / 1,406,878 gzip / 1,090,948 Brotli bytes as
+  optimized Hermes bytecode. The reviewed ceilings advance to 1,665,000 /
+  390,000 / 307,000 Vite bytes, 1,300,000 / 357,000 / 287,000 esbuild bytes,
+  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,480,000 / 1,410,000 /
+  1,095,000 Hermes bytes.
+
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final
   page previously returned only that page's length, so a client paging a large

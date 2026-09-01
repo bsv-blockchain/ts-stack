@@ -257,6 +257,11 @@ See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
 
+See [Expiring `noSend` actions](./docs/no-send-expiry.md) for the built-in
+BRC-111 `p nosend expiry` module, exact label forms, prefunding, durable
+Node/browser/mobile monitoring, storage coordination, and proof-based race
+resolution.
+
 ### `createAction` performance telemetry
 
 Wallet Storage treats `inputBEEF` as proof data for the inputs declared in the

@@ -116,6 +116,33 @@ describe('StorageClient tests', () => {
     expect(sent.sendWithResults).toHaveLength(1)
   })
 
+  test('1a creates and arms BRC-177 entirely through authenticated remote storage', async () => {
+    await expect(client.storage.getCapabilities()).resolves.toMatchObject({
+      brc177NoSendExpiry: { version: 1 }
+    })
+    const created = await client.wallet.createAction({
+      description: 'remote BRC-177 protected action',
+      labels: ['p nosend expiry seconds 3600'],
+      outputs: [
+        {
+          satoshis: 500,
+          lockingScript: '51',
+          outputDescription: 'remote protected output'
+        }
+      ],
+      options: { noSend: true, randomizeOutputs: false }
+    })
+
+    const target = verifyOne(
+      await server.setup.activeStorage.findTransactions({
+        partial: { userId: server.setup.userId, txid: created.txid }
+      })
+    )
+    expect(target.noSendExpiryState).toBe('signed')
+    expect(target.noSendExpiryReclaimTxid).toMatch(/^[0-9a-f]{64}$/)
+    expect(target.noSendExpiryReclaimRawTx?.length).toBeGreaterThan(0)
+  })
+
   test('1b authenticated binary action batch blob upload', async () => {
     const firstAction = Validation.validateCreateActionArgs({
       description: 'stage binary action batch blob',

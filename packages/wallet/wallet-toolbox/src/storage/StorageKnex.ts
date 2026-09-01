@@ -62,6 +62,7 @@ import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { managedChangeOutputFields } from './methods/managedChange'
 import type { ManagedChangeInputCandidate } from './methods/availableManagedChange'
+import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -132,6 +133,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   protected override supportsActionBatchPersistence (): boolean { return true }
+  protected override supportsNoSendExpiryPersistence (): boolean { return true }
   protected override requiresActionBatchCleanupBeforeCreateAction (): boolean { return false }
 
   async readSettings (trx?: TrxToken): Promise<TableSettings> {
@@ -748,6 +750,19 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       throw new WERR_INVALID_PARAMETER('id', 'transactionId or array of transactionId')
     }
     return r
+  }
+
+  override async compareAndSetNoSendExpiryState (
+    transactionId: number,
+    expected: Brc177NoSendExpiryState,
+    next: Brc177NoSendExpiryState,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    await this.verifyReadyForDatabaseAccess(trx)
+    const updated = await this.toDb(trx)<TableTransaction>('transactions')
+      .where({ transactionId, noSendExpiryState: expected })
+      .update(this.validatePartialForUpdate({ noSendExpiryState: next } as Partial<TableTransaction>))
+    return updated === 1
   }
 
   override async updateTxLabelMap (

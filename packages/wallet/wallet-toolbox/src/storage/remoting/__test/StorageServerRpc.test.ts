@@ -139,6 +139,50 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('trace-id'))
   })
 
+  test('authenticates and dispatches the BRC-177 storage lifecycle RPCs', async () => {
+    const prepareNoSendExpiry = jest.fn(async () => ({ anchorSatoshis: 10 }))
+    const activateNoSendExpiry = jest.fn(async () => ({ deadline: 20 }))
+    const armNoSendExpiry = jest.fn(async () => undefined)
+    const server = makeServer({ prepareNoSendExpiry, activateNoSendExpiry, armNoSendExpiry })
+
+    for (const [id, method] of ['prepareNoSendExpiry', 'activateNoSendExpiry', 'armNoSendExpiry'].entries()) {
+      const captured = makeResponse()
+      await invoke(server, 'handleRpcRequest', makeRequest({
+        jsonrpc: '2.0',
+        method,
+        params: [{}, { caller: method }],
+        id
+      }), captured.response)
+      expect(captured.statusCode).toBe(200)
+      expect(captured.body).toMatchObject({ jsonrpc: '2.0', id })
+    }
+
+    for (const handler of [prepareNoSendExpiry, activateNoSendExpiry, armNoSendExpiry]) {
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({ identityKey: 'alice', userId: 7 }),
+        expect.any(Object)
+      )
+    }
+  })
+
+  test('rejects BRC-177 lifecycle mutations on an inactive remote store', async () => {
+    const server = makeServer({
+      findOrInsertUser: jest.fn(async (identityKey: string) => ({
+        user: {
+          activeStorage: 'different-storage-key',
+          identityKey,
+          userId: 7
+        }
+      }))
+    })
+    const request = makeRequest({}, {}, 'alice')
+    for (const method of ['prepareNoSendExpiry', 'activateNoSendExpiry', 'armNoSendExpiry']) {
+      await expect(
+        invoke(server, 'authorizeStandardRpcCall', method, [{}, {}], request)
+      ).rejects.toThrow("this method requires the authenticated user's active storage provider")
+    }
+  })
+
   test('correlates the HTTP, authorization, handler, and RPC spans', async () => {
     const events: TelemetryEvent[] = []
     let nextSpanId = 1

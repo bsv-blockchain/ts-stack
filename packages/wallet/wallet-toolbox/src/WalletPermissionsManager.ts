@@ -28,6 +28,47 @@ import {
 } from '@bsv/sdk'
 
 import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
+import { parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
+
+function brc177PreflightSatoshis(args: object): number {
+  const outputs = (args as { outputs?: Array<{ satoshis?: unknown }> }).outputs ?? []
+  let total = 0
+  for (const output of outputs) {
+    if (typeof output.satoshis !== 'number' || !Number.isSafeInteger(output.satoshis) || output.satoshis < 0) {
+      throw new Error('BRC-177 outputs must contain valid satoshi amounts')
+    }
+    total += output.satoshis
+    if (!Number.isSafeInteger(total)) throw new Error('BRC-177 output amount exceeds the safely supported range')
+  }
+  // Even an action funded entirely by caller-supplied inputs incurs a wallet
+  // prefunding fee. Require a spending grant before that fee can be broadcast.
+  return Math.max(1, total)
+}
+
+function validateBrc177CreateActionShape(args: object): void {
+  const request = args as {
+    outputs?: unknown[]
+    options?: {
+      noSend?: boolean
+      sendWith?: unknown[]
+      noSendChange?: unknown[]
+      returnTXIDOnly?: boolean
+    }
+  }
+  if (!Array.isArray(request.outputs) || request.outputs.length === 0) {
+    throw new Error('BRC-177 protected actions require at least one output')
+  }
+  if (request.options?.noSend !== true) throw new Error('BRC-177 protected actions require noSend')
+  if ((request.options.sendWith?.length ?? 0) > 0) {
+    throw new Error('BRC-177 protected actions cannot use sendWith')
+  }
+  if ((request.options.noSendChange?.length ?? 0) > 0) {
+    throw new Error('BRC-177 protected actions cannot supply noSendChange')
+  }
+  if (request.options.returnTXIDOnly === true) {
+    throw new Error('BRC-177 protected actions cannot use returnTXIDOnly')
+  }
+}
 
 // Security invariant: only the configured admin originator bypasses permission
 // prompts. Admin-reserved protocols, baskets, and labels are rejected for all
@@ -643,7 +684,40 @@ export class WalletPermissionsManager implements WalletInterface {
       seekGroupedPermission: true,
       differentiatePrivilegedOperations: true,
       whitelistedCounterparties: {},
-      ...config // override with user-specified config
+      ...config,
+      permissionModules: {
+        ...config.permissionModules,
+        // BRC-177 is a built-in reserved BRC-111 module in every Toolbox wallet.
+        nosend: {
+          onRequest: async req => {
+            const labels = (req.args as { labels?: string[] }).labels
+            parseBrc177NoSendExpiryLabels(labels)
+            if (req.method !== 'createAction' && req.method !== 'listActions') {
+              throw new Error('BRC-177 noSend expiry labels are only valid for createAction and listActions')
+            }
+            if (req.method === 'createAction') validateBrc177CreateActionShape(req.args)
+            // Prefunding has a real miner fee, so authorize use of this
+            // module before the underlying wallet can broadcast it. This is
+            // deliberately separate from the later amount-specific spend
+            // authorization for the protected transaction.
+            await this.ensureLabelAccess({
+              originator: req.originator,
+              label: 'BRC-177 noSend expiry',
+              reason: req.method,
+              usageType: req.method === 'createAction' ? 'apply' : 'list'
+            })
+            if (req.method === 'createAction') {
+              await this.ensureSpendingAuthorization({
+                originator: req.originator,
+                satoshis: brc177PreflightSatoshis(req.args),
+                reason: 'BRC-177 protected action prefunding'
+              })
+            }
+            return { args: req.args }
+          },
+          onResponse: async res => res
+        }
+      }
     }
   }
 
@@ -1542,7 +1616,8 @@ export class WalletPermissionsManager implements WalletInterface {
     satoshis,
     lineItems,
     reason,
-    seekPermission = true
+    seekPermission = true,
+    allowRecentGrant = true
   }: {
     originator: string
     satoshis: number
@@ -1553,6 +1628,13 @@ export class WalletPermissionsManager implements WalletInterface {
     }>
     reason?: string
     seekPermission?: boolean
+    /**
+     * Whether an identical grant from the short-lived permission cache can
+     * satisfy this check. BRC-177 disables this for its final authorization
+     * because prefunding has changed the authoritative spending ledger since
+     * the preflight grant.
+     */
+    allowRecentGrant?: boolean
   }): Promise<boolean> {
     const { normalized: normalizedOriginator, lookupValues } = this.prepareOriginator(originator)
     originator = normalizedOriginator
@@ -1565,7 +1647,7 @@ export class WalletPermissionsManager implements WalletInterface {
     // Spending keys are amount-scoped. The recent-grant window this adds sits
     // inside the pre-existing permissionCache window grantPermission already
     // wrote for spending, so accounting exposure is unchanged.
-    if (await this.hasRecentOrPendingGrant(cacheKey)) {
+    if (allowRecentGrant && (await this.hasRecentOrPendingGrant(cacheKey))) {
       return true
     }
     const token = await this.findSpendingToken(originator, lookupValues)
@@ -4174,7 +4256,8 @@ export class WalletPermissionsManager implements WalletInterface {
           originator: originator!,
           satoshis: netSpent,
           lineItems,
-          reason: originalDescription
+          reason: originalDescription,
+          allowRecentGrant: parseBrc177NoSendExpiryLabels(args.labels) == null
         })
       } catch (err) {
         await this.underlying.abortAction({ reference })

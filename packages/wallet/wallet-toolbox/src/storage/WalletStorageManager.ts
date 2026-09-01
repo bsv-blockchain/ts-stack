@@ -484,6 +484,37 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
+  async prepareNoSendExpiry(
+    args: Validation.ValidCreateActionArgs
+  ): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.prepareNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      return await writer.prepareNoSendExpiry(await this.getAuth(true), args)
+    })
+  }
+
+  async activateNoSendExpiry(
+    args: sdk.StorageActivateNoSendExpiryArgs
+  ): Promise<sdk.StorageActivateNoSendExpiryResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.activateNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      return await writer.activateNoSendExpiry(await this.getAuth(true), args)
+    })
+  }
+
+  async armNoSendExpiry(args: sdk.StorageArmNoSendExpiryArgs): Promise<void> {
+    await this.runAsWriter(async writer => {
+      if (writer.armNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      await writer.armNoSendExpiry(await this.getAuth(true), args)
+    })
+  }
+
   async getCapabilities(): Promise<sdk.StorageCapabilities> {
     return await this.runAsReader(async () => await this.getActive().getCapabilities())
   }

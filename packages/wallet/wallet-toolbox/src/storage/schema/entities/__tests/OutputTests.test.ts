@@ -1,4 +1,4 @@
-import { createSyncMap, TableOutput } from '../../../../../src'
+import { createSyncMap, TableOutput, TableTransaction } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityOutput } from '../EntityOutput'
 
@@ -338,6 +338,108 @@ describe('Output class method tests', () => {
     })
     expect(unchangedRecord).toHaveLength(1)
     expect(unchangedRecord[0].spendable).toBe(true)
+  })
+
+  test('BRC-177 reclaim outputs stay quarantined when synchronized after a target winner', async () => {
+    const ctx = ctxs[0]
+    const now = new Date()
+    const reclaimTxid = 'fa'.repeat(32)
+    const target: TableTransaction = {
+      created_at: now,
+      updated_at: now,
+      transactionId: 0,
+      userId: 1,
+      status: 'completed',
+      reference: 'YnJjMTc3LXRhcmdldA==',
+      isOutgoing: true,
+      satoshis: -1,
+      description: 'BRC-177 target winner',
+      txid: 'fb'.repeat(32),
+      noSendExpiryState: 'target-won',
+      noSendExpiryReclaimTxid: reclaimTxid
+    }
+    target.transactionId = await ctx.activeStorage.insertTransaction(target)
+    const reclaim: TableTransaction = {
+      created_at: now,
+      updated_at: now,
+      transactionId: 0,
+      userId: 1,
+      status: 'failed',
+      reference: 'YnJjMTc3LXJlY2xhaW0=',
+      isOutgoing: true,
+      satoshis: -1,
+      description: 'BRC-177 expiry reclaim',
+      txid: reclaimTxid
+    }
+    reclaim.transactionId = await ctx.activeStorage.insertTransaction(reclaim)
+
+    const existing: TableOutput = {
+      created_at: new Date(now.getTime() - 2_000),
+      updated_at: new Date(now.getTime() - 1_000),
+      outputId: 0,
+      userId: 1,
+      transactionId: reclaim.transactionId,
+      spendable: false,
+      change: true,
+      satoshis: 1_000,
+      outputDescription: '',
+      vout: 0,
+      type: 'P2PKH',
+      providedBy: 'storage',
+      purpose: 'change',
+      txid: reclaimTxid
+    }
+    existing.outputId = await ctx.activeStorage.insertOutput(existing)
+    const entity = new EntityOutput(existing)
+    const syncMap = createSyncMap()
+    syncMap.transaction.idMap[reclaim.transactionId] = reclaim.transactionId
+
+    await expect(
+      entity.mergeExisting(
+        ctx.activeStorage,
+        undefined,
+        { ...existing, updated_at: now, spendable: true },
+        syncMap
+      )
+    ).resolves.toBe(true)
+    expect(entity.spendable).toBe(false)
+    expect(
+      (await ctx.activeStorage.findOutputs({ partial: { outputId: existing.outputId } }))[0].spendable
+    ).toBe(false)
+
+    const secondReclaimTxid = 'fc'.repeat(32)
+    const secondTarget = {
+      ...target,
+      transactionId: 0,
+      reference: 'YnJjMTc3LXRhcmdldC0y',
+      txid: 'fd'.repeat(32),
+      noSendExpiryReclaimTxid: secondReclaimTxid
+    }
+    secondTarget.transactionId = await ctx.activeStorage.insertTransaction(secondTarget)
+    const secondReclaim = {
+      ...reclaim,
+      transactionId: 0,
+      reference: 'YnJjMTc3LXJlY2xhaW0tMg==',
+      txid: secondReclaimTxid
+    }
+    secondReclaim.transactionId = await ctx.activeStorage.insertTransaction(secondReclaim)
+    const incomingTransactionId = 9_001
+    const incoming = new EntityOutput({
+      ...existing,
+      outputId: 9_002,
+      transactionId: incomingTransactionId,
+      txid: secondReclaimTxid,
+      spendable: true
+    })
+    syncMap.transaction.idMap[incomingTransactionId] = secondReclaim.transactionId
+
+    await incoming.mergeNew(ctx.activeStorage, 1, syncMap)
+    expect(incoming.spendable).toBe(false)
+    expect(
+      (await ctx.activeStorage.findOutputs({
+        partial: { transactionId: secondReclaim.transactionId, vout: 0 }
+      }))[0].spendable
+    ).toBe(false)
   })
 
   // Test: Output entity getters and setters
