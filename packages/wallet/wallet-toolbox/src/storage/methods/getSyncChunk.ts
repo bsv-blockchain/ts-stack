@@ -280,7 +280,11 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`)
     }
     let preAddCalled = false
-    let limit = Math.min(itemCount, Math.max(MIN_SYNC_QUERY_ITEMS, Math.ceil(args.maxItems / a.maxDivider)))
+    let limit = Math.min(
+      itemCount,
+      MAX_SYNC_QUERY_ITEMS,
+      Math.max(MIN_SYNC_QUERY_ITEMS, Math.ceil(args.maxItems / a.maxDivider))
+    )
     while (!done) {
       if (limit <= 0) break
       const items = await a.findItems(storage, {

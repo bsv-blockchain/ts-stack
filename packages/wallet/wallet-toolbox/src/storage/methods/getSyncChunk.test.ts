@@ -93,6 +93,29 @@ describe('getSyncChunk query batching', () => {
     expect(getProvenTxsForUser.mock.calls.map(call => call[0].paged?.limit)).toEqual([10, 80, 160])
   })
 
+  test('caps the initial query for entity types without a conservative divider', async () => {
+    const { storage } = makeStorage(0)
+    const now = new Date('2026-08-17T00:00:00.000Z')
+    const outputBaskets = Array.from({ length: 300 }, (_, index) => ({
+      basketId: index + 1,
+      userId: 1,
+      name: `basket-${index}`,
+      created_at: now,
+      updated_at: now
+    }))
+    const findOutputBaskets = jest.fn(async ({ paged }: { paged?: { limit: number; offset?: number } }) => {
+      const offset = paged?.offset ?? 0
+      return outputBaskets.slice(offset, offset + (paged?.limit ?? outputBaskets.length))
+    })
+    storage.findOutputBaskets = findOutputBaskets as StorageReader['findOutputBaskets']
+
+    const chunk = await getSyncChunk(storage, makeArgs(1_000))
+
+    expect(chunk.outputBaskets).toHaveLength(300)
+    expect(findOutputBaskets.mock.calls[0][0].paged?.limit).toBe(250)
+    expect(findOutputBaskets.mock.calls.map(call => call[0].paged?.limit)).toEqual([250, 250])
+  })
+
   test('uses observed record size to bound read-ahead for large records', async () => {
     const { storage, getProvenTxsForUser } = makeStorage(250, 20_000)
 

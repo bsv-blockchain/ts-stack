@@ -174,4 +174,24 @@ describe('count tests', () => {
       expect(await storage.countSyncStates({ partial: {} })).toBe(1)
     }
   })
+
+  test('15 computes internally consistent per-user sync totals on SQLite and MySQL', async () => {
+    for (const { storage, setup } of setups) {
+      const totals = await storage.getSyncChunkTotals(
+        {
+          identityKey: setup.u1.identityKey,
+          fromStorageIdentityKey: storage.getSettings().storageIdentityKey,
+          toStorageIdentityKey: 'remote-storage',
+          maxItems: 1_000,
+          maxRoughSize: 1_000_000,
+          offsets: []
+        },
+        setup.u1.userId
+      )
+
+      expect(totals).toBeDefined()
+      expect(totals!.totalRecords).toBeGreaterThan(0)
+      expect(Object.values(totals!.records).reduce((sum, count) => sum + count, 0)).toBe(totals!.totalRecords)
+    }
+  })
 })
