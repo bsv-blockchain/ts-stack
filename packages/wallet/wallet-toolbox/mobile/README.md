@@ -56,6 +56,12 @@ const { tx } = await wallet.createAction({
 })
 ```
 
+The mobile wallet includes the built-in BRC-177 `p nosend expiry` module. Its
+active remote storage must run a migrated Wallet Toolbox 2.11-or-newer service
+and default monitor, which owns expiry enforcement across restarts and devices.
+Capability negotiation fails before prefunding against an older server. See
+[the full expiry guide](../docs/no-send-expiry.md).
+
 ## Use cases
 
 ### Self-custody BSV wallet on a phone

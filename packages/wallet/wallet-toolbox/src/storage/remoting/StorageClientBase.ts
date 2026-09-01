@@ -27,6 +27,10 @@ import {
   StorageInternalizeActionResult,
   StorageProcessActionArgs,
   StorageProcessActionResults,
+  StoragePrepareNoSendExpiryResult,
+  StorageActivateNoSendExpiryArgs,
+  StorageActivateNoSendExpiryResult,
+  StorageArmNoSendExpiryArgs,
   SyncChunk,
   UpdateProvenTxReqWithNewProvenTxArgs,
   UpdateProvenTxReqWithNewProvenTxResult,
@@ -308,6 +312,24 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
     return await this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
+  }
+
+  async prepareNoSendExpiry(
+    auth: AuthId,
+    args: Validation.ValidCreateActionArgs
+  ): Promise<StoragePrepareNoSendExpiryResult> {
+    return await this.rpcCall<StoragePrepareNoSendExpiryResult>('prepareNoSendExpiry', [auth, args])
+  }
+
+  async activateNoSendExpiry(
+    auth: AuthId,
+    args: StorageActivateNoSendExpiryArgs
+  ): Promise<StorageActivateNoSendExpiryResult> {
+    return await this.rpcCall<StorageActivateNoSendExpiryResult>('activateNoSendExpiry', [auth, args])
+  }
+
+  async armNoSendExpiry(auth: AuthId, args: StorageArmNoSendExpiryArgs): Promise<void> {
+    await this.rpcCall<void>('armNoSendExpiry', [auth, args])
   }
 
   async getCapabilities(): Promise<StorageCapabilities> {

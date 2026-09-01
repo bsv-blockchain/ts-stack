@@ -88,6 +88,12 @@ IndexedDB keeps the canonical BEEF path, while a compatible remote storage
 server can enable prepared reads and writes without a browser configuration or
 wire-format change.
 
+The browser wallet includes the built-in BRC-177 `p nosend expiry` module.
+Embedded IndexedDB wallets use the default local monitor. When remote storage
+is active, its migrated Wallet Toolbox 2.11-or-newer service and monitor own
+expiry enforcement; capability negotiation fails before prefunding against an
+older server. See [the full expiry guide](../docs/no-send-expiry.md).
+
 ## What's excluded vs `@bsv/wallet-toolbox`
 
 | Excluded                      | Why                                     |

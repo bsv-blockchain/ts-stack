@@ -3,6 +3,23 @@ import { optionalArraysEqual, verifyId, verifyOneOrNone } from '../../../utility
 import { TableOutput } from '../tables/TableOutput'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
+async function quarantineUnresolvedBrc177Reclaim(
+  output: EntityOutput,
+  storage: EntityStorage,
+  trx?: TrxToken
+): Promise<void> {
+  if (!output.spendable || output.txid == null) return
+  const target = verifyOneOrNone(
+    await storage.findTransactions({
+      partial: { userId: output.userId, noSendExpiryReclaimTxid: output.txid },
+      trx
+    })
+  )
+  if (target != null && target.noSendExpiryState !== 'reclaimed') {
+    output.spendable = false
+  }
+}
+
 export class EntityOutput extends EntityBase<TableOutput> {
   constructor (api?: TableOutput) {
     const now = new Date()
@@ -300,6 +317,7 @@ export class EntityOutput extends EntityBase<TableOutput> {
     this.basketId = this.basketId ? syncMap.outputBasket.idMap[this.basketId] : undefined
     this.transactionId = syncMap.transaction.idMap[this.transactionId]
     this.spentBy = this.spentBy ? syncMap.transaction.idMap[this.spentBy] : undefined
+    await quarantineUnresolvedBrc177Reclaim(this, storage, trx)
     this.outputId = 0
     this.outputId = await storage.insertOutput(this.toApi(), trx)
   }
@@ -326,6 +344,7 @@ export class EntityOutput extends EntityBase<TableOutput> {
       this.scriptLength = ei.scriptLength
       this.scriptOffset = ei.scriptOffset
       this.lockingScript = ei.lockingScript
+      await quarantineUnresolvedBrc177Reclaim(this, storage, trx)
       this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
       await storage.updateOutput(this.id, this.toApi(), trx)
       wasMerged = true

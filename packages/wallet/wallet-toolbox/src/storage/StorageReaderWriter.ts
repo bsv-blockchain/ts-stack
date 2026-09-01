@@ -32,6 +32,8 @@ import {
   DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
   DEFAULT_MANAGED_CHANGE_TARGET_UTXOS
 } from './methods/managedChangePolicy'
+import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
+import { WERR_NOT_IMPLEMENTED } from '../sdk/WERR_errors'
 
 export abstract class StorageReaderWriter extends StorageReader {
   abstract dropAllData (): Promise<void>
@@ -87,6 +89,14 @@ export abstract class StorageReaderWriter extends StorageReader {
   abstract updateProvenTxReq (id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number>
   abstract updateSyncState (id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number>
   abstract updateTransaction (id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number>
+  async compareAndSetNoSendExpiryState (
+    _transactionId: number,
+    _expected: Brc177NoSendExpiryState,
+    _next: Brc177NoSendExpiryState,
+    _trx?: TrxToken
+  ): Promise<boolean> {
+    throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+  }
   abstract updateTxLabel (id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number>
   abstract updateTxLabelMap (
     transactionId: number,

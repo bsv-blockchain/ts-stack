@@ -17,6 +17,7 @@ export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createA
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
 export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed change liquidity defaults'
 export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifacts'
+export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -175,6 +176,52 @@ export class KnexMigrations implements MigrationSource<string> {
       async down() {
         // Intentionally irreversible. Restoring 32-satoshi liquidity units on
         // rollback would actively re-fragment wallets that already migrated.
+      }
+    }
+
+    migrations[BRC177_NO_SEND_EXPIRY_MIGRATION] = {
+      async up(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.string('noSendExpiryMode', 16).nullable()
+          table.bigInteger('noSendExpiryValue').unsigned().nullable()
+          table.bigInteger('noSendExpiryDeadline').unsigned().nullable()
+          table.string('noSendExpiryState', 24).nullable()
+          table.string('noSendExpiryAnchorTxid', 64).nullable()
+          table.integer('noSendExpiryAnchorVout').unsigned().nullable()
+          table.bigInteger('noSendExpiryReleasedAt').unsigned().nullable()
+          table.bigInteger('noSendExpiryObservedAt').unsigned().nullable()
+          table.string('noSendExpiryReclaimTxid', 64).nullable()
+          table.binary('noSendExpiryReclaimRawTx').nullable()
+          table.string('noSendExpiryReclaimDerivationPrefix', 32).nullable()
+          table.string('noSendExpiryReclaimDerivationSuffix', 32).nullable()
+          table.bigInteger('noSendExpiryReclaimSatoshis').unsigned().nullable()
+          table.index(['noSendExpiryState', 'noSendExpiryDeadline'], 'idx_transactions_nosend_expiry')
+          table.index(['userId', 'noSendExpiryReclaimTxid'], 'idx_transactions_nosend_reclaim')
+        })
+        if ((await determineDBType(knex)) === 'MySQL') {
+          await knex.raw('ALTER TABLE transactions MODIFY COLUMN noSendExpiryReclaimRawTx LONGBLOB')
+        }
+      },
+      async down(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.dropIndex(['noSendExpiryState', 'noSendExpiryDeadline'], 'idx_transactions_nosend_expiry')
+          table.dropIndex(['userId', 'noSendExpiryReclaimTxid'], 'idx_transactions_nosend_reclaim')
+          table.dropColumns(
+            'noSendExpiryMode',
+            'noSendExpiryValue',
+            'noSendExpiryDeadline',
+            'noSendExpiryState',
+            'noSendExpiryAnchorTxid',
+            'noSendExpiryAnchorVout',
+            'noSendExpiryReleasedAt',
+            'noSendExpiryObservedAt',
+            'noSendExpiryReclaimTxid',
+            'noSendExpiryReclaimRawTx',
+            'noSendExpiryReclaimDerivationPrefix',
+            'noSendExpiryReclaimDerivationSuffix',
+            'noSendExpiryReclaimSatoshis'
+          )
+        })
       }
     }
 

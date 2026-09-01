@@ -105,6 +105,19 @@ describe('Transaction class method tests', () => {
     // New setters
     tx.version = 2
     tx.lockTime = 5000
+    tx.noSendExpiryMode = 'timestamp'
+    tx.noSendExpiryValue = 2_000_000_000
+    tx.noSendExpiryDeadline = 2_000_000_000
+    tx.noSendExpiryState = 'signed'
+    tx.noSendExpiryAnchorTxid = '11'.repeat(32)
+    tx.noSendExpiryAnchorVout = 1
+    tx.noSendExpiryReleasedAt = 123
+    tx.noSendExpiryObservedAt = 456
+    tx.noSendExpiryReclaimTxid = '22'.repeat(32)
+    tx.noSendExpiryReclaimRawTx = [7, 8, 9]
+    tx.noSendExpiryReclaimDerivationPrefix = 'prefix'
+    tx.noSendExpiryReclaimDerivationSuffix = 'suffix'
+    tx.noSendExpiryReclaimSatoshis = 700
 
     expect(tx.transactionId).toBe(123)
     expect(tx.userId).toBe(456)
@@ -122,6 +135,19 @@ describe('Transaction class method tests', () => {
     // Check new properties
     expect(tx.version).toBe(2) // Ensure version is set correctly
     expect(tx.lockTime).toBe(5000) // Ensure lockTime is set correctly
+    expect(tx.noSendExpiryMode).toBe('timestamp')
+    expect(tx.noSendExpiryValue).toBe(2_000_000_000)
+    expect(tx.noSendExpiryDeadline).toBe(2_000_000_000)
+    expect(tx.noSendExpiryState).toBe('signed')
+    expect(tx.noSendExpiryAnchorTxid).toBe('11'.repeat(32))
+    expect(tx.noSendExpiryAnchorVout).toBe(1)
+    expect(tx.noSendExpiryReleasedAt).toBe(123)
+    expect(tx.noSendExpiryObservedAt).toBe(456)
+    expect(tx.noSendExpiryReclaimTxid).toBe('22'.repeat(32))
+    expect(tx.noSendExpiryReclaimRawTx).toEqual([7, 8, 9])
+    expect(tx.noSendExpiryReclaimDerivationPrefix).toBe('prefix')
+    expect(tx.noSendExpiryReclaimDerivationSuffix).toBe('suffix')
+    expect(tx.noSendExpiryReclaimSatoshis).toBe(700)
   })
 
   // Test: `getBsvTx` returns parsed transaction
@@ -239,6 +265,142 @@ describe('Transaction class method tests', () => {
       // Currently expecting current time and date, but should be the updated_at from the incoming entity
       const updatedAtTime = updatedTx[0]?.updated_at.getTime()
       expect(updatedAtTime).toBe(expectedMergeUpdatedAt)
+    }
+  })
+
+  test('BRC-177 sync advances lifecycle state but rejects clock-skew regression', async () => {
+    for (const { activeStorage } of ctxs) {
+      const txData = await _tu.insertTestTransaction(activeStorage, undefined, true)
+      const local: TableTransaction = {
+        ...txData.tx,
+        updated_at: new Date('2026-08-30T12:00:00.000Z'),
+        noSendExpiryMode: 'timestamp',
+        noSendExpiryValue: 2_000_000_000,
+        noSendExpiryDeadline: 0,
+        noSendExpiryState: 'signed',
+        noSendExpiryAnchorTxid: '17'.repeat(32),
+        noSendExpiryAnchorVout: 0,
+        noSendExpiryReclaimRawTx: [1, 2, 3],
+        description: 'current transaction data'
+      }
+      await activeStorage.updateTransaction(local.transactionId, { ...local })
+      const entity = new EntityTransaction({
+        ...local,
+        created_at: new Date(local.created_at),
+        updated_at: new Date(local.updated_at)
+      })
+      const syncMap = createSyncMap()
+      const proven = await _tu.insertTestProvenTx(activeStorage, local.txid)
+      const incomingProvenTxId = 9_999
+      syncMap.provenTx.idMap[incomingProvenTxId] = proven.provenTxId
+
+      const staleButNewer: TableTransaction = {
+        ...local,
+        updated_at: new Date('2026-08-31T12:00:00.000Z'),
+        noSendExpiryDeadline: 2_000_000_000,
+        noSendExpiryState: 'unsigned'
+      }
+      await expect(entity.mergeExisting(activeStorage, undefined, staleButNewer, syncMap)).resolves.toBe(false)
+
+      const advancedButOlder: TableTransaction = {
+        ...local,
+        updated_at: new Date('2026-08-29T12:00:00.000Z'),
+        noSendExpiryDeadline: 2_000_000_000,
+        noSendExpiryState: 'reclaiming',
+        noSendExpiryReclaimRawTx: undefined,
+        description: 'stale transaction data'
+      }
+      await expect(entity.mergeExisting(activeStorage, undefined, advancedButOlder, syncMap)).resolves.toBe(true)
+      const [stored] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      expect(stored.noSendExpiryState).toBe('reclaiming')
+      expect(stored.noSendExpiryDeadline).toBe(0)
+      expect(stored.noSendExpiryReclaimRawTx).toBeDefined()
+      expect(stored.description).toBe('current transaction data')
+
+      const proofFromLowerState: TableTransaction = {
+        ...local,
+        updated_at: new Date('2026-08-30T13:00:00.000Z'),
+        noSendExpiryState: 'broadcast',
+        status: 'completed',
+        provenTxId: incomingProvenTxId,
+        description: 'proof-bearing transaction data'
+      }
+      await expect(entity.mergeExisting(activeStorage, undefined, proofFromLowerState, syncMap)).resolves.toBe(true)
+      const [proofMerged] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      expect(proofMerged.noSendExpiryState).toBe('reclaiming')
+      expect(proofMerged.status).toBe('completed')
+      expect(proofMerged.description).toBe('proof-bearing transaction data')
+
+      const reclaimTxid = '18'.repeat(32)
+      const { tx: reclaim } = await _tu.insertTestTransaction(activeStorage, txData.user, true, {
+        txid: reclaimTxid,
+        status: 'completed'
+      })
+      const reclaimOutput = await _tu.insertTestOutput(activeStorage, reclaim, 0, 100, undefined, true, {
+        txid: reclaimTxid,
+        spendable: true
+      })
+      await activeStorage.updateTransaction(local.transactionId, {
+        noSendExpiryState: 'reclaimed',
+        noSendExpiryReclaimTxid: reclaimTxid,
+        updated_at: new Date('2026-08-31T12:00:00.000Z')
+      })
+      const [reclaimedLocal] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      const terminalEntity = new EntityTransaction(reclaimedLocal)
+      const targetWinnerWithOlderClock: TableTransaction = {
+        ...reclaimedLocal,
+        updated_at: new Date('2026-08-29T12:00:00.000Z'),
+        noSendExpiryState: 'target-won'
+      }
+
+      await expect(
+        terminalEntity.mergeExisting(activeStorage, undefined, targetWinnerWithOlderClock, syncMap)
+      ).resolves.toBe(true)
+      const [terminalTarget] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      const [quarantined] = await activeStorage.findOutputs({
+        partial: { outputId: reclaimOutput.outputId }
+      })
+      expect(terminalTarget.noSendExpiryState).toBe('target-won')
+      expect(quarantined.spendable).toBe(false)
+
+      await activeStorage.updateTransaction(local.transactionId, {
+        noSendExpiryState: 'reclaimed',
+        status: 'failed',
+        provenTxId: undefined,
+        updated_at: new Date('2026-08-31T13:00:00.000Z')
+      })
+      await activeStorage.updateOutput(reclaimOutput.outputId, { spendable: true })
+      const [reclaimedBeforeProof] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      const proofEntity = new EntityTransaction(reclaimedBeforeProof)
+      const olderTargetProofBeforeLifecycleUpdate: TableTransaction = {
+        ...reclaimedBeforeProof,
+        updated_at: new Date('2026-08-29T13:00:00.000Z'),
+        noSendExpiryState: 'reclaiming',
+        status: 'completed',
+        provenTxId: incomingProvenTxId
+      }
+      await expect(
+        proofEntity.mergeExisting(activeStorage, undefined, olderTargetProofBeforeLifecycleUpdate, syncMap)
+      ).resolves.toBe(true)
+      const [proofWinner] = await activeStorage.findTransactions({
+        partial: { transactionId: local.transactionId }
+      })
+      const [proofQuarantined] = await activeStorage.findOutputs({
+        partial: { outputId: reclaimOutput.outputId }
+      })
+      expect(proofWinner.noSendExpiryState).toBe('target-won')
+      expect(proofWinner.status).toBe('completed')
+      expect(proofQuarantined.spendable).toBe(false)
     }
   })
 

@@ -1,6 +1,7 @@
 import { _tu } from '../utils/TestUtilsWalletStorage'
 import {
   AUTH_SESSION_MIGRATION,
+  BRC177_NO_SEND_EXPIRY_MIGRATION,
   CREATE_ACTION_FUNDING_INDEX_MIGRATION,
   KnexMigrations,
   MANAGED_CHANGE_POLICY_MIGRATION,
@@ -241,6 +242,41 @@ describe('KnexMigrations tests', () => {
       await migration.down?.(knex)
       const afterDown = await knex('output_baskets').orderBy('userId')
       expect(afterDown.map(row => Number(row.minimumDesiredUTXOValue))).toEqual([5_000, 64, 32, 32])
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5b adds and rolls back durable BRC-177 lifecycle columns and index', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratebrc177.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+    try {
+      await knex.schema.createTable('transactions', table => {
+        table.increments('transactionId')
+        table.integer('userId').notNullable()
+      })
+      const source = new KnexMigrations('test', 'BRC-177 migration test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(BRC177_NO_SEND_EXPIRY_MIGRATION)
+      await migration.up(knex)
+
+      for (const column of [
+        'noSendExpiryMode',
+        'noSendExpiryDeadline',
+        'noSendExpiryState',
+        'noSendExpiryAnchorTxid',
+        'noSendExpiryReclaimRawTx'
+      ]) {
+        await expect(knex.schema.hasColumn('transactions', column)).resolves.toBe(true)
+      }
+      await expect(knex('sqlite_master')
+        .where({ type: 'index', name: 'idx_transactions_nosend_expiry' })
+        .first()).resolves.toBeDefined()
+      await expect(knex('sqlite_master')
+        .where({ type: 'index', name: 'idx_transactions_nosend_reclaim' })
+        .first()).resolves.toBeDefined()
+
+      await migration.down?.(knex)
+      await expect(knex.schema.hasColumn('transactions', 'noSendExpiryState')).resolves.toBe(false)
     } finally {
       await knex.destroy()
     }

@@ -30,6 +30,7 @@ import {
   WERR_INSUFFICIENT_FUNDS,
   WERR_INVALID_OPERATION,
   WERR_INVALID_PARAMETER,
+  WERR_NOT_ACTIVE,
   WERR_REVIEW_ACTIONS
 } from '../../sdk/WERR_errors'
 import {
@@ -56,6 +57,7 @@ import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutput
 import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
 import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
+import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -107,6 +109,10 @@ async function createActionCore(
   // stampLog(vargs, `start storage createTransactionSdk`)
 
   if (vargs.isTestWerrReviewActions) throwDummyReviewActions()
+
+  if ((vargs as Brc177ValidCreateActionArgs).brc177 != null && auth.isActive !== true) {
+    throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+  }
 
   if (!vargs.isNewTx)
   // The purpose of this function is to create the initial storage records associated
@@ -177,6 +183,7 @@ async function createActionCore(
     [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel],
     parent
   )
+  validateBrc177FundingPlan(vargs as Brc177ValidCreateActionArgs, initialFundingPlan)
   logger?.log(`planned funding from ${initialFundingPlan.availableChangeCount} change inputs`)
 
   // The selected source txids are known before the write transaction begins.
@@ -233,7 +240,11 @@ async function createActionCore(
         logger?.log('adjusted change outputs to max possible')
       }
 
+      const fixedManagedChangeSatoshis = ctx.xoutputs
+        .filter(output => output.purpose === 'change')
+        .reduce((sum, output) => sum + output.satoshis, 0)
       const satoshis =
+        fixedManagedChangeSatoshis +
         funded.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
         funded.allocatedChange.reduce((sum, output) => sum + output.satoshis, 0)
       if (satoshis !== initialSatoshis) {
@@ -337,9 +348,10 @@ interface CreateTransactionSdkContext {
   noSendChangeIn: TableOutput[]
   feeModel: StorageFeeModel
   transactionId: number
+  derivationPrefix?: string
 }
 
-interface XValidCreateActionInput extends Validation.ValidCreateActionInput {
+export interface XValidCreateActionInput extends Validation.ValidCreateActionInput {
   vin: number
   lockingScript: Script
   satoshis: number
@@ -576,6 +588,60 @@ async function persistNewOutput(
   return describeNewOutput(o, tags, txBaskets)
 }
 
+async function createRequiredOutput(
+  storage: StorageProvider,
+  userId: number,
+  xo: XValidCreateActionOutput,
+  ctx: CreateTransactionSdkContext,
+  txBaskets: Record<string, TableOutputBasket>,
+  trx?: TrxToken
+): Promise<{ o: TableOutput; tags: string[] }> {
+  const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
+  if (xo.purpose === 'service-charge') {
+    const lockingScript = asArray(xo.lockingScript)
+    const now = new Date()
+    await storage.insertCommission(
+      {
+        userId,
+        transactionId: ctx.transactionId,
+        lockingScript,
+        satoshis: xo.satoshis,
+        isRedeemed: false,
+        keyOffset: verifyTruthy(xo.keyOffset),
+        created_at: now,
+        updated_at: now,
+        commissionId: 0
+      },
+      trx
+    )
+    o.lockingScript = lockingScript
+    o.providedBy = 'storage'
+    o.purpose = 'storage-commission'
+    o.type = 'custom'
+    o.spendable = false
+    return { o, tags: [] }
+  }
+  if (xo.purpose === 'change') {
+    o.basketId = ctx.changeBasket.basketId
+    o.change = true
+    o.derivationPrefix = verifyTruthy(ctx.derivationPrefix)
+    o.derivationSuffix = verifyTruthy(xo.derivationSuffix)
+    o.providedBy = 'storage'
+    o.purpose = 'change'
+    o.type = 'P2PKH'
+    o.spendable = true
+    return { o, tags: [] }
+  }
+  o.lockingScript = asArray(xo.lockingScript)
+  o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
+  o.customInstructions = xo.customInstructions
+  o.outputDescription = xo.outputDescription
+  o.providedBy = xo.providedBy
+  o.purpose = xo.purpose || ''
+  o.type = 'custom'
+  return { o, tags: xo.tags }
+}
+
 async function createNewOutputs(
   storage: StorageProvider,
   userId: number,
@@ -598,41 +664,7 @@ async function createNewOutputs(
   const newOutputs: Array<{ o: TableOutput; tags: string[] }> = []
 
   for (const xo of ctx.xoutputs) {
-    const lockingScript = asArray(xo.lockingScript)
-    if (xo.purpose === 'service-charge') {
-      const now = new Date()
-      await storage.insertCommission(
-        {
-          userId,
-          transactionId: ctx.transactionId,
-          lockingScript,
-          satoshis: xo.satoshis,
-          isRedeemed: false,
-          keyOffset: verifyTruthy(xo.keyOffset),
-          created_at: now,
-          updated_at: now,
-          commissionId: 0
-        },
-        trx
-      )
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = lockingScript
-      o.providedBy = 'storage'
-      o.purpose = 'storage-commission'
-      o.type = 'custom'
-      o.spendable = false
-      newOutputs.push({ o, tags: [] })
-    } else {
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = lockingScript
-      o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
-      o.customInstructions = xo.customInstructions
-      o.outputDescription = xo.outputDescription
-      o.providedBy = xo.providedBy
-      o.purpose = xo.purpose || ''
-      o.type = 'custom'
-      newOutputs.push({ o, tags: xo.tags })
-    }
+    newOutputs.push(await createRequiredOutput(storage, userId, xo, ctx, txBaskets, trx))
   }
 
   for (const o of changeOutputs) {
@@ -696,6 +728,15 @@ async function createNewTxRecord(
     txid: undefined,
     rawTx: undefined
   }
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
+  if (brc177?.kind === 'protected') {
+    newTx.noSendExpiryMode = brc177.expiry.mode
+    newTx.noSendExpiryValue = brc177.expiry.value
+    newTx.noSendExpiryDeadline = brc177.deadline
+    newTx.noSendExpiryState = 'preparing'
+    newTx.noSendExpiryAnchorTxid = brc177.anchorTxid
+    newTx.noSendExpiryAnchorVout = brc177.anchorVout
+  }
   newTx.transactionId = await storage.insertTransaction(newTx, trx)
 
   const labelNames = [...new Set(vargs.labels)]
@@ -730,7 +771,7 @@ async function createNewTxRecord(
  * @param vargs
  * @returns xoutputs
  */
-function validateRequiredOutputs(
+export function validateRequiredOutputs(
   storage: StorageProvider,
   userId: number,
   vargs: Validation.ValidCreateActionArgs
@@ -767,6 +808,23 @@ function validateRequiredOutputs(
     })
   }
 
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
+  if (brc177?.kind === 'funding') {
+    vout++
+    xoutputs.push({
+      lockingScript: '00'.repeat(25),
+      satoshis: brc177.anchorSatoshis,
+      outputDescription: '',
+      basket: undefined,
+      tags: [],
+      vout,
+      providedBy: 'storage',
+      purpose: 'change',
+      derivationSuffix: undefined,
+      keyOffset: undefined
+    })
+  }
+
   return xoutputs
 }
 
@@ -791,7 +849,7 @@ function validateRequiredOutputs(
  * @returns {beef} containing verified validity proof data for all required inputs.
  * @returns {xinputs} extended validated required inputs.
  */
-async function validateRequiredInputs(
+export async function validateRequiredInputs(
   storage: StorageProvider,
   userId: number,
   vargs: Validation.ValidCreateActionArgs
@@ -1102,6 +1160,7 @@ interface MakeFundingParamsArgs {
 function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams {
   const { storage, vargs, xinputs, xoutputs, changeBasket, feeModel, healthyChangeCount, compatibilityFallback } = args
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   return {
     fixedInputs: xinputs.map(input => ({
       satoshis: input.satoshis,
@@ -1120,7 +1179,9 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
     targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
-    maxChangeOutputs: storage.managedChangePolicy.maxOutputsPerAction,
+    // The planner requires a positive cap. The exact anchor leaves no surplus,
+    // and validateBrc177FundingPlan below independently rejects any change.
+    maxChangeOutputs: brc177?.kind === 'protected' ? 1 : storage.managedChangePolicy.maxOutputsPerAction,
     surplusPoolShaping: !compatibilityFallback,
     maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals
@@ -1138,9 +1199,11 @@ async function buildFundingPlan(
 ): Promise<PreparedFundingPlan> {
   const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel] = context
   const noSendIds = new Set(noSendChangeIn.map(output => output.outputId))
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   const available = candidates.filter(
     output => !noSendIds.has(output.outputId) && eligibleStatuses.includes(output.transactionStatus)
   )
+  if (brc177?.kind === 'protected') available.length = 0
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   const healthyChangeCount = compatibilityFallback
     ? // Preserve the legacy target-count input exactly, including noSendChange
@@ -1587,6 +1650,12 @@ async function fundNewTransactionSdk(
 
   // Generate a derivation prefix for the payment
   const derivationPrefix = randomDerivation(16)
+  ctx.derivationPrefix = derivationPrefix
+  for (const output of ctx.xoutputs) {
+    if (output.purpose === 'change' && output.derivationSuffix == null) {
+      output.derivationSuffix = randomDerivation(16)
+    }
+  }
 
   const r: {
     allocatedChange: TableOutput[]
@@ -1632,6 +1701,24 @@ async function fundNewTransactionSdk(
   }
 
   return r
+}
+
+function validateBrc177FundingPlan(
+  vargs: Brc177ValidCreateActionArgs,
+  plan: PreparedFundingPlan
+): void {
+  if (vargs.brc177?.kind !== 'protected') return
+  if (plan.selected.length !== 1 || vargs.options.noSendChange.length !== 1) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action must use exactly one revocation anchor')
+  }
+  const selected = plan.selected[0]
+  const anchor = vargs.options.noSendChange[0]
+  if (selected.txid !== anchor.txid || selected.vout !== anchor.vout) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action selected a non-anchor wallet input')
+  }
+  if (plan.result.changeOutputs.length !== 0) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action must not create wallet change')
+  }
 }
 
 /**

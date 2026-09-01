@@ -1,5 +1,9 @@
 import { Base64String } from '@bsv/sdk'
 import * as sdk from '../../../sdk'
+import type {
+  Brc177NoSendExpiryMode,
+  Brc177NoSendExpiryState
+} from '../../../utility/brc177NoSendExpiry'
 
 export interface TableTransaction extends sdk.EntityTimeStamp {
   created_at: Date
@@ -33,6 +37,21 @@ export interface TableTransaction extends sdk.EntityTimeStamp {
   txid?: string
   inputBEEF?: number[]
   rawTx?: number[]
+  /** Internal BRC-177 lifecycle metadata. These fields are synchronized with the action. */
+  noSendExpiryMode?: Brc177NoSendExpiryMode
+  noSendExpiryValue?: number
+  /** Resolved Unix seconds for time modes, or the absolute height for blockheight. */
+  noSendExpiryDeadline?: number
+  noSendExpiryState?: Brc177NoSendExpiryState
+  noSendExpiryAnchorTxid?: string
+  noSendExpiryAnchorVout?: number
+  noSendExpiryReleasedAt?: number
+  noSendExpiryObservedAt?: number
+  noSendExpiryReclaimTxid?: string
+  noSendExpiryReclaimRawTx?: number[]
+  noSendExpiryReclaimDerivationPrefix?: string
+  noSendExpiryReclaimDerivationSuffix?: string
+  noSendExpiryReclaimSatoshis?: number
 }
 
 export const transactionColumnsWithoutRawTx = [
@@ -48,7 +67,20 @@ export const transactionColumnsWithoutRawTx = [
   'version',
   'lockTime',
   'description',
-  'txid'
+  'txid',
+  'noSendExpiryMode',
+  'noSendExpiryValue',
+  'noSendExpiryDeadline',
+  'noSendExpiryState',
+  'noSendExpiryAnchorTxid',
+  'noSendExpiryAnchorVout',
+  'noSendExpiryReleasedAt',
+  'noSendExpiryObservedAt',
+  'noSendExpiryReclaimTxid',
+  'noSendExpiryReclaimDerivationPrefix',
+  'noSendExpiryReclaimDerivationSuffix',
+  'noSendExpiryReclaimSatoshis'
   //   'inputBEEF',
   //   'rawTx',
+  //   'noSendExpiryReclaimRawTx',
 ]

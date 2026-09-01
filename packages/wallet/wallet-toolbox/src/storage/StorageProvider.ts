@@ -48,6 +48,10 @@ import {
   StorageInternalizeActionResult,
   StorageProcessActionArgs,
   StorageProcessActionResults,
+  StoragePrepareNoSendExpiryResult,
+  StorageActivateNoSendExpiryArgs,
+  StorageActivateNoSendExpiryResult,
+  StorageArmNoSendExpiryArgs,
   StorageProvenOrReq,
   SyncChunk,
   TrxToken,
@@ -71,6 +75,7 @@ import {
   WERR_INVALID_OPERATION,
   WERR_INVALID_PARAMETER,
   WERR_MISSING_PARAMETER,
+  WERR_NOT_ACTIVE,
   WERR_NOT_IMPLEMENTED,
   WERR_UNAUTHORIZED
 } from '../sdk/WERR_errors'
@@ -79,6 +84,7 @@ import { WalletError } from '../sdk/WalletError'
 import { asArray } from '../utility/utilityHelpers.noBuffer'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
+import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -119,6 +125,11 @@ import {
   defaultManagedChangePolicy,
   validateManagedChangePolicy
 } from './methods/managedChangePolicy'
+import {
+  activateNoSendExpiry,
+  armNoSendExpiry,
+  prepareNoSendExpiry
+} from './methods/noSendExpiry'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -387,9 +398,48 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async getCapabilities(): Promise<StorageCapabilities> {
-    return this.supportsActionBatchPersistence()
-      ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
-      : {}
+    return {
+      ...(this.supportsNoSendExpiryPersistence()
+        ? { brc177NoSendExpiry: { version: 1 as const } }
+        : {}),
+      ...(this.supportsActionBatchPersistence()
+        ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
+        : {})
+    }
+  }
+
+  async prepareNoSendExpiry(
+    auth: AuthId,
+    args: Validation.ValidCreateActionArgs
+  ): Promise<StoragePrepareNoSendExpiryResult> {
+    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+    if (!this.supportsNoSendExpiryPersistence()) {
+      throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+    }
+    return await prepareNoSendExpiry(this, auth, args)
+  }
+
+  async activateNoSendExpiry(
+    auth: AuthId,
+    args: StorageActivateNoSendExpiryArgs
+  ): Promise<StorageActivateNoSendExpiryResult> {
+    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+    if (!this.supportsNoSendExpiryPersistence()) {
+      throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+    }
+    return await activateNoSendExpiry(this, auth, args)
+  }
+
+  async armNoSendExpiry(auth: AuthId, args: StorageArmNoSendExpiryArgs): Promise<void> {
+    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+    if (!this.supportsNoSendExpiryPersistence()) {
+      throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+    }
+    await armNoSendExpiry(this, auth, args)
+  }
+
+  protected supportsNoSendExpiryPersistence(): boolean {
+    return false
   }
 
   protected supportsActionBatchPersistence(): boolean {
@@ -603,7 +653,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       )
     }
     const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
-    if (tx == null || !tx.isOutgoing || unAbortableStatus.includes(tx.status)) {
+    const brc177TerminalOrRacing = tx?.noSendExpiryState != null && [
+      'broadcast',
+      'reclaiming',
+      'reclaimed',
+      'target-won',
+      'conflicted',
+      'cancelled'
+    ].includes(tx.noSendExpiryState)
+    if (tx == null || !tx.isOutgoing || (unAbortableStatus.includes(tx.status) && !brc177TerminalOrRacing)) {
       throw new WERR_INVALID_PARAMETER(
         'reference',
         'an inprocess, outgoing action that has not been signed and shared to the network.'
@@ -657,6 +715,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     serviceUnreachable: boolean,
     trx: TrxToken
   ): Promise<AbortActionResult> {
+    if (tx.noSendExpiryState === 'preparing' || tx.noSendExpiryState === 'unsigned') {
+      if (!await this.compareAndSetNoSendExpiryState(
+        tx.transactionId,
+        tx.noSendExpiryState,
+        'cancelled',
+        trx
+      )) {
+        throw new WERR_INVALID_OPERATION('BRC-177 action changed while it was being aborted')
+      }
+    }
     await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
     if (tx.txid != null && tx.txid !== '') {
       const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
@@ -679,6 +747,47 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const userId = auth.userId
     const r = await this.transaction(async trx => {
       const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
+      if (tx.noSendExpiryState != null && auth.isActive !== true) {
+        throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+      }
+      if (tx.noSendExpiryState === 'signed') {
+        // A released BRC-177 transaction must never be invalidated locally: the
+        // recipient may be broadcasting it at this instant. Make it due and let
+        // the lifecycle's positive chain/UTXO checks arbitrate the race.
+        if (!await this.compareAndSetNoSendExpiryState(
+          tx.transactionId,
+          'signed',
+          'revocation-requested',
+          trx
+        )) {
+          throw new WERR_INVALID_OPERATION('BRC-177 action changed while early revocation was requested')
+        }
+        const req = tx.txid == null ? undefined : await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+        if (req != null) {
+          req.addHistoryNote({ what: 'brc177-early-abort-reclaim-requested', reference: args.reference })
+          await req.updateStorageDynamicProperties(this, trx)
+        }
+        return {
+          __abortAction: 'brc177-reclaim-requested' as const,
+          transactionId: tx.transactionId
+        }
+      }
+      if (tx.noSendExpiryState === 'revocation-requested') {
+        return {
+          __abortAction: 'brc177-reclaim-requested' as const,
+          transactionId: tx.transactionId
+        }
+      }
+      if (tx.noSendExpiryState === 'reclaiming' || tx.noSendExpiryState === 'reclaimed') {
+        return { __abortAction: 'brc177-reclaim-in-progress' as const }
+      }
+      if (tx.noSendExpiryState === 'cancelled') {
+        return { __abortAction: 'brc177-cancelled' as const }
+      }
+      if (tx.noSendExpiryState === 'broadcast' || tx.noSendExpiryState === 'target-won' ||
+        tx.noSendExpiryState === 'conflicted') {
+        return { __abortAction: 'brc177-target-protected' as const }
+      }
       // Chain-status protection for signed nosend txs.
       //
       // Background: a nosend tx (created via createAction({noSend:true}))
@@ -725,6 +834,21 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       )
     })
     if ('__abortAction' in r) {
+      if (r.__abortAction === 'brc177-reclaim-requested') {
+        await processNoSendExpiryLifecycle(this).catch(() => undefined)
+        const current = verifyOne(await this.findTransactions({
+          partial: { transactionId: r.transactionId },
+          noRawTx: true
+        }))
+        if (current.noSendExpiryState === 'broadcast' || current.noSendExpiryState === 'target-won' ||
+          current.noSendExpiryState === 'conflicted') {
+          return { aborted: false }
+        }
+        return { aborted: true }
+      }
+      if (r.__abortAction === 'brc177-reclaim-in-progress') return { aborted: true }
+      if (r.__abortAction === 'brc177-cancelled') return { aborted: true }
+      if (r.__abortAction === 'brc177-target-protected') return { aborted: false }
       // Tone Engel review feedback (PR #122 comment 4444566147 item 3):
       // do not throw on chain-confirmed refusal — surface it via the
       // return value so callers can branch on it. Refusal is positive
@@ -898,6 +1022,28 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     }
   }
 
+  private async protectNoSendExpiryReclaimInputOnFailure(
+    tx: TableTransaction,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    if (tx.txid == null) return false
+    const target = verifyOneOrNone(
+      await this.findTransactions({
+        partial: { userId: tx.userId, noSendExpiryReclaimTxid: tx.txid },
+        noRawTx: true,
+        trx
+      })
+    )
+    if (target == null) return false
+
+    // Generic failed-transaction cleanup releases inputs for reuse. A reclaim
+    // is different: the signed target may still be outside the wallet, so its
+    // anchor remains quarantined even when a processor rejects this reclaim.
+    // Keep the race lifecycle intact because a prior submission can still be
+    // proven later; a rejection response is not chain finality.
+    return true
+  }
+
   /**
    * For all `status` values besides 'failed', just updates the transaction records status property.
    *
@@ -944,7 +1090,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
       switch (status) {
         case 'failed':
-          await this.releaseInputsAllocatedToFailedTransaction(tx, trx)
+          if (!(await this.protectNoSendExpiryReclaimInputOnFailure(tx, trx))) {
+            await this.releaseInputsAllocatedToFailedTransaction(tx, trx)
+          }
           await this.markFailedTransactionOutputsNotSpendable(tx, trx)
           break
         case 'nosend':
