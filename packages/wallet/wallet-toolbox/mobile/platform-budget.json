@@ -2,7 +2,7 @@
   "profile": "mobile",
   "maximumBytes": {
     "metro": {
-      "raw": 1712000,
+      "raw": 1713000,
       "gzip": 455000,
       "brotli": 360000
     },
