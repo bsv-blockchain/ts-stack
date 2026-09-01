@@ -9,20 +9,69 @@ interface SyncProofValidationStorage {
   getServices: () => WalletServices
 }
 
+const replacementAuthorized = new WeakSet<TableProvenTx>()
+const insertOnly = new WeakSet<TableProvenTx>()
+
+function equalBytes(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
 function invalidSyncProof(message: string): never {
   throw new WERR_INVALID_PARAMETER('provenTx', `a server-verified proof. ${message}`)
 }
 
+/** Normalize text-key identifiers before lookup or persistence. */
+export function canonicalizeSyncProofIdentifiers(candidate: TableProvenTx): void {
+  if (!/^[0-9a-f]{64}$/i.test(candidate.txid)) invalidSyncProof('txid must be 32-byte hexadecimal')
+  if (!/^[0-9a-f]{64}$/i.test(candidate.blockHash)) {
+    invalidSyncProof('block hash must be 32-byte hexadecimal')
+  }
+  if (!/^[0-9a-f]{64}$/i.test(candidate.merkleRoot)) {
+    invalidSyncProof('Merkle root must be 32-byte hexadecimal')
+  }
+  candidate.txid = candidate.txid.toLowerCase()
+  candidate.blockHash = candidate.blockHash.toLowerCase()
+  candidate.merkleRoot = candidate.merkleRoot.toLowerCase()
+}
+
+/** Compare proof authority fields, excluding local IDs and timestamps. */
+export function sameSyncProof(a: TableProvenTx, b: TableProvenTx): boolean {
+  return a.txid.toLowerCase() === b.txid.toLowerCase() &&
+    a.height === b.height &&
+    a.index === b.index &&
+    equalBytes(a.merklePath, b.merklePath) &&
+    equalBytes(a.rawTx, b.rawTx) &&
+    a.blockHash.toLowerCase() === b.blockHash.toLowerCase() &&
+    a.merkleRoot.toLowerCase() === b.merkleRoot.toLowerCase()
+}
+
+/** Record that preflight found no row which this candidate may replace. */
+export function markSyncProofInsertOnly(candidate: TableProvenTx): void {
+  insertOnly.add(candidate)
+}
+
 /**
- * Validate a tenant-supplied proof before Knex opens the sync transaction.
- * This module is deliberately server-only so proof-authority checks do not
- * expand portable/browser storage bundles.
+ * Enforce the pre-transaction proof decision again at the entity merge point.
+ * This closes the race where another process inserts the txid after preflight.
+ */
+export function assertSyncProofReplacementAuthorized(candidate: TableProvenTx): void {
+  if (replacementAuthorized.has(candidate)) return
+  if (insertOnly.has(candidate)) {
+    invalidSyncProof('a concurrent proof row appeared; retry synchronization')
+  }
+  invalidSyncProof('replacement requires active-chain validation')
+}
+
+/**
+ * Validate proof authority before an RPC proof is admitted or an in-process
+ * backup/conflict proof replaces an existing global row. Network-backed checks
+ * run before the storage merge transaction is opened.
  */
 export async function validateSyncProof(
   storage: SyncProofValidationStorage,
   candidate: TableProvenTx
 ): Promise<void> {
-  if (!/^[0-9a-f]{64}$/i.test(candidate.txid)) invalidSyncProof('txid must be 32-byte hexadecimal')
+  canonicalizeSyncProofIdentifiers(candidate)
   if (!Number.isSafeInteger(candidate.height) || candidate.height < 0) {
     invalidSyncProof('height must be a non-negative safe integer')
   }
@@ -65,6 +114,7 @@ export async function validateSyncProof(
     if (activeHash !== candidate.blockHash.toLowerCase() || activeMerkleRoot !== root) {
       invalidSyncProof('block metadata does not match the active header')
     }
+    replacementAuthorized.add(candidate)
   } catch (error) {
     if (error instanceof WERR_INVALID_PARAMETER) throw error
     invalidSyncProof('transaction, Merkle path, or active header could not be validated')

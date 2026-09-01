@@ -9,6 +9,7 @@ export const PREPARED_BEEF_FORMAT_VERSION = 1
 const DEFAULT_MAX_QUEUE_SIZE = 32
 const DEFAULT_MAX_QUEUE_SIZE_PER_USER = 4
 const DEFAULT_MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
+const DEFAULT_MAX_LOOKUP_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_ARTIFACT_TRANSACTIONS = 256
 const DEFAULT_BACKFILL_BATCH_SIZE = 32
 const DEFAULT_BACKFILL_INTERVAL_MS = 100
@@ -30,6 +31,8 @@ export interface PreparedBeefOptions {
   maxQueueSizePerUser?: number
   /** Reject a prepared artifact larger than this many bytes. */
   maxArtifactBytes?: number
+  /** Bypass prepared lookup when all matching artifacts exceed this total. */
+  maxLookupBytes?: number
   /** Reject source or prepared BEEF graphs with more transactions. */
   maxArtifactTransactions?: number
   /** Maximum roots selected by each low-priority backfill pass. */
@@ -45,6 +48,7 @@ export interface PreparedBeefPolicy {
   maxQueueSize: number
   maxQueueSizePerUser: number
   maxArtifactBytes: number
+  maxLookupBytes: number
   maxArtifactTransactions: number
   backfillBatchSize: number
   backfillIntervalMs: number
@@ -76,6 +80,7 @@ export interface PreparedBeefStorage extends Pick<
   readonly preparedBeefPolicy: PreparedBeefPolicy
   preparedBeefReadsEnabled?: () => boolean
   findPreparedBeefs: (userId: number, rootTxids: string[]) => Promise<TablePreparedBeef[]>
+  readPreparedBeefLookupByteLength: (userId: number, rootTxids: string[]) => Promise<number>
   readPreparedBeefProofEpoch: () => Promise<number>
   readPreparedBeefSourceByteLength: (rootTxid: string) => Promise<number | undefined>
   upsertPreparedBeef: (artifact: TablePreparedBeef, expectedProofEpoch: number) => Promise<boolean>
@@ -90,6 +95,7 @@ export function defaultPreparedBeefPolicy(): PreparedBeefPolicy {
     maxQueueSize: DEFAULT_MAX_QUEUE_SIZE,
     maxQueueSizePerUser: DEFAULT_MAX_QUEUE_SIZE_PER_USER,
     maxArtifactBytes: DEFAULT_MAX_ARTIFACT_BYTES,
+    maxLookupBytes: DEFAULT_MAX_LOOKUP_BYTES,
     maxArtifactTransactions: DEFAULT_MAX_ARTIFACT_TRANSACTIONS,
     backfillBatchSize: DEFAULT_BACKFILL_BATCH_SIZE,
     backfillIntervalMs: DEFAULT_BACKFILL_INTERVAL_MS
@@ -106,6 +112,7 @@ export function validatePreparedBeefPolicy(options?: PreparedBeefOptions): Prepa
     'maxQueueSize',
     'maxQueueSizePerUser',
     'maxArtifactBytes',
+    'maxLookupBytes',
     'maxArtifactTransactions',
     'backfillBatchSize'
   ] as const) {
@@ -202,6 +209,29 @@ export async function lookupPreparedBeefs(
         return result
       }
       try {
+        // Normal createAction calls usually have one funding root and retain a
+        // single-query hit path. Fragmented calls receive a cheap aggregate
+        // byte preflight so the optimization never pulls an unbounded set of
+        // blobs into the foreground merely to fall back afterward.
+        if (requestedTxids.length > 1) {
+          const lookupBytes = await storage.readPreparedBeefLookupByteLength(userId, requestedTxids)
+          if (
+            !Number.isSafeInteger(lookupBytes) ||
+            lookupBytes < 0 ||
+            lookupBytes > storage.preparedBeefPolicy.maxLookupBytes
+          ) {
+            span.end({
+              attributes: {
+                'prepared_beef.hit_count': 0,
+                'prepared_beef.miss_count': requestedTxids.length,
+                'prepared_beef.corrupt_count': 0,
+                'prepared_beef.bytes': 0,
+                'prepared_beef.lookup_bypassed': true
+              }
+            })
+            return result
+          }
+        }
         const rows = await storage.findPreparedBeefs(userId, requestedTxids)
         const byTxid = new Map(rows.map(row => [row.rootTxid, row]))
         const missing: string[] = []

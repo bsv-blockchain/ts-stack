@@ -16,10 +16,11 @@ service a new dependency.
 
 1. `createAction` starts proof prefetch while its normal planning and database
    work continue.
-2. With prepared reads enabled, Knex performs one user-scoped indexed lookup
-   for at most 32 selected root transaction IDs. Broader, unusually fragmented
-   actions bypass prepared storage and go directly to the canonical builder so
-   the fast path cannot add a large query before fallback.
+2. With prepared reads enabled, a normal one-root call performs one user-scoped
+   indexed lookup. A fragmented call first runs a metadata-only aggregate and
+   bypasses prepared storage if matching BEEF blobs exceed `maxLookupBytes`.
+   Calls with more than 32 roots also bypass prepared storage. The canonical
+   builder therefore remains the bounded path for unusually broad actions.
 3. A valid hit is parsed and merged directly. A missing, stale, corrupt,
    oversized, or unsupported artifact is treated as a miss and the existing
    canonical builder runs for only those roots.
@@ -51,11 +52,12 @@ authority:
 
 - the authenticated storage user is part of every read and write key;
 - canonical transaction, proof, and output rows remain the source of truth;
-- proof rows received through authenticated remote sync cannot establish
-  global proof authority on their own: before opening the sync transaction,
-  the server recomputes the transaction ID and Merkle root, checks the path
-  position, and matches the active server header/chain tracker. Configured
-  in-process backup/portable sync remains a trusted operator relationship. Any
+- proof rows received through authenticated RPC cannot establish global proof
+  authority on their own: the server recomputes the transaction ID and Merkle
+  root, checks the path position, and matches its active header/chain tracker.
+  In-process backup and conflict sync canonicalize hexadecimal identifiers and
+  apply the same active-chain validation before replacing an existing global
+  proof, so an orphaned backup cannot overwrite a repaired active proof. Any
   inserted or replaced proof invalidates prepared artifacts in the same
   storage transaction;
 - each artifact contains one root transaction plus only its recursive proof
@@ -106,6 +108,7 @@ const setup = await Setup.createWalletKnex({
     maxQueueSize: 32,
     maxQueueSizePerUser: 4,
     maxArtifactBytes: 2 * 1024 * 1024,
+    maxLookupBytes: 2 * 1024 * 1024,
     maxArtifactTransactions: 256,
     backfillBatchSize: 32,
     backfillIntervalMs: 100
@@ -113,22 +116,24 @@ const setup = await Setup.createWalletKnex({
 })
 ```
 
-| Setting                   | Default | Meaning                                                                                                  |
-| ------------------------- | ------: | -------------------------------------------------------------------------------------------------------- |
-| `writeEnabled`            | `false` | Queue and persist verified artifacts after foreground action work.                                       |
-| `readEnabled`             | `false` | Use valid artifacts on the `createAction` proof path.                                                    |
-| `backfillEnabled`         | `false` | Prepare eligible existing managed-change roots in bounded background passes. Requires writes.            |
-| `maxQueueSize`            |    `32` | Maximum roots queued or running globally. New work is safely dropped when full.                          |
-| `maxQueueSizePerUser`     |     `4` | Maximum roots queued or running for one user, preventing one tenant from consuming the shared worker.    |
-| `maxArtifactBytes`        | `2 MiB` | Maximum estimated source and exact prepared-artifact size.                                               |
-| `maxArtifactTransactions` |   `256` | Maximum transactions in a source or exact prepared graph before expensive worker stages.                 |
-| `backfillBatchSize`       |    `32` | Maximum roots selected in one backfill pass.                                                             |
-| `backfillIntervalMs`      |   `100` | Delay between low-priority backfill passes.                                                              |
+| Setting                   | Default | Meaning                                                                                               |
+| ------------------------- | ------: | ----------------------------------------------------------------------------------------------------- |
+| `writeEnabled`            | `false` | Queue and persist verified artifacts after foreground action work.                                    |
+| `readEnabled`             | `false` | Use valid artifacts on the `createAction` proof path.                                                 |
+| `backfillEnabled`         | `false` | Prepare eligible existing managed-change roots in bounded background passes. Requires writes.         |
+| `maxQueueSize`            |    `32` | Maximum roots queued or running globally. New work is safely dropped when full.                       |
+| `maxQueueSizePerUser`     |     `4` | Maximum roots queued or running for one user, preventing one tenant from consuming the shared worker. |
+| `maxArtifactBytes`        | `2 MiB` | Maximum estimated source and exact prepared-artifact size.                                            |
+| `maxLookupBytes`          | `2 MiB` | Maximum aggregate prepared BEEF bytes loaded for one fragmented foreground lookup.                    |
+| `maxArtifactTransactions` |   `256` | Maximum transactions in a source or exact prepared graph before expensive worker stages.              |
+| `backfillBatchSize`       |    `32` | Maximum roots selected in one backfill pass.                                                          |
+| `backfillIntervalMs`      |   `100` | Delay between low-priority backfill passes.                                                           |
 
 The queue is in-process and best effort. It retains bounded identifiers only,
 applies global and per-user admission quotas, and serializes preparation work.
 Before canonical reload, the worker first asks storage for the root's raw/proof
-byte length, so an oversized no-send `inputBEEF` is never loaded or parsed by
+byte length across every canonical-load status (including `unconfirmed`), so an
+oversized no-send `inputBEEF` is never loaded or parsed by
 COOK. It then applies estimated byte and transaction-count limits before
 dependency selection, verification, and exact serialization. A restart,
 full queue, resource rejection, verification failure, or persistence failure
@@ -169,8 +174,8 @@ repeated canonical proof reconstruction from prepared hits.
 Telemetry uses bounded-cardinality spans:
 
 - `wallet.storage.prepared_beef.lookup` reports requested roots, hits, misses,
-  corrupt rows, bytes, and whether the lookup was bypassed by the 32-root
-  foreground safety bound;
+  corrupt rows, bytes, and whether the lookup was bypassed by the root-count or
+  aggregate-byte foreground safety bound;
 - `wallet.storage.prepared_beef.prepare` reports attempted roots, prepared and
   rejected counts, and bytes; and
 - `wallet.storage.prepared_beef.backfill` reports a failed backfill pass.

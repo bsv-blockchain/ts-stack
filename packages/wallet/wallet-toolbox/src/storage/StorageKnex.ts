@@ -70,6 +70,7 @@ import {
   PreparedBeefPolicy,
   PreparedBeefPreparation,
   PreparedBeefRoot,
+  PREPARED_BEEF_FORMAT_VERSION,
   lookupPreparedBeefs,
   validatePreparedBeefPolicy
 } from './methods/preparedBeef'
@@ -240,10 +241,29 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   ): Promise<TablePreparedBeef[]> {
     const unique = [...new Set(rootTxids)]
     if (unique.length === 0) return []
-    const rows = await this.toDb(trx)<TablePreparedBeef>('prepared_beefs')
-      .where({ userId, state: 'ready' })
+    let query = this.toDb(trx)<TablePreparedBeef>('prepared_beefs')
+      .where({ userId, state: 'ready', formatVersion: PREPARED_BEEF_FORMAT_VERSION })
       .whereIn('rootTxid', unique)
+    // Enforce the per-row byte limit in SQL so a corrupt metadata value cannot
+    // make Knex transfer an oversized blob before JavaScript validates it.
+    query = query.whereRaw('length(??) <= ?', ['beef', this.preparedBeefPolicy.maxArtifactBytes])
+    const rows = await query
     return this.validateEntities(rows)
+  }
+
+  /**
+   * Metadata-only foreground preflight for fragmented actions. SQL computes
+   * the actual blob lengths; BEEF bytes are not transferred to the process.
+   */
+  async readPreparedBeefLookupByteLength (userId: number, rootTxids: string[]): Promise<number> {
+    const unique = [...new Set(rootTxids)]
+    if (unique.length === 0) return 0
+    const row = await this.knex('prepared_beefs')
+      .where({ userId, state: 'ready', formatVersion: PREPARED_BEEF_FORMAT_VERSION })
+      .whereIn('rootTxid', unique)
+      .first({ byteLength: this.knex.raw('coalesce(sum(length(??)), 0)', ['beef']) }) as
+      { byteLength: number } | undefined
+    return Number(row?.byteLength ?? 0)
   }
 
   async readPreparedBeefProofEpoch (trx?: TrxToken): Promise<number> {
@@ -271,7 +291,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (proven != null) return Number(proven.byteLength)
     const request = await this.knex('proven_tx_reqs')
       .where({ txid: rootTxid })
-      .whereIn('status', ['unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail'])
+      .whereIn('status', ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'])
       .first({ byteLength: byteLength('rawTx', 'inputBEEF') }) as { byteLength: number } | undefined
     return request == null ? undefined : Number(request.byteLength)
   }

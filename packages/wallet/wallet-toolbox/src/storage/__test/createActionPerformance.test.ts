@@ -438,6 +438,64 @@ describe('createAction funding performance', () => {
       .first('state')).resolves.toMatchObject({ state: 'failed' })
   })
 
+  test('preflights an unconfirmed no-send source before loading its input BEEF', async () => {
+    const [template] = await ctx.activeStorage.findProvenTxReqs({ partial: {} })
+    const txid = 'e'.repeat(64)
+    await ctx.activeStorage.insertProvenTxReq({
+      ...template,
+      provenTxReqId: 0,
+      provenTxId: undefined,
+      txid,
+      status: 'unconfirmed',
+      rawTx: [1, 2, 3],
+      inputBEEF: Array<number>(200).fill(4),
+      created_at: new Date(),
+      updated_at: new Date()
+    })
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      writeEnabled: true,
+      maxArtifactBytes: 100
+    })
+    const load = jest.spyOn(ctx.activeStorage, 'getBeefForTransaction')
+
+    await expect(ctx.activeStorage.readPreparedBeefSourceByteLength(txid)).resolves.toBe(203)
+    expect(ctx.activeStorage.enqueuePreparedBeef({ userId: ctx.userId, rootTxids: [txid] })).toBe(true)
+    await ctx.activeStorage.waitForPreparedBeefTasks()
+
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  test('bypasses fragmented prepared lookup before loading blobs over the aggregate budget', async () => {
+    const rootTxids = ['a'.repeat(64), 'b'.repeat(64)]
+    const now = new Date()
+    await ctx.activeStorage.knex('prepared_beefs').insert(rootTxids.map(rootTxid => ({
+      userId: ctx.userId,
+      rootTxid,
+      beef: Buffer.alloc(64),
+      checksum: 'c'.repeat(64),
+      formatVersion: 1,
+      state: 'ready',
+      txCount: 1,
+      bumpCount: 0,
+      byteLength: 64,
+      created_at: now,
+      updated_at: now
+    })))
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      maxArtifactBytes: 2 * 1024 * 1024,
+      maxLookupBytes: 100
+    })
+    const load = jest.spyOn(ctx.activeStorage, 'findPreparedBeefs')
+
+    await expect(ctx.activeStorage.lookupPreparedBeefs(ctx.userId, rootTxids)).resolves.toMatchObject({
+      hitTxids: [],
+      missingTxids: rootTxids,
+      byteLength: 0
+    })
+    expect(load).not.toHaveBeenCalled()
+  })
+
   test('keeps canonical createAction compatible when the optional COOK queue is absent', async () => {
     await replaceFundingCandidates(1, 5_000)
     ctx.activeStorage.preparedBeefPolicy.writeEnabled = true

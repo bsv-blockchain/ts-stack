@@ -617,4 +617,72 @@ describe('ProvenTx class method tests', () => {
     expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
   })
 
+  test('14_direct sync rejects an orphaned backup proof before opening the merge transaction', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const stale = makeServerVerifiedProof(transaction, 104, 5)
+    const active = makeServerVerifiedProof(transaction, 105, 6)
+    const storage = makeProofStorage(active.header) as StorageProvider & {
+      transaction: jest.Mock
+      findProvenTxs: jest.Mock
+    }
+    storage.transaction = jest.fn()
+    storage.findProvenTxs = jest.fn(async () => [active.proof])
+
+    await expect(StorageProvider.prototype.processSyncChunk.call(
+      storage,
+      {} as sdk.RequestSyncChunkArgs,
+      { provenTxs: [stale.proof] } as sdk.SyncChunk
+    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.transaction).not.toHaveBeenCalled()
+  })
+
+  test('15_direct sync canonicalizes validated hexadecimal proof identifiers', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 106, 7)
+    proof.txid = proof.txid.toUpperCase()
+    proof.blockHash = proof.blockHash.toUpperCase()
+    proof.merkleRoot = proof.merkleRoot.toUpperCase()
+    const storage = makeProofStorage(header) as StorageProvider & {
+      transaction: jest.Mock
+      findProvenTxs: jest.Mock
+    }
+    const merged = { done: true, maxUpdated_at: undefined, updates: 0, inserts: 1 }
+    storage.transaction = jest.fn(async () => merged)
+    storage.findProvenTxs = jest.fn(async () => [])
+
+    await expect(StorageProvider.prototype.processSyncChunk.call(
+      storage,
+      {} as sdk.RequestSyncChunkArgs,
+      { provenTxs: [proof] } as sdk.SyncChunk
+    )).resolves.toEqual(merged)
+
+    expect(proof).toMatchObject({
+      txid: proof.txid.toLowerCase(),
+      blockHash: proof.blockHash.toLowerCase(),
+      merkleRoot: proof.merkleRoot.toLowerCase()
+    })
+    expect(storage.transaction).toHaveBeenCalledTimes(1)
+  })
+
+  test('16_mergeExisting rejects a differing proof without replacement authorization', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const original = makeServerVerifiedProof(transaction, 107, 8, 51)
+    const unvalidated = makeServerVerifiedProof(transaction, 108, 9, 52)
+    const storage = makeProofStorage(unvalidated.header)
+    const entity = new EntityProvenTx(original.proof)
+
+    await expect(entity.mergeExisting(
+      storage,
+      undefined,
+      unvalidated.proof,
+      createSyncMap()
+    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.updateProvenTx).not.toHaveBeenCalled()
+  })
+
 })

@@ -25,6 +25,7 @@ describe('prepared BEEF policy', () => {
       maxQueueSize: 7,
       maxQueueSizePerUser: 2,
       maxArtifactBytes: 1234,
+      maxLookupBytes: 2345,
       maxArtifactTransactions: 12,
       backfillBatchSize: 3,
       backfillIntervalMs: 25
@@ -35,6 +36,7 @@ describe('prepared BEEF policy', () => {
       maxQueueSize: 7,
       maxQueueSizePerUser: 2,
       maxArtifactBytes: 1234,
+      maxLookupBytes: 2345,
       maxArtifactTransactions: 12,
       backfillBatchSize: 3,
       backfillIntervalMs: 25
@@ -47,6 +49,7 @@ describe('prepared BEEF policy', () => {
     expect(() => validatePreparedBeefPolicy({ maxQueueSize: 2, maxQueueSizePerUser: 3 }))
       .toThrow('maxQueueSizePerUser')
     expect(() => validatePreparedBeefPolicy({ maxArtifactBytes: 1.5 })).toThrow('maxArtifactBytes')
+    expect(() => validatePreparedBeefPolicy({ maxLookupBytes: 0 })).toThrow('maxLookupBytes')
     expect(() => validatePreparedBeefPolicy({ maxArtifactTransactions: 0 }))
       .toThrow('maxArtifactTransactions')
     expect(() => validatePreparedBeefPolicy({ backfillIntervalMs: -1 })).toThrow('backfillIntervalMs')

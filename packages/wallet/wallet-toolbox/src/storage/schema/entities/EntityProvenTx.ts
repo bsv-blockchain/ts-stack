@@ -7,6 +7,7 @@ import { MerklePath } from '@bsv/sdk'
 import { EntityProvenTxReq } from './EntityProvenTxReq'
 import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
+import { assertSyncProofReplacementAuthorized } from '../../methods/validateSyncProof'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
   private sameProof(candidate: TableProvenTx): boolean {
@@ -270,6 +271,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     trx?: TrxToken
   ): Promise<boolean> {
     if (this.sameProof(ei)) return false
+    assertSyncProofReplacementAuthorized(ei)
     const update: Partial<TableProvenTx> = {
       updated_at: ei.updated_at,
       height: ei.height,
