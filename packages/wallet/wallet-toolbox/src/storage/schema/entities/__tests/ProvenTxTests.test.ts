@@ -685,4 +685,76 @@ describe('ProvenTx class method tests', () => {
     expect(storage.updateProvenTx).not.toHaveBeenCalled()
   })
 
+  test('17_sync rejects malformed proof fields before consulting chain services', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 109, 10)
+    const storage = makeProofStorage(header)
+    const malformed: TableProvenTx[] = [
+      { ...proof, txid: 'not-a-txid' },
+      { ...proof, blockHash: 'not-a-block-hash' },
+      { ...proof, merkleRoot: 'not-a-merkle-root' },
+      { ...proof, height: -1 },
+      { ...proof, index: 0.5 },
+      { ...proof, rawTx: [] },
+      { ...proof, merklePath: [] }
+    ]
+
+    for (const candidate of malformed) {
+      await expect(syncProofValidation.validateSyncProof(storage, candidate))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    }
+  })
+
+  test('18_sync rejects inconsistent or inactive proof authority', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 110, 11)
+    const wrongHeightPath = new bsv.MerklePath(
+      proof.height + 1,
+      [[{ offset: 0, hash: proof.txid, txid: true }]]
+    )
+    const invalidCases: Array<{ candidate: TableProvenTx, storage: StorageProvider }> = [
+      { candidate: { ...proof, merklePath: wrongHeightPath.toBinary() }, storage: makeProofStorage(header) },
+      { candidate: { ...proof, index: 1 }, storage: makeProofStorage(header) },
+      { candidate: { ...proof, merkleRoot: 'f'.repeat(64) }, storage: makeProofStorage(header) },
+      {
+        candidate: { ...proof },
+        storage: {
+          getServices: () => ({
+            getChainTracker: async () => ({ isValidRootForHeight: async () => false }),
+            getHeaderForHeight: async () => header
+          })
+        } as unknown as StorageProvider
+      },
+      {
+        candidate: { ...proof },
+        storage: {
+          getServices: () => ({
+            getChainTracker: async () => { throw new Error('chain tracker unavailable') },
+            getHeaderForHeight: async () => header
+          })
+        } as unknown as StorageProvider
+      },
+      { candidate: { ...proof }, storage: makeProofStorage(header.slice(0, 79)) },
+      { candidate: { ...proof, rawTx: [1] }, storage: makeProofStorage(header) }
+    ]
+
+    for (const { candidate, storage } of invalidCases) {
+      await expect(syncProofValidation.validateSyncProof(storage, candidate))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    }
+  })
+
+  test('19_insert-only authorization rejects a concurrent proof replacement', () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof } = makeServerVerifiedProof(transaction, 111, 12)
+
+    syncProofValidation.markSyncProofInsertOnly(proof)
+
+    expect(() => syncProofValidation.assertSyncProofReplacementAuthorized(proof))
+      .toThrow('concurrent proof row appeared')
+  })
+
 })
