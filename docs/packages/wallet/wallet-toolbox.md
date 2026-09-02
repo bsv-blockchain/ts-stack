@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.11.0'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -27,6 +27,12 @@ See [Expiring noSend actions](https://github.com/bsv-blockchain/ts-stack/blob/ma
 
 Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
 matching count on every page, including short final and out-of-range pages.
+
+Knex storage can opt into prepared BEEF (COOK) for normal `createAction`
+funding. Exact verified proof closures are persisted only after foreground
+action work, while reads, writes, and bounded backfill remain separately
+controlled and default off. Every miss or invalid artifact retains the
+canonical BEEF builder.
 
 `WalletAuthenticationManager` supports an additive WAB UMP outpoint pin for
 legacy ambiguity and an OTP-verified phone-number change that always rolls the

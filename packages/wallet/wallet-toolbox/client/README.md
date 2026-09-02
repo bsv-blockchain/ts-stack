@@ -83,6 +83,11 @@ IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across every page, including a short final page or an offset at or past
 the end.
 
+Prepared BEEF (COOK) persistence is a server-side Knex capability. Browser
+IndexedDB keeps the canonical BEEF path, while a compatible remote storage
+server can enable prepared reads and writes without a browser configuration or
+wire-format change.
+
 The browser wallet includes the built-in BRC-177 `p nosend expiry` module.
 Embedded IndexedDB wallets use the default local monitor. When remote storage
 is active, its migrated Wallet Toolbox 2.11-or-newer service and monitor own

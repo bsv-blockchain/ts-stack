@@ -2,6 +2,67 @@ import * as bsv from '@bsv/sdk'
 import { createSyncMap, sdk, sha256Hash } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityProvenTx } from '../EntityProvenTx'
+import { StorageProvider } from '../../../StorageProvider'
+import * as syncProofValidation from '../../../methods/validateSyncProof'
+import { toBinaryBaseBlockHeader } from '../../../../services/Services'
+import { doubleSha256BE } from '../../../../utility/utilityHelpers'
+import { asString } from '../../../../utility/utilityHelpers.noBuffer'
+import type { TableProvenTx } from '../../tables/TableProvenTx'
+
+function makeServerVerifiedProof(
+  transaction: bsv.Transaction,
+  height: number,
+  time: number,
+  provenTxId = 1
+): { proof: TableProvenTx, header: number[] } {
+  const txid = transaction.id('hex')
+  const merklePath = new bsv.MerklePath(height, [[{ offset: 0, hash: txid, txid: true }]])
+  const merkleRoot = merklePath.computeRoot(txid)
+  const header = toBinaryBaseBlockHeader({
+    version: 1,
+    previousHash: '0'.repeat(64),
+    merkleRoot,
+    time,
+    bits: 0,
+    nonce: 0
+  })
+  const now = new Date()
+  return {
+    proof: {
+      provenTxId,
+      created_at: now,
+      updated_at: now,
+      txid,
+      height,
+      index: 0,
+      merklePath: merklePath.toBinary(),
+      rawTx: transaction.toBinary(),
+      blockHash: asString(doubleSha256BE(header)),
+      merkleRoot
+    },
+    header
+  }
+}
+
+function makeProofStorage(header: number[]): StorageProvider & {
+  insertProvenTx: jest.Mock
+  updateProvenTx: jest.Mock
+  invalidatePreparedBeefs: jest.Mock
+} {
+  return {
+    getServices: () => ({
+      getChainTracker: async () => ({ isValidRootForHeight: async () => true }),
+      getHeaderForHeight: async () => header
+    }),
+    insertProvenTx: jest.fn(async () => 77),
+    updateProvenTx: jest.fn(async () => 1),
+    invalidatePreparedBeefs: jest.fn(async () => 0)
+  } as unknown as StorageProvider & {
+    insertProvenTx: jest.Mock
+    updateProvenTx: jest.Mock
+    invalidatePreparedBeefs: jest.Mock
+  }
+}
 
 describe('ProvenTx class method tests', () => {
   jest.setTimeout(99999999)
@@ -473,7 +534,7 @@ describe('ProvenTx class method tests', () => {
     expect(tx1.equals(tx2.toApi())).toBe(false)
   })
 
-  test('10_mergeExisting: always returns false', async () => {
+  test('10_mergeExisting: does not rewrite an identical proof', async () => {
     const ctx = ctxs[0]
 
     // Create a ProvenTx entity
@@ -500,7 +561,200 @@ describe('ProvenTx class method tests', () => {
     // Call the mergeExisting method
     const result = await provenTx.mergeExisting(mockStorage, new Date(), provenTx.toApi(), mockSyncMap, mockTrx)
 
-    // Assert that it always returns false
+    // Identical server proof state needs no validation or database write.
     expect(result).toBe(false)
   })
+
+  test('11_sync rejects a client-authored proof whose raw transaction does not match its txid', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 100, 1)
+    const storage = makeProofStorage(header)
+    const corrupted = { ...proof, rawTx: [...proof.rawTx] }
+    corrupted.rawTx[corrupted.rawTx.length - 1] ^= 1
+
+    await expect(syncProofValidation.validateSyncProof(storage, corrupted))
+      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.insertProvenTx).not.toHaveBeenCalled()
+    expect(storage.invalidatePreparedBeefs).not.toHaveBeenCalled()
+  })
+
+  test('12_sync accepts a server-verified proof and invalidates derived artifacts', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 101, 2)
+    const storage = makeProofStorage(header)
+    const entity = new EntityProvenTx(proof)
+
+    await syncProofValidation.validateSyncProof(storage, proof)
+    await entity.mergeNew(storage, 1, createSyncMap())
+
+    expect(storage.insertProvenTx).toHaveBeenCalledWith(expect.objectContaining({ txid: proof.txid }), undefined)
+    expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
+  })
+
+  test('13_sync replaces an existing global proof only after validating the active chain', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const original = makeServerVerifiedProof(transaction, 102, 3, 44)
+    const replacement = makeServerVerifiedProof(transaction, 103, 4, 999)
+    const storage = makeProofStorage(replacement.header)
+    const entity = new EntityProvenTx(original.proof)
+
+    await syncProofValidation.validateSyncProof(storage, replacement.proof)
+    await expect(entity.mergeExisting(
+      storage,
+      undefined,
+      replacement.proof,
+      createSyncMap()
+    )).resolves.toBe(true)
+
+    expect(storage.updateProvenTx).toHaveBeenCalledWith(44, expect.objectContaining({
+      height: 103,
+      blockHash: replacement.proof.blockHash
+    }), undefined)
+    expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
+  })
+
+  test('14_direct sync rejects an orphaned backup proof before opening the merge transaction', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const stale = makeServerVerifiedProof(transaction, 104, 5)
+    const active = makeServerVerifiedProof(transaction, 105, 6)
+    const storage = makeProofStorage(active.header) as StorageProvider & {
+      transaction: jest.Mock
+      findProvenTxs: jest.Mock
+    }
+    storage.transaction = jest.fn()
+    storage.findProvenTxs = jest.fn(async () => [active.proof])
+
+    await expect(StorageProvider.prototype.processSyncChunk.call(
+      storage,
+      {} as sdk.RequestSyncChunkArgs,
+      { provenTxs: [stale.proof] } as sdk.SyncChunk
+    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.transaction).not.toHaveBeenCalled()
+  })
+
+  test('15_direct sync canonicalizes validated hexadecimal proof identifiers', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 106, 7)
+    proof.txid = proof.txid.toUpperCase()
+    proof.blockHash = proof.blockHash.toUpperCase()
+    proof.merkleRoot = proof.merkleRoot.toUpperCase()
+    const storage = makeProofStorage(header) as StorageProvider & {
+      transaction: jest.Mock
+      findProvenTxs: jest.Mock
+    }
+    const merged = { done: true, maxUpdated_at: undefined, updates: 0, inserts: 1 }
+    storage.transaction = jest.fn(async () => merged)
+    storage.findProvenTxs = jest.fn(async () => [])
+
+    await expect(StorageProvider.prototype.processSyncChunk.call(
+      storage,
+      {} as sdk.RequestSyncChunkArgs,
+      { provenTxs: [proof] } as sdk.SyncChunk
+    )).resolves.toEqual(merged)
+
+    expect(proof).toMatchObject({
+      txid: proof.txid.toLowerCase(),
+      blockHash: proof.blockHash.toLowerCase(),
+      merkleRoot: proof.merkleRoot.toLowerCase()
+    })
+    expect(storage.transaction).toHaveBeenCalledTimes(1)
+  })
+
+  test('16_mergeExisting rejects a differing proof without replacement authorization', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const original = makeServerVerifiedProof(transaction, 107, 8, 51)
+    const unvalidated = makeServerVerifiedProof(transaction, 108, 9, 52)
+    const storage = makeProofStorage(unvalidated.header)
+    const entity = new EntityProvenTx(original.proof)
+
+    await expect(entity.mergeExisting(
+      storage,
+      undefined,
+      unvalidated.proof,
+      createSyncMap()
+    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+
+    expect(storage.updateProvenTx).not.toHaveBeenCalled()
+  })
+
+  test('17_sync rejects malformed proof fields before consulting chain services', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 109, 10)
+    const storage = makeProofStorage(header)
+    const malformed: TableProvenTx[] = [
+      { ...proof, txid: 'not-a-txid' },
+      { ...proof, blockHash: 'not-a-block-hash' },
+      { ...proof, merkleRoot: 'not-a-merkle-root' },
+      { ...proof, height: -1 },
+      { ...proof, index: 0.5 },
+      { ...proof, rawTx: [] },
+      { ...proof, merklePath: [] }
+    ]
+
+    for (const candidate of malformed) {
+      await expect(syncProofValidation.validateSyncProof(storage, candidate))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    }
+  })
+
+  test('18_sync rejects inconsistent or inactive proof authority', async () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof, header } = makeServerVerifiedProof(transaction, 110, 11)
+    const wrongHeightPath = new bsv.MerklePath(
+      proof.height + 1,
+      [[{ offset: 0, hash: proof.txid, txid: true }]]
+    )
+    const invalidCases: Array<{ candidate: TableProvenTx, storage: StorageProvider }> = [
+      { candidate: { ...proof, merklePath: wrongHeightPath.toBinary() }, storage: makeProofStorage(header) },
+      { candidate: { ...proof, index: 1 }, storage: makeProofStorage(header) },
+      { candidate: { ...proof, merkleRoot: 'f'.repeat(64) }, storage: makeProofStorage(header) },
+      {
+        candidate: { ...proof },
+        storage: {
+          getServices: () => ({
+            getChainTracker: async () => ({ isValidRootForHeight: async () => false }),
+            getHeaderForHeight: async () => header
+          })
+        } as unknown as StorageProvider
+      },
+      {
+        candidate: { ...proof },
+        storage: {
+          getServices: () => ({
+            getChainTracker: async () => { throw new Error('chain tracker unavailable') },
+            getHeaderForHeight: async () => header
+          })
+        } as unknown as StorageProvider
+      },
+      { candidate: { ...proof }, storage: makeProofStorage(header.slice(0, 79)) },
+      { candidate: { ...proof, rawTx: [1] }, storage: makeProofStorage(header) }
+    ]
+
+    for (const { candidate, storage } of invalidCases) {
+      await expect(syncProofValidation.validateSyncProof(storage, candidate))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    }
+  })
+
+  test('19_insert-only authorization rejects a concurrent proof replacement', () => {
+    const transaction = new bsv.Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
+    const { proof } = makeServerVerifiedProof(transaction, 111, 12)
+
+    syncProofValidation.markSyncProofInsertOnly(proof)
+
+    expect(() => syncProofValidation.assertSyncProofReplacementAuthorized(proof))
+      .toThrow('concurrent proof row appeared')
+  })
+
 })

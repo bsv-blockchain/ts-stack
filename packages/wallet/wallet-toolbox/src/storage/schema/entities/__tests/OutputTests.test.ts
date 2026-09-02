@@ -181,7 +181,7 @@ describe('Output class method tests', () => {
       type: 'p2pkh',
       providedBy: 'you',
       purpose: 'initial',
-      txid: 'txid201',
+      txid: 'fa'.repeat(32),
       spendingDescription: 'Initial Spending',
       derivationPrefix: 'm/44',
       derivationSuffix: '/0/0',

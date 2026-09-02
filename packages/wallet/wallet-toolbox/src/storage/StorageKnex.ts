@@ -21,6 +21,7 @@ import {
   transactionColumnsWithoutRawTx
 } from './schema/tables'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
+import { TablePreparedBeef } from './schema/tables/TablePreparedBeef.interfaces'
 import { KnexMigrations } from './schema/KnexMigrations'
 import { Knex } from 'knex'
 import { AdminStatsResult, StorageProvider, StorageProviderOptions } from './StorageProvider'
@@ -29,7 +30,7 @@ import { listActions } from './methods/listActionsKnex'
 import { listOutputs } from './methods/listOutputsKnex'
 import { DBType } from './StorageReader'
 import { reviewStatus } from './methods/reviewStatus'
-import { ServicesCallHistory } from '../sdk/WalletServices.interfaces'
+import { ServicesCallHistory, WalletServices } from '../sdk/WalletServices.interfaces'
 import {
   AuthId,
   FindCertificateFieldsArgs,
@@ -62,6 +63,17 @@ import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { managedChangeOutputFields } from './methods/managedChange'
 import type { ManagedChangeInputCandidate } from './methods/availableManagedChange'
+import {
+  PreparedBeefCoordinator,
+  PreparedBeefLookupResult,
+  PreparedBeefOptions,
+  PreparedBeefPolicy,
+  PreparedBeefPreparation,
+  PreparedBeefRoot,
+  PREPARED_BEEF_FORMAT_VERSION,
+  lookupPreparedBeefs,
+  validatePreparedBeefPolicy
+} from './methods/preparedBeef'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
@@ -69,6 +81,8 @@ export interface StorageKnexOptions extends StorageProviderOptions {
    * Knex database interface initialized with valid connection configuration.
    */
   knex: Knex
+  /** Optional prepared-BEEF (COOK) rollout controls. Disabled by default. */
+  preparedBeef?: PreparedBeefOptions
 }
 
 // Keep bulk statements below conservative SQLite/MySQL bind-parameter
@@ -81,8 +95,17 @@ interface KnexTelemetryQuery {
   method?: string
 }
 
+interface PreparedBeefMetadata {
+  preparedBeefMetadataId: number
+  proofEpoch: number
+}
+
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  readonly preparedBeefPolicy: PreparedBeefPolicy
+  private readonly preparedBeefCoordinator: PreparedBeefCoordinator
+  private readonly preparedBeefReadSuspensions = new Set<number>()
+  private nextPreparedBeefReadSuspension = 0
   private readonly querySpans = new Map<string, TelemetrySpan>()
   private readonly onQuery = (query: KnexTelemetryQuery): void => {
     if (!this.telemetry.enabled || query.__knexQueryUid == null) return
@@ -109,6 +132,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+    this.preparedBeefPolicy = validatePreparedBeefPolicy(options.preparedBeef)
+    this.preparedBeefCoordinator = new PreparedBeefCoordinator(this)
     if (this.telemetry.enabled) {
       this.knex.on('query', this.onQuery)
       this.knex.on('query-response', this.onQueryResponse)
@@ -135,6 +160,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   protected override supportsActionBatchPersistence (): boolean { return true }
   protected override supportsNoSendExpiryPersistence (): boolean { return true }
   protected override requiresActionBatchCleanupBeforeCreateAction (): boolean { return false }
+
+  override async makeAvailable (): Promise<TableSettings> {
+    const settings = await super.makeAvailable()
+    this.startPreparedBeefBackfill()
+    return settings
+  }
+
+  override setServices (services: WalletServices): void {
+    super.setServices(services)
+    this.startPreparedBeefBackfill()
+  }
 
   async readSettings (trx?: TrxToken): Promise<TableSettings> {
     return this.validateEntity(verifyOne(await this.toDb(trx)<TableSettings>('settings')))
@@ -198,25 +234,228 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return results
   }
 
-  dbTypeSubstring (source: string, fromOffset: number, forLength?: number): string {
-    if (this.dbtype === 'MySQL') return `substring(${source} from ${fromOffset} for ${String(forLength)})`
-    return `substr(${source}, ${fromOffset}, ${String(forLength)})`
+  async findPreparedBeefs (
+    userId: number,
+    rootTxids: string[],
+    trx?: TrxToken
+  ): Promise<TablePreparedBeef[]> {
+    const unique = [...new Set(rootTxids)]
+    if (unique.length === 0) return []
+    let query = this.toDb(trx)<TablePreparedBeef>('prepared_beefs')
+      .where({ userId, state: 'ready', formatVersion: PREPARED_BEEF_FORMAT_VERSION })
+      .whereIn('rootTxid', unique)
+    // Enforce the per-row byte limit in SQL so a corrupt metadata value cannot
+    // make Knex transfer an oversized blob before JavaScript validates it.
+    query = query.whereRaw('length(??) <= ?', ['beef', this.preparedBeefPolicy.maxArtifactBytes])
+    const rows = await query
+    return this.validateEntities(rows)
   }
 
-  private normaliseKnexRawResult (rs: unknown): Array<{ rawTx: Buffer | null }> {
-    if (this.dbtype === 'MySQL') return (rs as Array<Array<{ rawTx: Buffer | null }>>)[0]
-    return rs as Array<{ rawTx: Buffer | null }>
+  /**
+   * Metadata-only foreground preflight for fragmented actions. SQL computes
+   * the actual blob lengths; BEEF bytes are not transferred to the process.
+   */
+  async readPreparedBeefLookupByteLength (userId: number, rootTxids: string[]): Promise<number> {
+    const unique = [...new Set(rootTxids)]
+    if (unique.length === 0) return 0
+    const row = await this.knex('prepared_beefs')
+      .where({ userId, state: 'ready', formatVersion: PREPARED_BEEF_FORMAT_VERSION })
+      .whereIn('rootTxid', unique)
+      .first({ byteLength: this.knex.raw('coalesce(sum(length(??)), 0)', ['beef']) }) as
+      { byteLength: number } | undefined
+    return Number(row?.byteLength ?? 0)
+  }
+
+  async readPreparedBeefProofEpoch (trx?: TrxToken): Promise<number> {
+    const row = await this.toDb(trx)<PreparedBeefMetadata>('prepared_beef_metadata')
+      .where({ preparedBeefMetadataId: 1 })
+      .first('proofEpoch')
+    if (row == null || !Number.isSafeInteger(Number(row.proofEpoch))) {
+      throw new WERR_INTERNAL('prepared BEEF proof epoch is unavailable')
+    }
+    return Number(row.proofEpoch)
+  }
+
+  /**
+   * Cheap worker preflight. It prevents a large tenant-controlled no-send BEEF
+   * from being loaded and parsed merely to discover that COOK will reject it.
+   */
+  async readPreparedBeefSourceByteLength (rootTxid: string): Promise<number | undefined> {
+    const byteLength = (...columns: string[]): Knex.Raw<number> => this.knex.raw(
+      columns.map(() => 'coalesce(length(??), 0)').join(' + '),
+      columns
+    )
+    const proven = await this.knex('proven_txs')
+      .where({ txid: rootTxid })
+      .first({ byteLength: byteLength('rawTx', 'merklePath') }) as { byteLength: number } | undefined
+    if (proven != null) return Number(proven.byteLength)
+    const request = await this.knex('proven_tx_reqs')
+      .where({ txid: rootTxid })
+      .whereIn('status', ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'])
+      .first({ byteLength: byteLength('rawTx', 'inputBEEF') }) as { byteLength: number } | undefined
+    return request == null ? undefined : Number(request.byteLength)
+  }
+
+  async upsertPreparedBeef (artifact: TablePreparedBeef, expectedProofEpoch: number): Promise<boolean> {
+    return await this.transaction(async trx => {
+      let epochQuery = this.toDb(trx)<PreparedBeefMetadata>('prepared_beef_metadata')
+        .where({ preparedBeefMetadataId: 1 })
+      // Serialize a worker commit with proof invalidation across MySQL server
+      // processes. SQLite serializes the subsequent write transaction.
+      if (this.dbtype === 'MySQL') epochQuery = epochQuery.forUpdate()
+      const metadata = await epochQuery.first('proofEpoch')
+      if (metadata == null || Number(metadata.proofEpoch) !== expectedProofEpoch) return false
+
+      const row = await this.validateEntityForInsert(artifact, trx)
+      if (row.preparedBeefId === 0) delete row.preparedBeefId
+      const update = {
+        beef: row.beef,
+        checksum: row.checksum,
+        formatVersion: row.formatVersion,
+        state: row.state,
+        txCount: row.txCount,
+        bumpCount: row.bumpCount,
+        byteLength: row.byteLength,
+        updated_at: row.updated_at
+      }
+      await this.toDb(trx)<TablePreparedBeef>('prepared_beefs')
+        .insert(row)
+        .onConflict(['userId', 'rootTxid'])
+        .merge(update)
+      return true
+    })
+  }
+
+  async findPreparedBeefBackfillRoots (
+    limit: number,
+    formatVersion: number
+  ): Promise<PreparedBeefRoot[]> {
+    const rows = await this.knex('outputs as o')
+      .join('transactions as t', function () {
+        this.on('t.transactionId', '=', 'o.transactionId').andOn('t.userId', '=', 'o.userId')
+      })
+      .leftJoin('prepared_beefs as pb', function () {
+        this.on('pb.userId', '=', 'o.userId')
+          .andOn('pb.rootTxid', '=', 'o.txid')
+          .andOnVal('pb.formatVersion', '=', formatVersion)
+      })
+      .where('o.spendable', true)
+      .whereNull('o.spentBy')
+      .where('o.change', true)
+      .where('o.providedBy', 'storage')
+      .where('o.purpose', 'change')
+      .where('o.type', 'P2PKH')
+      .whereNotNull('o.derivationPrefix')
+      .whereNotNull('o.derivationSuffix')
+      .whereNotNull('o.txid')
+      // Backfill only settled roots. Pending roots receive one organic
+      // processAction attempt and can be retried after a canonical read; a
+      // perpetual backfill loop must not poll an unconfirmed ancestry chain.
+      .where('t.status', 'completed')
+      .whereNotNull('t.provenTxId')
+      .whereNull('pb.preparedBeefId')
+      .select('o.userId', 'o.txid as rootTxid')
+      .groupBy('o.userId', 'o.txid')
+      .orderByRaw('MIN(o.outputId)')
+      .limit(limit) as PreparedBeefRoot[]
+    return rows
+  }
+
+  async invalidatePreparedBeefs (trx?: TrxToken): Promise<number> {
+    if (trx == null) {
+      return await this.transaction(async transaction => await this.invalidatePreparedBeefs(transaction))
+    }
+    const metadataUpdates = await this.toDb(trx)('prepared_beef_metadata')
+      .where({ preparedBeefMetadataId: 1 })
+      .increment('proofEpoch', 1)
+    if (metadataUpdates !== 1) throw new WERR_INTERNAL('prepared BEEF proof epoch update failed')
+    return await this.toDb(trx)<TablePreparedBeef>('prepared_beefs')
+      .where({ state: 'ready' })
+      .update(this.validatePartialForUpdate<TablePreparedBeef>({
+        state: 'stale',
+        // A later backfill pass must not mistake an invalidated current-format
+        // row for a completed artifact.
+        formatVersion: 0
+      }))
+  }
+
+  async lookupPreparedBeefs (
+    userId: number,
+    rootTxids: string[],
+    parent?: TelemetrySpan
+  ): Promise<PreparedBeefLookupResult> {
+    return await lookupPreparedBeefs(this, userId, rootTxids, parent)
+  }
+
+  preparedBeefReadsEnabled (): boolean {
+    return this.preparedBeefPolicy.readEnabled && this.preparedBeefReadSuspensions.size === 0
+  }
+
+  /**
+   * Synchronously close the local prepared-read gate before asynchronous reorg
+   * invalidation waits for manager/database locks. The returned release is
+   * idempotent; callers release it only after invalidation commits.
+   */
+  suspendPreparedBeefReads (): () => void {
+    const suspension = ++this.nextPreparedBeefReadSuspension
+    this.preparedBeefReadSuspensions.add(suspension)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      // This committed invalidation covers every reorg observed before it,
+      // including an earlier failed attempt. Do not clear a newer suspension
+      // whose database invalidation may still be pending.
+      for (const pending of this.preparedBeefReadSuspensions) {
+        if (pending <= suspension) this.preparedBeefReadSuspensions.delete(pending)
+      }
+    }
+  }
+
+  preparedBeefWritesEnabled (): boolean {
+    return this.preparedBeefPolicy.writeEnabled
+  }
+
+  /** Queue best-effort preparation after foreground action work has completed. */
+  enqueuePreparedBeef (preparation: PreparedBeefPreparation): boolean {
+    return this.preparedBeefCoordinator.enqueue(preparation)
+  }
+
+  /** Start the optional, rate-limited existing-wallet backfill. */
+  startPreparedBeefBackfill (): void {
+    if (!this.isAvailable() || this._services == null) return
+    this.preparedBeefCoordinator.startBackfill()
+  }
+
+  /** Test/operator hook for waiting until currently queued work is complete. */
+  async waitForPreparedBeefTasks (): Promise<void> {
+    await this.preparedBeefCoordinator.waitForIdle()
+  }
+
+  /** Stop accepting background work and settle an active preparation before shutdown. */
+  async stopPreparedBeefTasks (): Promise<void> {
+    await this.preparedBeefCoordinator.stop()
+  }
+
+  private rawTxSliceExpression (offset: number, length: number): Knex.Raw<Buffer> {
+    const sql = this.dbtype === 'MySQL'
+      ? 'substring(?? from ? for ?)'
+      : 'substr(??, ?, ?)'
+    return this.knex.raw(sql, ['rawTx', offset + 1, length])
   }
 
   private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
-    const sub = this.dbTypeSubstring('rawTx', offset + 1, length)
-    let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from proven_txs where txid = '${txid}'`)
-    const proven = verifyOneOrNone(this.normaliseKnexRawResult(rs))
+    const k = this.toDb(trx)
+    const slice = this.rawTxSliceExpression(offset, length)
+    const proven = verifyOneOrNone(await k('proven_txs')
+      .select({ rawTx: slice })
+      .where({ txid })) as { rawTx: Buffer | null } | undefined
     if (proven?.rawTx != null) return Array.from(proven.rawTx)
-    rs = await this.toDb(trx).raw(
-      `select ${sub} as rawTx from proven_tx_reqs where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
-    )
-    const req = verifyOneOrNone(this.normaliseKnexRawResult(rs))
+    const req = verifyOneOrNone(await k('proven_tx_reqs')
+      .select({ rawTx: slice })
+      .where({ txid })
+      .whereIn('status', ['unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail'])) as
+      { rawTx: Buffer | null } | undefined
     return req?.rawTx != null ? Array.from(req.rawTx) : undefined
   }
 
@@ -227,8 +466,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken
   ): Promise<number[] | undefined> {
     if (txid == null || txid === '') return undefined
+    const hasOffset = offset !== undefined
+    const hasLength = length !== undefined
+    if (hasOffset !== hasLength) {
+      throw new WERR_INVALID_PARAMETER('offset and length', 'both defined or both undefined')
+    }
+    if (hasOffset && (
+      !/^[0-9a-f]{64}$/i.test(txid) ||
+      !Number.isSafeInteger(offset) ||
+      !Number.isSafeInteger(length) ||
+      (offset as number) < 0 ||
+      (length as number) < 0 ||
+      !Number.isSafeInteger((offset as number) + (length as number))
+    )) {
+      throw new WERR_INVALID_PARAMETER(
+        'txid, offset and length',
+        'a hexadecimal transaction id and non-negative safe slice integers with a safe sum'
+      )
+    }
     if (!this.isAvailable()) await this.makeAvailable()
-    if (Number.isInteger(offset) && Number.isInteger(length)) {
+    if (hasOffset) {
       return await this.getRawTxSlice(txid, offset as number, length as number, trx)
     }
     const r = await this.getProvenOrRawTx(txid, trx)
@@ -1208,6 +1465,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async destroy (): Promise<void> {
+    await this.stopPreparedBeefTasks()
     this.knex.off('query', this.onQuery)
     this.knex.off('query-response', this.onQueryResponse)
     this.knex.off('query-error', this.onQueryError)

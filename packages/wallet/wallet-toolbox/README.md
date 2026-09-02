@@ -253,6 +253,12 @@ the 144-output / 5,000-satoshi defaults, gradual legacy-wallet migration,
 pending-parent policy, exact BEEF comparison, operator tuning, action-batch
 alignment, monitoring, and rollout guidance.
 
+See [Prepared BEEF (COOK)](./docs/prepared-beef.md) for the opt-in Knex cache
+that creates an exact, verified proof closure once and keeps it ready for a
+future `createAction`. Reads, writes, and bounded backfill are separately
+controlled and default off; cache misses and failures retain the canonical
+BEEF builder.
+
 See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
@@ -292,6 +298,13 @@ The retained fragmented-funding benchmark is runnable with:
 pnpm bench:create-action-funding
 pnpm bench:create-action-beef
 ```
+
+The proof-bearing benchmark includes a prepared-BEEF cohort and asserts that a
+prepared hit does not invoke the canonical BEEF builder. A representative
+local SQLite one-input run reported 8.04 ms on the cold canonical path and
+4.39 ms on the prepared path. Local timings are noise-bound; the intended
+production measurement is the authenticated remote/MySQL cohort, where
+repeated proof reconstruction has materially higher cost.
 
 Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
 fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,

@@ -88,6 +88,11 @@ The mobile entry includes `Wallet`, `WalletSigner`, `WalletStorageManager`, the 
 
 See the [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) README for full documentation.
 
+Prepared BEEF (COOK) persistence is a server-side Knex capability. Mobile
+storage keeps the canonical BEEF path, while a compatible remote storage
+server can enable prepared reads and writes without a mobile configuration or
+wire-format change.
+
 ## CORS, CSP, and public services
 
 This client does not impose an origin allowlist. Native mobile requests are not governed by browser CORS, while WebView and hybrid clients can be. A remote Storage service should remain reachable by its intended public apps, WUI, browser, extension, and mobile callers. Operators can keep public access enabled by default or configure an explicit allowlist when their deployment requires one; deployments should not assume a single calling domain.

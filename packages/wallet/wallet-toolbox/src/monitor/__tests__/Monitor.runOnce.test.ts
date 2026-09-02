@@ -114,6 +114,34 @@ describe('Monitor.runOnce compatibility', () => {
     expect(task.execute).not.toHaveBeenCalled()
   })
 
+  it('starts prepared-proof invalidation immediately when a reorg is received', async () => {
+    let releaseInvalidation!: () => void
+    const pending = new Promise<void>(resolve => { releaseInvalidation = resolve })
+    const invalidatePreparedBeefsForReorg = jest.fn(() => pending)
+    const monitor = new Monitor({
+      chain: 'main',
+      services: { chain: 'main' },
+      storage: { invalidatePreparedBeefsForReorg },
+      chaintracks: {},
+      msecsWaitPerMerkleProofServiceReq: 0,
+      taskRunWaitMsecs: 0,
+      abandonedMsecs: 0,
+      unprovenAttemptsLimitTest: 0,
+      unprovenAttemptsLimitMain: 0,
+      maxRebroadcastAttempts: 0
+    } as any)
+    const oldTip = { height: 10, hash: 'a'.repeat(64) } as any
+    const newTip = { height: 10, hash: 'b'.repeat(64) } as any
+    const deactivated = [{ height: 10, hash: 'a'.repeat(64) }] as any
+
+    monitor.processReorg(1, oldTip, newTip, deactivated)
+
+    expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(1)
+    expect(monitor.deactivatedHeaders).toHaveLength(1)
+    releaseInvalidation()
+    await monitor.reorgInvalidationPromise
+  })
+
   it('isolates setup and trigger errors while continuing other tasks', async () => {
     const { monitor, events } = createMonitor()
     const setupFailure = new ControlledTask(

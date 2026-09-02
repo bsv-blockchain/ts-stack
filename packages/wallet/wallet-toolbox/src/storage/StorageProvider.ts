@@ -86,6 +86,12 @@ import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from '
 import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
 import {
+  canonicalizeSyncProofIdentifiers,
+  markSyncProofInsertOnly,
+  sameSyncProof,
+  validateSyncProof
+} from './methods/validateSyncProof'
+import {
   AbortActionBatchResult,
   ActionBatchManifest,
   BeginActionBatchArgs,
@@ -1311,6 +1317,25 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+    // Canonicalize before text-key lookup in every sync mode. Direct
+    // backup/conflict sync retains its established trust for new proof rows,
+    // but may replace an existing global proof only after active-chain
+    // validation. RPC validates every proof before reaching this method.
+    const incomingProofs = chunk.provenTxs ?? []
+    for (const proof of incomingProofs) canonicalizeSyncProofIdentifiers(proof)
+    if (incomingProofs.length > 0) {
+      const existingProofs = await this.findProvenTxs({
+        partial: {},
+        txids: [...new Set(incomingProofs.map(proof => proof.txid))]
+      })
+      const existingByTxid = new Map(existingProofs.map(proof => [proof.txid.toLowerCase(), proof]))
+      for (const proof of incomingProofs) {
+        const existing = existingByTxid.get(proof.txid)
+        if (existing == null) markSyncProofInsertOnly(proof)
+        else if (!sameSyncProof(existing, proof)) await validateSyncProof(this, proof)
+      }
+    }
+
     // A sync page may contain hundreds of related entities. Keep their lookups,
     // inserts, ID remapping, and sync-state checkpoint in one transaction. This
     // avoids a transaction startup/commit for every record (especially costly

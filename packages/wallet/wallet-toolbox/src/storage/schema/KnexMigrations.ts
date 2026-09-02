@@ -16,6 +16,7 @@ export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor cr
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
 export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed change liquidity defaults'
+export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifacts'
 export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 interface Migration {
@@ -221,6 +222,39 @@ export class KnexMigrations implements MigrationSource<string> {
             'noSendExpiryReclaimSatoshis'
           )
         })
+      }
+    }
+
+    migrations[PREPARED_BEEF_MIGRATION] = {
+      async up(knex) {
+        const dbtype = await determineDBType(knex)
+        await knex.schema.createTable('prepared_beef_metadata', table => {
+          table.integer('preparedBeefMetadataId').unsigned().primary()
+          table.integer('proofEpoch').unsigned().notNullable()
+        })
+        await knex('prepared_beef_metadata').insert({ preparedBeefMetadataId: 1, proofEpoch: 0 })
+        await knex.schema.createTable('prepared_beefs', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('preparedBeefId').notNullable()
+          table.integer('userId').unsigned().references('userId').inTable('users').notNullable()
+          table.string('rootTxid', 64).notNullable()
+          table.binary('beef').notNullable()
+          table.string('checksum', 64).notNullable()
+          table.integer('formatVersion').unsigned().notNullable()
+          table.string('state', 16).notNullable()
+          table.integer('txCount').unsigned().notNullable()
+          table.integer('bumpCount').unsigned().notNullable()
+          table.integer('byteLength').unsigned().notNullable()
+          table.unique(['userId', 'rootTxid'])
+          table.index(['state', 'formatVersion'], 'idx_prepared_beefs_state_version')
+        })
+        if (dbtype === 'MySQL') {
+          await knex.raw('ALTER TABLE prepared_beefs MODIFY COLUMN beef LONGBLOB NOT NULL')
+        }
+      },
+      async down(knex) {
+        await knex.schema.dropTable('prepared_beefs')
+        await knex.schema.dropTable('prepared_beef_metadata')
       }
     }
 
