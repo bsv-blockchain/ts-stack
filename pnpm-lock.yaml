@@ -1709,6 +1709,9 @@ importers:
       '@bsv/payment-express-middleware':
         specifier: workspace:^
         version: link:../../middleware/payment-express-middleware
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -1873,6 +1876,9 @@ importers:
 
   packages/wallet/wallet-toolbox/client:
     dependencies:
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
       hash-wasm:
         specifier: ^4.12.0
         version: 4.12.0
@@ -1916,6 +1922,9 @@ importers:
       '@babel/runtime':
         specifier: 7.29.7
         version: 7.29.7
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
       hash-wasm:
         specifier: ^4.12.0
         version: 4.12.0
@@ -3090,6 +3099,10 @@ packages:
 
   '@noble/hashes@2.2.0':
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
   '@oxc-project/types@0.139.0':
@@ -10370,6 +10383,8 @@ snapshots:
   '@noble/hashes@1.8.0': {}
 
   '@noble/hashes@2.2.0': {}
+
+  '@noble/hashes@2.4.0': {}
 
   '@oxc-project/types@0.139.0': {}
 

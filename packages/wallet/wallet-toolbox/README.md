@@ -65,6 +65,13 @@ requested at or past the end of the result set.
 
 ### UMP account continuity and phone changes
 
+Argon2id password derivation prefers `hash-wasm` for performance. When a
+runtime does not provide WebAssembly, Wallet Toolbox falls back to an
+asynchronously yielding JavaScript implementation with the same Argon2id
+parameters and output. Existing UMP v3 tokens remain interoperable and do not
+need migration; React Native users do not need to enable a device or browser
+setting.
+
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
 backward-compatible WAB authentication response. Normal verified lookup and
 lineage resolution always run first. The WAB pin is considered only when those

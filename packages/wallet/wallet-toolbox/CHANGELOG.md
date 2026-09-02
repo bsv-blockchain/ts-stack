@@ -6,6 +6,20 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Keep Argon2id-backed UMP v3 wallets available in React Native and other
+  runtimes without WebAssembly by falling back to an asynchronously yielding,
+  standards-compatible JavaScript implementation. The same KDF parameters and
+  derived bytes are preserved, so existing tokens require no migration and
+  WebAssembly-capable runtimes retain the faster path. The current-main macOS
+  reference fixtures measure 1,690,925 raw / 398,461 gzip / 311,955 Brotli
+  bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
+  esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and
+  3,542,034 raw / 1,419,515 gzip / 1,117,531 Brotli bytes as optimized Hermes
+  bytecode. The reviewed ceilings advance to 1,693,000 / 400,000 / 314,000
+  Vite bytes, 1,321,000 / 364,000 / 293,000 esbuild bytes, 1,748,000 raw Metro
+  bytes with the compressed ceilings unchanged, and 3,547,000 / 1,423,000 /
+  1,123,000 Hermes bytes.
+
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
   directly or invoke the underlying wallet operation at most once, while
@@ -61,10 +75,10 @@ attention to changes that materially alter behavior or extend functionality.
   no longer discards the total it already computed. Full pages, first pages,
   and empty result sets are unchanged, so no consumer migration is required.
   `balanceAndUtxos` now terminates from page progress instead of relying on the
-   former collapsing total, preventing a zero-progress loop after the final page.
-   The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
-   covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
-   and esbuild ceilings remain unchanged.
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
 
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with

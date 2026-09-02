@@ -32,6 +32,14 @@ The package publishes:
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
 
+### Password derivation without WebAssembly
+
+Argon2id password derivation uses `hash-wasm` when WebAssembly is available.
+React Native engines such as Hermes that do not expose WebAssembly use an
+asynchronously yielding JavaScript fallback with identical parameters and
+output. Existing UMP v3 wallets remain compatible, and users do not need to
+change a device setting or migrate their account.
+
 ## Remote storage example
 
 ```ts
