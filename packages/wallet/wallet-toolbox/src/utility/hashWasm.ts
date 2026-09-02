@@ -14,7 +14,7 @@ interface Argon2idBinaryOptions {
 }
 
 function isWebAssemblyUnavailable(error: unknown): boolean {
-  if (typeof globalThis.WebAssembly === 'undefined') return true
+  if (globalThis.WebAssembly === undefined) return true
   const message = error instanceof Error ? error.message : String(error)
   return /webassembly.*(?:not supported|unavailable|disabled|compile|instantiate|module)/i.test(message)
 }
