@@ -2,14 +2,9 @@ import argon2Api from 'hash-wasm/dist/argon2.umd.min.js'
 import pbkdf2Api from 'hash-wasm/dist/pbkdf2.umd.min.js'
 import sha256Api from 'hash-wasm/dist/sha256.umd.min.js'
 import sha512Api from 'hash-wasm/dist/sha512.umd.min.js'
+import { readyArgon2idBackend, validateArgon2idResult, type Argon2idOptions } from './Argon2idBackend'
 
-interface Argon2idBinaryOptions {
-  password: Uint8Array
-  salt: Uint8Array
-  iterations: number
-  parallelism: number
-  memorySize: number
-  hashLength: number
+interface Argon2idBinaryOptions extends Argon2idOptions {
   outputType: 'binary'
 }
 
@@ -24,6 +19,19 @@ function isWebAssemblyUnavailable(error: unknown): boolean {
  * asynchronously yielding JavaScript implementation in runtimes such as Hermes.
  */
 export async function argon2id(options: Argon2idBinaryOptions): Promise<Uint8Array> {
+  const backend = readyArgon2idBackend()
+  if (backend !== undefined) {
+    const result = await backend.deriveKey({
+      password: options.password,
+      salt: options.salt,
+      iterations: options.iterations,
+      parallelism: options.parallelism,
+      memorySize: options.memorySize,
+      hashLength: options.hashLength
+    })
+    return validateArgon2idResult(result, options.hashLength)
+  }
+
   try {
     return await argon2Api.argon2id(options)
   } catch (error) {

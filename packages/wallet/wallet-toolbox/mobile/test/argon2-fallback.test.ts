@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { argon2id } from '../../src/utility/hashWasm'
+import {
+  registerArgon2idBackend,
+  unregisterArgon2idBackend,
+  type AsyncArgon2idBackend
+} from '../../src/utility/Argon2idBackend'
 
 const webAssemblyDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'WebAssembly')
 const wasmArgon2id = vi.hoisted(() => vi.fn())
@@ -20,8 +25,25 @@ const options = {
 
 const expectedHex = 'fb199af9488d7935c4e60f2ff21c84628a30bde9dde66ff66f0bdd4035383c71'
 const toHex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+let registeredBackend: AsyncArgon2idBackend | undefined
+
+function registerBackend(overrides: Partial<AsyncArgon2idBackend> = {}): AsyncArgon2idBackend {
+  const backend: AsyncArgon2idBackend = {
+    preload: vi.fn(async () => {}),
+    isReady: vi.fn(() => true),
+    deriveKey: vi.fn(async () => new Uint8Array(options.hashLength).fill(7)),
+    ...overrides
+  }
+  registerArgon2idBackend(backend)
+  registeredBackend = backend
+  return backend
+}
 
 afterEach(() => {
+  if (registeredBackend !== undefined) {
+    unregisterArgon2idBackend(registeredBackend)
+    registeredBackend = undefined
+  }
   wasmArgon2id.mockReset()
   if (webAssemblyDescriptor === undefined) {
     Reflect.deleteProperty(globalThis, 'WebAssembly')
@@ -31,6 +53,50 @@ afterEach(() => {
 })
 
 describe('Argon2id derivation', () => {
+  it('uses a proven-ready host backend before WebAssembly', async () => {
+    const expected = new Uint8Array(options.hashLength).fill(9)
+    const backend = registerBackend({ deriveKey: vi.fn(async () => expected) })
+
+    await expect(argon2id(options)).resolves.toBe(expected)
+    expect(backend.deriveKey).toHaveBeenCalledWith({
+      password: options.password,
+      salt: options.salt,
+      iterations: options.iterations,
+      parallelism: options.parallelism,
+      memorySize: options.memorySize,
+      hashLength: options.hashLength
+    })
+    expect(wasmArgon2id).not.toHaveBeenCalled()
+  })
+
+  it('preloads a cold host backend while retaining the portable path', async () => {
+    const backend = registerBackend({ isReady: vi.fn(() => false) })
+    const expected = Uint8Array.of(1, 2, 3)
+    wasmArgon2id.mockResolvedValue(expected)
+
+    await expect(argon2id(options)).resolves.toBe(expected)
+    expect(backend.preload).toHaveBeenCalledTimes(1)
+    expect(backend.deriveKey).not.toHaveBeenCalled()
+  })
+
+  it('does not hide a selected host backend derivation failure', async () => {
+    const error = new Error('Native Argon2id failed')
+    registerBackend({ deriveKey: vi.fn(async () => await Promise.reject(error)) })
+
+    await expect(argon2id(options)).rejects.toBe(error)
+    expect(wasmArgon2id).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { result: Uint8Array.of(1, 2, 3), message: 'returned 3 bytes; expected 32' },
+    { result: [1, 2, 3] as unknown as Uint8Array, message: 'returned a non-byte result' }
+  ])('rejects malformed host backend output: $message', async ({ result, message }) => {
+    registerBackend({ deriveKey: vi.fn(async () => result) })
+
+    await expect(argon2id(options)).rejects.toThrow(message)
+    expect(wasmArgon2id).not.toHaveBeenCalled()
+  })
+
   it('uses the compatible JavaScript fallback when WebAssembly is unavailable', async () => {
     wasmArgon2id.mockRejectedValue(new Error('WebAssembly is not supported in this environment!'))
     Object.defineProperty(globalThis, 'WebAssembly', {
