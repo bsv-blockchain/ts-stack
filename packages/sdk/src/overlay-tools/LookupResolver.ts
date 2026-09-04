@@ -522,7 +522,7 @@ class LookupQuerySession {
   private waiter: (() => void) | null = null
   private answered = false
   private graceTimer: ReturnType<typeof setTimeout> | null = null
-  private softTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly softTimer: ReturnType<typeof setTimeout> | null = null
   private graceFired = false
   private emittedOnce = false
 
