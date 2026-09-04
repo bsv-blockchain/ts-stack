@@ -12,9 +12,10 @@ attention to changes that materially alter behavior or extend functionality.
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
   The additive client path measures 1,671,343 raw Vite bytes locally and
-  1,671,573 bytes on hosted Linux; its reviewed Vite ceilings advance to
-  1,672,000 raw and 307,250 Brotli bytes; gzip and all esbuild ceilings remain
-  unchanged.
+  1,671,573 bytes on hosted Linux; esbuild raw measures 1,304,944 bytes locally
+  and 1,305,165 bytes on hosted Linux. The reviewed Vite ceilings advance to
+  1,672,000 raw and 307,250 Brotli bytes, and the esbuild raw ceiling advances
+  to 1,305,500 bytes; gzip and esbuild compressed ceilings remain unchanged.
 
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
