@@ -158,6 +158,24 @@
       "removeWhen": "Remove when the supported Vite and PostCSS dependency graph naturally resolves nanoid 3.3.18 or newer and the frozen audit remains green."
     },
     {
+      "id": "toml-frontmatter-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override for TOML releases below 4.2.0",
+      "owner": "ts-stack-maintainers",
+      "reason": "remark-mdx-frontmatter 5.2.0 still constrains its TOML parser dependency to vulnerable 3.x even though it imports only the compatible parse API. GHSA-v5mp-jgw5-2x6j is fixed in 4.1.2, and GHSA-82x6-q7mm-w9cf requires 4.2.0. The workspace already requires Node 24, webpack-cli accepts TOML 4, and the docs validation, tests, and complete production build verify the substitution.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "pnpm-lock.yaml#overrides",
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "docs-site/package.json#scripts",
+        "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j",
+        "https://github.com/advisories/GHSA-82x6-q7mm-w9cf"
+      ],
+      "created": "2026-09-04",
+      "reviewBy": "2026-10-04",
+      "removeWhen": "Remove when remark-mdx-frontmatter or its supported successor natively resolves TOML 4.2.0 or newer and docs validation, tests, production build, and the frozen high-severity audit remain green."
+    },
+    {
       "id": "image-size-unpublished-advisory-patch",
       "category": "advisory",
       "target": "image-size 1.2.1 pnpm patch and exact audit exclusions for malformed ICNS, HEIF, and JPEG XL records",

@@ -119,7 +119,7 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries two narrow audited dependency overrides:
+The root workspace carries four narrow audited dependency overrides:
 
 - Jest 30.4.2 still constrains parts of its reporting and coverage graph to
   minimatch releases with older `brace-expansion` ranges. The follow-up
@@ -129,20 +129,31 @@ The root workspace carries two narrow audited dependency overrides:
   `qs@6.15.1` exactly. A parent-scoped substitution selects 6.15.3 until
   upstream accepts 6.15.2 or newer. This replaces a fragile lock-only
   substitution that an unrelated graph refresh could silently undo.
+- Vite's PostCSS graph can select `nanoid` releases below the current patched
+  3.x boundary, so the workspace selects 3.3.18 until that graph resolves it
+  natively.
+- `remark-mdx-frontmatter@5.2.0` still requires vulnerable `toml` 3.x while
+  consuming only its compatible `parse()` API. The workspace selects TOML
+  4.2.0, which fixes both current high-severity parser advisories, until the
+  docs plugin adopts the patched line directly.
 
-Both substitutions are verified through the affected Jest/mutation paths and
-have owners, evidence, review dates, and upstream removal conditions in the
-repository-health exception registry. Standalone service locks also need
+These substitutions are verified through their affected Jest, mutation,
+documentation, and build paths and have owners, evidence, review dates, and
+upstream removal conditions in the repository-health exception registry.
+Standalone service locks also need
 temporary `gaxios` substitutions, and Message Box plus UHRP cloud storage need
 `uuid`; the Wave 37 review removed every substitution from a service where the
 frozen graph stayed clean without it. The machine-readable registry now maps
 every remaining selector and exact value to its exception. CI rejects a new,
 changed, stale, expired, unowned, or upstream-unlinked override.
 
-Wave 40 rechecked all 20 selectors against the frozen graphs, current upstream
-manifests, and the advisory audit. The supported graphs still select exact
-`gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their registered
-substitutions. New upstream majors can remove some legacy paths only through a
+Wave 40 rechecked the prior 20 selectors against the frozen graphs, current
+upstream manifests, and the advisory audit. The 2026-09-04 security review
+retained those results within the monthly window and added the twenty-first
+selector after reproducing the new TOML advisories. The supported graphs still
+select exact `gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their
+registered substitutions, while the current frontmatter plugin still requests
+TOML 3.x. New upstream majors can remove some legacy paths only through a
 coordinated Stryker or Google Cloud migration, so no selector can be removed
 safely in isolation. The method, result, count, and next rehearsal are enforced
 in `governance/dependency-release-policy.json`.
@@ -150,7 +161,7 @@ in `governance/dependency-release-policy.json`.
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with
 the same owner/review/removal fields, and must regenerate identical checked-in
-output. These three exceptions are not permanent policy: their review dates
+output. These exceptions are not permanent policy: their review dates
 are removal deadlines unless fresh evidence justifies an explicit extension.
 
 The former AsyncAPI generator override was eliminated by replacing that

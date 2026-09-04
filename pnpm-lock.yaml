@@ -7,6 +7,7 @@ settings:
 overrides:
   brace-expansion@<5.0.9: 5.0.9
   nanoid@<3.3.18: 3.3.18
+  toml@<4.2.0: 4.2.0
   typed-rest-client@2.3.1>qs: 6.15.3
 
 patchedDependencies:
@@ -78,7 +79,7 @@ importers:
         version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   conformance/runner:
     dependencies:
@@ -484,7 +485,7 @@ importers:
         version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
         specifier: ^7.2.2
-        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
+        version: 7.2.2(json5@2.2.3)(toml@4.2.0)(webpack@5.109.2)
 
   packages/helpers/fund-wallet:
     dependencies:
@@ -521,7 +522,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/helpers/simple:
     dependencies:
@@ -689,7 +690,7 @@ importers:
         version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
         specifier: ^7.2.2
-        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
+        version: 7.2.2(json5@2.2.3)(toml@4.2.0)(webpack@5.109.2)
 
   packages/messaging/message-box-client:
     dependencies:
@@ -735,7 +736,7 @@ importers:
         version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
         specifier: ^7.2.2
-        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
+        version: 7.2.2(json5@2.2.3)(toml@4.2.0)(webpack@5.109.2)
 
   packages/messaging/ts-paymail:
     dependencies:
@@ -851,7 +852,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/middleware/auth:
     devDependencies:
@@ -1915,7 +1916,7 @@ importers:
         version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/wallet/wallet-toolbox/mobile:
     dependencies:
@@ -1970,7 +1971,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
 packages:
 
@@ -8103,8 +8104,9 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
-  toml@3.0.0:
-    resolution: {integrity: sha512-y/mWCZinnvxjTKYhJ+pYxwD0mRLVvOtdS2Awbgxln6iEnt4rk0yBxeSBHkGJcPucRiG0e55mwWp+g/05rsrd6w==}
+  toml@4.2.0:
+    resolution: {integrity: sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==}
+    engines: {node: '>=20'}
 
   tough-cookie@5.1.2:
     resolution: {integrity: sha512-FVDYdxtnj0G6Qm/DhNPSb8Ju59ULcup3tuJxkFb5K8Bv2pUXILbf0xZWU8PX8Ov19OXljbUyveOFwRMwkXzO+A==}
@@ -8489,6 +8491,7 @@ packages:
       '@vitest/ui': 4.1.10
       happy-dom: '*'
       jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -8550,7 +8553,7 @@ packages:
     peerDependencies:
       js-yaml: ^4.0.0 || ^5.0.0
       json5: ^2.2.3
-      toml: ^3.0.0 || ^4.0.0
+      toml: 4.2.0
       webpack: ^5.101.0
       webpack-bundle-analyzer: ^4.0.0 || ^5.0.0
       webpack-dev-server: ^5.0.0 || ^6.0.0
@@ -10938,7 +10941,7 @@ snapshots:
       '@stryker-mutator/util': 9.6.1
       semver: 7.8.5
       tslib: 2.8.1
-      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -11452,7 +11455,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -15355,7 +15358,7 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
       estree-util-value-to-estree: 3.5.0
-      toml: 3.0.0
+      toml: 4.2.0
       unified: 11.0.5
       unist-util-mdx-define: 1.1.2
       yaml: 2.9.0
@@ -15966,7 +15969,7 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
-  toml@3.0.0: {}
+  toml@4.2.0: {}
 
   tough-cookie@5.1.2:
     dependencies:
@@ -16325,7 +16328,7 @@ snapshots:
       tsx: 4.23.1
       yaml: 2.9.0
 
-  vitest@4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0):
+  vitest@4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -16352,18 +16355,7 @@ snapshots:
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
       jsdom: 26.1.0
     transitivePeerDependencies:
-      - '@vitejs/devtools'
-      - esbuild
-      - jiti
-      - less
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   vlq@1.0.1: {}
 
@@ -16392,7 +16384,7 @@ snapshots:
 
   webidl-conversions@7.0.0: {}
 
-  webpack-cli@7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2):
+  webpack-cli@7.2.2(json5@2.2.3)(toml@4.2.0)(webpack@5.109.2):
     dependencies:
       '@discoveryjs/json-ext': 1.1.0
       commander: 14.0.3
@@ -16405,7 +16397,7 @@ snapshots:
       webpack-merge: 6.0.1
     optionalDependencies:
       json5: 2.2.3
-      toml: 3.0.0
+      toml: 4.2.0
 
   webpack-merge@6.0.1:
     dependencies:
@@ -16474,7 +16466,7 @@ snapshots:
       watchpack: 2.5.2
       webpack-sources: 3.5.1
     optionalDependencies:
-      webpack-cli: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
+      webpack-cli: 7.2.2(json5@2.2.3)(toml@4.2.0)(webpack@5.109.2)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
