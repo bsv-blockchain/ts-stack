@@ -44,6 +44,7 @@ pnpm --filter @bsv/sdk test:coverage --runInBand
 pnpm --filter @bsv/sdk test:property
 pnpm --filter @bsv/sdk pack:check
 pnpm --filter @bsv/sdk test:browser
+pnpm --filter @bsv/wallet-toolbox-client test:browser
 pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 pnpm --filter docs-site test
 pnpm --filter docs-site build
@@ -56,12 +57,11 @@ uses a disposable browser profile, and removes its package extraction afterwards
 No browser account, production endpoint or existing storage is used. Ten
 consecutive runs of the transactional fixture passed (200 reloads total).
 
-The local SDK coverage suite passed 165 suites / 6,004 tests and
-one snapshot, with 94.37% statement, 86.51% branch, 95.29% function and 95.29% line
-coverage. Packed ESM/CJS exports, strict declarations, source maps, publint,
-Vite, esbuild and UMD contracts passed. UMD is 554,989 bytes within the unchanged 555,000-byte budget.
-The PR records the final exact-head results; historical measurements are not a
-substitute for its current hosted merge gate.
+The local SDK coverage suite passed 165 suites / 6,004 tests and one snapshot.
+Packed ESM/CJS exports, strict declarations, source maps, publint, Vite, esbuild
+and UMD contracts passed. The PR records exact-head coverage and platform sizes;
+all original coverage and bundle budgets remain in force. Historical measurements
+are not a substitute for the current hosted merge gate.
 
 The existing property profile passed three suites / six tests. Conformance
 parsed 76 files / 6,690 vectors without errors; no new portable protocol is
@@ -102,11 +102,9 @@ including the wallet browser consumer and packed Chromium recovery fixture.
 No force-install or peer-validation bypass is used. Source versions and
 ranges are listed in the generated package API/migration table.
 
-Workspace tests also exercise the SDK 3 graph. Three wallet suites initially
-encountered missing middleware output while package checks rebuilt those files;
-after builds completed, all three suites / 46 tests passed. The other 219 wallet
-suites / 2,103 tests passed in the first run. CI performs builds before tests,
-so this local scheduling mistake does not require a source workaround.
+Workspace coverage, package consumer checks and browser/mobile profiles exercise
+the SDK 3 dependency graph. Builds must finish before checks that consume their
+output; overlapping package rebuilds can temporarily remove required artifacts.
 
 ## Tooling dependency remediation
 
@@ -131,9 +129,9 @@ cover the storage boundary. Refresh is capped at 50 ms and remains advisory.
 The Hermes profile exposed bytecode growth from redundant async wrappers in the
 shared resolver. Promise-returning adapters and synchronous structural validators
 avoid unnecessary transpiled state machines. Mobile, browser, cancellation and
-deadline checks validate the same resolver with the original bundle budgets. The
-packed mobile fixture measures 1,718,563 bytes for Metro and 3,493,631 bytes for
-Hermes, below the unchanged 1,720,000 and 3,495,000 byte limits.
+deadline checks validate the same resolver with the original bundle budgets.
+Metro and Hermes raw, gzip and Brotli measurements must each pass their existing
+limits; the PR records the final platform results.
 
 Node 24.20 accepts some invalid punycode labels that earlier URL parsers rejected.
 Discovery advertisement validation explicitly requires those labels to decode,
@@ -145,3 +143,13 @@ The governed advertisement mutation profile passes at 86.83% (145 detected of
 The IndexedDB transaction tests use the existing workspace `fake-indexeddb`
 6.2.5 version as an SDK development dependency. It is excluded from runtime
 bundles; real Chromium independently verifies browser persistence.
+
+## CI runtime and bundle parity
+
+Platform checks use Node 24.20, matching CI. Its zlib build produces different
+compressed sizes from Node 24.16, so the earlier local compression measurements
+are not the release gate. The final PR records the Node 24.20 browser and mobile
+results under the original budgets. The resolver drains progress through one
+async iterator, groups settlement counters once per query and exposes an explicit
+atomic storage update instead of a mutable read cache and lock callback. Tests
+retain the same progress, cancellation, recovery and concurrent-write assertions.

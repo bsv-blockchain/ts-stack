@@ -10,6 +10,7 @@ import {
   boundedMs,
   normalizeHosts,
   requestReliableHost,
+  isLookupRejection,
   LookupValidationError,
   type ReliableLookupOptions,
   type ReliableLookupResult
@@ -399,14 +400,9 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       // 408/429 are availability/backpressure signals. Other 4xx responses
       // reject this request but do not prove that the host is unavailable, so
       // they remain distinguishable and neutral for availability reputation.
-      const kind: LookupHTTPErrorKind =
-        response.status < 400 ||
-        response.status === 408 ||
-        response.status === 425 ||
-        response.status === 429 ||
-        response.status >= 500
-          ? 'availability'
-          : 'semantic'
+      const kind: LookupHTTPErrorKind = isLookupRejection(response.status)
+        ? 'semantic'
+        : 'availability'
       throw new LookupHTTPError(response.status, kind, response.statusText)
     }
     response = await boundLookupResponse(response, signal)
@@ -500,19 +496,21 @@ interface LookupQuerySessionOptions {
 
 class LookupQuerySession {
   readonly startedAt = Date.now()
-  readonly hostCount: number
-  readonly correlationId?: string
-  completedHosts = 0
-  successfulHosts = 0
-  emptyHosts = 0
-  failedHosts = 0
-  rejectedHosts = 0
-  freeformHosts = 0
+  readonly summary: Pick<
+    LookupAnswerProgress,
+    | 'hostCount'
+    | 'completedHosts'
+    | 'successfulHosts'
+    | 'emptyHosts'
+    | 'failedHosts'
+    | 'rejectedHosts'
+    | 'freeformHosts'
+    | 'discoveryComplete'
+    | 'correlationId'
+  >
   emittedFinal = false
 
-  private readonly discoveryComplete: boolean
   private readonly graceMs: number
-  private readonly softTimeoutMs?: number
   private readonly waitForAllHosts: boolean
   private readonly resolveTxId: LookupQuerySessionOptions['resolveTxId']
   private readonly outputsMap = new Map<
@@ -529,13 +527,23 @@ class LookupQuerySession {
   private emittedOnce = false
 
   constructor(options: LookupQuerySessionOptions) {
-    this.hostCount = options.hostCount
-    this.discoveryComplete = options.discoveryComplete
+    this.summary = {
+      hostCount: options.hostCount,
+      completedHosts: 0,
+      successfulHosts: 0,
+      emptyHosts: 0,
+      failedHosts: 0,
+      rejectedHosts: 0,
+      freeformHosts: 0,
+      discoveryComplete: options.discoveryComplete,
+      ...(options.correlationId !== undefined ? { correlationId: options.correlationId } : {})
+    }
     this.graceMs = options.graceMs
-    this.softTimeoutMs = options.softTimeoutMs
     this.waitForAllHosts = options.waitForAllHosts
-    this.correlationId = options.correlationId
     this.resolveTxId = options.resolveTxId
+    if (typeof options.softTimeoutMs === 'number' && options.softTimeoutMs >= 0) {
+      this.softTimer = setTimeout(() => this.push({ kind: 'soft' }), options.softTimeoutMs)
+    }
   }
 
   private push(event: LookupQueryEvent): void {
@@ -546,29 +554,19 @@ class LookupQuerySession {
     waiter()
   }
 
-  recordOutputAnswer(answer: LookupAnswer): void {
-    this.successfulHosts++
-    if (answer.outputs.length === 0) {
-      this.emptyHosts++
-      return
+  record(
+    kind: 'successfulHosts' | 'freeformHosts' | 'rejectedHosts' | 'failedHosts',
+    answer?: LookupAnswer
+  ): void {
+    this.summary[kind]++
+    if (answer !== undefined) {
+      if (answer.outputs.length === 0) this.summary.emptyHosts++
+      else this.push({ kind: 'answer', answer })
     }
-    this.push({ kind: 'answer', answer })
-  }
-
-  recordFreeformAnswer(): void {
-    this.freeformHosts++
-  }
-
-  recordRejection(): void {
-    this.rejectedHosts++
-  }
-
-  recordAvailabilityFailure(): void {
-    this.failedHosts++
   }
 
   recordDone(): void {
-    this.completedHosts++
+    this.summary.completedHosts++
     this.push({ kind: 'done' })
   }
 
@@ -588,11 +586,11 @@ class LookupQuerySession {
   }
 
   private completionStatus(): LookupAnswerProgress['status'] {
-    if (this.successfulHosts === 0) return 'unavailable'
+    if (this.summary.successfulHosts === 0) return 'unavailable'
     if (
-      this.discoveryComplete &&
-      this.completedHosts === this.hostCount &&
-      this.successfulHosts === this.hostCount
+      this.summary.discoveryComplete &&
+      this.summary.completedHosts === this.summary.hostCount &&
+      this.summary.successfulHosts === this.summary.hostCount
     )
       return 'complete'
     return 'incomplete'
@@ -604,16 +602,8 @@ class LookupQuerySession {
       outputs: Array.from(this.outputsMap.values()),
       txIds: this.txIds.slice(),
       isFinal,
-      hostCount: this.hostCount,
-      completedHosts: this.completedHosts,
-      successfulHosts: this.successfulHosts,
-      emptyHosts: this.emptyHosts,
-      failedHosts: this.failedHosts,
-      rejectedHosts: this.rejectedHosts,
-      freeformHosts: this.freeformHosts,
-      discoveryComplete: this.discoveryComplete,
-      status: this.completionStatus(),
-      ...(this.correlationId !== undefined ? { correlationId: this.correlationId } : {})
+      ...this.summary,
+      status: this.completionStatus()
     }
   }
 
@@ -637,59 +627,33 @@ class LookupQuerySession {
     return null
   }
 
-  private handleGrace(): LookupAnswerProgress | null {
-    if (this.emittedOnce || this.waitForAllHosts) return null
+  private processEvent(event: LookupQueryEvent): LookupAnswerProgress | null {
+    if (event.kind === 'answer') return this.handleAnswer(event.answer)
+    if (event.kind === 'done' || this.emittedOnce) return null
+    if (event.kind === 'grace' && this.waitForAllHosts) return null
+    this.graceFired = true
     this.emittedOnce = true
     return this.snapshot(false)
   }
 
-  private handleSoft(): LookupAnswerProgress | null {
-    let snapshot: LookupAnswerProgress | null = null
-    if (!this.emittedOnce) {
-      this.graceFired = true
-      this.emittedOnce = true
-      snapshot = this.snapshot(false)
+  /** Drain queued events without creating a second async iterator. */
+  nextProgress(): Promise<LookupAnswerProgress> {
+    while (this.queue.length > 0) {
+      const progress = this.processEvent(this.queue.shift() as LookupQueryEvent)
+      if (progress !== null) return Promise.resolve(progress)
     }
-    return snapshot
-  }
-
-  private nextEvent(): Promise<LookupQueryEvent> {
-    if (this.queue.length > 0) return Promise.resolve(this.queue.shift() as LookupQueryEvent)
+    if (this.summary.completedHosts === this.summary.hostCount) {
+      this.emittedFinal = true
+      return Promise.resolve(this.snapshot(true))
+    }
     return new Promise<void>(resolve => {
       this.waiter = resolve
-    }).then(() => this.queue.shift() as LookupQueryEvent)
+    }).then(() => this.nextProgress())
   }
 
-  private processEvent(event: LookupQueryEvent): LookupAnswerProgress | null {
-    switch (event.kind) {
-      case 'answer':
-        return this.handleAnswer(event.answer)
-      case 'grace':
-        return this.handleGrace()
-      case 'soft':
-        return this.handleSoft()
-      case 'done':
-        return null
-    }
-  }
-
-  async *progress(): AsyncIterable<LookupAnswerProgress> {
-    if (typeof this.softTimeoutMs === 'number' && this.softTimeoutMs >= 0) {
-      this.softTimer = setTimeout(() => this.push({ kind: 'soft' }), this.softTimeoutMs)
-    }
-    try {
-      while (this.completedHosts < this.hostCount || this.queue.length > 0) {
-        const event = await this.nextEvent()
-        const outcome = this.processEvent(event)
-        if (outcome != null) yield outcome
-      }
-      const finalSnapshot = this.snapshot(true)
-      this.emittedFinal = true
-      yield finalSnapshot
-    } finally {
-      if (this.graceTimer !== null) clearTimeout(this.graceTimer)
-      if (this.softTimer !== null) clearTimeout(this.softTimer)
-    }
+  close(): void {
+    if (this.graceTimer !== null) clearTimeout(this.graceTimer)
+    if (this.softTimer !== null) clearTimeout(this.softTimer)
   }
 }
 
@@ -861,7 +825,7 @@ export default class LookupResolver {
               hostTimeoutMs: MAX_TRACKER_WAIT_TIME,
               validate: answer => {
                 if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
-                const hosts = this.extractHosts(answer, question.service)
+                const hosts = this.extractHostsFromAnswer(answer, question.service)
                 if (hosts.length !== answer.outputs.length) complete = false
                 return hosts
               }
@@ -997,9 +961,9 @@ export default class LookupResolver {
   ): void {
     let outcome: 'empty' | 'success' | 'freeform' = 'freeform'
     if (isOutputListAnswer(answer)) {
-      session.recordOutputAnswer(answer)
+      session.record('successfulHosts', answer)
       outcome = answer.outputs.length === 0 ? 'empty' : 'success'
-    } else session.recordFreeformAnswer()
+    } else session.record('freeformHosts')
     this.captureHost(service, host, outcome, Date.now() - hostStartedAt, correlationId)
   }
 
@@ -1014,8 +978,7 @@ export default class LookupResolver {
       notificationCooldownMs
     } = context
     const semanticRejection = isSemanticLookupRejection(error)
-    if (semanticRejection) session.recordRejection()
-    else session.recordAvailabilityFailure()
+    session.record(semanticRejection ? 'rejectedHosts' : 'failedHosts')
     this.captureHost(
       service,
       host,
@@ -1038,7 +1001,7 @@ export default class LookupResolver {
     signal: AbortSignal,
     remaining: () => number
   ): void {
-    const correlationId = session.correlationId
+    const correlationId = session.summary.correlationId
     const notificationCooldownMs = this.notificationCooldown(options)
     for (const host of hosts) {
       const hostStartedAt = Date.now()
@@ -1053,7 +1016,7 @@ export default class LookupResolver {
         })
         .catch(error => {
           if (signal.aborted) {
-            session.recordAvailabilityFailure()
+            session.record('failedHosts')
             return
           }
           this.recordFailure(
@@ -1150,13 +1113,15 @@ export default class LookupResolver {
     )
 
     try {
-      for await (const progress of session.progress()) {
+      while (!session.emittedFinal) {
+        const progress = await session.nextProgress()
         if (progress.isFinal) {
           this.captureCompletion(question.service, progress, Date.now() - session.startedAt)
         }
         yield progress
       }
     } finally {
+      session.close()
       clearTimeout(timer)
       options?.signal?.removeEventListener('abort', abort)
       controller.abort()
@@ -1169,7 +1134,7 @@ export default class LookupResolver {
           attributes: {
             service: question.service,
             hostCount,
-            completedHosts: session.completedHosts,
+            completedHosts: session.summary.completedHosts,
             durationMs: Date.now() - session.startedAt
           }
         })
@@ -1180,7 +1145,7 @@ export default class LookupResolver {
   /**
    * Extracts competent host domains from a SLAP tracker response.
    */
-  protected extractHosts(answer: LookupAnswer, service: string): string[] {
+  protected extractHostsFromAnswer(answer: LookupAnswer, service: string): string[] {
     const hosts: string[] = []
     if (answer.type !== 'output-list') return hosts
     for (const output of answer.outputs) {

@@ -9,12 +9,9 @@ export interface ReliableReputationEntry {
   reason?: HostFailureReason
 }
 export interface ReliableReputationStorage {
-  get: (key: string) => string | null | undefined
-  set: (key: string, value: string) => void
-  /** Refresh a synchronous read cache from transactional storage, when needed. */
-  load?: (key: string) => Promise<void>
-  /** Must serialize coherent read/modify/write across every writer. */
-  lock: <T>(name: string, action: () => Promise<T>) => Promise<T>
+  get: (key: string) => Promise<string | null | undefined>
+  /** Transform committed state atomically; the transform must be synchronous. */
+  update: (key: string, transform: (current: string | null | undefined) => string) => Promise<void>
 }
 const KEY = 'bsvsdk_overlay_host_reputation_v4'
 const TTL = 86400000
@@ -90,9 +87,11 @@ export class ReliableHostReputation {
     )
   }
 
-  private read(now: number): Record<string, ReliableReputationEntry> {
+  private decode(
+    raw: string | null | undefined,
+    now: number
+  ): Record<string, ReliableReputationEntry> {
     try {
-      const raw = this.storage?.get(KEY)
       if (raw == null || raw.length > 1024 * 1024) return {}
       const envelope = JSON.parse(raw)
       return envelope?.version === 4 ? this.sanitize(envelope.entries, now) : {}
@@ -103,12 +102,15 @@ export class ReliableHostReputation {
 
   /** Advisory refresh; callers bound this independently of host work. */
   refresh(): Promise<void> {
-    return this.storage?.load?.(KEY) ?? Promise.resolve()
+    if (this.storage === undefined) return Promise.resolve()
+    return this.storage.get(KEY).then(raw => {
+      this.entries = this.decode(raw, Date.now())
+    })
   }
 
   rank(network: string, service: string, hosts: string[]): string[] {
     const now = Date.now()
-    this.entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
+    this.entries = this.sanitize(this.entries, now)
     const score = (host: string): number => {
       const e = this.entries[this.scope(network, service, host)]
       if (e === undefined) return 0
@@ -131,9 +133,10 @@ export class ReliableHostReputation {
     host: string,
     reason?: HostFailureReason
   ): Promise<void> {
-    const update = (): Promise<void> => {
+    const update = (raw?: string | null): void => {
       const now = Date.now()
-      const entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
+      const entries =
+        this.storage === undefined ? this.sanitize(this.entries, now) : this.decode(raw, now)
       const key = this.scope(network, service, host)
       const previous = entries[key]
       const weights = { timeout: 1, transport: 2, rejected: 2, malformed: 8, invalid: 16 }
@@ -147,12 +150,18 @@ export class ReliableHostReputation {
         reason
       }
       this.entries = this.sanitize(entries, now)
-      this.storage?.set(KEY, JSON.stringify({ version: 4, entries: this.entries }))
-      return Promise.resolve()
     }
     // Catch synchronous adapter failures and asynchronous transaction rejection.
     return Promise.resolve()
-      .then(() => (this.storage === undefined ? update() : this.storage.lock(KEY, update)))
+      .then(() => {
+        if (this.storage !== undefined) {
+          return this.storage.update(KEY, raw => {
+            update(raw)
+            return JSON.stringify({ version: 4, entries: this.entries })
+          })
+        }
+        update()
+      })
       .catch(() => {})
   }
 }

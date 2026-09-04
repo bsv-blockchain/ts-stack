@@ -5,13 +5,12 @@ import { ReliableHostReputation } from '../ReliableHostReputation'
 const KEY = 'bsvsdk_overlay_host_reputation_v4'
 
 describe('transactional browser reputation', () => {
-  it('merges concurrent writers with independent stale read caches', async () => {
+  it('merges concurrent writers with independent prior reads', async () => {
     const factory = new IDBFactory()
     const a = indexedDBReputationStorage(factory)
     const b = indexedDBReputationStorage(factory)
-    await Promise.all([a.load!(KEY), b.load!(KEY)])
-    expect(a.get(KEY)).toBeNull()
-    expect(b.get(KEY)).toBeNull()
+    expect(await a.get(KEY)).toBeNull()
+    expect(await b.get(KEY)).toBeNull()
     const trackers = [new ReliableHostReputation(a), new ReliableHostReputation(b)]
     await Promise.all(
       Array.from({ length: 32 }, (_, i) =>
@@ -19,8 +18,7 @@ describe('transactional browser reputation', () => {
       )
     )
     const reloaded = indexedDBReputationStorage(factory)
-    await reloaded.load!(KEY)
-    const entries = JSON.parse(reloaded.get(KEY)!).entries
+    const entries = JSON.parse((await reloaded.get(KEY))!).entries
     expect(Object.keys(entries)).toHaveLength(32)
     expect(Object.values(entries).every((entry: any) => entry.penalty === 2)).toBe(true)
   })
@@ -31,13 +29,10 @@ describe('transactional browser reputation', () => {
     await Promise.all(
       Array.from({ length: 20 }, (_, i) => {
         const storage = stores[i % 2]
-        return storage.lock(KEY, async () => {
-          storage.set(KEY, String(Number(storage.get(KEY) ?? 0) + 1))
-        })
+        return storage.update(KEY, current => String(Number(current ?? 0) + 1))
       })
     )
-    await stores[0].load!(KEY)
-    expect(stores[0].get(KEY)).toBe('20')
+    expect(await stores[0].get(KEY)).toBe('20')
     const tracker = new ReliableHostReputation(stores[0])
     await tracker.record('mainnet', 'ls_service', 'https://one.example', 'invalid')
     const reloaded = new ReliableHostReputation(indexedDBReputationStorage(factory))
@@ -49,15 +44,13 @@ describe('transactional browser reputation', () => {
 
   it('aborts failed updates without changing committed data', async () => {
     const storage = indexedDBReputationStorage(new IDBFactory())
-    await storage.lock(KEY, async () => storage.set(KEY, 'committed'))
+    await storage.update(KEY, () => 'committed')
     await expect(
-      storage.lock(KEY, async () => {
-        storage.set(KEY, 'uncommitted')
+      storage.update(KEY, () => {
         throw new Error('synthetic update failure')
       })
     ).rejects.toThrow('Reputation transaction aborted')
-    await storage.load!(KEY)
-    expect(storage.get(KEY)).toBe('committed')
+    expect(await storage.get(KEY)).toBe('committed')
   })
 
   it('rejects a malformed database without an uncaught event-handler error', async () => {
@@ -71,7 +64,7 @@ describe('transactional browser reputation', () => {
       open.onerror = () => reject(open.error)
     })
     const storage = indexedDBReputationStorage(factory)
-    await expect(storage.load!(KEY)).rejects.toBeDefined()
+    await expect(storage.get(KEY)).rejects.toBeDefined()
     await expect(
       new ReliableHostReputation(storage).record('mainnet', 'ls_test', 'https://one.example')
     ).resolves.toBeUndefined()

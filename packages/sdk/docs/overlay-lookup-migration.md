@@ -39,7 +39,9 @@ service validator through `queryReliable` where those checks are needed.
 - v4 reputation is scoped by network/service/normalized host, bounded and decays.
   v1–v3 records are ignored without deletion. IndexedDB transactions protect
   browser updates; refresh is capped at 50 ms and fails open. Custom
-  `reliableReputationStorage` adapters must provide coherent serialized updates.
+  `reliableReputationStorage` adapters provide asynchronous `get(key)` and
+  atomic `update(key, transform)` methods. The synchronous transform must receive
+  the latest committed state inside the storage transaction.
   Unsupported environments and legacy get/set-only adapters use in-memory health.
 - HTTP semantic rejection and valid freeform responses remain neutral for
   standard availability reputation. HTTP 408/425/429 and 5xx are availability

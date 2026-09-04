@@ -88,15 +88,18 @@ export function normalizeHosts(hosts: string[], allowHTTP: boolean): string[] {
   return [...normalized]
 }
 
+/** Non-retryable HTTP rejection, shared by transport and host accounting. */
+export function isLookupRejection(status: number): boolean {
+  return status >= 400 && status < 500 && ![408, 425, 429].includes(status)
+}
+
 function failureReason(error: unknown): HostFailureReason {
   if (error instanceof LookupValidationError) return error.reason
   if (error instanceof Error && /deadline|timed out|abort/i.test(error.message)) return 'timeout'
   if (error instanceof SyntaxError) return 'malformed'
   if (typeof error === 'object' && error !== null && 'status' in error) {
     const status = Number(error.status)
-    return status >= 400 && status < 500 && ![408, 425, 429].includes(status)
-      ? 'rejected'
-      : 'transport'
+    return isLookupRejection(status) ? 'rejected' : 'transport'
   }
   return 'transport'
 }

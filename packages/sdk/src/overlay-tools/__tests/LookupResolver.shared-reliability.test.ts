@@ -25,11 +25,10 @@ function storageFixture(): { storage: ReliableReputationStorage; data: Map<strin
   return {
     data,
     storage: {
-      get: key => data.get(key),
-      set: (key, value) => {
-        data.set(key, value)
-      },
-      lock: async (_name, action) => await action()
+      get: async key => data.get(key),
+      update: async (key, transform) => {
+        data.set(key, transform(data.get(key)))
+      }
     }
   }
 }
@@ -172,7 +171,7 @@ describe('standard package resolver reliability for every overlay service', () =
 
   it('does not let a blocked reputation database hold up host recovery', async () => {
     const { storage } = storageFixture()
-    storage.load = () => new Promise(() => {})
+    storage.get = () => new Promise(() => {})
     const lookup = jest.fn(async () => answer)
     const resolver = new LookupResolver({
       facilitator: { lookup },

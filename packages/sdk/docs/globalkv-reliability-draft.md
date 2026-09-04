@@ -101,7 +101,8 @@ and bounded parallel work over suppressing every probe during an outage.
   inside each write transaction. LocalStorage plus Web Locks allowed stale
   cross-tab reads to overwrite newer updates in the repeated browser fixture.
   Health refresh is capped at 50 ms; unavailable storage cannot hold up host
-  recovery. Custom adapters must provide coherent, serialized updates.
+  recovery. Custom adapters use asynchronous reads and an atomic update method
+  whose synchronous transform runs against the latest committed state.
 - At most 32 candidate hosts and 32 trackers per operation. Truncation marks
   discovery incomplete. This is a resource bound, not a guarantee that an
   arbitrary 33rd healthy host will be contacted; scalable candidate scheduling

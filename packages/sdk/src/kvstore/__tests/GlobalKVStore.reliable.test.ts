@@ -170,11 +170,10 @@ describe('verified KV reliability', () => {
   it('recovered host recorded in v4 cooldown is probed and rehabilitated', async () => {
     const values = new Map<string, string>()
     const storage = {
-      get: key => values.get(key),
-      set: (key, value) => {
-        values.set(key, value)
-      },
-      lock: async (_name, action) => await action()
+      get: async key => values.get(key),
+      update: async (key, transform) => {
+        values.set(key, transform(values.get(key)))
+      }
     }
     const reputation = new ReliableHostReputation(storage)
     await reputation.record('mainnet', 'ls_kvstore', good, 'invalid')

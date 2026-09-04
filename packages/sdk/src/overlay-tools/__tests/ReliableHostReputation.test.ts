@@ -7,17 +7,13 @@ function storage() {
   let pending = Promise.resolve()
   return {
     data,
-    get: (key: string) => data.get(key),
-    set: (key: string, value: string) => {
-      data.set(key, value)
-    },
-    lock: async <T>(_name: string, action: () => Promise<T>): Promise<T> => {
-      const result = pending.then(action)
-      pending = result.then(
-        () => {},
-        () => {}
-      )
-      return await result
+    get: async (key: string) => data.get(key),
+    update: (key: string, transform: (raw: string | null | undefined) => string): Promise<void> => {
+      const result = pending.then(() => {
+        data.set(key, transform(data.get(key)))
+      })
+      pending = result.catch(() => {})
+      return result
     }
   }
 }
@@ -29,13 +25,12 @@ describe('versioned advisory reputation', () => {
   afterEach(() => jest.useRealTimers())
   it.each(['{', 'null', '[]', '{"version":3,"entries":{}}', '{"version":4,"entries":null}'])(
     'fails open for corrupt/legacy schema %s',
-    raw => {
+    async raw => {
       const s = storage()
       s.data.set(KEY, raw)
-      expect(new ReliableHostReputation(s).rank('mainnet', 'ls_kvstore', [h1, h2])).toEqual([
-        h1,
-        h2
-      ])
+      const tracker = new ReliableHostReputation(s)
+      await tracker.refresh()
+      expect(tracker.rank('mainnet', 'ls_kvstore', [h1, h2])).toEqual([h1, h2])
     }
   )
   it('does not import poisoned v1-v3 or mutate legacy browser records', async () => {
