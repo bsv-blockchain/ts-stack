@@ -150,12 +150,9 @@ export class ReliableHostReputation {
       this.storage?.set(KEY, JSON.stringify({ version: 4, entries: this.entries }))
       return Promise.resolve()
     }
-    try {
-      if (this.storage !== undefined) return this.storage.lock(KEY, update).catch(() => {})
-      return update()
-    } catch {
-      /* Advisory persistence must never break lookup. */
-    }
+    // Catch synchronous adapter failures and asynchronous transaction rejection.
     return Promise.resolve()
+      .then(() => (this.storage === undefined ? update() : this.storage.lock(KEY, update)))
+      .catch(() => {})
   }
 }
