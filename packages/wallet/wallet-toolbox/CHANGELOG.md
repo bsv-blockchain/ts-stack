@@ -6,6 +6,15 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Make new WAB account creation resumable when wallet setup, funding, KDF, UMP
+  publication, or the final acknowledgement is interrupted. The manager accepts
+  a clean missing-token result only for a server-declared pending registration,
+  finalizes after successful publication, repairs a lost acknowledgement on the
+  next login, and preserves fail-closed continuity for active and legacy WABs.
+  The additive client path measures 1,671,343 raw Vite bytes locally; its
+  reviewed Vite ceilings advance to 1,671,500 raw and 307,250 Brotli bytes;
+  gzip and all esbuild ceilings remain unchanged.
+
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
   directly or invoke the underlying wallet operation at most once, while

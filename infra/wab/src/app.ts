@@ -9,6 +9,7 @@ import { AccountDeletionController } from './controllers/AccountDeletionControll
 import { ShareController } from './controllers/ShareController'
 import { AdminController } from './controllers/AdminController'
 import { PhoneChangeController } from './controllers/PhoneChangeController'
+import { RegistrationController } from './controllers/RegistrationController'
 import { requireWABAdmin } from './security/adminAuth'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy'
 import {
@@ -110,6 +111,7 @@ app.get('/info', InfoController.getInfo)
 // Auth routes
 app.post('/auth/start', authenticationLimiter, AuthController.startAuth)
 app.post('/auth/complete', authenticationLimiter, AuthController.completeAuth)
+app.post('/auth/registration/finalize', authenticationLimiter, RegistrationController.finalize)
 app.post('/auth/phone-change/start', authenticationLimiter, PhoneChangeController.start)
 app.post('/auth/phone-change/complete', authenticationLimiter, PhoneChangeController.complete)
 app.post('/auth/phone-change/commit', authenticationLimiter, PhoneChangeController.commit)
@@ -117,6 +119,12 @@ app.post('/auth/phone-change/finalize', authenticationLimiter, PhoneChangeContro
 
 // Administrative support routes are unavailable unless WAB_ADMIN_TOKEN is set.
 app.post('/admin/ump-pin', adminLimiter, requireWABAdmin, AdminController.setUMPTokenPin)
+app.post(
+  '/admin/registration/reopen',
+  adminLimiter,
+  requireWABAdmin,
+  AdminController.reopenRegistration
+)
 app.post(
   '/admin/phone-change/restore',
   adminLimiter,

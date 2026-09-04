@@ -72,6 +72,15 @@ checks leave multiple valid UMP tokens, and only when the pinned outpoint is
 present in the verified candidates. A pin cannot introduce an outpoint that the
 wallet did not independently retrieve and validate.
 
+New WAB registrations are interruption-safe across the off-chain/on-chain
+boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified
+retry reuse the stored presentation key when a clean UMP lookup confirms that
+publication has not happened. After publishing the UMP token, the manager
+finalizes WAB idempotently. A lost finalization response is non-fatal: the next
+verified login finds the published token and repairs the pending state. Missing
+or invalid lifecycle metadata remains fail-closed for established accounts, and
+older WAB servers and clients retain their existing wire behavior.
+
 Authenticated applications can verify a phone number and roll the presentation
 key, including when the user enters the same phone number:
 

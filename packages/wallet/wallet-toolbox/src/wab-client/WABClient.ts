@@ -125,6 +125,14 @@ export class WABClient {
     })
   }
 
+  public async finalizeRegistration(presentationKey: string): Promise<WABOperationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return this.transport.request<WABOperationResponse>('/auth/registration/finalize', {
+      operation: 'finalize-registration',
+      body: { presentationKey }
+    })
+  }
+
   public async deleteUser(presentationKey: string): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
     return this.transport.request<WABOperationResponse>('/user/delete', {

@@ -15,6 +15,7 @@ const AUTH_COMPONENT = 'wallet-toolbox.authentication-manager'
 const AUTH_EVENT = 'wallet-toolbox.authentication.'
 const EXISTING_USER = 'existing-user'
 const NEW_USER = 'new-user'
+const PENDING_REGISTRATION = 'pending'
 
 export interface WalletAuthenticationManagerOptions {
   telemetry?: TelemetryConfig
@@ -73,6 +74,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
   private authMethod?: AuthMethodInteractor // chosen AuthMethod interactor
   private authSession?: WABAuthSession
   private phoneChangeSession?: WABPhoneChangeSession
+  private pendingRegistrationPresentationKey?: string
   private readonly authSessionTtlMs: number
 
   constructor(
@@ -212,6 +214,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     const authMethod = this.authMethod
     if (this.authenticated) throw new Error('User is already authenticated')
     this.cancelAuth()
+    this.pendingRegistrationPresentationKey = undefined
 
     const presentationKey = this.generateTemporaryPresentationKey()
     const correlationId = this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
@@ -304,6 +307,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
 
     this.cancelAuth()
     const wabAccountStatus = this.inferAccountStatus(result, session.presentationKey)
+    const registrationStatus = this.readRegistrationStatus(result)
     try {
       await this.provideWABPresentationKey(result, wabAccountStatus)
     } catch (error) {
@@ -321,7 +325,11 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       throw error
     }
 
-    if (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER) {
+    if (
+      wabAccountStatus === EXISTING_USER &&
+      this.authenticationFlow !== EXISTING_USER &&
+      registrationStatus !== PENDING_REGISTRATION
+    ) {
       super.destroy()
       const error = new WABAccountContinuityError()
       this.telemetry.capture({
@@ -339,7 +347,19 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       throw error
     }
 
-    const continuity = wabAccountStatus === this.authenticationFlow ? 'matched' : 'ump-existing'
+    if (registrationStatus === PENDING_REGISTRATION) {
+      this.pendingRegistrationPresentationKey = result.presentationKey
+      if (this.authenticationFlow === EXISTING_USER) {
+        await this.finalizePendingRegistration()
+      }
+    }
+
+    const continuity =
+      registrationStatus === PENDING_REGISTRATION && this.authenticationFlow === NEW_USER
+        ? 'registration-resumed'
+        : wabAccountStatus === this.authenticationFlow
+          ? 'matched'
+          : 'ump-existing'
     this.telemetry.capture({
       name: `${AUTH_EVENT}completed`,
       component: AUTH_COMPONENT,
@@ -358,30 +378,64 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     this.authSession = undefined
   }
 
+  /**
+   * Publishes a new UMP token before committing WAB's registration state.
+   * Finalization is deliberately best-effort: if its response is lost, the
+   * next verified login finds the UMP token and repairs WAB idempotently.
+   */
+  public override async providePassword(password: string): Promise<void> {
+    const shouldFinalize = this.pendingRegistrationPresentationKey != null && this.authenticationFlow === NEW_USER
+    await super.providePassword(password)
+    if (shouldFinalize) await this.finalizePendingRegistration()
+  }
+
+  private readRegistrationStatus(result: CompleteAuthResponse): 'pending' | 'active' {
+    const status: unknown = result.registrationStatus
+    if (status === undefined) return 'active'
+    if (status !== 'pending' && status !== 'active') {
+      throw new WABAccountContinuityError('WAB returned an invalid registration status.')
+    }
+    return status
+  }
+
+  private async finalizePendingRegistration(): Promise<void> {
+    const presentationKey = this.pendingRegistrationPresentationKey
+    if (presentationKey == null) return
+    try {
+      const result = await this.wabClient.finalizeRegistration(presentationKey)
+      if (result.success !== true || result.registrationStatus !== 'active') {
+        throw new Error(result.message || 'WAB registration finalization was not acknowledged.')
+      }
+      this.pendingRegistrationPresentationKey = undefined
+      this.telemetry.capture({
+        name: `${AUTH_EVENT}registration-finalize.completed`,
+        component: AUTH_COMPONENT,
+        severity: 'info'
+      })
+    } catch (error) {
+      this.telemetry.capture({
+        name: `${AUTH_EVENT}registration-finalize.deferred`,
+        component: AUTH_COMPONENT,
+        severity: 'warn',
+        error: new Error('WAB registration finalization was deferred.', { cause: error })
+      })
+    }
+  }
+
   private readPendingPhoneChange(result: CompleteAuthResponse): PendingPhoneChange | undefined {
     const presentationKey = result.pendingPresentationKey
     const changeId = result.pendingPhoneChangeId
     if (presentationKey === undefined && changeId === undefined) return undefined
-    if (
-      !/^[0-9a-fA-F]{64}$/.test(presentationKey ?? '') ||
-      !Number.isSafeInteger(changeId) ||
-      changeId! <= 0
-    ) {
+    if (!/^[0-9a-fA-F]{64}$/.test(presentationKey ?? '') || !Number.isSafeInteger(changeId) || changeId! <= 0) {
       throw new WABAccountContinuityError('WAB returned invalid pending phone-change data.')
     }
     return { presentationKey: presentationKey!, changeId: changeId! }
   }
 
-  private async provideWABPresentationKey(
-    result: CompleteAuthResponse,
-    wabAccountStatus: string
-  ): Promise<void> {
+  private async provideWABPresentationKey(result: CompleteAuthResponse, wabAccountStatus: string): Promise<void> {
     const umpTokenOutpoint =
-      typeof result.umpTokenOutpoint === 'string'
-        ? (result.umpTokenOutpoint as `${string}.${number}`)
-        : undefined
-    const lookupOptions =
-      umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
+      typeof result.umpTokenOutpoint === 'string' ? (result.umpTokenOutpoint as `${string}.${number}`) : undefined
+    const lookupOptions = umpTokenOutpoint == null ? undefined : { pinnedOutpoint: umpTokenOutpoint }
     const pending = this.readPendingPhoneChange(result)
     let usePending = false
     try {
@@ -393,8 +447,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
 
     if (
       pending != null &&
-      (usePending ||
-        (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER))
+      (usePending || (wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER))
     ) {
       await this.providePresentationKey(Utils.toArray(pending.presentationKey, 'hex'), lookupOptions)
       if (this.authenticationFlow === EXISTING_USER) {
@@ -403,19 +456,14 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     }
   }
 
-  private async finalizePendingPhoneChange(
-    currentPresentationKey: string,
-    pending: PendingPhoneChange
-  ): Promise<void> {
+  private async finalizePendingPhoneChange(currentPresentationKey: string, pending: PendingPhoneChange): Promise<void> {
     const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
       changeId: pending.changeId,
       presentationKey: currentPresentationKey,
       newPresentationKey: pending.presentationKey
     })
     if (finalized.success !== true || finalized.changeId !== pending.changeId) {
-      throw new WABAccountContinuityError(
-        finalized.message || 'WAB could not finalize the pending phone change.'
-      )
+      throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
     }
   }
 
@@ -464,10 +512,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       if (resumable) {
         session.newKey = Utils.toArray(authorization.pendingPresentationKey!, 'hex')
         session.changeId = authorization.pendingPhoneChangeId
-      } else if (
-        typeof authorization.changeToken === 'string' &&
-        authorization.changeToken.length > 0
-      ) {
+      } else if (typeof authorization.changeToken === 'string' && authorization.changeToken.length > 0) {
         session.changeToken = authorization.changeToken
       } else {
         throw new Error(authorization.message || 'Phone change failed')
@@ -512,6 +557,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
   public override destroy(): void {
     this.cancelAuth()
     this.cancelPhoneNumberChange()
+    this.pendingRegistrationPresentationKey = undefined
     super.destroy()
   }
 

@@ -36,10 +36,13 @@ export class UserService {
     /**
      * Create a new user with a given presentationKey
      */
-    static async createUser(presentationKey: string): Promise<User> {
+    static async createUser(
+        presentationKey: string,
+        registrationStatus: User["registrationStatus"] = "active"
+    ): Promise<User> {
         // Note: SQLite does not support RETURNING. Knex will return the inserted row id as a number in SQLite,
         // while in MySQL it may return an object when specifying returning columns.
-        const insertResult: unknown = await db("users").insert({ presentationKey });
+        const insertResult: unknown = await db("users").insert({ presentationKey, registrationStatus });
 
         const insertedId = insertedIdFromResult(insertResult);
         if (insertedId === undefined) throw new Error("User creation failed");
@@ -66,6 +69,85 @@ export class UserService {
 
     static async setUMPTokenOutpoint(userId: number, outpoint: string | null): Promise<void> {
         await db("users").where({ id: userId }).update({ umpTokenOutpoint: outpoint });
+    }
+
+    /**
+     * Atomically finds the owner of an authentication identity or creates a
+     * pending registration and links that identity. This prevents a database
+     * failure or concurrent completion from leaving a user and auth method in
+     * separate states.
+     */
+    static async findOrCreatePendingRegistration(
+        presentationKey: string,
+        methodType: string,
+        config: string
+    ): Promise<{ user: User; created: boolean }> {
+        try {
+            return await db.transaction(async trx => {
+                const existingMethod = await trx<AuthMethodEntity>("auth_methods")
+                    .where({ methodType, config })
+                    .first();
+                if (existingMethod?.userId != null) {
+                    const user = await trx<User>("users").where({ id: existingMethod.userId }).first();
+                    if (!user) throw new AuthIdentityConflictError("Authentication identity owner was not found.");
+                    return { user, created: false };
+                }
+
+                const insertResult: unknown = await trx("users").insert({
+                    presentationKey,
+                    registrationStatus: "pending"
+                });
+                const userId = insertedIdFromResult(insertResult);
+                if (userId === undefined) throw new Error("User creation failed");
+
+                if (existingMethod) {
+                    const claimed = await trx("auth_methods")
+                        .where({ id: existingMethod.id })
+                        .whereNull("userId")
+                        .update({ userId });
+                    if (claimed !== 1) {
+                        throw new AuthIdentityConflictError("Authentication method could not be linked safely.");
+                    }
+                } else {
+                    await trx("auth_methods").insert({
+                        userId,
+                        methodType,
+                        config,
+                        receivedFaucet: false
+                    });
+                }
+
+                const user = await trx<User>("users").where({ id: userId }).first();
+                if (!user) throw new Error("User creation failed");
+                return { user, created: true };
+            });
+        } catch (error) {
+            // A concurrent completion can win the unique auth identity race.
+            // Re-read only after the losing transaction has rolled back.
+            const user = await this.findUserByConfig(methodType, config);
+            if (user) return { user, created: false };
+            throw error;
+        }
+    }
+
+    /** Idempotently marks a pending registration as fully published. */
+    static async finalizeRegistration(presentationKey: string): Promise<User | undefined> {
+        const user = await this.getUserByPresentationKey(presentationKey);
+        if (!user) return undefined;
+        if (user.registrationStatus !== "pending" && user.registrationStatus !== "active") {
+            throw new Error("Stored registration status is invalid");
+        }
+        if (user.registrationStatus === "pending") {
+            await db("users")
+                .where({ id: user.id, registrationStatus: "pending" })
+                .update({ registrationStatus: "active" });
+        }
+        return await this.getUserById(user.id);
+    }
+
+    /** Support-only repair for a registration known to have no published UMP token. */
+    static async reopenRegistration(userId: number): Promise<void> {
+        await db("users").where({ id: userId }).update({ registrationStatus: "pending" });
     }
 
     /**

@@ -18,6 +18,8 @@ export interface CompleteAuthResponse {
   accountStatus?: 'new-user' | 'existing-user'
   /** Compatibility signal accepted from WAB deployments using a boolean. */
   existingUser?: boolean
+  /** Two-phase WAB lifecycle state. Absent means active for older servers. */
+  registrationStatus?: 'pending' | 'active'
   /** Operator-selected UMP ambiguity fallback supplied by newer WAB servers. */
   umpTokenOutpoint?: string
   /** Staged key returned while a verified phone change awaits WAB finalization. */
