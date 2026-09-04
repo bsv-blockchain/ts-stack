@@ -519,6 +519,44 @@ describe('WAB transport hardening', () => {
     expect(() => readRegistrationStatus({ registrationStatus: 'unknown' })).toThrow(WABAccountContinuityError)
   })
 
+  it('keeps every unacknowledged registration-finalization response retryable', async () => {
+    const events: TelemetryEvent[] = []
+    const finalizeRegistration = jest
+      .fn()
+      .mockResolvedValueOnce({ success: false, message: 'finalization rejected' })
+      .mockResolvedValueOnce({ success: true, registrationStatus: 'pending' })
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      {
+        findByPresentationKeyHash: jest.fn(async () => undefined),
+        findByRecoveryKeyHash: jest.fn(async () => undefined),
+        buildAndSend: jest.fn(async () => `${'a'.repeat(64)}.0`)
+      },
+      async (): Promise<true> => true,
+      async () => 'password',
+      { finalizeRegistration } as unknown as WABClient,
+      new DevConsoleInteractor(),
+      undefined,
+      { telemetry: { sink: { capture: event => events.push(event) }, minimumSeverity: 'debug' } }
+    )
+    jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValue()
+
+    manager.authenticationFlow = 'new-user'
+    await expect(manager.providePassword('password')).resolves.toBeUndefined()
+    expect(finalizeRegistration).not.toHaveBeenCalled()
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+
+    ;(manager as any).pendingRegistrationPresentationKey = 'a'.repeat(64)
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+
+    expect(finalizeRegistration).toHaveBeenCalledTimes(2)
+    expect(events.filter(event => event.name.endsWith('registration-finalize.deferred'))).toHaveLength(2)
+    manager.authenticationFlow = 'existing-user'
+    expect((manager as any).describeContinuity('new-user', 'active')).toBe('ump-existing')
+  })
+
   it('maps the legacy existingUser signal without a nested status expression', () => {
     const interactor: UMPTokenInteractor = {
       findByPresentationKeyHash: jest.fn(async () => undefined),
