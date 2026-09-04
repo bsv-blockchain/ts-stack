@@ -17,8 +17,9 @@ attention to changes that materially alter behavior or extend functionality.
   1,672,000 raw and 307,250 Brotli bytes, and the esbuild raw ceiling advances
   to 1,305,500 bytes; gzip and esbuild compressed ceilings remain unchanged.
   Optimized Hermes bytecode measures 3,494,808 raw bytes locally and 3,495,655
-  on hosted Linux; its raw ceiling advances to 3,496,500 while the Metro and
-  compressed mobile ceilings remain unchanged.
+  on hosted Linux. Hosted Linux gzip measures 1,415,730 bytes. Its reviewed raw
+  and gzip ceilings advance to 3,496,500 and 1,416,500 respectively, while the
+  Metro and Hermes Brotli ceilings remain unchanged.
 
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
