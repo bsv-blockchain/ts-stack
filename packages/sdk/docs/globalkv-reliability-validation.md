@@ -19,7 +19,7 @@ processes. Source comparison starts at ts-stack `98734b07cf` (2026-09-04).
 | Outage becomes an apparently empty collection   | Incomplete empty aggregates throw retryable `LookupUnavailableError`; detailed/progressive APIs retain completion evidence.                                                                                                                      |
 | Bad proof or stale ancestor wins by latency     | KV tests validate BEEF, signatures, selectors and fixture-root SPV before reconciliation; incomparable tips produce conflict.                                                                                                                    |
 | Accepted transaction is not yet indexed         | Optional KV write tests retain the same transaction identity, report unconfirmed status and reconcile without creating another transaction.                                                                                                      |
-| Persisted penalties recur across tabs/reloads   | `browser/lookup-recovery.mjs` uses the exact packed UMD in Chromium, real IndexedDB transactions, two concurrent tabs, four services and five outage/recovery cycles.                                                                            |
+| Persisted penalties recur across tabs/reloads   | `browser/tests/lookup-recovery.mjs` uses the exact packed UMD in Chromium, real IndexedDB transactions, two concurrent tabs, four services and five outage/recovery cycles.                                                                            |
 
 The legacy cooldown behavior can be reproduced at `ff36b55`; the standard-export
 recovery assertions are in `LookupResolver.shared-reliability.test.ts`. Services
@@ -57,11 +57,17 @@ uses a disposable browser profile, and removes its package extraction afterwards
 No browser account, production endpoint or existing storage is used. Ten
 consecutive runs of the transactional fixture passed (200 reloads total).
 
-The local SDK coverage suite passed 165 suites / 6,004 tests and one snapshot.
+The local SDK coverage suite passed 166 suites / 6,027 tests and one snapshot.
 Packed ESM/CJS exports, strict declarations, source maps, publint, Vite, esbuild
 and UMD contracts passed. The PR records exact-head coverage and platform sizes;
 all original coverage and bundle budgets remain in force. Historical measurements
 are not a substitute for the current hosted merge gate.
+
+Public adapter contract tests cover return shapes, incomplete-read errors, pending
+write reconciliation, removal confirmation and retained-state transitions. The
+repository patch-coverage calculation passes at 91.92% (1,229/1,337 changed
+line/branch points) against the unchanged 90% requirement. The standalone browser
+fixture lives under `browser/tests/` and remains part of `test:browser`.
 
 The existing property profile passed three suites / six tests. Conformance
 parsed 76 files / 6,690 vectors without errors; no new portable protocol is

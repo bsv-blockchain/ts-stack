@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url'
 
 import puppeteer from 'puppeteer-core'
 
-import { createCommandRunner } from '../../../scripts/lib/command-runner.mjs'
+import { createCommandRunner } from '../../../../scripts/lib/command-runner.mjs'
 
-const packageDirectory = fileURLToPath(new URL('../', import.meta.url))
+const packageDirectory = fileURLToPath(new URL('../../', import.meta.url))
 const run = createCommandRunner({ timeoutMs: 240_000, maxBufferBytes: 4 * 1024 * 1024 })
 const legacyKey = 'bsvsdk_overlay_host_reputation_v3'
 const currentKey = 'bsvsdk_overlay_host_reputation_v4'

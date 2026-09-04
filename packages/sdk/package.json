@@ -758,7 +758,7 @@
     "lint:ci": "pnpm lint",
     "lint": "oxlint mod.ts src benchmarks browser jest.config.js rspack.config.js --deny-warnings",
     "pack:check": "pnpm build && node ../../scripts/check-package-artifact.mjs . --exports PrivateKey,PublicKey,Transaction,Script,WalletClient,ProtoWallet,AuthFetch,IdentityClient,LookupResolver,RemittanceManager --esm-only-entrypoints ./umd",
-    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node browser/lookup-recovery.mjs",
+    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node browser/tests/lookup-recovery.mjs",
     "typecheck": "tsc --build --pretty false",
     "build": "pnpm build:ts && pnpm build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
