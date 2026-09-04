@@ -105,7 +105,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost.com',
@@ -115,7 +116,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -207,7 +209,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost.com',
@@ -217,7 +220,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ],
       [
         // additional host should also have been queried
@@ -228,7 +232,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -273,7 +278,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -341,7 +347,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ],
       [
         // additional host should also have been queried
@@ -352,12 +359,13 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
 
-  it('should handle multiple SLAP trackers and resolve with first responder hosts', async () => {
+  it('should query the union returned by multiple SLAP trackers', async () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
@@ -438,7 +446,7 @@ describe('LookupResolver', () => {
       outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
     })
 
-    // Both SLAP trackers are queried, but only the first host is used for the actual query
+    // Both SLAP trackers contribute hosts for the actual query
     expect(mockFacilitator.lookup.mock.calls.length).toBeGreaterThanOrEqual(3)
     expect(mockFacilitator.lookup.mock.calls[0]).toEqual([
       'https://mock.slap1',
@@ -448,7 +456,8 @@ describe('LookupResolver', () => {
           service: 'ls_foo'
         }
       },
-      5000
+      1500,
+      expect.any(AbortSignal)
     ])
     expect(mockFacilitator.lookup.mock.calls[1]).toEqual([
       'https://mock.slap2',
@@ -458,7 +467,8 @@ describe('LookupResolver', () => {
           service: 'ls_foo'
         }
       },
-      5000
+      1500,
+      expect.any(AbortSignal)
     ])
     expect(mockFacilitator.lookup.mock.calls[2]).toEqual([
       'https://slaphost1.com',
@@ -468,7 +478,8 @@ describe('LookupResolver', () => {
           test: 1
         }
       },
-      undefined
+      2000,
+      expect.any(AbortSignal)
     ])
   })
 
@@ -550,7 +561,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost1.com',
@@ -560,7 +572,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost2.com',
@@ -570,7 +583,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -653,7 +667,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost1.com',
@@ -663,7 +678,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost2.com',
@@ -673,7 +689,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -695,9 +712,7 @@ describe('LookupResolver', () => {
         service: 'ls_foo',
         query: { test: 1 }
       })
-    ).rejects.toThrow(
-      'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
-    )
+    ).rejects.toThrow('Overlay lookup temporarily unavailable or incomplete')
 
     expect(mockFacilitator.lookup.mock.calls).toEqual([
       [
@@ -708,7 +723,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -795,7 +811,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost1.com',
@@ -805,7 +822,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ],
       [
         'https://slaphost2.com',
@@ -815,7 +833,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -857,7 +876,8 @@ describe('LookupResolver', () => {
             test: 1
           }
         },
-        undefined
+        2000,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -880,9 +900,7 @@ describe('LookupResolver', () => {
         service: 'ls_foo',
         query: { test: 1 }
       })
-    ).rejects.toThrow(
-      'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
-    )
+    ).rejects.toThrow('Overlay lookup temporarily unavailable or incomplete')
 
     expect(mockFacilitator.lookup.mock.calls).toEqual([
       [
@@ -893,7 +911,8 @@ describe('LookupResolver', () => {
             service: 'ls_foo'
           }
         },
-        5000
+        1500,
+        expect.any(AbortSignal)
       ]
     ])
   })
@@ -906,7 +925,7 @@ describe('LookupResolver', () => {
   })
 
   describe('Host reputation tracking', () => {
-    it('shares performance learnings across resolver instances and prefers low latency hosts', async () => {
+    it('queries every host across resolver instances without inferring authority from latency', async () => {
       const fastHost = 'https://fast.host'
       const slowHost = 'https://slow.host'
       const hosts = [slowHost, fastHost]
@@ -981,13 +1000,13 @@ describe('LookupResolver', () => {
         })
 
         const orderedHosts = mockFacilitator.lookup.mock.calls.map(call => call[0])
-        expect(orderedHosts).toEqual([fastHost, slowHost])
+        expect(orderedHosts).toEqual([slowHost, fastHost])
       } finally {
         nowSpy.mockRestore()
       }
     })
 
-    it('exponentially backs off consistently failing hosts to avoid repeated work', async () => {
+    it('probes failing hosts on every bounded query so recovery needs no cooldown reset', async () => {
       const failingHost = 'https://offline.host'
       const healthyHost = 'https://healthy.host'
       let fakeNow = 0
@@ -1030,17 +1049,16 @@ describe('LookupResolver', () => {
 
         expect(failingCalls).toBe(3)
 
-        // Immediately try again; failing host should now be in backoff and skipped
+        // Advisory cooldown must not skip the next probe
         fakeNow += 20
         await resolver.query({ service: 'ls_backoff', query: { attempt: 4 } })
-        expect(failingCalls).toBe(3)
-        const lastCall = callLog[callLog.length - 1]
-        expect(lastCall).toBe(healthyHost)
+        expect(failingCalls).toBe(4)
+        expect(callLog.slice(-2)).toEqual(expect.arrayContaining([failingHost, healthyHost]))
 
         // Advance beyond the backoff window so the failing host is retried
         fakeNow = 2000
         await resolver.query({ service: 'ls_backoff', query: { attempt: 5 } })
-        expect(failingCalls).toBe(4)
+        expect(failingCalls).toBe(5)
       } finally {
         nowSpy.mockRestore()
       }
@@ -1124,7 +1142,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://mock.slap2',
@@ -1134,7 +1153,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost.com',
@@ -1144,7 +1164,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ]
       ])
     })
@@ -1247,7 +1268,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost1.com',
@@ -1257,7 +1279,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost2.com',
@@ -1267,7 +1290,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ]
       ])
     })
@@ -1350,7 +1374,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost1.com',
@@ -1360,7 +1385,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost2.com',
@@ -1370,7 +1396,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ]
       ])
     })
@@ -1452,7 +1479,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost1.com',
@@ -1462,7 +1490,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost2.com',
@@ -1472,7 +1501,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ]
       ])
     })
@@ -1511,13 +1541,14 @@ describe('LookupResolver', () => {
         slapTrackers: ['https://mock.slap']
       })
 
-      const res = await r.query({
+      const res = await r.queryDetailed({
         service: 'ls_foo',
         query: { test: 1 }
       })
 
-      // Since there are no valid outputs, expect an error
-      expect(res).toEqual({
+      expect(res.progress).toMatchObject({ status: 'unavailable', failedHosts: 1 })
+      // The detailed API carries failure evidence alongside the empty aggregate.
+      expect(res.answer).toEqual({
         type: 'output-list',
         outputs: []
       })
@@ -1531,7 +1562,8 @@ describe('LookupResolver', () => {
               service: 'ls_foo'
             }
           },
-          5000
+          1500,
+          expect.any(AbortSignal)
         ],
         [
           'https://slaphost.com',
@@ -1541,7 +1573,8 @@ describe('LookupResolver', () => {
               test: 1
             }
           },
-          undefined
+          2000,
+          expect.any(AbortSignal)
         ]
       ])
     })
@@ -1562,9 +1595,7 @@ describe('LookupResolver', () => {
           service: 'ls_foo',
           query: { test: 1 }
         })
-      ).rejects.toThrow(
-        'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
-      )
+      ).rejects.toThrow('Overlay lookup temporarily unavailable or incomplete')
 
       expect(mockFacilitator.lookup.mock.calls).toHaveLength(2)
     })

@@ -36,7 +36,10 @@ function browserStorage(): ReliableReputationStorage | undefined {
 /** v1-v3 are intentionally not imported: their host-only keys cannot be safely scoped. */
 export class ReliableHostReputation {
   private entries: Record<string, ReliableReputationEntry> = {}
-  constructor(private readonly storage = browserStorage()) {}
+  private readonly storage: ReliableReputationStorage | undefined
+  constructor(storage?: ReliableReputationStorage | null) {
+    this.storage = storage === null ? undefined : (storage ?? browserStorage())
+  }
 
   private scope(network: string, service: string, host: string): string {
     return JSON.stringify([network, service, host])
@@ -102,6 +105,13 @@ export class ReliableHostReputation {
         : e.penalty * 2 ** (-(now - e.updatedAt) / 60000) + (e.cooldownUntil > now ? 64 : 0)
     }
     return [...new Set(hosts)].sort((a, b) => score(a) - score(b))
+  }
+
+  /** Sanitized diagnostic snapshot for one explicit scope. */
+  snapshot(network: string, service: string, host: string): ReliableReputationEntry | undefined {
+    this.rank(network, service, [host])
+    const entry = this.entries[this.scope(network, service, host)]
+    return entry === undefined ? undefined : { ...entry }
   }
 
   async record(

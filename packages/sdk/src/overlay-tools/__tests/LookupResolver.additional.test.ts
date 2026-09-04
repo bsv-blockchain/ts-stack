@@ -1,10 +1,11 @@
+import { ReliableHostReputation } from '../ReliableHostReputation'
 import LookupResolver, {
   HTTPSOverlayLookupFacilitator,
   DEFAULT_SLAP_TRACKERS,
   DEFAULT_TESTNET_SLAP_TRACKERS,
   DEFAULT_TTN_SLAP_TRACKERS
 } from '../LookupResolver'
-import { getOverlayHostReputationTracker, HostReputationTracker } from '../HostReputationTracker'
+import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
 import { CompletedProtoWallet } from '../../auth/certificates/__tests/CompletedProtoWallet'
 import { PrivateKey } from '../../primitives/index'
@@ -23,13 +24,6 @@ const sampleBeef1 = new Transaction(
   1,
   [],
   [{ lockingScript: LockingScript.fromHex('88'), satoshis: 1 }],
-  0
-).toBEEF()
-
-const sampleBeef2 = new Transaction(
-  1,
-  [],
-  [{ lockingScript: LockingScript.fromHex('88'), satoshis: 2 }],
   0
 ).toBEEF()
 
@@ -113,7 +107,7 @@ describe('LookupResolver – additional coverage', () => {
       expect(mockFacilitator.lookup.mock.calls[0][0]).toBe('http://localhost:8080')
     })
 
-    it('includes "testnet" in error message for testnet preset', async () => {
+    it('reports explicit unavailability for testnet discovery failure', async () => {
       mockFacilitator.lookup.mockResolvedValueOnce({
         type: 'output-list',
         outputs: []
@@ -121,7 +115,7 @@ describe('LookupResolver – additional coverage', () => {
 
       const r = new LookupResolver({ facilitator: mockFacilitator, networkPreset: 'testnet' })
       await expect(r.query({ service: 'ls_missing', query: {} })).rejects.toThrow(
-        'No competent testnet hosts found'
+        'Overlay lookup temporarily unavailable or incomplete'
       )
     })
 
@@ -198,9 +192,8 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       await r.query({ service: 'ls_test', query: {} })
-      ;((r as any).hostReputation as HostReputationTracker).flush()
-      // Reputation data should have been written to the store
-      expect(store.size).toBeGreaterThan(0)
+      // Unsafe legacy get/set persistence is not used for v4 concurrent updates.
+      expect(store.size).toBe(0)
     })
   })
 
@@ -208,136 +201,86 @@ describe('LookupResolver – additional coverage', () => {
   // Cache tuning options
   // -----------------------------------------------------------------------
 
-  describe('cache configuration', () => {
-    it('respects custom hostsTtlMs', () => {
-      const r = new LookupResolver({
-        facilitator: mockFacilitator,
-        cache: { hostsTtlMs: 999 }
-      })
-      expect((r as any).hostsTtlMs).toBe(999)
-    })
-
-    it('respects custom hostsMaxEntries', () => {
-      const r = new LookupResolver({
-        facilitator: mockFacilitator,
-        cache: { hostsMaxEntries: 5 }
-      })
-      expect((r as any).hostsMaxEntries).toBe(5)
-    })
-
+  describe('fresh discovery and compatibility cache options', () => {
+    it.each([{ hostsTtlMs: 999 }, { hostsMaxEntries: 5 }])(
+      'keeps legacy cache options source-compatible but discovers afresh: %j',
+      async cache => {
+        const ad = await makeSlapTx(42, 'https://fresh.host', 'ls_cache')
+        mockFacilitator.lookup.mockImplementation(async (_host, question) => ({
+          type: 'output-list',
+          outputs: question.service === 'ls_slap' ? [{ beef: ad.toBEEF(), outputIndex: 0 }] : []
+        }))
+        const r = new LookupResolver({
+          facilitator: mockFacilitator,
+          slapTrackers: ['https://tracker.host'],
+          cache
+        })
+        await r.query({ service: 'ls_cache', query: {} })
+        await r.query({ service: 'ls_cache', query: {} })
+        expect(
+          mockFacilitator.lookup.mock.calls.filter(c => c[1].service === 'ls_slap')
+        ).toHaveLength(2)
+      }
+    )
     it('respects custom txMemoTtlMs', () => {
-      const r = new LookupResolver({
-        facilitator: mockFacilitator,
-        cache: { txMemoTtlMs: 123 }
-      })
+      const r = new LookupResolver({ facilitator: mockFacilitator, cache: { txMemoTtlMs: 123 } })
       expect((r as any).txMemoTtlMs).toBe(123)
     })
-
-    it('uses stale hosts from cache while refreshing in the background', async () => {
-      const slapTx = await makeSlapTx(42, 'https://cached.host', 'ls_cached')
-
-      // First call: populates the cache
-      mockFacilitator.lookup
-        .mockResolvedValueOnce({
-          type: 'output-list',
-          outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
-        })
-        .mockResolvedValueOnce({
-          type: 'output-list',
-          outputs: [{ beef: sampleBeef1, outputIndex: 0 }]
-        })
-
+    it('replaces a retired advertisement on the next lookup', async () => {
+      const old = await makeSlapTx(42, 'https://old.host', 'ls_cache')
+      const fresh = await makeSlapTx(43, 'https://fresh.host', 'ls_cache')
+      let advertisement = old
+      mockFacilitator.lookup.mockImplementation(async (host, question) => {
+        if (question.service === 'ls_slap')
+          return {
+            type: 'output-list',
+            outputs: [{ beef: advertisement.toBEEF(), outputIndex: 0 }]
+          }
+        if (host === 'https://old.host') throw new Error('retired')
+        return { type: 'output-list', outputs: [{ beef: sampleBeef1, outputIndex: 0 }] }
+      })
       const r = new LookupResolver({
         facilitator: mockFacilitator,
-        slapTrackers: ['https://mock.slap'],
-        cache: { hostsTtlMs: 0 } // immediate expiry to force stale path
+        slapTrackers: ['https://tracker.host']
       })
-
-      await r.query({ service: 'ls_cached', query: {} })
-
-      // Second call: cache entry is now stale (ttl=0), should use stale hosts
-      // while kicking off a background refresh
-      mockFacilitator.lookup.mockResolvedValue({
-        type: 'output-list',
-        outputs: [{ beef: sampleBeef2, outputIndex: 1 }]
-      })
-
-      const res2 = await r.query({ service: 'ls_cached', query: {} })
-
-      expect(res2.type).toBe('output-list')
+      expect((await r.queryDetailed({ service: 'ls_cache', query: {} })).progress.status).toBe(
+        'unavailable'
+      )
+      advertisement = fresh
+      expect((await r.query({ service: 'ls_cache', query: {} })).outputs).toHaveLength(1)
     })
-
-    it('evicts oldest cache entry when hostsMaxEntries is reached', async () => {
+    it('bounds candidate fanout and reports truncation', async () => {
+      const hosts = Array.from({ length: 40 }, (_, i) => `https://host-${i}.example`)
+      mockFacilitator.lookup.mockResolvedValue({ type: 'output-list', outputs: [] })
       const r = new LookupResolver({
         facilitator: mockFacilitator,
-        slapTrackers: ['https://mock.slap'],
-        cache: { hostsMaxEntries: 2 }
+        hostOverrides: { ls_cap: hosts }
       })
-
-      const hostsCache: Map<string, any> = (r as any).hostsCache
-
-      // Manually populate the cache to its limit
-      hostsCache.set('ls_service1', { hosts: ['https://h1.com'], expiresAt: Date.now() + 60000 })
-      hostsCache.set('ls_service2', { hosts: ['https://h2.com'], expiresAt: Date.now() + 60000 })
-
-      expect(hostsCache.size).toBe(2)
-
-      // Force a refresh for a third service which should evict ls_service1
-      mockFacilitator.lookup.mockResolvedValueOnce({
-        type: 'output-list',
-        outputs: []
-      })
-
-      // Trigger cache refresh via refreshHosts indirectly
-      const slapTx = await makeSlapTx(42, 'https://h3.com', 'ls_service3')
-      mockFacilitator.lookup.mockResolvedValue({
-        type: 'output-list',
-        outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
-      })
-
-      try {
-        await r.query({ service: 'ls_service3', query: {} })
-      } catch {
-        // might fail if no competent hosts for the actual lookup
-      }
-
-      // Cache size should not exceed hostsMaxEntries + 1 (the new entry)
-      expect(hostsCache.size).toBeLessThanOrEqual(3)
+      const result = await r.queryDetailed({ service: 'ls_cap', query: {} })
+      expect(mockFacilitator.lookup).toHaveBeenCalledTimes(32)
+      expect(result.progress).toMatchObject({ discoveryComplete: false, status: 'incomplete' })
     })
-
-    it('coalesces concurrent in-flight host resolution requests for the same service', async () => {
-      const slapTx = await makeSlapTx(42, 'https://coalesce.host', 'ls_coalesce')
-
-      let resolveSlap: (v: any) => void
-      const slapPromise = new Promise<any>(res => {
-        resolveSlap = res
-      })
-
-      mockFacilitator.lookup
-        .mockReturnValueOnce(slapPromise) // slap tracker – delayed
-        .mockResolvedValue({
-          type: 'output-list',
-          outputs: [{ beef: sampleBeef1, outputIndex: 0 }]
-        })
-
+    it('isolates concurrent discovery operations', async () => {
+      const ad = await makeSlapTx(42, 'https://fresh.host', 'ls_cache')
+      mockFacilitator.lookup.mockImplementation(async (_host, question) => ({
+        type: 'output-list',
+        outputs: question.service === 'ls_slap' ? [{ beef: ad.toBEEF(), outputIndex: 0 }] : []
+      }))
       const r = new LookupResolver({
         facilitator: mockFacilitator,
-        slapTrackers: ['https://mock.slap']
+        slapTrackers: ['https://tracker.host']
       })
-
-      // Fire two concurrent queries before slap resolves
-      const p1 = r.query({ service: 'ls_coalesce', query: {} })
-      const p2 = r.query({ service: 'ls_coalesce', query: {} })
-
-      // Resolve the SLAP tracker
-      resolveSlap!({
-        type: 'output-list',
-        outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
-      })
-
-      const [res1, res2] = await Promise.all([p1, p2])
-      expect(res1.type).toBe('output-list')
-      expect(res2.type).toBe('output-list')
+      const results = await Promise.all([
+        r.query({ service: 'ls_cache', query: {} }),
+        r.query({ service: 'ls_cache', query: {} })
+      ])
+      expect(results).toEqual([
+        { type: 'output-list', outputs: [] },
+        { type: 'output-list', outputs: [] }
+      ])
+      expect(
+        mockFacilitator.lookup.mock.calls.filter(c => c[1].service === 'ls_slap')
+      ).toHaveLength(2)
     })
   })
 
@@ -379,8 +322,8 @@ describe('LookupResolver – additional coverage', () => {
   // prepareHostsForQuery – all-backoff error
   // -----------------------------------------------------------------------
 
-  describe('prepareHostsForQuery – backoff error', () => {
-    it('throws when all competent hosts are in backoff and no alternatives exist', async () => {
+  describe('advisory cooldown probes', () => {
+    it('probes recovered competent hosts even in cooldown', async () => {
       const slapTx = await makeSlapTx(42, 'https://backing.off', 'ls_backoff_test')
 
       // SLAP keeps returning the same backed-off host on every call — including
@@ -390,7 +333,7 @@ describe('LookupResolver – additional coverage', () => {
         if (q.service === 'ls_slap') {
           return { type: 'output-list', outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }] }
         }
-        // Host queries — shouldn't be reached because backoff filter blocks them.
+        // The recovered host must be contacted despite its recorded cooldown.
         return { type: 'output-list', outputs: [] }
       })
 
@@ -400,33 +343,35 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       // Poison the reputation of the host so it enters backoff
-      const tracker: HostReputationTracker = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).hostReputation
       for (let i = 0; i < 5; i++) {
-        tracker.recordFailure('https://backing.off', 'connection refused')
+        await tracker.record('mainnet', 'ls_backoff_test', 'https://backing.off', 'transport')
       }
 
-      // Self-healing re-discovers via SLAP, sees the SAME backed-off host, and
-      // rethrows the backoff error.
-      await expect(r.query({ service: 'ls_backoff_test', query: {} })).rejects.toThrow(
-        /All lookup service ls_backoff_test hosts are backing off/
-      )
+      // The same host recovers without clearing reputation.
+      await expect(r.query({ service: 'ls_backoff_test', query: {} })).resolves.toEqual({
+        type: 'output-list',
+        outputs: []
+      })
+      expect(mockFacilitator.lookup.mock.calls.map(c => c[0])).toContain('https://backing.off')
     })
 
-    it('throws when all SLAP trackers are in backoff', async () => {
+    it('probes SLAP trackers even in cooldown', async () => {
       const r = new LookupResolver({
         facilitator: mockFacilitator,
         slapTrackers: ['https://backed.off.slap']
       })
 
       // Put the SLAP tracker into deep backoff
-      const tracker: HostReputationTracker = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).hostReputation
       for (let i = 0; i < 5; i++) {
-        tracker.recordFailure('https://backed.off.slap', 'connection refused')
+        await tracker.record('mainnet', 'ls_slap', 'https://backed.off.slap', 'transport')
       }
 
       await expect(r.query({ service: 'ls_any', query: {} })).rejects.toThrow(
-        'All SLAP trackers hosts are backing off'
+        'Overlay lookup temporarily unavailable or incomplete'
       )
+      expect(mockFacilitator.lookup).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -727,17 +672,16 @@ describe('LookupResolver – additional coverage', () => {
 
       // Multiple repeated queries shouldn't push the host into backoff.
       for (let i = 0; i < 6; i++) {
-        const res = await r.query({ service: 'ls_invalid', query: { i } })
-        expect(res.outputs).toHaveLength(0)
+        const res = await r.queryDetailed({ service: 'ls_invalid', query: { i } })
+        expect(res.progress).toMatchObject({
+          status: 'unavailable',
+          freeformHosts: 1,
+          failedHosts: 0
+        })
       }
 
-      const tracker: HostReputationTracker = (r as any).hostReputation
-      const snap = tracker.snapshot('https://weird.host')
-      expect(snap?.totalFailures).toBe(0)
-      // Freeform is neutral: it must neither penalize the host nor clear a
-      // concurrent availability backoff by recording a success.
-      expect(snap?.totalSuccesses).toBe(0)
-      expect(snap?.backoffUntil).toBe(0)
+      const tracker: ReliableHostReputation = (r as any).hostReputation
+      expect(tracker.snapshot('mainnet', 'ls_invalid', 'https://weird.host')).toBeUndefined()
     })
 
     it('records failure for a structurally MALFORMED response (no type field)', async () => {
@@ -748,12 +692,13 @@ describe('LookupResolver – additional coverage', () => {
         hostOverrides: { ls_bad: ['https://malformed.host'] }
       })
 
-      const res = await r.query({ service: 'ls_bad', query: {} })
-      expect(res.outputs).toHaveLength(0)
+      const res = await r.queryDetailed({ service: 'ls_bad', query: {} })
+      expect(res.progress).toMatchObject({ status: 'unavailable', failedHosts: 1 })
 
-      const tracker: HostReputationTracker = (r as any).hostReputation
-      const snap = tracker.snapshot('https://malformed.host')
-      expect(snap?.totalFailures).toBeGreaterThan(0)
+      const tracker: ReliableHostReputation = (r as any).hostReputation
+      const snap = tracker.snapshot('mainnet', 'ls_bad', 'https://malformed.host')
+      expect(snap?.reason).toBe('malformed')
+      expect(snap?.penalty).toBe(8)
     })
   })
 
@@ -770,7 +715,7 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       await expect(r.query({ service: 'ls_foo', query: {} })).rejects.toThrow(
-        'No competent mainnet hosts found'
+        'Overlay lookup temporarily unavailable or incomplete'
       )
     })
   })

@@ -3,8 +3,8 @@ import { HostReputationTracker } from '../HostReputationTracker'
 import { Transaction } from '../../transaction/index'
 import { LockingScript } from '../../script/index'
 
-// Synthetic local reproduction retained as evidence for the legacy API.
-describe('legacy poisoned reputation reproduction', () => {
+// The original failing reproduction is retained in commit ff36b55; these now assert the shared fix.
+describe('shared poisoned reputation regression', () => {
   const host = 'https://recovered.example'
   const empty = 'https://empty.example'
   const output = {
@@ -24,7 +24,7 @@ describe('legacy poisoned reputation reproduction', () => {
         }),
       set: () => {}
     })
-  it('never contacts a reachable host with a future persisted cooldown', async () => {
+  it('contacts a reachable host despite a future legacy persisted cooldown', async () => {
     const lookup = jest.fn(async () => ({ type: 'output-list' as const, outputs: [output] }))
     const resolver = new LookupResolver({
       facilitator: { lookup },
@@ -34,12 +34,10 @@ describe('legacy poisoned reputation reproduction', () => {
         set: () => {}
       }
     })
-    await expect(resolver.query({ service: 'ls_kvstore', query: {} })).rejects.toThrow(
-      'backing off'
-    )
-    expect(lookup).not.toHaveBeenCalled()
+    expect((await resolver.query({ service: 'ls_kvstore', query: {} })).outputs).toHaveLength(1)
+    expect(lookup).toHaveBeenCalledTimes(1)
   })
-  it('returns empty while the reachable data host is excluded; reset immediately restores data', async () => {
+  it('returns data even when the fastest host is empty and a reachable host has legacy poison', async () => {
     const lookup = jest.fn(async (url: string) => ({
       type: 'output-list' as const,
       outputs: url === host ? [output] : []
@@ -53,14 +51,13 @@ describe('legacy poisoned reputation reproduction', () => {
         set: () => {}
       }
     })
-    expect((await resolver.query({ service: 'ls_kvstore', query: {} })).outputs).toHaveLength(0)
-    expect(lookup.mock.calls.map(call => call[0])).toEqual([empty])
-    ;(resolver as any).hostReputation.reset()
+    expect((await resolver.query({ service: 'ls_kvstore', query: {} })).outputs).toHaveLength(1)
+    expect(lookup.mock.calls.map(call => call[0])).toEqual([empty, host])
     expect((await resolver.query({ service: 'ls_kvstore', query: {} })).outputs).toHaveLength(1)
   })
 })
 
-it('a normal persisted penalty becomes year-long exclusion after the browser clock is corrected', async () => {
+it('ignores a legacy year-long cooldown caused by browser clock correction', async () => {
   jest.useFakeTimers()
   const data = new Map<string, string>()
   const storage = {
@@ -82,10 +79,11 @@ it('a normal persisted penalty becomes year-long exclusion after the browser clo
       reputationStorage: storage,
       hostOverrides: { ls_kvstore: [host] }
     })
-    await expect(reloaded.query({ service: 'ls_kvstore', query: {} })).rejects.toThrow(
-      'backing off'
-    )
-    expect(lookup).not.toHaveBeenCalled()
+    await expect(reloaded.query({ service: 'ls_kvstore', query: {} })).resolves.toEqual({
+      type: 'output-list',
+      outputs: []
+    })
+    expect(lookup).toHaveBeenCalledTimes(1)
     expect(
       new HostReputationTracker(storage).snapshot(host)!.backoffUntil - Date.now()
     ).toBeGreaterThan(300 * 86400000)

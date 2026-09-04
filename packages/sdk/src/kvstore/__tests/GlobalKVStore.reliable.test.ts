@@ -97,7 +97,7 @@ describe('verified KV reliability', () => {
       lookupResolver: resolver,
       reliability: { chainTracker, authoritativeHosts: [good] }
     })
-    expect((await store.getResult(f.query)).kind).toBe(status < 500 ? 'rejected' : 'unavailable')
+    expect((await store.getResult(f.query)).kind).toBe(status === 404 ? 'rejected' : 'unavailable')
   })
   it.each([
     { type: 'output-list', outputs: [{ beef: [1, 2, 3], outputIndex: 0 }] },
@@ -279,7 +279,7 @@ describe('read validation boundaries', () => {
       jest.fn(async () => new Response('x', { headers: { 'content-length': '5000000' } }))
     )
     await expect(facilitator.lookup(good, { service: 'ls_kvstore', query: {} })).rejects.toThrow(
-      'malformed'
+      /malformed/i
     )
   })
 })

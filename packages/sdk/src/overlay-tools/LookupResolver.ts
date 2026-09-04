@@ -1,8 +1,19 @@
+import { boundLookupResponse } from './boundLookupResponse.js'
 import { Transaction } from '../transaction/index.js'
 import { Beef } from '../transaction/Beef.js'
 import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 import * as Utils from '../primitives/utils.js'
-import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
+import { ReliableHostReputation, type ReliableReputationStorage } from './ReliableHostReputation.js'
+import {
+  withinDeadline,
+  monotonicNow,
+  boundedMs,
+  normalizeHosts,
+  requestReliableHost,
+  LookupValidationError,
+  type ReliableLookupOptions,
+  type ReliableLookupResult
+} from './ReliableLookup.js'
 import { Telemetry, TelemetryConfig } from '../telemetry/Telemetry.js'
 import { normalizeBRC100ByteFields, stringifyBRC100 } from '../wallet/BRC100ByteEncoding.js'
 
@@ -50,7 +61,7 @@ export type LookupFacilitatorAnswer = LookupAnswer | LookupFreeformAnswer
 
 /**
  * Per-call options for {@link LookupResolver.query} and {@link LookupResolver.query$}.
- * All optional; defaults preserve prior behavior.
+ * All optional; shared deadline and failure semantics apply to every service.
  */
 export interface LookupQueryOptions {
   /**
@@ -92,6 +103,10 @@ export interface LookupQueryOptions {
    * alias; `waitForAllHosts` takes precedence when both are supplied.
    */
   waitForAllHosts?: boolean
+  /** Total discovery and lookup budget. Default 5000 ms; maximum 30000 ms. */
+  deadlineMs?: number
+  /** Cancels discovery and outstanding host requests. */
+  signal?: AbortSignal
   /** Correlates resolver and downstream wallet telemetry without logging the query payload. */
   correlationId?: string
 }
@@ -134,6 +149,10 @@ export interface LookupAnswerProgress {
   rejectedHosts: number
   /** Hosts that returned a valid but non-aggregatable freeform response. */
   freeformHosts: number
+  /** Whether every selected discovery tracker completed without truncation. */
+  discoveryComplete?: boolean
+  /** Transport completion only; never proof of authoritative absence or freshness. */
+  status?: 'complete' | 'incomplete' | 'unavailable'
   /** Correlation id used for privacy-safe distributed diagnostics. */
   correlationId?: string
 }
@@ -142,6 +161,15 @@ export interface LookupAnswerProgress {
 export interface LookupResolution {
   answer: LookupAnswer
   progress: LookupAnswerProgress
+}
+
+/** An empty aggregate could not be distinguished from infrastructure failure. */
+export class LookupUnavailableError extends Error {
+  readonly retryable = true
+  constructor(readonly progress: LookupAnswerProgress) {
+    super('Overlay lookup temporarily unavailable or incomplete')
+    this.name = 'LookupUnavailableError'
+  }
 }
 
 /** Default SLAP trackers */
@@ -177,7 +205,7 @@ export const DEFAULT_TTN_SLAP_TRACKERS: string[] = [
 /** Public overlay network presets understood by lookup and SHIP routing. */
 export type LookupNetworkPreset = 'mainnet' | 'testnet' | 'teratestnet' | 'local'
 
-const MAX_TRACKER_WAIT_TIME = 5000
+const MAX_TRACKER_WAIT_TIME = 1500
 const DEFAULT_LOOKUP_TIMEOUT = 2000
 const DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS = 60_000
 const MAX_NOTIFICATION_DEDUP_ENTRIES = 512
@@ -235,6 +263,7 @@ function isOutputListAnswer(value: unknown): value is LookupAnswer {
   return (
     answer.type === 'output-list' &&
     Array.isArray(answer.outputs) &&
+    answer.outputs.length <= 256 &&
     answer.outputs.every(isLookupOutput)
   )
 }
@@ -243,46 +272,6 @@ function isFreeformAnswer(value: unknown): value is LookupFreeformAnswer {
   if (typeof value !== 'object' || value === null) return false
   const answer = value as Record<string, unknown>
   return answer.type === 'freeform' && Object.hasOwn(answer, 'result')
-}
-
-/** A wall-clock deadline that rejects after `timeoutMs`, optionally aborting a controller. */
-interface Deadline {
-  /** Rejects with `Error('Request timed out')` once the timer fires. */
-  promise: Promise<never>
-  /** Clears the underlying timer. Safe to call after the timer has already fired. */
-  cancel: () => void
-  /** Returns true once the timer has fired. */
-  didTimeOut: () => boolean
-}
-
-function createDeadline(timeoutMs: number, controller?: AbortController): Deadline {
-  let expired = false
-  let timer: ReturnType<typeof setTimeout> | null = null
-  const promise = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      expired = true
-      try {
-        controller?.abort()
-      } catch {
-        /* noop */
-      }
-      reject(new Error('Request timed out'))
-    }, timeoutMs)
-  })
-  return {
-    promise,
-    cancel: () => {
-      if (timer !== null) clearTimeout(timer)
-    },
-    didTimeOut: () => expired
-  }
-}
-
-function normalizeLookupError(err: unknown, timedOut: boolean): Error {
-  if (timedOut) return new Error('Request timed out')
-  if ((err as { name?: string })?.name === 'AbortError') return new Error('Request timed out')
-  if (err instanceof Error) return err
-  return new Error(Utils.toSafeString(err, 'Unknown error'))
 }
 
 /**
@@ -298,9 +287,9 @@ function isOctetStream(contentType: string | null): boolean {
 
 /** Internal cache options. Kept optional to preserve drop-in compatibility. */
 interface CacheOptions {
-  /** How long (ms) a hosts entry is considered fresh. Default 5 minutes. */
+  /** @deprecated Discovery is refreshed on every lookup; this setting is ignored. */
   hostsTtlMs?: number
-  /** How many distinct services’ hosts to cache before evicting. Default 128. */
+  /** @deprecated Discovery is no longer cached; this setting is ignored. */
   hostsMaxEntries?: number
   /** How long (ms) to keep txId memoization. Default 10 minutes. */
   txMemoTtlMs?: number
@@ -324,12 +313,14 @@ export interface LookupResolverConfig {
   hostOverrides?: Record<string, string[]>
   /** Map of lookup service names to arrays of hosts to use in addition to resolving via SLAP. */
   additionalHosts?: Record<string, string[]>
-  /** Optional cache tuning. */
+  /** Transaction memo tuning; legacy host-cache options are accepted but ignored. */
   cache?: CacheOptions
-  /** Optional storage for host reputation data. */
+  /** @deprecated Use reliableReputationStorage for atomic v4 persistence. Legacy get/set stores use memory-only health. */
   reputationStorage?:
     | 'localStorage'
     | { get: (key: string) => string | null | undefined; set: (key: string, value: string) => void }
+  /** Atomic v4 reputation storage. Legacy host-only records are ignored automatically. */
+  reliableReputationStorage?: ReliableReputationStorage
   /** Optional privacy-bounded telemetry sink. Query payloads are never emitted. */
   telemetry?: TelemetryConfig
 }
@@ -369,32 +360,23 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
   async lookup(
     url: string,
     question: LookupQuestion,
-    timeout: number = 2000
+    timeout: number = 2000,
+    signal?: AbortSignal
   ): Promise<LookupFacilitatorAnswer> {
     if (!url.startsWith('https:') && !this.allowHTTP) {
       throw new Error('HTTPS facilitator can only use URLs that start with "https:"')
     }
 
-    const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
-    const deadline = createDeadline(timeout, controller)
-
-    // Hard wall-clock deadline: in some environments (e.g. browser/Electron CORS
-    // failures) the underlying fetch can stall without ever settling, and the
-    // AbortController signal alone is insufficient to make the returned promise
-    // resolve or reject. Race the fetch against a setTimeout-backed reject so
-    // the consumer-facing promise always settles within `timeout` ms.
-    const fetchPromise = this.performLookupRequest(url, question, controller?.signal)
-    // Swallow background rejection if the deadline wins first.
-    fetchPromise.catch(() => {
-      /* noop */
-    })
-
     try {
-      return await Promise.race([fetchPromise, deadline.promise])
-    } catch (e) {
-      throw normalizeLookupError(e, deadline.didTimeOut())
-    } finally {
-      deadline.cancel()
+      return await withinDeadline(
+        async child => await this.performLookupRequest(url, question, child),
+        timeout,
+        signal
+      )
+    } catch (error) {
+      if ((error as { name?: string })?.name === 'AbortError') throw new Error('Request timed out')
+      if (error instanceof Error) throw error
+      throw new Error(Utils.toSafeString(error, 'Unknown error'))
     }
   }
 
@@ -412,7 +394,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       body: stringifyBRC100({ service: question.service, query: question.query }),
       signal
     }
-    const response: Response = await this.fetchClient(`${url}/lookup`, fco)
+    let response: Response = await this.fetchClient(`${url}/lookup`, fco)
     if (!response.ok) {
       // 408/429 are availability/backpressure signals. Other 4xx responses
       // reject this request but do not prove that the host is unavailable, so
@@ -427,6 +409,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
           : 'semantic'
       throw new LookupHTTPError(response.status, kind, response.statusText)
     }
+    response = await boundLookupResponse(response, signal)
     if (isOctetStream(response.headers.get('content-type'))) {
       return await this.parseOctetStreamLookup(response)
     }
@@ -450,6 +433,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     const payload = await response.arrayBuffer()
     const r = new Utils.Reader([...new Uint8Array(payload)])
     const nOutpoints = r.readVarIntNum()
+    if (nOutpoints > 256) throw new LookupValidationError('malformed')
     const outpoints: Array<{ txid: string; outputIndex: number; context?: number[] }> = []
     for (let i = 0; i < nOutpoints; i++) {
       const txid = Utils.toHex(r.read(32))
@@ -499,10 +483,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
 }
 
 type LookupQueryEvent =
-  | { kind: 'answer'; answer: LookupAnswer }
-  | { kind: 'done' }
-  | { kind: 'grace' }
-  | { kind: 'soft' }
+  { kind: 'answer'; answer: LookupAnswer } | { kind: 'done' } | { kind: 'grace' } | { kind: 'soft' }
 
 interface LookupQuerySessionOptions {
   hostCount: number
@@ -510,10 +491,8 @@ interface LookupQuerySessionOptions {
   softTimeoutMs?: number
   waitForAllHosts: boolean
   correlationId?: string
-  resolveTxId: (
-    output: LookupAnswer['outputs'][number],
-    now: number
-  ) => string | null
+  discoveryComplete: boolean
+  resolveTxId: (output: LookupAnswer['outputs'][number], now: number) => string | null
 }
 
 class LookupQuerySession {
@@ -528,6 +507,7 @@ class LookupQuerySession {
   freeformHosts = 0
   emittedFinal = false
 
+  private readonly discoveryComplete: boolean
   private readonly graceMs: number
   private readonly softTimeoutMs?: number
   private readonly waitForAllHosts: boolean
@@ -547,6 +527,7 @@ class LookupQuerySession {
 
   constructor(options: LookupQuerySessionOptions) {
     this.hostCount = options.hostCount
+    this.discoveryComplete = options.discoveryComplete
     this.graceMs = options.graceMs
     this.softTimeoutMs = options.softTimeoutMs
     this.waitForAllHosts = options.waitForAllHosts
@@ -616,9 +597,16 @@ class LookupQuerySession {
       failedHosts: this.failedHosts,
       rejectedHosts: this.rejectedHosts,
       freeformHosts: this.freeformHosts,
-      ...(this.correlationId !== undefined
-        ? { correlationId: this.correlationId }
-        : {})
+      discoveryComplete: this.discoveryComplete,
+      status:
+        this.successfulHosts === 0
+          ? 'unavailable'
+          : this.discoveryComplete &&
+              this.completedHosts === this.hostCount &&
+              this.successfulHosts === this.hostCount
+            ? 'complete'
+            : 'incomplete',
+      ...(this.correlationId !== undefined ? { correlationId: this.correlationId } : {})
     }
   }
 
@@ -635,11 +623,7 @@ class LookupQuerySession {
         this.graceFired = true
       }
     }
-    if (
-      this.graceFired &&
-      added &&
-      (this.emittedOnce || !this.waitForAllHosts)
-    ) {
+    if (this.graceFired && added && (this.emittedOnce || !this.waitForAllHosts)) {
       this.emittedOnce = true
       return this.snapshot(false)
     }
@@ -664,9 +648,7 @@ class LookupQuerySession {
     }
     return {
       snapshot,
-      stop:
-        typeof this.softTimeoutMs === 'number' &&
-        this.firstResponseAt !== null
+      stop: false
     }
   }
 
@@ -696,18 +678,12 @@ class LookupQuerySession {
   }
 
   async *progress(): AsyncIterable<LookupAnswerProgress> {
-    if (
-      typeof this.softTimeoutMs === 'number' &&
-      this.softTimeoutMs >= 0
-    ) {
-      this.softTimer = setTimeout(
-        () => this.push({ kind: 'soft' }),
-        this.softTimeoutMs
-      )
+    if (typeof this.softTimeoutMs === 'number' && this.softTimeoutMs >= 0) {
+      this.softTimer = setTimeout(() => this.push({ kind: 'soft' }), this.softTimeoutMs)
     }
     try {
       let stop = false
-      while (this.completedHosts < this.hostCount && !stop) {
+      while ((this.completedHosts < this.hostCount || this.queue.length > 0) && !stop) {
         const event = await this.nextEvent()
         const outcome = this.processEvent(event)
         if (outcome.snapshot != null) yield outcome.snapshot
@@ -742,14 +718,8 @@ export default class LookupResolver {
   protected readonly hostOverrides: Record<string, string[]>
   protected readonly additionalHosts: Record<string, string[]>
   protected readonly networkPreset: LookupNetworkPreset
-  private readonly hostReputation: HostReputationTracker
+  private readonly hostReputation: ReliableHostReputation
   private readonly telemetry: Telemetry
-
-  // ---- Caches / memoization ----
-  private readonly hostsCache: Map<string, { hosts: string[]; expiresAt: number }>
-  private readonly hostsInFlight: Map<string, Promise<string[]>>
-  private readonly hostsTtlMs: number
-  private readonly hostsMaxEntries: number
 
   private readonly txMemo: Map<string, { txId: string; expiresAt: number }>
   private readonly txMemoTtlMs: number
@@ -774,27 +744,14 @@ export default class LookupResolver {
     this.additionalHosts = config.additionalHosts ?? {}
     this.telemetry = new Telemetry(config.telemetry)
 
-    const rs = config.reputationStorage
-    if (rs === 'localStorage') {
-      this.hostReputation = new HostReputationTracker()
-    } else if (
-      typeof rs === 'object' &&
-      rs !== null &&
-      typeof rs.get === 'function' &&
-      typeof rs.set === 'function'
-    ) {
-      this.hostReputation = new HostReputationTracker(rs)
-    } else {
-      this.hostReputation = getOverlayHostReputationTracker()
-    }
+    // A legacy get/set-only store cannot safely perform cross-tab read/modify/write.
+    // Keep it memory-only unless the caller supplies an atomic v4 store.
+    this.hostReputation = new ReliableHostReputation(
+      config.reliableReputationStorage ??
+        (typeof config.reputationStorage === 'object' ? null : undefined)
+    )
+    this.txMemoTtlMs = config.cache?.txMemoTtlMs ?? 10 * 60 * 1000
 
-    // cache tuning
-    this.hostsTtlMs = config.cache?.hostsTtlMs ?? 5 * 60 * 1000 // 5 min
-    this.hostsMaxEntries = config.cache?.hostsMaxEntries ?? 128
-    this.txMemoTtlMs = config.cache?.txMemoTtlMs ?? 10 * 60 * 1000 // 10 min
-
-    this.hostsCache = new Map()
-    this.hostsInFlight = new Map()
     this.txMemo = new Map()
     this.advertisedBy = new Map()
     this.lastUnreachableNotificationAt = new Map()
@@ -818,14 +775,17 @@ export default class LookupResolver {
    *
    * Optional `options.graceMs` overrides the per-call grace window (default 80 ms).
    * Optional `options.softTimeoutMs` resolves the query early with whatever has arrived once any host has
-   * answered (or with an empty result if no host has answered by `softTimeoutMs`).
+   * answered (or with a retryable error if no host has answered by `softTimeoutMs`).
    */
   async query(
     question: LookupQuestion,
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    return (await this.queryDetailed(question, timeout, options)).answer
+    const resolution = await this.queryDetailed(question, timeout, options)
+    if (resolution.answer.outputs.length === 0 && resolution.progress.status !== 'complete')
+      throw new LookupUnavailableError(resolution.progress)
+    return resolution.answer
   }
 
   /**
@@ -878,84 +838,121 @@ export default class LookupResolver {
     }
   }
 
-  private appendAdditionalHosts(service: string, hosts: string[]): void {
-    const additional = this.additionalHosts[service]
-    if (additional == null || additional.length === 0) return
-    const seen = new Set(hosts)
-    for (const host of additional) {
-      if (!seen.has(host)) hosts.push(host)
-    }
-  }
-
-  private async competentHostsFor(question: LookupQuestion): Promise<string[]> {
-    let hosts: string[]
-    if (question.service === 'ls_slap') {
-      hosts =
-        this.networkPreset === 'local'
-          ? ['http://localhost:8080']
-          : this.slapTrackers
-    } else if (this.hostOverrides[question.service] != null) {
-      hosts = this.hostOverrides[question.service]
+  /** Fresh bounded union across trackers; health never removes an eligible candidate. */
+  private async resolveHosts(
+    question: LookupQuestion,
+    signal: AbortSignal,
+    remaining: () => number
+  ): Promise<{ hosts: string[]; complete: boolean }> {
+    let candidates: string[]
+    let complete = true
+    if (this.hostOverrides[question.service] !== undefined) {
+      candidates = this.hostOverrides[question.service].slice()
     } else if (this.networkPreset === 'local') {
-      hosts = ['http://localhost:8080']
+      candidates = ['http://localhost:8080']
+    } else if (question.service === 'ls_slap') {
+      candidates = this.slapTrackers.slice()
     } else {
-      hosts = await this.getCompetentHostsCached(question.service)
-    }
-    this.appendAdditionalHosts(question.service, hosts)
-    if (hosts.length < 1) {
-      throw new Error(
-        `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
+      const trackers = normalizeHosts(this.slapTrackers, false)
+      if (trackers.length === 0 || trackers.length > 32) complete = false
+      const answers = await Promise.all(
+        trackers.slice(0, 32).map(async tracker => {
+          const result = await requestReliableHost(
+            this.facilitator,
+            this.hostReputation,
+            this.networkPreset,
+            tracker,
+            { service: 'ls_slap', query: { service: question.service } },
+            {
+              hostTimeoutMs: MAX_TRACKER_WAIT_TIME,
+              validate: async answer => {
+                if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
+                const hosts = this.extractHostsFromAnswer(answer, question.service)
+                if (hosts.length !== answer.outputs.length) complete = false
+                return hosts
+              }
+            },
+            remaining(),
+            signal
+          )
+          if (result.kind !== 'answer') {
+            complete = false
+            return []
+          }
+          for (const host of result.values) {
+            if (this.advertisedBy.size >= 512) this.evictOldest(this.advertisedBy)
+            this.advertisedBy.set(host, tracker)
+          }
+          return result.values
+        })
       )
+      candidates = answers.flat()
     }
-    return hosts
-  }
-
-  private isSlapRecoveryEligible(service: string): boolean {
-    return (
-      service !== 'ls_slap' &&
-      this.hostOverrides[service] == null &&
-      this.networkPreset !== 'local'
+    candidates.push(...(this.additionalHosts[question.service] ?? []))
+    if (
+      candidates.some(host => normalizeHosts([host], this.networkPreset === 'local').length === 0)
     )
+      complete = false
+    const hosts = normalizeHosts(candidates, this.networkPreset === 'local')
+    if (hosts.length === 0 || hosts.length > 32) complete = false
+    // Select before ranking: persisted health must not exclude a candidate at the cap.
+    return {
+      hosts: this.hostReputation.rank(this.networkPreset, question.service, hosts.slice(0, 32)),
+      complete
+    }
   }
 
-  private async rankedHostsFor(question: LookupQuestion): Promise<string[]> {
-    const competentHosts = await this.competentHostsFor(question)
-    let rankedHosts: string[]
+  /** Service-specific verification on the same discovery, scheduling and reputation path. */
+  async queryReliable<T>(
+    question: LookupQuestion,
+    options: ReliableLookupOptions<T>
+  ): Promise<ReliableLookupResult<T>> {
+    const start = monotonicNow()
+    const deadlineMs = boundedMs(options.deadlineMs, 5000)
+    boundedMs(options.hostTimeoutMs, DEFAULT_LOOKUP_TIMEOUT)
+    const remaining = (): number => Math.max(0, deadlineMs - (monotonicNow() - start))
+    const hosts: ReliableLookupResult<T>['hosts'] = []
+    let discoveryComplete = false
     try {
-      rankedHosts = this.prepareHostsForQuery(
-        competentHosts,
-        `lookup service ${question.service}`
+      await withinDeadline(
+        async signal => {
+          const discovery = await this.resolveHosts(question, signal, remaining)
+          discoveryComplete = discovery.complete
+          await Promise.all(
+            discovery.hosts.map(async host => {
+              hosts.push(
+                await requestReliableHost(
+                  this.facilitator,
+                  this.hostReputation,
+                  this.networkPreset,
+                  host,
+                  question,
+                  {
+                    ...options,
+                    validate: async (answer, child) => {
+                      if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
+                      return await options.validate(answer, child)
+                    }
+                  },
+                  remaining(),
+                  signal
+                )
+              )
+            })
+          )
+        },
+        deadlineMs,
+        options.signal
       )
-    } catch (error) {
-      if (!this.isSlapRecoveryEligible(question.service)) throw error
-      this.hostsCache.delete(question.service)
-      const fresh = await this.refreshHosts(question.service, true)
-      this.appendAdditionalHosts(question.service, fresh)
-      if (fresh.length < 1) {
-        throw new Error(
-          `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
-        )
-      }
-      rankedHosts = this.prepareHostsForQuery(
-        fresh,
-        `lookup service ${question.service}`
-      )
+    } catch {
+      discoveryComplete = false
     }
-    if (rankedHosts.length < 1) {
-      throw new Error(
-        `All competent hosts for ${question.service} are temporarily unavailable due to backoff.`
-      )
-    }
-    return rankedHosts
+    return { hosts: hosts.slice(), discoveryComplete, durationMs: monotonicNow() - start }
   }
 
-  private unreachableNotificationCooldown(
-    options: LookupQueryOptions | undefined
-  ): number {
+  private unreachableNotificationCooldown(options: LookupQueryOptions | undefined): number {
     const requested = options?.unreachableHostNotificationCooldownMs
-    return typeof requested === 'number' &&
-      Number.isFinite(requested) &&
-      requested >= 0
+    return typeof requested === 'number' && Number.isFinite(requested) && requested >= 0
       ? requested
       : DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS
   }
@@ -971,13 +968,9 @@ export default class LookupResolver {
     const notificationKey = `${service}\u0000${host}`
     const now = Date.now()
     const lastNotificationAt =
-      this.lastUnreachableNotificationAt.get(notificationKey) ??
-      Number.NEGATIVE_INFINITY
+      this.lastUnreachableNotificationAt.get(notificationKey) ?? Number.NEGATIVE_INFINITY
     if (now - lastNotificationAt < cooldownMs) return
-    if (
-      this.lastUnreachableNotificationAt.size >=
-      MAX_NOTIFICATION_DEDUP_ENTRIES
-    ) {
+    if (this.lastUnreachableNotificationAt.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
       this.evictOldest(this.lastUnreachableNotificationAt)
     }
     this.lastUnreachableNotificationAt.set(notificationKey, now)
@@ -1016,19 +1009,10 @@ export default class LookupResolver {
       return
     }
     session.recordFreeformAnswer()
-    this.captureHostTelemetry(
-      service,
-      host,
-      'freeform',
-      Date.now() - hostStartedAt,
-      correlationId
-    )
+    this.captureHostTelemetry(service, host, 'freeform', Date.now() - hostStartedAt, correlationId)
   }
 
-  private recordLookupHostFailure(
-    context: LookupHostFailureContext,
-    error: unknown
-  ): void {
+  private recordLookupHostFailure(context: LookupHostFailureContext, error: unknown): void {
     const {
       session,
       service,
@@ -1050,13 +1034,7 @@ export default class LookupResolver {
       error
     )
     if (!semanticRejection) {
-      this.notifyUnreachableHost(
-        host,
-        service,
-        error,
-        onUnreachableHost,
-        notificationCooldownMs
-      )
+      this.notifyUnreachableHost(host, service, error, onUnreachableHost, notificationCooldownMs)
     }
   }
 
@@ -1065,14 +1043,20 @@ export default class LookupResolver {
     question: LookupQuestion,
     timeout: number | undefined,
     session: LookupQuerySession,
-    options: LookupQueryOptions | undefined
+    options: LookupQueryOptions | undefined,
+    signal: AbortSignal,
+    remaining: () => number
   ): void {
     const correlationId = session.correlationId
-    const notificationCooldownMs =
-      this.unreachableNotificationCooldown(options)
+    const notificationCooldownMs = this.unreachableNotificationCooldown(options)
     for (const host of hosts) {
       const hostStartedAt = Date.now()
-      void this.lookupHostWithTracking(host, question, timeout)
+      void this.lookupHostWithTracking(
+        host,
+        question,
+        Math.min(timeout ?? DEFAULT_LOOKUP_TIMEOUT, remaining()),
+        signal
+      )
         .then(answer => {
           this.recordLookupHostAnswer(
             session,
@@ -1084,15 +1068,22 @@ export default class LookupResolver {
           )
         })
         .catch(error => {
-          this.recordLookupHostFailure({
-            session,
-            service: question.service,
-            host,
-            hostStartedAt,
-            correlationId,
-            onUnreachableHost: options?.onUnreachableHost,
-            notificationCooldownMs
-          }, error)
+          if (signal.aborted) {
+            session.recordAvailabilityFailure()
+            return
+          }
+          this.recordLookupHostFailure(
+            {
+              session,
+              service: question.service,
+              host,
+              hostStartedAt,
+              correlationId,
+              onUnreachableHost: options?.onUnreachableHost,
+              notificationCooldownMs
+            },
+            error
+          )
         })
         .finally(() => {
           session.recordDone()
@@ -1109,26 +1100,45 @@ export default class LookupResolver {
    *  - Subsequent emissions: re-emitted whenever a late host returns extra outputs that weren't in earlier
    *    emissions. Each emission contains the cumulative `outputs` set.
    *  - Final emission: `isFinal: true` once all in-flight hosts have settled (success / fail / timeout). The
-   *    caller can `break` early; outstanding work is bounded by the per-host timeout.
+   *    caller can `break` early to abort outstanding work.
    *
-   * No host work runs past its per-host `timeout` — there is no leak risk on early break.
+   * Resolver waits are bounded even for non-cooperative facilitators; only cooperative work can actually be aborted.
    */
   async *query$(
     question: LookupQuestion,
     timeout?: number,
     options?: LookupQueryOptions
   ): AsyncIterable<LookupAnswerProgress> {
-    const rankedHosts = await this.rankedHostsFor(question)
+    const startedAt = monotonicNow()
+    const deadlineMs = boundedMs(options?.deadlineMs, 5000)
+    boundedMs(timeout, DEFAULT_LOOKUP_TIMEOUT)
+    const remaining = (): number => Math.max(0, deadlineMs - (monotonicNow() - startedAt))
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    const timer = setTimeout(abort, deadlineMs)
+    if (options?.signal?.aborted === true) abort()
+    else options?.signal?.addEventListener('abort', abort, { once: true })
+    let discovery: { hosts: string[]; complete: boolean }
+    try {
+      discovery = await withinDeadline(
+        async signal => await this.resolveHosts(question, signal, remaining),
+        remaining(),
+        controller.signal
+      )
+    } catch {
+      discovery = { hosts: [], complete: false }
+    }
+    const rankedHosts = discovery.hosts
     const hostCount = rankedHosts.length
     const correlationId =
       options?.correlationId ??
       (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined)
     const session = new LookupQuerySession({
       hostCount,
+      discoveryComplete: discovery.complete,
       graceMs: options?.graceMs ?? 80,
       softTimeoutMs: options?.softTimeoutMs,
-      waitForAllHosts:
-        options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
+      waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
       correlationId,
       resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
     })
@@ -1150,7 +1160,9 @@ export default class LookupResolver {
       question,
       timeout,
       session,
-      options
+      options,
+      controller.signal,
+      remaining
     )
 
     try {
@@ -1165,6 +1177,9 @@ export default class LookupResolver {
         yield progress
       }
     } finally {
+      clearTimeout(timer)
+      options?.signal?.removeEventListener('abort', abort)
+      controller.abort()
       if (!session.emittedFinal) {
         this.telemetry.capture({
           name: 'sdk.overlay.lookup.cancelled',
@@ -1180,71 +1195,6 @@ export default class LookupResolver {
         })
       }
     }
-  }
-
-  /**
-   * Cached wrapper for competent host discovery with stale-while-revalidate.
-   */
-  private async getCompetentHostsCached(service: string): Promise<string[]> {
-    const now = Date.now()
-    const cached = this.hostsCache.get(service)
-
-    // if fresh, return immediately
-    if (typeof cached === 'object' && cached.expiresAt > now) {
-      return cached.hosts.slice()
-    }
-
-    // if stale but present, kick off a refresh if not already in-flight and return stale
-    if (typeof cached === 'object' && cached.expiresAt <= now) {
-      if (!this.hostsInFlight.has(service)) {
-        this.hostsInFlight.set(
-          service,
-          this.refreshHosts(service).finally(() => {
-            this.hostsInFlight.delete(service)
-          })
-        )
-      }
-      return cached.hosts.slice()
-    }
-
-    // no cache: coalesce concurrent requests
-    if (this.hostsInFlight.has(service)) {
-      try {
-        const hosts = await this.hostsInFlight.get(service)
-        if (typeof hosts !== 'object') {
-          throw new TypeError('Hosts is not defined.')
-        }
-        return hosts.slice()
-      } catch {
-        // fall through to a fresh attempt below
-      }
-    }
-
-    const promise = this.refreshHosts(service).finally(() => {
-      this.hostsInFlight.delete(service)
-    })
-    this.hostsInFlight.set(service, promise)
-    const hosts = await promise
-    return hosts.slice()
-  }
-
-  /**
-   * Actually resolves competent hosts from SLAP trackers and updates cache.
-   */
-  private async refreshHosts(
-    service: string,
-    requireAvailable: boolean = false
-  ): Promise<string[]> {
-    const hosts = await this.findCompetentHosts(service, requireAvailable)
-    const expiresAt = Date.now() + this.hostsTtlMs
-
-    // bounded cache with simple FIFO eviction
-    if (!this.hostsCache.has(service) && this.hostsCache.size >= this.hostsMaxEntries) {
-      const oldestKey = this.hostsCache.keys().next().value
-      if (oldestKey !== undefined) this.hostsCache.delete(oldestKey)
-    }
-    this.hostsCache.set(service, { hosts, expiresAt })
-    return hosts
   }
 
   /**
@@ -1271,88 +1221,22 @@ export default class LookupResolver {
   }
 
   /**
-   * Returns a list of competent hosts for a given lookup service.
-   * Resolves as soon as the first SLAP tracker responds with valid hosts.
-   * Remaining trackers continue in the background for reputation tracking.
-   * @param service Service for which competent hosts are to be returned
-   * @returns Array of hosts competent for resolving queries
-   */
-  private async findCompetentHosts(
-    service: string,
-    requireAvailable: boolean = false
-  ): Promise<string[]> {
-    const query: LookupQuestion = {
-      service: 'ls_slap',
-      query: { service }
-    }
-
-    const trackerHosts = this.prepareHostsForQuery(this.slapTrackers, 'SLAP trackers')
-    if (trackerHosts.length === 0) return []
-
-    // Fire all trackers, resolve as soon as any returns valid hosts.
-    // Remaining trackers continue in the background for reputation tracking.
-    return await new Promise<string[]>(resolve => {
-      const allHosts = new Set<string>()
-      let resolved = false
-      let pending = trackerHosts.length
-
-      for (const tracker of trackerHosts) {
-        this.lookupHostWithTracking(tracker, query, MAX_TRACKER_WAIT_TIME)
-          .then(answer => {
-            const hosts = isOutputListAnswer(answer)
-              ? this.extractHostsFromAnswer(answer, service)
-              : []
-            for (const h of hosts) {
-              if (!allHosts.has(h)) {
-                allHosts.add(h)
-                // First-seen attribution: the tracker that surfaced this host
-                // gets credit, used by onUnreachableHost callbacks.
-                this.advertisedBy.set(h, tracker)
-              }
-            }
-            const now = Date.now()
-            const foundAvailable = [...allHosts].some(host => {
-              const backoffUntil = this.hostReputation.snapshot(host)?.backoffUntil ?? 0
-              return backoffUntil <= now
-            })
-            if (!resolved && allHosts.size > 0 && (!requireAvailable || foundAvailable)) {
-              resolved = true
-              resolve([...allHosts])
-            }
-          })
-          .catch(() => {
-            /* tracker failure tracked in reputation */
-          })
-          .finally(() => {
-            pending--
-            if (pending === 0 && !resolved) {
-              resolved = true
-              resolve([...allHosts])
-            }
-          })
-      }
-    })
-  }
-
-  /**
    * Resolve a txid for an aggregated lookup output. Uses the threaded-through `output.txid`
-   * fast path when present; otherwise memoizes Transaction.fromBEEF(beef).id('hex') keyed by
-   * the BEEF byte sequence. Returns null when the BEEF is unparseable.
+   * hint only after it matches Transaction.fromBEEF(beef).id('hex'), memoized by
+   * the BEEF byte sequence. Returns null for unparseable BEEF or a mismatched hint.
    */
   private resolveTxIdForOutput(
     output: { txid?: string; beef: number[]; outputIndex: number; context?: number[] },
     now: number
   ): string | null {
-    if (typeof output.txid === 'string' && output.txid.length > 0) {
-      return output.txid
-    }
     const keyForBeef = Array.isArray(output.beef) ? output.beef.join(',') : ''
     const memo = this.txMemo.get(keyForBeef)
     if (typeof memo === 'object' && memo !== null && memo.expiresAt > now) {
-      return memo.txId
+      return output.txid === undefined || output.txid.toLowerCase() === memo.txId ? memo.txId : null
     }
     try {
       const txId = Transaction.fromBEEF(output.beef).id('hex')
+      if (output.txid !== undefined && output.txid.toLowerCase() !== txId) return null
       if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
       this.txMemo.set(keyForBeef, { txId, expiresAt: now + this.txMemoTtlMs })
       return txId
@@ -1375,64 +1259,43 @@ export default class LookupResolver {
     }
   }
 
-  private prepareHostsForQuery(hosts: string[], context: string): string[] {
-    if (hosts.length === 0) return []
-    const now = Date.now()
-    const ranked = this.hostReputation.rankHosts(hosts, now)
-    const available = ranked.filter(h => h.backoffUntil <= now).map(h => h.host)
-    if (available.length > 0) return available
-
-    const soonest = Math.min(...ranked.map(h => h.backoffUntil))
-    const waitMs = Math.max(soonest - now, 0)
-    throw new Error(
-      `All ${context} hosts are backing off for approximately ${waitMs}ms due to repeated failures.`
-    )
-  }
-
   private async lookupHostWithTracking(
     host: string,
     question: LookupQuestion,
-    timeout?: number
+    timeout: number,
+    signal: AbortSignal
   ): Promise<LookupFacilitatorAnswer> {
-    const startedAt = Date.now()
-    const effectiveTimeout =
-      typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0
-        ? timeout
-        : DEFAULT_LOOKUP_TIMEOUT
-    const deadline = createDeadline(effectiveTimeout)
-    // Start the custom facilitator in a promise chain so synchronous throws
-    // become rejections governed by the same wall-clock deadline.
-    const lookupPromise = Promise.resolve().then(() =>
-      this.facilitator.lookup(host, question, timeout)
+    let failure: unknown
+    const result = await requestReliableHost<LookupFacilitatorAnswer>(
+      this.facilitator,
+      this.hostReputation,
+      this.networkPreset,
+      host,
+      question,
+      {
+        hostTimeoutMs: Math.max(1, timeout),
+        onError: error => {
+          failure = error
+        },
+        credit: values => values[0]?.type === 'output-list',
+        penalizeRejections: false,
+        validate: async answer => {
+          if (!isOutputListAnswer(answer) && !isFreeformAnswer(answer))
+            throw new LookupValidationError('malformed')
+          if (
+            isOutputListAnswer(answer) &&
+            answer.outputs.some(output => this.resolveTxIdForOutput(output, Date.now()) === null)
+          )
+            throw new LookupValidationError('malformed')
+          return [answer]
+        }
+      },
+      timeout,
+      signal
     )
-    lookupPromise.catch(() => {
-      /* deadline may win while custom facilitator settles later */
-    })
-
-    let answer: LookupFacilitatorAnswer
-    try {
-      answer = await Promise.race([lookupPromise, deadline.promise])
-    } catch (err) {
-      const normalized = normalizeLookupError(err, deadline.didTimeOut())
-      if (!isSemanticLookupRejection(err)) this.hostReputation.recordFailure(host, normalized)
-      throw isSemanticLookupRejection(err) ? err : normalized
-    } finally {
-      deadline.cancel()
-    }
-
-    if (isOutputListAnswer(answer)) {
-      this.hostReputation.recordSuccess(host, Date.now() - startedAt)
-      return answer
-    }
-
-    // A valid freeform response is neutral: it proves this request reached the
-    // service, but it must not erase an availability backoff established by a
-    // concurrent failing request and cannot contribute to output aggregation.
-    if (isFreeformAnswer(answer)) return answer
-
-    const malformed = new Error('Malformed lookup response')
-    this.hostReputation.recordFailure(host, malformed)
-    throw malformed
+    if (result.kind === 'answer') return result.values[0]
+    if (failure !== undefined) throw failure
+    throw new Error(`Lookup response ${result.kind}`)
   }
 
   private captureHostTelemetry(
@@ -1469,8 +1332,7 @@ export default class LookupResolver {
     progress: LookupAnswerProgress,
     durationMs: number
   ): void {
-    const degraded =
-      progress.failedHosts > 0 || progress.rejectedHosts > 0 || progress.freeformHosts > 0
+    const degraded = progress.status !== 'complete'
     this.telemetry.capture({
       name: 'sdk.overlay.lookup.completed',
       component: 'sdk.lookup-resolver',

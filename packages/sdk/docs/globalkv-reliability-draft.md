@@ -1,9 +1,11 @@
-# GlobalKVStore reliability proposal — unapproved, not ready for deployment
+# Shared overlay lookup and GlobalKVStore reliability proposal — unapproved, not ready for deployment
 
-This is a local investigation and opt-in implementation proposal, based on
+This is a local investigation and shared implementation proposal, based on
 `98734b07cf` (2026-09-04). Nothing here authorizes merging, publishing, deployment,
-changing discovery, or removing existing consumer overrides. The legacy path is
-retained for compatibility and as an executable reproduction of the defect.
+changing live discovery, or removing existing consumer overrides. The revised
+SDK 3.0.0 draft moves shared reliability into the standard resolver for every
+lookup service. KV-specific correctness and write recovery remain optional.
+See `overlay-lookup-migration.md` for the deliberate contract changes.
 
 ## Proven failure sequence
 
@@ -11,10 +13,11 @@ retained for compatibility and as an executable reproduction of the defect.
 in-process hosts. A future `backoffUntil` excludes a working host entirely. An
 empty peer then produces an empty answer. Resetting only the synthetic tracker
 immediately restores the data without changing the query or host behavior.
-Both assertions pass against the unchanged legacy implementation. A third test
+Both assertions passed against the legacy implementation at draft commit
+`ff36b55`. They now assert recovery through the standard resolver. A third test
 uses only normal `recordFailure`/`flush` calls with a temporarily advanced browser
 clock; correcting the clock and reloading turns the generated penalty into more
-than 300 days of exclusion.
+than 300 days of legacy exclusion; the revised resolver ignores that record.
 
 The root cause spans several shared boundaries:
 
@@ -111,9 +114,10 @@ URLs cannot be contacted. Existing emergency host overrides remain available.
 The total monotonic timer includes discovery, request parsing and validation.
 Each host has its own smaller budget. AbortSignal is passed to facilitators;
 standard fetch is cancelled. A non-cooperative custom facilitator cannot hold
-the consumer promise open, but its own underlying work may continue. No early
-first-answer cancellation is used because the current wire protocol supplies no
-safe early-completion certificate. Cancellation at deadline/completion is tested.
+the consumer promise open, but its own underlying work may continue. The verified `queryReliable` API does not use early
+first-answer cancellation because the current wire protocol supplies no
+safe early-completion certificate. Cancellation at deadline/completion is tested. Standard progressive callers can
+explicitly close their iterator to cancel remaining work with an incomplete snapshot.
 
 ## Correctness and structured API
 
@@ -121,7 +125,7 @@ safe early-completion certificate. Cancellation at deadline/completion is tested
 Each candidate validates BEEF parsing, actual txid versus any hint, output index,
 PushDrop fields, protocol/controller/key/tags selectors, derived controller lock,
 field signature and SPV verification before health credit or deduplication.
-The optional HTTP facilitator bounds streamed responses to 4 MiB before parsing.
+The standard HTTP facilitator bounds streamed responses to 4 MiB before parsing.
 Bounds are 256 outputs and 4 MiB BEEF per host. Aggregate outputs are deduplicated
 by the actual transaction hash and index. Within each protocol/controller/key,
 proven spending successors supersede ancestors. Incomparable tips return conflict;
@@ -173,7 +177,8 @@ remain for legacy callers. The effective per-call protocol is used when unlockin
 The optional `ReliableTopicBroadcaster` now rediscovers SHIP hosts on every
 submission, bounds discovery and parallel submissions under one five-second
 deadline, propagates fetch cancellation and checks acknowledgment indices.
-Returned errors are failures. Legacy broadcaster behavior is unchanged.
+Returned errors are failures. The standard broadcaster retains its own SHIP cache
+and submission behavior; its resolver calls inherit the shared lookup improvements.
 Competing replacement transactions now wait for independent indexing confirmation
 before the retry helper resumes. Replacement output zero is the GlobalKVStore
 contract; removal transactions still require a separate absence confirmation.
@@ -218,10 +223,14 @@ Proposed sequence after human design approval:
 
 ## Review guide
 
-Start with the two legacy reproduction tests. Review `ReliableHostReputation`,
-then `ReliableLookupResolver.queryReliable`/`ReliableLookup`, then the cryptographic and reconciliation
-boundary in `ReliableKVStore`. Review the opt-in adapter in `ReliableGlobalKVStore` last. The optional subpath keeps the legacy UMD
-payload within its unchanged size budget.
+Start with `LookupResolver.poison-reproduction.test.ts` and the service-agnostic
+`LookupResolver.shared-reliability.test.ts`. Review `ReliableHostReputation`, then
+`LookupResolver.resolveHosts`, `query$`, `queryReliable` and `ReliableLookup`.
+`ReliableLookupResolver` and `ReliableHTTPSLookupFacilitator` are compatibility
+aliases to the standard implementations, with no separate scheduling algorithm.
+Review the cryptographic and reconciliation boundary in `ReliableKVStore`, then
+the optional `ReliableGlobalKVStore` adapter. KV-specific helpers remain in the
+optional subpath; the common fixes are included in the normal SDK and UMD.
 Run deterministic tests and real loopback fault injection before package checks.
 Read the limitations above before evaluating latency or completeness claims.
 This proposal must remain a draft: it is not a complete implementation of all
@@ -246,8 +255,9 @@ session.stop()
 ```
 
 The placeholders above must be supplied by the application; no permissive tracker
-or authority is silently invented. Main SDK imports retain legacy behavior. The
-new subpath has ESM, CJS and TypeScript export contracts. No production app pin or
+or authority is silently invented. Main SDK imports use the shared reliability
+implementation for all resolver methods. The KV-specific subpath has ESM, CJS
+and TypeScript export contracts. No production app pin or
 compatibility patch has been removed.
 
 Open design decisions: authority membership and fault model; signed index

@@ -214,8 +214,11 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
-- Draft 2.5.0: add opt-in verified GlobalKVStore observations, advisory scoped
-  reputation, bounded concurrent lookup and explicit incomplete/conflict states.
+- Draft 3.0.0: apply advisory scoped reputation, fresh bounded discovery,
+  request cancellation, response limits and incomplete/unavailable evidence to
+  every standard overlay resolver method. Incomplete empty `query()` calls now
+  throw a retryable error. Add optional verified GlobalKVStore observations and
+  write reconciliation. See `docs/overlay-lookup-migration.md`.
   Unapproved; see `docs/globalkv-reliability-draft.md` before any migration.
 
 ### Added

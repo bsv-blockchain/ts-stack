@@ -1,4 +1,9 @@
-import type { LookupAnswer, LookupQuestion, OverlayLookupFacilitator } from './LookupResolver.js'
+import type {
+  LookupAnswer,
+  LookupFacilitatorAnswer,
+  LookupQuestion,
+  OverlayLookupFacilitator
+} from './LookupResolver.js'
 import { ReliableHostReputation, type HostFailureReason } from './ReliableHostReputation.js'
 
 export type ReliableHostOutcome<T> =
@@ -26,7 +31,7 @@ export class LookupValidationUnavailableError extends Error {
 }
 export class LookupValidationError extends Error {
   constructor(readonly reason: 'malformed' | 'invalid') {
-    super(`Lookup response ${reason}`)
+    super(reason === 'malformed' ? 'Malformed lookup response' : 'Invalid lookup response')
     this.name = 'LookupValidationError'
   }
 }
@@ -50,7 +55,7 @@ export async function withinDeadline<T>(
   const deadline = new Promise<never>((_resolve, reject) => {
     abort = () => {
       controller.abort()
-      reject(new Error('Lookup deadline exceeded'))
+      reject(new Error('Request timed out'))
     }
     timer = setTimeout(abort, Math.max(0, ms))
     if (parent?.aborted === true) abort()
@@ -91,7 +96,12 @@ export async function requestReliableHost<T>(
   network: string,
   host: string,
   question: LookupQuestion,
-  options: ReliableLookupOptions<T>,
+  options: Omit<ReliableLookupOptions<T>, 'validate'> & {
+    validate: (answer: LookupFacilitatorAnswer, signal: AbortSignal) => Promise<T[]>
+    credit?: (values: T[]) => boolean
+    onError?: (error: unknown) => void
+    penalizeRejections?: boolean
+  },
   remainingMs: number,
   parent: AbortSignal
 ): Promise<ReliableHostOutcome<T>> {
@@ -100,26 +110,34 @@ export async function requestReliableHost<T>(
     const values = await withinDeadline(
       async signal => {
         const answer = await facilitator.lookup(host, question, budget, signal)
-        if (answer?.type !== 'output-list' || !Array.isArray(answer.outputs))
-          throw new LookupValidationError('malformed')
         return await options.validate(answer, signal)
       },
       budget,
       parent
     )
-    if (!parent.aborted) void reputation.record(network, question.service, host)
+    if (!parent.aborted && options.credit?.(values) !== false)
+      void reputation.record(network, question.service, host)
     return { host, kind: 'answer', values }
   } catch (error) {
+    options.onError?.(error)
     let reason: HostFailureReason = 'transport'
     if (error instanceof LookupValidationError) reason = error.reason
     else if (error instanceof Error && /deadline|timed out|abort/i.test(error.message))
       reason = 'timeout'
     else if (error instanceof SyntaxError) reason = 'malformed'
     else if (typeof error === 'object' && error !== null && 'status' in error) {
-      reason = Number(error.status) < 500 ? 'rejected' : 'transport'
+      const status = Number(error.status)
+      reason =
+        status >= 400 && status < 500 && ![408, 425, 429].includes(status)
+          ? 'rejected'
+          : 'transport'
     }
     // Cancellation belongs to the operation, not to the host.
-    if (!parent.aborted && !(error instanceof LookupValidationUnavailableError))
+    if (
+      !parent.aborted &&
+      !(error instanceof LookupValidationUnavailableError) &&
+      !(reason === 'rejected' && options.penalizeRejections === false)
+    )
       void reputation.record(network, question.service, host, reason)
     return { host, kind: reason }
   }
