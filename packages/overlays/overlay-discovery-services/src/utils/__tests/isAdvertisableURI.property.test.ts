@@ -82,6 +82,7 @@ describe('overlay discovery boundary properties', () => {
       'https+bsvauth://%',
       'wss://%',
       'https://xn--0.org',
+      'wss://xn--0.org',
       'https://localhost',
       'wss://localhost',
       'https://example.org/path',
