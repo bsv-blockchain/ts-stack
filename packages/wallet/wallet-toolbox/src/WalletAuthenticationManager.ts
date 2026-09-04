@@ -325,41 +325,9 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       throw error
     }
 
-    if (
-      wabAccountStatus === EXISTING_USER &&
-      this.authenticationFlow !== EXISTING_USER &&
-      registrationStatus !== PENDING_REGISTRATION
-    ) {
-      super.destroy()
-      const error = new WABAccountContinuityError()
-      this.telemetry.capture({
-        name: `${AUTH_EVENT}account-continuity.mismatch`,
-        component: AUTH_COMPONENT,
-        severity: 'error',
-        correlationId: session.correlationId,
-        attributes: {
-          methodType: session.methodType,
-          wabAccountStatus,
-          umpAccountStatus: NEW_USER
-        },
-        error
-      })
-      throw error
-    }
-
-    if (registrationStatus === PENDING_REGISTRATION) {
-      this.pendingRegistrationPresentationKey = result.presentationKey
-      if (this.authenticationFlow === EXISTING_USER) {
-        await this.finalizePendingRegistration()
-      }
-    }
-
-    const continuity =
-      registrationStatus === PENDING_REGISTRATION && this.authenticationFlow === NEW_USER
-        ? 'registration-resumed'
-        : wabAccountStatus === this.authenticationFlow
-          ? 'matched'
-          : 'ump-existing'
+    this.assertAccountContinuity(wabAccountStatus, registrationStatus, session)
+    await this.reconcilePendingRegistration(result, registrationStatus)
+    const continuity = this.describeContinuity(wabAccountStatus, registrationStatus)
     this.telemetry.capture({
       name: `${AUTH_EVENT}completed`,
       component: AUTH_COMPONENT,
@@ -396,6 +364,51 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       throw new WABAccountContinuityError('WAB returned an invalid registration status.')
     }
     return status
+  }
+
+  private assertAccountContinuity(
+    wabAccountStatus: 'new-user' | 'existing-user',
+    registrationStatus: 'pending' | 'active',
+    session: WABAuthSession
+  ): void {
+    const mismatch = wabAccountStatus === EXISTING_USER && this.authenticationFlow !== EXISTING_USER
+    if (!mismatch || registrationStatus === PENDING_REGISTRATION) return
+
+    super.destroy()
+    const error = new WABAccountContinuityError()
+    this.telemetry.capture({
+      name: `${AUTH_EVENT}account-continuity.mismatch`,
+      component: AUTH_COMPONENT,
+      severity: 'error',
+      correlationId: session.correlationId,
+      attributes: {
+        methodType: session.methodType,
+        wabAccountStatus,
+        umpAccountStatus: NEW_USER
+      },
+      error
+    })
+    throw error
+  }
+
+  private async reconcilePendingRegistration(
+    result: CompleteAuthResponse,
+    registrationStatus: 'pending' | 'active'
+  ): Promise<void> {
+    if (registrationStatus !== PENDING_REGISTRATION) return
+    this.pendingRegistrationPresentationKey = result.presentationKey
+    if (this.authenticationFlow === EXISTING_USER) await this.finalizePendingRegistration()
+  }
+
+  private describeContinuity(
+    wabAccountStatus: 'new-user' | 'existing-user',
+    registrationStatus: 'pending' | 'active'
+  ): 'registration-resumed' | 'matched' | 'ump-existing' {
+    if (registrationStatus === PENDING_REGISTRATION && this.authenticationFlow === NEW_USER) {
+      return 'registration-resumed'
+    }
+    if (wabAccountStatus === this.authenticationFlow) return 'matched'
+    return 'ump-existing'
   }
 
   private async finalizePendingRegistration(): Promise<void> {
