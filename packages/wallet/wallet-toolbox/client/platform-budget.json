@@ -2,7 +2,7 @@
   "profile": "browser",
   "maximumBytes": {
     "vite": {
-      "raw": 1671500,
+      "raw": 1672000,
       "gzip": 394000,
       "brotli": 307250
     },

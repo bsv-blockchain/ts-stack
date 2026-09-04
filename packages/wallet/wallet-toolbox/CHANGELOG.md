@@ -11,9 +11,10 @@ attention to changes that materially alter behavior or extend functionality.
   a clean missing-token result only for a server-declared pending registration,
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
-  The additive client path measures 1,671,343 raw Vite bytes locally; its
-  reviewed Vite ceilings advance to 1,671,500 raw and 307,250 Brotli bytes;
-  gzip and all esbuild ceilings remain unchanged.
+  The additive client path measures 1,671,343 raw Vite bytes locally and
+  1,671,573 bytes on hosted Linux; its reviewed Vite ceilings advance to
+  1,672,000 raw and 307,250 Brotli bytes; gzip and all esbuild ceilings remain
+  unchanged.
 
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
@@ -70,10 +71,10 @@ attention to changes that materially alter behavior or extend functionality.
   no longer discards the total it already computed. Full pages, first pages,
   and empty result sets are unchanged, so no consumer migration is required.
   `balanceAndUtxos` now terminates from page progress instead of relying on the
-   former collapsing total, preventing a zero-progress loop after the final page.
-   The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
-   covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
-   and esbuild ceilings remain unchanged.
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
 
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with
