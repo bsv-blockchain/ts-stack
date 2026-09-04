@@ -6,6 +6,21 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Make new WAB account creation resumable when wallet setup, funding, KDF, UMP
+  publication, or the final acknowledgement is interrupted. The manager accepts
+  a clean missing-token result only for a server-declared pending registration,
+  finalizes after successful publication, repairs a lost acknowledgement on the
+  next login, and preserves fail-closed continuity for active and legacy WABs.
+  The additive client path measures 1,671,343 raw Vite bytes locally and
+  1,671,573 bytes on hosted Linux; esbuild raw measures 1,304,944 bytes locally
+  and 1,305,165 bytes on hosted Linux. The reviewed Vite ceilings advance to
+  1,672,000 raw and 307,250 Brotli bytes, and the esbuild raw ceiling advances
+  to 1,305,500 bytes; gzip and esbuild compressed ceilings remain unchanged.
+  Optimized Hermes bytecode measures 3,494,808 raw bytes locally and 3,495,655
+  on hosted Linux. Hosted Linux gzip measures 1,415,730 bytes. Its reviewed raw
+  and gzip ceilings advance to 3,496,500 and 1,416,500 respectively, while the
+  Metro and Hermes Brotli ceilings remain unchanged.
+
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
   directly or invoke the underlying wallet operation at most once, while
@@ -61,10 +76,10 @@ attention to changes that materially alter behavior or extend functionality.
   no longer discards the total it already computed. Full pages, first pages,
   and empty result sets are unchanged, so no consumer migration is required.
   `balanceAndUtxos` now terminates from page progress instead of relying on the
-   former collapsing total, preventing a zero-progress loop after the final page.
-   The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
-   covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
-   and esbuild ceilings remain unchanged.
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
 
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with

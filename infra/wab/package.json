@@ -2,7 +2,7 @@
   "name": "@bsv/wab-server",
   "author": "BSV Association",
   "private": true,
-  "version": "1.5.4",
+  "version": "1.5.5",
   "overrides": {
     "brace-expansion": "5.0.9",
     "gaxios": "7.3.0"

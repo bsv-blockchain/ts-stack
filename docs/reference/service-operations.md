@@ -270,6 +270,7 @@ Incident handling follows this evidence-preserving sequence:
   `--require ./dist/telemetry.js`.
 - Critical journeys:
 - start and complete an authentication challenge
+- resume and finalize an interrupted WAB-to-UMP account registration
 - pin a verified legacy UMP outpoint and clear the pin after recovery
 - verify, commit, and if necessary restore a phone-number association change
 - store, retrieve, update, and delete encrypted shares
@@ -278,12 +279,12 @@ Incident handling follows this evidence-preserving sequence:
 - SMS challenge, completion, replay, or abuse-control failures spike
 - share encryption, retrieval, or deletion failures repeat
 - database migration or pool failures consume error budget
-- State: Authentication, identity-link, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
+- State: Authentication, identity-link, pending-registration, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
 - Migration/startup: Migrations complete before listen; verify rollback compatibility before rollout.
 - Backup/restore: Take an encrypted database snapshot and test identity/share recovery without logging secrets.
 - RPO starting point: 15 minutes for authentication and encrypted share state.
 - RTO starting point: 4 hours from a verified encrypted backup and independently retained encryption keys.
-- Restore validation: Verify migration state, authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
+- Restore validation: Verify migration state, authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.
 - Scaling: Multiple replicas require shared rate limits and any authentication challenge/session state to remain database-backed.
 - Disruption: Preserve at least one ready replica after shared abuse-control state is verified.

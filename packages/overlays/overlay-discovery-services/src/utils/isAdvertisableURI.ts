@@ -30,11 +30,17 @@ const parsePositiveMeasurement = (value: string): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+const isAllowedPublicHostname = (hostname: string): boolean => {
+  const normalized = hostname.toLowerCase()
+  if (normalized === 'localhost') return false
+  return normalized.split('.').every(label => !label.startsWith('xn--'))
+}
+
 const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
   try {
     const modifiedURI = uri.replace(prefix, 'https://')
     const parsed = new URL(modifiedURI)
-    if (parsed.hostname.toLowerCase() === 'localhost') return false
+    if (!isAllowedPublicHostname(parsed.hostname)) return false
     if (parsed.pathname !== '/') return false
     return true
   } catch {
@@ -45,7 +51,7 @@ const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
 const validateWssURI = (uri: string): boolean => {
   try {
     const parsed = new URL(uri)
-    if (parsed.hostname.toLowerCase() === 'localhost') return false
+    if (!isAllowedPublicHostname(parsed.hostname)) return false
     return true
   } catch {
     return false
