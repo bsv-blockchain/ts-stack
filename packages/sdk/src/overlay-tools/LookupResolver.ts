@@ -346,7 +346,8 @@ export interface OverlayLookupFacilitator {
   lookup: (
     url: string,
     question: LookupQuestion,
-    timeout?: number
+    timeout?: number,
+    signal?: AbortSignal
   ) => Promise<LookupFacilitatorAnswer>
 }
 
@@ -397,7 +398,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     }
   }
 
-  private async performLookupRequest(
+  protected async performLookupRequest(
     url: string,
     question: LookupQuestion,
     signal: AbortSignal | undefined
@@ -736,11 +737,11 @@ interface LookupHostFailureContext {
  * Represents a Lookup Resolver.
  */
 export default class LookupResolver {
-  private readonly facilitator: OverlayLookupFacilitator
-  private readonly slapTrackers: string[]
-  private readonly hostOverrides: Record<string, string[]>
-  private readonly additionalHosts: Record<string, string[]>
-  private readonly networkPreset: LookupNetworkPreset
+  protected readonly facilitator: OverlayLookupFacilitator
+  protected readonly slapTrackers: string[]
+  protected readonly hostOverrides: Record<string, string[]>
+  protected readonly additionalHosts: Record<string, string[]>
+  protected readonly networkPreset: LookupNetworkPreset
   private readonly hostReputation: HostReputationTracker
   private readonly telemetry: Telemetry
 
@@ -1249,7 +1250,7 @@ export default class LookupResolver {
   /**
    * Extracts competent host domains from a SLAP tracker response.
    */
-  private extractHostsFromAnswer(answer: LookupAnswer, service: string): string[] {
+  protected extractHostsFromAnswer(answer: LookupAnswer, service: string): string[] {
     const hosts: string[] = []
     if (answer.type !== 'output-list') return hosts
     for (const output of answer.outputs) {

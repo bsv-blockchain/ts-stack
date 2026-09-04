@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
+- Draft 2.5.0: add opt-in verified GlobalKVStore observations, advisory scoped
+  reputation, bounded concurrent lookup and explicit incomplete/conflict states.
+  Unapproved; see `docs/globalkv-reliability-draft.md` before any migration.
+
 ### Added
 
 - Add shared BRC-100 byte-boundary helpers that preserve valid `number[]` and

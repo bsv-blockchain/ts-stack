@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -736,6 +736,16 @@
     "./umd": {
       "types": "./dist/types/mod.d.ts",
       "import": "./dist/umd/bundle.js"
+    },
+    "./kvstore/reliable": {
+      "import": {
+        "types": "./dist/types/src/kvstore/reliable.d.ts",
+        "default": "./dist/esm/src/kvstore/reliable.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/kvstore/reliable.d.ts",
+        "default": "./dist/cjs/src/kvstore/reliable.js"
+      }
     }
   },
   "scripts": {

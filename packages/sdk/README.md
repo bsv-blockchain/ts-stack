@@ -185,3 +185,12 @@ Incorporated material remains under the separate terms identified in
 [LICENSES/](./LICENSES/). Keep all three payloads with source and binary distributions.
 
 Thank you for being a part of the BSV Blockchain Libraries Project. Let's build the future of BSV Blockchain together!
+
+## Draft GlobalKVStore reliability API
+
+The optional `@bsv/sdk/kvstore/reliable` entry point exposes a `getResult` API distinguishes verified observations, partial answers,
+authoritative absence, conflicts and temporary failure. It requires an explicit
+network-correct chain tracker and completeness policy. See the
+[unapproved design and migration proposal](docs/globalkv-reliability-draft.md)
+for local evidence and material limits. Legacy behavior remains unchanged.
+This proposal is not ready for publication or deployment.

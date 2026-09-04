@@ -63,10 +63,10 @@ export class GlobalKVStore {
 
   /**
    * Configuration for the KVStore instance containing all runtime options.
-   * @private
+   * @protected
    * @readonly
    */
-  private readonly config: KVStoreConfig
+  protected readonly config: KVStoreConfig
 
   /**
    * Historian instance used to extract history from transaction outputs.
@@ -82,9 +82,9 @@ export class GlobalKVStore {
 
   /**
    * Topic broadcaster used to broadcast transactions to the overlay.
-   * @private
+   * @protected
    */
-  private readonly topicBroadcaster: TopicBroadcaster
+  protected readonly topicBroadcaster: TopicBroadcaster
 
   /**
    * A map to store locks for each key to ensure atomic updates.
@@ -231,7 +231,11 @@ export class GlobalKVStore {
       // Wrap entire operation in double-spend retry, including overlay query
       const outpoint = await withDoubleSpendRetry(async () => {
         // Re-query overlay on each attempt to get fresh token state
-        const existingEntries = await this.queryOverlay({ key, controller }, { includeToken: true })
+        const existingEntries = await this.queryOverlay(
+          { key, controller },
+          { includeToken: true },
+          protocolID
+        )
         const existingToken = existingEntries.length > 0 ? existingEntries[0].token : undefined
 
         if (existingToken == null) {
@@ -299,7 +303,7 @@ export class GlobalKVStore {
           }
 
           const tx = Transaction.fromAtomicBEEF(signableTransaction.tx)
-          const unlocker = pushdrop.unlock(this.config.protocolID as WalletProtocol, key, 'anyone')
+          const unlocker = pushdrop.unlock(protocolID as WalletProtocol, key, 'anyone')
           const unlockingScript = await unlocker.sign(tx, 0)
 
           const { tx: finalTx } = await this.wallet.signAction(
@@ -368,7 +372,11 @@ export class GlobalKVStore {
       // Remove token with double-spend retry
       const txid = await withDoubleSpendRetry(async () => {
         // Re-query overlay on each attempt to get fresh token state
-        const existingEntries = await this.queryOverlay({ key, controller }, { includeToken: true })
+        const existingEntries = await this.queryOverlay(
+          { key, controller },
+          { includeToken: true },
+          protocolID
+        )
 
         if (existingEntries.length === 0 || existingEntries[0].token == null) {
           throw new Error('The item did not exist, no item was deleted.')
@@ -499,9 +507,9 @@ export class GlobalKVStore {
    * Helper function to fetch and cache user identity key
    *
    * @returns {Promise<PubKeyHex>} The identity key of the current user
-   * @private
+   * @protected
    */
-  private async getIdentityKey(): Promise<PubKeyHex> {
+  protected async getIdentityKey(): Promise<PubKeyHex> {
     this.cachedIdentityKey ??= (
       await this.wallet.getPublicKey({ identityKey: true }, this.config.originator)
     ).publicKey
@@ -514,11 +522,12 @@ export class GlobalKVStore {
    * @param {KVStoreQuery} query - Query parameters sent to overlay
    * @param {KVStoreGetOptions} options - Configuration options for the query
    * @returns {Promise<KVStoreEntry[]>} Array of matching KV entries
-   * @private
+   * @protected
    */
-  private async queryOverlay(
+  protected async queryOverlay(
     query: KVStoreQuery,
-    options: KVStoreGetOptions = {}
+    options: KVStoreGetOptions = {},
+    _writeProtocol?: WalletProtocol
   ): Promise<KVStoreEntry[]> {
     const answer = await this.lookupResolver.query({
       service: options.serviceName ?? (this.config.serviceName as string),
@@ -618,9 +627,9 @@ export class GlobalKVStore {
    * @param {Transaction} transaction - The transaction to broadcast.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} The broadcast result.
    * @throws {Error} If the broadcast fails or the network is unreachable.
-   * @private
+   * @protected
    */
-  private async submitToOverlay(
+  protected async submitToOverlay(
     transaction: Transaction
   ): Promise<BroadcastResponse | BroadcastFailure> {
     return await this.topicBroadcaster.broadcast(transaction)

@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Adds one strict BRC-100 byte-boundary contract and secure React Native bridge validation, and completes incorporated-code compliance with hash-pinned provenance, exact MIT/ISC/BSD/Apache notices, source lineage markers, package payloads, a retained UMD banner, SBOM components, and release enforcement. Removes a broken copied Swagger UI scaffold and screenshot; the first-party OpenAPI source remains available for use with any viewer. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No API migration is required. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles."
+      "releaseType": "minor",
+      "summary": "Adds one strict BRC-100 byte-boundary contract and secure React Native bridge validation, and completes incorporated-code compliance with hash-pinned provenance, exact MIT/ISC/BSD/Apache notices, source lineage markers, package payloads, a retained UMD banner, SBOM components, and release enforcement. Removes a broken copied Swagger UI scaffold and screenshot; the first-party OpenAPI source remains available for use with any viewer. Standardizes first-party author metadata on the current BSV Association name. Adds an opt-in, draft GlobalKVStore reliability API with bounded parallel discovery, advisory scoped reputation, verified observations and explicit incomplete/conflict outcomes.",
+      "migration": "No API migration is required. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles. The proposed reliable path requires explicit chain-tracker and authority configuration; legacy APIs and browser state remain unchanged. This draft is unapproved and must not be published or deployed; see packages/sdk/docs/globalkv-reliability-draft.md."
     },
     {
       "name": "@bsv/simple",
