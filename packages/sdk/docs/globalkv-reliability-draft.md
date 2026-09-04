@@ -97,9 +97,11 @@ and bounded parallel work over suppressing every probe during an outage.
 - v1–v3 are ignored, not copied or deleted. Rolling back still sees legacy state.
 - At most 256 entries and 1 MiB read input. No arbitrary server error text,
   query, user identity, value, or BEEF is persisted or logged.
-- Browser read/modify/write is serialized using Web Locks. Without atomic
-  storage/locks, the new path uses memory only. Custom adapters must provide
-  equivalent serialization; the tests model two independent tabs sharing it.
+- Browser read/modify/write uses IndexedDB transactions, including the read
+  inside each write transaction. LocalStorage plus Web Locks allowed stale
+  cross-tab reads to overwrite newer updates in the repeated browser fixture.
+  Health refresh is capped at 50 ms; unavailable storage cannot hold up host
+  recovery. Custom adapters must provide coherent, serialized updates.
 - At most 32 candidate hosts and 32 trackers per operation. Truncation marks
   discovery incomplete. This is a resource bound, not a guarantee that an
   arbitrary 33rd healthy host will be contacted; scalable candidate scheduling

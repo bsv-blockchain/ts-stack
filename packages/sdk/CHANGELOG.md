@@ -214,6 +214,9 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
+- Persist browser overlay health with IndexedDB transactions to prevent cross-tab
+  lost updates from stale localStorage reads. Bound advisory health refresh at
+  50 ms so unavailable storage cannot block a recovered host.
 - SDK 3.0.0: apply advisory scoped reputation, fresh bounded discovery,
   request cancellation, response limits and incomplete/unavailable evidence to
   every standard overlay resolver method. Incomplete empty `query()` calls now

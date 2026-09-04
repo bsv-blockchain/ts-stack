@@ -34,6 +34,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Reject invalid punycode advertisement hosts consistently across Node/ICU versions,
+  while retaining valid internationalized names for HTTPS and WSS schemes.
+
 - Describe the accepted zero lookup limit accurately.
 
 ### Security

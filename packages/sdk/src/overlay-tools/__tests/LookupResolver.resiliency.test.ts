@@ -10,7 +10,7 @@ import { Transaction } from '../../transaction/index'
 import { LockingScript } from '../../script/index'
 
 const reputationOf = (resolver: LookupResolver): ReliableHostReputation =>
-  (resolver as unknown as { hostReputation: ReliableHostReputation }).hostReputation
+  (resolver as unknown as { reputation: ReliableHostReputation }).reputation
 
 // --------------------------------------------------------------------------
 // Test fixtures: distinct BEEFs representing distinct outputs

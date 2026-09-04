@@ -794,16 +794,17 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
+    "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "oxlint": "^1.76.0",
+    "puppeteer-core": "25.4.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
-    "puppeteer-core": "25.4.0"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "typesVersions": {
     "*": {

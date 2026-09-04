@@ -170,6 +170,22 @@ describe('standard package resolver reliability for every overlay service', () =
     })
   })
 
+  it('does not let a blocked reputation database hold up host recovery', async () => {
+    const { storage } = storageFixture()
+    storage.load = () => new Promise(() => {})
+    const lookup = jest.fn(async () => answer)
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      reliableReputationStorage: storage,
+      hostOverrides: { ls_identity: [good] }
+    })
+    const pending = resolver.query({ service: 'ls_identity', query: {} })
+    await jest.advanceTimersByTimeAsync(50)
+    await expect(pending).resolves.toEqual(answer)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
   it('aborts outstanding requests when a progressive consumer closes the iterator', async () => {
     const signals: AbortSignal[] = []
     const resolver = new LookupResolver({

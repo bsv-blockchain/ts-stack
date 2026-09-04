@@ -357,27 +357,27 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     this.allowHTTP = allowHTTP
   }
 
-  async lookup(
+  lookup(
     url: string,
     question: LookupQuestion,
     timeout: number = 2000,
     signal?: AbortSignal
   ): Promise<LookupFacilitatorAnswer> {
     if (!url.startsWith('https:') && !this.allowHTTP) {
-      throw new Error('HTTPS facilitator can only use URLs that start with "https:"')
+      return Promise.reject(
+        new Error('HTTPS facilitator can only use URLs that start with "https:"')
+      )
     }
 
-    try {
-      return await withinDeadline(
-        async child => await this.performLookupRequest(url, question, child),
-        timeout,
-        signal
-      )
-    } catch (error) {
+    return withinDeadline(
+      child => this.performLookupRequest(url, question, child),
+      timeout,
+      signal
+    ).catch(error => {
       if ((error as { name?: string })?.name === 'AbortError') throw new Error('Request timed out')
       if (error instanceof Error) throw error
       throw new Error(Utils.toSafeString(error, 'Unknown error'))
-    }
+    })
   }
 
   protected async performLookupRequest(
@@ -429,23 +429,26 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
   }
 
   /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */
-  private async parseOctetStreamLookup(response: Response): Promise<LookupAnswer> {
-    const payload = await response.arrayBuffer()
-    const r = new Utils.Reader([...new Uint8Array(payload)])
-    const nOutpoints = r.readVarIntNum()
-    if (nOutpoints > 256) throw new LookupValidationError('malformed')
-    const outpoints: Array<{ txid: string; outputIndex: number; context?: number[] }> = []
-    for (let i = 0; i < nOutpoints; i++) {
-      const txid = Utils.toHex(r.read(32))
-      const outputIndex = r.readVarIntNum()
-      const contextLength = r.readVarIntNum()
-      const context = contextLength > 0 ? r.read(contextLength) : undefined
-      outpoints.push({ txid, outputIndex, context })
-    }
-    const beef = r.read()
-    const beefObj = Beef.fromBinary(beef)
-    const outputs = await this.extractAtomicOutputs(outpoints, beefObj)
-    return { type: 'output-list', outputs }
+  private parseOctetStreamLookup(response: Response): Promise<LookupAnswer> {
+    return response.arrayBuffer().then(payload => {
+      const r = new Utils.Reader([...new Uint8Array(payload)])
+      const nOutpoints = r.readVarIntNum()
+      if (nOutpoints > 256) throw new LookupValidationError('malformed')
+      const outpoints: Array<{ txid: string; outputIndex: number; context?: number[] }> = []
+      for (let i = 0; i < nOutpoints; i++) {
+        const txid = Utils.toHex(r.read(32))
+        const outputIndex = r.readVarIntNum()
+        const contextLength = r.readVarIntNum()
+        const context = contextLength > 0 ? r.read(contextLength) : undefined
+        outpoints.push({ txid, outputIndex, context })
+      }
+      const beef = r.read()
+      const beefObj = Beef.fromBinary(beef)
+      return this.extractAtomicOutputs(outpoints, beefObj).then(outputs => ({
+        type: 'output-list',
+        outputs
+      }))
+    })
   }
 
   /** Memoize per-txid atomic BEEF extraction, yielding to the event loop between outputs. */
@@ -519,7 +522,7 @@ class LookupQuerySession {
   private readonly txIds: string[] = []
   private readonly queue: LookupQueryEvent[] = []
   private waiter: (() => void) | null = null
-  private firstResponseAt: number | null = null
+  private answered = false
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private softTimer: ReturnType<typeof setTimeout> | null = null
   private graceFired = false
@@ -616,8 +619,8 @@ class LookupQuerySession {
 
   private handleAnswer(answer: LookupAnswer): LookupAnswerProgress | null {
     const added = this.mergeAnswer(answer)
-    if (this.firstResponseAt === null) {
-      this.firstResponseAt = Date.now()
+    if (!this.answered) {
+      this.answered = true
       if (!this.graceFired && this.graceMs > 0) {
         this.graceTimer = setTimeout(() => {
           this.graceFired = true
@@ -640,44 +643,33 @@ class LookupQuerySession {
     return this.snapshot(false)
   }
 
-  private handleSoft(): {
-    snapshot: LookupAnswerProgress | null
-    stop: boolean
-  } {
+  private handleSoft(): LookupAnswerProgress | null {
     let snapshot: LookupAnswerProgress | null = null
     if (!this.emittedOnce) {
       this.graceFired = true
       this.emittedOnce = true
       snapshot = this.snapshot(false)
     }
-    return {
-      snapshot,
-      stop: false
-    }
+    return snapshot
   }
 
-  private async nextEvent(): Promise<LookupQueryEvent> {
-    if (this.queue.length === 0) {
-      await new Promise<void>(resolve => {
-        this.waiter = resolve
-      })
-    }
-    return this.queue.shift() as LookupQueryEvent
+  private nextEvent(): Promise<LookupQueryEvent> {
+    if (this.queue.length > 0) return Promise.resolve(this.queue.shift() as LookupQueryEvent)
+    return new Promise<void>(resolve => {
+      this.waiter = resolve
+    }).then(() => this.queue.shift() as LookupQueryEvent)
   }
 
-  private processEvent(event: LookupQueryEvent): {
-    snapshot: LookupAnswerProgress | null
-    stop: boolean
-  } {
+  private processEvent(event: LookupQueryEvent): LookupAnswerProgress | null {
     switch (event.kind) {
       case 'answer':
-        return { snapshot: this.handleAnswer(event.answer), stop: false }
+        return this.handleAnswer(event.answer)
       case 'grace':
-        return { snapshot: this.handleGrace(), stop: false }
+        return this.handleGrace()
       case 'soft':
         return this.handleSoft()
       case 'done':
-        return { snapshot: null, stop: false }
+        return null
     }
   }
 
@@ -686,12 +678,10 @@ class LookupQuerySession {
       this.softTimer = setTimeout(() => this.push({ kind: 'soft' }), this.softTimeoutMs)
     }
     try {
-      let stop = false
-      while ((this.completedHosts < this.hostCount || this.queue.length > 0) && !stop) {
+      while (this.completedHosts < this.hostCount || this.queue.length > 0) {
         const event = await this.nextEvent()
         const outcome = this.processEvent(event)
-        if (outcome.snapshot != null) yield outcome.snapshot
-        stop = outcome.stop
+        if (outcome != null) yield outcome
       }
       const finalSnapshot = this.snapshot(true)
       this.emittedFinal = true
@@ -722,7 +712,7 @@ export default class LookupResolver {
   protected readonly hostOverrides: Record<string, string[]>
   protected readonly additionalHosts: Record<string, string[]>
   protected readonly networkPreset: LookupNetworkPreset
-  private readonly hostReputation: ReliableHostReputation
+  private readonly reputation: ReliableHostReputation
   private readonly telemetry: Telemetry
 
   private readonly txMemo: Map<string, { txId: string; expiresAt: number }>
@@ -734,7 +724,7 @@ export default class LookupResolver {
    * notification consumers know which tracker has a stale advertisement.
    */
   private readonly advertisedBy: Map<string, string>
-  private readonly lastUnreachableNotificationAt: Map<string, number>
+  private readonly notificationTimes: Map<string, number>
 
   constructor(config: LookupResolverConfig = {}) {
     this.networkPreset = config.networkPreset ?? 'mainnet'
@@ -750,7 +740,7 @@ export default class LookupResolver {
 
     // A legacy get/set-only store cannot safely perform cross-tab read/modify/write.
     // Keep it memory-only unless the caller supplies an atomic v4 store.
-    this.hostReputation = new ReliableHostReputation(
+    this.reputation = new ReliableHostReputation(
       config.reliableReputationStorage ??
         (typeof config.reputationStorage === 'object' ? null : undefined)
     )
@@ -758,7 +748,7 @@ export default class LookupResolver {
 
     this.txMemo = new Map()
     this.advertisedBy = new Map()
-    this.lastUnreachableNotificationAt = new Map()
+    this.notificationTimes = new Map()
   }
 
   private defaultSlapTrackers(): string[] {
@@ -781,15 +771,16 @@ export default class LookupResolver {
    * Optional `options.softTimeoutMs` resolves the query early with whatever has arrived once any host has
    * answered (or with a retryable error if no host has answered by `softTimeoutMs`).
    */
-  async query(
+  query(
     question: LookupQuestion,
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    const resolution = await this.queryDetailed(question, timeout, options)
-    if (resolution.answer.outputs.length === 0 && resolution.progress.status !== 'complete')
-      throw new LookupUnavailableError(resolution.progress)
-    return resolution.answer
+    return this.queryDetailed(question, timeout, options).then(resolution => {
+      if (resolution.answer.outputs.length === 0 && resolution.progress.status !== 'complete')
+        throw new LookupUnavailableError(resolution.progress)
+      return resolution.answer
+    })
   }
 
   /**
@@ -860,15 +851,15 @@ export default class LookupResolver {
       const trackers = normalizeHosts(this.slapTrackers, false)
       if (trackers.length === 0 || trackers.length > 32) complete = false
       const answers = await Promise.all(
-        trackers.slice(0, 32).map(async tracker => {
-          const result = await requestReliableHost(
+        trackers.slice(0, 32).map(tracker =>
+          requestReliableHost(
             this.facilitator,
-            { reputation: this.hostReputation, network: this.networkPreset },
+            { reputation: this.reputation, network: this.networkPreset },
             tracker,
             { service: 'ls_slap', query: { service: question.service } },
             {
               hostTimeoutMs: MAX_TRACKER_WAIT_TIME,
-              validate: async answer => {
+              validate: answer => {
                 if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
                 const hosts = this.extractHostsFromAnswer(answer, question.service)
                 if (hosts.length !== answer.outputs.length) complete = false
@@ -877,17 +868,18 @@ export default class LookupResolver {
             },
             remaining(),
             signal
-          )
-          if (result.kind !== 'answer') {
-            complete = false
-            return []
-          }
-          for (const host of result.values) {
-            if (this.advertisedBy.size >= 512) this.evictOldest(this.advertisedBy)
-            this.advertisedBy.set(host, tracker)
-          }
-          return result.values
-        })
+          ).then(result => {
+            if (result.kind !== 'answer') {
+              complete = false
+              return []
+            }
+            for (const host of result.values) {
+              if (this.advertisedBy.size >= 512) this.evictOldest(this.advertisedBy)
+              this.advertisedBy.set(host, tracker)
+            }
+            return result.values
+          })
+        )
       )
       candidates = answers.flat()
     }
@@ -898,9 +890,13 @@ export default class LookupResolver {
       complete = false
     const hosts = normalizeHosts(candidates, this.networkPreset === 'local')
     if (hosts.length === 0 || hosts.length > 32) complete = false
+    // Storage is advisory: a blocked browser database must not delay host recovery.
+    await withinDeadline(() => this.reputation.refresh(), Math.min(50, remaining()), signal).catch(
+      () => {}
+    )
     // Select before ranking: persisted health must not exclude a candidate at the cap.
     return {
-      hosts: this.hostReputation.rank(this.networkPreset, question.service, hosts.slice(0, 32)),
+      hosts: this.reputation.rank(this.networkPreset, question.service, hosts.slice(0, 32)),
       complete
     }
   }
@@ -918,31 +914,31 @@ export default class LookupResolver {
     let discoveryComplete = false
     try {
       await withinDeadline(
-        async signal => {
-          const discovery = await this.resolveHosts(question, signal, remaining)
-          discoveryComplete = discovery.complete
-          await Promise.all(
-            discovery.hosts.map(async host => {
-              hosts.push(
-                await requestReliableHost(
+        signal =>
+          this.resolveHosts(question, signal, remaining).then(discovery => {
+            discoveryComplete = discovery.complete
+            return Promise.all(
+              discovery.hosts.map(host =>
+                requestReliableHost(
                   this.facilitator,
-                  { reputation: this.hostReputation, network: this.networkPreset },
+                  { reputation: this.reputation, network: this.networkPreset },
                   host,
                   question,
                   {
                     ...options,
-                    validate: async (answer, child) => {
+                    validate: (answer, child) => {
                       if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
-                      return await options.validate(answer, child)
+                      return options.validate(answer, child)
                     }
                   },
                   remaining(),
                   signal
-                )
+                ).then(outcome => {
+                  hosts.push(outcome)
+                })
               )
-            })
-          )
-        },
+            )
+          }),
         deadlineMs,
         options.signal
       )
@@ -952,7 +948,7 @@ export default class LookupResolver {
     return { hosts: hosts.slice(), discoveryComplete, durationMs: monotonicNow() - start }
   }
 
-  private unreachableNotificationCooldown(options: LookupQueryOptions | undefined): number {
+  private notificationCooldown(options: LookupQueryOptions | undefined): number {
     const requested = options?.unreachableHostNotificationCooldownMs
     return typeof requested === 'number' && Number.isFinite(requested) && requested >= 0
       ? requested
@@ -970,12 +966,12 @@ export default class LookupResolver {
     const notificationKey = `${service}\u0000${host}`
     const now = Date.now()
     const lastNotificationAt =
-      this.lastUnreachableNotificationAt.get(notificationKey) ?? Number.NEGATIVE_INFINITY
+      this.notificationTimes.get(notificationKey) ?? Number.NEGATIVE_INFINITY
     if (now - lastNotificationAt < cooldownMs) return
-    if (this.lastUnreachableNotificationAt.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
-      this.evictOldest(this.lastUnreachableNotificationAt)
+    if (this.notificationTimes.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
+      this.evictOldest(this.notificationTimes)
     }
-    this.lastUnreachableNotificationAt.set(notificationKey, now)
+    this.notificationTimes.set(notificationKey, now)
     try {
       const result = callback({
         host,
@@ -991,7 +987,7 @@ export default class LookupResolver {
     }
   }
 
-  private recordLookupHostAnswer(
+  private recordAnswer(
     session: LookupQuerySession,
     service: string,
     host: string,
@@ -999,22 +995,15 @@ export default class LookupResolver {
     hostStartedAt: number,
     correlationId: string | undefined
   ): void {
+    let outcome: 'empty' | 'success' | 'freeform' = 'freeform'
     if (isOutputListAnswer(answer)) {
       session.recordOutputAnswer(answer)
-      this.captureHostTelemetry(
-        service,
-        host,
-        answer.outputs.length === 0 ? 'empty' : 'success',
-        Date.now() - hostStartedAt,
-        correlationId
-      )
-      return
-    }
-    session.recordFreeformAnswer()
-    this.captureHostTelemetry(service, host, 'freeform', Date.now() - hostStartedAt, correlationId)
+      outcome = answer.outputs.length === 0 ? 'empty' : 'success'
+    } else session.recordFreeformAnswer()
+    this.captureHost(service, host, outcome, Date.now() - hostStartedAt, correlationId)
   }
 
-  private recordLookupHostFailure(context: LookupHostFailureContext, error: unknown): void {
+  private recordFailure(context: LookupHostFailureContext, error: unknown): void {
     const {
       session,
       service,
@@ -1027,7 +1016,7 @@ export default class LookupResolver {
     const semanticRejection = isSemanticLookupRejection(error)
     if (semanticRejection) session.recordRejection()
     else session.recordAvailabilityFailure()
-    this.captureHostTelemetry(
+    this.captureHost(
       service,
       host,
       semanticRejection ? 'rejected' : 'failed',
@@ -1040,7 +1029,7 @@ export default class LookupResolver {
     }
   }
 
-  private startLookupHostQueries(
+  private startQueries(
     hosts: string[],
     question: LookupQuestion,
     timeout: number | undefined,
@@ -1050,31 +1039,24 @@ export default class LookupResolver {
     remaining: () => number
   ): void {
     const correlationId = session.correlationId
-    const notificationCooldownMs = this.unreachableNotificationCooldown(options)
+    const notificationCooldownMs = this.notificationCooldown(options)
     for (const host of hosts) {
       const hostStartedAt = Date.now()
-      void this.lookupHostWithTracking(
+      void this.lookupHost(
         host,
         question,
         Math.min(timeout ?? DEFAULT_LOOKUP_TIMEOUT, remaining()),
         signal
       )
         .then(answer => {
-          this.recordLookupHostAnswer(
-            session,
-            question.service,
-            host,
-            answer,
-            hostStartedAt,
-            correlationId
-          )
+          this.recordAnswer(session, question.service, host, answer, hostStartedAt, correlationId)
         })
         .catch(error => {
           if (signal.aborted) {
             session.recordAvailabilityFailure()
             return
           }
-          this.recordLookupHostFailure(
+          this.recordFailure(
             {
               session,
               service: question.service,
@@ -1123,7 +1105,7 @@ export default class LookupResolver {
     let discovery: { hosts: string[]; complete: boolean }
     try {
       discovery = await withinDeadline(
-        async signal => await this.resolveHosts(question, signal, remaining),
+        signal => this.resolveHosts(question, signal, remaining),
         remaining(),
         controller.signal
       )
@@ -1157,7 +1139,7 @@ export default class LookupResolver {
       }
     })
 
-    this.startLookupHostQueries(
+    this.startQueries(
       rankedHosts,
       question,
       timeout,
@@ -1170,11 +1152,7 @@ export default class LookupResolver {
     try {
       for await (const progress of session.progress()) {
         if (progress.isFinal) {
-          this.captureLookupCompletedTelemetry(
-            question.service,
-            progress,
-            Date.now() - session.startedAt
-          )
+          this.captureCompletion(question.service, progress, Date.now() - session.startedAt)
         }
         yield progress
       }
@@ -1261,16 +1239,16 @@ export default class LookupResolver {
     }
   }
 
-  private async lookupHostWithTracking(
+  private lookupHost(
     host: string,
     question: LookupQuestion,
     timeout: number,
     signal: AbortSignal
   ): Promise<LookupFacilitatorAnswer> {
     let failure: unknown
-    const result = await requestReliableHost<LookupFacilitatorAnswer>(
+    return requestReliableHost<LookupFacilitatorAnswer>(
       this.facilitator,
-      { reputation: this.hostReputation, network: this.networkPreset },
+      { reputation: this.reputation, network: this.networkPreset },
       host,
       question,
       {
@@ -1280,7 +1258,7 @@ export default class LookupResolver {
         },
         credit: values => values[0]?.type === 'output-list',
         penalizeRejections: false,
-        validate: async answer => {
+        validate: answer => {
           if (!isOutputListAnswer(answer) && !isFreeformAnswer(answer))
             throw new LookupValidationError('malformed')
           if (
@@ -1293,13 +1271,14 @@ export default class LookupResolver {
       },
       timeout,
       signal
-    )
-    if (result.kind === 'answer') return result.values[0]
-    if (failure !== undefined) throw failure
-    throw new Error(`Lookup response ${result.kind}`)
+    ).then(result => {
+      if (result.kind === 'answer') return result.values[0]
+      if (failure !== undefined) throw failure
+      throw new Error(`Lookup response ${result.kind}`)
+    })
   }
 
-  private captureHostTelemetry(
+  private captureHost(
     service: string,
     host: string,
     outcome: 'success' | 'empty' | 'failed' | 'rejected' | 'freeform',
@@ -1328,7 +1307,7 @@ export default class LookupResolver {
     })
   }
 
-  private captureLookupCompletedTelemetry(
+  private captureCompletion(
     service: string,
     progress: LookupAnswerProgress,
     durationMs: number

@@ -292,7 +292,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/overlays/overlay-discovery-services.md](../packages/overlays/overlay-discovery-services.md)
 - Source: [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services)
-- Release note: Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Fixes clean installs with SDK 3 by accepting its peer version alongside the existing SDK 2 range.
+- Release note: Extends WalletAdvertiser to TerraTestNet with chain-isolated SHIP/SLAP resolution and TTN wallet services. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Fixes clean installs with SDK 3 by accepting its peer version alongside the existing SDK 2 range. Rejects invalid punycode advertisement hosts consistently across Node/ICU versions while retaining valid internationalized names.
 - Migration: Existing mainnet and testnet advertisers are unchanged. TTN operators pass chain ttn and provision the staging storage and overlay endpoints before advertising. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package. SDK 3 is supported alongside the existing SDK 2 peer range. Applications adopting SDK 3 must follow packages/sdk/docs/overlay-lookup-migration.md for changed lookup failure, deadline and persistence behavior; existing SDK 2 installations remain supported.
 
 | Public subpath | Runtime target(s)                              | Declaration target(s)                                |

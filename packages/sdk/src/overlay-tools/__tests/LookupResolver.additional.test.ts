@@ -343,7 +343,7 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       // Poison the reputation of the host so it enters backoff
-      const tracker: ReliableHostReputation = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).reputation
       for (let i = 0; i < 5; i++) {
         await tracker.record('mainnet', 'ls_backoff_test', 'https://backing.off', 'transport')
       }
@@ -363,7 +363,7 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       // Put the SLAP tracker into deep backoff
-      const tracker: ReliableHostReputation = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).reputation
       for (let i = 0; i < 5; i++) {
         await tracker.record('mainnet', 'ls_slap', 'https://backed.off.slap', 'transport')
       }
@@ -651,10 +651,10 @@ describe('LookupResolver – additional coverage', () => {
   })
 
   // -----------------------------------------------------------------------
-  // lookupHostWithTracking – invalid response tracking
+  // lookupHost – invalid response tracking
   // -----------------------------------------------------------------------
 
-  describe('lookupHostWithTracking – non-output-list responses', () => {
+  describe('lookupHost – non-output-list responses', () => {
     it('does NOT penalize a host that returns a structurally valid freeform response', async () => {
       // Many lookup services legitimately return freeform shapes for some
       // queries (e.g. ls_kvstore for missing keys). A reachable host
@@ -680,7 +680,7 @@ describe('LookupResolver – additional coverage', () => {
         })
       }
 
-      const tracker: ReliableHostReputation = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).reputation
       expect(tracker.snapshot('mainnet', 'ls_invalid', 'https://weird.host')).toBeUndefined()
     })
 
@@ -695,7 +695,7 @@ describe('LookupResolver – additional coverage', () => {
       const res = await r.queryDetailed({ service: 'ls_bad', query: {} })
       expect(res.progress).toMatchObject({ status: 'unavailable', failedHosts: 1 })
 
-      const tracker: ReliableHostReputation = (r as any).hostReputation
+      const tracker: ReliableHostReputation = (r as any).reputation
       const snap = tracker.snapshot('mainnet', 'ls_bad', 'https://malformed.host')
       expect(snap?.reason).toBe('malformed')
       expect(snap?.penalty).toBe(8)

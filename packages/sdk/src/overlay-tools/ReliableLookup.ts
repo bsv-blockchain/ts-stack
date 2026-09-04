@@ -44,7 +44,7 @@ export function boundedMs(value: number | undefined, fallback: number): number {
 }
 
 /** Races even a non-cooperative facilitator; cooperative work also receives abort. */
-export async function withinDeadline<T>(
+export function withinDeadline<T>(
   work: (signal: AbortSignal) => Promise<T>,
   ms: number,
   parent?: AbortSignal
@@ -61,17 +61,15 @@ export async function withinDeadline<T>(
     if (parent?.aborted === true) abort()
     else parent?.addEventListener('abort', abort, { once: true })
   })
-  try {
-    const pending = Promise.resolve().then(async () => {
-      if (controller.signal.aborted) throw new Error('Lookup cancelled')
-      return await work(controller.signal)
-    })
-    return await Promise.race([pending, deadline])
-  } finally {
+  const pending = Promise.resolve().then(() => {
+    if (controller.signal.aborted) throw new Error('Lookup cancelled')
+    return work(controller.signal)
+  })
+  return Promise.race([pending, deadline]).finally(() => {
     clearTimeout(timer)
     parent?.removeEventListener('abort', abort)
     controller.abort()
-  }
+  })
 }
 
 export function normalizeHosts(hosts: string[], allowHTTP: boolean): string[] {
@@ -103,13 +101,13 @@ function failureReason(error: unknown): HostFailureReason {
   return 'transport'
 }
 
-export async function requestReliableHost<T>(
+export function requestReliableHost<T>(
   facilitator: OverlayLookupFacilitator,
   context: { reputation: ReliableHostReputation; network: string },
   host: string,
   question: LookupQuestion,
   options: Omit<ReliableLookupOptions<T>, 'validate'> & {
-    validate: (answer: LookupFacilitatorAnswer, signal: AbortSignal) => Promise<T[]>
+    validate: (answer: LookupFacilitatorAnswer, signal: AbortSignal) => T[] | Promise<T[]>
     credit?: (values: T[]) => boolean
     onError?: (error: unknown) => void
     penalizeRejections?: boolean
@@ -119,28 +117,29 @@ export async function requestReliableHost<T>(
 ): Promise<ReliableHostOutcome<T>> {
   const { reputation, network } = context
   const budget = Math.min(boundedMs(options.hostTimeoutMs, 2000), remainingMs)
-  try {
-    const values = await withinDeadline(
-      async signal => {
-        const answer = await facilitator.lookup(host, question, budget, signal)
-        return await options.validate(answer, signal)
-      },
-      budget,
-      parent
-    )
-    if (!parent.aborted && options.credit?.(values) !== false)
-      void reputation.record(network, question.service, host)
-    return { host, kind: 'answer', values }
-  } catch (error) {
-    options.onError?.(error)
-    const reason = failureReason(error)
-    // Cancellation belongs to the operation, not to the host.
-    if (
-      !parent.aborted &&
-      !(error instanceof LookupValidationUnavailableError) &&
-      !(reason === 'rejected' && options.penalizeRejections === false)
-    )
-      void reputation.record(network, question.service, host, reason)
-    return { host, kind: reason }
-  }
+  return withinDeadline(
+    signal =>
+      Promise.resolve(facilitator.lookup(host, question, budget, signal)).then(answer =>
+        options.validate(answer, signal)
+      ),
+    budget,
+    parent
+  )
+    .then((values): ReliableHostOutcome<T> => {
+      if (!parent.aborted && options.credit?.(values) !== false)
+        void reputation.record(network, question.service, host)
+      return { host, kind: 'answer', values }
+    })
+    .catch((error): ReliableHostOutcome<T> => {
+      options.onError?.(error)
+      const reason = failureReason(error)
+      // Cancellation belongs to the operation, not to the host.
+      if (
+        !parent.aborted &&
+        !(error instanceof LookupValidationUnavailableError) &&
+        !(reason === 'rejected' && options.penalizeRejections === false)
+      )
+        void reputation.record(network, question.service, host, reason)
+      return { host, kind: reason }
+    })
 }

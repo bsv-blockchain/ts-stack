@@ -87,3 +87,15 @@ describe('isAdvertisableURI', () => {
     expect(isAdvertisableURI('mailto:user@example.com')).toBe(false)
   })
 })
+
+// Keep rejection stable when URL's native IDNA behavior changes between Node releases.
+it.each(['https://', 'https+bsvauth://', 'wss://'])(
+  'validates internationalized hostname labels for %s',
+  prefix => {
+    expect(isAdvertisableURI(`${prefix}xn--bcher-kva.org`)).toBe(true)
+    expect(isAdvertisableURI(`${prefix}bücher.org`)).toBe(true)
+    for (const label of ['xn--0', 'xn--', 'xn--a']) {
+      expect(isAdvertisableURI(`${prefix}${label}.org`)).toBe(false)
+    }
+  }
+)

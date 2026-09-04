@@ -1,3 +1,5 @@
+import { indexedDBReputationStorage } from './IndexedDBReputationStorage.js'
+
 /** Advisory health state. No entry is ever permission to exclude a host. */
 export type HostFailureReason = 'timeout' | 'transport' | 'rejected' | 'malformed' | 'invalid'
 export interface ReliableReputationEntry {
@@ -9,7 +11,9 @@ export interface ReliableReputationEntry {
 export interface ReliableReputationStorage {
   get: (key: string) => string | null | undefined
   set: (key: string, value: string) => void
-  /** Must serialize read/modify/write across every writer (e.g. Web Locks). */
+  /** Refresh a synchronous read cache from transactional storage, when needed. */
+  load?: (key: string) => Promise<void>
+  /** Must serialize coherent read/modify/write across every writer. */
   lock: <T>(name: string, action: () => Promise<T>) => Promise<T>
 }
 const KEY = 'bsvsdk_overlay_host_reputation_v4'
@@ -26,14 +30,8 @@ const reasons = new Set<HostFailureReason>([
 
 function browserStorage(): ReliableReputationStorage | undefined {
   try {
-    const storage = globalThis.localStorage
-    const locks = globalThis.navigator?.locks
-    if (storage == null || locks == null) return undefined
-    return {
-      get: key => storage.getItem(key),
-      set: (key, value) => storage.setItem(key, value),
-      lock: async (name, action) => await locks.request(name, action)
-    }
+    const factory = globalThis.indexedDB
+    return factory == null ? undefined : indexedDBReputationStorage(factory)
   } catch {
     return undefined
   }
@@ -103,6 +101,11 @@ export class ReliableHostReputation {
     }
   }
 
+  /** Advisory refresh; callers bound this independently of host work. */
+  refresh(): Promise<void> {
+    return this.storage?.load?.(KEY) ?? Promise.resolve()
+  }
+
   rank(network: string, service: string, hosts: string[]): string[] {
     const now = Date.now()
     this.entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
@@ -122,13 +125,13 @@ export class ReliableHostReputation {
     return entry === undefined ? undefined : { ...entry }
   }
 
-  async record(
+  record(
     network: string,
     service: string,
     host: string,
     reason?: HostFailureReason
   ): Promise<void> {
-    const update = async (): Promise<void> => {
+    const update = (): void => {
       const now = Date.now()
       const entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
       const key = this.scope(network, service, host)
@@ -147,10 +150,12 @@ export class ReliableHostReputation {
       this.storage?.set(KEY, JSON.stringify({ version: 4, entries: this.entries }))
     }
     try {
-      if (this.storage === undefined) await update()
-      else await this.storage.lock(KEY, update)
+      if (this.storage !== undefined)
+        return this.storage.lock(KEY, () => Promise.resolve(update())).catch(() => {})
+      update()
     } catch {
       /* Advisory persistence must never break lookup. */
     }
+    return Promise.resolve()
   }
 }

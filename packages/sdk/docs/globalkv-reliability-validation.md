@@ -19,7 +19,7 @@ processes. Source comparison starts at ts-stack `98734b07cf` (2026-09-04).
 | Outage becomes an apparently empty collection   | Incomplete empty aggregates throw retryable `LookupUnavailableError`; detailed/progressive APIs retain completion evidence.                                                                                                                      |
 | Bad proof or stale ancestor wins by latency     | KV tests validate BEEF, signatures, selectors and fixture-root SPV before reconciliation; incomparable tips produce conflict.                                                                                                                    |
 | Accepted transaction is not yet indexed         | Optional KV write tests retain the same transaction identity, report unconfirmed status and reconcile without creating another transaction.                                                                                                      |
-| Persisted penalties recur across tabs/reloads   | `browser/lookup-recovery.mjs` uses the exact packed UMD in Chromium, real localStorage and Web Locks, two concurrent tabs, four services and five outage/recovery cycles.                                                                        |
+| Persisted penalties recur across tabs/reloads   | `browser/lookup-recovery.mjs` uses the exact packed UMD in Chromium, real IndexedDB transactions, two concurrent tabs, four services and five outage/recovery cycles.                                                                            |
 
 The legacy cooldown behavior can be reproduced at `ff36b55`; the standard-export
 recovery assertions are in `LookupResolver.shared-reliability.test.ts`. Services
@@ -44,6 +44,7 @@ pnpm --filter @bsv/sdk test:coverage --runInBand
 pnpm --filter @bsv/sdk test:property
 pnpm --filter @bsv/sdk pack:check
 pnpm --filter @bsv/sdk test:browser
+pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 pnpm --filter docs-site test
 pnpm --filter docs-site build
 pnpm conformance
@@ -52,12 +53,13 @@ pnpm audit:security
 
 The browser command requires Chrome or Chromium in a standard system location,
 uses a disposable browser profile, and removes its package extraction afterwards.
-No browser account, production endpoint or existing storage is used.
+No browser account, production endpoint or existing storage is used. Ten
+consecutive runs of the transactional fixture passed (200 reloads total).
 
-The final local SDK coverage suite passed 164 suites / 5,998 tests and
-one snapshot, with 94.34% statement, 86.48% branch, 95.16% function and 95.26% line
+The final local SDK coverage suite passed 165 suites / 6,004 tests and
+one snapshot, with 94.37% statement, 86.51% branch, 95.29% function and 95.29% line
 coverage. Packed ESM/CJS exports, strict declarations, source maps, publint,
-Vite, esbuild and UMD contracts passed. UMD is 554,779 bytes within the unchanged 555,000-byte budget.
+Vite, esbuild and UMD contracts passed. UMD is 554,955 bytes within the unchanged 555,000-byte budget.
 The PR records the final exact-head results; historical measurements are not a
 substitute for its current hosted merge gate.
 
@@ -116,3 +118,30 @@ The current frontmatter plugin still requires toml 3, so a parent-scoped toml
 MDX TOML/YAML integration, parser security regressions and the full documentation
 build check its compatibility. No advisory dismissal or quality/bundle threshold
 was added or relaxed.
+
+## Cross-runtime CI follow-up
+
+Repeated Chromium runs exposed a stale localStorage read overwriting a newer
+update in another tab despite Web Locks. Browser persistence now reads and writes
+inside one IndexedDB transaction. The fixture waits for committed state, reloads
+both tabs with active penalties and preserves legacy localStorage unchanged.
+Independent-cache, same-key concurrency, abort and unavailable-database tests
+cover the storage boundary. Refresh is capped at 50 ms and remains advisory.
+
+The Hermes profile exposed bytecode growth from redundant async wrappers in the
+shared resolver. Promise-returning adapters and synchronous structural validators
+avoid unnecessary transpiled state machines. Mobile, browser, cancellation and
+deadline checks validate the same resolver with the original bundle budgets. The
+packed mobile fixture measures 1,718,536 bytes for Metro and 3,493,469 bytes for
+Hermes, below the unchanged 1,720,000 and 3,495,000 byte limits.
+
+Node 24.20 accepts some invalid punycode labels that earlier URL parsers rejected.
+Discovery advertisement validation explicitly requires those labels to decode,
+while preserving valid internationalized names. All 100 discovery tests pass on
+Node 24.20, including the unchanged property regression that exposed this change.
+The governed advertisement mutation profile passes at 86.83% (145 detected of
+167 valid mutations).
+
+The IndexedDB transaction tests use the existing workspace `fake-indexeddb`
+6.2.5 version as an SDK development dependency. It is excluded from runtime
+bundles; real Chromium independently verifies browser persistence.

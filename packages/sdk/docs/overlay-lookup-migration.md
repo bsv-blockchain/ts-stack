@@ -37,9 +37,10 @@ service validator through `queryReliable` where those checks are needed.
   caller's deadline, but arbitrary synchronous parsing/validator code cannot be
   preempted on the same JavaScript thread. Worker isolation remains unresolved.
 - v4 reputation is scoped by network/service/normalized host, bounded and decays.
-  v1–v3 records are ignored without deletion. Web Locks protect browser updates;
-  custom persistence requires `reliableReputationStorage` with a lock. Unsupported
-  storage environments and legacy get/set-only adapters use in-memory health.
+  v1–v3 records are ignored without deletion. IndexedDB transactions protect
+  browser updates; refresh is capped at 50 ms and fails open. Custom
+  `reliableReputationStorage` adapters must provide coherent serialized updates.
+  Unsupported environments and legacy get/set-only adapters use in-memory health.
 - HTTP semantic rejection and valid freeform responses remain neutral for
   standard availability reputation. HTTP 408/425/429 and 5xx are availability
   failures. The explicit validator API can apply reason-specific rejection and

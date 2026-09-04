@@ -35,9 +35,26 @@ async function chromePath() {
 async function preparePage(page, origin) {
   await page.goto(origin)
   await page.waitForFunction(() => globalThis.bsv?.LookupResolver !== undefined)
-  assert.equal(await page.evaluate(() => typeof navigator.locks?.request), 'function')
+  assert.equal(await page.evaluate(() => typeof indexedDB?.open), 'function')
   await page.evaluate(
     ({ services, host }) => {
+      globalThis.readHealth = key =>
+        new Promise((resolve, reject) => {
+          const open = indexedDB.open(key, 1)
+          open.onupgradeneeded = () => open.result.createObjectStore('state')
+          open.onerror = () => reject(open.error)
+          open.onsuccess = () => {
+            const db = open.result
+            const tx = db.transaction('state')
+            const read = tx.objectStore('state').get(key)
+            read.onsuccess = () => resolve(JSON.parse(read.result ?? '{}'))
+            tx.oncomplete = () => db.close()
+            tx.onabort = () => {
+              db.close()
+              reject(tx.error)
+            }
+          }
+        })
       const output = {
         beef: new bsv.Transaction(
           1,
@@ -67,6 +84,22 @@ async function preparePage(page, origin) {
       }
     },
     { services, host }
+  )
+}
+
+async function waitForHealth(page, pair, recovered) {
+  await page.waitForFunction(
+    ({ key, pair, host, recovered }) => {
+      return readHealth(key).then(state => {
+        const entries = state.entries ?? {}
+        return pair.every(service => {
+          const entry = entries[JSON.stringify(['mainnet', service, host])]
+          return entry !== undefined && (recovered ? entry.penalty === 0 : entry.penalty > 0)
+        })
+      })
+    },
+    { polling: 25, timeout: 5000 },
+    { key: currentKey, pair, host, recovered }
   )
 }
 
@@ -130,6 +163,8 @@ try {
     poison
   })
 
+  // Health persistence is advisory and asynchronous. Observe the eventual public
+  // transactional state rather than assuming cross-renderer requests have arrived.
   for (let cycle = 0; cycle < 5; cycle++) {
     // Independent tabs write different services concurrently: neither may lose the other's update.
     for (let offset = 0; offset < services.length; offset += 2) {
@@ -141,9 +176,9 @@ try {
         failed,
         pair.map(() => ({ unavailable: true, probes: 1 }))
       )
-      await pages[0].evaluate(key => navigator.locks.request(key, () => {}), currentKey)
+      await waitForHealth(pages[0], pair, false)
       const entries = await pages[0].evaluate(
-        key => JSON.parse(localStorage.getItem(key)).entries,
+        key => readHealth(key).then(state => state.entries),
         currentKey
       )
       for (const service of pair)
@@ -157,9 +192,9 @@ try {
         recovered,
         pair.map(() => ({ outputs: 1, probes: 1 }))
       )
-      await pages[0].evaluate(key => navigator.locks.request(key, () => {}), currentKey)
+      await waitForHealth(pages[0], pair, true)
       const healed = await pages[0].evaluate(
-        key => JSON.parse(localStorage.getItem(key)).entries,
+        key => readHealth(key).then(state => state.entries),
         currentKey
       )
       for (const service of pair)
