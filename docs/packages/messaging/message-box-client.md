@@ -3,10 +3,10 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.4.2'
+version: '2.4.3'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -15,6 +15,10 @@ tags: [messaging, message-box, brc-103, brc-29]
 ---
 
 # @bsv/message-box-client
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Browser- and Node-compatible authenticated store-and-forward messaging,
 > live WebSockets, peer payments, token settlement, permissions, quotes, and

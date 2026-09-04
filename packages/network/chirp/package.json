@@ -1,6 +1,6 @@
 {
   "name": "@bsv/chirp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "BRC-167 Chunked, Hashed, Interleaved Resolution Protocol reference implementation",
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -55,7 +55,7 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.1"
+    "@bsv/sdk": "^3.0.0 || ^2.4.1"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

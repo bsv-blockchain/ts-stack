@@ -8,7 +8,7 @@
 npm install @bsv/402-pay
 ```
 
-Peer dependency: `@bsv/sdk ^2.1.6`. The package supports Node.js 22+ and browser
+Peer dependency: `@bsv/sdk ^3.0.0 || ^2.1.6`. The package supports Node.js 22+ and browser
 consumers, with matching ESM and CommonJS entry points and declarations for the
 package root, `/server`, and `/client`.
 
@@ -22,13 +22,16 @@ import { createPaymentMiddleware } from '@bsv/402-pay/server'
 
 const app = express()
 
-app.use('/articles/:slug', createPaymentMiddleware({
-  wallet,  // WalletInterface from @bsv/sdk
-  calculatePrice: (path) => {
-    // Return price in satoshis, or undefined to skip payment
-    return 100
-  }
-}))
+app.use(
+  '/articles/:slug',
+  createPaymentMiddleware({
+    wallet, // WalletInterface from @bsv/sdk
+    calculatePrice: path => {
+      // Return price in satoshis, or undefined to skip payment
+      return 100
+    }
+  })
+)
 
 app.get('/articles/:slug', (req, res) => {
   // req.payment is set if payment was accepted
@@ -82,20 +85,20 @@ always sent to the service.
 
 ### Server → Client
 
-| Header | Description |
-|---|---|
-| `x-bsv-sats` | Required satoshi amount |
+| Header         | Description                |
+| -------------- | -------------------------- |
+| `x-bsv-sats`   | Required satoshi amount    |
 | `x-bsv-server` | Server identity public key |
 
 ### Client → Server
 
-| Header | Description |
-|---|---|
-| `x-bsv-beef` | Base64-encoded BEEF transaction |
-| `x-bsv-sender` | Client identity public key |
-| `x-bsv-nonce` | Base64-encoded derivation prefix |
-| `x-bsv-time` | Unix millisecond timestamp |
-| `x-bsv-vout` | Payment output index |
+| Header         | Description                      |
+| -------------- | -------------------------------- |
+| `x-bsv-beef`   | Base64-encoded BEEF transaction  |
+| `x-bsv-sender` | Client identity public key       |
+| `x-bsv-nonce`  | Base64-encoded derivation prefix |
+| `x-bsv-time`   | Unix millisecond timestamp       |
+| `x-bsv-vout`   | Payment output index             |
 
 ## Security and Replay Protection
 

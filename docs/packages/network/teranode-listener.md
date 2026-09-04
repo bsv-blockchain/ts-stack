@@ -4,9 +4,9 @@ title: '@bsv/teranode-listener'
 kind: package
 domain: network
 npm: '@bsv/teranode-listener'
-version: '1.1.5'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '1.1.6'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p'
 status: stable
@@ -14,6 +14,10 @@ tags: ['network', 'broadcast', 'teranode', 'p2p', 'libp2p']
 ---
 
 # @bsv/teranode-listener
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > TypeScript library for subscribing to Teranode P2P topics (blocks, subtrees, mining updates) via libp2p private DHT network.
 

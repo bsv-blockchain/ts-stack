@@ -214,12 +214,11 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
-- Draft 3.0.0: apply advisory scoped reputation, fresh bounded discovery,
+- SDK 3.0.0: apply advisory scoped reputation, fresh bounded discovery,
   request cancellation, response limits and incomplete/unavailable evidence to
   every standard overlay resolver method. Incomplete empty `query()` calls now
   throw a retryable error. Add optional verified GlobalKVStore observations and
   write reconciliation. See `docs/overlay-lookup-migration.md`.
-  See `docs/overlay-lookup-migration.md` for the SDK 3 migration.
 
 ### Added
 

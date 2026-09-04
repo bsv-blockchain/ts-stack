@@ -3,10 +3,10 @@ id: pkg-authsocket-client
 title: '@bsv/authsocket-client'
 kind: package
 domain: messaging
-version: '2.1.6'
+version: '2.1.7'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/authsocket-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client'
@@ -15,6 +15,10 @@ tags: [messaging, websocket, brc-31, auth]
 ---
 
 # @bsv/authsocket-client
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Client-side BRC-103 mutual authentication wrapper for socket.io-client. Signs all outbound messages and verifies inbound messages using a wallet, enabling authenticated peer-to-peer WebSocket communication.
 

@@ -3,9 +3,9 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.5'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '0.3.6'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/verifast'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast'
@@ -14,6 +14,10 @@ tags: [sdk, verification, wasm, browser, worker]
 ---
 
 # @bsv/verifast
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 `@bsv/verifast` is the optional BSV BDK WebAssembly verification backend for
 `@bsv/sdk`. It supports Node ESM and CommonJS, browser and worker ESM, and a

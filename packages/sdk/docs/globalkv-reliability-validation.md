@@ -89,6 +89,23 @@ explicit authority/protocol model. Durable pending-write recovery across reloads
 cross-device uniqueness, verified KV history and production UI adoption are
 separate extensions; see [the design](globalkv-reliability-draft.md).
 
+## Coordinated SDK peer compatibility
+
+The first clean-install CI run exposed SDK 2-only peer declarations in first-party
+packages. The 31 affected packages now accept SDK 3 alongside their existing SDK 2
+ranges, with patch versions and synchronized release documentation. The complete
+workspace `pack:check` run passes clean installs, declarations, exports and package
+payloads. The full workspace browser matrix also passes with unchanged budgets,
+including the wallet browser consumer and packed Chromium recovery fixture.
+No force-install or peer-validation bypass is used. Source versions and
+ranges are listed in the generated package API/migration table.
+
+Workspace tests also exercise the SDK 3 graph. Three wallet suites initially
+encountered missing middleware output while package checks rebuilt those files;
+after builds completed, all three suites / 46 tests passed. The other 219 wallet
+suites / 2,103 tests passed in the first run. CI performs builds before tests,
+so this local scheduling mistake does not require a source workaround.
+
 ## Tooling dependency remediation
 
 The audit identified vulnerable `fast-uri`, `qs` and `toml` versions in the build

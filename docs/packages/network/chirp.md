@@ -4,9 +4,9 @@ title: '@bsv/chirp'
 kind: package
 domain: network
 npm: '@bsv/chirp'
-version: '0.1.1'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+version: '0.1.2'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp'
 status: experimental
@@ -14,6 +14,10 @@ tags: ['network', 'storage', 'uhrp', 'merkle', 'brc-167']
 ---
 
 # @bsv/chirp
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Browser- and Node-compatible BRC-167 reference implementation for progressively publishing and resiliently resolving large UHRP-addressed byte streams.
 

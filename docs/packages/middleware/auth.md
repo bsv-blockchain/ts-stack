@@ -3,9 +3,9 @@ id: pkg-auth
 title: '@bsv/auth'
 kind: package
 domain: middleware
-version: '0.1.4'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '0.1.5'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth'
@@ -14,6 +14,10 @@ tags: [middleware, authentication, wallet, replay]
 ---
 
 # @bsv/auth
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 `@bsv/auth` provides framework-neutral, expiry-bound, single-use wallet
 authentication proofs. It separates proof creation and verification from HTTP,

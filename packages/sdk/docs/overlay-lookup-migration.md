@@ -103,8 +103,9 @@ arbitrary application state. KV's validator/reconciler is one implementation.
 
 Review the changed SDK contract and inventory each consumer's use of empty results,
 custom timeouts, response sizes, discovery cache settings and custom facilitators.
-Coordinate SDK 3 peer ranges and dependent package releases only after maintainer
-approval; this change does not change their public ranges or deployed pins. Repack
+First-party packages accept SDK 3 alongside their existing SDK 2 peer ranges,
+with patch versions for the compatible manifest correction. Publish the coordinated
+package set after maintainer approval; deployed consumer pins remain unchanged. Repack
 and test each approved consumer, then adopt service-specific validators and UI
 failure handling where needed. KV-specific write and authority guarantees have
 additional unresolved requirements described in the companion design.

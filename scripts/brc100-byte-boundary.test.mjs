@@ -118,6 +118,6 @@ for (const file of dependentPackages) {
   test(`${file} cannot resolve an SDK without the shared byte contract`, async () => {
     const pkg = JSON.parse(await readFile(file, 'utf8'))
     const sdkRange = pkg.dependencies?.['@bsv/sdk'] ?? pkg.peerDependencies?.['@bsv/sdk']
-    assert.equal(sdkRange, '^2.4.1')
+    assert.equal(sdkRange, '^3.0.0 || ^2.4.1')
   })
 }

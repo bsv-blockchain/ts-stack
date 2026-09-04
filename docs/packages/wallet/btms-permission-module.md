@@ -4,9 +4,9 @@ title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/btms-permission-module'
-version: '1.1.4'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.1.5'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'permissions']
@@ -14,6 +14,10 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms
 ---
 
 # @bsv/btms-permission-module
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 The core permission module for BTMS token operations. Framework-agnostic with no UI dependencies. <!-- audio: Btms.m4a @ 00:45 -->
 

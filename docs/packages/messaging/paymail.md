@@ -3,10 +3,10 @@ id: pkg-paymail
 title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: '2.4.7'
+version: '2.4.8'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/paymail'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail'
@@ -15,6 +15,10 @@ tags: [paymail, messaging, brc-29, identity]
 ---
 
 # @bsv/paymail
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > TypeScript SDK for BSV Paymail (BRC-121 capability discovery and routing). Provides both client-side capability discovery and server-side router with built-in support for PKI, P2P destinations, and public profiles.
 

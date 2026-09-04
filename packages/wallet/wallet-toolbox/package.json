@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -116,7 +116,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.1"
+    "@bsv/sdk": "^3.0.0 || ^2.4.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

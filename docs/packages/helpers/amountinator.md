@@ -3,10 +3,10 @@ id: pkg-amountinator
 title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: '2.1.5'
+version: '2.1.6'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/amountinator'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator'
@@ -15,6 +15,10 @@ tags: [helpers, amounts, satoshis]
 ---
 
 # @bsv/amountinator
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Satoshi/BSV/USD and multi-fiat currency conversion with exchange rate caching and wallet settings integration — convert between crypto (SATS, BSV) and 15+ fiat currencies with auto-refresh.
 
