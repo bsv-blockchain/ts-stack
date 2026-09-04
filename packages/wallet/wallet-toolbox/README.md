@@ -74,7 +74,10 @@ with the same parameters and output. Existing UMP v3 tokens remain
 interoperable and do not need migration; users do not need to enable a device
 or browser setting. A selected host backend is authoritative, so a derivation
 error or malformed output is surfaced instead of silently changing
-implementations.
+implementations. The existing `hash-wasm`-compatible utility export retains its
+full input and output contract; requests with `secret`, non-binary output, or
+non-`Uint8Array` input remain on `hash-wasm` rather than being reinterpreted by
+a backend with narrower capabilities.
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
 backward-compatible WAB authentication response. Normal verified lookup and

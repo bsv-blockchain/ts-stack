@@ -4,8 +4,20 @@ import sha256Api from 'hash-wasm/dist/sha256.umd.min.js'
 import sha512Api from 'hash-wasm/dist/sha512.umd.min.js'
 import { readyArgon2idBackend, validateArgon2idResult, type Argon2idOptions } from './Argon2idBackend'
 
-interface Argon2idBinaryOptions extends Argon2idOptions {
+type HashWasmArgon2idOptions = Parameters<typeof argon2Api.argon2id>[0]
+
+interface PortableArgon2idBinaryOptions extends Argon2idOptions {
   outputType: 'binary'
+  secret?: undefined
+}
+
+function isPortableArgon2idBinaryOptions(options: HashWasmArgon2idOptions): options is PortableArgon2idBinaryOptions {
+  return (
+    options.outputType === 'binary' &&
+    options.secret === undefined &&
+    options.password instanceof Uint8Array &&
+    options.salt instanceof Uint8Array
+  )
 }
 
 function isWebAssemblyUnavailable(error: unknown): boolean {
@@ -15,10 +27,15 @@ function isWebAssemblyUnavailable(error: unknown): boolean {
 }
 
 /**
- * Derives an Argon2id key with hash-wasm when available and a standards-compatible,
- * asynchronously yielding JavaScript implementation in runtimes such as Hermes.
+ * Preserves the complete hash-wasm Argon2id contract. Secret-free binary calls
+ * with byte-array inputs may use a registered backend or an asynchronously
+ * yielding JavaScript implementation when WebAssembly is unavailable.
  */
-export async function argon2id(options: Argon2idBinaryOptions): Promise<Uint8Array> {
+async function argon2idWithBackends(options: HashWasmArgon2idOptions): Promise<string | Uint8Array> {
+  if (!isPortableArgon2idBinaryOptions(options)) {
+    return await argon2Api.argon2id(options)
+  }
+
   const backend = readyArgon2idBackend()
   if (backend !== undefined) {
     const result = await backend.deriveKey({
@@ -46,6 +63,8 @@ export async function argon2id(options: Argon2idBinaryOptions): Promise<Uint8Arr
     })
   }
 }
+
+export const argon2id = argon2idWithBackends as typeof argon2Api.argon2id
 
 export const pbkdf2 = pbkdf2Api.pbkdf2
 export const createSHA256 = sha256Api.createSHA256

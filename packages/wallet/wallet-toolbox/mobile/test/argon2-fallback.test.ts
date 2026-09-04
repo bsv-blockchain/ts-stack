@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { argon2id } from '../../src/utility/hashWasm'
 import {
   registerArgon2idBackend,
@@ -53,6 +53,10 @@ afterEach(() => {
 })
 
 describe('Argon2id derivation', () => {
+  it('preserves the published hash-wasm type contract', () => {
+    expectTypeOf(argon2id).toEqualTypeOf<typeof import('hash-wasm').argon2id>()
+  })
+
   it('uses a proven-ready host backend before WebAssembly', async () => {
     const expected = new Uint8Array(options.hashLength).fill(9)
     const backend = registerBackend({ deriveKey: vi.fn(async () => expected) })
@@ -67,6 +71,66 @@ describe('Argon2id derivation', () => {
       hashLength: options.hashLength
     })
     expect(wasmArgon2id).not.toHaveBeenCalled()
+  })
+
+  it('retains hash-wasm for secret-bearing binary requests', async () => {
+    const backend = registerBackend()
+    const expected = new Uint8Array(options.hashLength).fill(5)
+    const secretOptions = { ...options, secret: Uint8Array.of(11, 12, 13) }
+    wasmArgon2id.mockResolvedValue(expected)
+
+    await expect(argon2id(secretOptions)).resolves.toBe(expected)
+    expect(wasmArgon2id).toHaveBeenCalledWith(secretOptions)
+    expect(backend.deriveKey).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { outputType: undefined, expected: 'default-hex' },
+    { outputType: 'hex' as const, expected: 'explicit-hex' },
+    { outputType: 'encoded' as const, expected: '$argon2id$v=19$m=1024,t=2,p=1$encoded' }
+  ])('retains hash-wasm for string inputs and $outputType output', async ({ outputType, expected }) => {
+    const backend = registerBackend()
+    const stringOptions = {
+      ...options,
+      password: 'password',
+      salt: 'sixteen-byte-slt',
+      outputType
+    }
+    wasmArgon2id.mockResolvedValue(expected)
+
+    await expect(argon2id(stringOptions)).resolves.toBe(expected)
+    expect(wasmArgon2id).toHaveBeenCalledWith(stringOptions)
+    expect(backend.deriveKey).not.toHaveBeenCalled()
+  })
+
+  it('retains hash-wasm for non-byte typed-array inputs', async () => {
+    const backend = registerBackend()
+    const typedArrayOptions = {
+      ...options,
+      password: new Uint16Array([1, 2]),
+      salt: new Uint32Array([3, 4, 5, 6])
+    }
+    const expected = new Uint8Array(options.hashLength).fill(6)
+    wasmArgon2id.mockResolvedValue(expected)
+
+    await expect(argon2id(typedArrayOptions)).resolves.toBe(expected)
+    expect(wasmArgon2id).toHaveBeenCalledWith(typedArrayOptions)
+    expect(backend.deriveKey).not.toHaveBeenCalled()
+  })
+
+  it('does not reinterpret a secret-bearing request when WebAssembly is unavailable', async () => {
+    const backend = registerBackend()
+    const error = new Error('WebAssembly is not supported in this environment!')
+    const secretOptions = { ...options, secret: Uint8Array.of(21, 22, 23) }
+    wasmArgon2id.mockRejectedValue(error)
+    Object.defineProperty(globalThis, 'WebAssembly', {
+      configurable: true,
+      value: undefined
+    })
+
+    await expect(argon2id(secretOptions)).rejects.toBe(error)
+    expect(wasmArgon2id).toHaveBeenCalledWith(secretOptions)
+    expect(backend.deriveKey).not.toHaveBeenCalled()
   })
 
   it('preloads a cold host backend while retaining the portable path', async () => {
