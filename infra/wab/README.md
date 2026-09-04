@@ -274,8 +274,9 @@ only an absent/empty value intentionally disables the routes.
 
 - `POST /admin/ump-pin` sets or clears a pin after identifying a user by
   presentation key or authentication method payload.
-- `POST /admin/registration/reopen` marks a support-verified, pre-migration
-  stranded registration pending without deleting its identity or faucet history.
+- `POST /admin/registration/reopen` performs a verified UMP lookup, then marks a
+  support-verified, pre-migration stranded registration pending only when the
+  lookup is cleanly empty, without deleting its identity or faucet history.
 - `POST /admin/phone-change/restore` restores the associations recorded for a
   `changeId`; it refuses automatic restoration after another ownership change.
 

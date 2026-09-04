@@ -1,6 +1,11 @@
 import { db } from '../db/knex'
 import { RegistrationController } from '../controllers/RegistrationController'
 import { AdminController } from '../controllers/AdminController'
+import {
+  RegistrationRecoveryError,
+  RegistrationRecoveryService,
+  registrationRecoveryService
+} from '../services/RegistrationRecoveryService'
 import { UserService } from '../services/UserService'
 
 function mockResponse(): any {
@@ -11,6 +16,10 @@ function mockResponse(): any {
 }
 
 describe('pending WAB registration recovery', () => {
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   beforeEach(async () => {
     await db('phone_change_sessions').del()
     await db('phone_change_history').del()
@@ -73,13 +82,16 @@ describe('pending WAB registration recovery', () => {
     await UserService.linkAuthMethod(user.id, 'TwilioPhone', '+14155550122')
     expect(user.registrationStatus).toBe('active')
 
+    jest
+      .spyOn(registrationRecoveryService, 'reopenIfUMPAbsent')
+      .mockImplementation(async target => UserService.reopenRegistration(target.id))
+
     const res = mockResponse()
     await AdminController.reopenRegistration(
       {
         body: {
           methodType: 'TwilioPhone',
-          payload: { phoneNumber: '+14155550122' },
-          confirmNoUMPToken: true
+          payload: { phoneNumber: '+14155550122' }
         }
       } as any,
       res
@@ -100,15 +112,65 @@ describe('pending WAB registration recovery', () => {
     expect(lookup).not.toHaveBeenCalled()
   })
 
-  it('requires support to affirm a healthy empty UMP lookup before reopening', async () => {
-    const reopen = jest.spyOn(UserService, 'reopenRegistration')
+  it('reopens only after the server verifies that UMP is cleanly empty', async () => {
+    const user = await UserService.createUser('e'.repeat(64))
+    const lookup = jest.fn().mockResolvedValue(undefined)
+    const service = new RegistrationRecoveryService({ findByPresentationKeyHash: lookup })
+
+    await service.reopenIfUMPAbsent(user)
+
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(lookup.mock.calls[0]?.[0]).toHaveLength(32)
+    await expect(UserService.getUserById(user.id)).resolves.toMatchObject({
+      registrationStatus: 'pending'
+    })
+  })
+
+  it('keeps the registration active when UMP has a token or lookup is indeterminate', async () => {
+    const user = await UserService.createUser('f'.repeat(64))
+    const found = new RegistrationRecoveryService({
+      findByPresentationKeyHash: jest
+        .fn()
+        .mockResolvedValue({ currentOutpoint: `${'1'.repeat(64)}.0` })
+    })
+    const unavailable = new RegistrationRecoveryService({
+      findByPresentationKeyHash: jest.fn().mockRejectedValue(new Error('lookup unavailable'))
+    })
+
+    await expect(found.reopenIfUMPAbsent(user)).rejects.toEqual(
+      expect.objectContaining<Partial<RegistrationRecoveryError>>({ status: 409 })
+    )
+    await expect(unavailable.reopenIfUMPAbsent(user)).rejects.toEqual(
+      expect.objectContaining<Partial<RegistrationRecoveryError>>({ status: 503 })
+    )
+    await expect(UserService.getUserById(user.id)).resolves.toMatchObject({
+      registrationStatus: 'active'
+    })
+  })
+
+  it('returns a fail-closed support response without changing registration state', async () => {
+    const user = await UserService.createUser('1'.repeat(64))
+    jest
+      .spyOn(registrationRecoveryService, 'reopenIfUMPAbsent')
+      .mockRejectedValue(
+        new RegistrationRecoveryError(
+          'Verified UMP lookup was indeterminate; registration was not reopened.',
+          503
+        )
+      )
     const res = mockResponse()
+
     await AdminController.reopenRegistration(
-      { body: { methodType: 'TwilioPhone', payload: { phoneNumber: '+14155550123' } } } as any,
+      { body: { presentationKey: user.presentationKey } } as any,
       res
     )
 
-    expect(res.status).toHaveBeenCalledWith(400)
-    expect(reopen).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(503)
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Verified UMP lookup was indeterminate; registration was not reopened.'
+    })
+    await expect(UserService.getUserById(user.id)).resolves.toMatchObject({
+      registrationStatus: 'active'
+    })
   })
 })

@@ -27,9 +27,10 @@ token is already visible. They never treat an active or legacy account as new.
 
 Accounts stranded before the registration-state migration are deliberately
 backfilled active. Reopen one only after support has independently verified the
-requester and confirmed through a healthy `ls_users` lookup that the stored WAB
-presentation hash has no UMP token. A timeout, incomplete host set, malformed
-answer, or ambiguity is not evidence of absence.
+requester. The WAB support route performs its own verified `ls_users` lookup for
+the stored presentation hash and reopens the registration only when that lookup
+is cleanly empty. A timeout, incomplete host set, malformed answer, ambiguity,
+or published token fails closed and leaves the registration active.
 
 ```bash
 curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/registration/reopen" \
@@ -37,8 +38,7 @@ curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/registration/reop
   --header 'Content-Type: application/json' \
   --data '{
     "methodType": "TwilioPhone",
-    "payload": { "phoneNumber": "+12065550100" },
-    "confirmNoUMPToken": true
+    "payload": { "phoneNumber": "+12065550100" }
   }'
 ```
 

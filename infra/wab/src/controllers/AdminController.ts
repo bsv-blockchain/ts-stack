@@ -10,6 +10,10 @@ import {
   isUMPOutpoint
 } from '../security/requestValidation'
 import { PhoneChangeError, PhoneChangeService } from '../services/PhoneChangeService'
+import {
+  RegistrationRecoveryError,
+  registrationRecoveryService
+} from '../services/RegistrationRecoveryService'
 import { UserService } from '../services/UserService'
 
 export class AdminController {
@@ -18,11 +22,6 @@ export class AdminController {
       if (!isRecord(req.body))
         return res.status(400).json({ message: 'Request body must be a JSON object.' })
       const { presentationKey, methodType, payload } = req.body
-      if (req.body.confirmNoUMPToken !== true) {
-        return res.status(400).json({
-          message: 'confirmNoUMPToken must be true after a healthy verified UMP lookup.'
-        })
-      }
       let user
       if (isHexIdentifier(presentationKey)) {
         user = await UserService.getUserByPresentationKey(presentationKey)
@@ -36,14 +35,20 @@ export class AdminController {
       }
       if (!user) return res.status(404).json({ message: 'User was not found.' })
 
-      await UserService.reopenRegistration(user.id)
+      await registrationRecoveryService.reopenIfUMPAbsent(user)
       log.warn(
         { operation: 'admin.registration.reopen', userId: user.id },
         'Registration reopened by support'
       )
       return res.json({ success: true, registrationStatus: 'pending' })
     } catch (error) {
-      log.error({ operation: 'admin.registration.reopen', err: error }, 'Registration reopen failed')
+      if (error instanceof RegistrationRecoveryError) {
+        return res.status(error.status).json({ message: error.message })
+      }
+      log.error(
+        { operation: 'admin.registration.reopen', err: error },
+        'Registration reopen failed'
+      )
       return res.status(500).json({ message: 'An internal error occurred.' })
     }
   }
