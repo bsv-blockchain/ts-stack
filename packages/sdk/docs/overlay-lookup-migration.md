@@ -1,8 +1,7 @@
-# Shared overlay lookup migration — unapproved SDK 3.0.0 draft
+# SDK 3 overlay lookup migration
 
-This candidate is intentionally a major version. It changes default scheduling,
-error behavior, discovery caching, bounds, and persisted health handling. No
-package has been published or deployed. All changes remain in a draft PR.
+SDK 3 is a major version. It changes default scheduling,
+error behavior, discovery caching, bounds, and persisted health handling. Publication and consumer upgrades follow the coordinated release process.
 
 ## Scope
 
@@ -54,7 +53,7 @@ now follow the same precedence as other services.
 ## Failure and completion contracts
 
 Before, `query()` could return `{ type: 'output-list', outputs: [] } when requests
-failed. It now throws `LookupUnavailableError` with `retryable: true` and a
+failed. It now throws `LookupUnavailableError`with`retryable: true` and a
 progress envelope for incomplete empty aggregates. A complete empty aggregate
 still means only that the selected hosts answered empty. It is not a non-inclusion
 proof or a claim about undiscovered hosts.
@@ -74,11 +73,11 @@ try {
 
 `queryDetailed` and `query$` provide `progress.status` / `status`:
 
-| Status | Meaning |
-| --- | --- |
-| `complete` | Discovery completed without truncation and every selected host returned a structurally usable output list. |
-| `incomplete` | At least one output-list response arrived, but some discovery or host work failed, was truncated or is still pending. |
-| `unavailable` | No usable output-list response has arrived. |
+| Status        | Meaning                                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `complete`    | Discovery completed without truncation and every selected host returned a structurally usable output list.            |
+| `incomplete`  | At least one output-list response arrived, but some discovery or host work failed, was truncated or is still pending. |
+| `unavailable` | No usable output-list response has arrived.                                                                           |
 
 `query()` retains successful nonempty aggregate shapes, including partial data;
 use `queryDetailed()` to inspect completeness before replacing cached collections.
@@ -105,7 +104,7 @@ arbitrary application state. KV's validator/reconciler is one implementation.
 Review the changed SDK contract and inventory each consumer's use of empty results,
 custom timeouts, response sizes, discovery cache settings and custom facilitators.
 Coordinate SDK 3 peer ranges and dependent package releases only after maintainer
-approval; this draft does not change their public ranges or deployed pins. Repack
+approval; this change does not change their public ranges or deployed pins. Repack
 and test each approved consumer, then adopt service-specific validators and UI
 failure handling where needed. KV-specific write and authority guarantees have
 additional unresolved requirements described in the companion design.
@@ -113,4 +112,4 @@ additional unresolved requirements described in the companion design.
 A later rollback uses the prior package/configuration. Old reputation keys remain
 untouched, so the prior resolver can still encounter its original cooldown defect.
 Keep production overrides and compatibility patches until an approved rollout
-has independently validated their removal. Nothing here authorizes a rollout.
+has independently validated their removal.

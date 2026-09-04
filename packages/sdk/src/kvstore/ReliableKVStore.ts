@@ -95,22 +95,7 @@ export async function validateKVAnswer(
   signal: AbortSignal
 ): Promise<ValidatedKVOutput[]> {
   if (answer.outputs.length > 256) throw new LookupValidationError('malformed')
-  const checkedTracker: ChainTracker = {
-    currentHeight: async () => {
-      try {
-        return await tracker.currentHeight()
-      } catch {
-        throw new LookupValidationUnavailableError()
-      }
-    },
-    isValidRootForHeight: async (root, height) => {
-      try {
-        return await tracker.isValidRootForHeight(root, height)
-      } catch {
-        throw new LookupValidationUnavailableError()
-      }
-    }
-  }
+  const checkedTracker = validationTracker(tracker)
   const values: ValidatedKVOutput[] = []
   let totalBytes = 0
   for (const result of answer.outputs) {
@@ -128,67 +113,99 @@ export async function validateKVAnswer(
       result.outputIndex < 0
     )
       throw new LookupValidationError('malformed')
-    try {
-      const tx = Transaction.fromBEEF(result.beef)
-      const txid = tx.id('hex')
-      if (result.txid !== undefined && result.txid.toLowerCase() !== txid)
-        throw new Error('Mismatched transaction')
-      const output = tx.outputs[result.outputIndex]
-      if (output === undefined) throw new Error('Missing output')
-      const decoded = PushDrop.decode(output.lockingScript)
-      if (decoded.fields.length !== 5 && decoded.fields.length !== 6)
-        throw new Error('Invalid fields')
-      const signature = decoded.fields.pop() as number[]
-      const entry: KVStoreEntry = {
-        protocolID: JSON.parse(Utils.toUTF8(decoded.fields[0])),
-        key: Utils.toUTF8(decoded.fields[1]),
-        value: Utils.toUTF8(decoded.fields[2]),
-        controller: Utils.toHex(decoded.fields[3])
-      }
-      if (
-        !Array.isArray(entry.protocolID) ||
-        entry.protocolID.length !== 2 ||
-        ![0, 1, 2].includes(entry.protocolID[0]) ||
-        typeof entry.protocolID[1] !== 'string' ||
-        entry.key.length === 0
-      )
-        throw new Error('Invalid identity')
-      if (decoded.fields.length === 5) {
-        const tags: unknown = JSON.parse(Utils.toUTF8(decoded.fields[4]))
-        if (!Array.isArray(tags) || !tags.every(x => typeof x === 'string'))
-          throw new Error('Invalid tags')
-        entry.tags = tags
-      }
-      if (!matches(entry, query)) throw new Error('Off-query output')
-      const anyone = new ProtoWallet('anyone')
-      const args = {
-        protocolID: entry.protocolID,
-        keyID: entry.key,
-        counterparty: entry.controller
-      }
-      const { valid } = await anyone.verifySignature({
-        ...args,
-        data: decoded.fields.flat(),
-        signature
-      })
-      if (!valid) throw new Error('Invalid signature')
-      const { publicKey } = await anyone.getPublicKey(args)
-      if (decoded.lockingPublicKey.toString() !== publicKey)
-        throw new Error('Invalid controller lock')
-      if (!(await tx.verify(checkedTracker))) throw new Error('Invalid transaction proof')
-      entry.token = {
-        txid,
-        outputIndex: result.outputIndex,
-        beef: Beef.fromBinary(result.beef),
-        satoshis: output.satoshis ?? 0
-      }
-      values.push({ entry, transaction: tx, outpoint: `${txid}.${result.outputIndex}` })
-    } catch (error) {
-      if (error instanceof LookupValidationUnavailableError) throw error
-      throw new LookupValidationError('invalid')
-    }
+    values.push(await validateKVOutput(result, query, checkedTracker))
   }
   return values
+}
+
+function validationTracker(tracker: ChainTracker): ChainTracker {
+  return {
+    currentHeight: async () => {
+      try {
+        return await tracker.currentHeight()
+      } catch {
+        throw new LookupValidationUnavailableError()
+      }
+    },
+    isValidRootForHeight: async (root, height) => {
+      try {
+        return await tracker.isValidRootForHeight(root, height)
+      } catch {
+        throw new LookupValidationUnavailableError()
+      }
+    }
+  }
+}
+
+function decodeKVFields(fields: number[][]): KVStoreEntry {
+  const entry: KVStoreEntry = {
+    protocolID: JSON.parse(Utils.toUTF8(fields[0])),
+    key: Utils.toUTF8(fields[1]),
+    value: Utils.toUTF8(fields[2]),
+    controller: Utils.toHex(fields[3])
+  }
+  if (
+    !Array.isArray(entry.protocolID) ||
+    entry.protocolID.length !== 2 ||
+    ![0, 1, 2].includes(entry.protocolID[0]) ||
+    typeof entry.protocolID[1] !== 'string' ||
+    entry.key.length === 0
+  )
+    throw new Error('Invalid identity')
+  if (fields.length === 5) {
+    const tags: unknown = JSON.parse(Utils.toUTF8(fields[4]))
+    if (!Array.isArray(tags) || !tags.every(x => typeof x === 'string'))
+      throw new Error('Invalid tags')
+    entry.tags = tags
+  }
+  return entry
+}
+
+async function validateKVOutput(
+  result: LookupAnswer['outputs'][number],
+  query: KVStoreQuery,
+  checkedTracker: ChainTracker
+): Promise<ValidatedKVOutput> {
+  try {
+    const tx = Transaction.fromBEEF(result.beef)
+    const txid = tx.id('hex')
+    if (result.txid !== undefined && result.txid.toLowerCase() !== txid)
+      throw new Error('Mismatched transaction')
+    const output = tx.outputs[result.outputIndex]
+    if (output === undefined) throw new Error('Missing output')
+    const decoded = PushDrop.decode(output.lockingScript)
+    if (decoded.fields.length !== 5 && decoded.fields.length !== 6)
+      throw new Error('Invalid fields')
+    const signature = decoded.fields.pop() as number[]
+    const entry = decodeKVFields(decoded.fields)
+    if (!matches(entry, query)) throw new Error('Off-query output')
+    const anyone = new ProtoWallet('anyone')
+    const args = {
+      protocolID: entry.protocolID,
+      keyID: entry.key,
+      counterparty: entry.controller
+    }
+    const { valid } = await anyone.verifySignature({
+      ...args,
+      data: decoded.fields.flat(),
+      signature
+    })
+    if (!valid) throw new Error('Invalid signature')
+    const { publicKey } = await anyone.getPublicKey(args)
+    if (decoded.lockingPublicKey.toString() !== publicKey)
+      throw new Error('Invalid controller lock')
+    if (!(await tx.verify(checkedTracker))) throw new Error('Invalid transaction proof')
+    entry.token = {
+      txid,
+      outputIndex: result.outputIndex,
+      beef: Beef.fromBinary(result.beef),
+      satoshis: output.satoshis ?? 0
+    }
+    return { entry, transaction: tx, outpoint: `${txid}.${result.outputIndex}` }
+  } catch (error) {
+    if (error instanceof LookupValidationUnavailableError) throw error
+    throw new LookupValidationError('invalid')
+  }
 }
 
 function spends(transaction: Transaction, outpoint: string): boolean {
@@ -209,18 +226,9 @@ function spends(transaction: Transaction, outpoint: string): boolean {
   return false
 }
 
-/** Select only maximal states whose relationship is proven by transaction inputs. */
-export function reconcileKVResults(
-  result: ReliableLookupResult<ValidatedKVOutput>,
-  authorities: string[] = []
-): KVStoreReadResult {
-  const answers = result.hosts.filter(h => h.kind === 'answer')
-  const evidence: KVStoreReadEvidence = {
-    completedHosts: result.hosts.length,
-    failedHosts: result.hosts.length - answers.length,
-    discoveryComplete: result.discoveryComplete,
-    durationMs: result.durationMs
-  }
+function maximalKVOutputs(
+  answers: Array<{ values: ValidatedKVOutput[] }>
+): ValidatedKVOutput[] | undefined {
   const unique = new Map<string, ValidatedKVOutput>()
   for (const host of answers) for (const value of host.values) unique.set(value.outpoint, value)
   const groups = new Map<string, ValidatedKVOutput[]>()
@@ -239,9 +247,36 @@ export function reconcileKVResults(
     const tips = group.filter(
       value => !group.some(other => other !== value && spends(other.transaction, value.outpoint))
     )
-    if (tips.length !== 1) return { kind: 'conflict', retryable: true, evidence }
+    if (tips.length !== 1) return undefined
     current.push(tips[0])
   }
+  return current
+}
+
+function emptyResultKind(
+  result: ReliableLookupResult<ValidatedKVOutput>,
+  answered: boolean
+): 'incomplete' | 'malformed' | 'rejected' | 'unavailable' {
+  if (answered) return 'incomplete'
+  if (result.hosts.some(h => h.kind === 'invalid' || h.kind === 'malformed')) return 'malformed'
+  if (result.hosts.some(h => h.kind === 'rejected')) return 'rejected'
+  return 'unavailable'
+}
+
+/** Select only maximal states whose relationship is proven by transaction inputs. */
+export function reconcileKVResults(
+  result: ReliableLookupResult<ValidatedKVOutput>,
+  authorities: string[] = []
+): KVStoreReadResult {
+  const answers = result.hosts.filter(h => h.kind === 'answer')
+  const evidence: KVStoreReadEvidence = {
+    completedHosts: result.hosts.length,
+    failedHosts: result.hosts.length - answers.length,
+    discoveryComplete: result.discoveryComplete,
+    durationMs: result.durationMs
+  }
+  const current = maximalKVOutputs(answers)
+  if (current === undefined) return { kind: 'conflict', retryable: true, evidence }
   const normalize = (host: string): string => host.replace(/\/$/, '')
   const authoritative =
     authorities.length > 0 &&
@@ -254,10 +289,7 @@ export function reconcileKVResults(
     evidence.failedHosts === 0 &&
     answers.every(host => {
       const represented = new Set(host.values.map(value => value.outpoint))
-      return (
-        current.every(value => represented.has(value.outpoint)) &&
-        host.values.every(value => unique.has(value.outpoint))
-      )
+      return current.every(value => represented.has(value.outpoint))
     })
   if (current.length > 0)
     return {
@@ -269,62 +301,62 @@ export function reconcileKVResults(
     }
   if (complete && answers.every(host => host.values.length === 0))
     return { kind: 'absent', authority: 'configured-hosts', evidence }
-  const kind =
-    answers.length > 0
-      ? 'incomplete'
-      : result.hosts.some(h => h.kind === 'invalid' || h.kind === 'malformed')
-        ? 'malformed'
-        : result.hosts.some(h => h.kind === 'rejected')
-          ? 'rejected'
-          : 'unavailable'
+  const kind = emptyResultKind(result, answers.length > 0)
   return { kind, retryable: true, evidence }
+}
+
+function entryIdentity(entry: KVStoreEntry): string {
+  return JSON.stringify([entry.protocolID, entry.controller, entry.key])
 }
 
 /** UI state contains only caller-owned memory; it must be discarded on account/query change. */
 export class KVStoreReadState {
   private lastGood: KVStoreEntry[] | undefined
+  private previousRelationship(entries: KVStoreEntry[]): 'stale' | 'conflict' | undefined {
+    for (const next of entries) {
+      const prior = this.lastGood?.find(entry => entryIdentity(entry) === entryIdentity(next))
+      if (
+        prior?.token === undefined ||
+        next.token === undefined ||
+        prior.token.txid === next.token.txid
+      )
+        continue
+      try {
+        const previousTx = Transaction.fromBEEF(prior.token.beef.toBinary(), prior.token.txid)
+        const nextTx = Transaction.fromBEEF(next.token.beef.toBinary(), next.token.txid)
+        if (spends(previousTx, `${next.token.txid}.${next.token.outputIndex}`)) return 'stale'
+        if (!spends(nextTx, `${prior.token.txid}.${prior.token.outputIndex}`)) return 'conflict'
+      } catch {
+        return 'conflict'
+      }
+    }
+    return undefined
+  }
+
+  private applyData(result: Extract<KVStoreReadResult, { kind: 'data' }>): KVStoreReadResult {
+    const relationship = this.previousRelationship(result.entries)
+    if (relationship === 'stale')
+      return {
+        kind: 'stale',
+        entries: this.lastGood as KVStoreEntry[],
+        retryable: true,
+        evidence: result.evidence
+      }
+    if (relationship === 'conflict')
+      return { kind: 'conflict', retryable: true, evidence: result.evidence }
+    if (result.completeness === 'partial' && this.lastGood !== undefined) {
+      const combined = new Map(this.lastGood.map(entry => [entryIdentity(entry), entry]))
+      for (const entry of result.entries) combined.set(entryIdentity(entry), entry)
+      this.lastGood = [...combined.values()]
+      return { kind: 'stale', entries: this.lastGood, retryable: true, evidence: result.evidence }
+    }
+    this.lastGood = result.entries
+    return result
+  }
+
   apply(result: KVStoreReadResult): KVStoreReadResult {
-    if (result.kind === 'data') {
-      for (const next of result.entries) {
-        const prior = this.lastGood?.find(
-          entry =>
-            entry.key === next.key &&
-            entry.controller === next.controller &&
-            JSON.stringify(entry.protocolID) === JSON.stringify(next.protocolID)
-        )
-        if (
-          prior?.token === undefined ||
-          next.token === undefined ||
-          prior.token.txid === next.token.txid
-        )
-          continue
-        try {
-          const previousTx = Transaction.fromBEEF(prior.token.beef.toBinary(), prior.token.txid)
-          const nextTx = Transaction.fromBEEF(next.token.beef.toBinary(), next.token.txid)
-          if (spends(previousTx, `${next.token.txid}.${next.token.outputIndex}`)) {
-            return {
-              kind: 'stale',
-              entries: this.lastGood as KVStoreEntry[],
-              retryable: true,
-              evidence: result.evidence
-            }
-          }
-          if (!spends(nextTx, `${prior.token.txid}.${prior.token.outputIndex}`))
-            return { kind: 'conflict', retryable: true, evidence: result.evidence }
-        } catch {
-          return { kind: 'conflict', retryable: true, evidence: result.evidence }
-        }
-      }
-      if (result.completeness === 'partial' && this.lastGood !== undefined) {
-        const identity = (entry: KVStoreEntry): string =>
-          JSON.stringify([entry.protocolID, entry.controller, entry.key])
-        const combined = new Map(this.lastGood.map(entry => [identity(entry), entry]))
-        for (const entry of result.entries) combined.set(identity(entry), entry)
-        this.lastGood = [...combined.values()]
-        return { kind: 'stale', entries: this.lastGood, retryable: true, evidence: result.evidence }
-      }
-      this.lastGood = result.entries
-    } else if (result.kind === 'absent') this.lastGood = undefined
+    if (result.kind === 'data') return this.applyData(result)
+    if (result.kind === 'absent') this.lastGood = undefined
     else if (result.kind !== 'conflict' && this.lastGood !== undefined)
       return { kind: 'stale', entries: this.lastGood, retryable: true, evidence: result.evidence }
     return result

@@ -36,8 +36,11 @@ overrides:
   nanoid@<3.3.18: 3.3.18
   # Stryker's latest typed-rest-client 2.3.1 pins vulnerable qs 6.15.1
   # exactly. Keep this parent-scoped substitution until upstream publishes a
-  # release that depends on qs 6.15.2 or newer.
-  'typed-rest-client@2.3.1>qs': 6.15.3
+  # release that depends on qs 6.16.0 or newer.
+  'typed-rest-client@2.3.1>qs': 6.16.0
+  # The current frontmatter plugin still requests vulnerable toml 3.x.
+  # toml 4.2 retains parse() and fixes prototype pollution and recursion.
+  'remark-mdx-frontmatter@5.2.0>toml': 4.2.0
 patchedDependencies:
   image-size@1.2.1: patches/image-size@1.2.1.patch
 auditConfig:

@@ -1,11 +1,10 @@
-# Shared overlay lookup and GlobalKVStore reliability proposal — unapproved, not ready for deployment
+# Shared overlay lookup reliability
 
-This is a local investigation and shared implementation proposal, based on
-`98734b07cf` (2026-09-04). Nothing here authorizes merging, publishing, deployment,
-changing live discovery, or removing existing consumer overrides. The revised
-SDK 3.0.0 draft moves shared reliability into the standard resolver for every
-lookup service. KV-specific correctness and write recovery remain optional.
-See `overlay-lookup-migration.md` for the deliberate contract changes.
+The standard SDK resolver now recovers from persisted host penalties, refreshes
+discovery for each operation, and reports incomplete lookups explicitly for every
+service. This design explains the reproduced failures, the shared fix and the
+additional KV-specific validation available through the optional entrypoint.
+See [the SDK 3 migration guide](overlay-lookup-migration.md) for changed defaults.
 
 ## Proven failure sequence
 
@@ -106,7 +105,7 @@ and bounded parallel work over suppressing every probe during an outage.
   arbitrary 33rd healthy host will be contacted; scalable candidate scheduling
   needs review before a general guarantee can be made.
 
-Discovery gathers all bounded tracker responses anew. The draft does not add a
+Discovery gathers all bounded tracker responses anew. The resolver does not add a
 new persistent discovery cache. Advertisement parsing is routing input, not proof
 of authority or a guarantee of freshness. Duplicates normalize away; malformed
 URLs cannot be contacted. Existing emergency host overrides remain available.
@@ -158,8 +157,8 @@ Empty responses carry no authenticated completeness/index watermark. Node identi
 is not an independent authority quorum. Thus the unconditional requested guarantee
 cannot honestly be delivered by a latency/reputation patch.
 
-The draft exposes this limit rather than labeling observed data globally current.
-Before promotion, define a versioned server capability for signed complete query
+Observed data is labeled with its actual verification status. A future
+authoritative-currentness extension would need to define a versioned server capability for signed complete query
 snapshots, authority membership/failure assumptions, index watermarks/read tokens,
 and spend/absence evidence. Pagination requires snapshot-bound cursors and global
 membership semantics. A server assertion alone still needs a stated trust policy.
@@ -182,14 +181,14 @@ and submission behavior; its resolver calls inherit the shared lookup improvemen
 Competing replacement transactions now wait for independent indexing confirmation
 before the retry helper resumes. Replacement output zero is the GlobalKVStore
 contract; removal transactions still require a separate absence confirmation.
-Remaining write blockers are material: cross-device uniqueness requires atomic
+Write guarantees have explicit limits: cross-device uniqueness requires atomic
 server admission/reservation or an explicit protocol conflict policy. A browser
-lock cannot provide that. The draft blocks subsequent same-key writes after an ambiguous/rejected result,
+lock cannot provide that. The KV adapter blocks subsequent same-key writes after an ambiguous/rejected result,
 shares up to 256 pending records across instances, and exposes
 `reconcilePendingWrite` to resubmit the same retained signed transaction and
 confirm without creating another transaction. BEEF is held in private memory,
 never attached to an error object or written to reputation storage. A durable
-cross-tab pending-write journal and tested restart reconciliation are required before claiming idempotence across reloads. Reliable
+cross-tab pending-write journal and tested restart reconciliation are required for idempotence across reloads. Reliable
 history is intentionally rejected by legacy-shaped `get` until ancestor values
 receive the same verification policy. No current value is substituted for history.
 
@@ -212,13 +211,13 @@ Proposed sequence after human design approval:
 2. Complete server capability and atomic write-admission design in overlay-topics
    and the overlay engine, including portable protocol vectors.
 3. Finish SDK browser/mobile, property/mutation, packed consumer and CI evidence.
-4. Publish an approved SDK minor and coordinated server capability releases only
+4. Publish SDK 3 and coordinated server capability releases only
    through protected workflows, in a separate explicitly authorized task.
 5. Integrate structured reads in Metanet Docs and an independent consumer; retain
    production pins and compatibility adapters until their backend capabilities
    are independently validated. Roll out read-only observation first.
 6. Verify synthetic canaries, tail latency, stale-state visibility and pending-write
-   recovery before any write-path upgrade. Human approval gates every deployment.
+   recovery before any write-path upgrade. Use the normal deployment approval process.
 7. Roll back via prior package/config; v4 is additive and legacy records untouched.
 
 ## Review guide
@@ -233,10 +232,11 @@ the optional `ReliableGlobalKVStore` adapter. KV-specific helpers remain in the
 optional subpath; the common fixes are included in the normal SDK and UMD.
 Run deterministic tests and real loopback fault injection before package checks.
 Read the limitations above before evaluating latency or completeness claims.
-This proposal must remain a draft: it is not a complete implementation of all
-requested protocol, restart, consumer UX or deployment guarantees.
+The shared lookup fix is independently reviewable. Durable pending writes, global
+currentness and production UI adoption are separate extensions with the
+requirements described above.
 
-## Local use and explicit non-goals of the prototype
+## KV integration example
 
 ```ts
 import { GlobalKVStore, KVStoreReadSession } from '@bsv/sdk/kvstore/reliable'

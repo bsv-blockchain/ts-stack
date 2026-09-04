@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-30",
+  "lastReviewed": "2026-09-04",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,10 +144,10 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-08-30",
-    "method": "Rechecked retained root and standalone overrides against the frozen locks, current package metadata, and the current advisory audit. Verified that typed-rest-client 2.3.1 still pins qs 6.15.1, Google and OpenTelemetry paths still request gaxios 6.x or 7.1.3, and teeny-request still permits uuid 9.x.",
-    "retainedCount": 20,
-    "result": "All 20 retained overrides still prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The expired qs, gaxios, and uuid entries remain necessary; the frozen graph resolves their reviewed patched versions and the high-severity audit reports only the two governed image-size advisories.",
+    "reviewedAt": "2026-09-04",
+    "method": "Retained the 2026-08-30 removal rehearsal for the 20 existing substitutions. On 2026-09-04, rechecked registry metadata and the frozen audit for typed-rest-client 2.3.1 (still pins qs 6.15.1) and remark-mdx-frontmatter 5.2.0 (still requests toml ^3.0.0). Verified compatible natural lock updates for fast-uri and Express qs; scoped replacements remain necessary for the two constrained parents.",
+    "retainedCount": 21,
+    "result": "The registry now contains 21 substitutions: the 20 previously rehearsed entries, with typed-rest-client qs advanced to 6.16.0, plus the frontmatter plugin toml 4.2.0 security fix. TOML/YAML compilation and prototype/recursion regressions pass; the frozen high-severity audit reports only the two previously governed image-size advisories. No new advisory exclusion was added.",
     "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [
@@ -166,7 +166,7 @@
     {
       "source": "pnpm-workspace.yaml",
       "selector": "typed-rest-client@2.3.1>qs",
-      "value": "6.15.3",
+      "value": "6.16.0",
       "exceptionId": "typed-rest-client-qs-override"
     },
     {
@@ -275,6 +275,12 @@
       "selector": "gaxios",
       "value": "7.3.0",
       "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "remark-mdx-frontmatter@5.2.0>toml",
+      "value": "4.2.0",
+      "exceptionId": "remark-mdx-frontmatter-toml-override"
     }
   ],
   "scheduledVerification": {

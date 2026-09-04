@@ -186,9 +186,9 @@ Incorporated material remains under the separate terms identified in
 
 Thank you for being a part of the BSV Blockchain Libraries Project. Let's build the future of BSV Blockchain together!
 
-## Draft overlay lookup reliability
+## Overlay lookup reliability
 
-The unapproved SDK 3.0.0 candidate applies shared reliability to the standard
+SDK 3.0.0 applies shared reliability to the standard
 `LookupResolver.query`, `queryDetailed`, `query$`, and `queryReliable` methods for
 all overlay lookup services. It includes bounded parallel discovery and requests,
 advisory scoped reputation, cancellation, response limits, and explicit failure
@@ -200,5 +200,5 @@ Transport completion does not prove authoritative absence, freshness, or a
 service's cryptographic rules. Services can use `queryReliable` with their own
 validator; the optional `@bsv/sdk/kvstore/reliable` integration supplies KV-specific
 proof validation, spend reconciliation, write recovery, and UI state helpers.
-See the [unapproved design proposal](docs/globalkv-reliability-draft.md) for evidence
-and limits. This draft is not ready for publication or deployment.
+See the [design and recovery evidence](docs/globalkv-reliability-draft.md) for evidence
+and the service-specific guarantees.

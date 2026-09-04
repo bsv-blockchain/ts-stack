@@ -44,7 +44,7 @@ describe('bounded submission adapter', () => {
     const fetch = jest.fn(async (url, init) => {
       signals.push(init.signal)
       expect(init.headers['X-Topics']).toBe('tm_kvstore')
-      if (url.startsWith(bad)) return await new Promise<Response>(() => {})
+      if (new URL(url).origin === bad) return await new Promise<Response>(() => {})
       return new Response(JSON.stringify(ack))
     })
     const broadcaster = new ReliableTopicBroadcaster(['tm_kvstore'], resolver as any, false, fetch)

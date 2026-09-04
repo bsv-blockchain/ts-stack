@@ -315,7 +315,7 @@ export interface LookupResolverConfig {
   additionalHosts?: Record<string, string[]>
   /** Transaction memo tuning; legacy host-cache options are accepted but ignored. */
   cache?: CacheOptions
-  /** @deprecated Use reliableReputationStorage for atomic v4 persistence. Legacy get/set stores use memory-only health. */
+  /** Legacy storage option. Use reliableReputationStorage for atomic v4 persistence; get/set-only stores use memory health. */
   reputationStorage?:
     | 'localStorage'
     | { get: (key: string) => string | null | undefined; set: (key: string, value: string) => void }
@@ -584,6 +584,17 @@ class LookupQuerySession {
     return added
   }
 
+  private completionStatus(): LookupAnswerProgress['status'] {
+    if (this.successfulHosts === 0) return 'unavailable'
+    if (
+      this.discoveryComplete &&
+      this.completedHosts === this.hostCount &&
+      this.successfulHosts === this.hostCount
+    )
+      return 'complete'
+    return 'incomplete'
+  }
+
   snapshot(isFinal: boolean): LookupAnswerProgress {
     return {
       type: 'output-list',
@@ -598,14 +609,7 @@ class LookupQuerySession {
       rejectedHosts: this.rejectedHosts,
       freeformHosts: this.freeformHosts,
       discoveryComplete: this.discoveryComplete,
-      status:
-        this.successfulHosts === 0
-          ? 'unavailable'
-          : this.discoveryComplete &&
-              this.completedHosts === this.hostCount &&
-              this.successfulHosts === this.hostCount
-            ? 'complete'
-            : 'incomplete',
+      status: this.completionStatus(),
       ...(this.correlationId !== undefined ? { correlationId: this.correlationId } : {})
     }
   }
@@ -859,8 +863,7 @@ export default class LookupResolver {
         trackers.slice(0, 32).map(async tracker => {
           const result = await requestReliableHost(
             this.facilitator,
-            this.hostReputation,
-            this.networkPreset,
+            { reputation: this.hostReputation, network: this.networkPreset },
             tracker,
             { service: 'ls_slap', query: { service: question.service } },
             {
@@ -923,8 +926,7 @@ export default class LookupResolver {
               hosts.push(
                 await requestReliableHost(
                   this.facilitator,
-                  this.hostReputation,
-                  this.networkPreset,
+                  { reputation: this.hostReputation, network: this.networkPreset },
                   host,
                   question,
                   {
@@ -1268,8 +1270,7 @@ export default class LookupResolver {
     let failure: unknown
     const result = await requestReliableHost<LookupFacilitatorAnswer>(
       this.facilitator,
-      this.hostReputation,
-      this.networkPreset,
+      { reputation: this.hostReputation, network: this.networkPreset },
       host,
       question,
       {

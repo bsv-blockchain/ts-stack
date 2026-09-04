@@ -90,10 +90,22 @@ export function normalizeHosts(hosts: string[], allowHTTP: boolean): string[] {
   return [...normalized]
 }
 
+function failureReason(error: unknown): HostFailureReason {
+  if (error instanceof LookupValidationError) return error.reason
+  if (error instanceof Error && /deadline|timed out|abort/i.test(error.message)) return 'timeout'
+  if (error instanceof SyntaxError) return 'malformed'
+  if (typeof error === 'object' && error !== null && 'status' in error) {
+    const status = Number(error.status)
+    return status >= 400 && status < 500 && ![408, 425, 429].includes(status)
+      ? 'rejected'
+      : 'transport'
+  }
+  return 'transport'
+}
+
 export async function requestReliableHost<T>(
   facilitator: OverlayLookupFacilitator,
-  reputation: ReliableHostReputation,
-  network: string,
+  context: { reputation: ReliableHostReputation; network: string },
   host: string,
   question: LookupQuestion,
   options: Omit<ReliableLookupOptions<T>, 'validate'> & {
@@ -105,6 +117,7 @@ export async function requestReliableHost<T>(
   remainingMs: number,
   parent: AbortSignal
 ): Promise<ReliableHostOutcome<T>> {
+  const { reputation, network } = context
   const budget = Math.min(boundedMs(options.hostTimeoutMs, 2000), remainingMs)
   try {
     const values = await withinDeadline(
@@ -120,18 +133,7 @@ export async function requestReliableHost<T>(
     return { host, kind: 'answer', values }
   } catch (error) {
     options.onError?.(error)
-    let reason: HostFailureReason = 'transport'
-    if (error instanceof LookupValidationError) reason = error.reason
-    else if (error instanceof Error && /deadline|timed out|abort/i.test(error.message))
-      reason = 'timeout'
-    else if (error instanceof SyntaxError) reason = 'malformed'
-    else if (typeof error === 'object' && error !== null && 'status' in error) {
-      const status = Number(error.status)
-      reason =
-        status >= 400 && status < 500 && ![408, 425, 429].includes(status)
-          ? 'rejected'
-          : 'transport'
-    }
+    const reason = failureReason(error)
     // Cancellation belongs to the operation, not to the host.
     if (
       !parent.aborted &&

@@ -16,7 +16,13 @@ const KEY = 'bsvsdk_overlay_host_reputation_v4'
 const TTL = 86400000
 const MAX_ENTRIES = 256
 const MAX_COOLDOWN = 30000
-const reasons: HostFailureReason[] = ['timeout', 'transport', 'rejected', 'malformed', 'invalid']
+const reasons = new Set<HostFailureReason>([
+  'timeout',
+  'transport',
+  'rejected',
+  'malformed',
+  'invalid'
+])
 
 function browserStorage(): ReliableReputationStorage | undefined {
   try {
@@ -45,6 +51,15 @@ export class ReliableHostReputation {
     return JSON.stringify([network, service, host])
   }
 
+  private validScope(key: string): boolean {
+    try {
+      const scope: unknown = JSON.parse(key)
+      return Array.isArray(scope) && scope.length === 3 && scope.every(x => typeof x === 'string')
+    } catch {
+      return false
+    }
+  }
+
   private sanitize(input: unknown, now: number): Record<string, ReliableReputationEntry> {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return {}
     const entries: Record<string, ReliableReputationEntry> = {}
@@ -61,15 +76,8 @@ export class ReliableHostReputation {
         e.cooldownUntil > e.updatedAt + MAX_COOLDOWN
       )
         continue
-      if (e.reason !== undefined && !reasons.includes(e.reason)) continue
-      let scope: unknown
-      try {
-        scope = JSON.parse(key)
-      } catch {
-        continue
-      }
-      if (!Array.isArray(scope) || scope.length !== 3 || !scope.every(x => typeof x === 'string'))
-        continue
+      if (e.reason !== undefined && !reasons.has(e.reason)) continue
+      if (!this.validScope(key)) continue
       entries[key] = {
         updatedAt: e.updatedAt,
         cooldownUntil: e.cooldownUntil,
@@ -100,9 +108,9 @@ export class ReliableHostReputation {
     this.entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
     const score = (host: string): number => {
       const e = this.entries[this.scope(network, service, host)]
-      return e === undefined
-        ? 0
-        : e.penalty * 2 ** (-(now - e.updatedAt) / 60000) + (e.cooldownUntil > now ? 64 : 0)
+      if (e === undefined) return 0
+      const cooldownPenalty = e.cooldownUntil > now ? 64 : 0
+      return e.penalty * 2 ** (-(now - e.updatedAt) / 60000) + cooldownPenalty
     }
     return [...new Set(hosts)].sort((a, b) => score(a) - score(b))
   }

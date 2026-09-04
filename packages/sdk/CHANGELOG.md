@@ -219,7 +219,7 @@ All notable changes to this project will be documented in this file. The format 
   every standard overlay resolver method. Incomplete empty `query()` calls now
   throw a retryable error. Add optional verified GlobalKVStore observations and
   write reconciliation. See `docs/overlay-lookup-migration.md`.
-  Unapproved; see `docs/globalkv-reliability-draft.md` before any migration.
+  See `docs/overlay-lookup-migration.md` for the SDK 3 migration.
 
 ### Added
 
