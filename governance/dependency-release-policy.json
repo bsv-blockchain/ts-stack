@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-30",
+  "lastReviewed": "2026-09-04",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,11 +144,11 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-08-30",
-    "method": "Rechecked retained root and standalone overrides against the frozen locks, current package metadata, and the current advisory audit. Verified that typed-rest-client 2.3.1 still pins qs 6.15.1, Google and OpenTelemetry paths still request gaxios 6.x or 7.1.3, and teeny-request still permits uuid 9.x.",
-    "retainedCount": 20,
-    "result": "All 20 retained overrides still prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The expired qs, gaxios, and uuid entries remain necessary; the frozen graph resolves their reviewed patched versions and the high-severity audit reports only the two governed image-size advisories.",
-    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
+    "reviewedAt": "2026-09-04",
+    "method": "Rechecked retained root and standalone overrides against the frozen locks, current package metadata, and the current advisory audit. Verified that AJV still permits affected fast-uri 3.x releases, remark-mdx-frontmatter 5.2.0 still restricts toml to its affected 3.x line, typed-rest-client 2.3.1 still pins qs 6.15.1, Google and OpenTelemetry paths still request gaxios 6.x or 7.1.3, and teeny-request still permits uuid 9.x.",
+    "retainedCount": 22,
+    "result": "All 22 retained overrides prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The frozen graph resolves the reviewed patched versions and the high-severity audit reports only the two governed, locally patched image-size advisories.",
+    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV/fast-uri, remark-mdx-frontmatter/toml, express-rate-limit, Socket.IO, Vite/PostCSS, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [
     {
@@ -159,9 +159,21 @@
     },
     {
       "source": "pnpm-workspace.yaml",
+      "selector": "fast-uri@<3.1.7",
+      "value": "3.1.7",
+      "exceptionId": "fast-uri-ajv-advisory-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
       "selector": "nanoid@<3.3.18",
       "value": "3.3.18",
       "exceptionId": "nanoid-postcss-advisory-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "remark-mdx-frontmatter@5.2.0>toml",
+      "value": "4.2.0",
+      "exceptionId": "remark-mdx-frontmatter-toml-override"
     },
     {
       "source": "pnpm-workspace.yaml",

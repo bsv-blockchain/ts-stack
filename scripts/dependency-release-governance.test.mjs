@@ -21,10 +21,15 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 20)
+  assert.equal(overrides.length, 22)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
+  assert.equal(overrides.filter(entry => entry.selector === 'fast-uri@<3.1.7').length, 1)
+  assert.equal(
+    overrides.filter(entry => entry.selector === 'remark-mdx-frontmatter@5.2.0>toml').length,
+    1
+  )
 })
 
 test('image-size patch contains both parser progress guards', () => {
