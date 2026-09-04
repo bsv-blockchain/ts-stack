@@ -733,7 +733,7 @@ export default class LookupResolver {
       new HTTPSOverlayLookupFacilitator(undefined, this.networkPreset === 'local')
     this.slapTrackers = config.slapTrackers ?? this.defaultSlapTrackers()
     const hostOverrides = config.hostOverrides ?? {}
-    this.assertValidOverrideServices(hostOverrides)
+    this.validateOverrides(hostOverrides)
     this.hostOverrides = hostOverrides
     this.additionalHosts = config.additionalHosts ?? {}
     this.telemetry = new Telemetry(config.telemetry)
@@ -861,7 +861,7 @@ export default class LookupResolver {
               hostTimeoutMs: MAX_TRACKER_WAIT_TIME,
               validate: answer => {
                 if (!isOutputListAnswer(answer)) throw new LookupValidationError('malformed')
-                const hosts = this.extractHostsFromAnswer(answer, question.service)
+                const hosts = this.extractHosts(answer, question.service)
                 if (hosts.length !== answer.outputs.length) complete = false
                 return hosts
               }
@@ -1124,7 +1124,7 @@ export default class LookupResolver {
       softTimeoutMs: options?.softTimeoutMs,
       waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
       correlationId,
-      resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
+      resolveTxId: (output, now) => this.resolveOutputTxId(output, now)
     })
 
     this.telemetry.capture({
@@ -1180,7 +1180,7 @@ export default class LookupResolver {
   /**
    * Extracts competent host domains from a SLAP tracker response.
    */
-  protected extractHostsFromAnswer(answer: LookupAnswer, service: string): string[] {
+  protected extractHosts(answer: LookupAnswer, service: string): string[] {
     const hosts: string[] = []
     if (answer.type !== 'output-list') return hosts
     for (const output of answer.outputs) {
@@ -1205,7 +1205,7 @@ export default class LookupResolver {
    * hint only after it matches Transaction.fromBEEF(beef).id('hex'), memoized by
    * the BEEF byte sequence. Returns null for unparseable BEEF or a mismatched hint.
    */
-  private resolveTxIdForOutput(
+  private resolveOutputTxId(
     output: { txid?: string; beef: number[]; outputIndex: number; context?: number[] },
     now: number
   ): string | null {
@@ -1231,7 +1231,7 @@ export default class LookupResolver {
     if (firstKey !== undefined) m.delete(firstKey)
   }
 
-  private assertValidOverrideServices(overrides: Record<string, string[]>): void {
+  private validateOverrides(overrides: Record<string, string[]>): void {
     for (const service of Object.keys(overrides)) {
       if (!service.startsWith('ls_')) {
         throw new Error(`Host override service names must start with "ls_": ${service}`)
@@ -1263,7 +1263,7 @@ export default class LookupResolver {
             throw new LookupValidationError('malformed')
           if (
             isOutputListAnswer(answer) &&
-            answer.outputs.some(output => this.resolveTxIdForOutput(output, Date.now()) === null)
+            answer.outputs.some(output => this.resolveOutputTxId(output, Date.now()) === null)
           )
             throw new LookupValidationError('malformed')
           return [answer]

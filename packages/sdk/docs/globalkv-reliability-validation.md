@@ -56,10 +56,10 @@ uses a disposable browser profile, and removes its package extraction afterwards
 No browser account, production endpoint or existing storage is used. Ten
 consecutive runs of the transactional fixture passed (200 reloads total).
 
-The final local SDK coverage suite passed 165 suites / 6,004 tests and
+The local SDK coverage suite passed 165 suites / 6,004 tests and
 one snapshot, with 94.37% statement, 86.51% branch, 95.29% function and 95.29% line
 coverage. Packed ESM/CJS exports, strict declarations, source maps, publint,
-Vite, esbuild and UMD contracts passed. UMD is 554,955 bytes within the unchanged 555,000-byte budget.
+Vite, esbuild and UMD contracts passed. UMD is 554,989 bytes within the unchanged 555,000-byte budget.
 The PR records the final exact-head results; historical measurements are not a
 substitute for its current hosted merge gate.
 
@@ -132,7 +132,7 @@ The Hermes profile exposed bytecode growth from redundant async wrappers in the
 shared resolver. Promise-returning adapters and synchronous structural validators
 avoid unnecessary transpiled state machines. Mobile, browser, cancellation and
 deadline checks validate the same resolver with the original bundle budgets. The
-packed mobile fixture measures 1,718,536 bytes for Metro and 3,493,469 bytes for
+packed mobile fixture measures 1,718,563 bytes for Metro and 3,493,631 bytes for
 Hermes, below the unchanged 1,720,000 and 3,495,000 byte limits.
 
 Node 24.20 accepts some invalid punycode labels that earlier URL parsers rejected.

@@ -131,7 +131,7 @@ export class ReliableHostReputation {
     host: string,
     reason?: HostFailureReason
   ): Promise<void> {
-    const update = (): void => {
+    const update = (): Promise<void> => {
       const now = Date.now()
       const entries = this.storage === undefined ? this.sanitize(this.entries, now) : this.read(now)
       const key = this.scope(network, service, host)
@@ -148,11 +148,11 @@ export class ReliableHostReputation {
       }
       this.entries = this.sanitize(entries, now)
       this.storage?.set(KEY, JSON.stringify({ version: 4, entries: this.entries }))
+      return Promise.resolve()
     }
     try {
-      if (this.storage !== undefined)
-        return this.storage.lock(KEY, () => Promise.resolve(update())).catch(() => {})
-      update()
+      if (this.storage !== undefined) return this.storage.lock(KEY, update).catch(() => {})
+      return update()
     } catch {
       /* Advisory persistence must never break lookup. */
     }

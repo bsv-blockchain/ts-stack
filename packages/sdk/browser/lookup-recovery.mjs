@@ -32,29 +32,33 @@ async function chromePath() {
   throw new Error('Chrome or Chromium is required for lookup recovery tests')
 }
 
+function installHealthReader() {
+  globalThis.readHealth = key =>
+    new Promise((resolve, reject) => {
+      const open = indexedDB.open(key, 1)
+      open.onupgradeneeded = () => open.result.createObjectStore('state')
+      open.onerror = () => reject(new Error('Health database unavailable', { cause: open.error }))
+      open.onsuccess = () => {
+        const db = open.result
+        const tx = db.transaction('state')
+        const read = tx.objectStore('state').get(key)
+        read.onsuccess = () => resolve(JSON.parse(read.result ?? '{}'))
+        tx.oncomplete = () => db.close()
+        tx.onabort = () => {
+          db.close()
+          reject(new Error('Health read aborted', { cause: tx.error }))
+        }
+      }
+    })
+}
+
 async function preparePage(page, origin) {
   await page.goto(origin)
   await page.waitForFunction(() => globalThis.bsv?.LookupResolver !== undefined)
   assert.equal(await page.evaluate(() => typeof indexedDB?.open), 'function')
+  await page.evaluate(installHealthReader)
   await page.evaluate(
     ({ services, host }) => {
-      globalThis.readHealth = key =>
-        new Promise((resolve, reject) => {
-          const open = indexedDB.open(key, 1)
-          open.onupgradeneeded = () => open.result.createObjectStore('state')
-          open.onerror = () => reject(open.error)
-          open.onsuccess = () => {
-            const db = open.result
-            const tx = db.transaction('state')
-            const read = tx.objectStore('state').get(key)
-            read.onsuccess = () => resolve(JSON.parse(read.result ?? '{}'))
-            tx.oncomplete = () => db.close()
-            tx.onabort = () => {
-              db.close()
-              reject(tx.error)
-            }
-          }
-        })
       const output = {
         beef: new bsv.Transaction(
           1,
