@@ -11,6 +11,9 @@ import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.
 const registry = JSON.parse(
   fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'), 'utf8')
 )
+const supplyChainPolicy = JSON.parse(
+  fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/npm-package-supply-chain.json'), 'utf8')
+)
 const packages = registry.projects.filter(project => project.release === 'npm-oidc')
 const expectedLicenseSize = fs.statSync(path.join(REPOSITORY_ROOT, LICENSE_FILE)).size
 const execFileAsync = promisify(execFile)
@@ -89,8 +92,11 @@ async function mapWithConcurrency(items, concurrency, operation) {
 }
 
 const errors = (await mapWithConcurrency(packages, 8, verifyPackage)).flat()
-if (packages.length !== 33) {
-  errors.push(`Expected 33 public npm packages, found ${packages.length}`)
+if (packages.length !== supplyChainPolicy.publicPackageCount) {
+  errors.push(
+    `Expected ${supplyChainPolicy.publicPackageCount} public npm packages, ` +
+      `found ${packages.length}`
+  )
 }
 
 if (errors.length > 0) {
