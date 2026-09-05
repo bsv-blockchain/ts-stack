@@ -89,6 +89,61 @@ describe('reliable KV public contracts', () => {
     await expect(client.getResult(f.query, { history: true })).rejects.toThrow('history validation')
   })
 
+  it.each([
+    { controller: '02' + '00'.repeat(32) },
+    { protocolID: [1, 'another protocol'] },
+    { tags: ['missing'] },
+    { tags: ['missing'], tagQueryMode: 'any' }
+  ])('rejects a valid signed output outside selector %j', async query => {
+    await expect(
+      validateKVAnswer(
+        { type: 'output-list', outputs: [f.output] },
+        query as any,
+        chainTracker,
+        new AbortController().signal
+      )
+    ).rejects.toMatchObject({ reason: 'invalid' })
+  })
+
+  it.each([
+    { beef: [], outputIndex: 0 },
+    { beef: [256], outputIndex: 0 },
+    { beef: [-1], outputIndex: 0 },
+    { beef: [0.5], outputIndex: 0 },
+    { beef: [0], outputIndex: -1 },
+    { beef: [0], outputIndex: 0.5 }
+  ])('rejects malformed wire values before transaction parsing: %j', async output => {
+    await expect(
+      validateKVAnswer(
+        { type: 'output-list', outputs: [output] },
+        f.query,
+        chainTracker,
+        new AbortController().signal
+      )
+    ).rejects.toMatchObject({ reason: 'malformed' })
+  })
+
+  it('bounds output counts and honors cancellation before validating a proof', async () => {
+    await expect(
+      validateKVAnswer(
+        { type: 'output-list', outputs: Array.from({ length: 257 }, () => f.output) },
+        f.query,
+        chainTracker,
+        new AbortController().signal
+      )
+    ).rejects.toMatchObject({ reason: 'malformed' })
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      validateKVAnswer(
+        { type: 'output-list', outputs: [f.output] },
+        f.query,
+        chainTracker,
+        controller.signal
+      )
+    ).rejects.toThrow('Lookup aborted')
+  })
+
   it('applies the configured service and an explicit service override', async () => {
     const lookup = jest.fn(async () => ({ type: 'output-list' as const, outputs: [] }))
     const client = new GlobalKVStore({

@@ -57,7 +57,7 @@ uses a disposable browser profile, and removes its package extraction afterwards
 No browser account, production endpoint or existing storage is used. Ten
 consecutive runs of the transactional fixture passed (200 reloads total).
 
-The local SDK coverage suite passed 166 suites / 6,027 tests and one snapshot.
+The local SDK coverage suite passed 166 suites / 6,051 tests and one snapshot.
 Packed ESM/CJS exports, strict declarations, source maps, publint, Vite, esbuild
 and UMD contracts passed. The PR records exact-head coverage and platform sizes;
 all original coverage and bundle budgets remain in force. Historical measurements
@@ -65,8 +65,12 @@ are not a substitute for the current hosted merge gate.
 
 Public adapter contract tests cover return shapes, incomplete-read errors, pending
 write reconciliation, removal confirmation and retained-state transitions. The
-repository patch-coverage calculation passes at 91.92% (1,229/1,337 changed
-line/branch points) against the unchanged 90% requirement. The standalone browser
+repository patch-coverage calculation passes at 93.64% (1,252/1,337 changed
+line/branch points) against the unchanged 90% requirement. Fully covered changed
+lines, counting a partially covered branch as incomplete, measure 91.43%
+(747/817), matching the separate Codecov patch calculation. Negative cases cover
+corrupt reputation, signed outputs outside the query and malformed wire values.
+The standalone browser
 fixture lives under `browser/tests/` and remains part of `test:browser`.
 
 The existing property profile passed three suites / six tests. Conformance

@@ -92,4 +92,39 @@ describe('versioned advisory reputation', () => {
     }
     expect(Object.keys(JSON.parse(s.data.get(KEY)!).entries)).toHaveLength(256)
   })
+
+  it.each([
+    ['invalid JSON scope', '{', {}],
+    ['non-array scope', '{}', {}],
+    ['wrong scope arity', '["mainnet"]', {}],
+    ['non-string service', '["mainnet",42,"https://one.example"]', {}],
+    ['oversized scope', 'x'.repeat(2049), {}],
+    ['missing record', JSON.stringify(['mainnet', 'ls_kvstore', h1]), null],
+    ['non-object record', JSON.stringify(['mainnet', 'ls_kvstore', h1]), 'invalid'],
+    ['non-finite time', JSON.stringify(['mainnet', 'ls_kvstore', h1]), { updatedAt: null }],
+    ['negative penalty', JSON.stringify(['mainnet', 'ls_kvstore', h1]), { penalty: -1 }],
+    ['excessive penalty', JSON.stringify(['mainnet', 'ls_kvstore', h1]), { penalty: 65 }],
+    ['negative cooldown', JSON.stringify(['mainnet', 'ls_kvstore', h1]), { cooldownUntil: -1 }],
+    [
+      'excessive cooldown',
+      JSON.stringify(['mainnet', 'ls_kvstore', h1]),
+      { cooldownUntil: 1030001 }
+    ],
+    ['unknown reason', JSON.stringify(['mainnet', 'ls_kvstore', h1]), { reason: 'unrecognized' }]
+  ])('discards persisted %s without blocking hosts', async (_label, key, changes) => {
+    const s = storage()
+    const value =
+      changes === null || typeof changes !== 'object'
+        ? changes
+        : { updatedAt: 1000000, cooldownUntil: 1001000, penalty: 16, reason: 'invalid', ...changes }
+    s.data.set(KEY, JSON.stringify({ version: 4, entries: { [key as string]: value } }))
+    const tracker = new ReliableHostReputation(s)
+    await tracker.refresh()
+    expect(tracker.rank('mainnet', 'ls_kvstore', [h1, h2])).toEqual([h1, h2])
+    expect(tracker.snapshot('mainnet', 'ls_kvstore', h1)).toBeUndefined()
+    await tracker.record('mainnet', 'ls_kvstore', h2)
+    expect(Object.keys(JSON.parse(s.data.get(KEY)!).entries)).toEqual([
+      JSON.stringify(['mainnet', 'ls_kvstore', h2])
+    ])
+  })
 })
