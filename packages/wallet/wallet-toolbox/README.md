@@ -65,6 +65,26 @@ requested at or past the end of the result set.
 
 ### UMP account continuity and phone changes
 
+Argon2id password derivation uses a proven-ready host backend when one is
+registered with `registerArgon2idBackend`. This lets React Native applications
+perform the memory-hard operation asynchronously in native code. Browser and
+Node runtimes prefer `hash-wasm`; when WebAssembly is unavailable, Wallet
+Toolbox falls back to an asynchronously yielding JavaScript implementation
+with the same parameters and output. Existing UMP v3 tokens remain
+interoperable and do not need migration; users do not need to enable a device
+or browser setting. A selected host backend is authoritative, so a derivation
+error or malformed output is surfaced instead of silently changing
+implementations. The existing `hash-wasm`-compatible utility export retains its
+full input and output contract; requests with `secret`, non-binary output, or
+non-`Uint8Array` input remain on `hash-wasm` rather than being reinterpreted by
+a backend with narrower capabilities. Registration and unregistration are also
+exported from the mobile and client package roots. Concurrent cold calls share
+one background preload attempt; later calls can retry after it settles. Hosts
+must make preload/readiness checks reentrant and cache permanent failures or
+apply retry backoff. Unrelated `hash-wasm` errors propagate even when the
+WebAssembly global is absent. Native and JavaScript results both pass the same
+byte-type and exact-length validation.
+
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
 backward-compatible WAB authentication response. Normal verified lookup and
 lineage resolution always run first. The WAB pin is considered only when those

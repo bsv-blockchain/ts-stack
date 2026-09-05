@@ -54,7 +54,7 @@
     "build": "tsdown --config tsdown.config.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/src/index.client.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.{client,mobile}.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts\" \"packages/wallet/wallet-toolbox/client/**/*.{json,md,ts}\"",
     "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/client/test packages/wallet/wallet-toolbox/client/tsdown.config.ts packages/wallet/wallet-toolbox/client/vitest.config.ts --deny-warnings",
-    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageIdb,Services,SetupClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,sdk",
+    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageIdb,Services,SetupClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,sdk",
     "test": "vitest run",
     "test:browser": "node ../../../../scripts/check-wallet-toolbox-platform.mjs browser",
     "test:coverage": "vitest run --coverage",
@@ -67,6 +67,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client#readme",
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.3"
   },

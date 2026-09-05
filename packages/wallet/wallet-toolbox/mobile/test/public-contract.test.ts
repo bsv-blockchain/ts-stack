@@ -10,6 +10,8 @@ const requiredExports = [
   'WalletSettingsManager',
   'WalletSigner',
   'WalletStorageManager',
+  'registerArgon2idBackend',
+  'unregisterArgon2idBackend',
   'sdk'
 ] as const
 
