@@ -3,10 +3,10 @@ id: pkg-payment-express-middleware
 title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: '2.1.6'
+version: '2.1.7'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'
@@ -15,6 +15,10 @@ tags: [middleware, express, payment, '402', brc-29]
 ---
 
 # @bsv/payment-express-middleware
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 Express middleware for the legacy authenticated `x-bsv-payment` JSON flow. It
 runs after `@bsv/auth-express-middleware`, validates an Atomic BEEF payment,

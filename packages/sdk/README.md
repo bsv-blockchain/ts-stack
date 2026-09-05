@@ -185,3 +185,20 @@ Incorporated material remains under the separate terms identified in
 [LICENSES/](./LICENSES/). Keep all three payloads with source and binary distributions.
 
 Thank you for being a part of the BSV Blockchain Libraries Project. Let's build the future of BSV Blockchain together!
+
+## Overlay lookup reliability
+
+SDK 3.0.0 applies shared reliability to the standard
+`LookupResolver.query`, `queryDetailed`, `query$`, and `queryReliable` methods for
+all overlay lookup services. It includes bounded parallel discovery and requests,
+advisory scoped reputation, cancellation, response limits, and explicit failure
+and completion evidence. No resolver opt-in or KV-specific import is needed.
+
+`query()` now throws a retryable `LookupUnavailableError` for an incomplete empty
+aggregate. See the [shared migration guide](docs/overlay-lookup-migration.md).
+Transport completion does not prove authoritative absence, freshness, or a
+service's cryptographic rules. Services can use `queryReliable` with their own
+validator; the optional `@bsv/sdk/kvstore/reliable` integration supplies KV-specific
+proof validation, spend reconciliation, write recovery, and UI state helpers.
+See the [design and recovery evidence](docs/globalkv-reliability-draft.md) for evidence
+and the service-specific guarantees.

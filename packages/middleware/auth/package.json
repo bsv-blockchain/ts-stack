@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -74,7 +74,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^3.0.0 || ^2.1.6"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

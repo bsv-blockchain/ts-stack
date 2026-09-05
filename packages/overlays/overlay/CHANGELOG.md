@@ -20,22 +20,32 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Accept SDK 3 alongside the existing SDK 2 peer range. See the shared
+  [SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+  when upgrading the application SDK.
+
 ### Added
+
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
+
 - (Detail modifications that are non-breaking but relevant to the end-users.)
 
 ### Deprecated
+
 - (List features that are in the process of being phased out or replaced.)
 
 ### Removed
+
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
+
 - (Document bugs that were fixed since the last release.)
 
 ### Security
+
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
 
 ---
@@ -43,12 +53,14 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.1] - 2026-06-27
 
 ### Added
+
 - Added BASM unproven transaction maintenance helpers that refresh proofs before
   evicting rows that remain unproven past the configured block threshold.
 - Added applied-transaction eviction support for provider-confirmed terminal
   invalidation such as double spends.
 
 ### Changed
+
 - Reorg and unproven lifecycle documentation now describes refresh-before-evict
   maintenance and provider invalidation behavior.
 
@@ -60,10 +72,10 @@ All notable changes to this project will be documented in this file. The format 
 
 - Added a slot based rate limiting mechanism to prevent excessive API calls and excessive database connections and insertions. This improves system stability under high load.
 
-
 ## [0.5.4] - 2025-12-16
 
 ### Changed
+
 - Check if transaction is already on-chain before attempting broadcast.
 
 ---
@@ -71,6 +83,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.5.4] - 2025-12-12
 
 ### Added
+
 - Documentation for developers using the overlay system.
 
 ---
@@ -78,6 +91,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.5.3] - 2025-11-11
 
 ### Changed
+
 - Moved broadcast before storage engine data updates in-case of broadcast failures.
 - DB index to improve performance on UTXO lookups.
 
@@ -86,6 +100,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.5.0] - 2025-10-21
 
 ### Changed
+
 - Improved performance of BEEF hydration
 - Added check for invalid input index and new deps in history traversal.
 - Upgrade ts-sdk deps
@@ -94,6 +109,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.4.5] - 2025-07-30
 
 ### Added
+
 - Support suppressing ship/slap advertisements.
 
 ---
@@ -116,6 +132,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.0.1] - YYYY-MM-DD
 
 ### Added
+
 - Initial release of the BSV Blockchain Overlay Services Engine.
 
 ---
@@ -128,22 +145,22 @@ Replace `X.X.X` with the new version number and `YYYY-MM-DD` with the release da
 ## [X.X.X] - YYYY-MM-DD
 
 ### Added
-- 
+-
 
 ### Changed
-- 
+-
 
 ### Deprecated
-- 
+-
 
 ### Removed
-- 
+-
 
 ### Fixed
-- 
+-
 
 ### Security
-- 
+-
 ```
 
 Use this template as the starting point for each new version. Always update the "Unreleased" section with changes as they're implemented, and then move them under the new version header when that version is released.

@@ -9,23 +9,33 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Accept SDK 3 alongside the existing SDK 2 peer range. See the shared
+  [SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+  when upgrading the application SDK.
+
 ### Added
+
 - Optional typed decoder for the two-layer JSON wire format. New `decodeMessage()` / `tryDecodeMessage()` helpers and topic payload interfaces (`MessageEnvelope`, `BlockMessage`, `SubtreeMessage`, `RejectedTxMessage`, `NodeStatusMessage`, `FeePolicy`). Set `decodeMessages: true` on the listener to receive a typed `DecodedMessage` instead of raw `Uint8Array`. Backward compatible (defaults to off).
 
 ### Changed
+
 - Refresh the compatible libp2p transport, discovery, identification, DHT,
   peer-ID, ping, and private-network maintenance releases.
 
 ### Deprecated
+
 - (List features that are in the process of being phased out or replaced.)
 
 ### Removed
+
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
+
 - (Document bugs that were fixed since the last release.)
 
 ### Security
+
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
 
 ---
@@ -33,6 +43,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [1.0.0] - YYYY-MM-DD
 
 ### Added
+
 - Initial release
 
 ---
@@ -45,22 +56,22 @@ Replace `X.X.X` with the new version number and `YYYY-MM-DD` with the release da
 ## [X.X.X] - YYYY-MM-DD
 
 ### Added
-- 
+-
 
 ### Changed
-- 
+-
 
 ### Deprecated
-- 
+-
 
 ### Removed
-- 
+-
 
 ### Fixed
-- 
+-
 
 ### Security
-- 
+-
 ```
 
 Use this template as the starting point for each new version. Always update the "Unreleased" section with changes as they're implemented, and then move them under the new version header when that version is released.

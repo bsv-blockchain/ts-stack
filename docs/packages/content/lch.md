@@ -4,9 +4,9 @@ title: '@bsv/lch'
 kind: package
 domain: content
 npm: '@bsv/lch'
-version: '0.1.0'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+version: '0.1.1'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch'
 status: experimental
@@ -14,6 +14,10 @@ tags: ['content', 'licensing', 'brc-170', 'odrl', 'c2pa', 'chirp', 'uhrp']
 ---
 
 # @bsv/lch
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Browser- and Node-compatible reference implementation of published BRC-170
 > Licensed Content Header protocol.

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/ecpm-permission-module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -49,7 +49,7 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.1",
+    "@bsv/sdk": "^3.0.0 || ^2.4.1",
     "@bsv/wallet-toolbox-client": "^2.11.0"
   },
   "devDependencies": {

@@ -1,3 +1,5 @@
+import { domainToUnicode } from 'node:url'
+
 /**
  * Checks if the provided URI is advertisable, with a recognized URI prefix.
  * Applies scheme-specific validation rules as defined by the BRC-101 overlay advertisement spec.
@@ -30,11 +32,22 @@ const parsePositiveMeasurement = (value: string): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+// Node/ICU versions differ in whether URL rejects invalid ASCII IDNA labels.
+// A valid xn-- label must decode; preserving it verbatim is not validation.
+const isValidHostname = (hostname: string): boolean => {
+  if (hostname.toLowerCase() === 'localhost') return false
+  return hostname.split('.').every(label => {
+    if (!label.startsWith('xn--')) return true
+    const decoded = domainToUnicode(label)
+    return decoded !== '' && decoded !== label
+  })
+}
+
 const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
   try {
     const modifiedURI = uri.replace(prefix, 'https://')
     const parsed = new URL(modifiedURI)
-    if (parsed.hostname.toLowerCase() === 'localhost') return false
+    if (!isValidHostname(parsed.hostname)) return false
     if (parsed.pathname !== '/') return false
     return true
   } catch {
@@ -45,7 +58,7 @@ const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
 const validateWssURI = (uri: string): boolean => {
   try {
     const parsed = new URL(uri)
-    if (parsed.hostname.toLowerCase() === 'localhost') return false
+    if (!isValidHostname(parsed.hostname)) return false
     return true
   } catch {
     return false

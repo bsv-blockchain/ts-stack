@@ -1,0 +1,10 @@
+/** Optional reliability adapter. No publication or deployment approval is implied. */
+export { default as GlobalKVStore } from './ReliableGlobalKVStore.js'
+export type { ReliableKVStoreConfig } from './ReliableGlobalKVStore.js'
+export { default as LookupResolver } from '../overlay-tools/ReliableLookupResolver.js'
+export type { ReliableLookupResolverConfig } from '../overlay-tools/ReliableLookupResolver.js'
+export * from './ReliableKVStore.js'
+export * from '../overlay-tools/ReliableLookup.js'
+export * from '../overlay-tools/ReliableHostReputation.js'
+export { default as HTTPSOverlayLookupFacilitator } from '../overlay-tools/ReliableHTTPSLookupFacilitator.js'
+export * from './KVStoreReadSession.js'

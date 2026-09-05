@@ -1,7 +1,7 @@
 import LookupResolver, { OverlayLookupFacilitator } from '../overlay-tools/LookupResolver'
 import { TelemetryEvent } from '../telemetry/Telemetry'
 
-function createReputationStorage (): { get: () => undefined, set: () => void } {
+function createReputationStorage(): { get: () => undefined; set: () => void } {
   return {
     get: () => undefined,
     set: () => {}
@@ -9,7 +9,7 @@ function createReputationStorage (): { get: () => undefined, set: () => void } {
 }
 
 describe('LookupResolver diagnostics', () => {
-  it('distinguishes authoritative empty results from host failures', async () => {
+  it('distinguishes complete empty observations from host failures', async () => {
     const emptyFacilitator: OverlayLookupFacilitator = {
       lookup: async () => ({ type: 'output-list', outputs: [] })
     }
@@ -39,7 +39,7 @@ describe('LookupResolver diagnostics', () => {
     })
 
     const partialFacilitator: OverlayLookupFacilitator = {
-      lookup: async (host) => {
+      lookup: async host => {
         if (host.includes('failed')) throw new Error('network unavailable')
         return { type: 'output-list', outputs: [] }
       }
@@ -75,7 +75,7 @@ describe('LookupResolver diagnostics', () => {
         lookup: async () => ({ type: 'output-list', outputs: [] })
       },
       hostOverrides: {
-        ls_private: ['https://overlay.example/private/path?secret=yes']
+        ls_private: ['https://overlay.example/private/path', 'https://rejected.example?secret=yes']
       },
       reputationStorage: createReputationStorage(),
       telemetry: {
@@ -94,7 +94,8 @@ describe('LookupResolver diagnostics', () => {
       service: 'ls_private',
       query: {
         presentationHash: privateHash,
-        snapshot: 'must-never-appear'
+        snapshot: 'must-never-appear',
+        secret: 'secret=yes'
       }
     })
 
@@ -106,5 +107,6 @@ describe('LookupResolver diagnostics', () => {
     expect(serialized).not.toContain('secret=yes')
     expect(serialized).toContain('https://overlay.example')
     expect(serialized).toContain('lookup-correlation')
+    expect(serialized).not.toContain('https://rejected.example')
   })
 })

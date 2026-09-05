@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Accept SDK 3 alongside the existing SDK 2 peer range. See the shared
+  [SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+  when upgrading the application SDK.
+
 ### Added
 
 - Added the `ttn` runtime network, TTN SHIP/SLAP roots, and explicit

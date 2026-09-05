@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -124,7 +124,7 @@
     "knex": "^3.3.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^3.0.0 || ^2.1.6"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

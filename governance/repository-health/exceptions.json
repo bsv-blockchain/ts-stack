@@ -132,16 +132,18 @@
       "category": "override",
       "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
       "owner": "ts-stack-maintainers",
-      "reason": "The workspace uses Stryker 9.6.1, and the current Stryker 10.0.0 release still depends on typed-rest-client ~2.3.0. typed-rest-client 2.3.1 pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 remains the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "reason": "The workspace uses Stryker 9.6.1, and Stryker 10.0.0 still depends on typed-rest-client ~2.3.0. typed-rest-client 2.3.1 pins vulnerable qs 6.15.1 exactly. The parent-scoped qs 6.16.0 replacement preserves the qs 6 API and fixes GHSA-q8mj-m7cp-5q26, GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g. A lock-only selection cannot survive regeneration of the exact parent constraint.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
         "https://www.npmjs.com/package/typed-rest-client/v/2.3.1?activeTab=dependencies",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+        "https://github.com/bsv-blockchain/ts-stack/issues/324",
+        "https://github.com/advisories/GHSA-x5fp-wj9c-mxmx",
+        "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g"
       ],
       "created": "2026-07-27",
       "reviewBy": "2026-09-30",
-      "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
+      "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.16.0 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {
       "id": "nanoid-postcss-advisory-override",
@@ -309,6 +311,23 @@
       "created": "2026-07-28",
       "reviewBy": "2026-10-26",
       "removeWhen": "Remove when the analyzer exempts exhaustive protocol dispatch or a separately reviewed generated opcode table improves auditability and passes every script vector, differential, mutation, fuzz, transaction, browser, and packed-consumer check."
+    },
+    {
+      "id": "remark-mdx-frontmatter-toml-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override remark-mdx-frontmatter@5.2.0>toml",
+      "owner": "ts-stack-maintainers",
+      "reason": "The latest remark-mdx-frontmatter 5.2.0 still requests toml ^3.0.0. No supported plugin update resolves the recursion and prototype-pollution advisories. The parent-scoped toml 4.2.0 replacement retains its parse() API and supports Node >=20, within the workspace Node >=24.11 contract. The MDX frontmatter regression and complete docs build exercise this build-only dependency.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-82x6-q7mm-w9cf",
+        "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j",
+        "https://www.npmjs.com/package/remark-mdx-frontmatter/v/5.2.0?activeTab=dependencies",
+        "docs-site/scripts/frontmatter-parser.test.mjs"
+      ],
+      "created": "2026-09-04",
+      "reviewBy": "2026-10-04",
+      "removeWhen": "Remove when the supported frontmatter plugin naturally resolves toml >=4.2.0, then regenerate the frozen lock and rerun frontmatter tests, the docs build and security audit."
     }
   ]
 }

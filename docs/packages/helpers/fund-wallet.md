@@ -3,10 +3,10 @@ id: pkg-fund-wallet
 title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: '1.4.4'
+version: '1.4.5'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/fund-wallet'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet'
@@ -15,6 +15,10 @@ tags: [helpers, testing, faucet, development]
 ---
 
 # @bsv/fund-wallet
+
+This version accepts SDK 3 alongside its existing SDK 2 peer range. Follow the
+[SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+when upgrading the application SDK.
 
 > Command-line faucet/funding tool for development and testing — funds a remote wallet with satoshis from a local Metanet Desktop wallet via private key derivation.
 

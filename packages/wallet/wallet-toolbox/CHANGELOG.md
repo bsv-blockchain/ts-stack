@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Accept SDK 3 alongside the existing SDK 2 peer range. See the shared
+  [SDK 3 migration guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/sdk/docs/overlay-lookup-migration.md)
+  when upgrading the application SDK.
+
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
   directly or invoke the underlying wallet operation at most once, while
@@ -61,10 +65,10 @@ attention to changes that materially alter behavior or extend functionality.
   no longer discards the total it already computed. Full pages, first pages,
   and empty result sets are unchanged, so no consumer migration is required.
   `balanceAndUtxos` now terminates from page progress instead of relying on the
-   former collapsing total, preventing a zero-progress loop after the final page.
-   The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
-   covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
-   and esbuild ceilings remain unchanged.
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
 
 - Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
   portable JSON arrays, keeping HTTP and relay error recovery compatible with

@@ -1,3 +1,4 @@
+import { ReliableHostReputation } from '../ReliableHostReputation'
 import LookupResolver, {
   UnreachableHostInfo,
   LookupAnswerProgress,
@@ -7,6 +8,9 @@ import LookupResolver, {
 import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import { Transaction } from '../../transaction/index'
 import { LockingScript } from '../../script/index'
+
+const reputationOf = (resolver: LookupResolver): ReliableHostReputation =>
+  (resolver as unknown as { reputation: ReliableHostReputation }).reputation
 
 // --------------------------------------------------------------------------
 // Test fixtures: distinct BEEFs representing distinct outputs
@@ -97,10 +101,12 @@ describe('LookupResolver resilience', () => {
       expect(res.outputs).toHaveLength(5)
     }
 
-    const slowSnap = getOverlayHostReputationTracker().snapshot(slowCompleteHost)
-    const fastSnap = getOverlayHostReputationTracker().snapshot(fastIncompleteHost)
-    expect(slowSnap?.totalSuccesses).toBe(20)
-    expect(fastSnap?.totalSuccesses).toBe(20)
+    const slowSnap = reputationOf(resolver).snapshot('mainnet', 'ls_topic', slowCompleteHost)
+    const fastSnap = reputationOf(resolver).snapshot('mainnet', 'ls_topic', fastIncompleteHost)
+    expect(slowSnap?.penalty).toBe(0)
+    expect(lookup.mock.calls.filter(c => c[0] === slowCompleteHost)).toHaveLength(20)
+    expect(fastSnap?.penalty).toBe(0)
+    expect(lookup.mock.calls.filter(c => c[0] === fastIncompleteHost)).toHaveLength(20)
     expect(slowSnap).not.toHaveProperty('avgCompleteness')
     expect(fastSnap).not.toHaveProperty('avgCompleteness')
   })
@@ -248,7 +254,7 @@ describe('LookupResolver resilience', () => {
   // -----------------------------------------------------------------------
   // Self-healing: warm cache + all hosts in backoff → re-discover via SLAP.
   // -----------------------------------------------------------------------
-  it('self-heals when warm-cache hosts have all slid into backoff', async () => {
+  it('discovers healthy replacements despite previous host penalties', async () => {
     const { PrivateKey } = await import('../../primitives/index')
     const { CompletedProtoWallet } =
       await import('../../auth/certificates/__tests/CompletedProtoWallet')
@@ -282,16 +288,10 @@ describe('LookupResolver resilience', () => {
       slapTrackers: [slapTrackerUrl]
     })
 
-    // Prime warm cache with the old dead host
-    ;(resolver as any).hostsCache.set('ls_topic', {
-      hosts: [oldDeadHost],
-      expiresAt: Date.now() + 5 * 60 * 1000
-    })
-
     // Push the dead host deep into backoff
-    const tracker = getOverlayHostReputationTracker()
+    const tracker = reputationOf(resolver)
     for (let i = 0; i < 5; i++) {
-      tracker.recordFailure(oldDeadHost, 'connection refused')
+      await tracker.record('mainnet', 'ls_topic', oldDeadHost, 'transport')
     }
 
     const queryPromise = resolver.query({ service: 'ls_topic', query: {} })
@@ -328,15 +328,17 @@ describe('LookupResolver resilience', () => {
     })
 
     for (let i = 0; i < 6; i++) {
-      const queryPromise = resolver.query({ service: 'ls_kvstore', query: { i } })
+      const queryPromise = resolver.queryDetailed({ service: 'ls_kvstore', query: { i } })
       await jest.advanceTimersByTimeAsync(50)
       const res = await queryPromise
-      expect(res.outputs).toHaveLength(0)
+      expect(res.progress).toMatchObject({
+        status: 'unavailable',
+        rejectedHosts: 1,
+        failedHosts: 0
+      })
     }
-
-    const snap = getOverlayHostReputationTracker().snapshot(partialHost)
-    expect(snap?.totalFailures ?? 0).toBe(0)
-    expect(snap?.backoffUntil ?? 0).toBe(0)
+    expect(reputationOf(resolver).snapshot('mainnet', 'ls_kvstore', partialHost)).toBeUndefined()
+    expect(fakeFetch).toHaveBeenCalledTimes(6)
   })
 })
 
@@ -394,15 +396,17 @@ describe('LookupResolver adversarial review regressions', () => {
       hostOverrides: { ls_malformed: [host] }
     })
 
-    const query = resolver.query({ service: 'ls_malformed', query: {} }, undefined, {
+    const query = resolver.queryDetailed({ service: 'ls_malformed', query: {} }, undefined, {
       onUnreachableHost: callback
     })
     await jest.advanceTimersByTimeAsync(100)
-    await expect(query).resolves.toMatchObject({ outputs: [] })
+    await expect(query).resolves.toMatchObject({
+      progress: { status: 'unavailable', failedHosts: 1 }
+    })
 
-    const snap = getOverlayHostReputationTracker().snapshot(host)
-    expect(snap?.totalSuccesses).toBe(0)
-    expect(snap?.totalFailures).toBe(1)
+    const snap = reputationOf(resolver).snapshot('mainnet', 'ls_malformed', host)
+    expect(snap?.reason).toBe('malformed')
+    expect(snap?.penalty).toBe(8)
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({
         host,
@@ -423,20 +427,22 @@ describe('LookupResolver adversarial review regressions', () => {
       hostOverrides: { ls_freeform: [host] }
     })
 
-    const query = resolver.query({ service: 'ls_freeform', query: {} })
+    const query = resolver.queryDetailed({ service: 'ls_freeform', query: {} })
     await jest.advanceTimersByTimeAsync(10)
-    const tracker = getOverlayHostReputationTracker()
-    tracker.recordFailure(host, 'network down')
-    tracker.recordFailure(host, 'network down')
-    tracker.recordFailure(host, 'network down')
-    const before = tracker.snapshot(host)
+    const tracker = reputationOf(resolver)
+    await tracker.record('mainnet', 'ls_freeform', host, 'transport')
+    await tracker.record('mainnet', 'ls_freeform', host, 'transport')
+    await tracker.record('mainnet', 'ls_freeform', host, 'transport')
+    const before = tracker.snapshot('mainnet', 'ls_freeform', host)
     expect(before).toBeDefined()
 
     await jest.advanceTimersByTimeAsync(200)
-    await expect(query).resolves.toMatchObject({ outputs: [] })
-    const after = tracker.snapshot(host)
-    expect(after?.consecutiveFailures).toBe(before?.consecutiveFailures)
-    expect(after?.backoffUntil).toBe(before?.backoffUntil)
+    await expect(query).resolves.toMatchObject({
+      progress: { status: 'unavailable', freeformHosts: 1, failedHosts: 0 }
+    })
+    const after = tracker.snapshot('mainnet', 'ls_freeform', host)
+    expect(after?.penalty).toBe(before?.penalty)
+    expect(after?.cooldownUntil).toBe(before?.cooldownUntil)
   })
 
   it('isolates rejected async callbacks and deduplicates notification storms', async () => {
@@ -450,11 +456,13 @@ describe('LookupResolver adversarial review regressions', () => {
     })
 
     for (let i = 0; i < 2; i++) {
-      const query = resolver.query({ service: 'ls_notify', query: { i } }, undefined, {
+      const query = resolver.queryDetailed({ service: 'ls_notify', query: { i } }, undefined, {
         onUnreachableHost: callback
       })
       await jest.advanceTimersByTimeAsync(100)
-      await expect(query).resolves.toMatchObject({ outputs: [] })
+      await expect(query).resolves.toMatchObject({
+        progress: { status: 'unavailable', failedHosts: 1 }
+      })
     }
     await Promise.resolve()
     expect(callback).toHaveBeenCalledTimes(1)
@@ -496,12 +504,9 @@ describe('LookupResolver adversarial review regressions', () => {
       facilitator: { lookup },
       slapTrackers: [fastTracker, slowTracker]
     })
-    ;(resolver as any).hostsCache.set('ls_recovery', {
-      hosts: [backedOffHost],
-      expiresAt: Date.now() + 60_000
-    })
-    const tracker = getOverlayHostReputationTracker()
-    for (let i = 0; i < 5; i++) tracker.recordFailure(backedOffHost, 'host down')
+    const tracker = reputationOf(resolver)
+    for (let i = 0; i < 5; i++)
+      await tracker.record('mainnet', 'ls_recovery', backedOffHost, 'transport')
 
     const query = resolver.query({ service: 'ls_recovery', query: {} })
     await jest.advanceTimersByTimeAsync(1000)
@@ -558,22 +563,31 @@ describe('LookupResolver adversarial review regressions', () => {
       hostOverrides: { ls_http_availability: [unavailableHost] }
     })
 
-    const semanticQuery = semanticResolver.query(
+    const semanticQuery = semanticResolver.queryDetailed(
       { service: 'ls_http_semantic', query: {} },
       undefined,
       { onUnreachableHost: callback }
     )
-    const unavailableQuery = unavailableResolver.query(
+    const unavailableQuery = unavailableResolver.queryDetailed(
       { service: 'ls_http_availability', query: {} },
       undefined,
       { onUnreachableHost: callback }
     )
     await jest.advanceTimersByTimeAsync(100)
-    await expect(semanticQuery).resolves.toMatchObject({ outputs: [] })
-    await expect(unavailableQuery).resolves.toMatchObject({ outputs: [] })
+    await expect(semanticQuery).resolves.toMatchObject({
+      progress: { rejectedHosts: 1, failedHosts: 0, status: 'unavailable' }
+    })
+    await expect(unavailableQuery).resolves.toMatchObject({
+      progress: { rejectedHosts: 0, failedHosts: 1, status: 'unavailable' }
+    })
 
-    expect(getOverlayHostReputationTracker().snapshot(semanticHost)?.totalFailures ?? 0).toBe(0)
-    expect(getOverlayHostReputationTracker().snapshot(unavailableHost)?.totalFailures).toBe(1)
+    expect(
+      reputationOf(semanticResolver).snapshot('mainnet', 'ls_http_semantic', semanticHost)
+    ).toBeUndefined()
+    expect(
+      reputationOf(unavailableResolver).snapshot('mainnet', 'ls_http_availability', unavailableHost)
+        ?.reason
+    ).toBe('transport')
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ host: unavailableHost }))
   })

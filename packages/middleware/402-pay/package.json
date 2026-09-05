@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -91,7 +91,7 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^3.0.0 || ^2.1.6"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

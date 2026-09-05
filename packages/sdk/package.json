@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.4.2",
+  "version": "3.0.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -736,6 +736,16 @@
     "./umd": {
       "types": "./dist/types/mod.d.ts",
       "import": "./dist/umd/bundle.js"
+    },
+    "./kvstore/reliable": {
+      "import": {
+        "types": "./dist/types/src/kvstore/reliable.d.ts",
+        "default": "./dist/esm/src/kvstore/reliable.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/kvstore/reliable.d.ts",
+        "default": "./dist/cjs/src/kvstore/reliable.js"
+      }
     }
   },
   "scripts": {
@@ -744,11 +754,11 @@
     "test:coverage": "pnpm build && jest --coverage --watchman=false",
     "test:property": "jest --runInBand --watchman=false --runTestsByPath src/primitives/__tests/utils.property.test.ts src/wallet/__tests/BRC100ByteEncoding.property.test.ts src/auth/clients/__tests__/AuthFetch.property.test.ts",
     "test:resource": "pnpm build && node ../../scripts/run-governed-test.mjs resource src/primitives/__tests/AESGCM.man.test.ts",
-    "format:check": "pnpm --workspace-root exec prettier --check \"packages/sdk/README.md\" \"packages/sdk/package.json\" \"packages/sdk/*.{js,json,ts}\"",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/sdk/README.md\" \"packages/sdk/package.json\" \"packages/sdk/*.{js,json,ts}\" \"packages/sdk/browser/**/*.mjs\"",
     "lint:ci": "pnpm lint",
-    "lint": "oxlint mod.ts src benchmarks jest.config.js rspack.config.js --deny-warnings",
+    "lint": "oxlint mod.ts src benchmarks browser jest.config.js rspack.config.js --deny-warnings",
     "pack:check": "pnpm build && node ../../scripts/check-package-artifact.mjs . --exports PrivateKey,PublicKey,Transaction,Script,WalletClient,ProtoWallet,AuthFetch,IdentityClient,LookupResolver,RemittanceManager --esm-only-entrypoints ./umd",
-    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs .",
+    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node browser/tests/lookup-recovery.mjs",
     "typecheck": "tsc --build --pretty false",
     "build": "pnpm build:ts && pnpm build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
@@ -784,10 +794,12 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
+    "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "oxlint": "^1.76.0",
+    "puppeteer-core": "25.4.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
