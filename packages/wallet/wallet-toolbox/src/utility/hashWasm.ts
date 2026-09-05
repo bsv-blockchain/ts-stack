@@ -21,7 +21,6 @@ function isPortableArgon2idBinaryOptions(options: HashWasmArgon2idOptions): opti
 }
 
 function isWebAssemblyUnavailable(error: unknown): boolean {
-  if (globalThis.WebAssembly === undefined) return true
   const message = error instanceof Error ? error.message : String(error)
   return /webassembly.*(?:not supported|unavailable|disabled|compile|instantiate|module)/i.test(message)
 }
@@ -54,13 +53,14 @@ async function argon2idWithBackends(options: HashWasmArgon2idOptions): Promise<s
   } catch (error) {
     if (!isWebAssemblyUnavailable(error)) throw error
     const { argon2idAsync: argon2idJavaScript } = await import('@noble/hashes/argon2.js')
-    return await argon2idJavaScript(options.password, options.salt, {
+    const result = await argon2idJavaScript(options.password, options.salt, {
       t: options.iterations,
       m: options.memorySize,
       p: options.parallelism,
       dkLen: options.hashLength,
       asyncTick: 10
     })
+    return validateArgon2idResult(result, options.hashLength)
   }
 }
 

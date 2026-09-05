@@ -187,7 +187,10 @@ describe('Argon2id derivation', () => {
     }
   )
 
-  it('does not hide unrelated Argon2 errors', async () => {
+  it.each([true, false])('does not hide unrelated Argon2 errors with WebAssembly present: %s', async present => {
+    if (!present) {
+      Object.defineProperty(globalThis, 'WebAssembly', { configurable: true, value: undefined })
+    }
     const error = new Error('Invalid Argon2 options')
     wasmArgon2id.mockRejectedValue(error)
 

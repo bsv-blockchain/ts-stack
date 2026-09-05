@@ -13,7 +13,11 @@ attention to changes that materially alter behavior or extend functionality.
   WebAssembly-capable runtimes retain the faster path. The existing public
   `hash-wasm`-compatible utility contract remains intact: secret-bearing,
   non-binary-output, and non-byte-array requests stay on `hash-wasm` and are
-  never reinterpreted by a host backend or fallback. The current-main macOS
+  never reinterpreted by a host backend or fallback. Native registration is
+  available from both mobile and client roots, concurrent cold callers share
+  one preload attempt, and both alternative implementations validate result
+  type and length. Unrelated validation errors propagate even without the
+  WebAssembly global. The current-main macOS
   reference fixtures measure 1,690,925 raw / 398,461 gzip / 311,955 Brotli
   bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
   esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and

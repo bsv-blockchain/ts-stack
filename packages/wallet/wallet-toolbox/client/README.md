@@ -32,6 +32,19 @@ The package publishes:
 
 Use a current browser bundler such as Vite or esbuild. Node.js 22 or newer is required for the published tooling and contributor workflow; browser runtime support is determined by your application's target configuration.
 
+### Optional native Argon2id backend
+
+Import `registerArgon2idBackend`, `unregisterArgon2idBackend`, and the
+`AsyncArgon2idBackend` type from this package's root export. Register a host
+implementation only after verifying its interoperability; `isReady()` must
+remain false until that verification succeeds. A ready backend is authoritative:
+derivation errors and malformed output are surfaced without switching implementations.
+
+Concurrent cold derivations share one background `preload()` attempt and keep
+the portable path. Later calls can retry after that attempt settles. Hosts must
+make `preload()` and `isReady()` reentrant and cache permanent failures or apply
+backoff. Unregister the same backend object when the host no longer owns it.
+
 ## Remote storage example
 
 ```ts

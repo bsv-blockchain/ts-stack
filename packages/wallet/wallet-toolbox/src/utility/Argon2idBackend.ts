@@ -14,6 +14,9 @@ export interface Argon2idOptions {
  * A selected backend is authoritative: derivation failures are propagated and
  * never retried with another implementation. Hosts should report readiness only
  * after proving that their native implementation is available and interoperable.
+ * Make preload and isReady reentrant, including calls made by the host itself.
+ * Concurrent cold calls share one preload attempt. Later calls may retry after
+ * settlement; hosts should cache permanent failures or apply retry backoff.
  */
 export interface AsyncArgon2idBackend {
   preload: () => Promise<void>
@@ -23,6 +26,18 @@ export interface AsyncArgon2idBackend {
 
 interface OptionalBackendGlobal {
   __bsvWalletToolboxArgon2idBackendV1?: AsyncArgon2idBackend
+}
+
+const preloadingBackends = new WeakSet<AsyncArgon2idBackend>()
+
+async function preloadBackend(backend: AsyncArgon2idBackend): Promise<void> {
+  try {
+    await backend.preload()
+  } catch {
+    // An unavailable optional backend must not interrupt portable derivation.
+  } finally {
+    preloadingBackends.delete(backend)
+  }
 }
 
 function backendGlobal(): typeof globalThis & OptionalBackendGlobal {
@@ -50,13 +65,16 @@ export function readyArgon2idBackend(): AsyncArgon2idBackend | undefined {
   const backend = backendGlobal().__bsvWalletToolboxArgon2idBackendV1
   if (backend === undefined) return undefined
   if (!backend.isReady()) {
-    void backend.preload().catch(() => {})
+    if (!preloadingBackends.has(backend)) {
+      preloadingBackends.add(backend)
+      void preloadBackend(backend)
+    }
     return undefined
   }
   return backend
 }
 
-/** Rejects malformed native output before it can become wallet key material. */
+/** Rejects malformed alternative-backend output before it can become wallet key material. */
 export function validateArgon2idResult(value: Uint8Array, expectedLength: number): Uint8Array {
   if (!(value instanceof Uint8Array)) {
     throw new TypeError('Argon2id backend returned a non-byte result')

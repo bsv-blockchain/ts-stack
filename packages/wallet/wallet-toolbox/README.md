@@ -77,7 +77,13 @@ error or malformed output is surfaced instead of silently changing
 implementations. The existing `hash-wasm`-compatible utility export retains its
 full input and output contract; requests with `secret`, non-binary output, or
 non-`Uint8Array` input remain on `hash-wasm` rather than being reinterpreted by
-a backend with narrower capabilities.
+a backend with narrower capabilities. Registration and unregistration are also
+exported from the mobile and client package roots. Concurrent cold calls share
+one background preload attempt; later calls can retry after it settles. Hosts
+must make preload/readiness checks reentrant and cache permanent failures or
+apply retry backoff. Unrelated `hash-wasm` errors propagate even when the
+WebAssembly global is absent. Native and JavaScript results both pass the same
+byte-type and exact-length validation.
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
 backward-compatible WAB authentication response. Normal verified lookup and

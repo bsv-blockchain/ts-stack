@@ -72,6 +72,78 @@ describe('Argon2idBackend', () => {
     await new Promise(resolve => setImmediate(resolve))
   })
 
+  test('coalesces concurrent cold callers and retries after settlement', async () => {
+    let finish!: () => void
+    const preload = jest.fn(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve
+        })
+    )
+    const cold = backend({ preload, isReady: () => false })
+    registerArgon2idBackend(cold)
+
+    expect(readyArgon2idBackend()).toBeUndefined()
+    expect(readyArgon2idBackend()).toBeUndefined()
+    expect(preload).toHaveBeenCalledTimes(1)
+    finish()
+    await new Promise(resolve => setImmediate(resolve))
+    expect(readyArgon2idBackend()).toBeUndefined()
+    expect(preload).toHaveBeenCalledTimes(2)
+    finish()
+    await new Promise(resolve => setImmediate(resolve))
+  })
+
+  test('does not let an old preload settlement clear a replacement backend attempt', async () => {
+    let finishOld!: () => void
+    let finishNew!: () => void
+    const old = backend({
+      isReady: () => false,
+      preload: jest.fn(
+        () =>
+          new Promise<void>(resolve => {
+            finishOld = resolve
+          })
+      )
+    })
+    const next = backend({
+      isReady: () => false,
+      preload: jest.fn(
+        () =>
+          new Promise<void>(resolve => {
+            finishNew = resolve
+          })
+      )
+    })
+    registerArgon2idBackend(old)
+    readyArgon2idBackend()
+    registerArgon2idBackend(next)
+    readyArgon2idBackend()
+    finishOld()
+    await new Promise(resolve => setImmediate(resolve))
+    expect(readyArgon2idBackend()).toBeUndefined()
+    expect(next.preload).toHaveBeenCalledTimes(1)
+    finishNew()
+    await new Promise(resolve => setImmediate(resolve))
+  })
+
+  test('allows a cold backend to retry after a failed preload', async () => {
+    const cold = backend({
+      isReady: () => false,
+      preload: jest.fn(async () => {
+        throw new Error('temporarily unavailable')
+      })
+    })
+    registerArgon2idBackend(cold)
+    readyArgon2idBackend()
+    readyArgon2idBackend()
+    expect(cold.preload).toHaveBeenCalledTimes(1)
+    await new Promise(resolve => setImmediate(resolve))
+    readyArgon2idBackend()
+    expect(cold.preload).toHaveBeenCalledTimes(2)
+    await new Promise(resolve => setImmediate(resolve))
+  })
+
   test('accepts only byte output of the requested length', () => {
     const valid = new Uint8Array([1, 2, 3, 4])
 
