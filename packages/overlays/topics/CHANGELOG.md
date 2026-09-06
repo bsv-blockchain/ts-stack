@@ -38,7 +38,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
-- (Document bugs that were fixed since the last release.)
+- `tm_uora_dpp` reads the anchor output exactly, as the format's reference reader does, instead of through the generic `PushDrop` decoder. A 65-byte uncompressed locking key push, a drop tail that is short, spelled with the wrong opcodes or followed by a trailing chunk, and a field carrying a control character are now refused; the decoder admitted all three, the first invisibly because the decoded key re-compresses before the attribution check. No published anchor uses any of these shapes. Admission rules are version-sensitive across index deployments, so a lenient instance would disagree with its peers about topic membership. The shared fixture gains the `uncompressedKey` and `malformedTail` vectors that pin the first two refusals.
 
 ### Security
 
