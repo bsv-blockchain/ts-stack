@@ -91,6 +91,12 @@ cross-origin default of its own.
    `socket.on(...)` and `socket.emit(...)` calls.
 3. Messages are signed and verified under the hood.
 
+Authenticated event data preserves arbitrary JSON exactly, including plain
+numeric-key objects under names such as `data`, `payload`, `transaction`, and
+`tx`. Real `Uint8Array` values are serialized as portable number arrays. Code
+that owns a typed payment or wallet protocol may recover a historical
+numeric-key byte object at that protocol's explicit byte field after receipt.
+
 Call `await io.close()` during shutdown. It is idempotent and disconnects
 active Socket.IO clients before closing the attached HTTP server.
 
@@ -154,7 +160,11 @@ operation and should be reserved for intentionally public events.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+Current TS Stack changes are licensed under the Open BSV License Version 6; see
+[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+under the Open BSV License Version 4. Redistributors must preserve
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
+[`LICENSES/`](./LICENSES/).
 
 ## Development and distribution
 

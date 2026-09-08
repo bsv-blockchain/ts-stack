@@ -94,4 +94,24 @@ describe('auth transport serialization properties', () => {
     expect(convertValueToArray(false, {})).toEqual(Utils.toArray('false', 'utf8'))
     expect(convertValueToArray(1n, {})).toEqual(Utils.toArray('1', 'utf8'))
   })
+
+  test('keeps typed bytes portable without rewriting byte-like plain records', () => {
+    const historical = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
+    const encoded = convertValueToArray(
+      {
+        tx: new Uint8Array([1, 2, 3]),
+        payload: { transaction: historical },
+        data: {},
+        unrelated: historical
+      },
+      {}
+    )
+
+    expect(JSON.parse(Utils.toUTF8(encoded))).toEqual({
+      tx: [1, 2, 3],
+      payload: { transaction: historical },
+      data: {},
+      unrelated: historical
+    })
+  })
 })

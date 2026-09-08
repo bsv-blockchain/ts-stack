@@ -133,6 +133,46 @@ const waitForKind = async (
 }
 
 describe('RemittanceManager base flows', () => {
+  it('serializes typed module bytes while preserving byte-like opaque module data', async () => {
+    const bus = new MessageBus()
+    const applicationData = { data: { 0: 1, 1: 2 }, tx: {}, signature: { 0: 3 } }
+    const module: RemittanceModule<
+      { transaction: Uint8Array; applicationData: typeof applicationData },
+      {},
+      {}
+    > = {
+      id: 'byte-module',
+      name: 'Byte Module',
+      allowUnsolicitedSettlements: false,
+      createOption: async () => ({ transaction: new Uint8Array([1, 2, 3]), applicationData }),
+      buildSettlement: async () => ({ action: 'settle', artifact: {} }),
+      acceptSettlement: async () => ({ action: 'accept', receiptData: {} })
+    }
+    const maker = new RemittanceManager(
+      { remittanceModules: [module], threadIdFactory: makeThreadIdFactory() },
+      makeWallet('maker-key'),
+      new TestComms('maker-key', bus)
+    )
+
+    await maker.sendInvoice('taker-key', makeInvoiceInput())
+
+    const envelope = parseEnvelope(bus.list('taker-key', 'remittance_inbox')[0])
+    expect((envelope.payload as any).options['byte-module'].transaction).toEqual([1, 2, 3])
+    expect((envelope.payload as any).options['byte-module'].applicationData).toEqual(
+      applicationData
+    )
+
+    const taker = new RemittanceManager(
+      { remittanceModules: [module] },
+      makeWallet('taker-key'),
+      new TestComms('taker-key', bus)
+    )
+    await taker.syncThreads()
+    const receivedOption = taker.getThreadOrThrow(envelope.threadId).invoice?.options['byte-module']
+    expect(receivedOption).toBeDefined()
+    expect((receivedOption as any).applicationData).toEqual(applicationData)
+  })
+
   it('processes an invoice, settlement, and receipt end-to-end', async () => {
     const bus = new MessageBus()
     const moduleProcessReceipt = jest.fn()

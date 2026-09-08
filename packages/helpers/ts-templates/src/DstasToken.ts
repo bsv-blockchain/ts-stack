@@ -3,24 +3,27 @@ import { LockingScript } from '@bsv/sdk'
 /**
  * DstasToken — decoder for DSTAS (Divisible STAS / STAS 3.0) locking scripts.
  *
- * DSTAS uses the dxs-bsv-token-sdk template:
+ * DSTAS-shaped scripts use this framing:
  *
  *   <owner pkh:20> <action data> [ENGINE ~2.9KB] OP_RETURN
  *     <redemption/protoID pkh:20 = tokenId> <flags> <service field per flag> <optional data...>
  *
- * Unlike the dxs SDK's full `LockingScriptReader` (which template-matches the
- * whole body), this is a minimal *structural* recogniser sufficient for an
- * overlay indexer: it extracts the owner, the tokenId (redemption pkh), the
- * flags, and the frozen marker. DSTAS is satoshi-denominated, so the token
- * amount is the containing output's satoshi value (read by the caller).
+ * This is a minimal *structural* recogniser sufficient for an overlay indexer:
+ * it extracts the owner, the tokenId (redemption pkh), the flags, and the
+ * frozen marker. It does not embed a third-party locking-script template or
+ * generated fixture. Protocol background is linked, rather than copied, at
+ * https://github.com/dxsapp/dxs-bsv-token-sdk.
  *
- * Recognition signals (validated against real dxs SDK output):
+ * DSTAS is satoshi-denominated, so the token amount is the containing output's
+ * satoshi value (read by the caller).
+ *
+ * Recognition signals:
  *  - the script opens with a 20-byte push (the owner) — `14 <20 bytes>`;
  *  - the body is large (the ~2.9KB engine);
  *  - `6a 14 <20 bytes>` (OP_RETURN + redemption push) appears once, near the
  *    end — the engine body contains no `6a14`.
  *
- * Decode-only; building DSTAS scripts is the dxs SDK's job.
+ * Decode-only; this module does not build DSTAS scripts.
  */
 
 export interface DstasTokenDecoded {

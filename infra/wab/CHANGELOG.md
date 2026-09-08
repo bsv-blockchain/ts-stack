@@ -10,7 +10,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- WAB 1.7.0 accepts explicit `expiresAtEpochMs: null` for store-mandated
+  non-expiring demo credentials. Omitted expiry remains invalid; revocation,
+  admin rotation, namespace isolation and persistent guess limits still apply.
+  No schema migration is required, and older binaries reject these credentials.
+- WAB 1.6.0 adds opt-in, admin-provisioned demonstration identities with expiring,
+  rotatable credentials, persisted attempt limits and immediate login revocation.
+  The explicit `/demo` base URL supports existing mobile phone interactors while
+  keeping demo identities separate from real SMS accounts. See the README for
+  provisioning, client setup, deployment and additive-migration rollback guidance.
+- Refresh compatible standalone `qs` and development-only `browserslist`
+  resolutions to their patched versions; no new dependency or override is added.
+
 ### Security
+
+- Add bearer-authenticated, rate-limited operator routes to pin a WAB account
+  to a verified UMP outpoint and restore a disputed phone-association transfer.
+- Require current-account knowledge plus Twilio OTP possession before a phone
+  change can commit, hash the short-lived authorization at rest, clear stale
+  UMP pins, and preserve reversible association history.
+- Stage phone changes before the on-chain rotation, retain current and pending
+  presentation keys until explicit finalization, and return pending recovery
+  data during verified authentication so restarts cannot strand the account.
+- Reject a configured `WAB_ADMIN_TOKEN` shorter than 32 characters during
+  startup instead of silently treating the support routes as disabled.
 
 - Apply one configurable rate-limit policy to authentication, user, faucet,
   deletion, and share routes. Forwarded client addresses are accepted only
@@ -27,9 +52,10 @@ All notable changes to this project will be documented in this file.
   verified authentication method, preventing cross-account share access.
 - Remove the legacy production OTP bypass and require canonical E.164 phone
   identities for Twilio verification.
-- Make authentication identities non-transferable between live users while
-  preserving faucet history when an identity is relinked after account
-  deletion.
+- Keep ordinary authentication identities non-transferable between live users.
+  The explicit verified phone-change flow can transfer a number while
+  preserving prior associations for support restoration and retaining faucet
+  history.
 - Replace forgeable account-deletion keys with hashed, expiring, rate-limited,
   single-use sessions bound to the exact authentication method and user.
 - Validate presentation keys, user hashes, auth method names, numeric IDs, and

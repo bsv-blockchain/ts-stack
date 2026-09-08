@@ -1,11 +1,12 @@
 {
   "name": "docs-site",
+  "author": "BSV Association",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-manifest.mjs && vite build && vite build --ssr src/entry-server.tsx --outDir .ssr && node scripts/prerender.mjs && node scripts/copy-docs-assets.mjs && test -f dist/index.html && pagefind --site dist --output-path dist/_pagefind && node scripts/check-built-links.mjs",
+    "build": "node scripts/build-manifest.mjs && vite build --sourcemap && vite build --ssr src/entry-server.tsx --outDir .ssr && node scripts/prerender.mjs && node scripts/copy-docs-assets.mjs && test -f dist/index.html && pagefind --site dist --output-path dist/_pagefind && node scripts/bundle-license-policy.mjs --write-dist && node scripts/check-built-links.mjs",
     "preview": "vite preview",
     "validate": "node scripts/validate-frontmatter.mjs && node scripts/check-links.mjs",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"vite.config.ts\" \"tsconfig.json\" \"package.json\" \"README.md\"",

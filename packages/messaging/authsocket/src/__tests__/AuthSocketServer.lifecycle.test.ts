@@ -16,6 +16,7 @@ jest.mock('socket.io', () => ({
 }))
 
 jest.mock('@bsv/sdk', () => ({
+  ...jest.requireActual('@bsv/sdk'),
   Peer: mockPeerConstructor
 }))
 

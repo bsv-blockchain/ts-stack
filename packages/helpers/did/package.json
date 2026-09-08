@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -61,7 +61,7 @@
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
-  "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "qrcode": "^1.5.4"

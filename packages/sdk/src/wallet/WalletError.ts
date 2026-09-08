@@ -1,3 +1,5 @@
+import { stringifyBRC100 } from './BRC100ByteEncoding.js'
+
 export class WalletError extends Error {
   code: number
   isError: boolean = true
@@ -60,7 +62,7 @@ export class WalletError extends Error {
         isError: true
       }
     }
-    const json = JSON.stringify(e)
+    const json = stringifyBRC100(e)
     return json
   }
 }

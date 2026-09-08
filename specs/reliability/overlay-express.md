@@ -12,7 +12,7 @@
 - Domain: Overlay
 - Criticality tier: 1
 - Reliability Level (current → target): RL2 → RL4
-- Owner / Backup owner: BSV Association / BSV Blockchain Association
+- Owner / Backup owner: BSV Association / BSV Association
 
 ## Build and Test
 - Build command: `npm run build` (tsc -b + tsconfig-to-dual-package)

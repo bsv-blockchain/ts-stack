@@ -10,6 +10,7 @@
 
 import WalletClient from '../WalletClient'
 import HTTPWalletJSON from '../substrates/HTTPWalletJSON'
+import ReactNativeWebView from '../substrates/ReactNativeWebView'
 import WalletWireTransceiver from '../substrates/WalletWireTransceiver'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER'
 import type { WalletInterface } from '../Wallet.interfaces'
@@ -56,6 +57,39 @@ describe('WalletClient – constructor substrate aliases', () => {
   it('creates an HTTPWalletJSON instance for "secure-json-api"', () => {
     const client = new WalletClient('secure-json-api', 'my.app.com')
     expect(client.substrate).toBeInstanceOf(HTTPWalletJSON)
+  })
+
+  it('does not treat a BRC-100 originator as a React Native MessageEvent origin', async () => {
+    const originalWindow = global.window
+    let listener: ((event: MessageEvent) => void) | undefined
+    const postMessage = jest.fn()
+    global.window = {
+      ReactNativeWebView: { postMessage },
+      addEventListener: jest.fn(
+        (_name: string, callback: (event: MessageEvent) => void) => { listener = callback }
+      ),
+      removeEventListener: jest.fn()
+    } as unknown as Window & typeof globalThis
+    try {
+      const client = new WalletClient('react-native', 'myapp.com')
+      const promise = (client.substrate as ReactNativeWebView).getVersion({})
+      const invocation = JSON.parse(postMessage.mock.calls[0][0])
+      listener?.({
+        origin: 'https://wallet.vendor.example',
+        data: JSON.stringify({
+          type: 'CWI',
+          isInvocation: false,
+          id: invocation.id,
+          status: 'success',
+          result: { version: '1.0.0' }
+        })
+      } as MessageEvent)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+      expect(client.originator).toBe('myapp.com')
+    } finally {
+      global.window = originalWindow
+    }
   })
 
   it('accepts a pre-built WalletInterface object as substrate', () => {

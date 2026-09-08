@@ -1,12 +1,12 @@
 {
   "name": "@bsv/teranode-listener",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
   "description": "An npm package to subscribe to Teranode P2P topics in a private DHT network and log messages",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,9 @@
   "files": [
     "dist/**/*",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "scripts": {
     "build": "tsc",

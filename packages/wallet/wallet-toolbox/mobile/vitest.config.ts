@@ -9,6 +9,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/index.mobile.ts',
+        'src/utility/hashWasm.ts',
         'src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts',
         'src/services/chaintracker/chaintracks/Api/BulkIngestorApi.ts',
         'src/services/chaintracker/chaintracks/Api/ChaintracksClientApi.ts'

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/simple",
-  "version": "0.5.0",
+  "version": "0.5.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -86,7 +86,7 @@
     "tokens",
     "certification"
   ],
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/message-box-client": "workspace:^",
@@ -108,14 +108,16 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.0"
+    "@bsv/sdk": "^2.4.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

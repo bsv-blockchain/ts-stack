@@ -10,6 +10,7 @@ import type {
 import { createNonce } from '../../auth/utils/createNonce.js'
 import P2PKH from '../../script/templates/P2PKH.js'
 import PublicKey from '../../primitives/PublicKey.js'
+import { toBRC100PortableByteArray } from '../../wallet/BRC100ByteEncoding.js'
 
 /**
  * BRC-29-like payment option terms.
@@ -62,7 +63,11 @@ export interface Brc29ReceiptData {
 }
 
 export interface NonceProvider {
-  createNonce: (wallet: WalletInterface, scope: WalletCounterparty, originator?: unknown) => Promise<string>
+  createNonce: (
+    wallet: WalletInterface,
+    scope: WalletCounterparty,
+    originator?: unknown
+  ) => Promise<string>
 }
 
 export interface LockingScriptProvider {
@@ -132,8 +137,11 @@ export interface Brc29RemittanceModuleConfig {
  * - payee internalizes the tx output using wallet.internalizeAction
  * - optional rejection can include a refund token embedded in the termination details
  */
-export class Brc29RemittanceModule
-  implements RemittanceModule<Brc29OptionTerms, Brc29SettlementArtifact, Brc29ReceiptData> {
+export class Brc29RemittanceModule implements RemittanceModule<
+  Brc29OptionTerms,
+  Brc29SettlementArtifact,
+  Brc29ReceiptData
+> {
   readonly id: RemittanceOptionId = 'brc29.p2pkh'
   readonly name = 'BSV (BRC-29 derived P2PKH)'
   readonly allowUnsolicitedSettlements = true
@@ -162,7 +170,7 @@ export class Brc29RemittanceModule
     if (legacyInternalizeProtocol === 'basket insertion') {
       throw new TypeError(
         'BRC-29 settlements cannot be internalized as basket insertions. ' +
-        'Use wallet payment for spendable wallet balance, or implement a separate custom-output protocol with insertionRemittance.'
+          'Use wallet payment for spendable wallet balance, or implement a separate custom-output protocol with insertionRemittance.'
       )
     }
     this.internalizeProtocol = 'wallet payment'
@@ -173,7 +181,10 @@ export class Brc29RemittanceModule
   async buildSettlement(
     args: { threadId: string; option: Brc29OptionTerms; note?: string },
     ctx: ModuleContext
-  ): Promise<{ action: 'settle'; artifact: Brc29SettlementArtifact } | { action: 'terminate'; termination: Termination }> {
+  ): Promise<
+    | { action: 'settle'; artifact: Brc29SettlementArtifact }
+    | { action: 'terminate'; termination: Termination }
+  > {
     const { wallet, originator } = ctx
 
     let option: Brc29OptionTerms
@@ -206,7 +217,10 @@ export class Brc29RemittanceModule
       )
 
       if (typeof publicKey !== 'string' || publicKey.trim() === '') {
-        return terminate('brc29.public_key_missing', 'Failed to derive payee public key for BRC-29 settlement.')
+        return terminate(
+          'brc29.public_key_missing',
+          'Failed to derive payee public key for BRC-29 settlement.'
+        )
       }
 
       const lockingScript = await this.lockingScriptProvider.pubKeyToP2PKHLockingScript(publicKey)
@@ -243,15 +257,19 @@ export class Brc29RemittanceModule
       if (tx == null) {
         return terminate('brc29.missing_tx', 'wallet.createAction did not return a transaction.')
       }
-      if (!isAtomicBeef(tx)) {
-        return terminate('brc29.invalid_tx', 'wallet.createAction returned an invalid transaction payload.')
+      const transaction = toPortableTransaction(tx)
+      if (transaction == null) {
+        return terminate(
+          'brc29.invalid_tx',
+          'wallet.createAction returned an invalid transaction payload.'
+        )
       }
 
       return {
         action: 'settle',
         artifact: {
           customInstructions: { derivationPrefix, derivationSuffix },
-          transaction: tx,
+          transaction,
           amountSatoshis: option.amountSatoshis,
           outputIndex: option.outputIndex ?? 0
         }
@@ -265,7 +283,10 @@ export class Brc29RemittanceModule
   async acceptSettlement(
     args: { threadId: string; settlement: Brc29SettlementArtifact; sender: PubKeyHex },
     ctx: ModuleContext
-  ): Promise<{ action: 'accept'; receiptData?: Brc29ReceiptData } | { action: 'terminate'; termination: Termination }> {
+  ): Promise<
+    | { action: 'accept'; receiptData?: Brc29ReceiptData }
+    | { action: 'terminate'; termination: Termination }
+  > {
     const { wallet, originator } = ctx
     const origin = originator as OriginatorDomainNameStringUnder250Bytes | undefined
     try {
@@ -294,12 +315,19 @@ export class Brc29RemittanceModule
       return { action: 'accept', receiptData: { internalizeResult } }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return terminate('brc29.internalize_failed', `Failed to internalize BRC-29 settlement: ${message}`)
+      return terminate(
+        'brc29.internalize_failed',
+        `Failed to internalize BRC-29 settlement: ${message}`
+      )
     }
   }
 }
 
-function terminate(code: string, message: string, details?: unknown): { action: 'terminate'; termination: Termination } {
+function terminate(
+  code: string,
+  message: string,
+  details?: unknown
+): { action: 'terminate'; termination: Termination } {
   return { action: 'terminate', termination: { code, message, details } }
 }
 
@@ -321,12 +349,19 @@ function ensureValidOption(option: Brc29OptionTerms): Brc29OptionTerms {
       throw new Error('BRC-29 option protocolID must be a tuple [number, string]')
     }
     const [protocolNumber, protocolString] = protocolID
-    if (!Number.isInteger(protocolNumber) || protocolNumber < 0 || !isNonEmptyString(protocolString)) {
+    if (
+      !Number.isInteger(protocolNumber) ||
+      protocolNumber < 0 ||
+      !isNonEmptyString(protocolString)
+    ) {
       throw new Error('BRC-29 option protocolID must be a tuple [number, string]')
     }
   }
   const labels = (option as Brc29OptionTerms).labels
-  if (labels != null && (!Array.isArray(labels) || labels.some((label) => !isNonEmptyString(label)))) {
+  if (
+    labels != null &&
+    (!Array.isArray(labels) || labels.some(label => !isNonEmptyString(label)))
+  ) {
     throw new Error('BRC-29 option labels must be a list of non-empty strings')
   }
   const description = (option as Brc29OptionTerms).description
@@ -344,7 +379,10 @@ function ensureValidSettlement(settlement: Brc29SettlementArtifact): Brc29Settle
   if (instructions == null || typeof instructions !== 'object') {
     throw new Error('BRC-29 settlement requires customInstructions')
   }
-  if (!isNonEmptyString(instructions.derivationPrefix) || !isNonEmptyString(instructions.derivationSuffix)) {
+  if (
+    !isNonEmptyString(instructions.derivationPrefix) ||
+    !isNonEmptyString(instructions.derivationSuffix)
+  ) {
     throw new Error('BRC-29 settlement derivation values are required')
   }
   const amountSatoshis = settlement.amountSatoshis
@@ -355,15 +393,16 @@ function ensureValidSettlement(settlement: Brc29SettlementArtifact): Brc29Settle
   if (outputIndex != null && (!Number.isInteger(outputIndex) || outputIndex < 0)) {
     throw new Error('BRC-29 settlement outputIndex must be a non-negative integer')
   }
-  if (!isAtomicBeef(settlement.transaction)) {
+  const transaction = toPortableTransaction(settlement.transaction)
+  if (transaction == null) {
     throw new Error('BRC-29 settlement transaction must be a non-empty byte array')
   }
-  return settlement
+  return transaction === settlement.transaction ? settlement : { ...settlement, transaction }
 }
 
-function isAtomicBeef(tx: unknown): tx is number[] {
-  if (!Array.isArray(tx) || tx.length === 0) return false
-  return tx.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+function toPortableTransaction(tx: unknown): number[] | undefined {
+  const bytes = toBRC100PortableByteArray(tx)
+  return bytes != null && bytes.length > 0 ? bytes : undefined
 }
 
 function isNonEmptyString(value: unknown): value is string {

@@ -16,6 +16,8 @@ export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor cr
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
 export const MANAGED_CHANGE_POLICY_MIGRATION = '2026-08-10-001 upgrade managed change liquidity defaults'
+export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifacts'
+export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -174,6 +176,85 @@ export class KnexMigrations implements MigrationSource<string> {
       async down() {
         // Intentionally irreversible. Restoring 32-satoshi liquidity units on
         // rollback would actively re-fragment wallets that already migrated.
+      }
+    }
+
+    migrations[BRC177_NO_SEND_EXPIRY_MIGRATION] = {
+      async up(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.string('noSendExpiryMode', 16).nullable()
+          table.bigInteger('noSendExpiryValue').unsigned().nullable()
+          table.bigInteger('noSendExpiryDeadline').unsigned().nullable()
+          table.string('noSendExpiryState', 24).nullable()
+          table.string('noSendExpiryAnchorTxid', 64).nullable()
+          table.integer('noSendExpiryAnchorVout').unsigned().nullable()
+          table.bigInteger('noSendExpiryReleasedAt').unsigned().nullable()
+          table.bigInteger('noSendExpiryObservedAt').unsigned().nullable()
+          table.string('noSendExpiryReclaimTxid', 64).nullable()
+          table.binary('noSendExpiryReclaimRawTx').nullable()
+          table.string('noSendExpiryReclaimDerivationPrefix', 32).nullable()
+          table.string('noSendExpiryReclaimDerivationSuffix', 32).nullable()
+          table.bigInteger('noSendExpiryReclaimSatoshis').unsigned().nullable()
+          table.index(['noSendExpiryState', 'noSendExpiryDeadline'], 'idx_transactions_nosend_expiry')
+          table.index(['userId', 'noSendExpiryReclaimTxid'], 'idx_transactions_nosend_reclaim')
+        })
+        if ((await determineDBType(knex)) === 'MySQL') {
+          await knex.raw('ALTER TABLE transactions MODIFY COLUMN noSendExpiryReclaimRawTx LONGBLOB')
+        }
+      },
+      async down(knex) {
+        await knex.schema.alterTable('transactions', table => {
+          table.dropIndex(['noSendExpiryState', 'noSendExpiryDeadline'], 'idx_transactions_nosend_expiry')
+          table.dropIndex(['userId', 'noSendExpiryReclaimTxid'], 'idx_transactions_nosend_reclaim')
+          table.dropColumns(
+            'noSendExpiryMode',
+            'noSendExpiryValue',
+            'noSendExpiryDeadline',
+            'noSendExpiryState',
+            'noSendExpiryAnchorTxid',
+            'noSendExpiryAnchorVout',
+            'noSendExpiryReleasedAt',
+            'noSendExpiryObservedAt',
+            'noSendExpiryReclaimTxid',
+            'noSendExpiryReclaimRawTx',
+            'noSendExpiryReclaimDerivationPrefix',
+            'noSendExpiryReclaimDerivationSuffix',
+            'noSendExpiryReclaimSatoshis'
+          )
+        })
+      }
+    }
+
+    migrations[PREPARED_BEEF_MIGRATION] = {
+      async up(knex) {
+        const dbtype = await determineDBType(knex)
+        await knex.schema.createTable('prepared_beef_metadata', table => {
+          table.integer('preparedBeefMetadataId').unsigned().primary()
+          table.integer('proofEpoch').unsigned().notNullable()
+        })
+        await knex('prepared_beef_metadata').insert({ preparedBeefMetadataId: 1, proofEpoch: 0 })
+        await knex.schema.createTable('prepared_beefs', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('preparedBeefId').notNullable()
+          table.integer('userId').unsigned().references('userId').inTable('users').notNullable()
+          table.string('rootTxid', 64).notNullable()
+          table.binary('beef').notNullable()
+          table.string('checksum', 64).notNullable()
+          table.integer('formatVersion').unsigned().notNullable()
+          table.string('state', 16).notNullable()
+          table.integer('txCount').unsigned().notNullable()
+          table.integer('bumpCount').unsigned().notNullable()
+          table.integer('byteLength').unsigned().notNullable()
+          table.unique(['userId', 'rootTxid'])
+          table.index(['state', 'formatVersion'], 'idx_prepared_beefs_state_version')
+        })
+        if (dbtype === 'MySQL') {
+          await knex.raw('ALTER TABLE prepared_beefs MODIFY COLUMN beef LONGBLOB NOT NULL')
+        }
+      },
+      async down(knex) {
+        await knex.schema.dropTable('prepared_beefs')
+        await knex.schema.dropTable('prepared_beef_metadata')
       }
     }
 

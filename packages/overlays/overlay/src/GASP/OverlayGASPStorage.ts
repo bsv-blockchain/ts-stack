@@ -131,7 +131,8 @@ export class OverlayGASPStorage implements GASPStorage {
       parsedTx.toBEEF(),
       [],
       typeof tx.txMetadata === 'string' ? Utils.toArray(tx.txMetadata) : undefined,
-      'historical-tx'
+      'historical-tx',
+      { dryRun: true }
     )
     if (!admittanceResult.outputsToAdmit.includes(tx.outputIndex) && this.engine.managers[this.topic] !== undefined && typeof this.engine.managers[this.topic].identifyNeededInputs === 'function') {
       // The transaction is not admissible, get inputs needed for further verification
@@ -242,7 +243,8 @@ export class OverlayGASPStorage implements GASPStorage {
       beef,
       this.previousCoinIndexes(tx, coins),
       undefined,
-      'historical-tx'
+      'historical-tx',
+      { dryRun: true }
     )
     for (const outputIndex of admittanceInstructions.outputsToAdmit) {
       coins.add(`${tx.id('hex')}.${outputIndex}`)

@@ -170,4 +170,42 @@ describe('purgeData tests', () => {
       await expect(storage.findTransactions({ partial: { transactionId: tx.transactionId } })).resolves.toHaveLength(0)
     }
   })
+
+  test('removes prepared BEEF only after its matching output is no longer spendable', async () => {
+    for (const storage of storages) {
+      const txid = await seedSpendableUtxo(storage)
+      const knexStorage = storage as StorageKnex
+      const [output] = await storage.findOutputs({ partial: { txid }, noScript: true })
+      const now = new Date()
+      const epoch = await knexStorage.readPreparedBeefProofEpoch()
+      await expect(knexStorage.upsertPreparedBeef({
+        created_at: now,
+        updated_at: now,
+        preparedBeefId: 0,
+        userId: output.userId,
+        rootTxid: txid,
+        beef: [1, 2, 3],
+        checksum: 'a'.repeat(64),
+        formatVersion: 1,
+        state: 'ready',
+        txCount: 1,
+        bumpCount: 0,
+        byteLength: 3
+      }, epoch)).resolves.toBe(true)
+
+      const noTransactionPurge: PurgeParams = {
+        purgeCompleted: false,
+        purgeFailed: false,
+        purgeSpent: false
+      }
+      await expect(storage.purgeData(noTransactionPurge)).resolves.toMatchObject({ count: 0 })
+      await expect(knexStorage.findPreparedBeefs(output.userId, [txid])).resolves.toHaveLength(1)
+
+      await storage.updateOutput(output.outputId, { spendable: false })
+      const result = await storage.purgeData(noTransactionPurge)
+
+      expect(result.log).toContain('unused prepared BEEFs deleted')
+      await expect(knexStorage.findPreparedBeefs(output.userId, [txid])).resolves.toEqual([])
+    }
+  })
 })

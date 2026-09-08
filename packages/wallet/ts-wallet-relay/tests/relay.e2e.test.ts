@@ -327,6 +327,31 @@ describe('WalletRelayService E2E', () => {
       expect(rpc.error?.message).toBe('wallet unavailable')
       mobile.disconnect()
     }, 10_000)
+
+    it('preserves BRC-100 byte fields across the encrypted relay in both directions', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const created = await service.createSession()
+      let receivedParams: unknown
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) => {
+        receivedParams = params
+        return Promise.resolve({
+          signableTransaction: { tx: new Uint8Array([4, 5, 6]), reference: 'cmVm' }
+        })
+      })
+
+      const rpc = await service.sendRequest(
+        created.sessionId,
+        'createAction',
+        { description: 'test action', inputBEEF: new Uint8Array([1, 2, 3]) },
+        created.desktopToken
+      )
+
+      expect(receivedParams).toMatchObject({ inputBEEF: [1, 2, 3] })
+      expect(rpc.result).toEqual({
+        signableTransaction: { tx: [4, 5, 6], reference: 'cmVm' }
+      })
+      mobile.disconnect()
+    }, 10_000)
   })
 
   // ── QR signing ───────────────────────────────────────────────────────────────

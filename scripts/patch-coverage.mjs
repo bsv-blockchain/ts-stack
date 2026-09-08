@@ -20,6 +20,11 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // Benchmark orchestration and type-only declarations have no executable
   // statements for Jest/Istanbul to instrument.
   /packages\/sdk\/scripts\/run-benchmarks\.js$/,
+  // The LCH vector regenerator is release tooling that executes the compiled
+  // package against a separately reviewed BRC fixture. Package coverage is
+  // deliberately collected from `src/**/*.ts`; this script is instead
+  // exercised by deterministic regeneration and byte-for-byte vector checks.
+  /packages\/content\/lch\/scripts\/regenerate-brc170-vectors\.mjs$/,
   /\.interfaces\.[cm]?[jt]sx?$/,
   /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/,
   // A `*.md.ts` module is one exported template literal, which is a convention
@@ -38,6 +43,8 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // do carry statements elsewhere: `packages/helpers/create-bsv-app/src/index.ts`
   // is a CLI that reads `process.argv` and branches on it, and excluding it by
   // shape would quietly drop real code out of this gate.
+  /packages\/overlays\/overlay\/mod\.ts$/,
+  /packages\/overlays\/overlay\/src\/TopicManager\.ts$/,
   /packages\/overlays\/topics\/src\/index\.ts$/,
   /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/,
   // SetupWallet is declarations only, while the mobile storage entry point is
@@ -46,6 +53,17 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/wallet\/wallet-toolbox\/src\/storage\/index\.mobile\.ts$/,
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
   /packages\/wallet\/btms\/src\/types\.ts$/,
+  /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
+  // CHIRP's package entry point is a pure re-export barrel and its types module
+  // emits declarations only. The executable CLI remains instrumented and is
+  // intentionally not part of this exact exclusion.
+  /packages\/network\/chirp\/src\/index\.ts$/,
+  /packages\/network\/chirp\/src\/types\.ts$/,
+  // LCH follows the same package shape: its entry point is only re-exports and
+  // its types module emits declarations only. Executable source remains in the
+  // patch-coverage boundary.
+  /packages\/content\/lch\/src\/index\.ts$/,
+  /packages\/content\/lch\/src\/types\.ts$/,
   // These ChainTracks modules emit no executable statements: two contain
   // interfaces/type-only imports and the mobile entry point only re-exports
   // platform-safe implementations. Keep the exclusions exact so executable

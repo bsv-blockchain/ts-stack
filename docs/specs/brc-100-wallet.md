@@ -224,6 +224,12 @@ Optional args:
 
 Returns `{ accepted: true }`.
 
+Wallets may receive a legacy AtomicBEEF envelope containing valid but unrelated
+BEEF branches. An implementation may discard those branches before validation,
+but it must validate the transaction named by the BRC-95 prefix and its complete
+recursive dependency proof. This compatibility behavior does not permit a
+missing subject, missing dependency, invalid proof, or invalid remittance.
+
 ## Outputs
 
 ### listOutputs
@@ -254,7 +260,7 @@ Returns:
 
 | Field | Type |
 |-------|------|
-| `totalOutputs` | `number` |
+| `totalOutputs` | `number`; total matching outputs before pagination, independent of `limit` and `offset` |
 | `BEEF` | `BEEF`, when `include: 'entire transactions'` |
 | `outputs` | `WalletOutput[]` |
 

@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
 import { governedWorkspacePackages, workspaceRuntimeClosure } from './lib/workspace-packages.mjs'
+import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.mjs'
 
 export { workspaceRuntimeClosure }
 
@@ -57,8 +58,13 @@ function isDeclarationFile(file) {
   return /\.d\.[cm]?ts$/i.test(file)
 }
 
-function requiredFileErrors(files) {
-  return ['package.json', 'LICENSE.txt'].flatMap(requiredFile =>
+function requiredFileErrors(files, packageName) {
+  const requiredFiles = [
+    'package.json',
+    'LICENSE.txt',
+    ...expectedThirdPartyFilesForPackage(packageName)
+  ]
+  return requiredFiles.flatMap(requiredFile =>
     files.filter(file => file === requiredFile).length === 1
       ? []
       : [`tarball must contain exactly one root ${requiredFile}`]
@@ -315,7 +321,7 @@ export function validatePackedFiles(packResult, manifest, allowedSourcePrefixes 
   const normalizedSourcePrefixes = normalizeSourcePrefixes(allowedSourcePrefixes)
   const files = (packResult.files ?? []).map(file => file.path)
   return [
-    ...requiredFileErrors(files),
+    ...requiredFileErrors(files, manifest.name),
     ...readmeErrors(files),
     ...files.flatMap(file => packedFileErrors(file, normalizedSourcePrefixes)),
     ...identityErrors(packResult, manifest),

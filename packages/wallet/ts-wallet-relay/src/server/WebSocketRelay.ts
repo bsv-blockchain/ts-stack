@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import type { IncomingMessage, Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import type { WireEnvelope } from '../types.js'
+import { stringifyBRC100 } from '@bsv/sdk'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
@@ -158,7 +159,7 @@ export class WebSocketRelay {
   sendToMobile(topic: string, envelope: WireEnvelope): void {
     const entry = this.topics.get(topic)
     if (entry?.mobile?.readyState === WebSocket.OPEN) {
-      entry.mobile.send(JSON.stringify(envelope))
+      entry.mobile.send(stringifyBRC100(envelope))
     } else {
       this.buffer(topic, envelope)
     }
@@ -168,7 +169,7 @@ export class WebSocketRelay {
   sendToDesktop(topic: string, envelope: WireEnvelope): void {
     const entry = this.topics.get(topic)
     if (entry?.desktop?.readyState === WebSocket.OPEN) {
-      entry.desktop.send(JSON.stringify(envelope))
+      entry.desktop.send(stringifyBRC100(envelope))
     } else {
       this.buffer(topic, envelope)
     }
@@ -231,7 +232,7 @@ export class WebSocketRelay {
     const toFlush = entry.buffer.filter(m => m.expiresAt > now)
     entry.buffer = []
     for (const { envelope } of toFlush) {
-      ws.send(JSON.stringify(envelope))
+      ws.send(stringifyBRC100(envelope))
     }
 
     ;(ws as WebSocket & { isAlive: boolean }).isAlive = true
@@ -247,7 +248,7 @@ export class WebSocketRelay {
         // Route to the other side
         const other = role === 'mobile' ? entry.desktop : entry.mobile
         if (other?.readyState === WebSocket.OPEN) {
-          other.send(JSON.stringify(envelope))
+          other.send(stringifyBRC100(envelope))
         } else if (role === 'desktop') {
           // Only buffer desktop→mobile messages. Mobile→desktop messages are
           // handled by the onMessage callback; buffering them here would cause

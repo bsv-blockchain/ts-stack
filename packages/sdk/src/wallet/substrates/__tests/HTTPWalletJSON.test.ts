@@ -19,7 +19,7 @@ function makeFetch(
   return jest.fn().mockResolvedValue({
     ok,
     status,
-    json: () => Promise.resolve(body),
+    json: () => Promise.resolve(body)
   } as unknown as Response)
 }
 
@@ -54,7 +54,11 @@ describe('HTTPWalletJSON – constructor', () => {
 
   it('stores the custom httpClient', () => {
     const mockFetch = jest.fn()
-    const client = new HTTPWalletJSON(TEST_ORIGINATOR, BASE_URL, mockFetch as unknown as typeof fetch)
+    const client = new HTTPWalletJSON(
+      TEST_ORIGINATOR,
+      BASE_URL,
+      mockFetch as unknown as typeof fetch
+    )
     expect(client.httpClient).toBe(mockFetch)
   })
 })
@@ -121,7 +125,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       isError: true,
       code: 6,
       parameter: 'description',
-      message: 'The description parameter must be at least 5 length.',
+      message: 'The description parameter must be at least 5 length.'
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
@@ -143,7 +147,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       isError: true,
       code: 6,
       parameter: 'lockingScript',
-      message: 'Custom server message for lockingScript.',
+      message: 'Custom server message for lockingScript.'
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
@@ -161,12 +165,14 @@ describe('HTTPWalletJSON – api() error responses', () => {
       isError: true,
       code: 7,
       totalSatoshisNeeded: 5000,
-      moreSatoshisNeeded: 2000,
+      moreSatoshisNeeded: 2000
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
 
-    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
+      WERR_INSUFFICIENT_FUNDS
+    )
 
     try {
       await client.createAction({ description: 'hello world' })
@@ -184,12 +190,14 @@ describe('HTTPWalletJSON – api() error responses', () => {
       code: 5,
       reviewActionResults: [{ txid: 'abc', status: 'failed' }],
       sendWithResults: [],
-      txid: 'abc123',
+      txid: 'abc123'
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
 
-    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(WERR_REVIEW_ACTIONS)
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
+      WERR_REVIEW_ACTIONS
+    )
 
     try {
       await client.createAction({ description: 'hello world' })
@@ -265,37 +273,27 @@ describe('HTTPWalletJSON – method routing', () => {
   })
 
   const expectCallName = async (method: () => Promise<unknown>, expectedPath: string) => {
-    await method().catch(() => { /* ignore deserialization quirks */ })
+    await method().catch(() => {
+      /* ignore deserialization quirks */
+    })
     const url: string = mockFetch.mock.calls[mockFetch.mock.calls.length - 1][0]
     expect(url).toContain(expectedPath)
   }
 
   it('createAction calls /createAction', async () => {
-    await expectCallName(
-      () => client.createAction({ description: 'hello world' }),
-      '/createAction'
-    )
+    await expectCallName(() => client.createAction({ description: 'hello world' }), '/createAction')
   })
 
   it('signAction calls /signAction', async () => {
-    await expectCallName(
-      () => client.signAction({ spends: {}, reference: 'cmVm' }),
-      '/signAction'
-    )
+    await expectCallName(() => client.signAction({ spends: {}, reference: 'cmVm' }), '/signAction')
   })
 
   it('abortAction calls /abortAction', async () => {
-    await expectCallName(
-      () => client.abortAction({ reference: 'cmVm' }),
-      '/abortAction'
-    )
+    await expectCallName(() => client.abortAction({ reference: 'cmVm' }), '/abortAction')
   })
 
   it('listActions calls /listActions', async () => {
-    await expectCallName(
-      () => client.listActions({ labels: [] }),
-      '/listActions'
-    )
+    await expectCallName(() => client.listActions({ labels: [] }), '/listActions')
   })
 
   it('internalizeAction calls /internalizeAction', async () => {
@@ -306,10 +304,7 @@ describe('HTTPWalletJSON – method routing', () => {
   })
 
   it('listOutputs calls /listOutputs', async () => {
-    await expectCallName(
-      () => client.listOutputs({ basket: 'default' }),
-      '/listOutputs'
-    )
+    await expectCallName(() => client.listOutputs({ basket: 'default' }), '/listOutputs')
   })
 
   it('relinquishOutput calls /relinquishOutput', async () => {
@@ -320,10 +315,7 @@ describe('HTTPWalletJSON – method routing', () => {
   })
 
   it('getPublicKey calls /getPublicKey', async () => {
-    await expectCallName(
-      () => client.getPublicKey({ identityKey: true }),
-      '/getPublicKey'
-    )
+    await expectCallName(() => client.getPublicKey({ identityKey: true }), '/getPublicKey')
   })
 
   it('revealCounterpartyKeyLinkage calls /revealCounterpartyKeyLinkage', async () => {
@@ -335,10 +327,13 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('revealSpecificKeyLinkage calls /revealSpecificKeyLinkage', async () => {
     await expectCallName(
-      () => client.revealSpecificKeyLinkage({
-        counterparty: 'aa', verifier: 'bb',
-        protocolID: [0, 'proto'], keyID: 'k1',
-      }),
+      () =>
+        client.revealSpecificKeyLinkage({
+          counterparty: 'aa',
+          verifier: 'bb',
+          protocolID: [0, 'proto'],
+          keyID: 'k1'
+        }),
       '/revealSpecificKeyLinkage'
     )
   })
@@ -380,17 +375,27 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('verifySignature calls /verifySignature', async () => {
     await expectCallName(
-      () => client.verifySignature({ data: [1], signature: [2], protocolID: [0, 'proto'], keyID: 'k1' }),
+      () =>
+        client.verifySignature({
+          data: [1],
+          signature: [2],
+          protocolID: [0, 'proto'],
+          keyID: 'k1'
+        }),
       '/verifySignature'
     )
   })
 
   it('acquireCertificate calls /acquireCertificate', async () => {
     await expectCallName(
-      () => client.acquireCertificate({
-        type: 'dHlwZQ==', certifier: 'aa', acquisitionProtocol: 'issuance',
-        fields: {}, certifierUrl: 'https://certifier.example.com',
-      } as any),
+      () =>
+        client.acquireCertificate({
+          type: 'dHlwZQ==',
+          certifier: 'aa',
+          acquisitionProtocol: 'issuance',
+          fields: {},
+          certifierUrl: 'https://certifier.example.com'
+        } as any),
       '/acquireCertificate'
     )
   })
@@ -404,16 +409,20 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('proveCertificate calls /proveCertificate', async () => {
     await expectCallName(
-      () => client.proveCertificate({
-        certificate: {} as any, fieldsToReveal: [], verifier: 'vv',
-      }),
+      () =>
+        client.proveCertificate({
+          certificate: {} as any,
+          fieldsToReveal: [],
+          verifier: 'vv'
+        }),
       '/proveCertificate'
     )
   })
 
   it('relinquishCertificate calls /relinquishCertificate', async () => {
     await expectCallName(
-      () => client.relinquishCertificate({ type: 'dHlwZQ==', serialNumber: 'c2Vy', certifier: 'aa' }),
+      () =>
+        client.relinquishCertificate({ type: 'dHlwZQ==', serialNumber: 'c2Vy', certifier: 'aa' }),
       '/relinquishCertificate'
     )
   })
@@ -433,45 +442,27 @@ describe('HTTPWalletJSON – method routing', () => {
   })
 
   it('isAuthenticated calls /isAuthenticated', async () => {
-    await expectCallName(
-      () => client.isAuthenticated({}),
-      '/isAuthenticated'
-    )
+    await expectCallName(() => client.isAuthenticated({}), '/isAuthenticated')
   })
 
   it('waitForAuthentication calls /waitForAuthentication', async () => {
-    await expectCallName(
-      () => client.waitForAuthentication({}),
-      '/waitForAuthentication'
-    )
+    await expectCallName(() => client.waitForAuthentication({}), '/waitForAuthentication')
   })
 
   it('getHeight calls /getHeight', async () => {
-    await expectCallName(
-      () => client.getHeight({}),
-      '/getHeight'
-    )
+    await expectCallName(() => client.getHeight({}), '/getHeight')
   })
 
   it('getHeaderForHeight calls /getHeaderForHeight', async () => {
-    await expectCallName(
-      () => client.getHeaderForHeight({ height: 1 }),
-      '/getHeaderForHeight'
-    )
+    await expectCallName(() => client.getHeaderForHeight({ height: 1 }), '/getHeaderForHeight')
   })
 
   it('getNetwork calls /getNetwork', async () => {
-    await expectCallName(
-      () => client.getNetwork({}),
-      '/getNetwork'
-    )
+    await expectCallName(() => client.getNetwork({}), '/getNetwork')
   })
 
   it('getVersion calls /getVersion', async () => {
-    await expectCallName(
-      () => client.getVersion({}),
-      '/getVersion'
-    )
+    await expectCallName(() => client.getVersion({}), '/getVersion')
   })
 })
 
@@ -531,6 +522,37 @@ describe('HTTPWalletJSON – byte-field wire compatibility', () => {
 
     const result = await client.signAction({ spends: {}, reference: 'cmVm' })
     expect(result.tx).toEqual([1, 1, 1, 1, 128, 73])
+  })
+
+  it('repairs a nested createAction signableTransaction tx', async () => {
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 74])))
+    const mockFetch = makeFetch({
+      signableTransaction: { tx: mangledTx, reference: 'cmVm' }
+    })
+    const client = makeClient(mockFetch)
+
+    const result = await client.createAction({ description: 'test action' })
+    expect(result.signableTransaction?.tx).toEqual([1, 1, 1, 1, 128, 74])
+  })
+
+  it('repairs listOutputs BEEF and cryptographic byte results', async () => {
+    const mangled = (bytes: number[]): Record<string, number> =>
+      JSON.parse(JSON.stringify(new Uint8Array(bytes)))
+    const listClient = makeClient(
+      makeFetch({ totalOutputs: 0, outputs: [], BEEF: mangled([2, 3]) })
+    )
+    const cryptoClient = makeClient(makeFetch({ hmac: mangled([4, 5]) }))
+
+    await expect(listClient.listOutputs({ basket: 'test' })).resolves.toMatchObject({
+      BEEF: [2, 3]
+    })
+    await expect(
+      cryptoClient.createHmac({
+        data: [],
+        protocolID: [1, 'test protocol'],
+        keyID: '1'
+      })
+    ).resolves.toEqual({ hmac: [4, 5] })
   })
 
   it('leaves a healthy number[] tx untouched', async () => {

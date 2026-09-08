@@ -17,6 +17,7 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { canonicalizeAtomicBeef } from '../../utility/canonicalizeAtomicBeef'
 import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../../utility/utilityHelpers'
 import { TransactionStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
@@ -430,7 +431,7 @@ class InternalizeActionContext {
    * @returns
    */
   async validateAtomicBeef (atomicBeef: number[] | Uint8Array) {
-    const ab = atomicBeef instanceof Uint8Array ? Beef.fromBinaryView(atomicBeef) : Beef.fromBinary(atomicBeef)
+    const ab = canonicalizeAtomicBeef(atomicBeef)
     const txValid = await ab.verify(await this.storage.getServices().getChainTracker(), false)
     if (!txValid || !ab.atomicTxid) throw new WERR_INVALID_PARAMETER('tx', 'valid AtomicBEEF')
     const txid = ab.atomicTxid

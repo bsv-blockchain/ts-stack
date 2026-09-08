@@ -15,17 +15,51 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Added an optional `socketOptions` client option, forwarded to
+  `AuthSocketClient` when the live socket is created. It carries the
+  `AuthSocketClient` options other than `wallet` and `originator`, which the
+  client owns, so callers can select Socket.IO transports (for example
+  `{ managerOptions: { transports: ['websocket'] } }`) to reach deployments that
+  do not carry Engine.IO's HTTP polling transport, and can also supply
+  `requestedCertificates`, `sessionManager`, `maxPendingAuthMessages`, and
+  `onError`. `managerOptions.autoConnect` is excluded and `false` is rejected:
+  the socket is started when it is created, so disabling auto-connect could
+  never connect. `managerOptions.retries` is excluded and nonzero values are
+  rejected because AuthSocket does not send the Socket.IO acknowledgements
+  needed to advance its message retry queue. Connection reconnection options
+  remain supported.
+  Nothing is forwarded when unset, so default transport negotiation and all HTTP
+  code paths are unchanged.
+
 - Added the `teratestnet` overlay preset. TTN clients must provide an explicit
   Message Box host until a dedicated TTN deployment is available, preventing
   accidental use of the existing testnet staging service.
 
 ### Changed
 
+- Rebuild the UMD bundle with SDK 2.5.0 support for the optional
+  `x-bsv-payment-known-txids` payment-ancestry extension. Compatible wallets can
+  omit recipient-declared known ancestors from payment BEEF; absent headers
+  preserve existing behavior. No consumer migration is required, and module
+  consumers can enable the same extension with SDK 2.5.0 or later.
+
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- Require the SDK patch that accepts binary Wallet Wire `Uint8Array`
+  transaction results in BRC-29 payment construction, and rebuild the browser
+  bundle with that correction. Historical `number[]` wallet results remain
+  unchanged. PeerPay receipt also recovers the numeric-key object produced when
+  a typed array crosses JSON transport, preserving pending cross-version
+  payments.
+- Normalize and validate BRC-100 transaction bytes at every Message Box JSON
+  boundary: PeerPay, token settlements, paid-message delivery, batch delivery,
+  remittance adaptation, live fallback, and receipt. Current typed-array,
+  historical number-array, and numeric-key JSON representations now converge
+  before wallet or adapter dispatch; malformed bytes are never acknowledged.
 
 ### Security
 

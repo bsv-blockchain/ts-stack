@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.9.0'
-last_updated: '2026-08-12'
-last_verified: '2026-08-12'
+version: '2.11.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,28 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
+pre-funds expiring `noSend` actions, stores a signed reclaim durably across
+active/backup storage and restarts, and lets the authoritative local or remote
+monitor reclaim an unbroadcast action after its time or block-height deadline.
+See [Expiring noSend actions](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/no-send-expiry.md).
+
+Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
+matching count on every page, including short final and out-of-range pages.
+
+Knex storage can opt into prepared BEEF (COOK) for normal `createAction`
+funding. Exact verified proof closures are persisted only after foreground
+action work, while reads, writes, and bounded backfill remain separately
+controlled and default off. Every miss or invalid artifact retains the
+canonical BEEF builder.
+
+`WalletAuthenticationManager` supports an additive WAB UMP outpoint pin for
+legacy ambiguity and an OTP-verified phone-number change that always rolls the
+presentation key. The same registered number is valid. A pin is ignored unless
+normal verified lineage resolution remains ambiguous and the outpoint is one
+of the wallet's verified candidates. Applications must persist
+`saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related
@@ -52,8 +74,10 @@ BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
 UMP account lookup accepts one verified matching token as an existing account.
 When no token verifies, one clean empty overlay response establishes a new
 account even if other hosts fail or return malformed records. Multiple distinct
-verified tokens and lookups with no usable response remain errors; WAB
-existing-account continuity still prevents replacement-wallet onboarding.
+verified tokens remain errors unless normal lineage finds one current token or
+an optional WAB pin names one of the verified candidates. Lookups with no usable
+response remain errors; WAB existing-account continuity still prevents
+replacement-wallet onboarding.
 
 ChainTracks defaults to credential-free Arcade/go-chaintracks v2 HTTP and SSE
 on mainnet, testnet, and TerraTestNet. STN and Terra Scaling TestNet require an
@@ -118,6 +142,18 @@ console.log(publicKey)
 ```
 
 `setup.wallet` is the BRC-100 wallet. The surrounding `setup` object exposes the constructed `rootKey`, `identityKey`, `keyDeriver`, `storage`, `services`, and `monitor` so wallet builders can inspect or replace pieces while developing.
+
+## Permission modules
+
+`WalletPermissionsManager` registers BRC-98/99/111 modules by the scheme after
+the `p` prefix. Existing modules can transform calls with `onRequest` and
+`onResponse`. A semantic module can instead implement
+`handleRequest(request, next)` and return the conforming BRC-100 result itself;
+if it needs the underlying wallet operation, `next` is guarded to one call.
+
+The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
+this hook to implement point multiplication under `p ecpm` while keeping
+`getPublicKey` as the public wallet method.
 
 ## Action Flow
 

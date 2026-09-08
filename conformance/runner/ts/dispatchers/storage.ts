@@ -2,6 +2,7 @@
  * Storage dispatcher — Wave 1.
  *
  * Categories:
+ *   chirp-v1    (storage.chirp-v1)
  *   uhrp-http   (storage.uhrp-http)
  *
  * Implementation notes:
@@ -26,11 +27,13 @@
  */
 
 import { expect } from '@jest/globals'
+import { CHIRPBuilder, buildBranchLevels, hashHex, sha256 } from '@bsv/chirp'
+import type { CHIRPChildReference } from '@bsv/chirp'
 import { StorageUtils } from '@bsv/sdk/storage'
 
 const { getURLForHash, getHashFromURL, isValidURL } = StorageUtils
 
-export const categories: ReadonlyArray<string> = ['uhrp-http']
+export const categories: ReadonlyArray<string> = ['chirp-v1', 'uhrp-http']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -340,10 +343,126 @@ export function dispatch(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
+  if (category === 'chirp-v1') {
+    return dispatchChirpV1(input, expected)
+  }
   if (category === 'uhrp-http') {
     return dispatchUhrpHttp(input, expected)
   }
   throw new Error(`storage dispatcher: unknown category '${category}'`)
+}
+
+async function dispatchChirpV1(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Promise<void> {
+  const leafCount = input['leafCount']
+  if (typeof leafCount === 'number') {
+    await dispatchChirpTreeVector(input, expected, leafCount)
+    return
+  }
+
+  const source = input['source'] as Record<string, unknown> | undefined
+  const sourceBytes = decodeChirpVectorSource(source)
+
+  const mediaTypeValue = input['mediaType']
+  if (mediaTypeValue !== null && typeof mediaTypeValue !== 'string') {
+    throw new Error('storage chirp-v1 vector has an invalid mediaType')
+  }
+
+  const blobIdentifiers: string[] = []
+  const result = await new CHIRPBuilder().build(sourceBytes, {
+    mediaType: mediaTypeValue ?? undefined,
+    sink: {
+      async putObject(objectIdentifier, _bytes, kind) {
+        if (kind === 'blob') blobIdentifiers.push(objectIdentifier)
+      }
+    }
+  })
+
+  expect(result.logicalLength.toString()).toBe(expected['logicalLength'])
+  expect(hashHex(result.contentHash)).toBe(expected['contentHash'])
+  expect(hashHex(result.rootBytes)).toBe(expected['rootBytes'])
+  expect(hashHex(sha256(result.rootBytes))).toBe(expected['rootHash'])
+  expect(result.rootIdentifier).toBe(expected['rootIdentifier'])
+  expect(result.chirpURL).toBe(expected['chirpURL'])
+
+  if (typeof expected['blobIdentifier'] === 'string') {
+    expect(blobIdentifiers).toEqual([expected['blobIdentifier']])
+  } else if (typeof expected['blobCount'] === 'number') {
+    expect(blobIdentifiers).toHaveLength(expected['blobCount'])
+  } else if (sourceBytes.byteLength > 0) {
+    expect(blobIdentifiers).toEqual([StorageUtils.getURLForHash(Array.from(sha256(sourceBytes)))])
+  } else {
+    expect(blobIdentifiers).toEqual([])
+  }
+}
+
+async function dispatchChirpTreeVector(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  leafCount: number
+): Promise<void> {
+  const logicalLength = input['logicalLength']
+  const hashSeed = input['hashSeed']
+  if (
+    !Number.isSafeInteger(leafCount) ||
+    leafCount < 1 ||
+    typeof logicalLength !== 'string' ||
+    typeof hashSeed !== 'string'
+  ) {
+    throw new Error('storage chirp-v1 tree vector is invalid')
+  }
+  const encoder = new TextEncoder()
+  const leaves: CHIRPChildReference[] = Array.from({ length: leafCount }, (_, index) => ({
+    childKind: 0,
+    logicalLength: BigInt(logicalLength),
+    objectHash: sha256(encoder.encode(`${hashSeed}:${index}`))
+  }))
+  const result = await buildBranchLevels(leaves)
+  expect(result.branchCount).toBe(expected['branchCount'])
+  expect(treeLevelWidths(leafCount)).toEqual(expected['levelWidths'])
+  const rootChildren = expected['rootChildren']
+  if (Array.isArray(rootChildren)) {
+    expect(
+      result.children.map(child => ({
+        childKind: child.childKind,
+        logicalLength: child.logicalLength.toString(),
+        objectHash: hashHex(child.objectHash)
+      }))
+    ).toEqual(rootChildren)
+  }
+}
+
+function decodeChirpVectorSource(source: Record<string, unknown> | undefined): Uint8Array {
+  const encoding = source?.['encoding']
+  const value = source?.['value']
+  if ((encoding === 'hex' || encoding === 'utf8') && typeof value === 'string') {
+    return Uint8Array.from(Buffer.from(value, encoding))
+  }
+  const repeatByte = source?.['byte']
+  const repeatLength = source?.['length']
+  if (
+    encoding === 'repeat' &&
+    Number.isSafeInteger(repeatByte) &&
+    Number.isSafeInteger(repeatLength) &&
+    (repeatByte as number) >= 0 &&
+    (repeatByte as number) <= 255 &&
+    (repeatLength as number) >= 0
+  ) {
+    return new Uint8Array(repeatLength as number).fill(repeatByte as number)
+  }
+  throw new Error('storage chirp-v1 vector has an invalid source')
+}
+
+function treeLevelWidths(leafCount: number): number[] {
+  const widths = [leafCount]
+  let width = leafCount
+  while (width > 256) {
+    width = Math.ceil(width / 256)
+    widths.push(width)
+  }
+  return widths
 }
 
 function hasAuthorizationHeader(input: Record<string, unknown>): boolean {

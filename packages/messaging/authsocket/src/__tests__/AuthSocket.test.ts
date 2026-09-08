@@ -65,6 +65,39 @@ describe('AuthSocket', () => {
     expect(identityKey).toBe('peer-key')
   })
 
+  it('serializes real typed arrays without rewriting byte-like application objects', async () => {
+    const { authSocket, generalMessage, peer } = createHarness()
+    const received = jest.fn()
+    const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
+    authSocket.on('payment', received)
+
+    generalMessage({ eventName: 'payment', data: { transaction: historicalTx } })
+    await authSocket.emit('payment', { transaction: new Uint8Array([1, 2, 3]) })
+
+    expect(received).toHaveBeenCalledWith({ transaction: historicalTx })
+    const [payload] = peer.toPeer.mock.calls[0]
+    expect(JSON.parse(Buffer.from(payload).toString('utf8'))).toEqual({
+      eventName: 'payment',
+      data: { transaction: [1, 2, 3] }
+    })
+  })
+
+  it('round-trips numeric-key application event data without silent corruption', async () => {
+    const { authSocket, generalMessage, peer } = createHarness()
+    const received = jest.fn()
+    const applicationData = { 0: 1, 1: 2 }
+    authSocket.on('applicationEvent', received)
+
+    generalMessage({ eventName: 'applicationEvent', data: applicationData })
+    await authSocket.emit('applicationEvent', applicationData)
+
+    expect(received).toHaveBeenCalledWith(applicationData)
+    const [payload] = peer.toPeer.mock.calls[0]
+    expect(Buffer.from(payload).toString('utf8')).toBe(
+      '{"eventName":"applicationEvent","data":{"0":1,"1":2}}'
+    )
+  })
+
   it('routes malformed payloads to the explicit unknown event', () => {
     const { authSocket, generalMessage } = createHarness()
     const unknown = jest.fn()

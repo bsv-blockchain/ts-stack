@@ -22,9 +22,8 @@ The documentation is split into various pages, each covering a set of related fu
 
 ## Open RPC
 
-StorageClient implements the WalletStorageProvider interface over https using a JSON-RPC api which can be explored using the JSight UI.
-
-- [StorageClient JSight UI](https://bsv-blockchain.github.io/wallet-toolbox/open-rpc)
+`StorageClient` implements `WalletStorageProvider` over HTTPS using JSON-RPC.
+Its maintained API documentation is in the [Storage reference](./storage.md#class-storageclient).
 
 ## Getting Started
 

@@ -24,13 +24,32 @@ describe('normalizeWalletJsonTx', () => {
     expect(normalizeWalletJsonTx(result).tx).toEqual([1, 1, 1, 1, 128, 7])
   })
 
-  it('does not rewrite unrelated numeric-keyed fields', () => {
+  it('preserves non-tx top-level wallet byte fields', () => {
     const result = {
       signature: mangled([48, 68]),
       BEEF: mangled([2, 0, 190, 239]),
       ciphertext: mangled([1])
     }
-    expect(normalizeWalletJsonTx(result)).toEqual(result)
+    expect(normalizeWalletJsonTx(result)).toBe(result)
+    expect(result.signature).toEqual(mangled([48, 68]))
+    expect(result.BEEF).toEqual(mangled([2, 0, 190, 239]))
+    expect(result.ciphertext).toEqual(mangled([1]))
+  })
+
+  it('preserves nested fields for the historical narrow export contract', () => {
+    const result = {
+      signableTransaction: { tx: mangled([1, 2]), reference: 'cmVm' },
+      reviewActionResults: [{ competingBeef: mangled([3, 4]) }]
+    }
+    expect(normalizeWalletJsonTx(result)).toBe(result)
+    expect(result.signableTransaction.tx).toEqual(mangled([1, 2]))
+    expect(result.reviewActionResults[0].competingBeef).toEqual(mangled([3, 4]))
+  })
+
+  it('does not rewrite unrelated numeric-keyed fields', () => {
+    const unrelated = mangled([48, 68])
+    const result = { unrelated }
+    expect(normalizeWalletJsonTx(result).unrelated).toBe(unrelated)
   })
 
   it('leaves healthy number[] byte fields untouched', () => {

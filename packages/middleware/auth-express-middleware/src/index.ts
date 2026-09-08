@@ -6,6 +6,8 @@ import {
   SessionManager,
   PublicKey,
   Telemetry,
+  normalizeBRC100ByteFields,
+  stringifyBRC100,
   type AsyncSessionManager,
   type AuthMessage,
   type PubKeyHex,
@@ -216,7 +218,10 @@ function validateHandshakeMessage(req: Request): {
   if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
     throw new AuthProtocolError('The BRC-104 handshake body must be an object.')
   }
-  const message = req.body as Partial<AuthMessage>
+  const message = normalizeBRC100ByteFields(req.body, [
+    'payload',
+    'signature'
+  ]) as Partial<AuthMessage>
   if (
     typeof message.messageType !== 'string' ||
     message.messageType.length === 0 ||
@@ -317,7 +322,7 @@ class ResponseWriterWrapper {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'application/json'
     }
-    this.setBody(Utils.toArray(JSON.stringify(data), 'utf8'))
+    this.setBody(Utils.toArray(stringifyBRC100(data), 'utf8'))
     return this
   }
 
@@ -705,7 +710,7 @@ export class ExpressTransport implements Transport {
       responseHeaderCount: Object.keys(responseHeaders).length,
       messageType: message.messageType
     })
-    res.send(message)
+    res.send(JSON.parse(stringifyBRC100(message)))
     this.removeNonGeneralHandle(message.yourNonce!, handle)
   }
 

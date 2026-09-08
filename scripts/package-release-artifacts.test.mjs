@@ -9,6 +9,7 @@ import {
   canonicalizePackedManifest,
   createLicenseInventory,
   deterministicUuid,
+  loadGovernedProjects,
   mergeCycloneDxDocuments,
   prepareSbomManifest,
   removeInjectedRootDependencies,
@@ -292,6 +293,19 @@ test('release staging requires the exact governed build runtime', () => {
   )
 })
 
+test('release staging derives its governed package count from supply-chain policy', async () => {
+  const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'))
+  const projects = await loadGovernedProjects(policy.publicPackageCount)
+
+  assert.equal(projects.length, policy.publicPackageCount)
+  await assert.rejects(
+    loadGovernedProjects(policy.publicPackageCount - 1),
+    new RegExp(
+      `expected ${policy.publicPackageCount - 1} governed npm packages, found ${policy.publicPackageCount}`
+    )
+  )
+})
+
 test('aggregate CycloneDX retains package roots and dependency relationships', () => {
   const records = [
     {
@@ -427,6 +441,10 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)
   assert.match(workflow, /name: \$\{\{ needs\.prepare\.outputs\.candidate \}\}/)
+  assert.match(
+    workflow,
+    /- name: Require incorporated-material rights clearance\n\s+run: pnpm license:release-check/
+  )
   const prepareJob = workflow.slice(workflow.indexOf('  prepare:'), workflow.indexOf('  publish:'))
   assert.doesNotMatch(prepareJob, /id-token: write|environment: npm-production/)
   assert.match(prepareJob, /permissions:\n\s+contents: read/)

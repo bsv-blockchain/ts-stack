@@ -10,7 +10,7 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/wallet/wallet-toolbox-examples"
   },
-  "author": "Tone Engel",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "keywords": [
     "bsv",

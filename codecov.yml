@@ -1,5 +1,10 @@
 codecov:
   require_ci_to_pass: yes
+  notify:
+    # The aggregate workflow uploads every coverage artifact in one batch.
+    # Publish statuses only after that upload has finished processing so an
+    # intermediate report cannot leave a stale patch-coverage result.
+    manual_trigger: true
 
 coverage:
   precision: 2

@@ -641,7 +641,7 @@ describe('ExpressTransport hardening', () => {
       identityKey: IDENTITY_KEY,
       nonce: 'AQ==',
       yourNonce: 'Ag==',
-      signature: [1],
+      signature: new Uint8Array([1]) as any,
       payload: responsePayload(201, { 'x-bsv-result': '7' }, Utils.toArray('{"ok":true}', 'utf8'))
     })
 
@@ -958,7 +958,8 @@ describe('ExpressTransport hardening', () => {
     )
     expect(originalSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageType: 'initialResponse'
+        messageType: 'initialResponse',
+        signature: [1]
       })
     )
   })

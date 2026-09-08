@@ -1,0 +1,253 @@
+import { LCH_LIMITS } from './constants.js'
+import { LCHError, lchAssert } from './errors.js'
+
+export type EndpointClass = 'identity' | 'content'
+
+export interface EndpointPolicy {
+  allowLocalOrigins?: readonly string[]
+  resolve?: (hostname: string) => Promise<readonly string[]>
+  connect?: (
+    url: URL,
+    init: RequestInit,
+    validatedAddresses: readonly string[]
+  ) => Promise<Response>
+  maximumRedirects?: number
+}
+
+function ipv4Value(address: string): number | undefined {
+  const parts = address.split('.')
+  if (parts.length !== 4) return undefined
+  const octets = parts.map(part => (/^\d{1,3}$/u.test(part) ? Number(part) : -1))
+  if (octets.some(value => value < 0 || value > 255)) return undefined
+  return (((octets[0] * 256 + octets[1]) * 256 + octets[2]) * 256 + octets[3]) >>> 0
+}
+
+function inV4Range(value: number, start: number, bits: number): boolean {
+  const shift = 32 - bits
+  return value >>> shift === start >>> shift
+}
+
+const BLOCKED_IPV4_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x00000000, 8],
+  [0x0a000000, 8],
+  [0x64400000, 10],
+  [0x7f000000, 8],
+  [0xa9fe0000, 16],
+  [0xac100000, 12],
+  [0xc0000000, 24],
+  [0xc0000200, 24],
+  [0xc0586300, 24],
+  [0xc0a80000, 16],
+  [0xc6120000, 15],
+  [0xc6336400, 24],
+  [0xcb007100, 24],
+  [0xe0000000, 4],
+  [0xf0000000, 4]
+]
+
+function isPublicIPv4Value(value: number): boolean {
+  return !BLOCKED_IPV4_RANGES.some(([start, bits]) => inV4Range(value, start, bits))
+}
+
+function normalizedIPv6(address: string): string | undefined {
+  const opens = address.startsWith('[')
+  const closes = address.endsWith(']')
+  if (opens !== closes) return undefined
+  const normalized = address.toLowerCase().replace(/^\[|\]$/gu, '')
+  if (normalized.includes('[') || normalized.includes(']') || normalized.includes('%'))
+    return undefined
+  return normalized
+}
+
+function expandEmbeddedIPv4(address: string): string | undefined {
+  if (!address.includes('.')) return address
+  const lastColon = address.lastIndexOf(':')
+  if (lastColon < 0) return undefined
+  const embedded = ipv4Value(address.slice(lastColon + 1))
+  if (embedded === undefined) return undefined
+  return `${address.slice(0, lastColon)}:${(embedded >>> 16).toString(16)}:${(
+    embedded & 0xffff
+  ).toString(16)}`
+}
+
+function parseIPv6Words(normalized: string): number[] | undefined {
+  const marker = normalized.indexOf('::')
+  if (marker >= 0 && normalized.slice(marker + 2).includes('::')) return undefined
+  const leftText = marker < 0 ? normalized : normalized.slice(0, marker)
+  const rightText = marker < 0 ? '' : normalized.slice(marker + 2)
+  const left = leftText === '' ? [] : leftText.split(':')
+  const right = rightText === '' ? [] : rightText.split(':')
+  const segments = [...left, ...right]
+  if (
+    segments.some(segment => !/^[\da-f]{1,4}$/u.test(segment)) ||
+    (marker < 0 ? segments.length !== 8 : segments.length >= 8)
+  )
+    return undefined
+  const zeroes = marker < 0 ? 0 : 8 - segments.length
+  return [
+    ...left.map(segment => Number.parseInt(segment, 16)),
+    ...Array.from({ length: zeroes }, () => 0),
+    ...right.map(segment => Number.parseInt(segment, 16))
+  ]
+}
+
+function ipv6Words(address: string): number[] | undefined {
+  const normalized = normalizedIPv6(address)
+  if (normalized === undefined) return undefined
+  const expanded = expandEmbeddedIPv4(normalized)
+  return expanded === undefined ? undefined : parseIPv6Words(expanded)
+}
+
+function publicEmbeddedIPv4(high: number, low: number): boolean {
+  const value = (high * 0x10000 + low) >>> 0
+  return isPublicAddress(
+    `${value >>> 24}.${(value >>> 16) & 0xff}.${(value >>> 8) & 0xff}.${value & 0xff}`
+  )
+}
+
+function zeroWords(words: readonly number[], start: number, end: number): boolean {
+  return words.slice(start, end).every(word => word === 0)
+}
+
+function embeddedIPv4(words: readonly number[]): readonly [number, number] | undefined {
+  const mapped = zeroWords(words, 0, 5) && words[5] === 0xffff
+  const translated = zeroWords(words, 0, 4) && words[4] === 0xffff && words[5] === 0
+  const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && zeroWords(words, 2, 6)
+  if (mapped || translated || nat64) return [words[6], words[7]]
+  if (words[0] === 0x2002) return [words[1], words[2]]
+  return undefined
+}
+
+function isAllowedIetfAssignment(words: readonly number[]): boolean {
+  const anycast = words[1] === 1 && zeroWords(words, 2, 7) && words[7] >= 1 && words[7] <= 3
+  const amt = words[1] === 3
+  const as112 = words[1] === 4 && words[2] === 0x0112
+  const orchid = (words[1] & 0xfff0) === 0x0020
+  const drone = (words[1] & 0xfff0) === 0x0030
+  return anycast || amt || as112 || orchid || drone
+}
+
+function isDocumentationIPv6(words: readonly number[]): boolean {
+  return (
+    (words[0] === 0x2001 && words[1] === 0x0db8) ||
+    (words[0] === 0x3fff && (words[1] & 0xf000) === 0)
+  )
+}
+
+export function isPublicAddress(address: string): boolean {
+  const v4 = ipv4Value(address)
+  if (v4 !== undefined) return isPublicIPv4Value(v4)
+  const words = ipv6Words(address)
+  if (words === undefined) return false
+  const embedded = embeddedIPv4(words)
+  if (embedded !== undefined) return publicEmbeddedIPv4(embedded[0], embedded[1])
+  if (zeroWords(words, 0, 6)) return false
+  if (words[0] === 0x0064 && words[1] === 0xff9b && words[2] === 1) return false
+  if ((words[0] & 0xe000) !== 0x2000) return false
+  const ietfAssignment = words[0] === 0x2001 && (words[1] & 0xfe00) === 0
+  if (ietfAssignment && !isAllowedIetfAssignment(words)) return false
+  return !isDocumentationIPv6(words)
+}
+
+export async function validateEndpoint(value: string, policy: EndpointPolicy = {}): Promise<URL> {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch (error) {
+    throw new LCHError('ERR_LCH_ENDPOINT', 'Endpoint is not an absolute URL', { cause: error })
+  }
+  const localOrigin = policy.allowLocalOrigins?.includes(url.origin) === true
+  lchAssert(
+    (url.protocol === 'https:' || (localOrigin && url.protocol === 'http:')) &&
+      url.username === '' &&
+      url.password === '' &&
+      url.hash === '',
+    'ERR_LCH_ENDPOINT',
+    'Endpoint must be HTTPS without userinfo or fragment'
+  )
+  if (localOrigin) return url
+  const directAddress = isPublicAddress(url.hostname)
+  if (/^[\d.]+$/u.test(url.hostname) || url.hostname.includes(':')) {
+    lchAssert(directAddress, 'ERR_LCH_ENDPOINT', 'Endpoint address is not public')
+  }
+  if (directAddress) return url
+  lchAssert(
+    policy.resolve !== undefined,
+    'ERR_LCH_ENDPOINT',
+    'No DNS validation resolver is configured'
+  )
+  const addresses = await policy.resolve(url.hostname)
+  lchAssert(
+    addresses.length > 0 && addresses.every(isPublicAddress),
+    'ERR_LCH_ENDPOINT',
+    'Endpoint DNS result is empty or non-public'
+  )
+  return url
+}
+
+async function validatedAddresses(url: URL, policy: EndpointPolicy): Promise<readonly string[]> {
+  if (policy.allowLocalOrigins?.includes(url.origin) === true) return []
+  if (isPublicAddress(url.hostname)) return [url.hostname]
+  lchAssert(
+    policy.resolve !== undefined,
+    'ERR_LCH_ENDPOINT',
+    'No DNS validation resolver is configured'
+  )
+  const addresses = await policy.resolve(url.hostname)
+  lchAssert(
+    addresses.length > 0 && addresses.every(isPublicAddress),
+    'ERR_LCH_ENDPOINT',
+    'Endpoint DNS result is empty or non-public'
+  )
+  return addresses
+}
+
+export async function fetchLCH(
+  input: string,
+  init: RequestInit = {},
+  endpointClass: EndpointClass = 'content',
+  policy: EndpointPolicy = {}
+): Promise<Response> {
+  let url = await validateEndpoint(input, policy)
+  const origin = url.origin
+  const maximum =
+    endpointClass === 'identity' ? 1 : (policy.maximumRedirects ?? LCH_LIMITS.redirects)
+  for (let redirect = 0; ; redirect += 1) {
+    const addresses = await validatedAddresses(url, policy)
+    const request = { ...init, redirect: 'manual' as const }
+    const localOrigin = policy.allowLocalOrigins?.includes(url.origin) === true
+    lchAssert(
+      policy.connect !== undefined ||
+        (addresses.length === 1 && addresses[0] === url.hostname) ||
+        localOrigin,
+      'ERR_LCH_ENDPOINT',
+      'DNS endpoints require an address-pinning connector'
+    )
+    const response =
+      policy.connect === undefined
+        ? await fetch(url, request)
+        : await policy.connect(url, request, addresses)
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response
+    lchAssert(redirect < maximum, 'ERR_LCH_ENDPOINT', 'Endpoint redirect limit exceeded')
+    const location = response.headers.get('location')
+    lchAssert(location !== null, 'ERR_LCH_ENDPOINT', 'Redirect omitted Location')
+    const next = await validateEndpoint(new URL(location, url).href, policy)
+    if (endpointClass === 'identity') {
+      lchAssert(
+        (response.status === 307 || response.status === 308) && next.origin === origin,
+        'ERR_LCH_ENDPOINT',
+        'Identity endpoint redirect must preserve method and origin'
+      )
+    } else if (next.origin !== url.origin) {
+      init = { ...init, headers: stripSensitiveHeaders(init.headers) }
+    }
+    url = next
+  }
+}
+
+function stripSensitiveHeaders(input: HeadersInit | undefined): Headers {
+  const headers = new Headers(input)
+  for (const name of ['authorization', 'cookie', 'x-bsv-auth', 'x-bsv-payment'])
+    headers.delete(name)
+  return headers
+}

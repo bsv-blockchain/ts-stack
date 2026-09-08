@@ -765,4 +765,27 @@ describe('WalletClient.connectToSubstrate – error when no substrate available'
       fetchSpy.mockRestore()
     }
   }, 10000)
+
+  it('times out an unresponsive React Native candidate during auto-detection', async () => {
+    const originalWindow = global.window
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('No test wallet available'))
+    global.window = {
+      ReactNativeWebView: { postMessage: jest.fn() },
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      postMessage: jest.fn()
+    } as unknown as Window & typeof globalThis
+
+    try {
+      const client = new WalletClient('auto', 'myapp.com')
+      await expect(client.connectToSubstrate()).rejects.toThrow(
+        'No wallet available over any communication substrate'
+      )
+    } finally {
+      fetchSpy.mockRestore()
+      global.window = originalWindow
+    }
+  }, 3000)
 })

@@ -1,6 +1,8 @@
 import * as bsv from '@bsv/sdk'
 import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
+import { StorageProvider } from '../StorageProvider'
+import { StorageReaderWriter } from '../StorageReaderWriter'
 
 import * as dotenv from 'dotenv'
 
@@ -25,6 +27,40 @@ describe('WalletStorageManager tests', () => {
   const root = '02135476'
   const kp = _tu.getKeyPair(root.repeat(8))
   const fredsAddress = kp.address
+
+  test('BRC-177 storage entry points fail closed when authority or persistence support is absent', async () => {
+    const { activeStorage: provider, storage: manager } = ctxs[0]
+    const inactive = { userId: 1, isActive: false }
+    const active = { userId: 1, isActive: true }
+
+    await expect(provider.prepareNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+    await expect(provider.activateNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+    await expect(provider.armNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
+
+    expect((StorageProvider.prototype as any).supportsNoSendExpiryPersistence.call(provider)).toBe(false)
+    await expect(
+      StorageReaderWriter.prototype.compareAndSetNoSendExpiryState.call(manager, 1, 'signed', 'reclaiming')
+    ).rejects.toThrow('BRC-177 atomic lifecycle persistence')
+
+    const persistence = jest.spyOn(provider as any, 'supportsNoSendExpiryPersistence').mockReturnValue(false)
+    try {
+      expect(await provider.getCapabilities()).not.toHaveProperty('brc177NoSendExpiry')
+      await expect(provider.prepareNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+      await expect(provider.activateNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+      await expect(provider.armNoSendExpiry(active, {} as any)).rejects.toThrow('atomic lifecycle persistence')
+    } finally {
+      persistence.mockRestore()
+    }
+
+    const writer = jest.spyOn(manager, 'runAsWriter').mockImplementation(async callback => await callback({} as any))
+    try {
+      await expect(manager.prepareNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+      await expect(manager.activateNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+      await expect(manager.armNoSendExpiry({} as any)).rejects.toThrow('does not support BRC-177')
+    } finally {
+      writer.mockRestore()
+    }
+  })
 
   test('1_runAsReader runAsWriter runAsSync interlock correctly', async () => {
     const { storage } = await _tu.createSQLiteTestSetup1Wallet({
@@ -356,6 +392,243 @@ describe('WalletStorageManager tests', () => {
         })
       )[0]
       expect(updatedTx.status).toBe('sending')
+    }
+  })
+
+  test('4_processAction prepares newly created managed change after returning', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefProcessAction', 'legacy')
+    Object.assign(ctx.activeStorage.preparedBeefPolicy, {
+      readEnabled: true,
+      writeEnabled: true
+    })
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true
+    } as bsv.ChainTracker)
+    const persist = jest.spyOn(ctx.activeStorage, 'upsertPreparedBeef')
+    try {
+      const result = await ctx.wallet.createAction({
+        description: 'prepare managed change with the real COOK worker',
+        outputs: [{
+          satoshis: 1,
+          lockingScript: '51',
+          outputDescription: 'prepared BEEF processAction test'
+        }],
+        options: {
+          noSend: true,
+          randomizeOutputs: false,
+          returnTXIDOnly: true,
+          signAndProcess: true
+        }
+      })
+
+      expect(result.txid).toBeTruthy()
+      expect(persist).not.toHaveBeenCalled()
+
+      await ctx.activeStorage.waitForPreparedBeefTasks()
+
+      await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [result.txid!])).resolves.toEqual([
+        expect.objectContaining({ rootTxid: result.txid, state: 'ready' })
+      ])
+      await expect(ctx.activeStorage.lookupPreparedBeefs(ctx.userId, [result.txid!])).resolves.toMatchObject({
+        hitTxids: [result.txid],
+        missingTxids: []
+      })
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('4a_processAction remains compatible when the optional COOK queue is absent', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefLegacyProcessAction', 'legacy')
+    ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
+    Object.defineProperty(ctx.activeStorage, 'enqueuePreparedBeef', {
+      configurable: true,
+      value: undefined
+    })
+    try {
+      const result = await ctx.wallet.createAction({
+        description: 'process action without a prepared BEEF queue',
+        outputs: [{
+          satoshis: 1,
+          lockingScript: '51',
+          outputDescription: 'legacy prepared BEEF provider test'
+        }],
+        options: {
+          noSend: true,
+          randomizeOutputs: false,
+          returnTXIDOnly: true,
+          signAndProcess: true
+        }
+      })
+
+      expect(result.txid).toBeTruthy()
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5_reproof updates advance the prepared-BEEF proof epoch atomically', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
+        log: '',
+        updated: { update: { height: ptx.height }, logUpdate: '' },
+        unchanged: false,
+        unavailable: false
+      })
+
+      const result = await ctx.storage.reproveHeader(ptx.blockHash)
+
+      expect(reprove).toHaveBeenCalled()
+      expect(result.updated.length).toBeGreaterThan(0)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5a_reorg fencing closes prepared reads before asynchronous invalidation completes', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefImmediateReorgEpoch', 'legacy')
+    try {
+      ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+
+      const invalidation = ctx.storage.invalidatePreparedBeefsForReorg()
+
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+      await invalidation
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(true)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5b_failed reorg invalidation leaves prepared reads closed', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefFailedReorgEpoch', 'legacy')
+    try {
+      ctx.activeStorage.preparedBeefPolicy.readEnabled = true
+      jest.spyOn(ctx.activeStorage, 'invalidatePreparedBeefs')
+        .mockRejectedValueOnce(new Error('database unavailable'))
+
+      const invalidation = ctx.storage.invalidatePreparedBeefsForReorg()
+
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+      await expect(invalidation).rejects.toThrow('database unavailable')
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(false)
+
+      // A later successful invalidation covers the failed generation and is
+      // the explicit recovery path; a process restart is not required.
+      await ctx.storage.invalidatePreparedBeefsForReorg()
+      expect(ctx.activeStorage.preparedBeefReadsEnabled()).toBe(true)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5c_reorg invalidates prepared BEEF while replacement proofs are unavailable', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefUnavailableReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
+        log: '',
+        updated: undefined,
+        unchanged: false,
+        unavailable: true
+      })
+
+      const result = await ctx.storage.reproveHeader(ptx.blockHash)
+
+      expect(result.updated).toHaveLength(0)
+      expect(result.unavailable).toHaveLength(1)
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5d_height reproof updates proofs and invalidates prepared BEEF atomically', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefHeightReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
+        log: '',
+        updated: { update: { height: ptx.height }, logUpdate: 'height reproof\n' },
+        unchanged: false,
+        unavailable: false
+      })
+
+      const result = await ctx.storage.reproveHeightMerkleRoot(ptx.height, ptx.merkleRoot)
+
+      expect(reprove).toHaveBeenCalledWith(ptx, true)
+      expect(result.updated).toHaveLength(1)
+      expect(result.log).toContain('proof data updated')
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+
+      await expect(ctx.storage.reproveHeightMerkleRoot(-1, '0'.repeat(64))).resolves.toMatchObject({
+        updated: [],
+        unchanged: [],
+        unavailable: []
+      })
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('5e_direct reproof persists the replacement proof and invalidates prepared BEEF', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefDirectReproofEpoch', 'legacy')
+    try {
+      const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
+      expect(ptx).toBeTruthy()
+      const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
+      const replacementHash = ptx.blockHash === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
+      const replacementHeight = ptx.height + 1
+      const merklePath = new bsv.MerklePath(replacementHeight, [[{
+        offset: 0,
+        hash: ptx.txid,
+        txid: true
+      }]])
+      const services = ctx.storage.getServices()
+      jest.spyOn(services, 'getChainTracker').mockResolvedValue({
+        isValidRootForHeight: async () => true
+      } as bsv.ChainTracker)
+      jest.spyOn(services, 'getMerklePath').mockResolvedValue({
+        name: 'prepared BEEF reproof test',
+        merklePath,
+        header: {
+          version: 1,
+          previousHash: '0'.repeat(64),
+          merkleRoot: merklePath.computeRoot(ptx.txid),
+          time: 0,
+          bits: 0,
+          nonce: 0,
+          height: replacementHeight,
+          hash: replacementHash
+        }
+      })
+
+      const result = await ctx.storage.reproveProven(ptx)
+
+      expect(result.updated?.update).toMatchObject({
+        height: replacementHeight,
+        blockHash: replacementHash
+      })
+      expect(result.log).toContain('proof data updated')
+      await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
+      await expect(ctx.activeStorage.findProvenTxs({
+        partial: { provenTxId: ptx.provenTxId }
+      })).resolves.toEqual([
+        expect.objectContaining({ height: replacementHeight, blockHash: replacementHash })
+      ])
+    } finally {
+      await ctx.wallet.destroy()
     }
   })
 })

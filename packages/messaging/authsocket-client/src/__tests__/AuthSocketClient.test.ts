@@ -19,6 +19,7 @@ jest.mock('socket.io-client', () => ({
 }))
 
 jest.mock('@bsv/sdk', () => ({
+  ...jest.requireActual('@bsv/sdk'),
   Peer: mockPeerConstructor,
   Utils: {
     toArray: (value: string) => Array.from(Buffer.from(value, 'utf8')),
@@ -139,6 +140,49 @@ describe('AuthSocketClient', () => {
       data: { value: 2 }
     })
     expect(identityKey).toBe('server-key')
+  })
+
+  it('serializes real typed arrays without rewriting byte-like application objects', () => {
+    const { client } = createClient()
+    const received = jest.fn()
+    const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
+    client.on('payment', received)
+
+    generalMessageListener?.(
+      'server-key',
+      Array.from(
+        Buffer.from(JSON.stringify({ eventName: 'payment', data: { transaction: historicalTx } }))
+      )
+    )
+    client.emit('payment', { transaction: new Uint8Array([1, 2, 3]) })
+
+    expect(received).toHaveBeenCalledWith({ transaction: historicalTx })
+    const [payload] = mockPeer.toPeer.mock.calls[0]
+    expect(JSON.parse(Buffer.from(payload).toString('utf8'))).toEqual({
+      eventName: 'payment',
+      data: { transaction: [1, 2, 3] }
+    })
+  })
+
+  it('round-trips numeric-key application event data without silent corruption', () => {
+    const { client } = createClient()
+    const received = jest.fn()
+    const applicationData = { 0: 1, 1: 2 }
+    client.on('applicationEvent', received)
+
+    generalMessageListener?.(
+      'server-key',
+      Array.from(
+        Buffer.from(JSON.stringify({ eventName: 'applicationEvent', data: applicationData }))
+      )
+    )
+    client.emit('applicationEvent', applicationData)
+
+    expect(received).toHaveBeenCalledWith(applicationData)
+    const [payload] = mockPeer.toPeer.mock.calls[0]
+    expect(Buffer.from(payload).toString('utf8')).toBe(
+      '{"eventName":"applicationEvent","data":{"0":1,"1":2}}'
+    )
   })
 
   it('reports asynchronous send failures with the event name', async () => {

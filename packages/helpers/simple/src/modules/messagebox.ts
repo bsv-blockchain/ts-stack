@@ -1,4 +1,5 @@
 import { PeerPayClient } from '@bsv/message-box-client'
+import { normalizeBRC100ByteArray, stringifyBRC100 } from '@bsv/sdk'
 import { WalletCore } from '../core/WalletCore'
 
 export function createMessageBoxMethods(core: WalletCore): {
@@ -49,7 +50,7 @@ export function createMessageBoxMethods(core: WalletCore): {
         const res = await fetch(`${effectiveRegistry}?action=register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tag: handle, identityKey: core.getIdentityKey() })
+          body: stringifyBRC100({ tag: handle, identityKey: core.getIdentityKey() })
         })
         const data = (await res.json()) as { success: boolean; error?: string }
         if (!data.success) throw new Error(data.error ?? 'Registration failed')
@@ -93,7 +94,7 @@ export function createMessageBoxMethods(core: WalletCore): {
             const res = await fetch(`${effectiveRegistry}?action=revoke`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tag: t.tag, identityKey: core.getIdentityKey() })
+              body: stringifyBRC100({ tag: t.tag, identityKey: core.getIdentityKey() })
             })
             const data = (await res.json()) as { success: boolean }
             if (!data.success) throw new Error('Revoke failed')
@@ -113,7 +114,7 @@ export function createMessageBoxMethods(core: WalletCore): {
         await client.sendMessage({
           recipient: to,
           messageBox: 'payment_inbox',
-          body: JSON.stringify(paymentToken)
+          body: stringifyBRC100(paymentToken)
         })
 
         return {
@@ -138,6 +139,10 @@ export function createMessageBoxMethods(core: WalletCore): {
     async acceptIncomingPayment(payment: any, basket?: string): Promise<any> {
       const pp = getPeerPay()
       const walletClient = core.getClient()
+      const transaction = normalizeBRC100ByteArray(payment?.token?.transaction)
+      if (transaction == null || transaction.length === 0) {
+        throw new Error('Incoming payment transaction must be a non-empty BRC-100 byte array')
+      }
 
       // Step 1: Internalize the payment. If this fails, do NOT acknowledge the
       // message — the sender's tx data and derivation info must be preserved so
@@ -147,7 +152,7 @@ export function createMessageBoxMethods(core: WalletCore): {
         // Wallet payment: output goes directly into wallet's spendable balance
         try {
           await (walletClient as any).internalizeAction({
-            tx: payment.token.transaction,
+            tx: transaction,
             outputs: [
               {
                 outputIndex: payment.token.outputIndex ?? 0,
@@ -171,14 +176,14 @@ export function createMessageBoxMethods(core: WalletCore): {
         // Basket insertion: output goes into a named basket
         try {
           await (walletClient as any).internalizeAction({
-            tx: payment.token.transaction,
+            tx: transaction,
             outputs: [
               {
                 outputIndex: payment.token.outputIndex ?? 0,
                 protocol: 'basket insertion',
                 insertionRemittance: {
                   basket,
-                  customInstructions: JSON.stringify({
+                  customInstructions: stringifyBRC100({
                     derivationPrefix: payment.token.customInstructions.derivationPrefix,
                     derivationSuffix: payment.token.customInstructions.derivationSuffix,
                     senderIdentityKey: payment.sender
@@ -222,7 +227,7 @@ export function createMessageBoxMethods(core: WalletCore): {
         const res = await fetch(`${effectiveRegistry}?action=register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
+          body: stringifyBRC100({ tag, identityKey: core.getIdentityKey() })
         })
         const data = (await res.json()) as { success: boolean; error?: string; tag?: string }
         if (!data.success) throw new Error(data.error ?? 'Registration failed')
@@ -283,7 +288,7 @@ export function createMessageBoxMethods(core: WalletCore): {
         const res = await fetch(`${effectiveRegistry}?action=revoke`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
+          body: stringifyBRC100({ tag, identityKey: core.getIdentityKey() })
         })
         const data = (await res.json()) as { success: boolean; error?: string }
         if (!data.success) throw new Error(data.error ?? 'Revoke failed')

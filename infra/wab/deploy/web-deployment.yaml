@@ -69,6 +69,12 @@ spec:
                 configMapKeyRef:
                   name: wab-config
                   key: db-port
+            - name: WAB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: wab-secrets
+                  key: wab-admin-token
+                  optional: true
             - name: NODE_ENV
               value: production
             - name: PORT

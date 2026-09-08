@@ -3,10 +3,10 @@ id: pkg-amountinator
 title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: '2.1.4'
+version: '2.1.5'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/amountinator'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator'

@@ -116,6 +116,22 @@ describe('PeerTokenClient Unit Tests', () => {
       }
       expect(ctx.dryRun).toBe(true)
     })
+
+    it('normalizes a current-wallet Uint8Array artifact for transport', async () => {
+      ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
+        action: 'settle',
+        artifact: { ...ARTIFACT, transaction: new Uint8Array([4, 5, 6]) }
+      } as never)
+
+      const token = await client.createTokenToken({
+        recipient,
+        protocol: 'stas',
+        source: SOURCE,
+        amount: '1000'
+      })
+
+      expect(token.transaction).toEqual([4, 5, 6])
+    })
   })
 
   describe('sendToken', () => {
@@ -165,6 +181,42 @@ describe('PeerTokenClient Unit Tests', () => {
       expect(adapter.acceptTokenSettlement).toHaveBeenCalledTimes(1)
       expect(ackSpy).toHaveBeenCalledWith(expect.objectContaining({ messageIds: ['msg-1'] }))
       expect(result).toMatchObject({ receiptData: { internalizeResult: 'ok' } })
+    })
+
+    it('recovers a historical numeric-key transaction before adapter dispatch', async () => {
+      const ackSpy = jest
+        .spyOn(client, 'acknowledgeMessage' as any)
+        .mockResolvedValue(undefined as never)
+      const transaction = JSON.parse(JSON.stringify(new Uint8Array([7, 8, 9])))
+
+      await client.acceptToken({
+        messageId: 'msg-json-bytes',
+        sender: recipient,
+        token: { ...ARTIFACT, transaction }
+      })
+
+      expect(adapter.acceptTokenSettlement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          settlement: expect.objectContaining({ transaction: [7, 8, 9] })
+        }),
+        expect.any(Object)
+      )
+      expect(ackSpy).toHaveBeenCalled()
+    })
+
+    it('does not dispatch or acknowledge malformed transaction records', async () => {
+      const ackSpy = jest.spyOn(client, 'acknowledgeMessage' as any)
+
+      await expect(
+        client.acceptToken({
+          messageId: 'msg-bad-bytes',
+          sender: recipient,
+          token: { ...ARTIFACT, transaction: { 1: 2 } as never }
+        })
+      ).resolves.toBe('Unable to receive token!')
+
+      expect(adapter.acceptTokenSettlement).not.toHaveBeenCalled()
+      expect(ackSpy).not.toHaveBeenCalled()
     })
   })
 

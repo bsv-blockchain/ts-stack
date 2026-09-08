@@ -1,21 +1,21 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-30",
+  "generated_at": "2026-08-25",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
-    "total_files": 75,
-    "total_vectors": 6681,
-    "fully_required_files": 56,
+    "total_files": 76,
+    "total_vectors": 6690,
+    "fully_required_files": 57,
     "files_with_intended": 17,
     "files_with_mixed_status": 15,
     "vectors_by_status": {
-      "required": 6477,
+      "required": 6486,
       "intended": 204,
       "skipped": 7
     },
     "by_reason_category": {
-      "fully_supported": 1265,
+      "fully_supported": 1274,
       "governed_vector_skip": 50,
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5116,
@@ -502,6 +502,18 @@
       "file_level_parity": "required",
       "effective_status": "required",
       "required_count": 15,
+      "intended_count": 0,
+      "skipped_count": 0,
+      "reason_category": "fully_supported",
+      "categories": []
+    },
+    {
+      "path": "storage/chirp-v1.json",
+      "id": "storage.chirp-v1",
+      "total_vectors": 9,
+      "file_level_parity": "required",
+      "effective_status": "required",
+      "required_count": 9,
       "intended_count": 0,
       "skipped_count": 0,
       "reason_category": "fully_supported",

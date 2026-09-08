@@ -35,6 +35,8 @@ Additionally, the WAB provides a **faucet** feature that can make a one-time BSV
 5. **TypeScript** – Strict typing, improved developer experience.
 6. **Docker** – Containerized for easy deployment.
 7. **CI/CD** – Example GitHub Actions workflow to build, push, and deploy to **Google Cloud Run** with **Cloud SQL**.
+8. **UMP support pinning** – An authenticated operator can select one UMP outpoint as a legacy-ambiguity fallback.
+9. **Verified phone changes** – Authenticated wallets can verify the same or a new number, rotate their presentation key, and retain reversible ownership history.
 
 ---
 
@@ -178,6 +180,10 @@ TRUST_PROXY_HOPS=1
 # Console OTP is permitted only in development/test and requires both values.
 # NODE_ENV=development
 # DEV_CONSOLE_AUTH_METHOD_ENABLED=true
+
+# Optional support capability. Use at least 32 random characters and source it
+# from the deployment secret manager. If omitted, admin routes return 404.
+# WAB_ADMIN_TOKEN=
 ```
 
 _(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)_
@@ -189,7 +195,9 @@ deletion attempts per 15 minutes, and 10 share operations per 15 minutes.
 Override a policy with `<PREFIX>_MAX` and `<PREFIX>_WINDOW_MS`, where the
 prefix is `WAB_AUTH_RATE_LIMIT`, `WAB_USER_RATE_LIMIT`,
 `WAB_FAUCET_RATE_LIMIT`, `WAB_ACCOUNT_DELETION_RATE_LIMIT`, or
-`WAB_SHARE_RATE_LIMIT`. Invalid or unbounded values fail startup.
+`WAB_SHARE_RATE_LIMIT`. Administrative support routes use
+`WAB_ADMIN_RATE_LIMIT` (30 requests per 15 minutes by default). Invalid or
+unbounded values fail startup.
 
 Express ignores forwarding headers unless `TRUST_PROXY_HOPS` is explicitly set
 to a value from 0 through 10. Set it only to the number of trusted proxies in
@@ -207,9 +215,15 @@ operations.
 
 ### Authentication and account-deletion invariants
 
-Phone identities use canonical E.164 form and cannot move between live user
-accounts. A previously linked identity may be attached to a new account only
-after its old account has been deleted; its faucet history is retained.
+Phone identities use canonical E.164 form. Ordinary sign-in and linking do not
+move a phone identity between live users. The authenticated phone-change flow
+is the deliberate exception: after the target wallet proves its current
+presentation key and possession of the claimed phone by OTP, the WAB moves the
+phone record, stages and then finalizes the target presentation key, clears any
+obsolete UMP pin at finalization, and writes the previous owners/associations
+to `phone_change_history`.
+Support can restore those associations if the change is later determined to be
+fraudulent. Faucet history remains attached to its original auth-method record.
 Presentation keys and Shamir user hashes are exact 256-bit hexadecimal values.
 Stored Shamir shares are bounded and structurally validated before any database
 operation.
@@ -221,6 +235,41 @@ intent expires after ten minutes, is single-use, is rate-limited per external
 identity, and is bound to the authentication method, canonical identity, and
 specific live user. A valid OTP from another flow or account cannot authorize
 deletion.
+
+### UMP pin and phone-change support
+
+`POST /auth/complete` remains backward compatible and may add
+`umpTokenOutpoint` when support has pinned that WAB account. Updated wallet
+clients still run normal verified UMP lookup and lineage selection first. They
+use the pin only if the result remains ambiguous and the pin names one of the
+verified candidates.
+
+Phone changes use four calls: `/auth/phone-change/start`,
+`/auth/phone-change/complete`, `/auth/phone-change/commit`, and
+`/auth/phone-change/finalize`. The first two prove possession of the requested
+number. Commit consumes the hashed, ten-minute, single-use authorization and
+stages the phone association plus replacement presentation key while retaining
+the current key. After the wallet publishes the UMP update, finalize promotes
+the staged key and clears the obsolete pin. During an interrupted transition,
+`/auth/complete` adds the pending key and change ID so an updated wallet can
+select the key backed by the verified UMP token and finish idempotently. If the
+current key remains live, repeating the phone-change OTP returns the staged key
+and change ID instead of creating a second authorization/commit. Entering the
+current number is valid and intentionally refreshes the key/hash.
+
+Operator routes require `Authorization: Bearer <WAB_ADMIN_TOKEN>`, are
+rate-limited, and return 404 when no strong token is configured:
+
+A non-empty token shorter than 32 characters is a startup configuration error;
+only an absent/empty value intentionally disables the routes.
+
+- `POST /admin/ump-pin` sets or clears a pin after identifying a user by
+  presentation key or authentication method payload.
+- `POST /admin/phone-change/restore` restores the associations recorded for a
+  `changeId`; it refuses automatic restoration after another ownership change.
+
+Follow [UMP account support](../../docs/infrastructure/wab-ump-account-support.md)
+for evidence requirements, commands, auditing, rollout, and rollback.
 
 ### Running Locally
 
@@ -253,6 +302,71 @@ deletion.
 ---
 
 ## Auth Methods
+
+### Admin-managed demonstration accounts
+
+WAB 1.6 adds opt-in `DemoPhone` accounts for app-store reviewers and other
+shared demonstrations. They use a separate identity namespace: an identical
+phone-shaped alias under `TwilioPhone` continues to require real SMS verification
+and resolves to a different wallet. Demo codes never authenticate an ordinary
+SMS identity or authorize a phone-number transfer.
+
+Set a dedicated, secret-manager-provided `WAB_DEMO_AUTH_SECRET` of at least 32 random
+characters, and the existing `WAB_ADMIN_TOKEN`, to provision demo access through
+`POST /admin/demo-accounts`. The JSON `action` is one of:
+
+- `provision`: supply `phoneNumber` (an E.164-shaped demo alias), `label`, and
+  `expiresAtEpochMs` within the next 30 days, or explicit JSON `null` for
+  non-expiring store-review access (WAB 1.7+). Omitted expiry and numeric zero
+  are rejected. Returns a random six-digit `code`
+  once, plus the account `id`. The alias is not proof of telephone ownership.
+- `rotate`: supply `id` and `expiresAtEpochMs`; returns a new code once and
+  restores the account's five-attempt budget. The demo identity remains the same.
+- `revoke`: supply `id`; disables subsequent demo authentication immediately.
+- `list`: returns metadata for the latest 100 demo accounts, never codes or hashes.
+
+All management actions require the existing administrator bearer credential and
+rate limits. Provision/rotation responses are `Cache-Control: no-store`. Codes
+are stored only as keyed digests, bound to the account's random identifier. An
+account locks after five incorrect codes in total until an administrator rotates
+it; this budget is database-backed across replicas and does not reset on sign-in,
+restart, or a new authentication start. Expired/revoked accounts fail closed.
+Removing the demo key disables the method; rotating that key invalidates all
+existing demo codes until each account's code is rotated.
+
+Use an expiry for temporary demonstrations. Stores that require permanently
+reusable reviewer credentials can use explicit `null`; all admin authentication,
+guess-budget, secret-rotation and revocation controls still apply. Keep a named
+operator responsible for revoking this access when it is no longer needed.
+Changing between expiring and non-expiring modes requires an admin code rotation.
+The non-expiring mode persists zero in the existing expiry column; an older WAB
+binary treats it as expired, so rollback fails closed without a schema change.
+
+Clients can select `DemoPhone` explicitly, or configure the WAB base URL as
+`https://your-wab.example/demo`. The latter advertises only `DemoPhone` so existing
+clients that select the first advertised method work without a new binary.
+Use the alias on the phone screen, the administrator-provided code on the OTP
+screen, and a separate wallet password. No SMS is sent for this method.
+For compatibility with older mobile phone interactors, requests to the explicit
+`/demo` base URL translate the wire method `TwilioPhone` to `DemoPhone` before
+authentication. They never resolve a real SMS identity. Ordinary root routes do
+not perform this translation. Phone-number change is not supported on the demo
+base URL; normal authentication, recovery shares and account deletion are.
+
+Ordinary WAB discovery keeps `TwilioPhone` first. The `/demo` routes share normal
+authentication, user-operation, and faucet rate limits.
+
+Initialize the dedicated demo wallet and verify a second clean sign-in before
+sharing its credentials with reviewers. Never reuse a personal or customer
+wallet; shared demo wallets should contain only disposable demonstration data
+and a deliberately limited sample balance. Revocation stops WAB sign-in, but
+cannot erase wallet keys or snapshots already shared with a reviewer. Keep a
+record of the operator, purpose, account id, expiry, and revocation. Do not log
+codes, wallet passwords, presentation keys, or administrative credentials.
+
+The migration adds only `demo_accounts`; existing identities require no
+migration. Retain the table when rolling back to an older image, which ignores
+it. Disable demo access and update reviewer instructions before rollback.
 
 The WAB is **modular**: you can configure multiple ways for users to authenticate. Two example methods are:
 

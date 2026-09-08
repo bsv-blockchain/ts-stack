@@ -1,5 +1,5 @@
 import { Request } from 'express'
-import { Utils } from '@bsv/sdk'
+import { Utils, stringifyBRC100 } from '@bsv/sdk'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -204,7 +204,7 @@ export function convertValueToArray(
     if (!responseHeaders['content-type']) {
       responseHeaders['content-type'] = 'application/json'
     }
-    return Utils.toArray(JSON.stringify(val), 'utf8')
+    return Utils.toArray(stringifyBRC100(val), 'utf8')
   }
   if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
     return Utils.toArray(val.toString(), 'utf8')

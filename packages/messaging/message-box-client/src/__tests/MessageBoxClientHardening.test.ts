@@ -333,6 +333,26 @@ describe('MessageBoxClient hardening branches', () => {
       )
     })
 
+    it('normalizes typed and historical JSON wallet transactions in paid messages', async () => {
+      wallet.createAction.mockResolvedValueOnce({ tx: new Uint8Array([4, 5, 6]) })
+      const typed = await (client as any).createMessagePayment(recipientA, {
+        recipientFee: 1,
+        deliveryFee: 0,
+        deliveryAgentIdentityKey: identityKey
+      })
+      wallet.createAction.mockResolvedValueOnce({
+        tx: JSON.parse(JSON.stringify(new Uint8Array([7, 8, 9])))
+      } as never)
+      const historical = await (client as any).createMessagePayment(recipientA, {
+        recipientFee: 1,
+        deliveryFee: 0,
+        deliveryAgentIdentityKey: identityKey
+      })
+
+      expect(typed.tx).toEqual([4, 5, 6])
+      expect(historical.tx).toEqual([7, 8, 9])
+    })
+
     it('rejects a zero-fee payment and a wallet action without a transaction', async () => {
       await expect(
         (client as any).createMessagePayment(recipientA, {
@@ -387,7 +407,7 @@ describe('MessageBoxClient hardening branches', () => {
 
     it('internalizes payments, decrypts envelopes, and sorts messages newest first', async () => {
       const payment = {
-        tx: [1, 2, 3],
+        tx: JSON.parse(JSON.stringify(new Uint8Array([1, 2, 3]))),
         outputs: [
           {
             outputIndex: 0,
@@ -436,6 +456,10 @@ describe('MessageBoxClient hardening branches', () => {
       expect(messages[0].body).toEqual({ plain: true })
       expect(messages[1].body).toEqual({ secret: true })
       expect(wallet.internalizeAction).toHaveBeenCalled()
+      expect(wallet.internalizeAction).toHaveBeenCalledWith(
+        expect.objectContaining({ tx: [1, 2, 3] }),
+        undefined
+      )
       expect(wallet.decrypt).toHaveBeenCalled()
     })
 

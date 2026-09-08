@@ -114,6 +114,12 @@ export { default as createUHRPLookupService } from './uhrp/UHRPLookupService.js'
 export type { UMPRecord } from './ump/types.js'
 export { default as UMPTopicManager } from './ump/UMPTopicManager.js'
 export { default as createUMPLookupService } from './ump/UMPLookupService.js'
+export {
+  InMemoryUMPIdentityStore,
+  MongoUMPIdentityStore,
+  UMPIdentityConflictError
+} from './ump/UMPIdentityStore.js'
+export type { UMPIdentityClaim, UMPIdentityReservationStore } from './ump/UMPIdentityStore.js'
 
 // utility-tokens
 export type { TokenDemoDetails, TokenDemoRecord, TokenDemoQuery } from './utility-tokens/types.js'

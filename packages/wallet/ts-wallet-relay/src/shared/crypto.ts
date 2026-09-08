@@ -1,4 +1,4 @@
-import type { WalletProtocol } from '@bsv/sdk'
+import { toBRC100PortableByteArray, type WalletProtocol } from '@bsv/sdk'
 import type { WalletLike } from '../types.js'
 import { bytesToBase64url, base64urlToBytes } from './encoding.js'
 
@@ -43,5 +43,7 @@ export async function decryptEnvelope(
     counterparty: params.counterparty,
     ciphertext
   })
-  return new TextDecoder().decode(new Uint8Array(plaintext))
+  const bytes = toBRC100PortableByteArray(plaintext)
+  if (bytes == null) throw new TypeError('Wallet returned an invalid plaintext byte payload')
+  return new TextDecoder().decode(new Uint8Array(bytes))
 }

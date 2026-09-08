@@ -12,7 +12,7 @@
 - Domain: Wallet
 - Criticality tier: 1
 - Reliability Level (current → target): RL2 → RL4
-- Owner / Backup owner: Tone Engel / BSV Blockchain Association
+- Owner / Backup owner: Tone Engel / BSV Association
 
 ## Build and Test
 - Build command: `npm run build` (tsc --build)

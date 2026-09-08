@@ -1,3 +1,4 @@
+// Modified hmac-drbg lineage; see ../../THIRD_PARTY_NOTICES.md.
 import { SHA256HMAC } from './Hash.js'
 import { toHex, toArray } from './utils.js'
 

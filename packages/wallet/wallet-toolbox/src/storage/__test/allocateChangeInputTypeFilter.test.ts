@@ -18,7 +18,7 @@ import { specOpWalletManagedUtxos } from '../../sdk/types'
  * allocator never hands back a `custom` output.
  */
 describe('allocateChangeInput managed-change policy', () => {
-  jest.setTimeout(99999999)
+  jest.setTimeout(60_000)
   type Ctx = TestWalletNoSetup | TestWalletProviderNoSetup
   const ctxs: Ctx[] = []
 

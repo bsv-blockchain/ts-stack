@@ -4,6 +4,7 @@ const HEX_256 = /^[0-9a-fA-F]{64}$/;
 const AUTH_METHOD_TYPE = /^[a-zA-Z0-9_-]{1,64}$/;
 const BASE58_FIELD = /^[1-9A-HJ-NP-Za-km-z]{1,64}$/;
 const INTEGRITY_TAG = /^[0-9a-fA-F]{8}$/;
+const UMP_OUTPOINT = /^[0-9a-fA-F]{64}\.(?:0|[1-9]\d*)$/;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -23,6 +24,12 @@ export function isHexIdentifier(value: unknown): value is string {
 
 export function isPositiveSafeInteger(value: unknown): value is number {
     return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+export function isUMPOutpoint(value: unknown): value is string {
+    if (typeof value !== "string" || !UMP_OUTPOINT.test(value)) return false;
+    const outputIndex = Number(value.slice(value.lastIndexOf(".") + 1));
+    return Number.isSafeInteger(outputIndex) && outputIndex >= 0 && outputIndex <= 0xffffffff;
 }
 
 /**

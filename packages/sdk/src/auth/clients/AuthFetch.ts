@@ -7,6 +7,7 @@ import {
   OriginatorDomainNameStringUnder250Bytes,
   WalletInterface
 } from '../../wallet/Wallet.interfaces.js'
+import { stringifyBRC100 } from '../../wallet/BRC100ByteEncoding.js'
 import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
 import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
@@ -77,12 +78,68 @@ const AUTH_RESPONSE_TIMEOUT_MS = 30000
 const MAX_PENDING_AUTH_REQUESTS = 1000
 
 /**
+ * Optional 402 response header by which a server declares transactions it already holds.
+ *
+ * A payment carries its ancestry so the recipient can verify it without asking anyone. Any
+ * ancestor the recipient ALREADY has is redundant weight — but the payer cannot know which
+ * those are, so today it sends all of them. Chained payments therefore grow without bound:
+ * each spends the previous payment's unconfirmed change, so every payment re-ships the whole
+ * unconfirmed run until a block collapses it to a merkle path. Past ~32KB of total request
+ * headers a Cloudflare-fronted origin refuses the request outright, and the payer has already
+ * broadcast and paid by then.
+ *
+ * `knownTxids` is the existing wallet mechanism for exactly this: listed txids are emitted as
+ * txid-only instead of full transactions. It is unused here only because nothing tells the
+ * payer what the recipient has.
+ *
+ * Txid-only encoding is specified by BRC-96 "BEEF V2, Txid Only Extension"
+ * (https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0096.md): Tx Data Format `02`
+ * carries just the 32-byte txid under version marker `0200BEEF`, for use "when parties
+ * exchanging BEEFs have already validated certain transactions". Note the spec's wording —
+ * such an entry "is treated as implicitly valid", i.e. the recipient verifies nothing about
+ * it, which is why only the recipient may declare one.
+ *
+ * Format: comma-separated 64-character hex txids. Absent header = no change in behaviour.
+ *
+ * SAFETY: only the recipient may populate this. Omitting an ancestor the recipient lacks makes
+ * the payment unverifiable, so the list must come from the recipient's own records — never
+ * inferred by the payer.
+ */
+const KNOWN_TXIDS_HEADER = 'x-bsv-payment-known-txids'
+const TXID_REGEX = /^[0-9a-fA-F]{64}$/
+/** Bounded so a hostile or buggy server cannot inflate the createAction call. */
+const MAX_KNOWN_TXIDS = 256
+
+/**
+ * Parse the known-txids header into a validated list.
+ *
+ * Deliberately lenient about the header being absent, empty or partly malformed: this is an
+ * optimisation, and a bad entry should cost bytes, never a failed payment. Anything that is not
+ * a well-formed txid is dropped rather than throwing.
+ */
+export function parseKnownTxidsHeader(headerValue: string | null): string[] | undefined {
+  if (headerValue == null) return undefined
+  const txids = headerValue
+    .split(',')
+    .map(t => t.trim().toLowerCase())
+    .filter(t => TXID_REGEX.test(t))
+  if (txids.length === 0) return undefined
+  return Array.from(new Set(txids)).slice(0, MAX_KNOWN_TXIDS)
+}
+
+/**
  * AuthFetch provides a lightweight fetch client for interacting with servers
  * over a simplified HTTP transport mechanism. It integrates session management, peer communication,
  * and certificate handling to enable secure and mutually-authenticated requests.
  *
  * Additionally, it automatically handles 402 Payment Required responses by creating
  * and sending BSV payment transactions when necessary.
+ * Recipients may advertise already-validated ancestors through the optional
+ * `x-bsv-payment-known-txids` response header. Up to 256 unique, valid lowercase
+ * transaction IDs are forwarded to wallet `createAction` options, including
+ * newly created payments after repricing. An absent or invalid-only header
+ * preserves existing payment creation behavior.
+ * The header is an optional SDK extension, not a standardized BRC-105 header.
  */
 export class AuthFetch {
   private readonly sessionManager: SessionManager
@@ -589,6 +646,8 @@ export class AuthFetch {
       throw new Error('Missing x-bsv-payment-derivation-prefix response header.')
     }
 
+    const knownTxids = parseKnownTxidsHeader(originalResponse.headers.get(KNOWN_TXIDS_HEADER))
+
     let paymentContext = config.paymentContext
     if (paymentContext == null) {
       paymentContext = await this.createPaymentContext(
@@ -596,7 +655,8 @@ export class AuthFetch {
         config,
         satoshisRequired,
         serverIdentityKey,
-        derivationPrefix
+        derivationPrefix,
+        knownTxids
       )
     } else {
       const requirementsChanged = !this.isPaymentContextCompatible(
@@ -616,7 +676,8 @@ export class AuthFetch {
           config,
           satoshisRequired,
           serverIdentityKey,
-          derivationPrefix
+          derivationPrefix,
+          knownTxids
         )
       }
     }
@@ -705,7 +766,8 @@ export class AuthFetch {
     config: SimplifiedFetchRequestOptions,
     satoshisRequired: number,
     serverIdentityKey: string,
-    derivationPrefix: string
+    derivationPrefix: string,
+    knownTxids?: string[]
   ): Promise<PaymentRetryContext> {
     const derivationSuffix = await createNonce(this.wallet, undefined, this.originator)
 
@@ -738,7 +800,10 @@ export class AuthFetch {
           }
         ],
         options: {
-          randomizeOutputs: false
+          randomizeOutputs: false,
+          // Ancestors the recipient already holds are emitted txid-only rather than in full.
+          // Undefined when the server did not declare any, which is the pre-existing behaviour.
+          ...(knownTxids != null ? { knownTxids } : {})
         }
       },
       this.originator
@@ -871,7 +936,7 @@ export class AuthFetch {
 
   private describeSerializableRequestBody(body: any): RequestBodySummary {
     try {
-      const serialized = JSON.stringify(body)
+      const serialized = stringifyBRC100(body)
       if (typeof serialized === 'string') {
         return { type: 'object', byteLength: Utils.toArray(serialized, 'utf8').length }
       }
@@ -1048,7 +1113,7 @@ export class AuthFetch {
     }
 
     // 8. Plain object JSON body
-    if (typeof body === 'object') return Utils.toArray(JSON.stringify(body), 'utf8')
+    if (typeof body === 'object') return Utils.toArray(stringifyBRC100(body), 'utf8')
 
     // 9. Fallback
     throw new Error('Unsupported body type in this SimplifiedFetch implementation.')

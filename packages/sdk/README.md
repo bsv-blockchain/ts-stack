@@ -10,6 +10,12 @@ Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SD
 
 For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClient` interface. BSV Desktop and BSV Browser are the BSV Association reference implementations for this interface; vendor distributions such as Babbage's Metanet Desktop / Metanet Explorer and Hudos Browser can implement the same interface with their own branding and service defaults.
 
+The BRC-100 `CreateActionResult` permits AtomicBEEF as either `number[]` or
+`Uint8Array`. SDK BRC-29 remittance accepts both wallet representations and
+emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
+and JSON transports preserve identical transaction bytes. The same boundary
+protects overlay lookup queries and JSON BEEF responses.
+
 ## Table of Contents
 
 1. [Objective](#objective)
@@ -90,6 +96,18 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
   client retains at most 1,000 pending authenticated requests. Invalid or
   rejected peer responses reject and clean up the owning request; they do not
   become unhandled process errors or leave listeners behind.
+
+  For BRC-105 payments, a recipient may include the optional
+  `x-bsv-payment-known-txids` response header on its 402 challenge. The value is
+  a comma-separated list of 64-character hexadecimal transaction IDs the
+  recipient already possesses and has validated. `AuthFetch` passes at most
+  256 unique lowercase IDs to the wallet's `createAction` options, including
+  when payment requirements change and a new transaction is created. This
+  lets compatible wallets omit known ancestors from payment BEEF. Whitespace,
+  duplicates, and malformed entries are ignored; an absent or invalid-only
+  header preserves existing payment behavior. Browser services must expose
+  the optional response header through their existing CORS policy.
+  The header is an optional SDK extension, not a standardized BRC-105 header.
 
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
@@ -173,6 +191,9 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-The license for the code in this repository is the Open BSV License. Refer to [LICENSE.txt](./LICENSE.txt) for the license text.
+TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+Incorporated material remains under the separate terms identified in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md), with complete texts in
+[LICENSES/](./LICENSES/). Keep all three payloads with source and binary distributions.
 
 Thank you for being a part of the BSV Blockchain Libraries Project. Let's build the future of BSV Blockchain together!

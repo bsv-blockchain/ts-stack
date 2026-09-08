@@ -13,7 +13,9 @@ scripts/sync-secrets.ts
 scripts/mkenv.sh
 scripts/start.sh
 *.md
+!THIRD_PARTY_NOTICES.md
 LICENSE.txt
+!LICENSE.txt
 storage-creds.json
 docker-compose.yml
 jest.config.js

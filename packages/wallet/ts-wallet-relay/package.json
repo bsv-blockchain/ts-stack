@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-relay",
-  "version": "0.3.4",
+  "version": "0.3.6",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -9,7 +9,7 @@
     "access": "public"
   },
   "description": "BSV mobile wallet relay — relay server and pairing client",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "keywords": [
     "bsv",
     "wallet",
@@ -78,7 +78,7 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6",
+    "@bsv/sdk": "^2.4.1",
     "@types/express": ">=4.17.0 <6",
     "express": ">=4.18.0 <6",
     "qrcode": ">=1.5.0",

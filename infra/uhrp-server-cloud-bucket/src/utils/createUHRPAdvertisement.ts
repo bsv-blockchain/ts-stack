@@ -1,4 +1,13 @@
-import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, SHIPBroadcaster } from "@bsv/sdk"
+import {
+  PushDrop,
+  PrivateKey,
+  Transaction,
+  StorageUtils,
+  Utils,
+  SHIPBroadcaster,
+  type BroadcastFailure,
+  type BroadcastResponse
+} from "@bsv/sdk"
 import { Setup } from "@bsv/wallet-toolbox"
 import { uhrpNetwork } from "./network"
 
@@ -14,20 +23,26 @@ export interface AdvertisementParams {
   url: string
   contentLength: number
   confederacyHost?: string
+  contentType?: string
 }
 
 export interface AdvertisementResponse {
   txid: string
 }
 
-export default async function createUHRPAdvertisement({
+export interface AdvertisementSubmission extends AdvertisementResponse {
+  broadcastResult: BroadcastResponse | BroadcastFailure
+}
+
+export async function createUHRPAdvertisementWithResult({
   hash,
   objectIdentifier,
   expiryTime,
   url,
   uploaderIdentityKey,
-  contentLength
-}: AdvertisementParams): Promise<AdvertisementResponse> {
+  contentLength,
+  contentType
+}: AdvertisementParams): Promise<AdvertisementSubmission> {
   if (typeof hash === 'string') {
     hash = StorageUtils.getHashFromURL(hash)
   }
@@ -73,7 +88,15 @@ export default async function createUHRPAdvertisement({
       satoshis: 1,
       basket: 'uhrp advertisements',
       outputDescription: 'UHRP advertisement token',
-      tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpURL, 'utf8'))}`, `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`, `uploader_identity_key_${uploaderIdentityKey}`, `expiry_time_${expiryTimeSeconds}`]
+      tags: [
+        `uhrp_url_${Utils.toHex(Utils.toArray(uhrpURL, 'utf8'))}`,
+        `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
+        `uploader_identity_key_${uploaderIdentityKey}`,
+        `expiry_time_${expiryTimeSeconds}`,
+        'name_file',
+        `content_type_${contentType || 'application/octet-stream'}`,
+        `size_${contentLength}`
+      ]
     }],
     description: 'UHRP Content Availability Advertisement',
     options: {
@@ -86,9 +109,17 @@ export default async function createUHRPAdvertisement({
     // Keep the service buildable against the last published SDK during the coordinated release.
     networkPreset: lookupPreset as 'mainnet' | 'testnet'
   })
-  await broadcaster.broadcast(transaction)
+  const broadcastResult = await broadcaster.broadcast(transaction)
 
   return {
-    txid
+    txid,
+    broadcastResult
   }
+}
+
+export default async function createUHRPAdvertisement(
+  params: AdvertisementParams
+): Promise<AdvertisementResponse> {
+  const { txid } = await createUHRPAdvertisementWithResult(params)
+  return { txid }
 }

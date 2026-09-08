@@ -1,0 +1,783 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-08-27",
+  "owner": "ts-stack-maintainers",
+  "distribution": "docs-site/dist",
+  "derivation": "Vite client source-map modules plus Pagefind-generated search runtime",
+  "components": [
+    {
+      "name": "@braintree/sanitize-url",
+      "version": "7.1.2",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/braintree/sanitize-url",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0984740e0c3d725c8044dec7edcefe1dbce180ef5a7bc710c251e19607000158"
+        }
+      ]
+    },
+    {
+      "name": "@iconify/utils",
+      "version": "3.1.4",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iconify/iconify",
+      "licenseFiles": [
+        {
+          "path": "license.txt",
+          "sha256": "a86793ac023162ce98b91899601c15f6712f44943163c4f92a0a4bf89152b3bf"
+        }
+      ]
+    },
+    {
+      "name": "@mdx-js/react",
+      "version": "3.1.1",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/mdx-js/mdx",
+      "licenseFiles": [
+        {
+          "path": "license",
+          "sha256": "c274d2be30a4def0f9344506f3fe6d15668890a8e6d3e3d6bea732b44af9e124"
+        }
+      ]
+    },
+    {
+      "name": "@mermaid-js/parser",
+      "version": "1.2.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/mermaid-js/mermaid",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d374061c40bfb6f99c5033290caefda97a9b3e7e477e5ee02f487143ef2177e8"
+        }
+      ]
+    },
+    {
+      "name": "@upsetjs/venn.js",
+      "version": "2.0.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/upsetjs/venn.js",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "6a3508febf2cfccfee96597394543a6154a4bb0b1f91f28404be42c09e9fcb54"
+        }
+      ]
+    },
+    {
+      "name": "cose-base",
+      "version": "1.0.3",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iVis-at-Bilkent/cose-base",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5fb3cf4a14c3c5af6e473a192df8bca10c77754e3a0c6492c79fb92a76a5478a"
+        }
+      ]
+    },
+    {
+      "name": "cose-base",
+      "version": "2.2.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iVis-at-Bilkent/cose-base",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5fb3cf4a14c3c5af6e473a192df8bca10c77754e3a0c6492c79fb92a76a5478a"
+        }
+      ]
+    },
+    {
+      "name": "cytoscape-cose-bilkent",
+      "version": "4.1.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/cytoscape/cytoscape.js-cose-bilkent",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "440fc58a56a12814e417d2b341da89b050da052dc75bdb235607d37ec5fe74ef"
+        }
+      ]
+    },
+    {
+      "name": "cytoscape-fcose",
+      "version": "2.2.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iVis-at-Bilkent/cytoscape.js-fcose",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2837634f403949215760fcdd2fa1ed0c64875d02099ecc8318c704b852f1421d"
+        }
+      ]
+    },
+    {
+      "name": "cytoscape",
+      "version": "3.34.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/cytoscape/cytoscape.js",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "eb319c6e6f233607f71e8e2f450391751883cfc0eeb3ca7ef574c13d1d9c2203"
+        }
+      ]
+    },
+    {
+      "name": "d3-array",
+      "version": "2.12.1",
+      "kind": "vite",
+      "packageLicense": "BSD-3-Clause",
+      "licenseExpression": "BSD-3-Clause",
+      "source": "https://github.com/d3/d3-array",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0747bebeb06b10954913149be9b9a8bdf6fad3e6fdcbd9f9524e7a94c13d2cea"
+        }
+      ]
+    },
+    {
+      "name": "d3-array",
+      "version": "3.2.4",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-array",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3e6849627f74ff73c257a3ae1efb574015d94fc1035c05ec3c15805165efcbc4"
+        }
+      ]
+    },
+    {
+      "name": "d3-axis",
+      "version": "3.0.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-axis",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-brush",
+      "version": "3.0.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-brush",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-color",
+      "version": "3.1.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-color",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884"
+        }
+      ]
+    },
+    {
+      "name": "d3-dispatch",
+      "version": "3.0.1",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-dispatch",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-ease",
+      "version": "3.0.1",
+      "kind": "vite",
+      "packageLicense": "BSD-3-Clause",
+      "licenseExpression": "BSD-3-Clause",
+      "source": "https://github.com/d3/d3-ease",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b989d9085148d21ff64a75e14462aefa06b2589a55553b07b1460c70081c7d08"
+        }
+      ]
+    },
+    {
+      "name": "d3-format",
+      "version": "3.1.2",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-format",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2a6d2d5f32ba0b755ddbc1c833f766e30cdbe6ebe9a6d4e3e24427721f0b63d3"
+        }
+      ]
+    },
+    {
+      "name": "d3-hierarchy",
+      "version": "3.1.2",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-hierarchy",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-interpolate",
+      "version": "3.0.1",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-interpolate",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-path",
+      "version": "1.0.9",
+      "kind": "vite",
+      "packageLicense": "BSD-3-Clause",
+      "licenseExpression": "BSD-3-Clause",
+      "source": "https://github.com/d3/d3-path",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b8265327ab678f554800e71188b1cc6b1ff57522e292d2b1c0be66f27cf328b6"
+        }
+      ]
+    },
+    {
+      "name": "d3-path",
+      "version": "3.1.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-path",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a09b0d6d76e768fca2085fad05743ee81ddd11946bcda160a3cf5e1081a479aa"
+        }
+      ]
+    },
+    {
+      "name": "d3-sankey",
+      "version": "0.12.3",
+      "kind": "vite",
+      "packageLicense": "BSD-3-Clause",
+      "licenseExpression": "BSD-3-Clause",
+      "source": "https://github.com/d3/d3-sankey",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2bf785e778d67a4f5266cffcd4f2cc5bb98cde73791666e7efeb8002ba32dfa5"
+        }
+      ]
+    },
+    {
+      "name": "d3-scale-chromatic",
+      "version": "3.1.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-scale-chromatic",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0986d93944902cca9af86824b6a641b4b7c2d10602fc510c433a8bcd443919fe"
+        }
+      ]
+    },
+    {
+      "name": "d3-scale",
+      "version": "4.0.2",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-scale",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-selection",
+      "version": "3.0.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-selection",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-shape",
+      "version": "1.3.7",
+      "kind": "vite",
+      "packageLicense": "BSD-3-Clause",
+      "licenseExpression": "BSD-3-Clause",
+      "source": "https://github.com/d3/d3-shape",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "7eea8533ea92bd8c32a901e89ecb0305890905bb12711449565ddff96891146d"
+        }
+      ]
+    },
+    {
+      "name": "d3-shape",
+      "version": "3.2.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-shape",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884"
+        }
+      ]
+    },
+    {
+      "name": "d3-time-format",
+      "version": "4.1.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-time-format",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-time",
+      "version": "3.1.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-time",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884"
+        }
+      ]
+    },
+    {
+      "name": "d3-timer",
+      "version": "3.0.1",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-timer",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-transition",
+      "version": "3.0.1",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-transition",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "d3-zoom",
+      "version": "3.0.0",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/d3/d3-zoom",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"
+        }
+      ]
+    },
+    {
+      "name": "dagre-d3-es",
+      "version": "7.0.14",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/tbo47/dagre-es",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "d01eb84ccce437dbf5fd40853bceea0f287930920acea066597a4a25ead63858"
+        }
+      ]
+    },
+    {
+      "name": "dayjs",
+      "version": "1.11.21",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iamkun/dayjs",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5faab7526d055651be3aab769d58897be6bd91f3d39d137f25f12dba1b31d5dc"
+        }
+      ]
+    },
+    {
+      "name": "dompurify",
+      "version": "3.4.13",
+      "kind": "vite",
+      "packageLicense": "(MPL-2.0 OR Apache-2.0)",
+      "licenseExpression": "Apache-2.0",
+      "source": "https://github.com/cure53/DOMPurify",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    },
+    {
+      "name": "es-toolkit",
+      "version": "1.50.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/toss/es-toolkit",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "51f3674294d988d89dbebd31273baaeb3c697a15482d9699b14d1fded2e132a7"
+        }
+      ]
+    },
+    {
+      "name": "internmap",
+      "version": "2.0.3",
+      "kind": "vite",
+      "packageLicense": "ISC",
+      "licenseExpression": "ISC",
+      "source": "https://github.com/mbostock/internmap",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9ea8903938dab5f12c4572d60725069bec2d1b0dc3bcc210b09bae946a5ebb1f"
+        }
+      ]
+    },
+    {
+      "name": "katex",
+      "version": "0.16.47",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/KaTeX/KaTeX",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3"
+        }
+      ]
+    },
+    {
+      "name": "khroma",
+      "version": "2.1.0",
+      "kind": "vite",
+      "packageLicense": null,
+      "licenseExpression": "MIT",
+      "source": "https://github.com/fabiospampinato/khroma",
+      "licenseFiles": [
+        {
+          "path": "license",
+          "sha256": "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49"
+        }
+      ]
+    },
+    {
+      "name": "layout-base",
+      "version": "1.0.2",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iVis-at-Bilkent/layout-base",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "eabb762d8a95109a39c9be3247325529a5239a7aca327d909c3ccdc41f3a06bf"
+        }
+      ]
+    },
+    {
+      "name": "layout-base",
+      "version": "2.0.1",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/iVis-at-Bilkent/layout-base",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "eabb762d8a95109a39c9be3247325529a5239a7aca327d909c3ccdc41f3a06bf"
+        }
+      ]
+    },
+    {
+      "name": "lodash-es",
+      "version": "4.18.1",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/lodash/lodash",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "f71e8ed126b46346494aad5486874cd8f0aafe95092ed67d2e3cb6110f939abc"
+        }
+      ]
+    },
+    {
+      "name": "mark.js",
+      "version": "8.11.1",
+      "kind": "repository",
+      "packageLicense": null,
+      "licenseExpression": "MIT",
+      "source": "https://github.com/julmot/mark.js/tree/025b51ad151cbe0b75bf27e8b29fbc5bd5552cb9",
+      "licenseFiles": [
+        {
+          "path": "LICENSES/mark.js-8.11.1-MIT.txt",
+          "sha256": "402936bcc8f1b6947750eb9193183d7d0c4dbca3c0ba06398571d94ee85c24be"
+        }
+      ]
+    },
+    {
+      "name": "marked",
+      "version": "16.4.2",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/markedjs/marked",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c"
+        }
+      ]
+    },
+    {
+      "name": "mermaid",
+      "version": "11.16.1",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/mermaid-js/mermaid",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "ec9fb67dcb25eccc416ed56e1aab819222c805a2a4bfe4cb19e7556bf2ffde80"
+        }
+      ]
+    },
+    {
+      "name": "pagefind",
+      "version": "1.5.2",
+      "kind": "pagefind",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/Pagefind/pagefind/tree/v1.5.2",
+      "licenseFiles": [
+        {
+          "path": "LICENSE/LICENSE",
+          "sha256": "f7499d8f9a345ba2846f39325271de0fdf54c1d2968eadfde7998625cc45add0"
+        },
+        {
+          "path": "LICENSE/LICENSE-vscode-ripgrep",
+          "sha256": "ccf06b70760761ae1437395117bcf911501e3dc85385d84c7eba20d5dfab55dd"
+        }
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.8",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/react/react",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "react-router",
+      "version": "8.3.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/remix-run/react-router",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
+        }
+      ]
+    },
+    {
+      "name": "react",
+      "version": "19.2.8",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/react/react",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "roughjs",
+      "version": "4.6.6",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/pshihn/rough",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "dca9a392272606ac748ac0976a2a1133f14eef841c27beaa51a844d53c56a09d"
+        }
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.27.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/facebook/react",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "stylis",
+      "version": "4.4.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/thysultan/stylis.js",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "88c579c6ee44b41137a21321190d177982e5b17d4fa1b83a4a2e3ea325a8fc9a"
+        }
+      ]
+    },
+    {
+      "name": "ts-dedent",
+      "version": "2.3.0",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/tamino-martinius/node-ts-dedent",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "eff13095d9d762c3bd9dda74370c81e2130c28f2691bc455603abf973bac25b9"
+        }
+      ]
+    },
+    {
+      "name": "uuid",
+      "version": "14.0.1",
+      "kind": "vite",
+      "packageLicense": "MIT",
+      "licenseExpression": "MIT",
+      "source": "https://github.com/uuidjs/uuid",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "beaa6b04fb82e41dd2ad679e19e27953afb5999b1abbb455b6564e78ebfeb332"
+        }
+      ]
+    }
+  ]
+}

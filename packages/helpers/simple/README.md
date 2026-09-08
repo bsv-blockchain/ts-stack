@@ -18,18 +18,18 @@ Use the browser-safe default entry point in frontend applications and
 
 ## What can you build?
 
-| Feature | Description |
-|---------|-------------|
-| **Payments** | Send BSV to any identity key via BRC-29 peer-to-peer payments |
+| Feature                       | Description                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| **Payments**                  | Send BSV to any identity key via BRC-29 peer-to-peer payments                       |
 | **Multi-Output Transactions** | Combine P2PKH payments, OP_RETURN data, and PushDrop tokens in a single transaction |
-| **Encrypted Tokens** | Create, transfer, and redeem PushDrop tokens with encrypted payloads |
-| **Inscriptions** | Write text, JSON, or file hashes permanently to the blockchain |
-| **MessageBox P2P** | Send and receive payments and tokens peer-to-peer via MessageBox |
-| **Certification** | Issue and manage BSV certificates with a standalone Certifier |
-| **Verifiable Credentials** | W3C-compatible VCs backed by BSV certificates, with on-chain revocation |
-| **DIDs** | Generate and resolve `did:bsv:` Decentralized Identifiers |
-| **Overlay Networks** | Broadcast to and query SHIP/SLAP overlay services |
-| **Server Wallet** | Run a backend wallet for automated operations and funding flows |
+| **Encrypted Tokens**          | Create, transfer, and redeem PushDrop tokens with encrypted payloads                |
+| **Inscriptions**              | Write text, JSON, or file hashes permanently to the blockchain                      |
+| **MessageBox P2P**            | Send and receive payments and tokens peer-to-peer via MessageBox                    |
+| **Certification**             | Issue and manage BSV certificates with a standalone Certifier                       |
+| **Verifiable Credentials**    | W3C-compatible VCs backed by BSV certificates, with on-chain revocation             |
+| **DIDs**                      | Generate and resolve `did:bsv:` Decentralized Identifiers                           |
+| **Overlay Networks**          | Broadcast to and query SHIP/SLAP overlay services                                   |
+| **Server Wallet**             | Run a backend wallet for automated operations and funding flows                     |
 
 ## Browser vs Server
 
@@ -39,6 +39,15 @@ The library has two entry points:
 - **`@bsv/simple/server`** — Uses `@bsv/wallet-toolbox` to run a server-side wallet from a private key. Used for agents, or servers receiving payments.
 
 Both entry points provide the same API surface — the only difference is how they connect to the underlying wallet.
+
+Message Box payment helpers normalize historical number-array, current binary
+Wallet Wire, and numeric-key JSON transaction representations before sending
+or internalizing them. Malformed transaction records fail without acknowledging
+the pending payment. The server adapter applies the same compatibility contract
+to request and response bodies before the host framework's JSON boundary.
+
+The packaged Message Box Client dependency now starts at 2.5.0. Existing helper
+calls retain the default HTTP and live-socket behavior; no migration is required.
 
 ## A taste of the API
 
@@ -70,4 +79,6 @@ const did = wallet.getDID()
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+The identified pre-monorepo source remains MIT-licensed; see
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).

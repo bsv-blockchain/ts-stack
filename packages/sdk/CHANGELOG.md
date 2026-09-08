@@ -216,6 +216,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add optional `x-bsv-payment-known-txids` support to AuthFetch BRC-105 payment
+  creation and repricing. Forward up to 256 unique, valid lowercase recipient
+  transaction IDs to wallet `createAction` options so compatible wallets can
+  omit known BEEF ancestors. Existing services require no migration; an absent
+  or invalid-only header preserves payment behavior.
+- Add shared BRC-100 byte-boundary helpers that preserve valid `number[]` and
+  `Uint8Array` fast paths by identity, recover the numeric-key form emitted by
+  historical JSON transports, serialize typed arrays portably, and reject
+  sparse or invalid byte records.
 - Add the `teratestnet` lookup/SHIP preset, isolated TTN SLAP roots, and
   explicit identity/registry overlay routing without changing BRC-100's
   mainnet/testnet wallet-network response.
@@ -299,12 +308,32 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Normalize both supported `CreateActionResult` AtomicBEEF representations,
+  `number[]` and Wallet Wire `Uint8Array`, into the portable byte-array form
+  emitted by BRC-29 remittance settlements. Binary wallet substrates no longer
+  fail payment creation with `brc29.invalid_tx`, and JSON transports receive
+  the same transaction shape as historical wallets.
 - Bind the default `HTTPWalletWire` fetch client to its global receiver so
   browser `WalletClient` auto-discovery can reach Cicada on port 3301 instead
   of falling through after an `Illegal invocation` error.
 - Preserve `HTTPWalletJSON` action wire compatibility by serializing
-  `Uint8Array` request fields as JSON arrays and normalizing the `tx` shape
-  returned by older wallet HTTP implementations.
+  `Uint8Array` request fields as JSON arrays and normalizing direct and nested
+  action transactions, list-output BEEF, cryptographic byte results, and
+  review-action error BEEF returned by older wallet HTTP implementations.
+- Preserve BRC-100 byte fields across React Native JSON bridges in both
+  directions, including deferred-signing `signableTransaction.tx` results.
+  `WalletClient` no longer confuses its schemeless BRC-100 originator with a
+  browser message origin, originless native responses remain compatible, and
+  every auto-detected substrate has a bounded version probe so discovery cannot
+  deadlock on an unresponsive candidate.
+- Preserve typed arrays portably in authenticated JSON request bodies,
+  remittance envelopes, overlay lookup queries, and serialized wallet review
+  errors. Historical numeric-key recovery is limited to typed protocol fields
+  such as authentication payload/signature and overlay output BEEF/context;
+  arbitrary JSON objects are never reinterpreted by name or shape. Existing
+  `number[]` payloads retain their zero-copy fast path. The reviewed
+  Vite, esbuild, and UMD raw ceilings advance by 2 kB to 740, 559, and 554 kB;
+  compressed ceilings remain unchanged.
 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.
@@ -330,6 +359,15 @@ All notable changes to this project will be documented in this file. The format 
   request, register initial-response waiters before transports can answer,
   bound pending authenticated HTTP requests and response time, and clean up
   listeners after malformed responses, transport errors, retries, and timeouts.
+- Verify that a `ReactNativeWebView` response was delivered by the React Native
+  bridge before its payload is read. A response now has to come from this
+  window, from the frame bridging for it, or from a host-synthesized event
+  without a source, and a relaying host frame has to carry this document's
+  origin or the configured wallet origin. Framed documents, openers, and
+  sandboxed frames with opaque origins can no longer answer a BRC-100
+  invocation, while bridge injections, `window.postMessage` responses,
+  host-stamped origins on synthesized events, and an exact configured domain
+  keep their existing behavior.
 
 ---
 

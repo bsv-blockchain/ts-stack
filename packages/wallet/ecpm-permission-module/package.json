@@ -1,0 +1,78 @@
+{
+  "name": "@bsv/ecpm-permission-module",
+  "version": "0.1.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "BRC-98 ECPM semantic module for elliptic-curve point multiplication in BRC-100 wallets",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/ecpm-permission-module/src/**/*.ts\" \"packages/wallet/ecpm-permission-module/README.md\" \"packages/wallet/ecpm-permission-module/*.{cjs,json,ts}\"",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports EcpmPermissionModule,createEcpmModule",
+    "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "jest --coverage",
+    "test:property": "jest --runInBand --runTestsByPath src/__tests__/EcpmPermissionModule.property.test.ts",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
+  },
+  "keywords": [
+    "brc-98",
+    "brc-229",
+    "ecpm",
+    "permissions",
+    "wallet",
+    "BSV"
+  ],
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "peerDependencies": {
+    "@bsv/sdk": "^2.4.1",
+    "@bsv/wallet-toolbox-client": "^2.11.0"
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox-client": "workspace:^",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
+    "ts-jest": "^29.4.12",
+    "tsdown": "0.22.14",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/ecpm-permission-module"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm-permission-module#readme"
+}

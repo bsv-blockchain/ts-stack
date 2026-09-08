@@ -5,6 +5,11 @@ BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
 
+Version 2.2.2 preserves BRC-100 byte fields in handshake and buffered JSON
+responses across number arrays, `Uint8Array`, and historical numeric-key JSON
+objects. Generic signed application-body canonicalization remains unchanged so
+old and new peers continue to verify the same bytes.
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -240,4 +245,8 @@ consumer probes. Tests do not rebuild the package as a side effect.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+Current TS Stack changes are licensed under the Open BSV License Version 6; see
+[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+under the Open BSV License Version 4. Redistributors must preserve
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
+[`LICENSES/`](./LICENSES/).

@@ -65,6 +65,40 @@ Each topic ships a matching `*TopicManager` (admission rules for incoming transa
 
 Per-topic query types (`*Query`, `*Record`) are exported alongside.
 
+### UMP identity reservations
+
+`UMPTopicManager` reserves each 32-byte presentation hash and recovery hash for
+the first admitted unspent outpoint. A later transaction may reuse either hash
+only when it consumes the outpoint that currently owns the reservation. This
+prevents an unrelated transaction from creating an ambiguous account lookup by
+copying another user's hashes.
+
+Production overlays should share one Mongo database between admission and
+lookup. The reference overlay-server wiring constructs a
+`MongoUMPIdentityStore` and passes it to both services:
+
+```ts
+const identityStore = new MongoUMPIdentityStore(db)
+const manager = new UMPTopicManager(identityStore)
+const lookup = createUMPLookupService(db, identityStore)
+```
+
+The additive `ump_identity_reservations` collection serializes first writers
+across replicas. A failed strict broadcast invokes the manager's provisional
+admission abort hook. During a legitimate transfer the confirmed owner remains
+authoritative until lookup indexing confirms its successor, so an expired or
+interrupted transfer cannot unprotect a live token. Initial pending claims
+expire if lookup indexing never confirms admission. On upgrade, existing
+indexed UMP UTXOs seed the collection once, with a durable completion marker,
+without deleting ambiguous rows. `ls_users` returns the newest 100 matching
+current UTXOs so a live lineage tip is not hidden by older legacy ambiguity and
+wallets can use verified lineage or an operator-selected WAB pin.
+
+The no-argument manager retains a bounded in-memory store for isolated tests
+and single-process validation. Production construction must pass a `Db` or a
+store shared with lookup; do not combine the no-argument manager with the
+lookup service's Mongo default.
+
 ## Use cases
 
 ### Stand up a multi-topic overlay node

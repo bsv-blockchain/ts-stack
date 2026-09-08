@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.9.0'
-last_updated: '2026-08-12'
-last_verified: '2026-08-12'
+version: '2.11.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -18,6 +18,15 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
+The built-in BRC-177 `p nosend expiry` module works with local IndexedDB or a
+2.11-compatible remote storage service; the active provider owns durable
+expiry monitoring, synchronized lifecycle state, and pre-signed reclaim
+submission.
+IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
+count across short final and out-of-range pages.
+Prepared BEEF persistence remains a server-side Knex capability. Browser
+IndexedDB uses the canonical path, and compatible remote servers can enable
+the optimization without a browser configuration or wire change.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.
@@ -33,6 +42,11 @@ Durable permission tokens retain delayed broadcast so permission approval does
 not inherit network latency.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
+
+The browser distribution also exposes the WAB UMP ambiguity fallback and
+OTP-verified `startPhoneNumberChange` / `completePhoneNumberChange` flow. A
+settings UI may submit the current number to force a fresh presentation hash;
+it must persist the wallet snapshot immediately after success.
 Browser authentication accepts one verified matching UMP token as an existing
 account. When no token verifies, one clean empty overlay response establishes a
 new account even if other hosts fail or return malformed records.

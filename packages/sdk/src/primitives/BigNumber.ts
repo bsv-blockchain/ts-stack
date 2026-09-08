@@ -1,4 +1,5 @@
 // @ts-nocheck
+// Modified bn.js lineage; see ../../THIRD_PARTY_NOTICES.md and ../../LICENSES/bn.js-MIT.txt.
 import ReductionContext from './ReductionContext.js'
 
 /** Comparison result: -1 (less than), 0 (equal), or 1 (greater than). */

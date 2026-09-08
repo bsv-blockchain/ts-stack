@@ -2,7 +2,7 @@
 export { Engine } from './src/Engine.js'
 export { serializeErrorForLog, serializeLogValue } from './src/SafeLog.js'
 export type * from './src/LookupService.js'
-export type { TopicManager } from './src/TopicManager.js'
+export type { TopicAdmittanceContext, TopicManager } from './src/TopicManager.js'
 
 // Interfaces and structures
 export type { Storage, AppliedTransaction } from './src/storage/Storage.js'

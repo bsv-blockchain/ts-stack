@@ -32,6 +32,19 @@ The package publishes:
 
 Use a current browser bundler such as Vite or esbuild. Node.js 22 or newer is required for the published tooling and contributor workflow; browser runtime support is determined by your application's target configuration.
 
+### Optional native Argon2id backend
+
+Import `registerArgon2idBackend`, `unregisterArgon2idBackend`, and the
+`AsyncArgon2idBackend` type from this package's root export. Register a host
+implementation only after verifying its interoperability; `isReady()` must
+remain false until that verification succeeds. A ready backend is authoritative:
+derivation errors and malformed output are surfaced without switching implementations.
+
+Concurrent cold derivations share one background `preload()` attempt and keep
+the portable path. Later calls can retry after that attempt settles. Hosts must
+make `preload()` and `isReady()` reentrant and cache permanent failures or apply
+backoff. Unregister the same backend object when the host no longer owns it.
+
 ## Remote storage example
 
 ```ts
@@ -79,6 +92,21 @@ import { StorageIdb } from '@bsv/wallet-toolbox-client'
 await storageManager.addWalletStorageProvider(new StorageIdb(...))
 ```
 
+IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
+count across every page, including a short final page or an offset at or past
+the end.
+
+Prepared BEEF (COOK) persistence is a server-side Knex capability. Browser
+IndexedDB keeps the canonical BEEF path, while a compatible remote storage
+server can enable prepared reads and writes without a browser configuration or
+wire-format change.
+
+The browser wallet includes the built-in BRC-177 `p nosend expiry` module.
+Embedded IndexedDB wallets use the default local monitor. When remote storage
+is active, its migrated Wallet Toolbox 2.11-or-newer service and monitor own
+expiry enforcement; capability negotiation fails before prefunding against an
+older server. See [the full expiry guide](../docs/no-send-expiry.md).
+
 ## What's excluded vs `@bsv/wallet-toolbox`
 
 | Excluded                      | Why                                     |
@@ -110,4 +138,7 @@ The gate installs the packed packages in a clean project, bundles them with Vite
 
 ## License
 
-Open BSV License Version 6 — see [LICENSE.txt](./LICENSE.txt).
+This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
+[LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
+browser build.

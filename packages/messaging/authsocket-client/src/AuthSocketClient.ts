@@ -11,7 +11,8 @@ import {
   Peer,
   WalletInterface,
   Utils,
-  OriginatorDomainNameStringUnder250Bytes
+  OriginatorDomainNameStringUnder250Bytes,
+  stringifyBRC100
 } from '@bsv/sdk'
 import { SocketClientTransport } from './SocketClientTransport.js'
 
@@ -167,7 +168,7 @@ class AuthSocketClientImpl {
 
   private encodeEventPayload(eventName: string, data: any): number[] {
     const obj = { eventName, data }
-    return Utils.toArray(JSON.stringify(obj), 'utf8')
+    return Utils.toArray(stringifyBRC100(obj), 'utf8')
   }
 
   private decodeEventPayload(payload: number[]): { eventName: string; data: any } {

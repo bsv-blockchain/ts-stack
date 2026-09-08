@@ -6,6 +6,119 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Keep Argon2id-backed UMP v3 wallets available in React Native and other
+  runtimes without WebAssembly by falling back to an asynchronously yielding,
+  standards-compatible JavaScript implementation. The same KDF parameters and
+  derived bytes are preserved, so existing tokens require no migration and
+  WebAssembly-capable runtimes retain the faster path. The existing public
+  `hash-wasm`-compatible utility contract remains intact: secret-bearing,
+  non-binary-output, and non-byte-array requests stay on `hash-wasm` and are
+  never reinterpreted by a host backend or fallback. Native registration is
+  available from both mobile and client roots, concurrent cold callers share
+  one preload attempt, and both alternative implementations validate result
+  type and length. Unrelated validation errors propagate even without the
+  WebAssembly global. The current-main macOS
+  reference fixtures measure 1,690,925 raw / 398,461 gzip / 311,955 Brotli
+  bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
+  esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and
+  3,542,034 raw / 1,419,515 gzip / 1,117,531 Brotli bytes as optimized Hermes
+  bytecode; hosted Linux measures 1,439,166 gzip bytes. The reviewed ceilings
+  advance to 1,693,000 / 400,000 / 314,000 Vite bytes, 1,321,000 / 364,000 /
+  293,000 esbuild bytes, 1,748,000 raw Metro bytes with the compressed ceilings
+  unchanged, and 3,547,000 / 1,441,000 / 1,123,000 Hermes bytes.
+
+- Extend the BRC-98/99/111 permission-module interface with an optional semantic
+  `handleRequest` hook. A module can now return a conforming BRC-100 result
+  directly or invoke the underlying wallet operation at most once, while
+  existing `onRequest`/`onResponse` transformation modules remain compatible.
+  The companion `@bsv/ecpm-permission-module` uses this hook to implement
+  `p ecpm` point multiplication without adding a BRC-100 method or wire call.
+
+- Add opt-in prepared BEEF storage for Knex-backed normal `createAction`
+  funding. COOK (Create Once, Output Kept) stores a user-scoped, exact,
+  independently verified and checksummed proof closure, merges valid hits
+  without invoking the canonical builder, and treats every miss or cache
+  failure as the existing canonical path. Missing roots and newly finalized
+  managed-change transactions are queued only after foreground action work is
+  complete; bounded writes, reads, and gradual backfill are separately
+  controlled and default off. Reorganizations stale derived artifacts, a
+  database proof epoch fences in-flight cross-process writes, purge removes
+  unused rows, and prepared data remains outside wallet sync. The
+  Knex worker is excluded from portable bundles. Reviewed Vite ceilings advance
+  to 1,610,250 raw / 379,750 gzip / 298,000 Brotli bytes and esbuild ceilings
+  to 1,255,000 raw / 346,250 gzip / 278,000 Brotli, covering local measurements
+  of 1,609,783 / 379,492 / 297,253 and 1,254,603 / 344,792 / 277,384 bytes;
+  hosted Linux Vite Brotli and esbuild gzip measured 297,585 and 345,711 bytes.
+  The Hermes raw / gzip ceilings advance to 3,374,500 / 1,369,000 bytes,
+  covering local measurements of 3,372,554 / 1,348,354 and hosted Linux
+  measurements of 3,373,560 / 1,368,128 bytes; Metro and Hermes Brotli
+  ceilings remain unchanged.
+- Add the built-in BRC-177 `p nosend expiry` module for seconds, Unix timestamp,
+  and block-height deadlines. Protected actions are prefunded through an
+  accepted transaction, contain no wallet change, and retain a pre-signed
+  reclaim across restarts, synchronized storage, devices, and keyless remote
+  monitors. Atomic lifecycle transitions, active-storage ownership,
+  fail-closed status checks, backoff-controlled recovery of terminally rejected
+  reclaims, quarantined race outputs, and locally validated proof finality
+  prevent duplicate reclaim activation and unsafe state regression. Wallet
+  Permissions Manager authorizes module use and spending
+  before prefunding, attributes the funding fee to the requesting originator,
+  and rechecks the current monthly ledger before releasing the protected
+  action. Existing actions and ordinary `noSend` calls are unchanged. The
+  current-main macOS reference fixtures measure 1,662,220 raw / 388,763 gzip /
+  305,307 Brotli bytes with Vite, 1,297,621 raw / 355,579 gzip / 285,031 Brotli
+  bytes with esbuild, 1,710,494 raw / 430,613 gzip / 334,490 Brotli bytes with
+  Metro, and 3,474,604 raw / 1,406,878 gzip / 1,090,948 Brotli bytes as
+  optimized Hermes bytecode. The reviewed ceilings advance to 1,665,000 /
+  390,000 / 307,000 Vite bytes, 1,300,000 / 357,000 / 287,000 esbuild bytes,
+  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,480,000 / 1,410,000 /
+  1,095,000 Hermes bytes.
+
+- Report `listOutputs` `totalOutputs` as the size of the whole result set on
+  every page, in both the IndexedDB and Knex storage providers. A short final
+  page previously returned only that page's length, so a client paging a large
+  basket saw the total collapse to the size of the last page; an offset at or
+  past the end now counts instead of inferring, and the managed-change spec-op
+  no longer discards the total it already computed. Full pages, first pages,
+  and empty result sets are unchanged, so no consumer migration is required.
+  `balanceAndUtxos` now terminates from page progress instead of relying on the
+  former collapsing total, preventing a zero-progress loop after the final page.
+  The reviewed Vite raw-size ceiling advances by 500 bytes to 1,607,500,
+  covering the hosted Linux measurement of 1,607,015 bytes; the Vite compressed
+  and esbuild ceilings remain unchanged.
+
+- Serialize typed AtomicBEEF and competing BEEF in wallet review errors as
+  portable JSON arrays, keeping HTTP and relay error recovery compatible with
+  both historical array wallets and current binary Wallet Wire wallets.
+- Serialize real typed arrays portably in outbound WAB requests while
+  preserving arbitrary inbound WAB JSON objects exactly.
+
+- Accept legacy BRC-95 payment envelopes that include unrelated BEEF branches
+  by reducing them to the declared transaction and its dependency closure
+  before strict proof and BRC-29 validation. Malformed transactions, invalid
+  proofs, and incorrectly locked payment outputs remain rejected. The shared
+  helper adds 137 bytes to the local optimized Hermes fixture. The reviewed
+  ceilings advance by 1,000 bytes to 3,361,000 raw and 1,362,000 gzip, covering
+  the measured macOS raw size of 3,360,137 bytes and hosted Linux gzip size of
+  1,361,509 bytes; the Brotli ceiling remains unchanged.
+
+- Commit each received wallet-storage sync page and its durable checkpoint in
+  one provider transaction. Large IndexedDB replications avoid thousands of
+  transaction startup/commit cycles, failed pages roll back without advancing
+  the checkpoint, and abort cleanup preserves the original storage error.
+
+- Make verified phone changes interruption-safe by staging the replacement key
+  in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
+  can recover an interrupted transition from the current or pending key and
+  idempotently finish it without creating a second UMP update.
+
+- Prune `inputBEEF` to the dependency closure of explicitly declared action
+  inputs before remote request serialization and repeat the pruning on the
+  server before verification and persistence. Unrelated proof branches no
+  longer consume transfer or validation work or cause an otherwise valid
+  action to fail; proof data required by a declared input is still fully
+  validated.
+
 - Add a local-first ChainTracks control plane for browser, mobile, and Node
   wallets, including explicit local-primary/remote-only mode, independently
   sourced consistency checks, quorum-backed exceptional fallback, local-clear

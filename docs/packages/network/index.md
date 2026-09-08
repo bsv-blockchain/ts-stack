@@ -5,7 +5,7 @@ kind: meta
 domain: network
 version: 'n/a'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'network']
@@ -13,12 +13,14 @@ tags: ['domain', 'network']
 
 # Network
 
-Connect to Teranode via private DHT and subscribe to real-time blockchain events (blocks, subtrees, mining updates).
+Publish and resolve large verified UHRP content with CHIRP, or connect to
+Teranode via private DHT and subscribe to real-time blockchain events.
 
 ## Packages in this Domain
 
 | Package                                          | Purpose                                                                                  |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| [@bsv/chirp](./chirp.md)                         | Progressively publish and resiliently resolve BRC-167 chunked Merkle content over UHRP   |
 | [@bsv/teranode-listener](./teranode-listener.md) | Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging |
 
 ## What You Can Do

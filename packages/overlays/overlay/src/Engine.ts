@@ -651,6 +651,24 @@ export class Engine {
     this.endTime(`broadcast_${txid.substring(0, 10)}`)
   }
 
+  private async abortProvisionalAdmissions(
+    validations: TopicValidation[],
+    failedTopics: Set<string>,
+    beef: number[]
+  ): Promise<void> {
+    await Promise.all(validations.map(async validation => {
+      if (validation.isDupe || failedTopics.has(validation.topic)) return
+      const outputs = validation.admissibleOutputs.outputsToAdmit
+      const abort = this.managers[validation.topic].abortAdmissibleOutputs
+      if (outputs.length === 0 || abort === undefined) return
+      try {
+        await abort.call(this.managers[validation.topic], beef, outputs)
+      } catch (error) {
+        this.logger.error(`Error aborting provisional topic admission: topic=${serializeLogValue(validation.topic)} error=${serializeErrorForLog(error)}`)
+      }
+    }))
+  }
+
   private async notifyOutputSpent(
     lookupService: LookupService,
     tx: Transaction,
@@ -1091,7 +1109,12 @@ export class Engine {
     const anyTopicAccepted = validations.some(validation =>
       this.isTopicSubmissionAccepted(validation, failedTopics)
     )
-    await this.broadcastAcceptedSubmission(tx, txid, mode, anyTopicAccepted)
+    try {
+      await this.broadcastAcceptedSubmission(tx, txid, mode, anyTopicAccepted)
+    } catch (error) {
+      await this.abortProvisionalAdmissions(validations, failedTopics, taggedBEEF.beef)
+      throw error
+    }
 
     // Call the callback function with STEAK if it is provided (before storage mutations)
     if (onSteakReady !== undefined) {

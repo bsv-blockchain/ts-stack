@@ -59,6 +59,7 @@ import {
 } from './validationHelpers.js'
 import { WERR_INVALID_PARAMETER } from './WERR_INVALID_PARAMETER.js'
 
+const MAX_FAST_SUBSTRATE_RESPONSE_WAIT = 1000
 const MAX_XDM_RESPONSE_WAIT = 200
 
 /**
@@ -85,7 +86,9 @@ export default class WalletClient implements WalletInterface {
     if (substrate === 'window.CWI') substrate = new WindowCWISubstrate()
     if (substrate === 'XDM') substrate = new XDMSubstrate()
     if (substrate === 'json-api') substrate = new HTTPWalletJSON(originator)
-    if (substrate === 'react-native') substrate = new ReactNativeWebView(originator)
+    // The BRC-100 originator identifies the calling app; it is not a browser
+    // MessageEvent origin and must not be used as an RN bridge filter.
+    if (substrate === 'react-native') substrate = new ReactNativeWebView()
     if (substrate === 'secure-json-api')
       substrate = new HTTPWalletJSON(originator, 'https://localhost:2121')
     this.substrate = substrate
@@ -104,13 +107,18 @@ export default class WalletClient implements WalletInterface {
       try {
         const sub = factory()
         let result
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined
         if (typeof timeout === 'number') {
-          result = await Promise.race([
-            sub.getVersion({}),
-            new Promise<never>((_resolve, reject) =>
-              setTimeout(() => reject(new Error('Timed out.')), timeout)
-            )
-          ])
+          try {
+            result = await Promise.race([
+              sub.getVersion({}),
+              new Promise<never>((_resolve, reject) => {
+                timeoutHandle = setTimeout(() => reject(new Error('Timed out.')), timeout)
+              })
+            ])
+          } finally {
+            if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+          }
         } else {
           result = await sub.getVersion({})
         }
@@ -125,11 +133,23 @@ export default class WalletClient implements WalletInterface {
 
     // Try all substrates concurrently, select first available by priority order
     const fastAttempts = [
-      attemptSubstrate(() => new WindowCWISubstrate()),
-      attemptSubstrate(() => new WalletWireTransceiver(new HTTPWalletWire(this.originator))),
-      attemptSubstrate(() => new HTTPWalletJSON(this.originator, 'https://localhost:2121')),
-      attemptSubstrate(() => new HTTPWalletJSON(this.originator)),
-      attemptSubstrate(() => new ReactNativeWebView(this.originator))
+      attemptSubstrate(() => new WindowCWISubstrate(), MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
+      attemptSubstrate(
+        () => new WalletWireTransceiver(new HTTPWalletWire(this.originator)),
+        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
+      ),
+      attemptSubstrate(
+        () => new HTTPWalletJSON(this.originator, 'https://localhost:2121'),
+        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
+      ),
+      attemptSubstrate(
+        () => new HTTPWalletJSON(this.originator),
+        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
+      ),
+      attemptSubstrate(
+        () => new ReactNativeWebView('*', MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
+        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
+      )
     ]
 
     const fastResults = await Promise.allSettled(fastAttempts)

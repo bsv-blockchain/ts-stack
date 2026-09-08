@@ -3,10 +3,10 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.4.0'
+version: '2.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -27,6 +27,10 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
+Use SDK 2.4.1 or newer so BRC-29 sends accept both historical `number[]` and
+binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
+recovers pending typed-array tokens serialized through JSON as numeric-key
+objects.
 
 ## Quick start
 
@@ -57,7 +61,8 @@ is useful.
 
 ## What it provides
 
-- `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery
+- `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery,
+  with selectable socket transports
 - encryption through the BRC-100 wallet protocol, enabled by default
 - overlay host advertisement and public-HTTPS discovery
 - sender-specific and box-wide permissions with fee quotes

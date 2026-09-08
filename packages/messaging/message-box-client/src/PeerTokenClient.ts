@@ -23,7 +23,14 @@ import {
   TokenSourceRef,
   TokenAdapterContext
 } from './TokenSettlementAdapter.js'
-import { WalletInterface, OriginatorDomainNameStringUnder250Bytes, createNonce } from '@bsv/sdk'
+import {
+  WalletInterface,
+  OriginatorDomainNameStringUnder250Bytes,
+  createNonce,
+  normalizeBRC100ByteArray,
+  toBRC100PortableByteArray,
+  stringifyBRC100
+} from '@bsv/sdk'
 
 import * as Logger from './Utils/logger.js'
 
@@ -128,12 +135,16 @@ export class PeerTokenClient extends MessageBoxClient {
       throw new Error(result.termination.message)
     }
     const { artifact } = result
+    const transaction = toBRC100PortableByteArray(artifact.transaction)
+    if (transaction == null || transaction.length === 0) {
+      throw new Error('Token settlement transaction must be a non-empty BRC-100 byte array')
+    }
     return {
       protocol: artifact.protocol,
       assetId: artifact.assetId,
       amount: artifact.amount,
       customInstructions: artifact.customInstructions,
-      transaction: artifact.transaction,
+      transaction,
       outputIndex: artifact.outputIndex,
       txid: artifact.txid
     }
@@ -149,7 +160,7 @@ export class PeerTokenClient extends MessageBoxClient {
       {
         recipient: params.recipient,
         messageBox: this.messageBox,
-        body: JSON.stringify(token)
+        body: stringifyBRC100(token)
       },
       hostOverride ?? this.tokenHost
     )
@@ -165,7 +176,7 @@ export class PeerTokenClient extends MessageBoxClient {
         {
           recipient: params.recipient,
           messageBox: this.messageBox,
-          body: JSON.stringify(token)
+          body: stringifyBRC100(token)
         },
         host
       )
@@ -175,7 +186,7 @@ export class PeerTokenClient extends MessageBoxClient {
         {
           recipient: params.recipient,
           messageBox: this.messageBox,
-          body: JSON.stringify(token)
+          body: stringifyBRC100(token)
         },
         host
       )
@@ -209,12 +220,16 @@ export class PeerTokenClient extends MessageBoxClient {
   async acceptToken(incoming: IncomingToken): Promise<any> {
     try {
       const adapter = this.adapterFor(incoming.token.protocol)
+      const transaction = normalizeBRC100ByteArray(incoming.token.transaction)
+      if (transaction == null || transaction.length === 0) {
+        throw new Error('Token settlement transaction must be a non-empty BRC-100 byte array')
+      }
       const result = await adapter.acceptTokenSettlement(
         {
           sender: incoming.sender,
           settlement: {
             customInstructions: incoming.token.customInstructions,
-            transaction: incoming.token.transaction,
+            transaction,
             protocol: incoming.token.protocol,
             assetId: incoming.token.assetId,
             amount: incoming.token.amount,
@@ -300,7 +315,7 @@ export class PeerTokenClient extends MessageBoxClient {
       {
         recipient: params.recipient,
         messageBox: TOKEN_REQUESTS_MESSAGEBOX,
-        body: JSON.stringify(body)
+        body: stringifyBRC100(body)
       },
       hostOverride ?? this.tokenHost
     )
@@ -369,7 +384,7 @@ export class PeerTokenClient extends MessageBoxClient {
       {
         recipient: request.sender,
         messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-        body: JSON.stringify(response)
+        body: stringifyBRC100(response)
       },
       hostOverride ?? this.tokenHost
     )
@@ -395,7 +410,7 @@ export class PeerTokenClient extends MessageBoxClient {
       {
         recipient: request.sender,
         messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-        body: JSON.stringify(response)
+        body: stringifyBRC100(response)
       },
       hostOverride ?? this.tokenHost
     )
@@ -421,7 +436,7 @@ export class PeerTokenClient extends MessageBoxClient {
       {
         recipient: params.recipient,
         messageBox: TOKEN_REQUESTS_MESSAGEBOX,
-        body: JSON.stringify(body)
+        body: stringifyBRC100(body)
       },
       hostOverride ?? this.tokenHost
     )

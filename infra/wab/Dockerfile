@@ -29,8 +29,10 @@ FROM public.ecr.aws/docker/library/node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
-# that we don't need at runtime.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# that we don't need at runtime. The pinned base contains OpenSSL 3.5.7-r0;
+# retain the reviewed 3.5.8-r0 fix for CVE-2026-14456.
+RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 
@@ -43,6 +45,12 @@ COPY --from=builder --chown=root:root --chmod=0555 /app/dist ./dist
 # Copy production node_modules from the pruned builder (including the compiled
 # native bindings, but excluding compilers, test runners, and other dev tools).
 COPY --from=builder --chown=root:root --chmod=0555 /app/node_modules ./node_modules
+
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
 
 # Expose port
 EXPOSE 8080

@@ -15,6 +15,8 @@ Create `wab-secrets` through the cluster's secret-management path with:
 - `mysql-root-password`;
 - any enabled identity-provider credentials;
 - any optional faucet/storage private material.
+- `wab-admin-token` with at least 32 random characters when operator UMP
+  pinning and phone-association restoration are enabled.
 
 Do not commit Secret manifests or literal values. Non-secret database coordinates
 live in `wab-config`. Replace them when using a managed database and remove the
@@ -41,3 +43,9 @@ Back up the database and record the current schema and image digest before a
 rollout. Apply the database change first, wait for its probes, then update the WAB
 digest. Roll back to the prior digest only when its schema compatibility is
 verified; otherwise restore through the database recovery runbook.
+
+The support migration adds `users.umpTokenOutpoint`,
+`phone_change_sessions`, and `phone_change_history`. The preceding WAB binary
+ignores these additive objects, so an image rollback may retain the migrated
+schema. Do not run the down migration after any phone change: it deletes the
+only automated association-restore history.

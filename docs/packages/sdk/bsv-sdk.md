@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.4.0'
+version: '2.5.0'
 npm: '@bsv/sdk'
-last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -77,6 +77,20 @@ const broadcast = await tx.broadcast()
 - **Overlay integration** — `TopicBroadcaster`, `TopicListener`, `RemittanceProtocol`, `IdentityResolver`, `Registry`
 - **2FA** — `generateTOTP()`, `verifyTOTP()` for time-based one-time passwords
 
+## AuthFetch payment ancestry
+
+Recipients can include the optional `x-bsv-payment-known-txids` response
+header in a BRC-105 402 challenge to list transactions they already possess
+and have validated. `AuthFetch` forwards up to 256 unique lowercase IDs
+through the wallet's `createAction` options, including newly created payments
+after repricing. Compatible wallets can then omit those ancestors from payment
+BEEF. Values are comma-separated 64-character hexadecimal transaction IDs;
+whitespace, duplicates, and malformed entries are ignored. An absent or
+invalid-only header preserves existing payment behavior, so existing consumers
+require no migration. Browser services must expose the optional response header
+through their existing CORS policy to enable this optimization.
+The header is an optional SDK extension, not a standardized BRC-105 header.
+
 ## Common patterns
 
 ### Build a P2PKH transaction
@@ -141,6 +155,10 @@ console.log(publicKey, action.txid)
 ```
 
 `WalletClient` implements the BRC-100 method surface. It discovers a wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
+
+`CreateActionResult` can carry AtomicBEEF as either a historical `number[]` or
+a binary Wallet Wire `Uint8Array`. BRC-29 remittance accepts both and emits a
+portable `number[]` settlement artifact for JSON-safe transport.
 
 For advanced postMessage integrations, `XDM` defaults to the wildcard target
 origin so public apps, mobile webviews, and opaque origins can reach an embedded

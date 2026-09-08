@@ -1,5 +1,10 @@
 import { AdmittanceInstructions } from '@bsv/sdk'
 
+export interface TopicAdmittanceContext {
+  /** Validate protocol shape without creating provisional external state. */
+  dryRun?: boolean
+}
+
 /**
  * Defines a Topic Manager interface that can be implemented for specific use-cases
  */
@@ -13,18 +18,29 @@ export interface TopicManager {
     beef: number[],
     previousCoins: number[],
     offChainValues?: number[],
-    mode?: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv'
+    mode?: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv',
+    context?: TopicAdmittanceContext
   ) => Promise<AdmittanceInstructions>
+
+  /**
+   * Releases provisional state created while identifying admissible outputs
+   * when a current transaction cannot be broadcast. Implementations that keep
+   * validation read-only do not need this hook.
+   */
+  abortAdmissibleOutputs?: (beef: number[], outputsToAbort: number[]) => Promise<void> | void
 
   /**
    * Identifies and returns the inputs needed to anchor any topical outputs from this transaction to their associated previous history.
    * @throws - if there are no potentially valid topical outputs in this transaction
    */
-  identifyNeededInputs?: (beef: number[], offChainValues?: number[]) => Promise<Array<{ txid: string, outputIndex: number }>>
+  identifyNeededInputs?: (
+    beef: number[],
+    offChainValues?: number[]
+  ) => Promise<Array<{ txid: string; outputIndex: number }>>
 
   /**
-  * Returns a Markdown-formatted documentation string for the topic manager.
-  */
+   * Returns a Markdown-formatted documentation string for the topic manager.
+   */
   getDocumentation: () => Promise<string>
 
   /**

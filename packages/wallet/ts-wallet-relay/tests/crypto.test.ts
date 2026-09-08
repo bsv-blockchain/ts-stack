@@ -8,6 +8,25 @@ function makeWallet() {
   return new ProtoWallet(PrivateKey.fromRandom())
 }
 
+function withHistoricalJsonBytes(wallet: ProtoWallet): ProtoWallet {
+  return new Proxy(wallet, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target)
+      if (property === 'encrypt' || property === 'decrypt') {
+        return async (...args: unknown[]) => {
+          const result = await value.apply(target, args)
+          const field = property === 'encrypt' ? 'ciphertext' : 'plaintext'
+          return {
+            ...result,
+            [field]: JSON.parse(JSON.stringify(new Uint8Array(result[field])))
+          }
+        }
+      }
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+}
+
 async function identityKey(wallet: ProtoWallet): Promise<string> {
   const { publicKey } = await wallet.getPublicKey({ identityKey: true })
   return publicKey
@@ -74,6 +93,26 @@ describe('encryptEnvelope / decryptEnvelope', () => {
     )
 
     expect(recovered).toBe(rpcRequest)
+  })
+
+  it('accepts ciphertext and plaintext bytes mangled by historical JSON wallet bridges', async () => {
+    const mobile = makeWallet()
+    const backend = makeWallet()
+    const mobilePub = await identityKey(mobile)
+    const backendPub = await identityKey(backend)
+
+    const ciphertext = await encryptEnvelope(
+      withHistoricalJsonBytes(mobile),
+      { protocolID: PROTOCOL_ID, keyID: SESSION_ID, counterparty: backendPub },
+      'historical bridge payload'
+    )
+    const recovered = await decryptEnvelope(
+      withHistoricalJsonBytes(backend),
+      { protocolID: PROTOCOL_ID, keyID: SESSION_ID, counterparty: mobilePub },
+      ciphertext
+    )
+
+    expect(recovered).toBe('historical bridge payload')
   })
 
   it('ciphertext is base64url (no +, /, or = characters)', async () => {

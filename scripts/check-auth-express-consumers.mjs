@@ -111,7 +111,14 @@ async function pack(packageDirectory, temporaryDirectory) {
   return path.resolve(JSON.parse(stdout).filename)
 }
 
-async function verifyProfile(packageName, source, tarball, profile, temporaryDirectory) {
+async function verifyProfile(
+  packageName,
+  source,
+  tarball,
+  sdkTarball,
+  profile,
+  temporaryDirectory
+) {
   const consumerDirectory = path.join(
     temporaryDirectory,
     `express-${profile.express.split('.')[0]}-consumer`
@@ -137,7 +144,7 @@ async function verifyProfile(packageName, source, tarball, profile, temporaryDir
       '--no-fund',
       '--package-lock=false',
       tarball,
-      '@bsv/sdk@^2.1.6',
+      sdkTarball,
       `express@${profile.express}`,
       `@types/express@${profile.types}`,
       'typescript@5.9.3'
@@ -174,8 +181,16 @@ const packageDirectory = path.join(repositoryRoot, contract.relativeDirectory)
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'auth-express-consumers-'))
 try {
   const tarball = await pack(packageDirectory, temporaryDirectory)
+  const sdkTarball = await pack(path.join(repositoryRoot, 'packages/sdk'), temporaryDirectory)
   for (const profile of profiles) {
-    await verifyProfile(packageName, contract.source, tarball, profile, temporaryDirectory)
+    await verifyProfile(
+      packageName,
+      contract.source,
+      tarball,
+      sdkTarball,
+      profile,
+      temporaryDirectory
+    )
   }
   console.log(`Verified ${packageName} clean TypeScript consumers on Express 4 and 5.`)
 } finally {

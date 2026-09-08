@@ -171,6 +171,46 @@ describe('SyncState class method tests', () => {
     expect(result.inserts).toBe(0)
   })
 
+  test('5_uses_the_supplied_transaction_for_the_sync_checkpoint', async () => {
+    const syncState = new EntitySyncState()
+    syncState.id = 123
+    syncState.userId = 1
+    syncState.storageIdentityKey = 'fromKey'
+    const trx = { test: 'sync-transaction' } as sdk.TrxToken
+    const updateSyncState = jest.fn(async () => 1)
+    const writer = { updateSyncState } as unknown as EntityStorage
+    const chunk: sdk.SyncChunk = {
+      fromStorageIdentityKey: 'fromKey',
+      toStorageIdentityKey: 'toKey',
+      userIdentityKey: 'testIdentityKey',
+      provenTxs: [],
+      provenTxReqs: [],
+      outputBaskets: [],
+      txLabels: [],
+      outputTags: [],
+      transactions: [],
+      txLabelMaps: [],
+      commissions: [],
+      outputs: [],
+      outputTagMaps: [],
+      certificates: [],
+      certificateFields: []
+    }
+    const args: sdk.RequestSyncChunkArgs = {
+      identityKey: 'testIdentityKey',
+      maxRoughSize: 20_000_000,
+      maxItems: 1000,
+      offsets: [],
+      since: undefined,
+      fromStorageIdentityKey: 'fromKey',
+      toStorageIdentityKey: 'toKey'
+    }
+
+    await syncState.processSyncChunk(writer, args, chunk, trx)
+
+    expect(updateSyncState).toHaveBeenCalledWith(123, expect.any(Object), trx)
+  })
+
   // Test: equals method always returns false
   test('6_equals_method_always_returns_false', () => {
     const syncState = new EntitySyncState()

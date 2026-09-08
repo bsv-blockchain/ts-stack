@@ -1,18 +1,28 @@
-import { AdmissionMode, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
+import {
+  AdmissionMode,
+  LookupService,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
 import { PushDrop, Utils } from '@bsv/sdk'
 import { UMPRecord, UTXOReference } from './types.js'
 import { Db, Collection } from 'mongodb'
+import { MongoUMPIdentityStore, UMPIdentityReservationStore } from './UMPIdentityStore.js'
 
 class UMPLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
   records: Collection<UMPRecord>
 
-  constructor (db: Db) {
+  constructor(
+    db: Db,
+    readonly identityStore: UMPIdentityReservationStore = new MongoUMPIdentityStore(db)
+  ) {
     this.records = db.collection<UMPRecord>('ump')
   }
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic) {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic) {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_users') return
@@ -24,7 +34,8 @@ class UMPLookupService implements LookupService {
     const recoveryHash = Utils.toHex(protocolFields[7])
 
     const hasV3AtIndex11 = protocolFields.length >= 12 && protocolFields[11]?.length === 1
-    const hasV3AtIndex12 = !hasV3AtIndex11 && protocolFields.length >= 13 && protocolFields[12]?.length === 1
+    const hasV3AtIndex12 =
+      !hasV3AtIndex11 && protocolFields.length >= 13 && protocolFields[12]?.length === 1
     const hasV3Candidate = hasV3AtIndex11 || hasV3AtIndex12
     const v3VersionIndex = hasV3AtIndex12 ? 12 : 11
 
@@ -47,21 +58,24 @@ class UMPLookupService implements LookupService {
       }
     }
 
-    await this.records.insertOne(record)
+    await this.records.updateOne({ txid, outputIndex }, { $set: record }, { upsert: true })
+    await this.identityStore.confirm(`${txid}.${outputIndex}`)
   }
 
-  async outputSpent (payload: OutputSpent) {
+  async outputSpent(payload: OutputSpent) {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_users') return
     await this.records.deleteOne({ txid, outputIndex })
+    await this.identityStore.release(`${txid}.${outputIndex}`)
   }
 
-  async outputEvicted (txid: string, outputIndex: number) {
+  async outputEvicted(txid: string, outputIndex: number) {
     await this.records.deleteOne({ txid, outputIndex })
+    await this.identityStore.release(`${txid}.${outputIndex}`)
   }
 
-  async lookup ({ query }: any): Promise<UTXOReference[]> {
+  async lookup({ query }: any): Promise<UTXOReference[]> {
     if (!query) throw new Error('Lookup must include a valid query!')
 
     let filter: Record<string, any>
@@ -76,17 +90,18 @@ class UMPLookupService implements LookupService {
       throw new Error('Query parameters must include presentationHash, recoveryHash, or outpoint!')
     }
 
-    const doc = await this.records.findOne(filter, { sort: { _id: -1 } })
-
-    if (!doc) return []
-    return [{ txid: doc.txid, outputIndex: doc.outputIndex }]
+    // Legacy ambiguous hashes can have more rows than the bounded response.
+    // Prefer the most recently indexed candidates so the live lineage tip is
+    // not permanently hidden behind the oldest 100 records.
+    const docs = await this.records.find(filter).sort({ _id: -1 }).limit(100).toArray()
+    return docs.map(doc => ({ txid: doc.txid, outputIndex: doc.outputIndex }))
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint.'
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -100,5 +115,7 @@ class UMPLookupService implements LookupService {
   }
 }
 
-function create (db: Db): UMPLookupService { return new UMPLookupService(db) }
+function create(db: Db, identityStore?: UMPIdentityReservationStore): UMPLookupService {
+  return new UMPLookupService(db, identityStore)
+}
 export default create

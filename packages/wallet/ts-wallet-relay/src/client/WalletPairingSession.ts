@@ -1,4 +1,4 @@
-import type { WalletProtocol } from '@bsv/sdk'
+import { normalizeBRC100WalletByteFields, stringifyBRC100, type WalletProtocol } from '@bsv/sdk'
 import type {
   WalletLike,
   PairingParams,
@@ -243,7 +243,7 @@ export class WalletPairingSession {
 
     ws.onopen = async () => {
       try {
-        const payload = JSON.stringify({
+        const payload = stringifyBRC100({
           id: crypto.randomUUID(),
           seq: this._lastSeq + 1,
           method: 'pairing_approved',
@@ -255,7 +255,7 @@ export class WalletPairingSession {
         })
         const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, payload)
         const envelope: WireEnvelope = { topic, mobileIdentityKey: publicKey, ciphertext }
-        ws.send(JSON.stringify(envelope))
+        ws.send(stringifyBRC100(envelope))
       } catch (err) {
         this.emitError(err instanceof Error ? err.message : 'Failed to send pairing message')
       }
@@ -339,6 +339,7 @@ export class WalletPairingSession {
 
   private async handleRpc(request: RpcRequest): Promise<void> {
     const { topic, backendIdentityKey } = this.params
+    normalizeBRC100WalletByteFields(request.params)
     const cryptoParams: CryptoParams = {
       protocolID: this.protocolID,
       keyID: topic,
@@ -346,8 +347,8 @@ export class WalletPairingSession {
     }
 
     const sendResponse = async (response: RpcResponse): Promise<void> => {
-      const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, JSON.stringify(response))
-      this.ws?.send(JSON.stringify({ topic, ciphertext } satisfies WireEnvelope))
+      const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, stringifyBRC100(response))
+      this.ws?.send(stringifyBRC100({ topic, ciphertext } satisfies WireEnvelope))
     }
 
     // Unknown method — reject immediately without showing approval UI

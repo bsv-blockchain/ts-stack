@@ -1,3 +1,4 @@
+// Implements BIP 39 with modified bsv 1.5.6 lineage; see ../../THIRD_PARTY_NOTICES.md.
 import { wordList } from './bip-39-wordlist-en.js'
 import { encode, toArray, Reader, Writer } from '../primitives/utils.js'
 import * as Hash from '../primitives/Hash.js'

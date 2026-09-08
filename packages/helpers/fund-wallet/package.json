@@ -1,7 +1,7 @@
 {
   "name": "@bsv/fund-wallet",
   "private": false,
-  "version": "1.4.3",
+  "version": "1.4.4",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -15,7 +15,7 @@
     "transactions"
   ],
   "license": "SEE LICENSE IN LICENSE.txt",
-  "author": "deggen",
+  "author": "BSV Association",
   "type": "module",
   "bin": {
     "fund-metanet": "./dist/index.mjs"
@@ -55,7 +55,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "repository": {
     "type": "git",

@@ -734,6 +734,16 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
     const result = await (authFetch as any).normalizeBodyToNumberArray(obj)
     expect(result.length).toBeGreaterThan(0)
   })
+
+  it('preserves nested wallet bytes in authenticated JSON request bodies', async () => {
+    const result = await (authFetch as any).normalizeBodyToNumberArray({
+      signableTransaction: { tx: new Uint8Array([1, 2, 3]) }
+    })
+
+    expect(JSON.parse(Utils.toUTF8(result))).toEqual({
+      signableTransaction: { tx: [1, 2, 3] }
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

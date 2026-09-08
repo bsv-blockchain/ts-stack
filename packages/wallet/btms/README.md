@@ -33,6 +33,11 @@ Node.js 22 or newer is required. The package provides typed ESM and CommonJS
 entry points. Browser applications should bundle the ESM entry point and
 provide a compatible wallet implementation.
 
+BTMS normalizes transaction bundles at its messaging boundary. Historical
+`number[]`, current Wallet Wire `Uint8Array`, and already-persisted numeric-key
+JSON representations interoperate; invalid or sparse BEEF is rejected before
+adapter, overlay, or wallet processing.
+
 ## Quick Start
 
 ```typescript

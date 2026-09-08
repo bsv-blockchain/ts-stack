@@ -21,6 +21,7 @@ import type { CommsLayer } from './CommsLayer.js'
 import type { IdentityLayer } from './IdentityLayer.js'
 import type { RemittanceModule } from './RemittanceModule.js'
 import { OriginatorDomainNameStringUnder250Bytes, PubKeyHex, WalletInterface } from '../wallet/Wallet.interfaces.js'
+import { stringifyBRC100 } from '../wallet/BRC100ByteEncoding.js'
 import { toBase64, toSafeString } from '../primitives/utils.js'
 import Random from '../primitives/Random.js'
 
@@ -942,7 +943,7 @@ export class RemittanceManager {
   }
 
   private async sendEnvelope (recipient: PubKeyHex, env: RemittanceEnvelope, hostOverride?: string): Promise<string> {
-    const body = JSON.stringify(env)
+    const body = stringifyBRC100(env)
 
     // Prefer live if available.
     if (typeof this.comms.sendLiveMessage === 'function') {
