@@ -712,7 +712,67 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       .collection<IdDocument>(MongoCollectionNames.payloads)
       .findOne({ _id: this.payloadId(ref), state: 'ready' }, context.options())
     if (payload === null) rejectAdmission('payload-not-ready')
-    await this.pin(context, ref, 'basm-job', decision.topic, 'history-update')
+    await this.replaceHistoryPin(
+      context,
+      decision.topic,
+      decision.expectedHistory.topicHistoryGeneration,
+      next,
+      ref
+    )
+  }
+
+  private historyUpdateSlot(generation: string): string {
+    return `history-update:${generation}`
+  }
+
+  private async replaceHistoryPin(
+    context: MongoTransactionContext,
+    topic: string,
+    previousGeneration: string,
+    nextGeneration: string,
+    ref: AdmissionPayloadRef
+  ): Promise<void> {
+    const previousSlot = this.historyUpdateSlot(previousGeneration)
+    const previous = await this.db
+      .collection<IdDocument>(MongoCollectionNames.payloadReferences)
+      .findOne(
+        {
+          network: this.scope.network,
+          genesisHash: this.scope.genesisHash,
+          nodeId: this.scope.nodeId,
+          ownerKind: 'basm-job',
+          ownerId: topic,
+          slot: previousSlot
+        },
+        context.options()
+      )
+    if (previous !== null) {
+      const previousPayload = await this.db
+        .collection<IdDocument>(MongoCollectionNames.payloads)
+        .findOne({ _id: String(previous.payloadId) }, context.options())
+      if (
+        previousPayload !== null &&
+        isPayloadKind(String(previousPayload.kind)) &&
+        typeof previousPayload.digest === 'string'
+      ) {
+        const options = context.options()
+        await this.payloads.releaseReference(
+          options.session,
+          {
+            scope: this.scope,
+            payload: {
+              kind: previousPayload.kind as MongoPayloadKind,
+              digest: previousPayload.digest
+            },
+            ownerKind: 'basm-job',
+            ownerId: topic,
+            slot: previousSlot
+          },
+          { timeoutMS: options.timeoutMS, signal: context.signal }
+        )
+      }
+    }
+    await this.pin(context, ref, 'basm-job', topic, this.historyUpdateSlot(nextGeneration))
   }
 
   private async applyHandoff(

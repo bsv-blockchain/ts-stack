@@ -207,7 +207,7 @@ export class MongoAdmissionHarness implements AdmissionStorageContractHarness {
       .collection(MongoCollectionNames.propagationOutbox)
       .find()
       .toArray()
-    const historyRefs = refs.filter(item => item.slot === 'history-update')
+    const historyRefs = refs.filter(item => String(item.slot).startsWith('history-update'))
     const historyUpdates = []
     for (const reference of historyRefs) {
       const payload = payloads.find(item => item._id === reference.payloadId)

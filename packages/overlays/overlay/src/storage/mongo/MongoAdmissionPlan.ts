@@ -72,46 +72,37 @@ export const admissionPlanPayloads = (plan: AdmissionCommit): AdmissionPayloadRe
   return references
 }
 
-const steakAdmittedIndexes = (plan: AdmissionCommit, topic: string): number[] | undefined => {
-  let steak: unknown
-  try {
-    steak = JSON.parse(plan.steak)
-  } catch {
-    return undefined
-  }
-  if (typeof steak !== 'object' || steak === null || Array.isArray(steak)) return undefined
-  const record = steak as Record<string, unknown>
-  if (Object.keys(record).length !== plan.decisions.length) return undefined
-  const entry = record[topic]
-  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return undefined
+const isSteakEntry = (entry: unknown): entry is { outputsToAdmit: number[] } => {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false
   const result = entry as Record<string, unknown>
-  if (!Array.isArray(result.outputsToAdmit)) return undefined
-  if (result.coinsToRetain !== undefined && !Array.isArray(result.coinsToRetain)) return undefined
-  if (result.coinsRemoved !== undefined && !Array.isArray(result.coinsRemoved)) return undefined
-  if (
-    result.outputsToAdmit.some(
-      value =>
-        typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 4294967295
-    )
-  ) {
-    return undefined
-  }
-  return result.outputsToAdmit as number[]
+  if (!Array.isArray(result.outputsToAdmit)) return false
+  if (result.coinsToRetain !== undefined && !Array.isArray(result.coinsToRetain)) return false
+  if (result.coinsRemoved !== undefined && !Array.isArray(result.coinsRemoved)) return false
+  return !result.outputsToAdmit.some(
+    value =>
+      typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 4294967295
+  )
 }
 
 export const isBoundSteak = (plan: AdmissionCommit): boolean => {
   if (typeof plan.steak !== 'string' || !plan.steak.isWellFormed()) return false
+  let steak: unknown
   try {
-    JSON.parse(plan.steak)
+    steak = JSON.parse(plan.steak)
   } catch {
     return false
   }
+  if (typeof steak !== 'object' || steak === null || Array.isArray(steak)) return false
+  const record = steak as Record<string, unknown>
+  for (const entry of Object.values(record)) {
+    if (!isSteakEntry(entry)) return false
+  }
   return plan.decisions.every(decision => {
-    const admitted = steakAdmittedIndexes(plan, decision.topic)
-    if (admitted === undefined) return false
+    const entry = record[decision.topic]
+    if (!isSteakEntry(entry)) return false
     try {
       const expected = decision.outputs.map(output => parseStorageOutputIndex(output.outputIndex))
-      return JSON.stringify(admitted) === JSON.stringify(expected)
+      return JSON.stringify(entry.outputsToAdmit) === JSON.stringify(expected)
     } catch {
       return false
     }

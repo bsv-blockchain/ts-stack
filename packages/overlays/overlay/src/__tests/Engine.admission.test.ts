@@ -202,4 +202,38 @@ describe('Engine admission submit', () => {
     })
     expect(order).toEqual(['commit', 'callback'])
   })
+
+  test('keeps failed-topic STEAK keys and attaches merkle applied metadata', async () => {
+    const rejectManager: TopicManager = {
+      identifyAdmissibleOutputs: jest.fn(async () => {
+        throw new Error('topic rejected')
+      }),
+      getDocumentation: async () => 'docs',
+      getMetaData: async () => ({ name: 'Reject', shortDescription: 'Reject' })
+    }
+    const proven = exampleTX.inputs[0].sourceTransaction
+    if (proven === undefined || proven.merklePath === undefined) {
+      throw new Error('expected the BEEF ancestor to carry a merkle path')
+    }
+    const engine = new Engine(
+      { Hello: mockTopicManager, Reject: rejectManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    engine.logger = { ...console, error: jest.fn() }
+    const steak = await engine.submit({
+      beef: proven.toBEEF(),
+      topics: ['Hello', 'Reject']
+    })
+    expect(Object.keys(steak).sort()).toEqual(['Hello', 'Reject'])
+    expect(steak.Hello.outputsToAdmit).toEqual([0])
+    expect(steak.Reject.outputsToAdmit).toEqual([])
+    const plan = commitAdmission.mock.calls[0][0] as AdmissionCommit
+    expect(JSON.parse(plan.steak)).toEqual(steak)
+    expect(plan.decisions).toHaveLength(1)
+    expect(plan.decisions[0].applied.proof?.kind).toBe('merkle-path')
+    expect(plan.decisions[0].applied.firstSeenHeight).toBe('800000')
+    expect(plan.decisions[0].applied.block).toBeUndefined()
+  })
 })

@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto'
 import type { Db, Document } from 'mongodb'
+import { MerklePath, Transaction } from '@bsv/sdk'
 import type { Output } from '../../Output.js'
 import type { AppliedTransaction, Storage } from '../Storage.js'
-import type { AdmissionPayloadRef, HistoryFence, StorageScope } from '../AdmissionStorage.js'
+import {
+  parseStorageOutputIndex,
+  parseStorageUint64,
+  type AdmissionPayloadRef,
+  type HistoryFence,
+  type StorageScope
+} from '../AdmissionStorage.js'
 import {
   MongoAdmissionStorage,
   type MongoAdmissionStorageOptions
@@ -13,6 +20,7 @@ import {
   decodeMongoUint64,
   encodeMongoOutputIndex,
   encodeMongoUint64,
+  mongoChainKey,
   mongoNodeKey,
   mongoRecordKey
 } from './MongoSchema.js'
@@ -127,13 +135,41 @@ export class MongoOverlayStorage implements Storage {
       },
       { upsert: true, writeConcern: { w: 'majority', j: true } }
     )
+    if (utxo.beef !== undefined) await this.persistTransactionBeef(utxo.txid, utxo.beef)
+  }
+
+  private async persistTransactionBeef(txid: string, beef: number[]): Promise<void> {
+    const tx = Transaction.fromBEEF(beef)
+    const published = await this.publishAdmissionPayload({
+      kind: 'raw-transaction',
+      bytes: Buffer.from(tx.toBinary()),
+      txid
+    })
+    const now = new Date()
+    const id = mongoRecordKey(mongoChainKey(this.admissionScope), 'transaction', txid)
+    await this.db.collection<IdDocument>(MongoCollectionNames.transactions).updateOne(
+      { _id: id },
+      {
+        $setOnInsert: {
+          _id: id,
+          schemaVersion: 1,
+          network: this.admissionScope.network,
+          genesisHash: this.admissionScope.genesisHash,
+          txid,
+          createdAt: now
+        },
+        $set: { rawPayloadId: this.admission.payloadId(published), updatedAt: now }
+      },
+      { upsert: true, writeConcern: { w: 'majority', j: true } }
+    )
   }
 
   async findOutput(
     txid: string,
     outputIndex: number,
     topic?: string,
-    spent?: boolean
+    spent?: boolean,
+    includeBEEF = false
   ): Promise<Output | null> {
     const filter: Record<string, unknown> = {
       network: this.admissionScope.network,
@@ -152,10 +188,10 @@ export class MongoOverlayStorage implements Storage {
         readPreference: 'primary'
       })
     if (document === null) return null
-    return this.toOutput(document)
+    return await this.toOutput(document, includeBEEF)
   }
 
-  async findOutputsForTransaction(txid: string): Promise<Output[]> {
+  async findOutputsForTransaction(txid: string, includeBEEF = false): Promise<Output[]> {
     const documents = await this.db
       .collection<IdDocument>(MongoCollectionNames.outputs)
       .find({
@@ -165,10 +201,17 @@ export class MongoOverlayStorage implements Storage {
         txid
       })
       .toArray()
-    return documents.map(document => this.toOutput(document))
+    return await Promise.all(
+      documents.map(async document => await this.toOutput(document, includeBEEF))
+    )
   }
 
-  async findUTXOsForTopic(topic: string, since?: number, limit?: number): Promise<Output[]> {
+  async findUTXOsForTopic(
+    topic: string,
+    since?: number,
+    limit?: number,
+    includeBEEF = false
+  ): Promise<Output[]> {
     const filter: Record<string, unknown> = {
       network: this.admissionScope.network,
       genesisHash: this.admissionScope.genesisHash,
@@ -182,7 +225,9 @@ export class MongoOverlayStorage implements Storage {
       .find(filter)
       .sort({ score: 1, _id: 1 })
     if (limit !== undefined && limit > 0) query = query.limit(limit)
-    return (await query.toArray()).map(document => this.toOutput(document))
+    return await Promise.all(
+      (await query.toArray()).map(async document => await this.toOutput(document, includeBEEF))
+    )
   }
 
   async deleteOutput(txid: string, outputIndex: number, topic: string): Promise<void> {
@@ -335,17 +380,112 @@ export class MongoOverlayStorage implements Storage {
     )
   }
 
-  private toOutput(document: Record<string, unknown>): Output {
-    return {
+  private toSafeNumber(value: string, label: string): number {
+    const parsed = parseStorageUint64(value)
+    if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`Mongo ${label} exceeds a safe JavaScript integer`)
+    }
+    return Number(parsed)
+  }
+
+  private async toOutput(document: Record<string, unknown>, includeBEEF: boolean): Promise<Output> {
+    const output: Output = {
       txid: document.txid as string,
-      outputIndex: Number(document.outputIndex),
-      outputScript: [],
-      satoshis: Number(decodeMongoUint64(document.satoshis as string)),
+      outputIndex: parseStorageOutputIndex(String(document.outputIndex)),
+      outputScript: await this.readScript(document),
+      satoshis: this.toSafeNumber(decodeMongoUint64(document.satoshis as string), 'satoshis'),
       topic: document.topic as string,
       spent: document.state === 'spent',
       outputsConsumed: [],
       consumedBy: [],
-      score: Number(decodeMongoUint64(document.score as string))
+      score: this.toSafeNumber(decodeMongoUint64(document.score as string), 'score')
     }
+    if (includeBEEF) {
+      const beef = await this.readBeef(output.txid)
+      if (beef !== undefined) output.beef = beef
+    }
+    return output
+  }
+
+  private async readScript(document: Record<string, unknown>): Promise<number[]> {
+    const payloadId = document.scriptPayloadId
+    if (typeof payloadId !== 'string') return []
+    const payload = await this.db.collection<IdDocument>(MongoCollectionNames.payloads).findOne({
+      _id: payloadId,
+      state: 'ready'
+    })
+    if (
+      payload === null ||
+      typeof payload.kind !== 'string' ||
+      typeof payload.digest !== 'string' ||
+      !isPayloadKind(payload.kind)
+    ) {
+      throw new Error('Mongo output script payload is not ready')
+    }
+    const bytes = await this.payloads.read(
+      { kind: payload.kind, digest: payload.digest },
+      {
+        offset: decodeMongoUint64(document.scriptOffset as string),
+        byteLength: decodeMongoUint64(document.scriptByteLength as string)
+      }
+    )
+    return Array.from(bytes)
+  }
+
+  private async readBeef(txid: string): Promise<number[] | undefined> {
+    const transaction = await this.db
+      .collection<IdDocument>(MongoCollectionNames.transactions)
+      .findOne({
+        network: this.admissionScope.network,
+        genesisHash: this.admissionScope.genesisHash,
+        txid
+      })
+    const rawPayloadId = transaction?.rawPayloadId
+    if (typeof rawPayloadId !== 'string') return undefined
+    const rawPayload = await this.db.collection<IdDocument>(MongoCollectionNames.payloads).findOne({
+      _id: rawPayloadId,
+      state: 'ready'
+    })
+    if (
+      rawPayload === null ||
+      typeof rawPayload.kind !== 'string' ||
+      typeof rawPayload.digest !== 'string' ||
+      !isPayloadKind(rawPayload.kind)
+    ) {
+      return undefined
+    }
+    const raw = await this.payloads.read({ kind: rawPayload.kind, digest: rawPayload.digest })
+    const tx = Transaction.fromBinary(Array.from(raw))
+    const merkle = await this.db
+      .collection<IdDocument>(MongoCollectionNames.payloadReferences)
+      .findOne({
+        network: this.admissionScope.network,
+        genesisHash: this.admissionScope.genesisHash,
+        nodeId: this.admissionScope.nodeId,
+        ownerKind: 'transaction',
+        ownerId: txid,
+        slot: { $regex: '^merkle-path:' }
+      })
+    if (merkle !== null && typeof merkle.payloadId === 'string') {
+      const merklePayload = await this.db
+        .collection<IdDocument>(MongoCollectionNames.payloads)
+        .findOne({
+          _id: merkle.payloadId,
+          state: 'ready'
+        })
+      if (
+        merklePayload !== null &&
+        typeof merklePayload.kind === 'string' &&
+        typeof merklePayload.digest === 'string' &&
+        isPayloadKind(merklePayload.kind)
+      ) {
+        const path = await this.payloads.read({
+          kind: merklePayload.kind,
+          digest: merklePayload.digest
+        })
+        tx.merklePath = MerklePath.fromBinary(Array.from(path))
+      }
+    }
+    return tx.merklePath === undefined ? tx.toBEEF() : tx.toAtomicBEEF()
   }
 }

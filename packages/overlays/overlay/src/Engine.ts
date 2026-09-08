@@ -1133,6 +1133,7 @@ export class Engine {
         this.advertiser !== undefined &&
         mode !== 'historical-tx' &&
         mode !== 'historical-tx-no-spv'
+      const applied = await this.buildAppliedTransactionRecord(tx)
       const buildPlan = async () =>
         await buildOverlayAdmissionPlan({
           host: admissionHost,
@@ -1145,7 +1146,8 @@ export class Engine {
           validations,
           failedTopics,
           lookupServices: this.lookupServices,
-          includePropagation
+          includePropagation,
+          applied
         })
       const committed = await waitForAdmissionReceipt(
         admissionHost.admission,

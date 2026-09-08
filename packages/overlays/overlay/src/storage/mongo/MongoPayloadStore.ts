@@ -186,6 +186,29 @@ export class MongoPayloadStore {
     })
   }
 
+  public async read(
+    payload: Pick<MongoPayloadRef, 'kind' | 'digest'>,
+    range?: { offset: string; byteLength: string }
+  ): Promise<Uint8Array> {
+    const payloadId = this.payloadId(this.scope, payload)
+    const record = await this.db
+      .collection<PayloadDocument>(MongoCollectionNames.payloads)
+      .findOne({
+        _id: payloadId,
+        state: 'ready'
+      })
+    if (record === null) throw new Error('Mongo payload is not ready')
+    const total = BigInt(decodeMongoUint64(record.byteLength))
+    const offset = range === undefined ? BigInt(0) : BigInt(range.offset)
+    const length = range === undefined ? total : BigInt(range.byteLength)
+    if (offset < BigInt(0) || length < BigInt(0) || offset + length > total)
+      throw new Error('Mongo payload range is invalid')
+    if (offset + length > BigInt(Number.MAX_SAFE_INTEGER))
+      throw new Error('Mongo payload range exceeds safe integer')
+    const bytes = await this.readBytes(record)
+    return bytes.subarray(Number(offset), Number(offset + length))
+  }
+
   public async publish(input: MongoPayloadInput): Promise<MongoPayloadRef> {
     input = { ...input }
     this.validateInput(input)
@@ -744,6 +767,28 @@ export class MongoPayloadStore {
       ...(fencingToken === undefined ? {} : { 'metadata.fencingToken': fencingToken })
     })
     if (file !== null) await this.bucket.delete(fileId).catch(() => undefined)
+  }
+
+  private async readBytes(record: PayloadDocument): Promise<Buffer> {
+    if (record.inlineData !== undefined) return Buffer.from(record.inlineData.buffer)
+    if (record.fileId === undefined) throw new Error('Mongo ready payload has no bytes')
+    const chunks: Buffer[] = []
+    const download = this.bucket.openDownloadStream(record.fileId)
+    const iterator = download[Symbol.asyncIterator]()
+    try {
+      while (true) {
+        const next = await iterator.next()
+        if (next.done) break
+        const chunk = next.value
+        if (!(chunk instanceof Uint8Array))
+          throw new Error('Mongo GridFS returned a non-byte chunk')
+        chunks.push(Buffer.from(chunk))
+      }
+    } catch (error) {
+      download.destroy(error instanceof Error ? error : new Error('Mongo payload read failed'))
+      throw error
+    }
+    return Buffer.concat(chunks)
   }
 
   private async verifyGridFs(

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { STEAK, Transaction } from '@bsv/sdk'
+import { extractMerkleProofMetadata } from './BASM.js'
 import {
   admissionSemanticDigest,
   getAdmissionStorage,
@@ -118,6 +119,13 @@ export async function buildOverlayAdmissionPlan(input: {
   failedTopics: Set<string>
   lookupServices: { [key: string]: LookupService }
   includePropagation: boolean
+  applied?: {
+    firstSeenHeight?: number
+    blockHeight?: number
+    blockHash?: string
+    blockIndex?: number
+    merkleRoot?: string
+  }
 }): Promise<AdmissionCommit> {
   const accepted = input.validations.filter(
     validation =>
@@ -146,13 +154,25 @@ export async function buildOverlayAdmissionPlan(input: {
     input.txid
   )
   const payloads: AdmissionPayloadRef[] = [raw]
+  let proof: AdmissionPayloadRef | undefined
   if (input.tx.merklePath !== undefined) {
-    payloads.push(
-      await localPayload(input.host, 'merkle-path', Buffer.from(input.tx.merklePath.toBinary()))
+    proof = await localPayload(
+      input.host,
+      'merkle-path',
+      Buffer.from(input.tx.merklePath.toBinary())
     )
+    payloads.push(proof)
   }
+  const merkle = extractMerkleProofMetadata(input.txid, input.tx.merklePath)
   const decisions: AdmissionTopicDecision[] = []
   const steak: STEAK = {}
+  for (const validation of input.validations) {
+    steak[validation.topic] = {
+      outputsToAdmit: validation.admissibleOutputs.outputsToAdmit,
+      coinsToRetain: validation.admissibleOutputs.coinsToRetain,
+      coinsRemoved: validation.admissibleOutputs.coinsRemoved ?? []
+    }
+  }
   for (const validation of accepted) {
     const { outputsConsumed, outputsToMarkStale } = classifyCoins(input.tx, validation)
     const fence =
@@ -201,7 +221,7 @@ export async function buildOverlayAdmissionPlan(input: {
           consumer: { txid: output.txid, outputIndex: output.outputIndex }
         }))
       ),
-      applied: { txid: input.txid }
+      applied: appliedRecord(input, proof, merkle)
     })
     steak[validation.topic] = {
       outputsToAdmit: validation.admissibleOutputs.outputsToAdmit,
@@ -270,6 +290,44 @@ export async function waitForAdmissionReceipt(
     }
   }
   throw new Error('Overlay admission commit is pending')
+}
+
+function appliedRecord(
+  input: {
+    txid: string
+    applied?: {
+      firstSeenHeight?: number
+      blockHeight?: number
+      blockHash?: string
+      blockIndex?: number
+      merkleRoot?: string
+    }
+  },
+  proof: AdmissionPayloadRef | undefined,
+  merkle: ReturnType<typeof extractMerkleProofMetadata>
+): AdmissionTopicDecision['applied'] {
+  const applied: AdmissionTopicDecision['applied'] = { txid: input.txid }
+  const firstSeen = input.applied?.firstSeenHeight ?? merkle?.blockHeight
+  if (firstSeen !== undefined) applied.firstSeenHeight = String(firstSeen)
+  if (proof !== undefined) applied.proof = proof
+  const blockHash = input.applied?.blockHash
+  const height = input.applied?.blockHeight ?? merkle?.blockHeight
+  const index = input.applied?.blockIndex ?? merkle?.blockIndex
+  const merkleRoot = input.applied?.merkleRoot ?? merkle?.merkleRoot
+  if (
+    blockHash !== undefined &&
+    height !== undefined &&
+    index !== undefined &&
+    merkleRoot !== undefined
+  ) {
+    applied.block = {
+      height: String(height),
+      hash: blockHash,
+      index: String(index),
+      merkleRoot
+    }
+  }
+  return applied
 }
 
 function uniquePayloads(payloads: AdmissionPayloadRef[]): AdmissionPayloadRef[] {
