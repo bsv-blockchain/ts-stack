@@ -1,3 +1,5 @@
+import { parseJsonRpc } from '../BinaryJson'
+import { validateSyncChunkEntities } from '../entityValidationHelpers'
 import { type Request, type Response } from 'express'
 import { TelemetryEvent, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletLogger } from '../../../WalletLogger'
@@ -137,6 +139,26 @@ describe('StorageServer JSON-RPC boundary', () => {
       id: 1
     })
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('trace-id'))
+  })
+
+  test.each([false, true])('encodes only declared sync bytes when binary is negotiated: %s', async binary => {
+    const bytes = Array.from({ length: 2048 }, (_, i) => i % 256)
+    const now = new Date()
+    const chunk = { ...emptyChunk, provenTxs: [{ provenTxId: 1, created_at: now, updated_at: now,
+      txid: '00'.repeat(32), rawTx: bytes, merklePath: bytes, height: 1, index: 0,
+      merkleRoot: '00'.repeat(32), blockHash: '00'.repeat(32), extraNumbers: bytes }] }
+    const server = makeServer({ getSyncChunk: async () => chunk })
+    const captured = makeResponse()
+    await invoke(server, 'handleRpcRequest', makeRequest({ jsonrpc: '2.0', method: 'getSyncChunk',
+      params: [{ identityKey: 'alice', maxItems: 10, maxRoughSize: 100000 }], id: 1
+    }, binary ? { [BINARY_ENCODING_HEADER]: BINARY_ENCODING } : {}), captured.response)
+    expect(captured.statusCode).toBe(200)
+    const wire = JSON.stringify(captured.body)
+    if (binary) expect(captured.body.result.provenTxs[0].rawTx.$bsvBinary).toBe('base64')
+    else expect(captured.body.result.provenTxs[0].rawTx).toEqual(bytes)
+    expect(captured.body.result.provenTxs[0].extraNumbers).toEqual(bytes)
+    expect(validateSyncChunkEntities(parseJsonRpc(wire, binary).result)).toEqual(chunk)
+    expect(chunk.provenTxs[0].rawTx).toBe(bytes)
   })
 
   test('advertises compact checkpoints without modifying stored settings and authenticates checkpoint reads', async () => {

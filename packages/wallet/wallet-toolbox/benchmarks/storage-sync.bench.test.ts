@@ -1,3 +1,5 @@
+import { syncChunkBinary } from '../src/storage/remoting/syncChunkBinary'
+import type { SyncChunk } from '../src/sdk/WalletStorage.interfaces'
 import { once } from 'node:events'
 import { performance } from 'node:perf_hooks'
 import { binaryJsonReviver, parseJsonRpc, stringifyJsonRpc } from '../src/storage/remoting/BinaryJson'
@@ -179,7 +181,9 @@ describe('sync transport CPU and checkpoint benchmark', () => {
       syntheticBytes: bytes.length, jsonBytes: Buffer.byteLength(encoded), samples: 9,
       legacyParseP50Ms: percentile(legacy, 0.5), candidateParseP50Ms: percentile(candidate, 0.5),
       legacyParseP95Ms: percentile(legacy, 0.95), candidateParseP95Ms: percentile(candidate, 0.95),
-      mapEntries: 50000, mapBytes, checkpointBytes
+      mapEntries: 50000, mapBytes, checkpointBytes,
+      decimalSyncBytes: Buffer.byteLength(stringifyJsonRpc({ provenTxs: [{ rawTx: bytes }] }, true)),
+      binarySyncBytes: Buffer.byteLength(stringifyJsonRpc(syncChunkBinary({ provenTxs: [{ rawTx: bytes }] } as SyncChunk), true))
     } }) + '\n')
   })
 })

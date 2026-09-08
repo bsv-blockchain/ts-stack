@@ -1,3 +1,4 @@
+import { syncChunkBinary } from './syncChunkBinary'
 import { validateSyncCheckpoint } from '../sync/syncCheckpoint'
 import {
   AbortActionArgs,
@@ -630,7 +631,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns whether processing is done, counts of inserts and udpates, and related progress tracking properties.
    */
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
-    const r = await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, chunk])
+    const wireChunk = this.binaryRequests && this.serverSupportsBinary ? syncChunkBinary(chunk) : chunk
+    const r = await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
     if (r.nextCheckpoint != null) r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args)
     return r
   }

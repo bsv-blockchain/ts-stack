@@ -78,6 +78,12 @@ errors remain failures rather than compatibility fallbacks. A retry starts
 from the writer's durable checkpoint. `includeNextCheckpoint` is optional, and
 legacy requests retain their existing response shape.
 
+When a reader negotiates binary JSON, large schema-defined sync byte fields
+are encoded as base64 instead of decimal number arrays. Legacy readers retain
+the existing arrays; unrelated numeric fields are never reinterpreted as bytes.
+Clients with `binaryRequests: true` use the same compact representation for
+sync uploads after the server negotiates binary request support. The default
+request setting is unchanged.
 Binary JSON parsing preserves the existing marker and escaping rules while
 avoiding a JavaScript reviver callback for every scalar byte. The SDK also
 prevents certificate work or session recovery from dispatching another request
@@ -100,7 +106,9 @@ one local Node 24 run, a 1 MiB numeric-array fixture (3.74 MB of JSON) measured
 501.2 ms versus 10.1 ms median parsing time across nine alternating samples.
 A synthetic 50,000-entry mapping occupied 678,850 bytes; its compact checkpoint
 occupied 432 bytes. These are CPU and payload measurements, not a claim of the
-same end-to-end network speedup.
+same end-to-end network speedup. Encoding the synthetic byte field through
+the negotiated sync codec reduced its JSON payload from 3,743,771 to 1,398,163
+bytes (62.7%).
 
 Retained integration tests cover authenticated HTTP backup and complete restore
 into a fresh IndexedDB store, multipage progression, no-change resync,

@@ -148,44 +148,47 @@ describe('compact sync checkpoints', () => {
     }
   })
 
-  test.each([false, true])('resumes after a failed page, including lost commit acknowledgement: %s', async committed => {
-    const reader = await makeStorage()
-    const writer = await makeStorage()
-    const identityKey = PrivateKey.fromRandom().toPublicKey().toString()
-    const manager = new WalletStorageManager(identityKey, reader)
-    try {
-      await manager.makeAvailable()
-      const { user } = await reader.findOrInsertUser(identityKey)
-      for (let i = 0; i < 12; i++) await reader.findOrInsertTxLabel(user.userId, `resume ${i}`)
-      const read = reader.getSyncChunk.bind(reader)
-      jest.spyOn(reader, 'getSyncChunk').mockImplementation(args => read({ ...args, maxItems: 4 }))
-      const process = writer.processSyncChunk.bind(writer)
-      let pages = 0
-      const spy = jest.spyOn(writer, 'processSyncChunk').mockImplementation(async (args, chunk) => {
-        if (++pages === 2) {
-          if (committed) await process(args, chunk)
-          throw new Error('synthetic transport failure')
-        }
-        return process(args, chunk)
-      })
-      await expect(manager.syncToWriter({ identityKey }, writer)).rejects.toThrow('synthetic transport failure')
-      const before = await writer.getSyncCheckpoint(
-        { identityKey },
-        reader.getSettings().storageIdentityKey,
-        reader.getSettings().storageName
-      )
-      expect(before.offsets.some(row => row.offset > 0)).toBe(true)
-      spy.mockRestore()
-      await manager.syncToWriter({ identityKey }, writer)
-      const { user: target } = await writer.findOrInsertUser(identityKey)
-      expect(await writer.countTxLabels({ partial: { userId: target.userId } })).toBe(12)
-    } finally {
-      await reader.destroy()
-      await writer.destroy()
-      await reader.dropAllData()
-      await writer.dropAllData()
+  test.each([false, true])(
+    'resumes after a failed page, including lost commit acknowledgement: %s',
+    async committed => {
+      const reader = await makeStorage()
+      const writer = await makeStorage()
+      const identityKey = PrivateKey.fromRandom().toPublicKey().toString()
+      const manager = new WalletStorageManager(identityKey, reader)
+      try {
+        await manager.makeAvailable()
+        const { user } = await reader.findOrInsertUser(identityKey)
+        for (let i = 0; i < 12; i++) await reader.findOrInsertTxLabel(user.userId, `resume ${i}`)
+        const read = reader.getSyncChunk.bind(reader)
+        jest.spyOn(reader, 'getSyncChunk').mockImplementation(args => read({ ...args, maxItems: 4 }))
+        const process = writer.processSyncChunk.bind(writer)
+        let pages = 0
+        const spy = jest.spyOn(writer, 'processSyncChunk').mockImplementation(async (args, chunk) => {
+          if (++pages === 2) {
+            if (committed) await process(args, chunk)
+            throw new Error('synthetic transport failure')
+          }
+          return process(args, chunk)
+        })
+        await expect(manager.syncToWriter({ identityKey }, writer)).rejects.toThrow('synthetic transport failure')
+        const before = await writer.getSyncCheckpoint(
+          { identityKey },
+          reader.getSettings().storageIdentityKey,
+          reader.getSettings().storageName
+        )
+        expect(before.offsets.some(row => row.offset > 0)).toBe(true)
+        spy.mockRestore()
+        await manager.syncToWriter({ identityKey }, writer)
+        const { user: target } = await writer.findOrInsertUser(identityKey)
+        expect(await writer.countTxLabels({ partial: { userId: target.userId } })).toBe(12)
+      } finally {
+        await reader.destroy()
+        await writer.destroy()
+        await reader.dropAllData()
+        await writer.dropAllData()
+      }
     }
-  })
+  )
 
   test('backs up and restores every page through authenticated HTTP with compact committed progress', async () => {
     const remote = await _tu.createSQLiteTestWallet({ databaseName: 'compactCheckpointHttp', dropAll: true })
@@ -204,7 +207,7 @@ describe('compact sync checkpoints', () => {
       if (!server.server.listening) await once(server.server, 'listening')
       const address = server.server.address()
       if (address == null || typeof address === 'string') throw new Error('test server did not bind')
-      client = new StorageClient(remote.wallet, `http://localhost:${address.port}`)
+      client = new StorageClient(remote.wallet, `http://localhost:${address.port}`, { binaryRequests: true })
       const identityKey = remote.identityKey
       const manager = new WalletStorageManager(identityKey, source)
       await manager.makeAvailable()
@@ -228,6 +231,26 @@ describe('compact sync checkpoints', () => {
       const noChange = await restoreManager.syncFromReader(identityKey, client)
       expect(noChange.inserts).toBe(0)
       expect(noChange.updates).toBe(0)
+      // Exercise real authenticated binary uploads independently of entity merge rules.
+      const bytes = Array.from({ length: 4096 }, (_, i) => i % 256)
+      const process = jest.spyOn(remote.activeStorage, 'processSyncChunk').mockResolvedValueOnce({
+        done: true,
+        inserts: 0,
+        updates: 0,
+        maxUpdated_at: undefined
+      })
+      const authClient = Reflect.get(client, 'authClient') as { fetch: typeof fetch }
+      const fetchSpy = jest.spyOn(authClient, 'fetch')
+      await client.processSyncChunk(
+        { identityKey } as RequestSyncChunkArgs,
+        {
+          outputs: [{ created_at: new Date(), updated_at: new Date(), lockingScript: bytes }]
+        } as never
+      )
+      expect(process.mock.calls[0][1].outputs?.[0].lockingScript).toEqual(bytes)
+      const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))
+      expect(body.params[1].outputs[0].lockingScript.$bsvBinary).toBe('base64')
+      expect(JSON.stringify(body).length).toBeLessThan(JSON.stringify(bytes).length)
     } finally {
       await client?.destroy()
       await server.close()

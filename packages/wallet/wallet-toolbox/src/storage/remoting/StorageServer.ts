@@ -1,3 +1,4 @@
+import { syncChunkBinary } from './syncChunkBinary'
 /**
  * StorageServer.ts
  *
@@ -574,7 +575,10 @@ export class StorageServer {
           400
         )
       }
-      return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result: dispatch.result, id })
+      const result = useBinary && method === 'getSyncChunk'
+        ? syncChunkBinary(dispatch.result as SyncChunk)
+        : dispatch.result
+      return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result, id })
     } catch (error: unknown) {
       return this.sendRpcError(res, useBinary, id, error)
     }
@@ -670,6 +674,8 @@ export class StorageServer {
       const current = pending.pop()!
       if (current.depth > 64) throw new RangeError('RPC parameter nesting exceeds 64 levels')
       if (current.value == null || typeof current.value !== 'object') continue
+      // Decoded binary values are bounded by the HTTP body limit, not item cardinality.
+      if (current.value instanceof Uint8Array) continue
       if (seen.has(current.value)) continue
       seen.add(current.value)
       if (Array.isArray(current.value) && current.value.length > this.maxRpcArrayItems) {
