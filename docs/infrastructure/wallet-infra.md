@@ -2,9 +2,9 @@
 id: infra-wallet-infra
 title: 'Wallet Infrastructure Services'
 kind: infra
-version: '2.0.25'
-last_updated: '2026-08-06'
-last_verified: '2026-08-06'
+version: '2.0.38'
+last_updated: '2026-09-07'
+last_verified: '2026-09-07'
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -16,7 +16,12 @@ tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
 
 ## What it does
 
-The Wallet Infrastructure Server implements JSON-RPC 2.0 endpoints backed by MySQL via Knex, extending `@bsv/wallet-toolbox` base classes. Clients POST JSON-RPC method calls (walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, etc.) to a single / endpoint. The server enforces mutual authentication via BRC-103 auth middleware, optionally enforces micropayment pricing via `@bsv/payment-express-middleware`, and manages UTXO state in MySQL with indexes on identity_key, output_hash, and blockchain_height.
+The Wallet Infrastructure Server exposes wallet-toolbox's storage JSON-RPC
+interface backed by MySQL via Knex. Clients use `StorageClient` and POST storage
+method calls to `/`; the server enforces mutual authentication and user-scoped
+authorization. Optional payment middleware charges for requests when enabled.
+The concrete RPC and schema contracts live in wallet-toolbox's `StorageServer`
+and `StorageKnex`, not a separately defined wallet API in this wrapper.
 
 Clients connect with identity-based auth headers, manage UTXOs, baskets, labels, and certificates via standardized JSON-RPC interface compatible with @bsv/wallet-toolbox WalletClient.
 
@@ -45,7 +50,9 @@ Clients connect with identity-based auth headers, manage UTXOs, baskets, labels,
 | GET    | /, /robots.txt                      | Public service metadata                       |
 | GET    | /healthz                            | Public process/storage health                 |
 
-JSON-RPC methods: walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, walletUtxoStorage_getBasket, walletUtxoStorage_listLabels, walletUtxoStorage_upsertLabel, walletUtxoStorage_dropLabels, walletUtxoStorage_listCertificates, walletUtxoStorage_insertCertificate (see @bsv/wallet-toolbox docs for full list).
+Use wallet-toolbox's `StorageClient` for the supported RPC names and argument
+shapes. The action-batch transport also accepts bounded authenticated pack
+uploads at `PUT /action-batch/:batchId/pack`.
 
 ## WebSocket endpoints
 
@@ -111,11 +118,8 @@ testing and with the response-byte and concurrency ceilings still enabled.
 ## Run locally
 
 ```bash
-# Install dependencies
-npm install
-
-# Development with ts-node
-npm run dev
+# Install dependencies without lifecycle scripts
+npm ci --ignore-scripts
 
 # Requires MySQL running
 docker compose up -d mysql
@@ -163,12 +167,15 @@ Dockerfile uses a digest-pinned Node 24 multi-stage build. Optional nginx.conf r
 
 ## Migrations
 
-Auto-run on startup via Knex. Creates tables: outputs, baskets, labels, certificates, metadata with indexes on identity_key, output_hash, blockchain_height for query performance.
+Auto-run on startup through `StorageKnex.migrate`. Back up the database before
+upgrading and consult the exact wallet-toolbox migration chain; this wrapper
+does not own an independent storage schema.
 
 ## Wallet monitor behavior
 
-The process starts both the JSON-RPC storage server and a wallet-toolbox
-`Monitor`:
+`WALLET_INFRA_ROLE` selects `all` (default), `api`, or `monitor`. API replicas
+do not start monitor tasks, and monitor-only replicas do not expose the public
+storage listener. For an `all` or `monitor` process:
 
 1. `Monitor.createDefaultWalletMonitorOptions(chain, storage, services, ...,
 startupTaskMode)` builds the selected task profile for real networks.
@@ -199,8 +206,7 @@ bootstrap page; authenticated and allowlisted BRC-100 clients can use
 `/admin/api`. Monitor:
 
 - MySQL connectivity and query latency.
-- JSON-RPC endpoint responds to method calls, such as
-  `walletUtxoStorage_getHeight`.
+- Authenticated storage RPCs respond through `StorageClient`.
 - Monitor startup emits `monitor.start` with `outcome=ok`.
 - Repeated monitor task failures, especially send/proof/double-spend review
   failures.
@@ -212,9 +218,9 @@ the nginx listener.
 
 ## Spec conformance
 
-- **BRC-100** – Full JSON-RPC wallet interface for UTXO storage and management
+- **BRC-100** – Storage backend used by BRC-100 wallet implementations
 - **BRC-103** – Mutual authentication on all API calls
-- **BRC-105** – Optional envelope support for multi-sig authorization
+- **BRC-105** – Optional HTTP payment middleware
 - **JSON-RPC 2.0** – Standard JSON-RPC protocol on POST /
 
 ## Integration with ts-stack
@@ -223,11 +229,9 @@ the nginx listener.
 - Storage implementation extends @bsv/wallet-toolbox base classes
 - Integrates with Arc/Taal-compatible providers for fee estimation, transaction
   submission, and proof acquisition. Newer wallet-toolbox service options can
-  configure Arcade as the primary broadcaster with Arc fallback, but the
-  reference infra wrapper needs explicit env wiring before operators can enable
-  that without code changes.
+  configure Arcade through `WALLET_STORAGE_ARCADE_URL` and the corresponding
+  API-key/callback-token settings without a custom image.
 - Optional payment middleware charges per-call or per-route via BRC-100
-- Advertises wallet storage service capability to overlay network
 
 ## Common pitfalls
 
@@ -239,7 +243,7 @@ the nginx listener.
 - Migrations auto-run: schema changes apply on startup; use Knex CLI for manual migration control if needed
 - Optional nginx: ENABLE_NGINX=true adds another layer; ensure port 8080 available and firewall open
 - Monitor admin: keep its dedicated listener private, use a stable secret-managed server key and explicit allowed identity keys, and run it only on the singleton monitor leader
-- Commission fees: COMMISSION_FEE enforcement requires COMMISSION_PUBLIC_KEY; mismatched config silently skips fee collection
+- Commission fees: a positive COMMISSION_FEE without COMMISSION_PUBLIC_KEY fails startup
 - Provider concentration: configure more than one supported provider where the
   target network offers them, and alert on individual broadcaster/proof-source
   failures.

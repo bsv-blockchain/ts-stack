@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- WAB 1.6.0 adds opt-in, admin-provisioned demonstration identities with expiring,
+  rotatable credentials, persisted attempt limits and immediate login revocation.
+  The explicit `/demo` base URL supports existing mobile phone interactors while
+  keeping demo identities separate from real SMS accounts. See the README for
+  provisioning, client setup, deployment and additive-migration rollback guidance.
+- Refresh compatible standalone `qs` and development-only `browserslist`
+  resolutions to their patched versions; no new dependency or override is added.
+
 ### Security
 
 - Add bearer-authenticated, rate-limited operator routes to pin a WAB account
