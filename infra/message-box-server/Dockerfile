@@ -34,9 +34,11 @@ WORKDIR /app
 
 # Copy package files and install production deps only.
 # better-sqlite3 compiles from source on Alpine; add the toolchain just for the
-# install, then remove it in the same layer to keep the image slim.
+# install, then remove it in the same layer to keep the image slim. Keep the
+# fixed OpenSSL runtime packages after removing the disposable toolchain.
 COPY --chown=root:root --chmod=0444 package*.json ./
 RUN apk add --no-cache --virtual .build-deps g++ make python3 \
+ && apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
  && npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3 \
  && apk del .build-deps \
@@ -45,6 +47,12 @@ RUN apk add --no-cache --virtual .build-deps g++ make python3 \
 # Copy built output from builder
 COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
 COPY --from=builder --chown=root:root --chmod=0444 /app/knexfile.js ./knexfile.js
+
+# Keep first-party and incorporated-material terms with the deployed image.
+COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
+RUN chmod -R a=rX /usr/share/licenses/ts-stack
+LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
 
 # The Node process serves HTTP and WebSocket traffic directly. Operators can
 # place a platform/load-balancer proxy in front of the container.

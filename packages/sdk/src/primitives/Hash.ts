@@ -1,4 +1,5 @@
 // @ts-nocheck
+// Modified code incorporates hash.js, @noble/hashes, and Closure lineages; see ../../THIRD_PARTY_NOTICES.md.
 /* eslint-disable @typescript-eslint/naming-convention */
 import { assertValidHex, normalizeHex } from './hex.js'
 

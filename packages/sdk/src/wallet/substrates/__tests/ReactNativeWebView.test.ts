@@ -28,16 +28,30 @@ describe('ReactNativeWebView', () => {
     jest.restoreAllMocks()
   })
 
-  const getMessageListener = (): ((event: { data: string; origin?: string }) => void) => {
+  type TestMessageEvent = { data: string; origin?: string; source?: unknown }
+
+  const getMessageListener = (): ((event: TestMessageEvent) => void) => {
     const call = addEventListenerMock.mock.calls.at(-1)
     if (call == null) {
       throw new Error('No message listener registered.')
     }
-    return call[1] as (event: { data: string; origin?: string }) => void
+    return call[1] as (event: TestMessageEvent) => void
   }
 
-  const dispatchMessage = (data: unknown, origin?: string): void => {
-    getMessageListener()({ data: JSON.stringify(data), origin })
+  const dispatchMessage = (data: unknown, origin?: string, source?: unknown): void => {
+    getMessageListener()({ data: JSON.stringify(data), origin, source })
+  }
+
+  const APP_ORIGIN = 'https://app.example'
+  const HOSTILE_ORIGIN = 'https://hostile.example'
+  const HOST_FRAME = { name: 'host-frame' }
+
+  const successResponse = {
+    type: 'CWI',
+    isInvocation: false,
+    id: 'request-id',
+    status: 'success',
+    result: { version: '1.0.0' }
   }
 
   describe('constructor', () => {
@@ -233,13 +247,149 @@ describe('ReactNativeWebView', () => {
           status: 'success',
           result: { version: '1.0.0' }
         },
-        'https://hostile.example'
+        HOSTILE_ORIGIN
       )
 
       await expect(promise).rejects.toThrow(
         'React Native wallet response origin https://hostile.example did not match https://trusted.example.'
       )
       expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
+    it('ignores a response delivered by another browsing context', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+      let settled = false
+      void promise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      dispatchMessage(successResponse, HOSTILE_ORIGIN, { name: 'hostile-frame' })
+
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+
+      dispatchMessage(successResponse)
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('ignores an opaque-origin response from a sandboxed frame', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+      let settled = false
+      void promise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      dispatchMessage(successResponse, 'null', { name: 'sandboxed-frame' })
+
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+    })
+
+    it('accepts a response posted by this window', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, APP_ORIGIN, global.window)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts a response this window dispatches without an origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, '', global.window)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts a response this window dispatches with a host-stamped origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, 'react-native', global.window)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts a response relayed by a same-origin host frame', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      ;(global.window as any).parent = HOST_FRAME
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, APP_ORIGIN, HOST_FRAME)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('accepts a response relayed by a host frame on the configured domain', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      ;(global.window as any).parent = HOST_FRAME
+      const substrate = new ReactNativeWebView('wallet.example')
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, 'https://wallet.example', HOST_FRAME)
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('ignores a response relayed by a cross-origin host frame', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      ;(global.window as any).parent = HOST_FRAME
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+      let settled = false
+      void promise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      dispatchMessage(successResponse, HOSTILE_ORIGIN, HOST_FRAME)
+
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+    })
+
+    it('accepts a host-synthesized response that stamps the wallet vendor origin', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      ;(global.window as any).origin = APP_ORIGIN
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+
+      dispatchMessage(successResponse, 'https://wallet.vendor.example')
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
     })
 
     it('rejects matching error responses as WalletError', async () => {
@@ -285,7 +435,7 @@ describe('ReactNativeWebView', () => {
         status: 'success',
         result: {}
       })
-      getMessageListener()({ data: '{not-json', origin: 'https://hostile.example' })
+      getMessageListener()({ data: '{not-json', origin: HOSTILE_ORIGIN })
       dispatchMessage({
         type: 'CWI',
         isInvocation: false,

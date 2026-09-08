@@ -8,6 +8,7 @@ import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
 import { uhrpNetwork } from '../utils/network'
+import { getChirpStore } from '../chirp/store'
 
 const storage = new Storage()
 const GCP_BUCKET_NAME = process.env.GCP_BUCKET_NAME as string
@@ -41,9 +42,7 @@ interface AdvertisementOutput {
 
 async function calculateRenewalAmount(size: string, additionalMinutes: number): Promise<number> {
   const fileSize = Number.parseInt(size, 10) || 0
-  return fileSize > 0
-    ? await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes })
-    : 0
+  return fileSize > 0 ? await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes }) : 0
 }
 
 function findFarthestAdvertisement(
@@ -53,9 +52,7 @@ function findFarthestAdvertisement(
     .map(advertisement => {
       const expiryTag = advertisement.tags?.find(tag => tag.startsWith('expiry_time_'))
       const expiry =
-        expiryTag == null
-          ? 0
-          : Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+        expiryTag == null ? 0 : Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
       return { advertisement, expiry }
     })
     .reduce<{ advertisement?: AdvertisementOutput; expiry: number }>(
@@ -101,8 +98,11 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       })
     }
     const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
-    if (!Number.isSafeInteger(additionalMinutes) || additionalMinutes <= 0 ||
-      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)) {
+    if (
+      !Number.isSafeInteger(additionalMinutes) ||
+      additionalMinutes <= 0 ||
+      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)
+    ) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_INVALID_TIME',
@@ -117,16 +117,19 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     } = await getMetadata(uhrpUrl, identityKey, pagination.limit, pagination.offset)
 
     // Convert to MS to create an ISO string
-    const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
+    const newExpiryTimeSeconds = prevExpiryTime + additionalMinutes * 60
     const newCustomTimeIso = new Date(newExpiryTimeSeconds * 1000).toISOString()
 
     const amount = await calculateRenewalAmount(size, additionalMinutes)
 
     // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
-    const { outputs, BEEF, } = await wallet.listOutputs({
+    const { outputs, BEEF } = await wallet.listOutputs({
       basket: 'uhrp advertisements',
-      tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`],
+      tags: [
+        `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+        `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`
+      ],
       tagQueryMode: 'all',
       includeTags: true,
       include: 'entire transactions',
@@ -183,18 +186,22 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 
     const { signableTransaction } = await wallet.createAction({
       inputBEEF: BEEF,
-      inputs: [{
-        outpoint: prevAdvertisement.outpoint,
-        unlockingScriptLength: 74,
-        inputDescription: 'Redeeming old advertisement'
-      }],
-      outputs: [{
-        lockingScript: newLockingScript.toHex(),
-        satoshis: 1,
-        basket: 'uhrp advertisements',
-        outputDescription: 'UHRP advertisement token (renewed)',
-        tags: newTags
-      }],
+      inputs: [
+        {
+          outpoint: prevAdvertisement.outpoint,
+          unlockingScriptLength: 74,
+          inputDescription: 'Redeeming old advertisement'
+        }
+      ],
+      outputs: [
+        {
+          lockingScript: newLockingScript.toHex(),
+          satoshis: 1,
+          basket: 'uhrp advertisements',
+          outputDescription: 'UHRP advertisement token (renewed)',
+          tags: newTags
+        }
+      ],
       description: `Renew advertisement for uhrpUrl ${uhrpUrl}`,
       options: {
         randomizeOutputs: false
@@ -214,8 +221,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     const unlockingScript = await unlocker.sign(partialTx, 0)
     const { tx, txid } = await wallet.signAction({
       reference: signableTransaction.reference,
-      spends:
-      {
+      spends: {
         0: {
           unlockingScript: unlockingScript.toHex()
         }
@@ -233,11 +239,19 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       networkPreset: lookupPreset as 'mainnet' | 'testnet'
     })
 
+    // Make storage durable before publishing the replacement advertisement. An ambiguous
+    // broadcast intentionally leaves the extended lease in place for safe reconciliation.
+    const chirpLeaseExtended = await getChirpStore().extendRootLease(
+      objectIdentifier,
+      newExpiryTimeSeconds
+    )
+    if (!chirpLeaseExtended) {
+      await storage
+        .bucket(GCP_BUCKET_NAME)
+        .file(`cdn/${objectIdentifier}`)
+        .setMetadata({ customTime: newCustomTimeIso })
+    }
     await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
-
-    // Setting the new expiry time in the actual database
-    await storage.bucket(GCP_BUCKET_NAME).file(`cdn/${objectIdentifier}`)
-      .setMetadata({ customTime: newCustomTimeIso })
 
     return res.status(200).json({
       status: 'success',
@@ -258,7 +272,8 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 export default {
   type: 'post',
   path: '/renew',
-  summary: 'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
+  summary:
+    'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
   parameters: {
     uhrpUrl: 'The UHRP URL (e.g. "uhrp://somehash")',
     additionalMinutes: 'Number of minutes to extend'

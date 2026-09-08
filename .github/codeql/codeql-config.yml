@@ -10,7 +10,6 @@ paths-ignore:
   - conformance/generated/**
   - docs-site/public/assets/asyncapi/**
   - packages/verifast/src/wasm/bdk-core.*
-  - packages/wallet/wallet-toolbox/docs/open-rpc/index.html
   - infra/uhrp-server-basic/src/security/edgePolicy.ts
   - infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts
   - infra/message-box-server/src/security/edgePolicy.ts

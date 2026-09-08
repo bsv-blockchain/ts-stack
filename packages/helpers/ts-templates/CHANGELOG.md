@@ -11,25 +11,33 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
+
 - `R1K1Wallet`, a static Runar contract template with a salted P-256 hardware
   signing path and an independent secp256k1 recovery path.
 
 ### Changed
+
 - Point contributors and AI agents to the canonical stack-level contribution
   and quality policy without changing template behavior.
 - Consolidate MultiPushDrop script-chunk assembly without changing the
   generated locking script.
+- Replace externally generated DSTAS test scripts with first-party synthetic
+  structural fixtures; production decoding behavior is unchanged.
 
 ### Deprecated
+
 - (List features that are in the process of being phased out or replaced.)
 
 ### Removed
+
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
+
 - (Document bugs that were fixed since the last release.)
 
 ### Security
+
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
 
 ---
@@ -37,11 +45,13 @@ All notable changes to this project will be documented in this file. The format 
 ## [1.8.0] - 2026-06-30
 
 ### Added
+
 - **Stablecoin admin action kinds in `MandalaActionKind`:** new values `pause`, `unpause`, `blockIdentity`, `unblockIdentity`, `allowIdentity`, `unallowIdentity`, `setAccessMode`, `freezeOutput`, `unfreezeOutput`, `reissue` for full stablecoin lifecycle control.
 - **Extended `MandalaActionDetails`:** new optional fields `identityKey` (hex string), `outpoint` (string, `"<txid>.<vout>"`), `recipient` (hex string), `mode` (`'denylist' | 'allowlist'`), and `bankRef` (string) to carry per-action parameters without altering existing canonicalize/commitment logic.
 - **`MandalaAdmin` script template:** locking/unlocking script template for admin control outputs; signs over `MandalaActionDetails` payload using BRC-42 key derivation.
 
 ### Changed
+
 - **MandalaToken assetId on-chain encoding (breaking on-chain format):** `encodeAssetId`
   now writes the txid in outpoint (internal/reversed, `tx.hash()`) byte order followed
   by the 4-byte little-endian vout, matching how an outpoint appears in a transaction.
@@ -55,6 +65,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [1.0.0] - YYYY-MM-DD
 
 ### Added
+
 - Initial release of the BSV Script Templates Repository.
 
 ---
@@ -67,22 +78,22 @@ Replace `X.X.X` with the new version number and `YYYY-MM-DD` with the release da
 ## [X.X.X] - YYYY-MM-DD
 
 ### Added
-- 
+-
 
 ### Changed
-- 
+-
 
 ### Deprecated
-- 
+-
 
 ### Removed
-- 
+-
 
 ### Fixed
-- 
+-
 
 ### Security
-- 
+-
 ```
 
 Use this template as the starting point for each new version. Always update the "Unreleased" section with changes as they're implemented, and then move them under the new version header when that version is released.

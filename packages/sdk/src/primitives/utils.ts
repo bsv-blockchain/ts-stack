@@ -1,3 +1,4 @@
+// Modified minimalistic-crypto-utils lineage; see ../../THIRD_PARTY_NOTICES.md.
 import BigNumber from './BigNumber.js'
 import { hash256 } from './Hash.js'
 import { assertValidHex } from './hex.js'

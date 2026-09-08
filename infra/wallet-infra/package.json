@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.37",
+  "version": "2.0.38",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -11,7 +11,7 @@
   },
   "type": "module",
   "description": "UTXO Management Server",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
@@ -34,7 +34,9 @@
   "files": [
     "out/src",
     "src",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "scripts": {
     "start": "node --import ./out/src/telemetry.js out/src/index.js",
@@ -56,7 +58,7 @@
   "dependencies": {
     "@bsv/payment-express-middleware": "^2.1.5",
     "@bsv/sdk": "^2.4.1",
-    "@bsv/wallet-toolbox": "^2.10.2",
+    "@bsv/wallet-toolbox": "^2.10.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",

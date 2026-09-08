@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/chirp",
+  "entry": ".",
+  "requiredExports": [
+    "CHIRPBuilder",
+    "CHIRPDownloader",
+    "CHIRPUploader",
+    "MemoryCHIRPCache",
+    "decodeCHIRPNode",
+    "validateCHIRPClosure"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 530000,
+      "gzip": 136000,
+      "brotli": 115000
+    },
+    "esbuild": {
+      "raw": 410000,
+      "gzip": 126000,
+      "brotli": 108000
+    }
+  }
+}

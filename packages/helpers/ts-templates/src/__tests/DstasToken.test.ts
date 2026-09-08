@@ -1,9 +1,21 @@
 import { DstasToken } from '../DstasToken.js'
 import { LockingScript } from '@bsv/sdk'
-import { DSTAS_PLAIN_HEX, DSTAS_FROZEN_HEX, DSTAS_OWNER, DSTAS_TOKEN_ID } from './dstas-fixtures.js'
 
-describe('DstasToken.decode (against real dxs-bsv-token-sdk output)', () => {
-  it('recovers owner, tokenId, flags from a real DSTAS script', () => {
+const DSTAS_OWNER = '11'.repeat(20)
+const DSTAS_TOKEN_ID = '22'.repeat(20)
+
+// First-party structural fixture. The repeated OP_1 body is deliberately
+// synthetic: the decoder only relies on the documented framing fields and
+// minimum engine length, not a copied or generated third-party script body.
+function syntheticDstasHex(action = '00'): string {
+  return `14${DSTAS_OWNER}${action}${'51'.repeat(2000)}6a14${DSTAS_TOKEN_ID}0103`
+}
+
+const DSTAS_PLAIN_HEX = syntheticDstasHex()
+const DSTAS_FROZEN_HEX = syntheticDstasHex('52')
+
+describe('DstasToken.decode (first-party structural fixtures)', () => {
+  it('recovers owner, tokenId, and flags from a DSTAS-shaped script', () => {
     const d = DstasToken.decode(LockingScript.fromHex(DSTAS_PLAIN_HEX))
     expect(d.ownerHash160).toBe(DSTAS_OWNER)
     expect(d.tokenId).toBe(DSTAS_TOKEN_ID)

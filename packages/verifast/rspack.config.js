@@ -1,8 +1,11 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { SwcJsMinimizerRspackPlugin } from '@rspack/core'
+import { rspack, SwcJsMinimizerRspackPlugin } from '@rspack/core'
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
+const thirdPartyBanner = `/*! This bundle includes BDK/bitcoin-sv, libsecp256k1, Emscripten,
+musl, LLVM runtime, and Boost material under their respective licenses. Keep
+THIRD_PARTY_NOTICES.md and LICENSES/ with the JavaScript and WebAssembly artifacts. */`
 
 export default {
   mode: 'production',
@@ -17,6 +20,9 @@ export default {
     },
     globalObject: 'globalThis'
   },
+  plugins: [
+    new rspack.BannerPlugin({ banner: thirdPartyBanner, raw: true, entryOnly: true, stage: 5000 })
+  ],
   optimization: {
     minimize: true,
     minimizer: [

@@ -3,8 +3,8 @@ id: repository-health
 title: 'Repository Health Controls'
 kind: reference
 version: '1.4.1'
-last_updated: '2026-08-04'
-last_verified: '2026-08-04'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -18,9 +18,11 @@ into a checked, machine-readable contract. Root
 `AGENTS.md`, governance registries, and CI are the current authority. Retired
 [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324)
 preserves modernization history; focused remaining work is tracked in
-[QA #400](https://github.com/bsv-blockchain/ts-stack/issues/400),
-[release/assurance #401](https://github.com/bsv-blockchain/ts-stack/issues/401),
-and [analysis/CI #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
+[QA #400](https://github.com/bsv-blockchain/ts-stack/issues/400) and
+[analysis/CI #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
+The completed
+[release/assurance program #401](https://github.com/bsv-blockchain/ts-stack/issues/401)
+retains its closeout evidence.
 
 ## Sources of truth
 
@@ -60,8 +62,8 @@ SonarCloud, governance, and published package versions. Update a measurement
 only from authoritative evidence and retain the evidence URL.
 
 The lint record retains the original 846-warning baseline while ratcheting the
-current authored-code result to zero across 1,909 files. The TypeScript record
-tracks all 121 governed configurations and their effective strict options,
+current authored-code result to zero across 1,909 files. The TypeScript checker
+currently tracks all 127 governed configurations and their effective strict options,
 including seven self-contained deployable-service contexts. `pnpm lint` and
 `pnpm typescript:check` are executable zero-debt gates; the historical counts
 are evidence, not allowances.
@@ -207,7 +209,7 @@ must retain one nominal identity throughout a consuming application.
 The `Repository health contract` job runs without installing dependencies. It
 checks:
 
-1. discovery matches the exact 37-project inventory;
+1. discovery matches the exact 41-project inventory;
 2. names, owners, profiles, criticality, targets, privacy, and release methods
    are internally consistent;
 3. generated artifact boundaries have valid owners, sources, generators, narrow
@@ -215,7 +217,7 @@ checks:
 4. published package versions match the recorded baseline;
 5. exception records are owned, structurally valid, and unexpired;
 6. current package-contract findings exactly match the ratcheted snapshot; and
-7. generated stack/conformance facts, all 30 public package README contracts,
+7. generated stack/conformance facts, all 33 public package README contracts,
    and one current consolidated package page per public package are current;
    and
 8. the health implementation’s unit tests pass; and
@@ -240,9 +242,9 @@ until their remediation PR removes them from both the code and baseline.
 ## Contributor-policy control
 
 `governance/contributor-policy.json` makes the root contribution and agent
-doctrine executable. `pnpm contributor-policy:check` requires a generated
-root-policy pointer at all 37 governed workspace projects and seven standalone
-services (43 unique nested scopes), forbids nested `.github` ownership and
+doctrine executable. `pnpm contributor-policy:check` currently requires 47
+generated root-policy pointers across governed workspace and standalone service
+scopes, forbids nested `.github` ownership and
 package-local contribution policies, verifies root templates/workflows, and
 retains the disposition of 31 legacy agent guides, 49 imported GitHub files,
 and eight superseded package policies. `pnpm contributor-policy:sync`

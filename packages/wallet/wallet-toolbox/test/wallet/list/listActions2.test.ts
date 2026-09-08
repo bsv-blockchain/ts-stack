@@ -17,7 +17,7 @@ describe('listActions2 single action tests', () => {
   const mockData: MockData = {
     actions: [
       {
-        txid: 'tx',
+        txid: '0101010101010101010101010101010101010101010101010101010101010101',
         satoshis: 1,
         status: 'completed',
         isOutgoing: true,
@@ -27,7 +27,7 @@ describe('listActions2 single action tests', () => {
         labels: ['label', 'label2'],
         inputs: [
           {
-            sourceOutpoint: 'tx.0',
+            sourceOutpoint: '0101010101010101010101010101010101010101010101010101010101010101.0',
             sourceSatoshis: 1,
             sourceLockingScript: '0123456789abcdef',
             unlockingScript: '0123456789abcdef',
@@ -76,7 +76,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -91,7 +91,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -105,7 +105,7 @@ describe('listActions2 single action tests', () => {
         labelQueryMode: 'all'
       }
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -153,7 +153,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -180,7 +180,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -196,7 +196,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -212,7 +212,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -239,7 +239,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -256,7 +256,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -273,7 +273,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -289,7 +289,7 @@ describe('listActions2 single action tests', () => {
   //       labels: [mixedCaseLabel]
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -304,7 +304,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -320,7 +320,7 @@ describe('listActions2 single action tests', () => {
   //       labels: [leadTrailSpacesLabel]
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -335,7 +335,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -351,7 +351,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -380,7 +380,7 @@ describe('listActions2 single action tests', () => {
   //       labelQueryMode: 'any'
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -393,7 +393,7 @@ describe('listActions2 single action tests', () => {
   //       labelQueryMode: 'any'
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -408,7 +408,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -423,7 +423,7 @@ describe('listActions2 single action tests', () => {
   //       labelQueryMode: 'all'
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -436,7 +436,7 @@ describe('listActions2 single action tests', () => {
   //       labelQueryMode: 'all'
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -451,7 +451,7 @@ describe('listActions2 single action tests', () => {
   //       labels: pairSameLabels
   //     }
 
-  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
+  //     const expectedResult = JSON.parse('{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}')
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
   //   }
@@ -468,7 +468,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"labels":["label","label2"],"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"labels":["label","label2"],"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       const r = await wallet.listActions(args)
@@ -494,7 +494,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -525,7 +525,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -542,7 +542,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceOutpoint":"tx.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceOutpoint":"0101010101010101010101010101010101010101010101010101010101010101.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -559,7 +559,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -577,7 +577,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceLockingScript":"0123456789abcdef","sourceOutpoint":"tx.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceLockingScript":"0123456789abcdef","sourceOutpoint":"0101010101010101010101010101010101010101010101010101010101010101.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -595,7 +595,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceOutpoint":"tx.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceOutpoint":"0101010101010101010101010101010101010101010101010101010101010101.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -614,7 +614,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceLockingScript":"","sourceOutpoint":"tx.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"sourceLockingScript":"","sourceOutpoint":"0101010101010101010101010101010101010101010101010101010101010101.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -639,7 +639,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"unlockingScript":"47304402207f2e9a6a6d8a5cf3f9d54b4e5fdfbb7a9c75c7e7a22be59d202c4baf1681c6140220219b1c07338fdfc60e949d0b426ce7b8f95de7a9d2e78f587db13fa7a6eb582301 0411db93e1dcdb8a016b49840f8c53bc1eb68a382fd70c81b7c4eeb4c1aab0eedda7e4a3c88ad097448a687ea1f90337e62c23f8cbb4cd7a7b20c54d7e0ceda220","sourceOutpoint":"tx.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","inputs":[{"inputDescription":"description","sequenceNumber":0,"unlockingScript":"47304402207f2e9a6a6d8a5cf3f9d54b4e5fdfbb7a9c75c7e7a22be59d202c4baf1681c6140220219b1c07338fdfc60e949d0b426ce7b8f95de7a9d2e78f587db13fa7a6eb582301 0411db93e1dcdb8a016b49840f8c53bc1eb68a382fd70c81b7c4eeb4c1aab0eedda7e4a3c88ad097448a687ea1f90337e62c23f8cbb4cd7a7b20c54d7e0ceda220","sourceOutpoint":"0101010101010101010101010101010101010101010101010101010101010101.0","sourceSatoshis":1}],"isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -667,7 +667,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -695,7 +695,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -718,7 +718,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -748,7 +748,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"lockingScript":"0123456789abcdef","tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"lockingScript":"0123456789abcdef","tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -778,7 +778,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -808,7 +808,7 @@ describe('listActions2 single action tests', () => {
       }
 
       const expectedResult = JSON.parse(
-        '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+        '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
       )
 
       expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -839,7 +839,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -869,7 +869,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -922,7 +922,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -952,7 +952,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -982,7 +982,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -1024,7 +1024,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -1054,7 +1054,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -1084,7 +1084,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -1114,7 +1114,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)
@@ -1144,7 +1144,7 @@ describe('listActions2 single action tests', () => {
   //     }
 
   //     const expectedResult = JSON.parse(
-  //       '{"totalActions":1,"actions":[{"txid":"tx","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
+  //       '{"totalActions":1,"actions":[{"txid":"0101010101010101010101010101010101010101010101010101010101010101","satoshis":1,"status":"completed","isOutgoing":true,"description":"Transaction","version":1,"lockTime":0,"outputs":[{"satoshis":1,"spendable":false,"tags":["tag","new tag"],"outputIndex":2,"outputDescription":"new description","basket":"new basket"}]}]}'
   //     )
 
   //     expect(await wallet.listActions(args)).toEqual(expectedResult)

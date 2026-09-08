@@ -1,3 +1,4 @@
+// Modified bsv 1.5.6 and SJCL lineages; see ../../THIRD_PARTY_NOTICES.md.
 // import { AESWrappercbc } from './aescbc'
 import Random from '../primitives/Random.js'
 import PrivateKey from '../primitives/PrivateKey.js'

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -55,7 +55,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "license": "SEE LICENSE IN LICENSE.txt",
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "private": false,
   "repository": {
     "type": "git",

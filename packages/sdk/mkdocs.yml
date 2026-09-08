@@ -49,22 +49,22 @@ plugins:
 nav:
   - Home: index.md
   - WalletClient QuickStart: https://fast.brc.dev
-  - Swagger BRC-100 Interface: swagger/index.html
+  - OpenAPI BRC-100 Interface: swagger/swagger.yaml
   - Guides:
-    - Remittance Getting Started: remittance-getting-started.md
+      - Remittance Getting Started: remittance-getting-started.md
   - Reference:
-    - Wallet: reference/wallet.md
-    - Primitives: reference/primitives.md
-    - Script: reference/script.md
-    - Transaction: reference/transaction.md
-    - Mutual Authentication: reference/auth.md
-    - Identity: reference/identity.md
-    - Overlay Tools: reference/overlay-tools.md
-    - Registry: reference/registry.md
-    - Storage: reference/storage.md
-    - KV Store: reference/kvstore.md
-    - Remittance: reference/remittance.md
-    - Messages: reference/messages.md
-    - TOTP: reference/totp.md
-    - Compatibility: reference/compat.md
+      - Wallet: reference/wallet.md
+      - Primitives: reference/primitives.md
+      - Script: reference/script.md
+      - Transaction: reference/transaction.md
+      - Mutual Authentication: reference/auth.md
+      - Identity: reference/identity.md
+      - Overlay Tools: reference/overlay-tools.md
+      - Registry: reference/registry.md
+      - Storage: reference/storage.md
+      - KV Store: reference/kvstore.md
+      - Remittance: reference/remittance.md
+      - Messages: reference/messages.md
+      - TOTP: reference/totp.md
+      - Compatibility: reference/compat.md
   - Performance: performance.md

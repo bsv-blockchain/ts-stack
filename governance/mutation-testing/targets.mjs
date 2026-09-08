@@ -497,6 +497,80 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/BasicTokenModule*.test.ts'], {
         esm: true
       })
+    },
+    'ecpm-permission': {
+      packageDirectory: 'packages/wallet/ecpm-permission-module',
+      manifest: 'packages/wallet/ecpm-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts',
+      // Keep the defensive infinity checks in production, but omit them from mutation:
+      // canonical compressed points and nonzero PrivateKey scalars cannot reach either branch.
+      mutate: [
+        'src/EcpmPermissionModule.ts:37-203',
+        'src/EcpmPermissionModule.ts:207-289',
+        'src/EcpmPermissionModule.ts:293-298'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/EcpmPermissionModule*.test.ts'], {
+        esm: true
+      })
+    },
+    'chirp-codec': {
+      packageDirectory: 'packages/network/chirp',
+      manifest: 'packages/network/chirp/package.json',
+      propertyTest: 'packages/network/chirp/test/codec.property.test.ts',
+      mutate: ['src/compactSize.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/codec.property.test.ts', '<rootDir>/test/primitives.test.ts'],
+        { esm: true }
+      )
+    },
+    'lch-cbor': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/cbor.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          'function compareBytes(',
+          'function encode('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  const entries = Object.entries(value)',
+          'export function encodeDeterministicCbor('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  private decodeMap(',
+          '  done(): boolean'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          '  private readLength(',
+          '  private read('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/content/lch',
+          'src/cbor.ts',
+          'export function decodeDeterministicCbor(',
+          '}'
+        )
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/cbor.property.test.ts', '<rootDir>/test/cbor.test.ts'],
+        { esm: true }
+      )
     }
   }
 }

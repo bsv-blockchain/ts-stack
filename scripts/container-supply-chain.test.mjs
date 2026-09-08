@@ -72,17 +72,33 @@ test('container registry exactly owns every release Dockerfile and immutable bas
       base.references.includes(base.discoveryReference),
       `${base.name} discovery reference must also be a governed runtime reference`
     )
+    assert.ok(Array.isArray(base.runtimePackagePins))
+    for (const pin of base.runtimePackagePins) {
+      assert.match(pin.name, /^[a-z0-9][a-z0-9+_.-]*$/)
+      assert.match(pin.version, /^[a-zA-Z0-9][a-zA-Z0-9+_.~-]*$/)
+      assert.match(pin.reason, /^CVE-\d{4}-\d+$/)
+    }
   }
 
   for (const component of registry.components) {
     assert.match(component.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     assert.equal(component.license, OCI_LICENSE_REFERENCE)
+    assert.equal(component.licenseNoticePath, '/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md')
     assert.match(component.documentation, /^https:\/\/github\.com\/bsv-blockchain\/ts-stack\//)
     assert.ok(component.title.length > 0)
     assert.ok(component.description.length > 0)
     assert.ok(existsSync(join(REPOSITORY_ROOT, component.path, 'package-lock.json')))
 
     const dockerfile = readRepositoryFile(`${component.path}/Dockerfile`)
+    assert.match(
+      dockerfile,
+      /COPY LICENSE\.txt THIRD_PARTY_NOTICES\.md \/usr\/share\/licenses\/ts-stack\//
+    )
+    assert.match(dockerfile, /COPY LICENSES \/usr\/share\/licenses\/ts-stack\/LICENSES/)
+    assert.match(
+      dockerfile,
+      /LABEL org\.bsvblockchain\.license\.notice="\/usr\/share\/licenses\/ts-stack\/THIRD_PARTY_NOTICES\.md"/
+    )
     for (const base of registry.baseImages) {
       assert.ok(
         dockerfile.includes(base.version),
@@ -98,6 +114,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     for (const base of bases) {
       assert.ok(allowedBases.has(base), `${component.name} uses unregistered base ${base}`)
       assert.match(base, SHA256_DIGEST)
+    }
+    const runtimeStage = dockerfile.slice(dockerfile.lastIndexOf('\nFROM '))
+    for (const base of registry.baseImages) {
+      for (const pin of base.runtimePackagePins) {
+        assert.ok(
+          runtimeStage.includes(`${pin.name}=${pin.version}`),
+          `${component.name} runtime must install ${pin.name}=${pin.version} (${pin.reason})`
+        )
+      }
     }
     const dockerfileInstructions = dockerfile
       .split('\n')

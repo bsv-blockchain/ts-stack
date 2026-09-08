@@ -2,9 +2,9 @@
 id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
-version: '1.1.1'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.2.1'
+last_updated: '2026-08-27'
+last_verified: '2026-08-27'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
@@ -24,8 +24,11 @@ artifact that reaches a registry.
 
 - the seven Docker build contexts and their `linux/amd64` platform;
 - the exact digest-pinned Node base and its human-readable expected version;
-- OCI title, description, uniform `LicenseRef-Open-BSV-License-6`, and
-  documentation metadata; and
+- the reviewed runtime-package pins needed to remediate vulnerabilities still
+  present in that immutable base;
+- OCI title, description, the scoped first-party
+  `LicenseRef-Open-BSV-License-6`, documentation metadata, and the stable
+  incorporated-material notice path; and
 - the GHCR or GHCR-plus-Marketplace release route for each component.
 
 `scripts/container-supply-chain.test.mjs`, run by `pnpm health:check`, rejects
@@ -52,10 +55,23 @@ Automatic Sonar analysis excludes only the non-build metadata file because its
 rule rejects tag-and-digest syntax; the executable zero-install repository check
 remains authoritative for it.
 
+When a governed immutable base still contains a fixed vulnerability,
+`runtimePackagePins` records the exact replacement package, version, and CVE.
+Repository health requires every final runtime stage to install every active
+pin. A base refresh that incorporates the fix must remove the obsolete runtime
+pins and their Dockerfile installs together.
+
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore
 fails `npm ci` before publication instead of silently producing a different
 dependency graph.
+
+Every final image contains `LICENSE.txt`, `THIRD_PARTY_NOTICES.md`, and the
+complete incorporated-material archive at `/usr/share/licenses/ts-stack`.
+`org.bsvblockchain.license.notice` identifies the notice path without
+misrepresenting the first-party OCI license label as the only terms in the
+image. Production dependency licenses remain in installed packages and in the
+generated SPDX SBOM.
 
 ## Pull request gates
 

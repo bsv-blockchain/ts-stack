@@ -1,3 +1,4 @@
+// BIP 39 English word list; see ../../THIRD_PARTY_NOTICES.md and ../../LICENSES/BIP-0039-MIT.txt.
 export const wordList = {
   value: [
     'abandon',

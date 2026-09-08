@@ -22,7 +22,7 @@ const client = new DIDClient({ networkPreset: 'mainnet' })
 
 // Mint a DID token bound to the subject's public key.
 const result = await client.createDID(
-  'serial-123',                                           // serialNumber
+  'serial-123', // serialNumber
   '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc' // subject pubkey
 )
 
@@ -59,22 +59,25 @@ await client.revokeDID({ serialNumber: 'serial-123' })
 
 ```ts
 const client = new DIDClient({
-  overlayTopic: 'tm_did',          // default
-  overlayService: 'ls_did',        // default
-  networkPreset: 'mainnet',        // 'mainnet' | 'testnet' | 'teratestnet' | 'local'
-  wallet: myWallet,                // optional, defaults to new WalletClient()
-  acceptDelayedBroadcast: false,   // default
+  overlayTopic: 'tm_did', // default
+  overlayService: 'ls_did', // default
+  networkPreset: 'mainnet', // 'mainnet' | 'testnet' | 'teratestnet' | 'local'
+  wallet: myWallet, // optional, defaults to new WalletClient()
+  acceptDelayedBroadcast: false // default
 })
 ```
 
 ## API
 
-| Method | Purpose |
-|--------|---------|
+| Method                                    | Purpose                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
 | `createDID(serialNumber, subject, opts?)` | Mints a new DID token via PushDrop and broadcasts it to the DID overlay |
-| `findDID(query)` | Looks up DID records by serial number, outpoint, date range, etc. |
-| `revokeDID(opts)` | Spends an existing DID UTXO, removing it from the overlay |
+| `findDID(query)`                          | Looks up DID records by serial number, outpoint, date range, etc.       |
+| `revokeDID(opts)`                         | Spends an existing DID UTXO, removing it from the overlay               |
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+The UMD bundle incorporates separately licensed SDK material; keep
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
+with the bundle.

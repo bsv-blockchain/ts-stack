@@ -1,6 +1,7 @@
 /**
- * Generated from the Runar R1K1Wallet artifact in icellan/runar#152.
+ * Generated from the MIT-licensed Runar R1K1Wallet artifact in icellan/runar#152.
  * Source commit: c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf
+ * The complete upstream notice is shipped in THIRD_PARTY_NOTICES.md and LICENSES/runar-MIT.txt.
  * Do not edit the compressed payload by hand.
  */
 export const R1_K1_TEMPLATE_BYTE_LENGTH = 959592

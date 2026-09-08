@@ -2,9 +2,9 @@
 id: infra-uhrp-basic
 title: 'UHRP Server (Basic)'
 kind: infra
-version: '0.1.8'
-last_updated: '2026-07-25'
-last_verified: '2026-07-25'
+version: '0.1.34'
+last_updated: '2026-08-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]
@@ -13,6 +13,10 @@ tags: [uhrp, storage, file-server, development, lightweight]
 # UHRP Server (Basic)
 
 > A simple, file-system based UHRP (Universal Host Reference Protocol) host server. Stores files locally on disk and provides HTTP endpoints for UHRP data retrieval and storage.
+
+The 0.1.34 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
+to remediate CVE-2026-14456. Service APIs, storage formats, CHIRP behavior, and
+deployment configuration are unchanged from 0.1.33.
 
 ## What it does
 
@@ -36,7 +40,7 @@ Clients PUT files with authentication, retrieve files via public GET, and query 
 | Type              | Requirement                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
 | Database          | None; filesystem-based storage                                                                      |
-| External services | Wallet Storage (WALLET_STORAGE_URL), ARC (optional for payment transactions)                        |
+| External services | Wallet Storage (WALLET_STORAGE_URL)                                                                |
 | ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox-client |
 
 ## HTTP endpoints
@@ -61,7 +65,7 @@ None.
 | -------------------------- | -------- | --------------------------------------------------------------------------------------------- |
 | PRICE_PER_GB_MO            | No       | Monthly storage price per GB (e.g., `0.03`)                                                   |
 | HOSTING_DOMAIN             | No       | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
-| BSV_NETWORK                | No       | Target blockchain network (e.g., `mainnet` or `testnet`)                                      |
+| BSV_NETWORK                | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                         |
 | WALLET_STORAGE_URL         | No       | Wallet storage endpoint for key derivation (e.g., `https://store-us-1.bsvb.tech`)             |
 | SERVER_PRIVATE_KEY         | Yes      | 256-bit hex private key for server identity                                                   |
 | HTTP_PORT                  | No       | Express server port (default: 8080)                                                           |
@@ -105,17 +109,20 @@ Files stored in `./public` or configured data directory.
 # Build and start
 npm run build && npm start
 
-# Or as Docker container (lightweight ts-node, no Dockerfile provided)
+# Or build the repository's digest-pinned, multi-stage Node 24 image
+docker build -t uhrp-lite:local .
 docker run -d \
   -e SERVER_PRIVATE_KEY=<256-bit-hex> \
   -e HOSTING_DOMAIN=https://uhrp.example.com \
   -e HTTP_PORT=8080 \
   -v uhrp_data:/app/public \
   -p 8080:8080 \
-  node-uhrp-server:latest
+  uhrp-lite:local
 ```
 
-No docker-compose.yml or nginx.conf provided; filesystem-based, no external database. Direct Express server on configured port.
+The container runs as the unprivileged `node` user and probes `/ready` before
+it is considered healthy. The service remains filesystem-based with no
+external database; mount durable storage at `/app/public`.
 
 ## Migrations
 
@@ -123,7 +130,10 @@ None; stateless server with files stored directly on disk with JSON metadata.
 
 ## Health checks
 
-Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monitor disk space and file directory accessibility.
+- `GET /health` and `GET /healthz` report process liveness.
+- `GET /ready` returns 200 only after wallet-backed authentication and payment
+  middleware initialization completes.
+- Monitor disk space and the mounted object directory separately.
 
 ## Spec conformance
 

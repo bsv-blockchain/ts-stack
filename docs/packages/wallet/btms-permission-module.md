@@ -4,9 +4,9 @@ title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/btms-permission-module'
-version: '1.1.3'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.1.4'
+last_updated: '2026-08-27'
+last_verified: '2026-08-27'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'permissions']

@@ -16,6 +16,10 @@ import {
   LICENSE_VERSION,
   REPOSITORY_ROOT
 } from './package-license-policy.mjs'
+import {
+  expectedThirdPartyFilesForPackage,
+  thirdPartyComponentsForPackage
+} from './third-party-license-policy.mjs'
 
 const ARTIFACT_SCHEMA_VERSION = 1
 const CYCLONEDX_SPEC_VERSION = '1.5'
@@ -162,13 +166,16 @@ function governedProjects(registry) {
   return registry.projects.filter(project => project.release === 'npm-oidc')
 }
 
-async function loadGovernedProjects() {
+export async function loadGovernedProjects(expectedCount) {
   const registry = await readJson(
     path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
   )
   const projects = governedProjects(registry)
-  if (projects.length !== 31) {
-    throw new Error(`expected 31 governed npm packages, found ${projects.length}`)
+  if (!Number.isSafeInteger(expectedCount) || expectedCount < 1) {
+    throw new Error(`invalid governed npm package count ${JSON.stringify(expectedCount)}`)
+  }
+  if (projects.length !== expectedCount) {
+    throw new Error(`expected ${expectedCount} governed npm packages, found ${projects.length}`)
   }
   return await Promise.all(
     projects.map(async project => {
@@ -320,7 +327,11 @@ function validatePackResult(packResult, project) {
     errors.push(`packed version ${packResult.version} does not match ${project.manifest.version}`)
   }
   const files = packResult.files?.map(file => file.path) ?? []
-  for (const required of [LICENSE_FILE, 'package.json']) {
+  for (const required of [
+    LICENSE_FILE,
+    'package.json',
+    ...expectedThirdPartyFilesForPackage(project.name)
+  ]) {
     if (files.filter(file => file === required).length !== 1) {
       errors.push(`tarball must contain exactly one root ${required}`)
     }
@@ -329,6 +340,24 @@ function validatePackResult(packResult, project) {
     errors.push('tarball must contain a root README')
   }
   if (errors.length > 0) throw new Error(`${project.name}: ${errors.join('; ')}`)
+}
+
+function addIncorporatedDependencies(dependencies, rootRef, components) {
+  if (components.length === 0) return dependencies
+  const incorporatedRefs = components.map(component => component['bom-ref'])
+  let foundRoot = false
+  const result = dependencies.map(dependency => {
+    if (dependency.ref !== rootRef) return dependency
+    foundRoot = true
+    return {
+      ...dependency,
+      dependsOn: [...new Set([...(dependency.dependsOn ?? []), ...incorporatedRefs])].toSorted(
+        compareStrings
+      )
+    }
+  })
+  if (!foundRoot) result.push({ ref: rootRef, dependsOn: incorporatedRefs })
+  return result
 }
 
 export function canonicalizePackedManifest(manifest) {
@@ -709,6 +738,7 @@ async function generatePackageSbom(
     const normalizedComponents = removeLocalFileReferences(
       normalizeGovernedComponentLicenses(bom.components ?? [], governedNames, internalLicense)
     )
+    const incorporatedComponents = thirdPartyComponentsForPackage(record.project.name)
     const injectedNames = new Set(preparedManifest.injectedNames)
     const injectedReferences = new Set(
       normalizedComponents
@@ -730,11 +760,18 @@ async function generatePackageSbom(
         timestamp: source.created,
         component: rootComponent
       },
-      components: await supplementRegistryLicenses(normalizedComponents),
-      dependencies: removeInjectedRootDependencies(
-        normalizeBomDependencyRefs(bom, originalRootRef, rootComponent['bom-ref']),
+      components: await supplementRegistryLicenses([
+        ...normalizedComponents,
+        ...incorporatedComponents
+      ]),
+      dependencies: addIncorporatedDependencies(
+        removeInjectedRootDependencies(
+          normalizeBomDependencyRefs(bom, originalRootRef, rootComponent['bom-ref']),
+          rootComponent['bom-ref'],
+          injectedReferences
+        ),
         rootComponent['bom-ref'],
-        injectedReferences
+        incorporatedComponents
       )
     }
     const sbomPath = path.join(sbomDirectory, `${packageSlug(record.project.name)}.cdx.json`)
@@ -868,7 +905,7 @@ export function mergeCycloneDxDocuments(records, source) {
           version: source.npm
         },
         {
-          vendor: 'BSV Blockchain Association',
+          vendor: 'BSV Association',
           name: 'ts-stack package-release-artifacts',
           version: String(ARTIFACT_SCHEMA_VERSION)
         }
@@ -965,7 +1002,8 @@ async function stageArtifacts(arguments_) {
   if (filter && requested.length > 0) {
     throw new Error('--filter and --package cannot be used together')
   }
-  const [governed, policy] = await Promise.all([loadGovernedProjects(), readJson(POLICY_PATH)])
+  const policy = await readJson(POLICY_PATH)
+  const governed = await loadGovernedProjects(policy.publicPackageCount)
   const source = await sourceMetadata(policy)
   await ensureEmptyOutputDirectory(outputDirectory)
   const governedNames = new Set(governed.map(project => project.name))
@@ -1249,11 +1287,11 @@ async function verifyArtifacts(manifestOption) {
   const manifestPath = path.resolve(REPOSITORY_ROOT, manifestOption)
   const releaseRoot = path.dirname(manifestPath)
   const manifest = await readJson(manifestPath)
-  const [{ stdout: currentCommit }, governed, policy] = await Promise.all([
+  const [{ stdout: currentCommit }, policy] = await Promise.all([
     run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT }),
-    loadGovernedProjects(),
     readJson(POLICY_PATH)
   ])
+  const governed = await loadGovernedProjects(policy.publicPackageCount)
   validateManifestEnvelope(manifest, currentCommit.trim(), policy)
 
   const context = {

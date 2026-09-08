@@ -4,17 +4,20 @@ import upload from './upload';
 import list from './list';
 import renew from './renew';
 import find from './find';
+import { chirpPostAuthRoutes, chirpPreAuthRoutes } from '../chirp/routes';
 
 const routes = {
   preAuth: [
     put,
-    quote
+    quote,
+    ...chirpPreAuthRoutes
   ],
   postAuth: [
     upload,
     list,
     renew,
-    find
+    find,
+    ...chirpPostAuthRoutes
   ]
 };
 

@@ -29,6 +29,7 @@ import { StorageClient } from './storage/remoting/StorageClient'
 import { StorageKnex } from './storage/StorageKnex'
 import { WalletStorageProvider } from './sdk/WalletStorage.interfaces'
 import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
+import type { PreparedBeefOptions } from './storage/methods/preparedBeef'
 
 // To rely on your own headers service, uncomment the following line:
 // import { BHServiceClient } from './services/chaintracker'
@@ -393,6 +394,7 @@ DEV_KEYS = '{
       feeModel: { model: 'sat/kb', value: 100 },
       actionBatchMaxReservedOutputs: args.actionBatchMaxReservedOutputs,
       managedChangePolicy: args.managedChangePolicy,
+      preparedBeef: args.preparedBeef,
       scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
@@ -494,6 +496,8 @@ export interface SetupWalletArgs {
   scriptVerifier?: SpendVerifierInterface
   /** Optional operator tuning for wallet-managed liquidity shaping. */
   managedChangePolicy?: ManagedChangePolicyOptions
+  /** Optional prepared-BEEF (COOK) rollout controls for Knex storage. */
+  preparedBeef?: PreparedBeefOptions
 }
 
 /**

@@ -16,7 +16,7 @@
     "sendBeefP2P": "pnpm build && node dist/cjs/src/client/sendP2PBeef.js",
     "typecheck": "tsc -p tsconfig.json --noEmit --incremental false"
   },
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/paymail": "workspace:^",

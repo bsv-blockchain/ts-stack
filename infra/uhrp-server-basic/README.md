@@ -37,3 +37,18 @@ expiry, declared size, and optional `Content-Length` first, streams up to
 `UHRP_UPLOAD_MAX_BODY_BYTES` into a private temporary file, hashes
 incrementally, and exclusively commits the completed object without
 overwriting an existing file or symlink.
+
+## CHIRP complete-host support
+
+The server also implements the BRC-167 baseline upload-session and complete-
+host routes under `/chirp/v1`. Objects are stream-hashed into a deduplicated
+filesystem store, a root is advertised through ordinary `tm_uhrp` only after
+its complete closure validates, and `/renew` extends the whole closure lease.
+Set `HOSTING_DOMAIN` to the public HTTPS origin and persist `CHIRP_DATA_DIR`
+(the image uses `/data/chirp`). Staging lifetime, GC interval, closure count,
+logical length, object size, and retention are bounded by the `CHIRP_*`
+resource variables. Public object authorization uses a bounded in-memory
+commit-membership index; tune `CHIRP_COMMIT_CACHE_ROOTS`,
+`CHIRP_COMMIT_CACHE_OBJECTS`, and `CHIRP_COMMIT_CACHE_SECONDS` for the
+deployment's root cardinality and memory budget. Existing UHRP routes and
+storage behavior are unchanged.

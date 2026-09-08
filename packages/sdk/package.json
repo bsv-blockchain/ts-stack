@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -18,7 +18,9 @@
     "!dist/**/*.tsbuildinfo",
     "docs",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "exports": {
     ".": {
@@ -769,7 +771,7 @@
     "Bitcoin",
     "SV"
   ],
-  "author": "BSV Blockchain Association",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

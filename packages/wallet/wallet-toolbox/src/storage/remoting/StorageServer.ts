@@ -56,10 +56,13 @@ import {
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
 import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
+import { validateSyncProof } from '../methods/validateSyncProof'
 
 const storageRpcMethods = new Set([
   'abortAction',
   'abortActionBatch',
+  'activateNoSendExpiry',
+  'armNoSendExpiry',
   'adminStats',
   'beginActionBatch',
   'commitActionBatch',
@@ -85,6 +88,7 @@ const storageRpcMethods = new Set([
   'makeAvailable',
   'migrate',
   'prepareActionBatchCommit',
+  'prepareNoSendExpiry',
   'processAction',
   'processSyncChunk',
   'relinquishCertificate',
@@ -98,6 +102,8 @@ const storageRpcMethods = new Set([
 const authIdRpcMethods = new Set([
   'abortAction',
   'abortActionBatch',
+  'activateNoSendExpiry',
+  'armNoSendExpiry',
   'beginActionBatch',
   'commitActionBatch',
   'commitActionBatchByDigest',
@@ -114,6 +120,7 @@ const authIdRpcMethods = new Set([
   'listCertificates',
   'listOutputs',
   'prepareActionBatchCommit',
+  'prepareNoSendExpiry',
   'processAction',
   'relinquishCertificate',
   'relinquishOutput',
@@ -122,13 +129,16 @@ const authIdRpcMethods = new Set([
   'setActive'
 ])
 
-const actionBatchRpcMethods = new Set([
+const activeStorageRpcMethods = new Set([
   'abortActionBatch',
+  'activateNoSendExpiry',
+  'armNoSendExpiry',
   'beginActionBatch',
   'commitActionBatch',
   'commitActionBatchByDigest',
   'extendActionBatch',
   'prepareActionBatchCommit',
+  'prepareNoSendExpiry',
   'renewActionBatch',
   'resumeActionBatch'
 ])
@@ -810,6 +820,9 @@ export class StorageServer {
       case 'processSyncChunk':
         await this.validateParam0(params, req)
         validateSyncChunkEntities(params[1] as SyncChunk)
+        for (const proof of (params[1] as SyncChunk).provenTxs ?? []) {
+          await validateSyncProof(this.storage, proof)
+        }
         return true
       default:
         await this.authorizeStandardRpcCall(method, params, req)
@@ -836,7 +849,7 @@ export class StorageServer {
 
   private async authorizeStandardRpcCall(method: string, params: any[], req: Request): Promise<void> {
     if (authIdRpcMethods.has(method)) {
-      await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
+      await this.bindAuthenticatedAuth(params, req, activeStorageRpcMethods.has(method))
       return
     }
     await this.validateParam0(params, req)
@@ -871,7 +884,7 @@ export class StorageServer {
     const { user } = await this.storage.findOrInsertUser(identityKey)
     const isActive = user.activeStorage === this.storage.getSettings().storageIdentityKey
     if (requireActive && !isActive) {
-      throw new WERR_NOT_ACTIVE("action batch methods require the authenticated user's active storage provider")
+      throw new WERR_NOT_ACTIVE("this method requires the authenticated user's active storage provider")
     }
     return {
       identityKey,

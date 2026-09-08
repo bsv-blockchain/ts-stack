@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -58,7 +58,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES"
   ],
   "scripts": {
     "build": "tsdown src/index.ts src/server.ts src/client.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -86,7 +88,7 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/middleware/402-pay"
   },
-  "author": "Deggen <d.kellenschwiler@bsvassociation.org>",
+  "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

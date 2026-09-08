@@ -78,6 +78,7 @@ import {
   DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
   isLegacyManagedChangeBasketDefault
 } from './methods/managedChangePolicy'
+import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
 
 export interface StorageIdbOptions extends StorageProviderOptions {}
 
@@ -133,6 +134,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   protected override supportsActionBatchPersistence(): boolean {
+    return true
+  }
+
+  protected override supportsNoSendExpiryPersistence(): boolean {
     return true
   }
 
@@ -213,10 +218,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 4, {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 5, {
       upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
+        const transactions = transaction.objectStore('transactions')
+        if (!transactions.indexNames.contains('noSendExpiryState')) {
+          transactions.createIndex('noSendExpiryState', 'noSendExpiryState')
+        }
+        if (!transactions.indexNames.contains('noSendExpiryReclaimTxid')) {
+          transactions.createIndex('noSendExpiryReclaimTxid', 'noSendExpiryReclaimTxid')
+        }
         const outputs = transaction.objectStore('outputs')
         if (!outputs.indexNames.contains('userId_basketId')) {
           outputs.createIndex('userId_basketId', ['userId', 'basketId'])
@@ -1208,6 +1220,28 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'transactionId', 'transactions', trx)
   }
 
+  override async compareAndSetNoSendExpiryState(
+    transactionId: number,
+    expected: Brc177NoSendExpiryState,
+    next: Brc177NoSendExpiryState,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    const dbTrx = this.toDbTrx(['transactions'], 'readwrite', trx)
+    const store = dbTrx.objectStore('transactions')
+    try {
+      const transaction = await store.get(transactionId)
+      if (transaction?.noSendExpiryState !== expected) return false
+      await (store.put as (value: TableTransaction) => Promise<IDBValidKey>)({
+        ...transaction,
+        noSendExpiryState: next,
+        updated_at: new Date()
+      })
+      return true
+    } finally {
+      if (trx == null) await dbTrx.done
+    }
+  }
+
   async updateTxLabel(id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
     return await this.updateIdb(id, update, 'txLabelId', 'tx_labels', trx)
   }
@@ -1907,6 +1941,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
     if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
     if (partial?.reference !== undefined) return store.index('reference').openCursor(partial.reference, direction)
+    if (partial?.noSendExpiryReclaimTxid !== undefined) {
+      return store.index('noSendExpiryReclaimTxid').openCursor(partial.noSendExpiryReclaimTxid, direction)
+    }
+    if (partial?.noSendExpiryState !== undefined) {
+      return store.index('noSendExpiryState').openCursor(partial.noSendExpiryState, direction)
+    }
     return store.openCursor(null, direction)
   }
 
@@ -1994,6 +2034,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       if (args.noRawTx === true) {
         t.rawTx = undefined
         t.inputBEEF = undefined
+        t.noSendExpiryReclaimRawTx = undefined
       } else {
         await this.validateRawTransaction(t, args.trx)
       }

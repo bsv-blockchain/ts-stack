@@ -6,7 +6,7 @@ domain: overlays
 version: '0.1.1'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/btms-backend'
 status: experimental

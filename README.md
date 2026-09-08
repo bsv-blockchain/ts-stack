@@ -248,7 +248,9 @@ Keep unrelated package history and generated artifacts out of the same change wh
 
 ## License
 
-Every package and service in this repository is licensed under the
-[Open BSV License Version 6](./LICENSE.txt). The repository copies the exact
-license into every package artifact; see the
-[licensing policy](./docs/reference/licensing.md) for the enforced convention.
+Current TS Stack first-party contributions are licensed under the
+[Open BSV License Version 6](./LICENSE.txt). Historical grants and incorporated
+material remain under the scoped terms in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
+[LICENSES/](./LICENSES/). The repository copies those payloads into each
+affected artifact; see the [licensing policy](./docs/reference/licensing.md).

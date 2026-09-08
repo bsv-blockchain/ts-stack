@@ -34,6 +34,10 @@ overrides:
   # Vite's PostCSS graph permits nanoid 3 releases older than the security
   # fix. Select the first patched 3.x release without changing its public API.
   nanoid@<3.3.18: 3.3.18
+  # remark-mdx-frontmatter 5.2.0 still constrains TOML to vulnerable 3.x even
+  # though it only consumes the compatible parse() API. webpack-cli already
+  # accepts TOML 4; keep both paths on the first release fixing the advisories.
+  toml@<4.2.0: 4.2.0
   # Stryker's latest typed-rest-client 2.3.1 pins vulnerable qs 6.15.1
   # exactly. Keep this parent-scoped substitution until upstream publishes a
   # release that depends on qs 6.15.2 or newer.

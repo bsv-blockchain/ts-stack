@@ -257,7 +257,7 @@ Returns:
 
 | Field | Type |
 |-------|------|
-| `totalOutputs` | `number` |
+| `totalOutputs` | `number`; total matching outputs before pagination, independent of `limit` and `offset` |
 | `BEEF` | `BEEF`, when `include: 'entire transactions'` |
 | `outputs` | `WalletOutput[]` |
 
