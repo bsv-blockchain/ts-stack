@@ -5,7 +5,7 @@ import { StorageIdb } from '../StorageIdb'
 import { StorageProvider } from '../StorageProvider'
 import * as idbHelpers from '../idbHelpers'
 import { StorageIdbSchema } from '../schema/StorageIdbSchema'
-import { TableTransaction } from '../schema/tables'
+import { TableProvenTx, TableTransaction } from '../schema/tables'
 
 const identity = '42'.repeat(32)
 const targetTxid = 'ab'.repeat(32)
@@ -125,6 +125,64 @@ describe('IndexedDB sync identity lookups', () => {
         commissions.mockRestore()
         tags.mockRestore()
         labels.mockRestore()
+      }
+    } finally {
+      await writer.destroy()
+      await deleteDB(writer.dbName)
+    }
+  })
+
+  test('proof batches skip unrelated rows and preserve ordered, user-scoped filtering', async () => {
+    const writer = storage()
+    await writer.migrate('Synthetic proof lookups', identity)
+    const txid = (id: number): string => id.toString(16).padStart(64, '0')
+    try {
+      const seed = writer.db!.transaction(['proven_txs', 'transactions'], 'readwrite')
+      for (let id = 1; id <= 1000; id++) {
+        await seed.objectStore('proven_txs').put({
+          provenTxId: id, txid: txid(id), height: id, index: 0,
+          created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'),
+          blockHash: 'ab'.repeat(32), merkleRoot: 'cd'.repeat(32),
+          rawTx: [1, 2, 3], merklePath: [4, 5, 6]
+        })
+      }
+      for (let id = 1; id <= 1000; id++) {
+        await seed.objectStore('transactions').put(transaction(id, { userId: id === 900 ? 2 : 1, provenTxId: id }))
+      }
+      await seed.done
+      const visits = jest.spyOn(idbHelpers, 'matchesProvenTxPartial')
+      try {
+        const txids = [txid(900), txid(500), txid(900), txid(2000)]
+        const found = await writer.findProvenTxs({ partial: {}, txids })
+        expect(found.map(row => row.provenTxId)).toEqual([500, 900])
+        expect(visits.mock.calls).toHaveLength(2)
+        expect(found[0].rawTx).toEqual([1, 2, 3])
+        expect(found[0].merklePath).toEqual([4, 5, 6])
+        expect((await writer.findProvenTxs({ partial: {}, txids, orderDescending: true }))
+          .map(row => row.provenTxId)).toEqual([900, 500])
+        expect((await writer.findProvenTxs({ partial: {}, txids, paged: { offset: 1, limit: 1 } }))
+          .map(row => row.provenTxId)).toEqual([900])
+        expect((await writer.findProvenTxs({ partial: { height: 900 }, txids, paged: { offset: 0, limit: 1 } }))
+          .map(row => row.provenTxId)).toEqual([900])
+        expect(await writer.findProvenTxs({ partial: {}, txids, since: new Date('2026-01-02') })).toEqual([])
+        expect(await writer.findProvenTxs({ partial: { provenTxId: 500 }, txids: [txid(900)] })).toEqual([])
+        expect(await writer.findProvenTxs({ partial: { txid: txid(500) }, txids: [txid(900)] })).toEqual([])
+        visits.mockClear()
+        expect(await writer.findProvenTxs({ partial: {}, txids: [txid(2000)] })).toEqual([])
+        expect(visits.mock.calls).toHaveLength(0)
+        const userRows: TableProvenTx[] = []
+        const ownershipVisits = jest.spyOn(idbHelpers, 'matchesTransactionPartial')
+        try {
+          await writer.filterProvenTxs({ partial: {}, txids }, row => userRows.push(row), 1)
+          expect(userRows.map(row => row.provenTxId)).toEqual([500])
+          expect(ownershipVisits.mock.calls).toHaveLength(2)
+        } finally {
+          ownershipVisits.mockRestore()
+        }
+        expect(await writer.findProvenTxs({ partial: {}, txids: [], paged: { offset: 0, limit: 2 } }))
+          .toHaveLength(2)
+      } finally {
+        visits.mockRestore()
       }
     } finally {
       await writer.destroy()

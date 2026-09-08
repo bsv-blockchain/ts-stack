@@ -15,6 +15,8 @@ attention to changes that materially alter behavior or extend functionality.
   index. Use existing reference, reclaim, commission, and relation keys for
   sync lookups, avoiding repeated scans as a local wallet grows. Preserve
   user filtering, pagination, existing bytes, and duplicate transaction IDs.
+  Proof-batch preflight checks resolve only requested transaction IDs through
+  the existing index, preserving proof validation and primary-key ordering.
   Older clients requesting schema version 5 cannot open the upgraded database.
 
 - Add negotiated compact sync checkpoints, reusing committed page progress while
@@ -25,15 +27,15 @@ attention to changes that materially alter behavior or extend functionality.
   authentication payload size while preserving legacy arrays and unrelated data.
   Retain authenticated full-copy,
   resume, malformed-input, and transport CPU/payload regression coverage.
-  Local packed measurements are 1,700,716 raw / 400,759 gzip / 313,792 Brotli
-  bytes (Vite), 1,326,622 / 364,304 / 292,951 (esbuild),
+  Local packed measurements are 1,701,382 raw / 400,933 gzip / 313,974 Brotli
+  bytes (Vite), 1,327,105 / 364,471 / 293,336 (esbuild),
   1,753,648 / 445,136 / 345,369 (Metro), and
   3,557,663 / 1,426,740 / 1,121,821 (Hermes). The raw ceilings become
-  1,701,000, 1,327,500, 1,755,000, and 3,558,500 respectively.
+  1,702,000, 1,327,500, 1,755,000, and 3,558,500 respectively.
   Vite and esbuild gzip ceilings increase to 402,000 and 365,750 bytes.
   Hosted Linux measures 365,484 esbuild gzip bytes and 1,445,624 Hermes gzip
   bytes; the Hermes gzip ceiling becomes 1,446,500.
-  The esbuild Brotli ceiling is 293,250 bytes. Other compressed ceilings remain unchanged.
+  The esbuild Brotli ceiling is 293,750 bytes. Other compressed ceilings remain unchanged.
   The added portable sync/progress and decoding paths account for
   the increase; no Node-only backend is introduced into portable bundles.
 

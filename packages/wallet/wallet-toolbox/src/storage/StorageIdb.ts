@@ -1,4 +1,4 @@
-import { deleteDB, IDBPDatabase, IDBPTransaction, openDB } from 'idb'
+import { deleteDB, IDBPDatabase, IDBPObjectStore, IDBPTransaction, openDB } from 'idb'
 import {
   matchesCertificateFieldPartial,
   matchesCertificatePartial,
@@ -100,11 +100,12 @@ async function scanCursor<T extends { updated_at: Date }>(
   offset: number,
   limit: number | undefined,
   matches: (r: T) => boolean | Promise<boolean>,
-  accept: (r: T) => void
+  accept: (r: T) => void,
+  next?: () => Promise<unknown>
 ): Promise<number> {
   let skipped = 0
   let count = 0
-  for (; cursor != null; cursor = await cursor.continue()) {
+  for (; cursor != null; cursor = next == null ? await cursor.continue() : await next()) {
     const r: T = cursor.value
     if (since != null && since > r.updated_at) continue
     if (!(await matches(r))) continue
@@ -747,6 +748,34 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
+  private async openProvenTxsCursor(
+    store: IDBPObjectStore<StorageIdbSchema, string[], 'proven_txs', 'readonly' | 'readwrite'>,
+    args: FindProvenTxsArgs,
+    direction: IDBCursorDirection
+  ): Promise<{ cursor: unknown; next?: () => Promise<unknown> }> {
+    if (args.partial?.provenTxId != null && args.partial.provenTxId > 0) {
+      return { cursor: await store.openCursor(args.partial.provenTxId, direction) }
+    }
+    if (args.partial?.txid !== undefined) {
+      return { cursor: await store.index('txid').openCursor(args.partial.txid, direction) }
+    }
+    if (args.txids != null && args.txids.length > 0) {
+      // Resolve only requested identities, then retain the primary-key ordering
+      // used by an unindexed scan. Duplicate or missing txids add no rows.
+      const index = store.index('txid')
+      const keys = await Promise.all([...new Set(args.txids)].map(async txid => await index.getKey(txid)))
+      const ordered = keys.filter((key): key is number => key !== undefined).sort((a, b) => a - b)
+      if (direction === 'prev') ordered.reverse()
+      const iterator = ordered.values()
+      const next = async (): Promise<unknown> => {
+        const key = iterator.next()
+        return key.done === true ? null : await store.openCursor(key.value, direction)
+      }
+      return { cursor: await next(), next }
+    }
+    return { cursor: await store.openCursor(null, direction) }
+  }
+
   async filterProvenTxs(args: FindProvenTxsArgs, filtered: (v: TableProvenTx) => void, userId?: number): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
     if (args.partial.rawTx != null) {
@@ -761,15 +790,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(['proven_txs', 'transactions'], 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending === true ? 'prev' : 'next'
     const store = dbTrx.objectStore('proven_txs')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.provenTxId != null && args.partial.provenTxId > 0) {
-      cursor = await store.openCursor(args.partial.provenTxId, direction)
-    } else if (args.partial?.txid !== undefined) {
-      cursor = await store.index('txid').openCursor(args.partial.txid, direction)
-    } else {
-      cursor = await store.openCursor(null, direction)
-    }
+    const { cursor, next } = await this.openProvenTxsCursor(store, args, direction)
     await scanCursor<TableProvenTx>(
       cursor,
       args.since,
@@ -784,7 +805,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         }
         return true
       },
-      filtered
+      filtered,
+      next
     )
     if (args.trx == null) await dbTrx.done
   }
@@ -1945,6 +1967,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (typeof partial?.noSendExpiryReclaimTxid === 'string') {
       return store.index('noSendExpiryReclaimTxid').openCursor(partial.noSendExpiryReclaimTxid, direction)
     }
+    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
     if (partial?.userId !== undefined) {
       if (typeof partial?.txid === 'string') {
         return store.index('txid_userId').openCursor([partial.txid, partial.userId], direction)
@@ -1955,7 +1978,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       return store.index('userId').openCursor(partial.userId, direction)
     }
     if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
-    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
     if (partial?.reference !== undefined) return store.index('reference').openCursor(partial.reference, direction)
     if (partial?.noSendExpiryReclaimTxid !== undefined) {
       return store.index('noSendExpiryReclaimTxid').openCursor(partial.noSendExpiryReclaimTxid, direction)

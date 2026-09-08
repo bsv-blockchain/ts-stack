@@ -71,7 +71,9 @@ for the rest of the session.
 
 IndexedDB schema version 6 adds a non-unique transaction-ID/user index. Sync
 identity lookups, commissions, and relation maps use selective indexes or exact
-keys instead of scanning the growing wallet for each row. Existing bytes and
+keys instead of scanning the growing wallet for each row. Proof batch checks
+resolve requested transaction IDs through the existing index, preserving primary-key
+ordering, pagination, and proof-validation rules. Existing bytes and
 legacy duplicate transaction IDs are preserved. Databases upgrade automatically;
 older clients that open schema version 5 cannot reopen an upgraded database, so
 keep a compatible client when retaining a local backup.
