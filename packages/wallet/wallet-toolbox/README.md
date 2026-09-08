@@ -101,6 +101,11 @@ HTTPS. Plain HTTP is accepted only for explicit loopback hosts during local
 development. Arcade SSE dependency debug logging remains disabled because its
 request URL and headers carry wallet callback credentials.
 
+Certificate signatures fail closed at every wallet trust boundary. Direct and
+issuer-mediated acquisition require an affirmative certifier-signature result
+before storage, and identity discovery verifies each untrusted overlay
+certificate before decryption or trust scoring.
+
 ### ChainTracks sources and networks
 
 Wallet services do not require a WhatsOnChain key for ChainTracks. Node

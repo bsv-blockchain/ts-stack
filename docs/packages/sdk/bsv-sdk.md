@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.4.2'
+version: '2.4.3'
 npm: '@bsv/sdk'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -18,6 +18,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 The foundational cryptographic and transaction library for the BSV blockchain. Zero external dependencies — all cryptographic primitives have been validated by a third-party auditor. Every other library in the ts-stack builds on top of `@bsv/sdk`. <!-- audio: ts-stack.m4a @ 27:00 -->
 
 Provides low-level primitives (keys, signatures, hashing), script construction and execution, transaction creation and signing, and integration interfaces for wallets and overlay networks.
+
+Security-sensitive consumers require affirmative cryptographic verdicts.
+`IdentityClient` will not publish a certificate whose certifier signature is
+invalid, and `GlobalKVStore` discards untrusted overlay entries unless their
+controller signature verifies as valid.
 
 ## Install
 

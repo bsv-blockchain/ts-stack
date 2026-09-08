@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
 version: '3.0.0'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -28,6 +28,9 @@ localStorage, logs, analytics, or unprotected sync. Remote storage and
 credential-bearing Arcade SSE require HTTPS except for explicit loopback
 development; SSE dependency debugging is disabled to keep credentials out of
 logs.
+Both direct and issuer-mediated certificate acquisition paths require a valid
+certifier signature before storage. Identity overlay results are verified before
+decryption and trust scoring.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

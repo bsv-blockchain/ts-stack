@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '3.0.0'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -39,6 +39,11 @@ dependency debug logging is disabled to protect callback and API credentials.
 Spending approvals are one operation per prompt,
 and spending-token accounting reads every action page before authorizing a
 spend.
+
+Certificate handling also fails closed. Both direct and issuer-mediated acquisition
+paths require a valid certifier signature before storage, and identity discovery
+verifies untrusted overlay certificates before decrypting or trust-scoring
+them.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related

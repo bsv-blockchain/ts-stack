@@ -129,19 +129,27 @@ export async function validatePayment(
   let beefArr: number[]
   let beefObj: Beef
   try {
-    beefArr = Utils.toArray(beef, 'base64')
+    beefObj = Beef.fromBinaryView(Uint8Array.from(Utils.toArray(beef, 'base64')))
+    const atomicTxid = beefObj.atomicTxid
+    if (atomicTxid == null || beefObj.findTxid(atomicTxid) == null) return null
+
+    // Older clients could include unrelated BEEF branches. Restrict both
+    // pricing and wallet internalization to the transaction named by the
+    // BRC-95 subject prefix and its dependency closure.
+    beefArr = beefObj.toBinaryAtomic(atomicTxid)
     beefObj = Beef.fromBinary(beefArr)
   } catch {
     return null
   }
-  const lastTx = beefObj.txs.at(-1)
-  if (!lastTx?.tx) return null
-  const txid = lastTx.tx.id('hex')
+  const txid = beefObj.atomicTxid
+  if (txid == null) return null
+  const paymentTx = beefObj.findTxid(txid)?.tx
+  if (paymentTx == null) return null
 
   // Verify the specified output carries at least the required satoshi amount
   const voutIndex = parseUnsignedInteger(vout)
   if (voutIndex === undefined) return null
-  const output = lastTx.tx.outputs[voutIndex]
+  const output = paymentTx.outputs[voutIndex]
   if (output?.satoshis === undefined || output.satoshis < requiredSats) return null
 
   const result = (await wallet.internalizeAction({
@@ -161,10 +169,13 @@ export async function validatePayment(
   })) as { accepted: boolean; isMerge?: boolean }
 
   // Reject replayed transactions with an explicit error so callers can log it
-  if (result.isMerge) {
+  if (result.accepted !== true || result.isMerge === true) {
     return {
       accepted: false,
-      reason: `Replayed transaction: txid ${txid} has already been processed`
+      reason:
+        result.isMerge === true
+          ? `Replayed transaction: txid ${txid} has already been processed`
+          : `Wallet rejected transaction: txid ${txid}`
     }
   }
 

@@ -6,6 +6,18 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Require an affirmative certifier-signature verification result before
+  storing directly acquired or issuer-returned certificates. Identity overlay
+  results are now verified before decryption and trust scoring, so forged
+  certificates cannot become wallet-held or trusted discovered identities. The
+  reviewed browser Vite raw ceiling advances by 500 bytes to 1,609,000,
+  covering the measured 1,608,566-byte bundle, and its gzip ceiling advances
+  by 1,000 bytes to 379,800, covering the measured 379,333-byte bundle. Its
+  Brotli ceiling advances by 500 bytes to 297,500, covering the measured
+  297,046-byte bundle. The reviewed Hermes raw ceiling advances by 500 bytes to
+  3,368,000, covering the measured 3,367,664-byte bytecode. Remaining
+  compressed ceilings are unchanged.
+
 - Prevent spending approvals from being cached or coalesced, account for every
   paginated action before enforcing a spending token, and require HTTPS for
   non-loopback remote storage and Arcade SSE endpoints. Arcade SSE dependency
@@ -17,10 +29,10 @@ attention to changes that materially alter behavior or extend functionality.
   comparably trusted secret store. These changes are coordinated across the
   Node, browser, and React Native packages.
   The reviewed Vite raw ceiling advances by 1,000 bytes to 1,608,500, covering
-  the measured 1,608,439-byte bundle. Esbuild advances by 1,000 raw bytes to
+  the prior measured 1,608,439-byte bundle. Esbuild advances by 1,000 raw bytes to
   1,254,000, 100 gzip bytes to 345,600, and 200 Brotli bytes to 277,500,
   covering measured outputs of 1,253,769, 345,572, and 277,361 bytes. The Hermes
-  raw ceiling advances by 500 bytes to 3,367,500, covering the measured
+  raw ceiling advances by 500 bytes to 3,367,500, covering the prior measured
   3,367,479-byte bytecode. Existing Vite compressed and remaining mobile
   ceilings cover the other measured outputs.
 
