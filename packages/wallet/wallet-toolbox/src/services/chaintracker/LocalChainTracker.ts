@@ -80,6 +80,12 @@ export class LocalChainTracker implements ChainTracker {
   private readonly recoverLocal: LocalChainTrackerOptions['recoverLocal']
   private readonly clearLocal: LocalChainTrackerOptions['clearLocal']
   private readonly now: () => Date
+  private verificationContext = 0
+  private resetting = false
+  private eventEpoch = 0
+  private observerGeneration = 0
+  private readonly eventSubscriptions = new Map<ChaintracksClientApi, string>()
+  private readonly eventSetups = new Map<ChaintracksClientApi, Promise<void>>()
   private status: LocalChainTrackerStatus
 
   constructor(options: LocalChainTrackerOptions) {
@@ -111,11 +117,52 @@ export class LocalChainTracker implements ChainTracker {
   }
 
   setMode(mode: LocalChainTrackerMode): void {
+    if (this.status.mode !== mode) this.verificationContext++
     this.status = {
       ...this.status,
       mode,
       activeSource: mode === 'remote-only' ? 'fallback' : 'local'
     }
+  }
+
+  /** Local mode/source generation marker for consumers that invalidate derived verdicts. */
+  getVerificationContext(): string {
+    return `local-chaintracks:${this.sourceContext()}`
+  }
+
+  /**
+   * Fresh token for providers participating in this attempt's canonical authority.
+   * Remote-only uses fallbacks only; local-primary uses the local client only.
+   * A missing participating identity fails closed. Unused providers are omitted
+   * and cannot stand in. This is not an atomic multi-source snapshot.
+   */
+  async getVerificationContextToken(signal?: AbortSignal): Promise<string> {
+    const context = this.sourceContext()
+    this.throwIfAborted(signal)
+    this.assertCurrentContext(context, 'canonical token lookup')
+    const sources = this.attemptSources()
+    if (sources.length === 0) throw new Error('No canonical ChainTracks source is available')
+    await this.ensureEventObservers(sources)
+    const tips = await Promise.all(sources.map(async source => await source.findChainTipHash()))
+    this.throwIfAborted(signal)
+    this.assertCurrentContext(context, 'canonical token lookup')
+    if (!this.sameSources(sources, this.attemptSources())) {
+      throw new Error('Local ChainTracks provider changed during canonical token lookup')
+    }
+    if (tips.some(tip => tip == null || tip === '')) {
+      throw new Error('Canonical ChainTracks source identity is unavailable')
+    }
+    return JSON.stringify({ context, eventEpoch: this.eventEpoch, tips })
+  }
+
+  async dispose(): Promise<void> {
+    this.observerGeneration++
+    await Promise.all(
+      Array.from(this.eventSubscriptions.entries()).map(async ([source, subscription]) => {
+        this.eventSubscriptions.delete(source)
+        await source.unsubscribe(subscription).catch(() => undefined)
+      })
+    )
   }
 
   getStatus(): LocalChainTrackerStatus {
@@ -127,32 +174,48 @@ export class LocalChainTracker implements ChainTracker {
   }
 
   async currentHeight(): Promise<number> {
+    const context = this.sourceContext()
+    this.assertCurrentContext(context, 'height lookup')
     if (this.status.mode === 'remote-only') {
-      return await this.fallbackHeight()
+      const height = await this.fallbackHeight()
+      this.assertCurrentContext(context, 'height lookup')
+      return height
     }
+    const local = this.local
     try {
-      const height = await this.local.getPresentHeight()
+      const height = await local.getPresentHeight()
+      this.assertCurrentContext(context, 'height lookup')
       this.status = { ...this.status, activeSource: 'local', localHeight: height, lastError: undefined }
       return height
     } catch (error) {
+      this.assertCurrentContext(context, 'height lookup')
       this.recordError(error)
       if (!this.fallbackOnLocalError) throw error
-      return await this.fallbackHeight()
+      const height = await this.fallbackHeight()
+      this.assertCurrentContext(context, 'height lookup')
+      return height
     }
   }
 
   async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    const context = this.sourceContext()
+    this.assertCurrentContext(context, 'root validation')
     if (this.status.mode !== 'remote-only') {
+      const local = this.local
       try {
-        const valid = await this.local.isValidRootForHeight(root, height)
+        const valid = await local.isValidRootForHeight(root, height)
+        this.assertCurrentContext(context, 'root validation')
         this.status = { ...this.status, activeSource: 'local', lastError: undefined }
         return valid
       } catch (error) {
+        this.assertCurrentContext(context, 'root validation')
         this.recordError(error)
         if (!this.fallbackOnLocalError) throw error
       }
     }
-    return await this.fallbackValidation(root, height)
+    const valid = await this.fallbackValidation(root, height)
+    this.assertCurrentContext(context, 'root validation')
+    return valid
   }
 
   async synchronize(): Promise<LocalChainTrackerStatus> {
@@ -162,8 +225,10 @@ export class LocalChainTracker implements ChainTracker {
   }
 
   async clearLocalData(): Promise<LocalChainTrackerStatus> {
-    if (this.clearLocal == null) throw new Error('Local ChainTracks clearing is not configured.')
-    this.local = await this.clearLocal()
+    const clearLocal = this.clearLocal
+    if (clearLocal == null) throw new Error('Local ChainTracks clearing is not configured.')
+    const reset = this.beginReset()
+    await this.applyReset(reset, clearLocal)
     this.status = {
       mode: this.status.mode,
       activeSource: this.status.mode === 'remote-only' ? 'fallback' : 'local',
@@ -274,15 +339,20 @@ export class LocalChainTracker implements ChainTracker {
         this.recoverLocal != null &&
         expectedHash != null
       ) {
-        this.local = await this.recoverLocal({
-          reason: consistency,
-          localHeight,
-          referenceHeight,
-          heightLag,
-          comparisonHeight,
-          expectedHash,
-          referenceAgreement
-        })
+        const reset = this.beginReset()
+        await this.applyReset(
+          reset,
+          async () =>
+            await this.recoverLocal!({
+              reason: consistency,
+              localHeight,
+              referenceHeight,
+              heightLag,
+              comparisonHeight,
+              expectedHash,
+              referenceAgreement
+            })
+        )
         const recoveredAt = this.now().toISOString()
         const recovered = await this.checkConsistencyInternal(false)
         this.status = { ...recovered, recoveredAt }
@@ -313,6 +383,114 @@ export class LocalChainTracker implements ChainTracker {
     const error = lastError ?? new Error('No fallback ChainTracks source is configured.')
     this.recordError(error)
     throw error
+  }
+
+  private attemptSources(): ChaintracksClientApi[] {
+    return this.status.mode === 'remote-only' ? [...this.fallbacks] : [this.local]
+  }
+
+  private sameSources(left: ChaintracksClientApi[], right: ChaintracksClientApi[]): boolean {
+    return left.length === right.length && left.every((source, index) => source === right[index])
+  }
+
+  private async applyReset(reset: number, nextLocal: () => Promise<ChaintracksClientApi>): Promise<void> {
+    await this.dispose()
+    this.assertResetOwner(reset)
+    const local = await nextLocal()
+    this.assertResetOwner(reset)
+    this.local = local
+    this.resetting = false
+  }
+
+  private sourceContext(): string {
+    const nested = (source: ChaintracksClientApi): string => {
+      const provider = source as ChaintracksClientApi & { getVerificationContext?: () => string | number }
+      return String(provider.getVerificationContext?.() ?? '')
+    }
+    return JSON.stringify([
+      this.verificationContext,
+      this.resetting,
+      this.status.mode,
+      this.eventEpoch,
+      this.observerGeneration,
+      nested(this.local),
+      this.fallbacks.map(nested)
+    ])
+  }
+
+  private assertCurrentContext(context: string, operation: string): void {
+    if (this.resetting || context !== this.sourceContext()) {
+      throw new Error(`Local ChainTracks provider changed during ${operation}`)
+    }
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted === true) throw signal.reason ?? new Error('Local ChainTracks token lookup aborted')
+  }
+
+  private beginReset(): number {
+    this.verificationContext++
+    this.resetting = true
+    return this.verificationContext
+  }
+
+  private assertResetOwner(reset: number): void {
+    if (reset !== this.verificationContext) throw new Error('Local ChainTracks reset was superseded')
+  }
+
+  private reorgSubscribe(source: ChaintracksClientApi): ((listener: unknown) => Promise<string>) | undefined {
+    if (source.supportsReorgEvents === false) return undefined
+    const events = source as ChaintracksClientApi & {
+      subscribeReorgs?: (listener: unknown) => Promise<string>
+    }
+    if (typeof events.subscribeReorgs === 'function') return async listener => await events.subscribeReorgs!(listener)
+    if (source.supportsReorgEvents === true) {
+      throw new Error('Chaintracks provider promised reorg events but subscribeReorgs is not implemented')
+    }
+    return undefined
+  }
+
+  private async ensureEventObservers(sources: ChaintracksClientApi[]): Promise<void> {
+    await Promise.all(
+      sources.map(async source => {
+        const subscribe = this.reorgSubscribe(source)
+        if (subscribe == null) return
+        if (this.eventSubscriptions.has(source)) return
+        const pending = this.eventSetups.get(source)
+        if (pending !== undefined) {
+          await pending
+          if (
+            !this.eventSubscriptions.has(source) &&
+            !this.resetting &&
+            (source === this.local || this.fallbacks.includes(source))
+          ) {
+            await this.ensureEventObservers([source])
+          }
+          return
+        }
+        const generation = this.observerGeneration
+        const current = (): boolean =>
+          !this.resetting &&
+          generation === this.observerGeneration &&
+          (source === this.local || this.fallbacks.includes(source))
+        const setup = (async () => {
+          const subscription = await subscribe(() => {
+            if (current()) this.eventEpoch++
+          })
+          if (!current()) {
+            await source.unsubscribe(subscription).catch(() => undefined)
+            return
+          }
+          this.eventSubscriptions.set(source, subscription)
+        })()
+        this.eventSetups.set(source, setup)
+        try {
+          await setup
+        } finally {
+          if (this.eventSetups.get(source) === setup) this.eventSetups.delete(source)
+        }
+      })
+    )
   }
 
   private async fallbackValidation(root: string, height: number): Promise<boolean> {

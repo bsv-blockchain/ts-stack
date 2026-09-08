@@ -7,15 +7,18 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox (unreleased)
 
 - Secure final overlay identity discovery with independently verified transaction
-  evidence, byte-derived txid/hint checks, output bounds, the subject-signed
-  identity envelope, and explicit certificate success. Cached overlay responses
-  retain evidence only and repeat verification before returning identities.
-  Configure the existing wallet Services ChainTracker; direct `identityUtils`
-  callers must pass it explicitly. Local contacts, permission handling, wallet
-  RPC shapes, and current pagination behavior are retained. This security fix is
-  a patch in the full, browser, and mobile packages (2.11.1). No storage migration
-  is required. See [identity verification](docs/identity-verification.md) for the
-  supported token contract and remaining chain-cache/discovery limits.
+  evidence, byte-derived txid/hint checks, complete unconfirmed-graph
+  consistency, bounded resolver intake, the standard subject-signed identity
+  envelope, and explicit certificate success. C02/C03 add the exported SDK
+  evidence coordinator, optional chain-provider context markers, bounded
+  transaction/script work sharing, and revalidation of canonical anchors on
+  positive-cache use. Cached overlay receipts and decrypted certificates remain
+  wallet-owned, bounded, and separate from local contacts and trust policy.
+  Existing permission negotiation, pagination, wallet RPC shapes, and resolver
+  call forms remain characterized as compatible. See [identity verification](docs/identity-verification.md)
+  for the current contracts and limits. Package and packed-consumer validation
+  for the current source remains pending release review; historical C01 bundle
+  measurements are retained in that guide.
 
 - Keep Argon2id-backed UMP v3 wallets available in React Native and other
   runtimes without WebAssembly by falling back to an asynchronously yielding,

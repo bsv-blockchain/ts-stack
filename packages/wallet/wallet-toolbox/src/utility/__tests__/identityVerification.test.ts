@@ -10,7 +10,13 @@ import {
   VerifiableCertificate
 } from '@bsv/sdk'
 import { LookupAnswer, LookupResolver } from '@bsv/sdk'
-import { parseResults, parseResults$, queryOverlay } from '../identityUtils'
+import {
+  IdentityEvidenceVerifier,
+  parseResults,
+  parseResults$,
+  queryOverlay,
+  queryOverlayEvidence
+} from '../identityUtils'
 import { verifyOverlayOutput } from '../verifyOverlayOutput'
 import {
   createIdentityVerificationFixture,
@@ -57,6 +63,30 @@ describe('identity overlay verification', () => {
       root: fixture.certificateTransaction.merklePath?.computeRoot(fixture.certificateTransaction.id('hex')),
       height: IDENTITY_VERIFICATION_CONFIRMED_HEIGHT
     })
+  })
+
+  it('propagates identity evidence limits instead of returning a partial result', async () => {
+    const receipt = answer(outputFor(fixture.certificateBEEF))
+    const resolver = { query: jest.fn(async () => receipt) } as unknown as LookupResolver
+    await expect(queryOverlayEvidence({}, resolver, { candidateBytes: 1 })).rejects.toMatchObject({ code: 'limit' })
+    await expect(
+      queryOverlayEvidence({}, resolver, {
+        candidateBytes: fixture.certificateBEEF.length,
+        retainedBytes: fixture.certificateBEEF.length,
+        outputs: 1
+      })
+    ).resolves.toEqual(receipt)
+
+    const limitedResolver = {
+      query: jest.fn(async (_query, _auth, options) => {
+        options.onEvidence({ type: 'limit' })
+        return receipt
+      })
+    } as unknown as LookupResolver
+    await expect(queryOverlayEvidence({}, limitedResolver)).rejects.toMatchObject({ code: 'limit' })
+
+    const verifier = new IdentityEvidenceVerifier(fixture.confirmedTracker, 'limit-test', { candidateBytes: 1 })
+    await expect(verifier.parse(outputFor(fixture.certificateBEEF))).rejects.toMatchObject({ code: 'limit' })
   })
 
   it('accepts a genuinely signed unconfirmed spend only when its ancestor is confirmed', async () => {

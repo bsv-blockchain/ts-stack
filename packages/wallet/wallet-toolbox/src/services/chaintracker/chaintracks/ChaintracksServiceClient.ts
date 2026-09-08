@@ -17,6 +17,8 @@ export interface ChaintracksServiceClientOptions {}
  *
  */
 export class ChaintracksServiceClient implements ChaintracksClientApi {
+  /** HTTP polling client; callback event methods are legacy unsupported stubs. */
+  readonly supportsReorgEvents = false
   static createChaintracksServiceClientOptions(): ChaintracksServiceClientOptions {
     const options: ChaintracksServiceClientOptions = {
       useAuthrite: false

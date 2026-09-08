@@ -1,106 +1,194 @@
 # Identity overlay verification
 
-This page records the bounded C01 source contract for identity results returned by the wallet toolbox. It is an inventory of the current implementation and its compatibility edges. It does not describe completion of the wider overlay reliability plan.
+This page records the current C01, C02, and C03 source contract for identity
+results returned by Wallet Toolbox. The implementation and its tests remain
+under review; this page is not a claim that the wider verification plan or
+release gates have completed.
 
 ## Evidence boundary
 
-An overlay lookup result is a host-supplied `LookupAnswer`. The resolver permits an output to carry a transaction id hint, but the hint is metadata rather than chain authority. C01 treats each output as untrusted evidence and verifies the BEEF bytes and selected output with the wallet's configured `ChainTracker` before decoding an identity certificate.
+An overlay result is a host-supplied `LookupAnswer`. A host TXID hint and
+`context` are metadata, never chain authority. [`queryOverlayEvidence`](../src/utility/identityUtils.ts)
+copies the BEEF and context bytes received through the additive resolver
+`onEvidence` callback. Resolver callback intake defaults to 512 outputs and
+16 MiB per query and accepts `evidenceLimits: { maxOutputs?, maxBytes? }` as
+configurable local policy. It uses a 300 ms identity grace window. Older or
+custom resolvers that do not invoke the callback remain usable through the
+legacy output-list fallback.
 
-The shared transaction seam is [`verifyOverlayOutput`](../src/utility/verifyOverlayOutput.ts). It owns a copy of the BEEF bytes, derives the transaction id from those bytes, and rejects a supplied hint unless it matches that derived id. It checks the selected output and verifies the transaction graph through the caller's tracker. An unconfirmed branch must have ancestry; an input-free unconfirmed leaf cannot anchor an identity result. The preflight also rejects duplicate inputs and conflicting spends across distinct unconfirmed ancestors, while allowing a shared transaction to be traversed once. This is consistency of the supplied graph, not an external unspentness check. The generic helper has no network default, certificate policy, verdict cache, or identity-specific locking-key rule.
+Direct `queryOverlayEvidence` callers can configure
+`{ candidateBytes?, retainedBytes?, outputs? }`. To admit larger valid
+evidence, pass matching byte limits to both this intake option and the third
+`IdentityEvidenceVerifier` constructor argument (`TransactionEvidenceLimits`).
+The resolver and verifier limits are separate admission boundaries and are not
+consensus limits.
 
-The wallet obtains the tracker through [`WalletServicesOptions.chainTracker`](../src/sdk/WalletServices.interfaces.ts) and [`Services.getChainTracker`](../src/services/Services.ts). A configured tracker is the wallet's chain authority. The utility functions [`queryOverlay`](../src/utility/identityUtils.ts), [`parseResults`](../src/utility/identityUtils.ts), and [`parseResults$`](../src/utility/identityUtils.ts) accept an explicit optional tracker; when it is missing they fail closed with an empty result. This keeps a caller from accidentally treating an overlay response as verified.
+[`TransactionEvidenceCoordinator`](../../../sdk/src/transaction/TransactionEvidenceCoordinator.ts)
+parses the owned bytes, derives the selected transaction ID, compares any
+supplied hint, checks the selected output, validates the complete unconfirmed
+graph, and performs fresh canonical-root checks through the caller's
+`ChainTracker`. It checks source transaction/value/script bindings, source TXID
+consistency, duplicate spent outpoints, input/script limits, and rejects an
+unconfirmed zero-input leaf. A successful result identifies a transaction
+output and locking script; it does not establish service relevance, current
+unspentness, ownership, or freshness.
 
-The identity parser then decodes the selected output as PushDrop, requires the subject-signed field payload to verify, requires `VerifiableCertificate.verify()` to return `true`, decrypts the public keyring, and requires nonempty decrypted fields. A cryptographic signature failure is already surfaced as an exception by [`ProtoWallet.verifySignature`](../../../sdk/src/wallet/ProtoWallet.ts), which the parser drops with the candidate. The earlier ignored boolean from certificate verification is therefore not an invalid-certificate bypass; C01 makes the success condition explicit while adding the missing transaction evidence checks. Candidate errors are not logged because parser/decryption exceptions may contain identity data.
+The coordinator's `chainNamespace` and `policyId` are explicit caller-owned
+trust context. An optional synchronous
+`ChainTracker.getVerificationContext(): string | number` is a provider,
+policy, or recovery-generation marker. The optional
+`getVerificationContextToken(signal?)` obtains a fresh trusted tip/context
+token and brackets canonical-root and height checks. Chaintracks and local
+adapters include monotonic reorganization/reset epochs and fence reset entry
+and failure paths. `LocalChainTracker` tokens cover only the providers
+participating in the current attempt: remote-only uses fallback identity,
+local-primary uses local identity. An unused provider cannot stand in, and a
+missing participating identity fails closed. Built-in remote ChainTracks
+clients advertise reorg-event capability explicitly; method presence is not
+capability. `Services.getChainTracker()` publishes one coalesced wrapper
+before yielding. A remote tip equality read cannot detect an unobserved ABA
+transition, and a token over multiple sources is not an atomic multi-source
+snapshot. Canonical roots and observed heights remain dependencies that are
+rechecked on each use, including positive-cache reuse. Existing trackers may
+omit either optional method and may ignore optional abort signals.
 
-## Standard identity envelope
+`EvidenceScriptWork` in the SDK now shares bounded script work by a binding that
+covers the actual transaction, all input source-output bytes and values, and
+script policy/backend parameters. The binding is transaction-wide rather than
+an input-index-only key. A cache hit can skip cryptographic script execution
+only. It still performs source/value binding, complete graph traversal,
+canonical chain calls, and policy/context checks. Non-batch individual
+executions preserve each entry's fulfilled or rejected result so a failed
+sibling cannot reject a successful shared ancestor. Only a backend batch-level
+failure rejects the whole batch. Non-abortable backend work remains counted
+until its actual promise settles, and in-flight owners are isolated. A normal
+block arrival before the next reuse does not erase exact cryptographic script
+work when its transaction/source/policy binding remains valid; canonical roots
+and fresh context are still checked.
 
-The interoperable envelope is the one emitted by the default [`IdentityClientOptions`](../../../sdk/src/identity/types/index.ts): protocol ID `[1, 'identity']`, key ID `'1'`, token amount `1`, and output index `0`. [`IdentityClient.publiclyRevealAttributes`](../../../sdk/src/identity/IdentityClient.ts) creates the PushDrop output and broadcasts it to `tm_identity`.
+## Identity envelope
 
-The current [`IdentityTopicManager`](../../../../packages/overlays/topics/src/identity/IdentityTopicManager.ts) verifies the same subject-signed PushDrop fields with protocol `[1, 'identity']` and key ID `'1'`, then checks certificate validity and nonempty decrypted attributes. C01 matches that actual server contract. `IdentityClientOptions` exposes custom protocol and key values, but the current topic manager does not accept arbitrary values: a non-default protocol ID or key ID is a compatibility hazard and can cause the topic to reject the output. C01 does not widen topic acceptance.
+The interoperable identity output is the standard subject-signed PushDrop
+created by [`IdentityClient.publiclyRevealAttributes`](../../../sdk/src/identity/IdentityClient.ts):
+protocol ID `[1, 'identity']`, key ID `'1'`, token amount `1`, and output index
+`0`. [`IdentityTopicManager`](../../../../packages/overlays/topics/src/identity/IdentityTopicManager.ts)
+checks the same protocol and key, then certificate validity and nonempty
+attributes. `IdentityClientOptions` exposes custom protocol and key values, but
+the current server topic does not accept arbitrary values; custom values remain
+a compatibility characterization item and C01 does not widen server
+acceptance.
 
-There is no existing topic contract for comparing an identity certificate to an arbitrary `lockingPublicKey`, so C01 adds no such equality rule. The subject-signed envelope, certificate signature, successful decryption, and trusted-certifier policy remain the relevant checks.
+The parser checks the subject signature, requires `VerifiableCertificate.verify()`
+to return `true`, decrypts the fields, and requires nonempty decrypted fields.
+`ProtoWallet.verifySignature` throws on a cryptographic failure today; the
+parser catches and rejects that candidate. C01 does not claim an invalid
+certificate can bypass this throw. There is no existing topic contract for an
+arbitrary `lockingPublicKey` equality rule, so none is added.
 
 ## Cache and contact boundaries
 
-The wallet's overlay evidence cache is a two-minute response cache in [`Wallet.ts`](../src/Wallet.ts). Cached BEEF is revalidated on every use with the current tracker and certificate checks. If any candidate is rejected, the query entry is evicted so a later call can fetch fresh evidence. The cache is not a chain verdict and does not change local contact behavior.
+The wallet keeps three distinct boundaries:
 
-Local contacts are a separate wallet-owned source. [`Wallet.ts`](../src/Wallet.ts) synthesizes contact results with the local contact's subject/certifier relationship and local trust data. A contact hit may short-circuit the overlay path as before; it must retain local-contact provenance and must not be presented as an overlay SPV result. Contact lookup failures fall through to the network path.
+- Transaction evidence is revalidated through the current chain tracker on
+  every use. Coordinator positive results are bounded by configurable generic
+  SDK limits, including 128 entries, 16 MiB retained bytes, and 60 seconds.
+- Decrypted certificate JSON is wallet-owned and copied on return. Its cache is
+  bounded at 2 MiB, 128 entries, and 60 seconds.
+- Raw overlay lookup receipts are copied into a wallet cache bounded at 32
+  queries, 16 MiB, and 120 seconds. A rejected or incomplete parse evicts that
+  query entry so a later call can fetch again.
 
-## Compatibility inventory and limits
+The wallet obtains the tracker from `getServices().getChainTracker()` and
+reuses the configured instance. Direct [`queryOverlay`](../src/utility/identityUtils.ts),
+`parseResults`, and `parseResults$` calls fail closed when no tracker is
+provided. [`verifyOverlayOutput`](../src/utility/verifyOverlayOutput.ts)
+requires an explicit tracker. Local contacts remain a separate wallet-owned
+source and retain their existing short-circuit and trust behavior; contact
+results must retain local provenance and are not overlay SPV results. Invalid
+candidate evidence is dropped, while typed `limit` and `timeout` outcomes
+propagate to the wallet caller instead of becoming a definitive empty result.
 
-The public identity path spans the SDK wallet interfaces and clients, JSON and binary wallet transports, toolbox wallet managers, and [`IdentityClient`](../../../sdk/src/identity/IdentityClient.ts). C01 preserves those Promise method shapes and the `parseResults$` async-iterable shape. It does not change permission negotiation or pagination. The interface documentation says `seekPermission` defaults true, while the validator currently applies a false default; see [`Wallet.interfaces.ts`](../../../sdk/src/wallet/Wallet.interfaces.ts) and [`validationHelpers.ts`](../../../sdk/src/wallet/validationHelpers.ts). The wallet's current overlay calls also do not forward validated `limit` and `offset`, although the identity lookup service accepts them. These are compatibility characterization items for W00/W02, outside this C01 document.
+## Compatibility characterization
 
-The resolver currently validates only the shape of a txid hint in [`LookupResolver.ts`](../../../sdk/src/overlay-tools/LookupResolver.ts). Its aggregation deduplicates by the hinted or derived txid and output index, keeping the first answer, and its fast path trusts a nonempty hint ([`LookupResolver.ts`](../../../sdk/src/overlay-tools/LookupResolver.ts), [`LookupResolver.ts`](../../../sdk/src/overlay-tools/LookupResolver.ts)). C02 owns the first-wins raw resolver suppression and pending full txid sharing work. C01 verifies the evidence that reaches the wallet; it cannot recover an alternate candidate discarded before parsing.
+C01, C02, and C03 preserve existing Promise and `parseResults$` async-iterable
+shapes. The resolver's `onEvidence` callback is optional and additive. Legacy
+resolver answers continue to aggregate by TXID/output index with first-wins
+suppression; a host hint is only a resolver fast path and must be re-derived
+and checked by security-sensitive consumers. The callback is the bounded path
+for consumers that need each host receipt before that suppression. Existing
+2-second lookup and 5-second tracker-wait defaults remain unchanged.
 
-The existing `ChaintracksChainTracker` still has its height-keyed root-cache and reorganization lifecycle. C01 makes no reorganization-safety claim; C03 covers that Chaintracks cache limitation and lifecycle work. C01 adds no workers, shared transaction jobs, response/graph budgets, or whole-attempt deadline. Large proofs still incur parsing and verification work on the calling runtime. These limits and canonical-context fencing require the later coordinator/runtime slices; no latency, reorganization safety, or deployment claim is made here.
+Permission negotiation and pagination are unchanged. The interface
+characterization still records that documentation says `seekPermission`
+defaults to true while the validator currently applies false. Identity lookup
+also retains the existing limit/offset validation and forwarding
+characterization; this evidence work does not silently change either contract.
 
-## Requirement and verification mapping
+The standard topic envelope characterization and custom `IdentityClientOptions`
+behavior above remain required for interoperability. No arbitrary locking-key
+equality rule is implied. Chaintracks and local adapters now expose monotonic
+reorganization/reset epochs and fence reset lifecycle races, including reset
+ownership checks after disposal and before a destructive hook. Remote tip
+equality still cannot detect an unobserved ABA transition, and no adapter token
+provides an atomic multi-source snapshot. C03 therefore makes no general
+reorganization-safety claim.
 
-The scoped source work supports requirement V1 (independent transaction evidence), the byte-binding portion of V2 (BEEF-derived txid must match any hint), and V5 (certificate success and trust policy). The planned characterization cases are T04 (false txid hint), T07 (confirmed/unconfirmed ancestry, scripts, values, and graph-internal conflicts), T09 (output/envelope/certificate validity), T10 (permission, cache, and local contacts), and T13 (Promise and pagination compatibility). This mapping is evidence for the C01 slice only; it is not a claim that the full verification plan has passed.
+## Usage
 
-## Configuration and migration
-
-This is a patch security correction in the 2.11.1 full, browser, and mobile
-packages; the aggregate release-note candidate remains minor relative to the
-recorded 2.10.4 published baseline. Wallet RPC and stored data need no migration.
-Wallet builders keep their existing `Services` chain configuration. Its
-`getChainTracker()` selects `options.chainTracker`, or wraps the configured
-`options.chaintracks`; a configuration/availability error never becomes an
-acceptance verdict. Use a chain source maintained independently of overlay hosts.
-
-Direct utility callers previously supplied only an answer. They must now pass
-their canonical chain source:
+Wallet callers use the existing Services configuration:
 
 ```ts
 const tracker = await wallet.getServices().getChainTracker()
 const certificates = await parseResults(answer, tracker)
 ```
 
-Omitting the optional argument remains source-compatible but fails closed.
-There is no bypass toggle. Failed candidate evidence evicts a wallet response
-cache entry; failures never establish a permanent negative verdict for a txid.
-Untrusted cached bytes may be shared within this wallet, but decrypted result
-objects are rebuilt on each call and then passed through the existing trust
-settings. The existing two-minute trust-settings snapshot policy is unchanged.
+Omitting the utility tracker remains source-compatible but returns no verified
+overlay identities. There is no bypass toggle. Wallet RPC shapes, stored data,
+permission defaults, and pagination behavior require no migration from this
+source work.
 
-## Package size review
+On browser and React Native runtimes, `parseResults$` cooperatively yields
+between certificates. This is a current-runtime scheduling behavior, with no
+worker, throughput, latency, resource-isolation, or deployment guarantee.
+C04/C05 work and any whole-plan completion claim remain future scope.
 
-On 8 September 2026, the originating review task
-`01a081b5-26d4-7ad1-8d85-243fe238d595` explicitly approved these measured C01
-budget adjustments under
-[`governance/browser-artifact-policy.json`](../../../../governance/browser-artifact-policy.json).
-The policy requires a versioned source change, composition evidence, and explicit
-review. All three published artifacts advance from 2.11.0 to 2.11.1. Mandatory
-transaction, graph, and identity checks remain in the portable bundles.
+## Requirement and verification mapping
+
+The scoped source supports V1 (independent transaction evidence), the
+byte-binding portion of V2 (BEEF-derived TXID versus any hint), and V5
+(certificate success and trust policy). T04, T07, T09, T10, and T13 remain the
+relevant characterization cases for false hints, graph and anchor checks,
+envelope/certificate validity, permissions/cache/contacts, and Promise/
+pagination compatibility. The synthetic shared-ancestor fixture is 556 BEEF
+bytes with three reachable transactions, three inputs, and 314 serialized
+script bytes; two child graphs produce three actual script executions. Current
+tests are evidence for these slices only; validation is not final until the
+required package and consumer checks pass.
+
+## Historical C01 bundle measurements
+
+The following measurements are retained as historical C01 evidence for the
+2.11.1 artifacts. They are measurements only, not passing platform gates and
+not a release decision. C02/C03 source changes require fresh package and
+consumer validation.
 
 Measurements used Node 24.15.0 and pnpm 10.33.2 on the same macOS host, with
 base commit `2bc799a8d8e535242e6de2d305f426ce3975ea7b` extracted into a temporary
-source tree and built against the same unchanged SDK and dependency graph.
-`pnpm build` ran in each base/current client and mobile package. A temporary
-copy of the platform checker printed every size instead of evaluating budgets:
-`node /tmp/c01-measure-baseline.mjs browser`,
-`node /tmp/c01-measure-baseline.mjs mobile`,
-`node /tmp/c01-measure-platform.mjs browser`, and
-`node /tmp/c01-measure-platform.mjs mobile`.
-These were **measurements only, not passing platform gates**. The original
-platform checker was not modified.
+source tree and the same SDK/dependency graph. A temporary copy of the
+platform checker printed each size instead of evaluating budgets. The original
+checker was not modified.
 
 Each cell lists raw / gzip / Brotli bytes:
 
-| Consumer | Base                              | C01                               | Reviewed maximum                  |
-| -------- | --------------------------------- | --------------------------------- | --------------------------------- |
-| Vite     | 1,692,309 / 399,380 / 312,207     | 1,694,805 / 400,062 / 312,426     | 1,696,000 / 401,000 / 314,000     |
-| esbuild  | 1,320,184 / 363,792 / 291,500     | 1,322,211 / 364,400 / 291,926     | 1,324,000 / 365,000 / 293,000     |
-| Metro    | 1,747,262 / 443,100 / 343,780     | 1,749,640 / 443,811 / 343,927     | 1,751,000 / 455,000 / 360,000     |
+| Consumer |                              Base |                               C01 |                  Reviewed maximum |
+| -------- | --------------------------------: | --------------------------------: | --------------------------------: |
+| Vite     |     1,692,309 / 399,380 / 312,207 |     1,694,805 / 400,062 / 312,426 |     1,696,000 / 401,000 / 314,000 |
+| esbuild  |     1,320,184 / 363,792 / 291,500 |     1,322,211 / 364,400 / 291,926 |     1,324,000 / 365,000 / 293,000 |
+| Metro    |     1,747,262 / 443,100 / 343,780 |     1,749,640 / 443,811 / 343,927 |     1,751,000 / 455,000 / 360,000 |
 | Hermes   | 3,544,570 / 1,440,174 / 1,117,759 | 3,550,004 / 1,442,134 / 1,120,813 | 3,553,000 / 1,443,000 / 1,123,000 |
 
-Raw growth is 2,496 / 2,027 / 2,378 / 5,434 bytes respectively (about
-0.14–0.15%). Vite composition retains 106 modules and the same packages:
-`@bsv/sdk`, `@bsv/wallet-toolbox-client`, `@noble/hashes`, `hash-wasm`, and `idb`.
-The esbuild module count remains 173. No new dependency or platform-only import
-was added. Shared wallet cache/fetch logic removes duplication; independent
-verification and subject-envelope checks account for the added code. Only
-exceeded dimensions changed, rounded to preserve comparable existing margins;
-all other limits stay fixed. This is a reviewed security-feature payload change,
-not an analysis exception. Original `test:browser` and `test:mobile` commands
-remain the executable gates and are recorded separately in the delivery ledger.
+The historical C01 result measured raw growth of 2,496 / 2,027 / 2,378 /
+5,434 bytes for Vite, esbuild, Metro, and Hermes respectively. The C01
+composition retained the same dependencies and did not add a platform-only
+import. The original `test:browser` and `test:mobile` commands remain the
+executable gates for any current release evidence.

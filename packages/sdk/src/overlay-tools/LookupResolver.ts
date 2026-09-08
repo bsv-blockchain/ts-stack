@@ -54,6 +54,20 @@ export type LookupFacilitatorAnswer = LookupAnswer | LookupFreeformAnswer
  */
 export interface LookupQueryOptions {
   /**
+   * Owned, UNTRUSTED receipts before legacy txid/outpoint deduplication. Enqueue
+   * promptly; callback completion is not awaited and failures are isolated.
+   * Intake stops at the configured evidenceLimits, reporting one limit event.
+   * No callbacks occur after the query iterator closes. Legacy answers, host
+   * scheduling, timeout and reputation behavior are unchanged.
+   */
+  onEvidence?: (event: LookupEvidenceEvent) => void | Promise<void>
+  /**
+   * Callback intake budget, independent of legacy aggregation. Defaults to 512
+   * outputs / 16 MiB of BEEF and context bytes. Values must be positive safe
+   * integers. Coordinate these with a downstream verifier's admission limits.
+   */
+  evidenceLimits?: { maxOutputs?: number; maxBytes?: number }
+  /**
    * Override the grace window (ms) between the first valid response and the resolution of the query.
    * Late responders arriving within this window are merged into the result. Default 80 ms.
    * Raise for identity-style paths (e.g. ~300 ms) where divergence between hosts matters.
@@ -95,6 +109,10 @@ export interface LookupQueryOptions {
   /** Correlates resolver and downstream wallet telemetry without logging the query payload. */
   correlationId?: string
 }
+
+/** Additive evidence intake, independent of the legacy aggregated answer. */
+export type LookupEvidenceEvent =
+  { type: 'output'; host: string; output: LookupAnswer['outputs'][number] } | { type: 'limit' }
 
 /** Info supplied to onUnreachableHost callbacks. */
 export interface UnreachableHostInfo {
@@ -498,10 +516,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
 }
 
 type LookupQueryEvent =
-  | { kind: 'answer'; answer: LookupAnswer }
-  | { kind: 'done' }
-  | { kind: 'grace' }
-  | { kind: 'soft' }
+  { kind: 'answer'; answer: LookupAnswer } | { kind: 'done' } | { kind: 'grace' } | { kind: 'soft' }
 
 interface LookupQuerySessionOptions {
   hostCount: number
@@ -509,10 +524,8 @@ interface LookupQuerySessionOptions {
   softTimeoutMs?: number
   waitForAllHosts: boolean
   correlationId?: string
-  resolveTxId: (
-    output: LookupAnswer['outputs'][number],
-    now: number
-  ) => string | null
+  evidenceLimits?: LookupQueryOptions['evidenceLimits']
+  resolveTxId: (output: LookupAnswer['outputs'][number], now: number) => string | null
 }
 
 class LookupQuerySession {
@@ -526,6 +539,12 @@ class LookupQuerySession {
   rejectedHosts = 0
   freeformHosts = 0
   emittedFinal = false
+  closed = false
+  private evidenceOutputs = 0
+  private evidenceBytes = 0
+  private evidenceLimited = false
+  private readonly maxEvidenceOutputs: number
+  private readonly maxEvidenceBytes: number
 
   private readonly graceMs: number
   private readonly softTimeoutMs?: number
@@ -545,6 +564,14 @@ class LookupQuerySession {
   private emittedOnce = false
 
   constructor(options: LookupQuerySessionOptions) {
+    this.maxEvidenceOutputs = options.evidenceLimits?.maxOutputs ?? 512
+    this.maxEvidenceBytes = options.evidenceLimits?.maxBytes ?? 16 * 1024 * 1024
+    if (
+      ![this.maxEvidenceOutputs, this.maxEvidenceBytes].every(
+        value => Number.isSafeInteger(value) && value > 0
+      )
+    )
+      throw new Error('Evidence intake limits must be positive safe integers')
     this.hostCount = options.hostCount
     this.graceMs = options.graceMs
     this.softTimeoutMs = options.softTimeoutMs
@@ -568,6 +595,43 @@ class LookupQuerySession {
       return
     }
     this.push({ kind: 'answer', answer })
+  }
+
+  receiveEvidence(
+    host: string,
+    answer: LookupAnswer,
+    callback: LookupQueryOptions['onEvidence']
+  ): void {
+    if (callback === undefined || this.closed || this.evidenceLimited) return
+    const deliver = (event: LookupEvidenceEvent): void => {
+      try {
+        void Promise.resolve(callback(event)).catch(() => {})
+      } catch {
+        /* consumer isolation */
+      }
+    }
+    for (const output of answer.outputs) {
+      const bytes = output.beef.length + (output.context?.length ?? 0)
+      if (
+        this.evidenceOutputs >= this.maxEvidenceOutputs ||
+        this.evidenceBytes + bytes > this.maxEvidenceBytes
+      ) {
+        this.evidenceLimited = true
+        deliver({ type: 'limit' })
+        break
+      }
+      this.evidenceOutputs++
+      this.evidenceBytes += bytes
+      deliver({
+        type: 'output',
+        host,
+        output: {
+          ...output,
+          beef: output.beef.slice(),
+          ...(output.context === undefined ? {} : { context: output.context.slice() })
+        }
+      })
+    }
   }
 
   recordFreeformAnswer(): void {
@@ -615,9 +679,7 @@ class LookupQuerySession {
       failedHosts: this.failedHosts,
       rejectedHosts: this.rejectedHosts,
       freeformHosts: this.freeformHosts,
-      ...(this.correlationId !== undefined
-        ? { correlationId: this.correlationId }
-        : {})
+      ...(this.correlationId !== undefined ? { correlationId: this.correlationId } : {})
     }
   }
 
@@ -634,11 +696,7 @@ class LookupQuerySession {
         this.graceFired = true
       }
     }
-    if (
-      this.graceFired &&
-      added &&
-      (this.emittedOnce || !this.waitForAllHosts)
-    ) {
+    if (this.graceFired && added && (this.emittedOnce || !this.waitForAllHosts)) {
       this.emittedOnce = true
       return this.snapshot(false)
     }
@@ -663,9 +721,7 @@ class LookupQuerySession {
     }
     return {
       snapshot,
-      stop:
-        typeof this.softTimeoutMs === 'number' &&
-        this.firstResponseAt !== null
+      stop: typeof this.softTimeoutMs === 'number' && this.firstResponseAt !== null
     }
   }
 
@@ -695,14 +751,8 @@ class LookupQuerySession {
   }
 
   async *progress(): AsyncIterable<LookupAnswerProgress> {
-    if (
-      typeof this.softTimeoutMs === 'number' &&
-      this.softTimeoutMs >= 0
-    ) {
-      this.softTimer = setTimeout(
-        () => this.push({ kind: 'soft' }),
-        this.softTimeoutMs
-      )
+    if (typeof this.softTimeoutMs === 'number' && this.softTimeoutMs >= 0) {
+      this.softTimer = setTimeout(() => this.push({ kind: 'soft' }), this.softTimeoutMs)
     }
     try {
       let stop = false
@@ -716,6 +766,7 @@ class LookupQuerySession {
       this.emittedFinal = true
       yield finalSnapshot
     } finally {
+      this.closed = true
       if (this.graceTimer !== null) clearTimeout(this.graceTimer)
       if (this.softTimer !== null) clearTimeout(this.softTimer)
     }
@@ -889,10 +940,7 @@ export default class LookupResolver {
   private async competentHostsFor(question: LookupQuestion): Promise<string[]> {
     let hosts: string[]
     if (question.service === 'ls_slap') {
-      hosts =
-        this.networkPreset === 'local'
-          ? ['http://localhost:8080']
-          : this.slapTrackers
+      hosts = this.networkPreset === 'local' ? ['http://localhost:8080'] : this.slapTrackers
     } else if (this.hostOverrides[question.service] != null) {
       hosts = this.hostOverrides[question.service]
     } else if (this.networkPreset === 'local') {
@@ -911,9 +959,7 @@ export default class LookupResolver {
 
   private isSlapRecoveryEligible(service: string): boolean {
     return (
-      service !== 'ls_slap' &&
-      this.hostOverrides[service] == null &&
-      this.networkPreset !== 'local'
+      service !== 'ls_slap' && this.hostOverrides[service] == null && this.networkPreset !== 'local'
     )
   }
 
@@ -921,10 +967,7 @@ export default class LookupResolver {
     const competentHosts = await this.competentHostsFor(question)
     let rankedHosts: string[]
     try {
-      rankedHosts = this.prepareHostsForQuery(
-        competentHosts,
-        `lookup service ${question.service}`
-      )
+      rankedHosts = this.prepareHostsForQuery(competentHosts, `lookup service ${question.service}`)
     } catch (error) {
       if (!this.isSlapRecoveryEligible(question.service)) throw error
       this.hostsCache.delete(question.service)
@@ -935,10 +978,7 @@ export default class LookupResolver {
           `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
         )
       }
-      rankedHosts = this.prepareHostsForQuery(
-        fresh,
-        `lookup service ${question.service}`
-      )
+      rankedHosts = this.prepareHostsForQuery(fresh, `lookup service ${question.service}`)
     }
     if (rankedHosts.length < 1) {
       throw new Error(
@@ -948,13 +988,9 @@ export default class LookupResolver {
     return rankedHosts
   }
 
-  private unreachableNotificationCooldown(
-    options: LookupQueryOptions | undefined
-  ): number {
+  private unreachableNotificationCooldown(options: LookupQueryOptions | undefined): number {
     const requested = options?.unreachableHostNotificationCooldownMs
-    return typeof requested === 'number' &&
-      Number.isFinite(requested) &&
-      requested >= 0
+    return typeof requested === 'number' && Number.isFinite(requested) && requested >= 0
       ? requested
       : DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS
   }
@@ -970,13 +1006,9 @@ export default class LookupResolver {
     const notificationKey = `${service}\u0000${host}`
     const now = Date.now()
     const lastNotificationAt =
-      this.lastUnreachableNotificationAt.get(notificationKey) ??
-      Number.NEGATIVE_INFINITY
+      this.lastUnreachableNotificationAt.get(notificationKey) ?? Number.NEGATIVE_INFINITY
     if (now - lastNotificationAt < cooldownMs) return
-    if (
-      this.lastUnreachableNotificationAt.size >=
-      MAX_NOTIFICATION_DEDUP_ENTRIES
-    ) {
+    if (this.lastUnreachableNotificationAt.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
       this.evictOldest(this.lastUnreachableNotificationAt)
     }
     this.lastUnreachableNotificationAt.set(notificationKey, now)
@@ -1015,19 +1047,10 @@ export default class LookupResolver {
       return
     }
     session.recordFreeformAnswer()
-    this.captureHostTelemetry(
-      service,
-      host,
-      'freeform',
-      Date.now() - hostStartedAt,
-      correlationId
-    )
+    this.captureHostTelemetry(service, host, 'freeform', Date.now() - hostStartedAt, correlationId)
   }
 
-  private recordLookupHostFailure(
-    context: LookupHostFailureContext,
-    error: unknown
-  ): void {
+  private recordLookupHostFailure(context: LookupHostFailureContext, error: unknown): void {
     const {
       session,
       service,
@@ -1049,13 +1072,7 @@ export default class LookupResolver {
       error
     )
     if (!semanticRejection) {
-      this.notifyUnreachableHost(
-        host,
-        service,
-        error,
-        onUnreachableHost,
-        notificationCooldownMs
-      )
+      this.notifyUnreachableHost(host, service, error, onUnreachableHost, notificationCooldownMs)
     }
   }
 
@@ -1067,12 +1084,12 @@ export default class LookupResolver {
     options: LookupQueryOptions | undefined
   ): void {
     const correlationId = session.correlationId
-    const notificationCooldownMs =
-      this.unreachableNotificationCooldown(options)
+    const notificationCooldownMs = this.unreachableNotificationCooldown(options)
     for (const host of hosts) {
       const hostStartedAt = Date.now()
       void this.lookupHostWithTracking(host, question, timeout)
         .then(answer => {
+          if (isOutputListAnswer(answer)) session.receiveEvidence(host, answer, options?.onEvidence)
           this.recordLookupHostAnswer(
             session,
             question.service,
@@ -1083,15 +1100,18 @@ export default class LookupResolver {
           )
         })
         .catch(error => {
-          this.recordLookupHostFailure({
-            session,
-            service: question.service,
-            host,
-            hostStartedAt,
-            correlationId,
-            onUnreachableHost: options?.onUnreachableHost,
-            notificationCooldownMs
-          }, error)
+          this.recordLookupHostFailure(
+            {
+              session,
+              service: question.service,
+              host,
+              hostStartedAt,
+              correlationId,
+              onUnreachableHost: options?.onUnreachableHost,
+              notificationCooldownMs
+            },
+            error
+          )
         })
         .finally(() => {
           session.recordDone()
@@ -1123,11 +1143,11 @@ export default class LookupResolver {
       options?.correlationId ??
       (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined)
     const session = new LookupQuerySession({
+      evidenceLimits: options?.evidenceLimits,
       hostCount,
       graceMs: options?.graceMs ?? 80,
       softTimeoutMs: options?.softTimeoutMs,
-      waitForAllHosts:
-        options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
+      waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
       correlationId,
       resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
     })
@@ -1144,13 +1164,7 @@ export default class LookupResolver {
       }
     })
 
-    this.startLookupHostQueries(
-      rankedHosts,
-      question,
-      timeout,
-      session,
-      options
-    )
+    this.startLookupHostQueries(rankedHosts, question, timeout, session, options)
 
     try {
       for await (const progress of session.progress()) {

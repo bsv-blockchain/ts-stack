@@ -1,4 +1,13 @@
-import { KeyDeriver, LookupAnswer, LookupResolver, PrivateKey, Validation } from '@bsv/sdk'
+import {
+  KeyDeriver,
+  LookupAnswer,
+  LookupResolver,
+  MerklePath,
+  PrivateKey,
+  Transaction,
+  Validation,
+  VerifiableCertificate
+} from '@bsv/sdk'
 import { Wallet } from '../Wallet'
 import { WalletSettingsManager } from '../WalletSettingsManager'
 import { WalletStorageManager } from '../storage/WalletStorageManager'
@@ -8,7 +17,7 @@ import {
   IdentityVerificationFixture
 } from '../utility/__tests__/identityVerification.fixtures'
 
-function walletFor(fixture: IdentityVerificationFixture) {
+function walletFor(fixture: IdentityVerificationFixture, resolver?: LookupResolver) {
   const keyDeriver = new KeyDeriver(new PrivateKey(15))
   const trustSettings = {
     trustLevel: 1,
@@ -27,7 +36,7 @@ function walletFor(fixture: IdentityVerificationFixture) {
     keyDeriver,
     storage: new WalletStorageManager(keyDeriver.identityKey),
     services: { getChainTracker } as unknown as WalletServices,
-    lookupResolver: { query } as unknown as LookupResolver,
+    lookupResolver: resolver ?? ({ query } as unknown as LookupResolver),
     settingsManager: { get: getSettings } as unknown as WalletSettingsManager
   })
   return { wallet, query, getChainTracker, getSettings, trustSettings }
@@ -72,6 +81,51 @@ describe('Wallet final identity verification and compatibility', () => {
     const second = await wallet.discoverByIdentityKey(args)
     expect(second.certificates[0].decryptedFields).toEqual({ name: 'Alice' })
     expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers a valid alternate receipt before legacy resolver merging and keeps certificate/trust caches isolated', async () => {
+    const badTransaction = Transaction.fromBEEF(fixture.certificateBEEF)
+    badTransaction.merklePath = new MerklePath(700_000, [
+      [
+        { offset: 0, hash: badTransaction.id('hex'), txid: true },
+        { offset: 1, hash: '42'.repeat(32) }
+      ]
+    ])
+    const badReceipt = badTransaction.toBEEF()
+    expect(Transaction.fromBEEF(badReceipt).id('hex')).toBe(fixture.certificateTransaction.id('hex'))
+    const firstHost = 'https://first.invalid-proof.example'
+    const secondHost = 'https://second.valid-proof.example'
+    const lookup = jest.fn(async (host: string) =>
+      host === firstHost
+        ? { type: 'output-list' as const, outputs: [{ beef: badReceipt, outputIndex: 0 }] }
+        : { type: 'output-list' as const, outputs: [{ beef: fixture.certificateBEEF, outputIndex: 0 }] }
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      hostOverrides: { ls_identity: [firstHost, secondHost] }
+    })
+    const { wallet, trustSettings } = walletFor(fixture, resolver)
+    const certificateVerify = jest.spyOn(VerifiableCertificate.prototype, 'verify')
+    const args = { identityKey: fixture.certificate.subject }
+
+    const initial = await wallet.discoverByIdentityKey(args)
+    expect(initial).toMatchObject({ totalCertificates: 1 })
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(certificateVerify).toHaveBeenCalledTimes(1)
+
+    initial.certificates[0].decryptedFields.name = 'Mutated caller copy'
+    trustSettings.trustLevel = 2
+    await expect(wallet.discoverByIdentityKey(args)).resolves.toEqual({ totalCertificates: 0, certificates: [] })
+    expect(certificateVerify).toHaveBeenCalledTimes(1)
+
+    trustSettings.trustLevel = 1
+    const restored = await wallet.discoverByIdentityKey(args)
+    expect(restored.certificates[0].decryptedFields).toEqual({ name: 'Alice' })
+    // The rejected receipt makes the bounded raw-receipt cache retry, but the
+    // verified certificate is still reused across trust-only refiltering.
+    expect(lookup).toHaveBeenCalledTimes(6)
+    expect(certificateVerify).toHaveBeenCalledTimes(1)
+    certificateVerify.mockRestore()
   })
 
   it('keeps trust filtering and forceRefresh on the final Promise API', async () => {
@@ -161,13 +215,21 @@ describe('Wallet final identity verification and compatibility', () => {
         query: { identityKey: fixture.certificate.subject, certifiers: [fixture.certificate.certifier] }
       },
       undefined,
-      { graceMs: 300 }
+      {
+        graceMs: 300,
+        evidenceLimits: { maxOutputs: 512, maxBytes: 16 * 1024 * 1024 },
+        onEvidence: expect.any(Function)
+      }
     )
     await wallet.discoverByAttributes({ attributes: { name: 'Alice' }, limit: 1, offset: 3, seekPermission: true })
     expect(query).toHaveBeenLastCalledWith(
       { service: 'ls_identity', query: { attributes: { name: 'Alice' }, certifiers: [fixture.certificate.certifier] } },
       undefined,
-      { graceMs: 300 }
+      {
+        graceMs: 300,
+        evidenceLimits: { maxOutputs: 512, maxBytes: 16 * 1024 * 1024 },
+        onEvidence: expect.any(Function)
+      }
     )
     await expect(wallet.discoverByIdentityKey({ ...identityArgs, limit: 10_001 })).rejects.toThrow()
     await expect(wallet.discoverByAttributes({ attributes: {}, offset: -1 })).rejects.toThrow()

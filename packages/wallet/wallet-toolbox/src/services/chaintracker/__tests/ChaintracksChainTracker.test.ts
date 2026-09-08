@@ -1,4 +1,5 @@
 import { ChaintracksChainTracker } from '../index.all'
+import { ChaintracksServiceClient } from '../chaintracks/ChaintracksServiceClient'
 import { sdk } from '../../../index.client'
 import { BlockHeader } from '../../../sdk/WalletServices.interfaces'
 
@@ -71,7 +72,7 @@ describe('ChaintracksChaintracker tests', () => {
   test('traces retry attempts and cache disposition without roots or headers', async () => {
     const events: any[] = []
     let nextSpanId = 1
-    const chaintracks = makeChaintracksClient([undefined, HEADER_877599])
+    const chaintracks = makeChaintracksClient([undefined, HEADER_877599, HEADER_877599])
     const tracker = new ChaintracksChainTracker('main', chaintracks, {
       maxRetries: 2,
       retryDelayMs: 0,
@@ -90,15 +91,15 @@ describe('ChaintracksChaintracker tests', () => {
 
     const attempts = events.filter(event => event.name === 'wallet.chaintracks.find_header')
     const validations = events.filter(event => event.name === 'wallet.chaintracks.validate_root')
-    expect(attempts).toHaveLength(2)
-    expect(attempts.map(event => event.attributes['retry.attempt'])).toEqual([1, 2])
+    expect(attempts).toHaveLength(3)
+    expect(attempts.map(event => event.attributes['retry.attempt'])).toEqual([1, 2, 1])
     expect(validations).toHaveLength(2)
     expect(validations[0].attributes).toMatchObject({
       'chaintracks.cache_hit': false,
       'chaintracks.valid': true
     })
     expect(validations[1].attributes).toMatchObject({
-      'chaintracks.cache_hit': true,
+      'chaintracks.cache_hit': false,
       'chaintracks.valid': true
     })
     expect(events.find(event => event.name === 'wallet.chaintracks.current_height')).toMatchObject({
@@ -106,6 +107,127 @@ describe('ChaintracksChaintracker tests', () => {
     })
     expect(JSON.stringify(events)).not.toContain(HEADER_877599.merkleRoot)
     expect(JSON.stringify(events)).not.toContain(HEADER_877599.previousHash)
+  })
+
+  test('reads the current canonical root on every request after a same-height reorg', async () => {
+    const reorged = { ...HEADER_877599, merkleRoot: '11'.repeat(32) }
+    const chaintracks = makeChaintracksClient([HEADER_877599, reorged])
+    const tracker = new ChaintracksChainTracker('main', chaintracks, { maxRetries: 1 })
+
+    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).resolves.toBe(true)
+    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).resolves.toBe(false)
+    expect(chaintracks.findHeaderForHeight).toHaveBeenCalledTimes(2)
+  })
+
+  test('rejects a header result from a provider replaced while its request is pending', async () => {
+    let release: (() => void) | undefined
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const oldProvider = makeChaintracksClient([])
+    oldProvider.findHeaderForHeight.mockImplementation(async () => {
+      await pending
+      return HEADER_877599
+    })
+    const replacement = makeChaintracksClient([HEADER_877599])
+    const tracker = new ChaintracksChainTracker('main', oldProvider, { maxRetries: 3, retryDelayMs: 0 })
+
+    const request = tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)
+    tracker.chaintracks = replacement
+    tracker.chaintracks = oldProvider
+    release!()
+
+    await expect(request).rejects.toThrow('provider changed')
+    expect(oldProvider.findHeaderForHeight).toHaveBeenCalledTimes(1)
+    expect(tracker.getVerificationContext()).toContain('chaintracks:2:')
+    expect(tracker.cache).toEqual({})
+  })
+
+  test('changes a token for every reorg event, including an ABA tip, and releases its listener', async () => {
+    let listener: (() => void) | undefined
+    const provider = makeChaintracksClient([])
+    provider.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    provider.subscribeReorgs = jest.fn(async callback => {
+      listener = callback
+      return 'reorg-1'
+    })
+    provider.unsubscribe = jest.fn(async () => true)
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    const before = await tracker.getVerificationContextToken()
+    listener!()
+    const after = await tracker.getVerificationContextToken()
+    expect(after).not.toBe(before)
+    await tracker.dispose()
+    expect(provider.unsubscribe).toHaveBeenCalledWith('reorg-1')
+  })
+
+  test('unsubscribes a deferred registration after provider replacement and obtains a fresh subscription', async () => {
+    let release: ((value: string) => void) | undefined
+    const pending = new Promise<string>(resolve => {
+      release = resolve
+    })
+    const oldProvider = makeChaintracksClient([])
+    oldProvider.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    oldProvider.subscribeReorgs = jest.fn(async () => await pending)
+    oldProvider.unsubscribe = jest.fn(async () => true)
+    const replacement = makeChaintracksClient([])
+    replacement.findChainTipHash = jest.fn(async () => 'bb'.repeat(32))
+    replacement.subscribeReorgs = jest.fn(async () => 'fresh-subscription')
+    replacement.unsubscribe = jest.fn(async () => true)
+    const tracker = new ChaintracksChainTracker('main', oldProvider)
+
+    const staleToken = tracker.getVerificationContextToken()
+    tracker.chaintracks = replacement
+    release!('stale-subscription')
+    await expect(staleToken).rejects.toThrow('provider changed')
+    expect(oldProvider.unsubscribe).toHaveBeenCalledWith('stale-subscription')
+    await expect(tracker.getVerificationContextToken()).resolves.toContain('bb'.repeat(32))
+    expect(replacement.subscribeReorgs).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects a token when dispose races with pending registration on the same provider', async () => {
+    let release: ((value: string) => void) | undefined
+    const pending = new Promise<string>(resolve => {
+      release = resolve
+    })
+    const provider = makeChaintracksClient([])
+    provider.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    provider.subscribeReorgs = jest.fn(async () => await pending)
+    provider.unsubscribe = jest.fn(async () => true)
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    const token = tracker.getVerificationContextToken()
+    const disposed = tracker.dispose()
+    release!('disposed-pending')
+    await disposed
+    await expect(token).rejects.toThrow('provider changed')
+    expect(provider.unsubscribe).toHaveBeenCalledWith('disposed-pending')
+  })
+
+  test('uses the HTTP Chaintracks client without attempting its unsupported reorg subscription', async () => {
+    const provider = new ChaintracksServiceClient('main', 'https://chaintracks.example')
+    expect(provider.supportsReorgEvents).toBe(false)
+    jest.spyOn(provider, 'findChainTipHash').mockResolvedValue('aa'.repeat(32))
+    jest.spyOn(provider, 'subscribeReorgs')
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    await expect(tracker.getVerificationContextToken()).resolves.toContain('aa'.repeat(32))
+    expect(provider.subscribeReorgs).not.toHaveBeenCalled()
+  })
+
+  test('does not hide a registration failure from a built-in client that promises reorg events', async () => {
+    class PromisingEventsClient extends ChaintracksServiceClient {
+      override readonly supportsReorgEvents = true
+    }
+    const provider = new PromisingEventsClient('main', 'https://chaintracks.example')
+    expect(provider.supportsReorgEvents).toBe(true)
+    jest.spyOn(provider, 'findChainTipHash').mockResolvedValue('aa'.repeat(32))
+    const subscribe = jest.spyOn(provider, 'subscribeReorgs')
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    await expect(tracker.getVerificationContextToken()).rejects.toThrow('Method not implemented.')
+    expect(subscribe).toHaveBeenCalled()
   })
 })
 

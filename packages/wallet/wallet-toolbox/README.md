@@ -426,14 +426,19 @@ does not apply schema changes.
 
 ### Overlay identity verification
 
-Final identity discovery verifies transaction evidence against the wallet's
-existing `Services.getChainTracker()` configuration before validating the
-subject-signed identity output and certificate. Cached responses are reverified
-before use. Direct `identityUtils` callers must supply a canonical `ChainTracker`;
-missing context or invalid evidence produces no overlay identities. Local
-contacts retain their separate policy. Inclusion does not establish unspentness
-or freshness. See [identity verification](docs/identity-verification.md) for
-configuration, compatibility, and remaining verification lifecycle limits.
+Final identity discovery copies bounded resolver receipts, verifies their
+transaction graph and canonical anchors with the wallet's existing
+`Services.getChainTracker()`, and then validates the standard subject-signed
+identity envelope and certificate. Transaction and certificate reuse remain
+bounded and canonical evidence is rechecked before cached results are used;
+fresh provider tokens bracket asynchronous anchor checks where the configured
+tracker supplies them. Invalid candidate evidence is dropped, while typed
+limit/timeout outcomes propagate to the caller.
+Direct `identityUtils` callers must supply a canonical `ChainTracker`; missing
+context or invalid evidence produces no overlay identities. Local contacts
+retain their separate policy. Inclusion does not establish unspentness or
+freshness. See [identity verification](docs/identity-verification.md) for
+current C01/C02/C03 contracts, compatibility characterization, and limits.
 
 ```bash
 git clone https://github.com/bsv-blockchain/ts-stack.git

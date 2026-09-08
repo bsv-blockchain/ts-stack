@@ -64,6 +64,35 @@ describe('verifyBeef tests', () => {
     await expect(services.getChainTracker()).resolves.toBe(chainTracker)
   })
 
+  test('coalesces concurrent getChainTracker lookups onto one wrapper', async () => {
+    const services = new Services('main')
+    const [first, second] = await Promise.all([services.getChainTracker(), services.getChainTracker()])
+    expect(first).toBe(second)
+    await expect(services.getChainTracker()).resolves.toBe(first)
+  })
+
+  test('publishes one replacement before disposing a mismatched tracker', async () => {
+    const firstClient = {
+      getPresentHeight: jest.fn(async () => 1),
+      findHeaderForHeight: jest.fn(),
+      findChainTipHash: jest.fn(async () => 'aa'.repeat(32))
+    }
+    const secondClient = {
+      getPresentHeight: jest.fn(async () => 2),
+      findHeaderForHeight: jest.fn(),
+      findChainTipHash: jest.fn(async () => 'bb'.repeat(32))
+    }
+    const options = { ...Services.createDefaultOptions('main'), chaintracks: firstClient as any }
+    const services = new Services(options)
+    const original = await services.getChainTracker()
+
+    services.options.chaintracks = secondClient as any
+    const [first, second] = await Promise.all([services.getChainTracker(), services.getChainTracker()])
+    expect(first).toBe(second)
+    expect(first).not.toBe(original)
+    await expect(services.getChainTracker()).resolves.toBe(first)
+  })
+
   test('1_', async () => {
     if (_tu.noEnv('main')) return
     const { env: _env, storage, services } = await _tu.createMainReviewSetup()

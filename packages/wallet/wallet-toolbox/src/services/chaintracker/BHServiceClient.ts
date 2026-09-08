@@ -24,6 +24,8 @@ interface BHSHeaderState {
 }
 
 export class BHServiceClient implements ChaintracksServiceClient {
+  /** HTTP polling client; callback event methods are legacy unsupported stubs. */
+  readonly supportsReorgEvents = false
   bhs: BlockHeadersService
   cache: Record<number, string>
   chain: Chain

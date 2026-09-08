@@ -85,12 +85,14 @@ Capability negotiation fails before prefunding against an older server. See
 
 ## Use cases
 
-Final overlay identity discovery uses the configured wallet Services ChainTracker
-to verify transaction evidence before returning certificate results, including
-on response-cache hits. Local contacts retain their separate policy. See the
-[identity verification guide](../docs/identity-verification.md) for configuration,
-compatibility, and chain-cache limits; inclusion is not proof of freshness or
-unspentness.
+Final overlay identity discovery copies bounded resolver receipts, verifies the
+complete transaction graph and canonical anchors with the configured wallet
+Services ChainTracker, and validates the standard subject-signed certificate
+envelope. Cached transaction evidence is rechecked before use; local contacts
+retain their separate policy. See the [identity verification guide](../docs/identity-verification.md)
+for C01/C02/C03 compatibility characterization and limits. Inclusion is not
+proof of freshness or unspentness. Current package and packed-consumer
+validation remains pending the release review.
 
 ### Self-custody BSV wallet on a phone
 
