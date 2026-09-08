@@ -3,7 +3,7 @@ id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
 version: '1.1.2'
-last_updated: '2026-07-30'
+last_updated: '2026-08-30'
 last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
@@ -255,10 +255,10 @@ private GitHub advisory, and coordinate disclosure under
 
 A release is complete only when source, published artifacts, post-release
 dependency state, deployed image digests where applicable, and documentation
-agree. Update
-[release issue #401](https://github.com/bsv-blockchain/ts-stack/issues/401)
-with the exact evidence; do not mark package availability or deployed behavior
-complete from a local build alone.
+agree. Record the exact evidence in the operator-authorized release tracker;
+[completed release program #401](https://github.com/bsv-blockchain/ts-stack/issues/401)
+is the retained reference closeout. Do not mark package availability or
+deployed behavior complete from a local build alone.
 
 See [npm Package Supply Chain](./npm-package-supply-chain.md),
 [Container Supply Chain](./container-supply-chain.md), and

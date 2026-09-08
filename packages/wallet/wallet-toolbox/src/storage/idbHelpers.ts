@@ -296,7 +296,13 @@ function matchesTransactionPartialScalars (r: TableTransaction, partial: Partial
     eq(partial.isOutgoing, r.isOutgoing) &&
     eq(partial.satoshis, r.satoshis) &&
     eq(partial.version, r.version) &&
-    eq(partial.lockTime, r.lockTime)
+    eq(partial.lockTime, r.lockTime) &&
+    eq(partial.noSendExpiryValue, r.noSendExpiryValue) &&
+    eq(partial.noSendExpiryDeadline, r.noSendExpiryDeadline) &&
+    eq(partial.noSendExpiryAnchorVout, r.noSendExpiryAnchorVout) &&
+    eq(partial.noSendExpiryReleasedAt, r.noSendExpiryReleasedAt) &&
+    eq(partial.noSendExpiryObservedAt, r.noSendExpiryObservedAt) &&
+    eq(partial.noSendExpiryReclaimSatoshis, r.noSendExpiryReclaimSatoshis)
   )
 }
 
@@ -305,7 +311,13 @@ function matchesTransactionPartialStrings (r: TableTransaction, partial: Partial
     eqNullable(partial.status, r.status) &&
     eqNullable(partial.reference, r.reference) &&
     eqNullable(partial.description, r.description) &&
-    eqNullable(partial.txid, r.txid)
+    eqNullable(partial.txid, r.txid) &&
+    eqNullable(partial.noSendExpiryMode, r.noSendExpiryMode) &&
+    eqNullable(partial.noSendExpiryState, r.noSendExpiryState) &&
+    eqNullable(partial.noSendExpiryAnchorTxid, r.noSendExpiryAnchorTxid) &&
+    eqNullable(partial.noSendExpiryReclaimTxid, r.noSendExpiryReclaimTxid) &&
+    eqNullable(partial.noSendExpiryReclaimDerivationPrefix, r.noSendExpiryReclaimDerivationPrefix) &&
+    eqNullable(partial.noSendExpiryReclaimDerivationSuffix, r.noSendExpiryReclaimDerivationSuffix)
   )
 }
 

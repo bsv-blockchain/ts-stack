@@ -30,6 +30,7 @@ import {
   WERR_INSUFFICIENT_FUNDS,
   WERR_INVALID_OPERATION,
   WERR_INVALID_PARAMETER,
+  WERR_NOT_ACTIVE,
   WERR_REVIEW_ACTIONS
 } from '../../sdk/WERR_errors'
 import {
@@ -55,6 +56,8 @@ import type { ManagedChangeInputCandidate } from './availableManagedChange'
 import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
+import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
+import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -106,6 +109,10 @@ async function createActionCore(
   // stampLog(vargs, `start storage createTransactionSdk`)
 
   if (vargs.isTestWerrReviewActions) throwDummyReviewActions()
+
+  if ((vargs as Brc177ValidCreateActionArgs).brc177 != null && auth.isActive !== true) {
+    throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+  }
 
   if (!vargs.isNewTx)
   // The purpose of this function is to create the initial storage records associated
@@ -176,6 +183,7 @@ async function createActionCore(
     [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel],
     parent
   )
+  validateBrc177FundingPlan(vargs as Brc177ValidCreateActionArgs, initialFundingPlan)
   logger?.log(`planned funding from ${initialFundingPlan.availableChangeCount} change inputs`)
 
   // The selected source txids are known before the write transaction begins.
@@ -184,6 +192,7 @@ async function createActionCore(
   // A funding-claim retry is handled below by fetching only any residual roots.
   const allocatedBeefPrefetch = startAllocatedChangeBeefPrefetch(
     storage,
+    userId,
     vargs,
     initialFundingPlan.selected,
     beef,
@@ -231,7 +240,11 @@ async function createActionCore(
         logger?.log('adjusted change outputs to max possible')
       }
 
+      const fixedManagedChangeSatoshis = ctx.xoutputs
+        .filter(output => output.purpose === 'change')
+        .reduce((sum, output) => sum + output.satoshis, 0)
       const satoshis =
+        fixedManagedChangeSatoshis +
         funded.changeOutputs.reduce((sum, output) => sum + output.satoshis, 0) -
         funded.allocatedChange.reduce((sum, output) => sum + output.satoshis, 0)
       if (satoshis !== initialSatoshis) {
@@ -259,8 +272,9 @@ async function createActionCore(
     const { allocatedChange, derivationPrefix, outputs, changeVouts, ctx } = persisted
     logger?.log('created new output records')
 
-    const inputBeef = await mergeAllocatedChangeBeefs(
+    const preparedInputBeef = await mergeAllocatedChangeBeefs(
       storage,
+      userId,
       vargs,
       allocatedChange,
       beef,
@@ -293,9 +307,14 @@ async function createActionCore(
       inputs,
       outputs,
       derivationPrefix,
-      inputBeef,
+      inputBeef: preparedInputBeef.inputBeef,
       noSendChangeOutputVouts: vargs.isNoSend ? changeVouts : undefined
     }
+
+    // This is intentionally the last foreground operation. The coordinator
+    // starts on a timer, so the createAction promise and HTTP response can
+    // resolve before any COOK verification or persistence begins.
+    enqueuePreparedBeefs(storage, preparedInputBeef.preparations)
 
     logger?.groupEnd()
     return r
@@ -329,9 +348,10 @@ interface CreateTransactionSdkContext {
   noSendChangeIn: TableOutput[]
   feeModel: StorageFeeModel
   transactionId: number
+  derivationPrefix?: string
 }
 
-interface XValidCreateActionInput extends Validation.ValidCreateActionInput {
+export interface XValidCreateActionInput extends Validation.ValidCreateActionInput {
   vin: number
   lockingScript: Script
   satoshis: number
@@ -568,6 +588,60 @@ async function persistNewOutput(
   return describeNewOutput(o, tags, txBaskets)
 }
 
+async function createRequiredOutput(
+  storage: StorageProvider,
+  userId: number,
+  xo: XValidCreateActionOutput,
+  ctx: CreateTransactionSdkContext,
+  txBaskets: Record<string, TableOutputBasket>,
+  trx?: TrxToken
+): Promise<{ o: TableOutput; tags: string[] }> {
+  const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
+  if (xo.purpose === 'service-charge') {
+    const lockingScript = asArray(xo.lockingScript)
+    const now = new Date()
+    await storage.insertCommission(
+      {
+        userId,
+        transactionId: ctx.transactionId,
+        lockingScript,
+        satoshis: xo.satoshis,
+        isRedeemed: false,
+        keyOffset: verifyTruthy(xo.keyOffset),
+        created_at: now,
+        updated_at: now,
+        commissionId: 0
+      },
+      trx
+    )
+    o.lockingScript = lockingScript
+    o.providedBy = 'storage'
+    o.purpose = 'storage-commission'
+    o.type = 'custom'
+    o.spendable = false
+    return { o, tags: [] }
+  }
+  if (xo.purpose === 'change') {
+    o.basketId = ctx.changeBasket.basketId
+    o.change = true
+    o.derivationPrefix = verifyTruthy(ctx.derivationPrefix)
+    o.derivationSuffix = verifyTruthy(xo.derivationSuffix)
+    o.providedBy = 'storage'
+    o.purpose = 'change'
+    o.type = 'P2PKH'
+    o.spendable = true
+    return { o, tags: [] }
+  }
+  o.lockingScript = asArray(xo.lockingScript)
+  o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
+  o.customInstructions = xo.customInstructions
+  o.outputDescription = xo.outputDescription
+  o.providedBy = xo.providedBy
+  o.purpose = xo.purpose || ''
+  o.type = 'custom'
+  return { o, tags: xo.tags }
+}
+
 async function createNewOutputs(
   storage: StorageProvider,
   userId: number,
@@ -590,41 +664,7 @@ async function createNewOutputs(
   const newOutputs: Array<{ o: TableOutput; tags: string[] }> = []
 
   for (const xo of ctx.xoutputs) {
-    const lockingScript = asArray(xo.lockingScript)
-    if (xo.purpose === 'service-charge') {
-      const now = new Date()
-      await storage.insertCommission(
-        {
-          userId,
-          transactionId: ctx.transactionId,
-          lockingScript,
-          satoshis: xo.satoshis,
-          isRedeemed: false,
-          keyOffset: verifyTruthy(xo.keyOffset),
-          created_at: now,
-          updated_at: now,
-          commissionId: 0
-        },
-        trx
-      )
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = lockingScript
-      o.providedBy = 'storage'
-      o.purpose = 'storage-commission'
-      o.type = 'custom'
-      o.spendable = false
-      newOutputs.push({ o, tags: [] })
-    } else {
-      const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
-      o.lockingScript = lockingScript
-      o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
-      o.customInstructions = xo.customInstructions
-      o.outputDescription = xo.outputDescription
-      o.providedBy = xo.providedBy
-      o.purpose = xo.purpose || ''
-      o.type = 'custom'
-      newOutputs.push({ o, tags: xo.tags })
-    }
+    newOutputs.push(await createRequiredOutput(storage, userId, xo, ctx, txBaskets, trx))
   }
 
   for (const o of changeOutputs) {
@@ -688,6 +728,15 @@ async function createNewTxRecord(
     txid: undefined,
     rawTx: undefined
   }
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
+  if (brc177?.kind === 'protected') {
+    newTx.noSendExpiryMode = brc177.expiry.mode
+    newTx.noSendExpiryValue = brc177.expiry.value
+    newTx.noSendExpiryDeadline = brc177.deadline
+    newTx.noSendExpiryState = 'preparing'
+    newTx.noSendExpiryAnchorTxid = brc177.anchorTxid
+    newTx.noSendExpiryAnchorVout = brc177.anchorVout
+  }
   newTx.transactionId = await storage.insertTransaction(newTx, trx)
 
   const labelNames = [...new Set(vargs.labels)]
@@ -722,7 +771,7 @@ async function createNewTxRecord(
  * @param vargs
  * @returns xoutputs
  */
-function validateRequiredOutputs(
+export function validateRequiredOutputs(
   storage: StorageProvider,
   userId: number,
   vargs: Validation.ValidCreateActionArgs
@@ -759,6 +808,23 @@ function validateRequiredOutputs(
     })
   }
 
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
+  if (brc177?.kind === 'funding') {
+    vout++
+    xoutputs.push({
+      lockingScript: '00'.repeat(25),
+      satoshis: brc177.anchorSatoshis,
+      outputDescription: '',
+      basket: undefined,
+      tags: [],
+      vout,
+      providedBy: 'storage',
+      purpose: 'change',
+      derivationSuffix: undefined,
+      keyOffset: undefined
+    })
+  }
+
   return xoutputs
 }
 
@@ -783,7 +849,7 @@ function validateRequiredOutputs(
  * @returns {beef} containing verified validity proof data for all required inputs.
  * @returns {xinputs} extended validated required inputs.
  */
-async function validateRequiredInputs(
+export async function validateRequiredInputs(
   storage: StorageProvider,
   userId: number,
   vargs: Validation.ValidCreateActionArgs
@@ -1094,6 +1160,7 @@ interface MakeFundingParamsArgs {
 function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams {
   const { storage, vargs, xinputs, xoutputs, changeBasket, feeModel, healthyChangeCount, compatibilityFallback } = args
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   return {
     fixedInputs: xinputs.map(input => ({
       satoshis: input.satoshis,
@@ -1112,7 +1179,9 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
     targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
-    maxChangeOutputs: storage.managedChangePolicy.maxOutputsPerAction,
+    // The planner requires a positive cap. The exact anchor leaves no surplus,
+    // and validateBrc177FundingPlan below independently rejects any change.
+    maxChangeOutputs: brc177?.kind === 'protected' ? 1 : storage.managedChangePolicy.maxOutputsPerAction,
     surplusPoolShaping: !compatibilityFallback,
     maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals
@@ -1130,9 +1199,11 @@ async function buildFundingPlan(
 ): Promise<PreparedFundingPlan> {
   const [userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel] = context
   const noSendIds = new Set(noSendChangeIn.map(output => output.outputId))
+  const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   const available = candidates.filter(
     output => !noSendIds.has(output.outputId) && eligibleStatuses.includes(output.transactionStatus)
   )
+  if (brc177?.kind === 'protected') available.length = 0
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   const healthyChangeCount = compatibilityFallback
     ? // Preserve the legacy target-count input exactly, including noSendChange
@@ -1579,6 +1650,12 @@ async function fundNewTransactionSdk(
 
   // Generate a derivation prefix for the payment
   const derivationPrefix = randomDerivation(16)
+  ctx.derivationPrefix = derivationPrefix
+  for (const output of ctx.xoutputs) {
+    if (output.purpose === 'change' && output.derivationSuffix == null) {
+      output.derivationSuffix = randomDerivation(16)
+    }
+  }
 
   const r: {
     allocatedChange: TableOutput[]
@@ -1626,6 +1703,24 @@ async function fundNewTransactionSdk(
   return r
 }
 
+function validateBrc177FundingPlan(
+  vargs: Brc177ValidCreateActionArgs,
+  plan: PreparedFundingPlan
+): void {
+  if (vargs.brc177?.kind !== 'protected') return
+  if (plan.selected.length !== 1 || vargs.options.noSendChange.length !== 1) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action must use exactly one revocation anchor')
+  }
+  const selected = plan.selected[0]
+  const anchor = vargs.options.noSendChange[0]
+  if (selected.txid !== anchor.txid || selected.vout !== anchor.vout) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action selected a non-anchor wallet input')
+  }
+  if (plan.result.changeOutputs.length !== 0) {
+    throw new WERR_INVALID_OPERATION('BRC-177 protected action must not create wallet change')
+  }
+}
+
 /**
  * Avoid returning any known raw transaction data by converting any known transaction
  * in the `beef` to txidOnly.
@@ -1661,6 +1756,105 @@ interface AllocatedChangeBeefPrefetchResult {
   error?: unknown
   sourceCount: number
   txids: string[]
+  preparations: PreparedBeefPreparation[]
+}
+
+interface LoadedAllocatedChangeBeef {
+  beef: Beef
+  preparations: PreparedBeefPreparation[]
+  preparedHitCount: number
+  canonicalFetchCount: number
+}
+
+interface PreparedBeefStorageExtension {
+  preparedBeefReadsEnabled: () => boolean
+  preparedBeefWritesEnabled: () => boolean
+  lookupPreparedBeefs: (
+    userId: number,
+    rootTxids: string[],
+    parent?: TelemetrySpan
+  ) => Promise<PreparedBeefLookupResult>
+  enqueuePreparedBeef: (preparation: PreparedBeefPreparation) => boolean
+}
+
+function preparedBeefStorage (storage: StorageProvider): Partial<PreparedBeefStorageExtension> {
+  return storage as unknown as Partial<PreparedBeefStorageExtension>
+}
+
+function appendPreparedBeefPreparation (
+  preparations: PreparedBeefPreparation[],
+  writeEnabled: boolean,
+  userId: number,
+  rootTxids: string[]
+): void {
+  if (!writeEnabled) return
+  preparations.push({ userId, rootTxids })
+}
+
+function enqueuePreparedBeefs (storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
+  const extension = preparedBeefStorage(storage)
+  if (typeof extension.enqueuePreparedBeef !== 'function') return
+  for (const preparation of preparations) extension.enqueuePreparedBeef.call(storage, preparation)
+}
+
+async function loadAllocatedChangeBeef(
+  storage: StorageProvider,
+  userId: number,
+  txids: string[],
+  options: StorageGetBeefOptions,
+  parent?: TelemetrySpan
+): Promise<LoadedAllocatedChangeBeef> {
+  const extension = preparedBeefStorage(storage)
+  const readEnabled = extension.preparedBeefReadsEnabled?.call(storage) === true
+  const writeEnabled = extension.preparedBeefWritesEnabled?.call(storage) === true
+  const lookup = readEnabled && typeof extension.lookupPreparedBeefs === 'function'
+    ? await extension.lookupPreparedBeefs.call(storage, userId, txids, parent)
+    : {
+        beef: new Beef(),
+        hitTxids: [],
+        missingTxids: [...new Set(txids)],
+        corruptCount: 0,
+        byteLength: 0
+      }
+  const beef = lookup.beef
+  const preparations: PreparedBeefPreparation[] = []
+  if (lookup.missingTxids.length > 0) {
+    const fetched = await storage.getBeefForTransactions(lookup.missingTxids, {
+      ...options,
+      mergeToBeef: undefined
+    })
+    if (lookup.hitTxids.length === 0) {
+      // Preserve the original disabled/cold path without merging into an
+      // otherwise empty BEEF solely for this optimization.
+      appendPreparedBeefPreparation(
+        preparations,
+        writeEnabled,
+        userId,
+        lookup.missingTxids
+      )
+      return {
+        beef: fetched,
+        preparations,
+        preparedHitCount: 0,
+        canonicalFetchCount: lookup.missingTxids.length
+      }
+    }
+    beef.mergeBeef(fetched)
+    // A caller's knownTxids may leave placeholders which are unsuitable for a
+    // reusable artifact. Rebuild those roots strictly in the worker.
+    appendPreparedBeefPreparation(
+      preparations,
+      writeEnabled,
+      userId,
+      lookup.missingTxids
+    )
+  }
+  return {
+    beef,
+    preparations,
+    preparedHitCount: lookup.hitTxids.length,
+    canonicalFetchCount: lookup.missingTxids.length
+  }
 }
 
 function missingAllocatedChangeTxids(
@@ -1680,15 +1874,16 @@ function missingAllocatedChangeTxids(
 
 function startAllocatedChangeBeefPrefetch(
   storage: StorageProvider,
+  userId: number,
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: ManagedChangeInputCandidate[],
   beef: Beef,
   parent?: TelemetrySpan
 ): Promise<AllocatedChangeBeefPrefetchResult> {
-  if (vargs.options.returnTXIDOnly) return Promise.resolve({ sourceCount: 0, txids: [] })
+  if (vargs.options.returnTXIDOnly) return Promise.resolve({ sourceCount: 0, txids: [], preparations: [] })
   const knownTxids = vargs.options.knownTxids ?? []
   const missing = missingAllocatedChangeTxids(allocatedChange, beef, knownTxids)
-  if (missing.length === 0) return Promise.resolve({ sourceCount: 0, txids: [] })
+  if (missing.length === 0) return Promise.resolve({ sourceCount: 0, txids: [], preparations: [] })
   const options: StorageGetBeefOptions = {
     trustSelf: undefined,
     knownTxids,
@@ -1707,18 +1902,25 @@ function startAllocatedChangeBeefPrefetch(
       'beef.storage_batch_count': missing.length === 0 ? 0 : 1
     },
     async span => {
-      const fetched = await storage.getBeefForTransactions(missing, options)
+      const fetched = await loadAllocatedChangeBeef(storage, userId, missing, options, parent)
       span?.end({
         attributes: {
-          'beef.fetched_tx_count': fetched.txs.length,
-          'beef.fetched_bump_count': fetched.bumps.length
+          'beef.fetched_tx_count': fetched.beef.txs.length,
+          'beef.fetched_bump_count': fetched.beef.bumps.length,
+          'beef.prepared_hit_count': fetched.preparedHitCount,
+          'beef.canonical_fetch_count': fetched.canonicalFetchCount
         }
       })
       return fetched
     }
   ).then(
-    prefetched => ({ beef: prefetched, sourceCount: missing.length, txids: missing }),
-    error => ({ error, sourceCount: missing.length, txids: missing })
+    prefetched => ({
+      beef: prefetched.beef,
+      preparations: prefetched.preparations,
+      sourceCount: missing.length,
+      txids: missing
+    }),
+    error => ({ error, preparations: [], sourceCount: missing.length, txids: missing })
   )
 }
 
@@ -1730,12 +1932,13 @@ function sameTxids(left: readonly string[], right: readonly string[]): boolean {
 
 async function mergeAllocatedChangeBeefs(
   storage: StorageProvider,
+  userId: number,
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: TableOutput[],
   beef: Beef,
   prefetch: Promise<AllocatedChangeBeefPrefetchResult>,
   parent?: TelemetrySpan
-): Promise<Uint8Array | undefined> {
+): Promise<{ inputBeef: Uint8Array | undefined; preparations: PreparedBeefPreparation[] }> {
   const options: StorageGetBeefOptions = {
     trustSelf: undefined,
     knownTxids: vargs.options.knownTxids,
@@ -1745,7 +1948,7 @@ async function mergeAllocatedChangeBeefs(
     ignoreNewProven: false,
     minProofLevel: undefined
   }
-  if (vargs.options.returnTXIDOnly) return undefined
+  if (vargs.options.returnTXIDOnly) return { inputBeef: undefined, preparations: [] }
   const knownTxids = vargs.options.knownTxids ?? []
   const requiredBeforePrefetch = missingAllocatedChangeTxids(allocatedChange, beef, knownTxids)
   const prefetched = await traceStorageStep(
@@ -1765,6 +1968,7 @@ async function mergeAllocatedChangeBeefs(
   const usePrefetch = sameTxids(prefetched.txids, requiredBeforePrefetch)
   if (usePrefetch && prefetched.error != null) throw prefetched.error
   if (usePrefetch && prefetched.beef != null) beef.mergeBeef(prefetched.beef)
+  const preparations = usePrefetch ? [...prefetched.preparations] : []
 
   // If a concurrent spender forced the funding claim to be replanned, only
   // the newly selected roots remain. The normal uncontended path is empty.
@@ -1784,7 +1988,9 @@ async function mergeAllocatedChangeBeefs(
     },
     async span => {
       if (missing.length > 0) {
-        fetched = await storage.getBeefForTransactions(missing, { ...options, mergeToBeef: undefined })
+        const loaded = await loadAllocatedChangeBeef(storage, userId, missing, options, parent)
+        fetched = loaded.beef
+        preparations.push(...loaded.preparations)
       }
       span?.end({
         attributes: {
@@ -1810,7 +2016,7 @@ async function mergeAllocatedChangeBeefs(
       })
     }
   )
-  return await traceStorageStep(
+  const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',
     parent,
@@ -1825,4 +2031,5 @@ async function mergeAllocatedChangeBeefs(
       return result
     }
   )
+  return { inputBeef, preparations }
 }

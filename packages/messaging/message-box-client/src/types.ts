@@ -21,10 +21,12 @@ import type { AuthSocketClientOptions } from '@bsv/authsocket-client'
  * `autoConnect` is excluded: AuthSocketClient exposes no connect method and the
  * client never starts the socket itself, so disabling auto-connect would leave
  * `initializeConnection` waiting for an authentication that cannot arrive.
+ * `retries` is excluded because AuthSocket acknowledges authenticated messages
+ * through its protocol, not the Socket.IO acknowledgements required by retries.
  */
 export type MessageBoxForwardedManagerOptions = Omit<
   NonNullable<AuthSocketClientOptions['managerOptions']>,
-  'autoConnect'
+  'autoConnect' | 'retries'
 >
 
 /**

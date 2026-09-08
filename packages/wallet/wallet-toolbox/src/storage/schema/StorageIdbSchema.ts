@@ -148,6 +148,8 @@ export interface StorageIdbSchema {
       provenTxId: number
       reference: string
       status: TransactionStatus
+      noSendExpiryState: string
+      noSendExpiryReclaimTxid: string
     }
   }
   txLabels: {

@@ -81,6 +81,8 @@ import { internalizeAction } from './signer/methods/internalizeAction'
 import { WalletSettingsManager } from './WalletSettingsManager'
 import { queryOverlay, transformVerifiableCertificatesWithTrust } from './utility/identityUtils'
 import { maxPossibleSatoshis } from './storage/methods/generateChange'
+import { hasBrc177NoSendExpiryLabel, parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
+import { createNoSendExpiryAction } from './signer/methods/createNoSendExpiryAction'
 import { WalletStorageManager } from './storage/WalletStorageManager'
 import { Monitor } from './monitor/Monitor'
 import { WalletSigner } from './signer/WalletSigner'
@@ -993,7 +995,11 @@ export class Wallet implements WalletInterface, ProtoWallet {
         vargs.randomVals = [...this.randomVals]
       }
 
-      const r = await createAction(this, auth, vargs)
+      const brc177Requested = hasBrc177NoSendExpiryLabel(vargs.labels)
+      if (brc177Requested) parseBrc177NoSendExpiryLabels(vargs.labels)
+      const r = brc177Requested
+        ? await createNoSendExpiryAction(this, auth, vargs)
+        : await createAction(this, auth, vargs)
       logger?.log('action created')
 
       const resultBeef = getResultBeef(r)
@@ -1075,6 +1081,12 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateInternalizeActionArgs)
 
     if (vargs.labels.includes(specOpThrowReviewActions)) throwDummyReviewActions()
+    if (hasBrc177NoSendExpiryLabel(vargs.labels)) {
+      throw new WERR_INVALID_PARAMETER(
+        'labels',
+        'BRC-177 noSend expiry labels only on outgoing createAction requests'
+      )
+    }
 
     const r = await internalizeAction(this, auth, args)
 

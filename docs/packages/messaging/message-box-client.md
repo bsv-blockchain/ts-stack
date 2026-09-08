@@ -5,8 +5,8 @@ kind: package
 domain: messaging
 version: '2.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'

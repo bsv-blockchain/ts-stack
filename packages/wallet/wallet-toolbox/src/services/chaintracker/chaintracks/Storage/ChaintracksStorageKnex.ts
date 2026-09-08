@@ -199,21 +199,34 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     return files
   }
 
-  dbTypeSubstring (source: string, fromOffset: number, forLength?: number) {
-    if (this.dbtype === 'MySQL') return `substring(${source} from ${fromOffset} for ${forLength!})`
-    return `substr(${source}, ${fromOffset}, ${forLength})`
-  }
-
   async getBulkFileData (fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
     await this.makeAvailable()
-    if (!Number.isInteger(fileId)) throw new WERR_INVALID_PARAMETER('fileId', 'a valid, integer bulk_files fileId')
+    if (!Number.isSafeInteger(fileId) || fileId < 1) {
+      throw new WERR_INVALID_PARAMETER('fileId', 'a positive safe-integer bulk_files fileId')
+    }
+    const hasOffset = offset !== undefined
+    const hasLength = length !== undefined
+    if (hasOffset !== hasLength) {
+      throw new WERR_INVALID_PARAMETER('offset and length', 'both defined or both undefined')
+    }
+    if (hasOffset && (
+      !Number.isSafeInteger(offset) ||
+      !Number.isSafeInteger(length) ||
+      offset! < 0 ||
+      length! < 0 ||
+      !Number.isSafeInteger(offset! + length!)
+    )) {
+      throw new WERR_INVALID_PARAMETER('offset and length', 'non-negative safe integers with a safe sum')
+    }
     let data: Uint8Array | undefined
-    if (Number.isInteger(offset) && Number.isInteger(length)) {
-      let rs: Array<{ data: Buffer | null }> = await this.knex.raw(
-        `select ${this.dbTypeSubstring('data', offset! + 1, length)} as data from ${this.bulkFilesTableName} where fileId = '${fileId}'`
-      )
-      if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ data: Buffer | null }>>)[0]
-      const r = verifyOneOrNone(rs)
+    if (hasOffset) {
+      const sql = this.dbtype === 'MySQL'
+        ? 'substring(?? from ? for ?)'
+        : 'substr(??, ?, ?)'
+      const slice = this.knex.raw(sql, ['data', offset! + 1, length!])
+      const r = verifyOneOrNone(await this.knex(this.bulkFilesTableName)
+        .select({ data: slice })
+        .where({ fileId })) as { data: Buffer | null } | undefined
       if (r?.data != null) {
         data = Uint8Array.from(r.data)
       }

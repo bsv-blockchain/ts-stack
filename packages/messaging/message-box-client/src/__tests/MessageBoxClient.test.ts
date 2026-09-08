@@ -238,6 +238,29 @@ describe('MessageBoxClient', () => {
     ).not.toThrow()
   })
 
+  it.each([1, 3])('Rejects managerOptions.retries %i, which blocks authentication', retries => {
+    expect(
+      () =>
+        new MessageBoxClient({
+          walletClient: mockWalletClient,
+          socketOptions: { managerOptions: { retries } } as any
+        })
+    ).toThrow(/Socket.IO acknowledgements/)
+    expect(authSocketClientMock).not.toHaveBeenCalled()
+  })
+
+  it('Allows disabled message retries with connection reconnection settings', () => {
+    expect(
+      () =>
+        new MessageBoxClient({
+          walletClient: mockWalletClient,
+          socketOptions: {
+            managerOptions: { retries: 0, reconnection: true, reconnectionAttempts: 3 }
+          } as any
+        })
+    ).not.toThrow()
+  })
+
   it('Keeps client-owned wallet and originator ahead of socketOptions', async () => {
     const foreignWallet = { id: 'foreign-wallet' }
     const messageBoxClient = new MessageBoxClient({

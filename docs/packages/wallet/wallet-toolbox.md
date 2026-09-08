@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.10.4'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '2.11.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -19,8 +19,20 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
+Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
+pre-funds expiring `noSend` actions, stores a signed reclaim durably across
+active/backup storage and restarts, and lets the authoritative local or remote
+monitor reclaim an unbroadcast action after its time or block-height deadline.
+See [Expiring noSend actions](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/no-send-expiry.md).
+
 Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
 matching count on every page, including short final and out-of-range pages.
+
+Knex storage can opt into prepared BEEF (COOK) for normal `createAction`
+funding. Exact verified proof closures are persisted only after foreground
+action work, while reads, writes, and bounded backfill remain separately
+controlled and default off. Every miss or invalid artifact retains the
+canonical BEEF builder.
 
 `WalletAuthenticationManager` supports an additive WAB UMP outpoint pin for
 legacy ambiguity and an OTP-verified phone-number change that always rolls the
@@ -130,6 +142,18 @@ console.log(publicKey)
 ```
 
 `setup.wallet` is the BRC-100 wallet. The surrounding `setup` object exposes the constructed `rootKey`, `identityKey`, `keyDeriver`, `storage`, `services`, and `monitor` so wallet builders can inspect or replace pieces while developing.
+
+## Permission modules
+
+`WalletPermissionsManager` registers BRC-98/99/111 modules by the scheme after
+the `p` prefix. Existing modules can transform calls with `onRequest` and
+`onResponse`. A semantic module can instead implement
+`handleRequest(request, next)` and return the conforming BRC-100 result itself;
+if it needs the underlying wallet operation, `next` is guarded to one call.
+
+The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
+this hook to implement point multiplication under `p ecpm` while keeping
+`getPublicKey` as the public wallet method.
 
 ## Action Flow
 

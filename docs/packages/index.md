@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 status: stable
 tags: ['packages']
@@ -12,9 +12,9 @@ tags: ['packages']
 
 # Packages
 
-ts-stack contains packages organized into 7 domains. Each domain serves a specific part of the stack — from core crypto to business logic. See the top-level README.md for the current package map.
+ts-stack contains packages organized into 8 domains. Each domain serves a specific part of the stack — from core crypto to licensed content and business logic. See the top-level README.md for the current package map.
 
-## Seven Domains
+## Eight Domains
 
 ### SDK
 
@@ -38,7 +38,14 @@ ts-stack contains packages organized into 7 domains. Each domain serves a specif
 
 **P2P Real-time Event Listener for Teranode**
 
+- [@bsv/chirp](./network/chirp.md) — Chunked Merkle publication and resilient retrieval over UHRP
 - [@bsv/teranode-listener](./network/teranode-listener.md) — Subscribe to Teranode P2P topics (blocks, subtrees, mining) with callbacks (see specs/sync for related)
+
+### Content
+
+**Licensed, encrypted, attributable creative content and composition.**
+
+- [@bsv/lch](./content/lch.md) — BRC-170 framing, rights, acquisition, key delivery, provenance, and whole-placement composition
 
 ### Overlays
 

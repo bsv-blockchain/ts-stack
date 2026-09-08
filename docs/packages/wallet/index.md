@@ -26,6 +26,7 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 | [@bsv/wallet-toolbox-mobile](./wallet-toolbox-mobile.md)   | React Native/mobile-safe wallet and remote storage distribution                                                                    |
 | [@bsv/btms](./btms.md)                                     | UTXO-based token issuance, transfer, burning, and ownership proof validation                                                       |
 | [@bsv/btms-permission-module](./btms-permission-module.md) | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
+| [@bsv/ecpm-permission-module](./ecpm-permission-module.md) | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                     |
 | [@bsv/wallet-relay](./wallet-relay.md)                     | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
 ## Common Use Cases
@@ -54,6 +55,13 @@ Use [@bsv/wallet-relay](./wallet-relay.md) for QR pairing. Desktop shows QR, mob
 
 Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom permission handler (modal, alert, web component, etc.).
 
+### I need wallet-native point multiplication
+
+Use [@bsv/ecpm-permission-module](./ecpm-permission-module.md) to install the
+`p ecpm` scheme. It reuses `getPublicKey`, so applications can apply or remove
+a BRC-42/43-derived scalar from a named point without extending the BRC-100
+wallet interface or exposing the scalar.
+
 ## Key Concepts
 
 - **BRC-100 Wallet Interface** — Standard interface implemented by all wallet packages. Apps can work with any wallet (desktop, mobile, hardware) without code changes.
@@ -66,6 +74,7 @@ Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom 
 - **Ownership Proof** — Cryptographic proof of token ownership without revealing private key. Used for collateral, escrow, access control.
 - **Relay Session** — Encrypted tunnel between desktop and mobile wallet. QR encodes relay URL + session ID; mobile scans and establishes WebSocket connection.
 - **Permission Module** — BRC-98/99 hooks that intercept special operations (token spend, burn) and prompt user via custom callback.
+- **Semantic Permission Module** — A BRC-98 module that owns a P-scheme's meaning and returns a conforming result without requiring the underlying BRC-100 method to retain its ordinary behavior.
 
 ## Architecture Overview
 
@@ -80,6 +89,7 @@ Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom 
 | **wallet-toolbox-mobile**  | Build tooling | —                 | Remote                   |
 | **btms**                   | ✓             | ✓                 | ✓                        |
 | **btms-permission-module** | ✓             | ✓                 | ✓                        |
+| **ecpm-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **wallet-relay**           | Server        | React components  | Supported via relay      |
 
 ## When to Use Each Package

@@ -145,11 +145,17 @@ await messages.listenForLiveMessages({
 It also carries `requestedCertificates`, `sessionManager`,
 `maxPendingAuthMessages`, and `onError`.
 
-Three fields are excluded from the type. `wallet` and `originator` are owned by
+Four fields are excluded from the type. `wallet` and `originator` are owned by
 the client, which always uses its own values. `managerOptions.autoConnect` is
 excluded because the socket connects when it is created and `AuthSocketClient`
 exposes no way to start one later, so disabling auto-connect could never
 connect; the constructor throws if it is passed as `false`.
+
+`managerOptions.retries` is also excluded: AuthSocket does not send the raw
+Socket.IO acknowledgements that message retries require, so enabling retries
+would block subsequent authentication and application messages. The constructor
+rejects nonzero retries. Connection reconnection settings such as `reconnection`
+and `reconnectionAttempts` remain supported.
 
 `socketOptions` applies **only to the live socket path** — `initializeConnection()`,
 `listenForLiveMessages()`, and `sendLiveMessage()`. It has no effect on

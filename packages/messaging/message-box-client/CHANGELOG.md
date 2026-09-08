@@ -22,8 +22,12 @@ All notable changes to this project will be documented in this file. The format 
   `{ managerOptions: { transports: ['websocket'] } }`) to reach deployments that
   do not carry Engine.IO's HTTP polling transport, and can also supply
   `requestedCertificates`, `sessionManager`, `maxPendingAuthMessages`, and
-  `onError`. `managerOptions.autoConnect` is excluded and rejected: the socket is
-  started when it is created, so disabling auto-connect could never connect.
+  `onError`. `managerOptions.autoConnect` is excluded and `false` is rejected:
+  the socket is started when it is created, so disabling auto-connect could
+  never connect. `managerOptions.retries` is excluded and nonzero values are
+  rejected because AuthSocket does not send the Socket.IO acknowledgements
+  needed to advance its message retry queue. Connection reconnection options
+  remain supported.
   Nothing is forwarded when unset, so default transport negotiation and all HTTP
   code paths are unchanged.
 

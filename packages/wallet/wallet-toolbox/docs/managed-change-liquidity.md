@@ -216,6 +216,13 @@ unrelated action.
 
 ## Monitoring and rollout
 
+Wallet Storage can optionally prepare the exact verified BEEF closure for a
+managed-change source after the foreground action finishes. This COOK
+(Create Once, Output Kept) optimization does not alter funding selection,
+transaction state, or the canonical fallback. See
+[Prepared BEEF (COOK)](./prepared-beef.md) for the asynchronous timing
+contract, storage controls, proof-reorganization handling, and staged rollout.
+
 `TaskReviewUtxos.reviewManagedChangeByIdentityKey(identityKey)` is a read-only
 operator report. It returns:
 
