@@ -10,8 +10,8 @@ const binaryFields = {
 
 function isLargeByteArray(value: unknown): value is number[] {
   if (!Array.isArray(value) || value.length < 128) return false
-  for (let i = 0; i < value.length; i++) {
-    if (!Number.isInteger(value[i]) || value[i] < 0 || value[i] > 255) return false
+  for (const byte of value) {
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) return false
   }
   return true
 }

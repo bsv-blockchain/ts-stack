@@ -19,13 +19,15 @@ attention to changes that materially alter behavior or extend functionality.
   authentication payload size while preserving legacy arrays and unrelated data.
   Retain authenticated full-copy,
   resume, malformed-input, and transport CPU/payload regression coverage.
-  Local packed measurements are 1,700,047 raw / 400,684 gzip / 313,689 Brotli
-  bytes (Vite), 1,325,973 / 364,200 / 292,865 (esbuild),
-  1,753,662 / 445,129 / 345,294 (Metro), and
-  3,557,648 / 1,426,595 / 1,121,985 (Hermes). The raw ceilings become
+  Local packed measurements are 1,700,010 raw / 400,665 gzip / 313,842 Brotli
+  bytes (Vite), 1,325,969 / 364,208 / 293,017 (esbuild),
+  1,753,648 / 445,136 / 345,369 (Metro), and
+  3,557,663 / 1,426,740 / 1,122,306 (Hermes). The raw ceilings become
   1,701,000, 1,327,500, 1,755,000, and 3,558,500 respectively.
-  Vite and esbuild gzip ceilings increase to 402,000 and 365,000 bytes; other ceilings remain
-  unchanged. The added portable sync/progress and decoding paths account for
+  Vite and esbuild gzip ceilings increase to 402,000 and 365,000 bytes.
+  The iterative decoder refactor measures 293,017 esbuild Brotli bytes; its
+  ceiling becomes 293,250 bytes. Other compressed ceilings remain unchanged.
+  The added portable sync/progress and decoding paths account for
   the increase; no Node-only backend is introduced into portable bundles.
 
 - Keep Argon2id-backed UMP v3 wallets available in React Native and other

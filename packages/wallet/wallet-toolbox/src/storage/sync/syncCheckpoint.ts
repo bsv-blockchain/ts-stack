@@ -32,7 +32,7 @@ export function validateSyncCheckpoint(value: SyncCheckpoint, previous?: Partial
     invalid()
   const offsets = entityNames.map((name, index) => {
     const entry = value.offsets[index]
-    if (entry == null || entry.name !== name || !Number.isSafeInteger(entry.offset) || entry.offset < 0) invalid()
+    if (entry?.name !== name || !Number.isSafeInteger(entry.offset) || entry.offset < 0) invalid()
     return { name, offset: entry.offset }
   })
   let since: Date | undefined
