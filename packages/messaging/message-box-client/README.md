@@ -121,6 +121,47 @@ await messages.sendLiveMessage({
 send route when the socket is unavailable or does not acknowledge delivery.
 Call `disconnectWebSocket()` when a long-lived client shuts down.
 
+### Socket options
+
+`socketOptions` is forwarded to the underlying `AuthSocketClient` when the live
+socket is created. Use it to select Socket.IO transports when a deployment's
+fronting infrastructure does not carry Engine.IO HTTP polling:
+
+```ts
+const messages = new MessageBoxClient({
+  walletClient: wallet,
+  host: 'https://messagebox.example',
+  socketOptions: { managerOptions: { transports: ['websocket'] } }
+})
+
+await messages.listenForLiveMessages({
+  messageBox: 'general_inbox',
+  onMessage: message => {
+    console.log(message.sender, message.body)
+  }
+})
+```
+
+It also carries `requestedCertificates`, `sessionManager`,
+`maxPendingAuthMessages`, and `onError`.
+
+Four fields are excluded from the type. `wallet` and `originator` are owned by
+the client, which always uses its own values. `managerOptions.autoConnect` is
+excluded because the socket connects when it is created and `AuthSocketClient`
+exposes no way to start one later, so disabling auto-connect could never
+connect; the constructor throws if it is passed as `false`.
+
+`managerOptions.retries` is also excluded: AuthSocket does not send the raw
+Socket.IO acknowledgements that message retries require, so enabling retries
+would block subsequent authentication and application messages. The constructor
+rejects nonzero retries. Connection reconnection settings such as `reconnection`
+and `reconnectionAttempts` remain supported.
+
+`socketOptions` applies **only to the live socket path** — `initializeConnection()`,
+`listenForLiveMessages()`, and `sendLiveMessage()`. It has no effect on
+`sendMessage()`, `listMessages()`, or `acknowledgeMessage()`, which use
+authenticated HTTP.
+
 ## Host selection and public-service access
 
 An explicitly configured host may use HTTP or HTTPS so local development and

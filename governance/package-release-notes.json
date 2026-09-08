@@ -118,9 +118,9 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
+      "releaseType": "minor",
+      "summary": "Adds an optional socketOptions client option that forwards the AuthSocketClient options other than wallet and originator, letting callers select Socket.IO transports such as websocket-only against deployments that do not carry Engine.IO HTTP polling, and reach certificate requests, session management, auth-message concurrency, and error reporting. Also preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "No API migration is required. socketOptions is optional and nothing is forwarded by default, so socket transport negotiation and every HTTP code path are unchanged for existing callers; wallet and originator stay client-owned and cannot be overridden through it. managerOptions excludes autoConnect and retries: JavaScript callers receive an immediate error for autoConnect: false or nonzero message retries because the live socket starts immediately and AuthSocket does not send Socket.IO acknowledgements. Connection reconnection options remain supported. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
     },
     {
       "name": "@bsv/overlay",
@@ -175,8 +175,8 @@
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet, preserves Message Box, token send/receive, and server-adapter transaction bytes across wallet runtimes, and restores the exact scoped MIT notice for the pre-monorepo source alongside Open BSV licensing for later first-party changes. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
+      "summary": "Adds TerraTestNet, preserves Message Box, token send/receive, and server-adapter transaction bytes across wallet runtimes, and restores the exact scoped MIT notice for the pre-monorepo source alongside Open BSV licensing for later first-party changes. Advances the packed Message Box Client dependency to the compatible 2.5.0 line. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.2 or later. The Message Box Client dependency advance requires no helper API migration and preserves the default HTTP and live-socket behavior. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "@bsv/templates",

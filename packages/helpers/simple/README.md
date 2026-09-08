@@ -46,6 +46,9 @@ or internalizing them. Malformed transaction records fail without acknowledging
 the pending payment. The server adapter applies the same compatibility contract
 to request and response bodies before the host framework's JSON boundary.
 
+The packaged Message Box Client dependency now starts at 2.5.0. Existing helper
+calls retain the default HTTP and live-socket behavior; no migration is required.
+
 ## A taste of the API
 
 ```typescript
