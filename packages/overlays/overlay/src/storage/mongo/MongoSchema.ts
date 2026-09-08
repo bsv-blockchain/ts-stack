@@ -44,6 +44,7 @@ export const MongoGridFsBucketName = 'overlayPayloads'
 
 const schemaVersion = 1
 const maxUint64 = '18446744073709551615'
+const maxUint32 = 4294967295
 const paddedUint64Pattern = '^[0-9]{20}$'
 const hashPattern = '^[0-9a-f]{64}$'
 const uuidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -169,6 +170,15 @@ function scopedValidator(
     .map(([field]) => ({
       $or: [{ $eq: [{ $type: `$${field}` }, 'missing'] }, { $lte: [`$${field}`, maxUint64] }]
     }))
+  // Unpadded canonical uint32 strings are not lexicographically ordered; compare as integers.
+  const uint32Bounds = Object.entries(fields)
+    .filter(([, definition]) => definition === uint32)
+    .map(([field]) => ({
+      $or: [
+        { $eq: [{ $type: `$${field}` }, 'missing'] },
+        { $lte: [{ $toLong: `$${field}` }, maxUint32] }
+      ]
+    }))
   return {
     $and: [
       {
@@ -187,6 +197,7 @@ function scopedValidator(
         }
       },
       ...uint64Bounds.map(bound => ({ $expr: bound })),
+      ...uint32Bounds.map(bound => ({ $expr: bound })),
       ...(options.extra === undefined ? [] : [options.extra])
     ]
   }
@@ -434,7 +445,7 @@ const definitions: MongoCollectionDefinition[] = [
         'state',
         'version'
       ],
-      { node: true, extra: { $expr: { $lte: ['$outputIndex', '4294967295'] } } }
+      { node: true }
     ),
     indexes: [
       index(
@@ -459,17 +470,7 @@ const definitions: MongoCollectionDefinition[] = [
         consumerOutputIndex: uint32
       },
       ['topic', 'sourceTxid', 'sourceOutputIndex', 'consumerTxid', 'consumerOutputIndex'],
-      {
-        node: true,
-        extra: {
-          $expr: {
-            $and: [
-              { $lte: ['$sourceOutputIndex', '4294967295'] },
-              { $lte: ['$consumerOutputIndex', '4294967295'] }
-            ]
-          }
-        }
-      }
+      { node: true }
     ),
     indexes: [
       index(
@@ -711,8 +712,7 @@ stateDefinition(
       { unique: true }
     ),
     index({ graphId: 1 }, 'graph_lookup')
-  ],
-  { $expr: { $lte: ['$outputIndex', '4294967295'] } }
+  ]
 )
 stateDefinition(
   MongoCollectionNames.manifestComponents,
@@ -770,8 +770,7 @@ for (const name of [MongoCollectionNames.shipRecords, MongoCollectionNames.slapR
         { unique: true }
       ),
       index({ domain: 1, topic: 1, createdAt: 1 }, 'discovery_lookup')
-    ],
-    { $expr: { $lte: ['$outputIndex', '4294967295'] } }
+    ]
   )
 }
 stateDefinition(

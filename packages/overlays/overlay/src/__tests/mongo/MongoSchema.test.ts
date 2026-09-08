@@ -45,8 +45,29 @@ describe('Mongo schema codecs', () => {
   })
 
   test('keeps output indexes in the wire uint32 domain', () => {
+    expect(encodeMongoOutputIndex('9')).toBe('9')
+    expect(encodeMongoOutputIndex('50')).toBe('50')
     expect(encodeMongoOutputIndex('4294967295')).toBe('4294967295')
     expect(() => encodeMongoOutputIndex('4294967296')).toThrow('Invalid storage output index')
+  })
+
+  test('compares uint32 collection bounds as integers, not lexicographic strings', () => {
+    const names = [
+      MongoCollectionNames.outputs,
+      MongoCollectionNames.consumptionEdges,
+      MongoCollectionNames.gaspNodes,
+      MongoCollectionNames.shipRecords,
+      MongoCollectionNames.slapRecords
+    ]
+    for (const name of names) {
+      const definition = MongoCollectionDefinitions.find(item => item.name === name)
+      if (definition === undefined) throw new Error(`Missing schema definition for ${name}`)
+      const encoded = JSON.stringify(definition.validator)
+      expect(encoded).toContain('$toLong')
+      expect(encoded).not.toContain('"$outputIndex","4294967295"')
+      expect(encoded).not.toContain('"$sourceOutputIndex","4294967295"')
+      expect(encoded).not.toContain('"$consumerOutputIndex","4294967295"')
+    }
   })
 
   test('defines every Overlay-owned collection with strict versioned validators', () => {
@@ -174,6 +195,102 @@ describe('Mongo schema bootstrap', () => {
         policyId: 'policy'
       })
     ).rejects.toThrow()
+  })
+
+  test('accepts canonical uint32 output indexes 9 and 4294967295 and rejects 4294967296', async () => {
+    const now = new Date()
+    const base = { schemaVersion: 1, ...fixture.scope, createdAt: now, updatedAt: now }
+    const txid = 'd1'.repeat(32)
+    const output = (id: string, outputIndex: string) => ({
+      _id: id,
+      ...base,
+      topic: 'tm_uint32',
+      txid,
+      outputIndex,
+      satoshis: encodeMongoUint64('1'),
+      score: encodeMongoUint64('0'),
+      scriptPayloadId: 'script',
+      scriptOffset: encodeMongoUint64('0'),
+      scriptByteLength: encodeMongoUint64('0'),
+      state: 'unspent',
+      version: 'v1'
+    })
+    const edge = (
+      id: string,
+      sourceOutputIndex: string,
+      consumerOutputIndex: string,
+      consumerTxid: string
+    ) => ({
+      _id: id,
+      ...base,
+      topic: 'tm_uint32',
+      sourceTxid: txid,
+      sourceOutputIndex,
+      consumerTxid,
+      consumerOutputIndex
+    })
+    await fixture.db
+      .collection(MongoCollectionNames.outputs)
+      .insertMany([output('output-index-9', '9'), output('output-index-max', '4294967295')])
+    await expect(
+      fixture.db
+        .collection(MongoCollectionNames.outputs)
+        .insertOne(output('output-index-overflow', '4294967296'))
+    ).rejects.toThrow()
+    await fixture.db.collection(MongoCollectionNames.consumptionEdges).insertMany([
+      edge('edge-index-9', '9', '50', 'd2'.repeat(32)),
+      edge('edge-index-max', '4294967295', '9', 'd3'.repeat(32))
+    ])
+    await expect(
+      fixture.db
+        .collection(MongoCollectionNames.consumptionEdges)
+        .insertOne(edge('edge-index-overflow', '4294967296', '0', 'd4'.repeat(32)))
+    ).rejects.toThrow()
+    await fixture.db.collection(MongoCollectionNames.gaspNodes).insertOne({
+      _id: 'gasp-index-9',
+      ...base,
+      graphId: 'graph-uint32',
+      txid,
+      outputIndex: '9',
+      state: 'receiving'
+    })
+    await expect(
+      fixture.db.collection(MongoCollectionNames.gaspNodes).insertOne({
+        _id: 'gasp-index-overflow',
+        ...base,
+        graphId: 'graph-uint32-overflow',
+        txid,
+        outputIndex: '4294967296',
+        state: 'receiving'
+      })
+    ).rejects.toThrow()
+    for (const name of [MongoCollectionNames.shipRecords, MongoCollectionNames.slapRecords]) {
+      await fixture.db.collection(name).insertOne({
+        _id: `${name}-index-9`,
+        ...base,
+        txid,
+        outputIndex: '9',
+        domain: 'example.com',
+        state: 'active'
+      })
+      await expect(
+        fixture.db.collection(name).insertOne({
+          _id: `${name}-index-overflow`,
+          ...base,
+          txid: 'd5'.repeat(32),
+          outputIndex: '4294967296',
+          domain: 'example.com',
+          state: 'active'
+        })
+      ).rejects.toThrow()
+    }
+    const ledger = await fixture.db
+      .collection(MongoCollectionNames.schema)
+      .findOne({ _id: mongoNodeKey(fixture.scope) })
+    expect(ledger?.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/)
+    expect(JSON.stringify(MongoCollectionDefinitions.map(item => item.validator))).toContain(
+      '$toLong'
+    )
   })
 
   test('rejects direct documents without required audit dates', async () => {

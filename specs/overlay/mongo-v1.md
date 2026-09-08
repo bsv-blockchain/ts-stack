@@ -46,7 +46,9 @@ Chain-wide records include `network` and `genesisHash`; node-owned records add
 delimiter-joined string. Exact wire integers are canonical decimal strings:
 the schema helpers reject non-canonical values and preserve uint64 values
 without passing them through an unsafe JavaScript number. Output indices have
-the stricter uint32 range. Collection validators and indexes bound row shape,
+the stricter uint32 range and are stored as unpadded canonical decimals;
+collection validators compare them as integers (`$toLong`), not as
+lexicographic strings. Collection validators and indexes bound row shape,
 field length, array size, receipt size, and indexed identity fields so an
 unbounded owner record is not silently created. MongoDB's BSON document ceiling
 is 16 MiB; schema bounds remain necessary even below that ceiling. See
