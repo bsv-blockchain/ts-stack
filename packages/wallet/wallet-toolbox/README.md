@@ -69,6 +69,13 @@ serialized RPC response exceeds the service ceiling, remote clients retry the
 read-only request with a smaller chunk budget and remember the working limit
 for the rest of the session.
 
+IndexedDB schema version 6 adds a non-unique transaction-ID/user index. Sync
+identity lookups, commissions, and relation maps use selective indexes or exact
+keys instead of scanning the growing wallet for each row. Existing bytes and
+legacy duplicate transaction IDs are preserved. Databases upgrade automatically;
+older clients that open schema version 5 cannot reopen an upgraded database, so
+keep a compatible client when retaining a local backup.
+
 Updated servers advertise `syncCheckpointVersion: 1` in runtime settings.
 Compatible clients fetch a compact checkpoint once, then use the checkpoint
 returned by each committed page. The complete ID mapping remains durable on

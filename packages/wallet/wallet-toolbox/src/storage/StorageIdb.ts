@@ -218,11 +218,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 5, {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 6, {
       upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
         const transactions = transaction.objectStore('transactions')
+        if (!transactions.indexNames.contains('txid_userId')) {
+          transactions.createIndex('txid_userId', ['txid', 'userId'])
+        }
         if (!transactions.indexNames.contains('noSendExpiryState')) {
           transactions.createIndex('noSendExpiryState', 'noSendExpiryState')
         }
@@ -640,7 +643,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const store = dbTrx.objectStore('output_tags_map')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
-    if (args.partial?.outputTagId !== undefined) {
+    if (typeof args.partial?.outputTagId === 'number' && typeof args.partial?.outputId === 'number') {
+      cursor = await store.openCursor([args.partial.outputTagId, args.partial.outputId])
+    } else if (args.partial?.outputTagId !== undefined) {
       cursor = await store.index('outputTagId').openCursor(args.partial.outputTagId)
     } else if (args.partial?.outputId !== undefined) {
       cursor = await store.index('outputId').openCursor(args.partial.outputId)
@@ -802,7 +807,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const store = dbTrx.objectStore('tx_labels_map')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
-    if (args.partial?.transactionId !== undefined) {
+    if (typeof args.partial?.txLabelId === 'number' && typeof args.partial?.transactionId === 'number') {
+      cursor = await store.openCursor([args.partial.txLabelId, args.partial.transactionId])
+    } else if (args.partial?.transactionId !== undefined) {
       cursor = await store.index('transactionId').openCursor(args.partial.transactionId)
     } else if (args.partial?.txLabelId !== undefined) {
       cursor = await store.index('txLabelId').openCursor(args.partial.txLabelId)
@@ -1622,10 +1629,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     let cursor: any
     if (args.partial?.commissionId != null && args.partial.commissionId !== 0) {
       cursor = await store.openCursor(args.partial.commissionId)
-    } else if (args.partial?.userId !== undefined) {
-      cursor = await store.index('userId').openCursor(args.partial.userId)
     } else if (args.partial?.transactionId !== undefined) {
       cursor = await store.index('transactionId').openCursor(args.partial.transactionId)
+    } else if (args.partial?.userId !== undefined) {
+      cursor = await store.index('userId').openCursor(args.partial.userId)
     } else {
       cursor = await store.openCursor()
     }
@@ -1932,7 +1939,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   ): Promise<any> {
     if (partial?.transactionId != null && partial.transactionId !== 0)
       return store.openCursor(partial.transactionId, direction)
+    // Sync merges need exact identity lookups; a user-wide cursor makes a
+    // growing local restore quadratic and repeatedly decodes stored byte fields.
+    if (typeof partial?.reference === 'string') return store.index('reference').openCursor(partial.reference, direction)
+    if (typeof partial?.noSendExpiryReclaimTxid === 'string') {
+      return store.index('noSendExpiryReclaimTxid').openCursor(partial.noSendExpiryReclaimTxid, direction)
+    }
     if (partial?.userId !== undefined) {
+      if (typeof partial?.txid === 'string') {
+        return store.index('txid_userId').openCursor([partial.txid, partial.userId], direction)
+      }
       if (partial?.status !== undefined) {
         return store.index('status_userId').openCursor([partial.status, partial.userId], direction)
       }
