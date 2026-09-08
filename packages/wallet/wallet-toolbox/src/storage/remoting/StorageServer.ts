@@ -72,6 +72,7 @@ const storageRpcMethods = new Set([
   'extendActionBatch',
   'findCertificatesAuth',
   'findOrInsertSyncStateAuth',
+  'getSyncCheckpoint',
   'findOrInsertUser',
   'findOutputBaskets',
   'findOutputBasketsAuth',
@@ -111,6 +112,7 @@ const authIdRpcMethods = new Set([
   'extendActionBatch',
   'findCertificatesAuth',
   'findOrInsertSyncStateAuth',
+  'getSyncCheckpoint',
   'findOutputBaskets',
   'findOutputBasketsAuth',
   'findOutputsAuth',
@@ -763,12 +765,16 @@ export class StorageServer {
 
     const logger = this.createRpcLogger(method, params)
     try {
-      const result = await this.traceRpcStep(
+      let result = await this.traceRpcStep(
         'wallet.storage.handler',
         rpcSpan,
         async () => await storageHandler.call(this.storage, ...params),
         { 'rpc.method': method }
       )
+      if ((method === 'makeAvailable' || method === 'getSettings') && typeof this.storage.getSyncCheckpoint === 'function') {
+        // Advertise on the wire without mutating the persisted settings object.
+        result = { ...result, syncCheckpointVersion: 1 }
+      }
       this.finishRpcLogging(logger, result)
       return { found: true, result }
     } catch (error: unknown) {

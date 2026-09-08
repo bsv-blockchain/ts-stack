@@ -11,6 +11,20 @@ attention to changes that materially alter behavior or extend functionality.
   a clean missing-token result only for a server-declared pending registration,
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
+- Add negotiated compact sync checkpoints, reusing committed page progress while
+  retaining complete writer-side ID mappings and the legacy provider fallback.
+  Avoid per-scalar reviver callbacks when decoding binary JSON pages without
+  changing marker escaping or byte semantics. Retain authenticated full-copy,
+  resume, malformed-input, and transport CPU/payload regression coverage.
+  Local packed measurements are 1,698,884 raw / 400,326 gzip / 313,477 Brotli
+  bytes (Vite), 1,325,091 / 363,919 / 292,681 (esbuild),
+  1,752,705 / 444,785 / 344,944 (Metro), and
+  3,555,918 / 1,425,470 / 1,121,485 (Hermes). The raw ceilings become
+  1,701,000, 1,327,500, 1,755,000, and 3,558,500 respectively; only the
+  Vite gzip ceiling also increases, to 402,000 bytes. Other ceilings remain
+  unchanged. The added portable sync/progress and decoding paths account for
+  the increase; no Node-only backend is introduced into portable bundles.
+
 - Keep Argon2id-backed UMP v3 wallets available in React Native and other
   runtimes without WebAssembly by falling back to an asynchronously yielding,
   standards-compatible JavaScript implementation. The same KDF parameters and

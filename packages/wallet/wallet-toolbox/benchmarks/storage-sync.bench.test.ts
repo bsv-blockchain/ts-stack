@@ -1,5 +1,7 @@
 import { once } from 'node:events'
 import { performance } from 'node:perf_hooks'
+import { binaryJsonReviver, parseJsonRpc, stringifyJsonRpc } from '../src/storage/remoting/BinaryJson'
+import { EntitySyncState } from '../src/storage/schema/entities/EntitySyncState'
 import { _tu, TestWalletNoSetup, TestWalletOnly } from '../test/utils/TestUtilsWalletStorage'
 import { RequestSyncChunkArgs } from '../src/sdk/WalletStorage.interfaces'
 import { StorageClient } from '../src/storage/remoting/StorageClient'
@@ -140,5 +142,44 @@ describe('candidate-provider wallet sync benchmark', () => {
       await candidate.server.close()
       await candidate.ctx.wallet.destroy()
     }
+  })
+})
+
+
+describe('sync transport CPU and checkpoint benchmark', () => {
+  test('compares identical synthetic numeric-array pages and bounded checkpoints', () => {
+    const bytes = Array.from({ length: 1024 * 1024 }, (_, i) => i % 256)
+    const encoded = stringifyJsonRpc({ jsonrpc: '2.0', result: { rawTx: bytes, proof: new Uint8Array([1, 2, 3]) } }, true)
+    const legacy: number[] = []
+    const candidate: number[] = []
+    expect(parseJsonRpc(encoded, true)).toEqual(JSON.parse(encoded, binaryJsonReviver))
+    for (let i = 0; i < 9; i++) {
+      const measure = (parse: () => unknown): number => {
+        const started = performance.now()
+        parse()
+        return performance.now() - started
+      }
+      // Alternate execution order to reduce systematic warm-up bias.
+      if (i % 2 === 0) {
+        legacy.push(measure(() => JSON.parse(encoded, binaryJsonReviver)))
+        candidate.push(measure(() => parseJsonRpc(encoded, true)))
+      } else {
+        candidate.push(measure(() => parseJsonRpc(encoded, true)))
+        legacy.push(measure(() => JSON.parse(encoded, binaryJsonReviver)))
+      }
+    }
+    const state = new EntitySyncState()
+    state.id = 1
+    for (let i = 1; i <= 50000; i++) state.syncMap.transaction.idMap[i] = i + 100
+    state.syncMap.transaction.count = 50000
+    const mapBytes = Buffer.byteLength(JSON.stringify(state.syncMap))
+    const checkpointBytes = Buffer.byteLength(JSON.stringify(state.makeSyncCheckpoint()))
+    expect(checkpointBytes).toBeLessThan(1024)
+    process.stdout.write(JSON.stringify({ syncTransport: {
+      syntheticBytes: bytes.length, jsonBytes: Buffer.byteLength(encoded), samples: 9,
+      legacyParseP50Ms: percentile(legacy, 0.5), candidateParseP50Ms: percentile(candidate, 0.5),
+      legacyParseP95Ms: percentile(legacy, 0.95), candidateParseP95Ms: percentile(candidate, 0.95),
+      mapEntries: 50000, mapBytes, checkpointBytes
+    } }) + '\n')
   })
 })

@@ -1359,7 +1359,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           })
         )
       )
-      return await ss.processSyncChunk(this, args, chunk, trx)
+      const result = await ss.processSyncChunk(this, args, chunk, trx)
+      return args.includeNextCheckpoint === true
+        ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() }
+        : result
     })
   }
 

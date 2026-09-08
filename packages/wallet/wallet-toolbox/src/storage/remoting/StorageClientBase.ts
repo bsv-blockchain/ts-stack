@@ -1,3 +1,4 @@
+import { validateSyncCheckpoint } from '../sync/syncCheckpoint'
 import {
   AbortActionArgs,
   AbortActionResult,
@@ -32,6 +33,7 @@ import {
   StorageActivateNoSendExpiryResult,
   StorageArmNoSendExpiryArgs,
   SyncChunk,
+  SyncCheckpoint,
   UpdateProvenTxReqWithNewProvenTxArgs,
   UpdateProvenTxReqWithNewProvenTxResult,
   WalletStorageProvider
@@ -442,6 +444,15 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return await this.rpcCall<{ user: TableUser; isNew: boolean }>('findOrInsertUser', [identityKey])
   }
 
+  /** Read compact progress only when the provider advertises support. */
+  async getSyncCheckpoint(auth: AuthId, storageIdentityKey: string, storageName: string): Promise<SyncCheckpoint | undefined> {
+    // Settings are already exchanged with legacy providers. Only an advertised
+    // capability enables this RPC; transport and authentication failures propagate.
+    if ((await this.makeAvailable()).syncCheckpointVersion !== 1) return undefined
+    const checkpoint = await this.rpcCall<SyncCheckpoint>('getSyncCheckpoint', [auth, storageIdentityKey, storageName])
+    return validateSyncCheckpoint(checkpoint)
+  }
+
   /**
    * Used to both find and insert a `TableSyncState` record for the user to track wallet data replication across storage providers.
    * @param auth Identifies client by identity key and the storage identity key of their currently active storage.
@@ -620,6 +631,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
     const r = await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, chunk])
+    if (r.nextCheckpoint != null) r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args)
     return r
   }
 

@@ -16,6 +16,10 @@ emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
 and JSON transports preserve identical transaction bytes. The same boundary
 protects overlay lookup queries and JSON BEEF responses.
 
+AuthFetch stops pending certificate dispatch and session recovery after its
+request deadline. An already dispatched request may still complete on the
+server; callers must resolve its outcome before retrying a non-idempotent write.
+
 ## Table of Contents
 
 1. [Objective](#objective)

@@ -147,6 +147,13 @@ export interface WalletStorageProvider extends WalletStorageSync {
 }
 
 export interface WalletStorageSync extends WalletStorageWriter {
+  /** Compact writer checkpoint. Undefined means a legacy remote provider. */
+  getSyncCheckpoint?: (
+    auth: AuthId,
+    storageIdentityKey: string,
+    storageName: string
+  ) => Promise<SyncCheckpoint | undefined>
+
   findOrInsertSyncStateAuth: (
     auth: AuthId,
     storageIdentityKey: string,
@@ -579,7 +586,17 @@ export type SyncStatus = 'success' | 'error' | 'identified' | 'updated' | 'unkno
 
 export type SyncProtocolVersion = '0.1.0'
 
+/** Compact writer progress; omits the durable ID mapping from this response. */
+export interface SyncCheckpoint {
+  syncStateId: number
+  since?: Date
+  offsets: Array<{ name: string, offset: number }>
+}
+
 export interface RequestSyncChunkArgs {
+  /** Request committed progress with the write response; legacy writers ignore it. */
+  includeNextCheckpoint?: boolean
+
   /**
    * The writer-local sync state selected when the source provider was
    * registered. New clients include this to disambiguate legacy databases
@@ -691,6 +708,9 @@ export interface SyncChunk {
 }
 
 export interface ProcessSyncChunkResult {
+  /** Present only when requested, after the page and checkpoint commit together. */
+  nextCheckpoint?: SyncCheckpoint
+
   done: boolean
   maxUpdated_at: Date | undefined
   updates: number

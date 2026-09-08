@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
+- Stop late certificate work and session recovery from dispatching requests after
+  an AuthFetch authentication timeout. Preserve the original gateway error and
+  do not automatically replay failed writes.
+
 ### Added
 
 - Add optional `x-bsv-payment-known-txids` support to AuthFetch BRC-105 payment

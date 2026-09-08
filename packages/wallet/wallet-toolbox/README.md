@@ -69,6 +69,21 @@ serialized RPC response exceeds the service ceiling, remote clients retry the
 read-only request with a smaller chunk budget and remember the working limit
 for the rest of the session.
 
+Updated servers advertise `syncCheckpointVersion: 1` in runtime settings.
+Compatible clients fetch a compact checkpoint once, then use the checkpoint
+returned by each committed page. The complete ID mapping remains durable on
+the writer and is no longer downloaded before every page. Older providers use
+the existing full-state path; authentication, gateway, and malformed checkpoint
+errors remain failures rather than compatibility fallbacks. A retry starts
+from the writer's durable checkpoint. `includeNextCheckpoint` is optional, and
+legacy requests retain their existing response shape.
+
+Binary JSON parsing preserves the existing marker and escaping rules while
+avoiding a JavaScript reviver callback for every scalar byte. The SDK also
+prevents certificate work or session recovery from dispatching another request
+after the caller's authentication deadline has expired. This does not cancel a
+write already received by a server or automatically replay failed writes.
+
 Run the authenticated candidate-provider sync benchmark with:
 
 ```sh
@@ -79,7 +94,19 @@ Set `WALLET_TOOLBOX_BENCH_MYSQL=true`, `MYSQL_CONNECTION`, and optionally
 `WALLET_TOOLBOX_BENCH_MYSQL_DATABASE` to exercise the same fixture through a
 MySQL-backed provider. The benchmark reports HTTP p50/p95 latency and the
 source-query limits used to fill a 250-record page; it is observational rather
-than a cross-machine latency SLA.
+than a cross-machine latency SLA. It also compares the old reviver with the
+current parser on identical synthetic data and measures checkpoint size. On
+one local Node 24 run, a 1 MiB numeric-array fixture (3.74 MB of JSON) measured
+501.2 ms versus 10.1 ms median parsing time across nine alternating samples.
+A synthetic 50,000-entry mapping occupied 678,850 bytes; its compact checkpoint
+occupied 432 bytes. These are CPU and payload measurements, not a claim of the
+same end-to-end network speedup.
+
+Retained integration tests cover authenticated HTTP backup and complete restore
+into a fresh IndexedDB store, multipage progression, no-change resync,
+interruption/resume, user isolation, malformed checkpoints, and legacy-provider
+fallback. Live deployment results must be reported separately with the tested
+revision and scope; a partial page sample is not a full restore verification.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages

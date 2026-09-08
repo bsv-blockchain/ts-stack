@@ -139,6 +139,30 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('trace-id'))
   })
 
+  test('advertises compact checkpoints without modifying stored settings and authenticates checkpoint reads', async () => {
+    const settings = { storageIdentityKey: 'storage-key' }
+    const getSyncCheckpoint = jest.fn(async () => ({ syncStateId: 1, offsets: [] }))
+    const server = makeServer({ getSettings: () => settings, makeAvailable: async () => settings, getSyncCheckpoint })
+    for (const method of ['getSettings', 'makeAvailable']) {
+      const captured = makeResponse()
+      await invoke(server, 'handleRpcRequest', makeRequest({ jsonrpc: '2.0', method, params: [], id: 1 }), captured.response)
+      expect(captured.body.result).toEqual({ ...settings, syncCheckpointVersion: 1 })
+      expect(settings).not.toHaveProperty('syncCheckpointVersion')
+    }
+    const captured = makeResponse()
+    await invoke(server, 'handleRpcRequest', makeRequest({
+      jsonrpc: '2.0', method: 'getSyncCheckpoint', params: [{ identityKey: 'alice', userId: 999 }, 'source', 'source'], id: 2
+    }), captured.response)
+    expect(captured.statusCode).toBe(200)
+    expect(getSyncCheckpoint).toHaveBeenCalledWith(expect.objectContaining({ identityKey: 'alice', userId: 7 }), 'source', 'source')
+    const denied = makeResponse()
+    await invoke(server, 'handleRpcRequest', makeRequest({
+      jsonrpc: '2.0', method: 'getSyncCheckpoint', params: [{ identityKey: 'bob' }, 'source', 'source'], id: 3
+    }), denied.response)
+    expect(denied.body.error).toBeDefined()
+    expect(getSyncCheckpoint).toHaveBeenCalledTimes(1)
+  })
+
   test('authenticates and dispatches the BRC-177 storage lifecycle RPCs', async () => {
     const prepareNoSendExpiry = jest.fn(async () => ({ anchorSatoshis: 10 }))
     const activateNoSendExpiry = jest.fn(async () => ({ deadline: 20 }))

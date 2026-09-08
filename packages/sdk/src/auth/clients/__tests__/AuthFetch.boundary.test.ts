@@ -358,3 +358,77 @@ describe('AuthFetch pending-request boundary', () => {
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)
   })
 })
+
+describe('AuthFetch expired-request dispatch boundary', () => {
+  test('does not send after certificate work completes past the response deadline', async () => {
+    jest.useFakeTimers()
+    try {
+      let finishCertificates!: () => void
+      const wait = new Promise<void>(resolve => { finishCertificates = resolve })
+      const peer = {
+        listenForGeneralMessages: jest.fn(() => 101),
+        stopListeningForGeneralMessages: jest.fn(),
+        toPeer: jest.fn(async () => {})
+      }
+      const authFetch = new AuthFetch({} as never)
+      ;(authFetch as any).peers['https://service.example'] = {
+        peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: [true]
+      }
+      jest.spyOn(authFetch as any, 'waitForPendingCertificateRequests').mockReturnValue(wait)
+      const pending = authFetch.fetch('https://service.example/write', { method: 'POST', body: 'synthetic' })
+      const rejected = expect(pending).rejects.toThrow('Timed out waiting for authenticated response.')
+      await jest.advanceTimersByTimeAsync(30000)
+      await rejected
+      finishCertificates()
+      await jest.advanceTimersByTimeAsync(0)
+      expect(peer.toPeer).not.toHaveBeenCalled()
+      expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally { jest.useRealTimers() }
+  })
+
+  test('a late stale-session failure never starts a retry after timeout', async () => {
+    jest.useFakeTimers()
+    try {
+      let failSend!: (error: Error) => void
+      const send = new Promise<void>((_resolve, reject) => { failSend = reject })
+      const peer = {
+        listenForGeneralMessages: jest.fn(() => 102),
+        stopListeningForGeneralMessages: jest.fn(),
+        toPeer: jest.fn(() => send)
+      }
+      const authFetch = new AuthFetch({} as never)
+      ;(authFetch as any).peers['https://service.example'] = {
+        peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: []
+      }
+      const recover = jest.spyOn(authFetch as any, 'recoverAuthenticatedSend')
+      const pending = authFetch.fetch('https://service.example/write', { method: 'POST', body: 'synthetic' })
+      const rejected = expect(pending).rejects.toThrow('Timed out waiting for authenticated response.')
+      await jest.advanceTimersByTimeAsync(30000)
+      await rejected
+      failSend(new Error('Session not found for nonce'))
+      await jest.advanceTimersByTimeAsync(0)
+      expect(peer.toPeer).toHaveBeenCalledTimes(1)
+      expect(recover).not.toHaveBeenCalled()
+      expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally { jest.useRealTimers() }
+  })
+
+  test('preserves an immediate gateway failure and cleans the waiter without retrying', async () => {
+    const failure = Object.assign(new Error('Unauthenticated HTTP 502 response'), { details: { status: 502 } })
+    const peer = {
+      listenForGeneralMessages: jest.fn(() => 103),
+      stopListeningForGeneralMessages: jest.fn(),
+      toPeer: jest.fn(async () => { throw failure })
+    }
+    const authFetch = new AuthFetch({} as never)
+    ;(authFetch as any).peers['https://service.example'] = {
+      peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: []
+    }
+    await expect(authFetch.fetch('https://service.example/write', { method: 'POST' })).rejects.toBe(failure)
+    expect(peer.toPeer).toHaveBeenCalledTimes(1)
+    expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledTimes(1)
+    expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+  })
+})

@@ -1,6 +1,7 @@
 import {
   RequestSyncChunkArgs,
   SyncChunk,
+  SyncCheckpoint,
   SyncStatus,
   TrxToken,
   WalletStorageSync
@@ -332,6 +333,12 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       a.offsets.push({ name: ess.entityName, offset: ess.count })
     }
     return a
+  }
+
+  /** Return progress without the potentially large writer-local ID maps. */
+  makeSyncCheckpoint(): SyncCheckpoint {
+    const request = this.makeRequestSyncChunkArgs('', '')
+    return { syncStateId: this.id, since: this.when == null ? undefined : new Date(this.when), offsets: request.offsets }
   }
 
   static syncChunkSummary(c: SyncChunk): string {

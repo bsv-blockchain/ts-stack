@@ -1,3 +1,4 @@
+import { EntitySyncState } from './schema/entities/EntitySyncState'
 import { TableCertificate } from './schema/tables/TableCertificate'
 import { TableCertificateField } from './schema/tables/TableCertificateField'
 import { TableCommission } from './schema/tables/TableCommission'
@@ -364,6 +365,14 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (retry > 0) throw error_
       }
     }
+  }
+
+  async getSyncCheckpoint(auth: AuthId, storageIdentityKey: string, storageName: string) {
+    const { user } = await this.findOrInsertUser(auth.identityKey)
+    const { syncState } = await this.findOrInsertSyncStateAuth(
+      { identityKey: auth.identityKey, userId: user.userId }, storageIdentityKey, storageName
+    )
+    return new EntitySyncState(syncState).makeSyncCheckpoint()
   }
 
   async findOrInsertSyncStateAuth (

@@ -201,8 +201,19 @@ export function decodeBinaryJsonValue(value: unknown): unknown {
     const current = stack.pop()
     if (current == null) continue
     const replacements: Array<readonly [string, unknown]> = []
-    for (const [key, child] of Object.entries(current)) {
-      collectDecodedChild(key, child, replacements, stack)
+    if (Array.isArray(current)) {
+      // Numeric byte arrays are common in sync responses. Avoid allocating an
+      // entry tuple and invoking a JSON reviver for every byte.
+      for (let index = 0; index < current.length; index++) {
+        const child: unknown = current[index]
+        if (child != null && typeof child === 'object') {
+          collectDecodedChild(String(index), child, replacements, stack)
+        }
+      }
+    } else {
+      for (const [key, child] of Object.entries(current)) {
+        collectDecodedChild(key, child, replacements, stack)
+      }
     }
     if (replacements.length > 0) defineOwnValues(current, replacements)
   }
@@ -218,11 +229,38 @@ export function stringifyJsonRpc(value: unknown, binary: boolean): string {
   return JSON.stringify(value, JSON_RPC_REPLACERS.get(binary))
 }
 
-const JSON_RPC_REVIVERS = new Map<boolean, typeof binaryJsonReviver | undefined>([
-  [true, binaryJsonReviver],
-  [false, undefined]
-])
-
 export function parseJsonRpc(text: string, binary: boolean = false): any {
-  return JSON.parse(text, JSON_RPC_REVIVERS.get(binary))
+  const value: unknown = JSON.parse(text)
+  if (!binary || value == null || typeof value !== 'object') return value
+
+  // Match the exported reviver's bottom-up semantics, including escaped
+  // marker collisions and duplicate entry validation, without a callback per
+  // scalar byte or recursion proportional to remote JSON nesting depth.
+  const root = { value }
+  type Frame = { value: object, holder: object, key: string, visited: boolean }
+  const stack: Frame[] = [{ value, holder: root, key: 'value', visited: false }]
+  while (stack.length > 0) {
+    const frame = stack.pop()!
+    if (frame.visited) {
+      const decoded = binaryJsonReviver(frame.key, frame.value)
+      if (decoded !== frame.value) defineOwnValues(frame.holder, [[frame.key, decoded]])
+      continue
+    }
+    stack.push({ ...frame, visited: true })
+    const push = (key: string, child: unknown): void => {
+      if (child != null && typeof child === 'object') {
+        stack.push({ value: child, holder: frame.value, key, visited: false })
+      }
+    }
+    if (Array.isArray(frame.value)) {
+      for (let index = frame.value.length - 1; index >= 0; index--) {
+        const child: unknown = frame.value[index]
+        if (child != null && typeof child === 'object') push(String(index), child)
+      }
+    } else {
+      const entries = Object.entries(frame.value)
+      for (let index = entries.length - 1; index >= 0; index--) push(...entries[index])
+    }
+  }
+  return root.value
 }
