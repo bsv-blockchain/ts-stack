@@ -21,7 +21,8 @@ declarations only. Go uses a separate optional provider/interface, preserving it
 existing `engine.Storage` implementers. Shape detection cannot certify durability.
 The existing engines, SQL adapter, injected Go stores and default selections are
 unchanged. Their existing STEAK callback must not be described as this receipt.
-S03/S04 must integrate and verify the capability before activating durable ACKs.
+S03 integrates the TS Engine/Mongo capability behind an explicit adapter;
+durable ACKs are not a production default. S04 owns the Go equivalent.
 
 ## Identity and exact values
 

@@ -85,8 +85,10 @@ applications should prefer the root entry point wherever possible.
 adapters. `getAdmissionStorage(storage)` detects an explicit provider with both
 commit and reconciliation methods. Existing Knex and injected legacy adapters
 remain supported; their individual methods do not imply atomic submission.
-Current `Engine.submit` does not call this capability, and its early STEAK
-callback is not a durable commit receipt.
+When `getAdmissionStorage(storage)` observes a complete `overlay-admission-v1`
+provider, `Engine.submit` builds an admission plan and returns the saved STEAK
+only after majority commit. The SQL/Knex path and its early STEAK callback are
+unchanged; that callback is not a durable commit receipt.
 
 The contract separates local commit, index visibility and propagation. It binds
 operation identity to verified transaction, topic/policy and off-chain context;
@@ -100,9 +102,9 @@ in this release candidate.
 ## Optional Mongo foundation
 
 The package also contains an opt-in MongoDB foundation for schema bootstrap,
-content-addressed payload publication, reference guards, and payload collection.
-It is not an Engine integration, an `AdmissionStorage` implementation, or a
-default storage selection; importing `@bsv/overlay` alone does not load MongoDB.
+content-addressed payload publication, reference guards, payload collection,
+and an explicit `AdmissionStorage` adapter. Mongo is not the default Engine
+storage selection; importing `@bsv/overlay` alone does not load MongoDB.
 
 Applications using a Mongo deep entry point install the optional peer first:
 
@@ -111,15 +113,16 @@ npm install @bsv/overlay mongodb@^7.5.0
 ```
 
 The initial entry points are
-`@bsv/overlay/storage/mongo/MongoSchema` and
-`@bsv/overlay/storage/mongo/MongoPayloadStore`. They require an explicitly
+`@bsv/overlay/storage/mongo/MongoSchema`,
+`@bsv/overlay/storage/mongo/MongoPayloadStore`,
+`@bsv/overlay/storage/mongo/MongoAdmissionStorage`, and
+`@bsv/overlay/storage/mongo/MongoOverlayStorage`. They require an explicitly
 operated unsharded replica set; the supported deployment profile is three
 members. Payload publication makes GridFS bytes physically `published` before
 the guarded payload row becomes `ready`; caller-session reference and GC
 operations share that row guard. See the [Mongo v1
 foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md)
-for operational bounds, recovery rules, and the still-pending admission
-transaction integration.
+for operational bounds, recovery rules, and the opt-in admission path.
 
 ## Runtime and package formats
 

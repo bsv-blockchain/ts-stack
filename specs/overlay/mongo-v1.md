@@ -5,9 +5,9 @@
 This is an additive, opt-in MongoDB storage foundation for `@bsv/overlay`.
 It supplies schema bootstrap, scoped keys, content-addressed payload primitives,
 and durable read-guard primitives. It does **not** select MongoDB by default,
-connect MongoDB to `Engine`, implement `AdmissionStorage`, or make an admission
-receipt claim. The existing Engine, Knex, and injected-storage paths retain
-their current behavior.
+change the SQL default, or claim production activation. `MongoOverlayStorage`
+may be injected explicitly; Knex and injected-storage callers without that
+adapter retain their current behavior.
 
 MongoDB is an optional peer dependency. An application that imports a Mongo
 entry point must install a compatible driver explicitly:
@@ -91,29 +91,30 @@ controls where they operate in a caller's admission body. Neither payload
 publication nor collection runs verifier logic, network activity, uploads, or
 plugin callbacks inside an admission transaction.
 
-## Admission transaction integration is pending
+## Admission transaction integration
 
-The foundation is deliberately smaller than the v1 admission contract. A later
-Engine/adapter integration must compose the guarded payload primitives with the
-whole admission operation in one short transaction. Until that integration and
-its conformance evidence land, no Mongo method is an `AdmissionStorage`
-implementation and no saved STEAK/receipt is exposed as a durable admission
-acknowledgment.
+`MongoAdmissionStorage` implements `overlay-admission-v1` using the schema,
+payload, read-guard, and transaction-runner primitives. `MongoOverlayStorage`
+is the Engine `Storage` adapter that advertises that capability only because
+`commitAdmission` actually honors majority ack, conditional spends, applied
+history, and outbox publication. `getAdmissionStorage(storage)` remains a
+declaration check: Knex and incomplete Mongo helpers still return undefined.
 
-The pending transaction core must use a finite retry budget and distinguish
-MongoDB's labels on the **same session and operation identity**: rerun a
-`TransientTransactionError` body only under that identity, and reconcile an
-`UnknownTransactionCommitResult` before a new body may run. Its completion
-record must be majority+journal persisted with the exact receipt. Expired
-orphan cleanup must use a compare-and-set proof rather than treating absence or
-an ambiguous commit as an abort. MongoDB documents the retry-label behavior in
-its [transaction API guidance](https://www.mongodb.com/docs/manual/core/transactions-in-applications/).
+Engine `submit` / historical submit call `commitAdmission` when that capability
+is present. Parse, SPV, topic decision, and broadcast stay outside the Mongo
+transaction. Broadcast-before-mutation ordering is unchanged for live mode;
+historical mode still skips broadcast/propagation. The returned STEAK is the
+exact UTF-8 JSON saved with the majority receipt. A crash retry of the same
+operation identity returns that saved STEAK. `TransientTransactionError`
+reruns the body under the same operation id; `UnknownTransactionCommitResult`
+reconciles the same commit identity before a new body.
 
-That integration must keep external indexes and propagation asynchronous:
-persist an idempotent outbox intent in the admission transaction, then let a
-leased worker deliver it. A callback may participate only after it declares
-replay safety, reconciliation, cancellation, and bounded work. It must never
-be invoked in the Mongo admission transaction.
+Native Mongo lookup indexes may enlist writes on the admission session and
+are the only indexes that may be `visible` at commit. External plugins receive
+a durable lookup outbox event with leased delivery; they are not assumed
+replay-safe, and STEAK is overlay admission, not remote delivery. Propagation
+uses the same outbox protocol. Ban/serving eviction must not erase historical
+applied/BASM records. Mongo is not the overlay default.
 
 ## Compatibility and operations
 

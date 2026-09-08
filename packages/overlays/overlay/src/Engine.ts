@@ -42,6 +42,12 @@ import {
 } from './BASM.js'
 import { BASMRemote } from './BASMRemote.js'
 import { serializeErrorForLog, serializeLogValue } from './SafeLog.js'
+import {
+  buildOverlayAdmissionPlan,
+  getOverlayAdmissionHost,
+  overlayAdmissionMode,
+  waitForAdmissionReceipt
+} from './EngineAdmission.js'
 
 const DEFAULT_GASP_SYNC_LIMIT = 10000
 const DEFAULT_BASM_RANGE_LIMIT = 1024
@@ -1114,6 +1120,41 @@ export class Engine {
     } catch (error) {
       await this.abortProvisionalAdmissions(validations, failedTopics, taggedBEEF.beef)
       throw error
+    }
+
+    const admissionHost = getOverlayAdmissionHost(this.storage)
+    if (admissionHost !== undefined) {
+      if (!anyTopicAccepted) {
+        if (onSteakReady !== undefined) onSteakReady(steak)
+        return steak
+      }
+      const admissionMode = overlayAdmissionMode(mode)
+      const includePropagation =
+        this.advertiser !== undefined &&
+        mode !== 'historical-tx' &&
+        mode !== 'historical-tx-no-spv'
+      const buildPlan = async () =>
+        await buildOverlayAdmissionPlan({
+          host: admissionHost,
+          tx,
+          txid,
+          beef: taggedBEEF.beef,
+          topics: taggedBEEF.topics,
+          mode: admissionMode,
+          offChainValues,
+          validations,
+          failedTopics,
+          lookupServices: this.lookupServices,
+          includePropagation
+        })
+      const committed = await waitForAdmissionReceipt(
+        admissionHost.admission,
+        await buildPlan(),
+        buildPlan
+      )
+      const acknowledged = JSON.parse(committed.receipt.steak) as STEAK
+      if (onSteakReady !== undefined) onSteakReady(acknowledged)
+      return acknowledged
     }
 
     // Call the callback function with STEAK if it is provided (before storage mutations)
