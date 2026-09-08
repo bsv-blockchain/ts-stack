@@ -117,18 +117,24 @@
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "mongodb": "7.5.0",
+    "mongodb-memory-server": "^11.2.0"
   },
   "dependencies": {
     "@bsv/gasp": "workspace:^",
     "knex": "^3.3.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6",
+    "mongodb": "^7.5.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    },
+    "mongodb": {
+      "optional": true
     }
   },
   "typesVersions": {

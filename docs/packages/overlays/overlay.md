@@ -85,6 +85,25 @@ receipt and pending index/propagation boundary for future adapters. Current
 capability. See the [persistence v1 specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md)
 for the shared fixtures and explicit limits. No consumer migration is required.
 
+## Optional Mongo foundation
+
+The package also contains an opt-in MongoDB foundation for schema bootstrap,
+content-addressed payload publication, reference guards, and payload collection.
+It is not an Engine integration, an `AdmissionStorage` implementation, or a
+default storage selection; importing `@bsv/overlay` does not load MongoDB.
+
+Applications using a Mongo deep entry point install the optional peer first:
+
+```sh
+npm install @bsv/overlay mongodb@^7.5.0
+```
+
+The initial entry points are `@bsv/overlay/storage/mongo/MongoSchema` and
+`@bsv/overlay/storage/mongo/MongoPayloadStore`. They require an explicitly
+operated unsharded replica set; the supported deployment profile is three
+members. See the [Mongo v1
+foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md).
+
 ## Common patterns
 
 ### Implementing a TopicManager
