@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Adds one strict BRC-100 byte-boundary contract and secure React Native bridge validation, and completes incorporated-code compliance with hash-pinned provenance, exact MIT/ISC/BSD/Apache notices, source lineage markers, package payloads, a retained UMD banner, SBOM components, and release enforcement. Removes a broken copied Swagger UI scaffold and screenshot; the first-party OpenAPI source remains available for use with any viewer. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No API migration is required. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles."
+      "releaseType": "minor",
+      "summary": "The coordinated unpublished 2.5.0 candidate corrects Merkle-path arithmetic for the full safe-integer offset domain, including positions above 32 bits, and rejects nonrepresentable offsets. Retains the strict BRC-100 byte-boundary contract, secure React Native bridge validation, incorporated-code provenance and notices, source lineage markers, package payloads, UMD banner, SBOM components, release enforcement, Swagger scaffold removal, and first-party author metadata corrections from the prior candidate.",
+      "migration": "No API or valid BUMP wire migration is required for the offset correction. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles."
     },
     {
       "name": "@bsv/simple",

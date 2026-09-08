@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.4.2'
+version: '2.5.0'
 npm: '@bsv/sdk'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
@@ -14,6 +14,12 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The unpublished 2.5.0 candidate corrects BUMP offset arithmetic above 32 bits
+through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
+calculation, extraction, combination and trimming use the same exact numeric
+domain; malformed non-integer and unsafe offsets fail explicitly. No consumer
+migration is needed for this correction.
 
 The foundational cryptographic and transaction library for the BSV blockchain. Zero external dependencies — all cryptographic primitives have been validated by a third-party auditor. Every other library in the ts-stack builds on top of `@bsv/sdk`. <!-- audio: ts-stack.m4a @ 27:00 -->
 
