@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Validated BASM heights, hashes and txid sets while retaining numeric-string
+  heights, public CORS, topic-free raw transactions, configured limits and sync
+  defaults. Added explicit unsupported-capability codes and optional trusted
+  full-block transaction counts on injected header resolvers. No deployment or
+  storage migration is required.
+
 ### Added
 
 - Added the `ttn` runtime network, TTN SHIP/SLAP roots, and explicit

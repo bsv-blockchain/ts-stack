@@ -7,6 +7,14 @@ topic**. The two systems are deliberately decoupled. Read the final section
 ("How BASM and removal interact") before operating a node that runs the janitor
 or removes tokens via the admin API.
 
+The protocol's binary-search reconciliation is a design capability, not an
+implemented durable recovery scheduler in this release. The current engine
+performs bounded forward work and refuses historical divergence or an untrusted
+bootstrap prefix. See the [current validation and recovery limits](../README.md#basm-peer-validation-and-current-recovery-limits)
+before interpreting a sync report. Optional canonical full-block counts provide
+stronger original-position evidence; header-only providers retain explicitly
+weaker evidence. Peer anchor equality is not durable or global completeness.
+
 ## What BRC-136 gives you
 
 GASP ([Synchronization.md](./Synchronization.md)) replicates transaction *data*

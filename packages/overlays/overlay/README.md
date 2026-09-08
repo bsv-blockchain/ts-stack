@@ -120,6 +120,51 @@ For production deployments:
 `@bsv/overlay-express` supplies these standard HTTP controls while preserving
 public protocol access by default.
 
+### BASM peer validation and current recovery limits
+
+BASM uses the current BRC-136 ordered admitted subset and block-anchored TAC.
+The five existing JSON POST routes remain compatible; empty tips remain
+`{ topic, blockHeight: -1, tac: <zero hash> }`. Unsupported storage capabilities
+are errors, not empty histories. The remote client validates response shape,
+topic/height/hash binding, ordered unique admitted positions, contiguous
+returned ranges, and complete proof/raw response ID sets before use.
+
+`BASMRemote` retains its injectable third `fetch` argument and accepts optional
+limits as a fourth argument. Defaults are 64 MiB per decoded response, 8 MiB
+per proof, 32 MiB per raw transaction, 100,000 admitted entries, 1,000 requested
+txids, 1,024 requested anchor heights, and 30 seconds per request including its
+body. Aggregate response limits also apply to hex-encoded transactions. These
+are configurable local acceptance limits, not consensus rules. Standard fetch
+bodies are bounded while streaming; legacy injected `text()` implementations
+are checked after buffering. Classified errors expose `code`, including
+`BASM_UNSUPPORTED`, `BASM_RESOURCE_LIMIT`, and `BASM_TIMEOUT`.
+
+Reconciliation requires a canonical header resolver as well as a ChainTracker.
+An optional `TopicAnchorHeader.blockTransactionCount` must come independently
+from the trusted canonical provider and refer to that exact `blockHash`.
+It enables full-block count/index bounds and odd-duplication checks. The sync
+report's `positionValidation` is `canonical-count` only when that evidence was
+available for every checked proof; legacy providers yield `encoded-offset-only`.
+A Merkle root plus an encoded offset alone cannot disambiguate Bitcoin's
+duplicate-last-leaf position ambiguity. No provider is required to add the
+field, and the engine does not download full blocks to infer it.
+
+Forward sync pages now contain at most 1,000 anchors to fit the standard HTTP
+server. Proof height, requested original index, canonical hash/root, raw byte
+identity, TAC continuity, and repeated peer anchors are checked before historical
+submission. Historical mode still applies the local TopicManager and suppresses
+broadcast and propagation. Automatic BASM sync remains disabled by default.
+
+This is bounded protocol hardening, not durable recovery. An empty local node
+whose topic genesis precedes the recent bootstrap window now refuses the
+untrusted TAC prefix; this intentionally replaces the old unchecked tail
+behavior. A block above 1,000 admitted entries reaches a request-limit error
+until proof/raw chunking is implemented. Equal-height/local-ahead divergence,
+whole-target bootstrap, durable cursors/leases, atomic revision fencing, and
+truthful per-topic agreement status remain required follow-up work. A successful
+legacy report does not establish global completeness, current unspentness, or
+durable recovery completion. See [BASM details](./docs/BRC-136-BASM.md).
+
 ## Development
 
 From the repository root:

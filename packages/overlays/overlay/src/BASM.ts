@@ -44,9 +44,13 @@ export interface TopicAnchorHeader {
   blockHeight: number
   blockHash: string
   merkleRoot?: string
+  /** Independently obtained full block transaction count, bound to this blockHash. */
+  blockTransactionCount?: number
 }
 
-export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<TopicAnchorHeader | undefined>
+export type TopicAnchorHeaderResolver = (
+  blockHeight: number
+) => Promise<TopicAnchorHeader | undefined>
 
 export interface TopicAnchorRangeRequest {
   fromHeight: number
@@ -106,6 +110,10 @@ export interface BASMPeerSyncReport {
   checkedHeights: number[]
   missingTxids: string[]
   fetchedTxCount: number
+  /** Weakest position evidence used by this attempt; absent when no proof was checked. */
+  positionValidation?: 'canonical-count' | 'encoded-offset-only'
+  /** Present for classified peer protocol or transport failures. */
+  errorCode?: string
   message?: string
 }
 
@@ -190,7 +198,10 @@ export function computeTac(prevTac: string, blockHash: string, basmRoot: string)
   return internalToDisplayHex(sha256d(input))
 }
 
-export function extractMerkleProofMetadata(txid: string, proof?: MerklePath): MerkleProofMetadata | undefined {
+export function extractMerkleProofMetadata(
+  txid: string,
+  proof?: MerklePath
+): MerkleProofMetadata | undefined {
   if (proof === undefined) {
     return undefined
   }
