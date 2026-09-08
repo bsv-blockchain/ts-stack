@@ -126,6 +126,13 @@ CSP is an application and deployment concern rather than a package-level access 
 
 ## Contributor checks
 
+Final overlay identity discovery uses the configured wallet Services ChainTracker
+to verify transaction evidence before returning certificate results, including
+on response-cache hits. Local contacts retain their separate policy. See the
+[identity verification guide](../docs/identity-verification.md) for configuration,
+compatibility, and chain-cache limits; inclusion is not proof of freshness or
+unspentness.
+
 From the repository root, build the SDK and package before running the installed-consumer browser gate:
 
 ```bash

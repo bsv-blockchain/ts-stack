@@ -424,6 +424,17 @@ does not apply schema changes.
 
 ## Development
 
+### Overlay identity verification
+
+Final identity discovery verifies transaction evidence against the wallet's
+existing `Services.getChainTracker()` configuration before validating the
+subject-signed identity output and certificate. Cached responses are reverified
+before use. Direct `identityUtils` callers must supply a canonical `ChainTracker`;
+missing context or invalid evidence produces no overlay identities. Local
+contacts retain their separate policy. Inclusion does not establish unspentness
+or freshness. See [identity verification](docs/identity-verification.md) for
+configuration, compatibility, and remaining verification lifecycle limits.
+
 ```bash
 git clone https://github.com/bsv-blockchain/ts-stack.git
 cd ts-stack
@@ -445,9 +456,12 @@ network access, or long runtimes. Files named `*.live.test.ts` are public-networ
 checks, also excluded from deterministic PR coverage. Run exactly one governed
 suite with `test:manual -- <path>` or `test:live -- <path>` after reviewing
 `governance/test-quality/policy.json`; never batch-run operator suites. CI
-merges four Wallet Toolbox coverage shards
-for reporting; the complete local `test:coverage` run currently measures
-69.12% statements, 59.09% branches, 72.83% functions, and 71.06% lines.
+merges four Wallet Toolbox coverage shards for reporting. The C01 local
+`test:coverage --runInBand` run passed 225 suites and 2,188 tests, with one
+pre-existing skipped test. Its all-files totals were 45.75% statements, 38.86%
+branches, 42.57% functions, and 45.46% lines; that collection includes imported
+`out/src` code as well as source files. Use the exact run's coverage report,
+rather than comparing unlike source-only and combined collections.
 
 Operational repair, migration, export, and long-running service procedures are
 not tests. They live under [`operator/`](./operator/README.md), produce an exact

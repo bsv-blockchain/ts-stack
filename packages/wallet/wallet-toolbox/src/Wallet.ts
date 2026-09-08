@@ -63,6 +63,8 @@ import {
   MasterCertificate,
   Certificate,
   LookupResolver,
+  LookupAnswer,
+  VerifiableCertificate,
   AtomicBEEF,
   BEEF,
   KeyDeriverApi,
@@ -79,7 +81,7 @@ import { createAction, CreateActionResultX } from './signer/methods/createAction
 import { signAction, SignActionResultX } from './signer/methods/signAction'
 import { internalizeAction } from './signer/methods/internalizeAction'
 import { WalletSettingsManager } from './WalletSettingsManager'
-import { queryOverlay, transformVerifiableCertificatesWithTrust } from './utility/identityUtils'
+import { parseResults, queryOverlayEvidence, transformVerifiableCertificatesWithTrust } from './utility/identityUtils'
 import { maxPossibleSatoshis } from './storage/methods/generateChange'
 import { hasBrc177NoSendExpiryLabel, parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
 import { createNoSendExpiryAction } from './signer/methods/createNoSendExpiryAction'
@@ -791,8 +793,32 @@ export class Wallet implements WalletInterface, ProtoWallet {
     trustSettings: Awaited<ReturnType<WalletSettingsManager['get']>>['trustSettings']
   }
 
-  /** 2-minute cache of queryOverlay() results keyed by normalized query */
-  private readonly _overlayCache: Map<string, { expiresAt: number; value: unknown }> = new Map()
+  /** Two-minute untrusted response cache. Every use repeats transaction and identity checks. */
+  private readonly _overlayEvidenceCache = new Map<string, { expiresAt: number; value: LookupAnswer }>()
+
+  private async discoverOverlayCertificates(
+    query: unknown,
+    cacheKey: string,
+    forceRefresh: boolean,
+    now: number
+  ): Promise<VerifiableCertificate[]> {
+    // Use the wallet's existing network/chain configuration, never the overlay host's verdict.
+    const chainTracker = await this.getServices().getChainTracker()
+    let cached = forceRefresh ? undefined : this._overlayEvidenceCache.get(cacheKey)
+    if (cached == null || cached.expiresAt <= now) {
+      const value = await queryOverlayEvidence(query, this.lookupResolver)
+      cached = { value, expiresAt: now + 2 * 60 * 1000 }
+      this._overlayEvidenceCache.set(cacheKey, cached)
+    }
+    if (cached.value.type !== 'output-list') {
+      this._overlayEvidenceCache.delete(cacheKey)
+      return []
+    }
+    const certificates = await parseResults(cached.value, chainTracker)
+    // Failed evidence must allow another fetch, including after temporary chain unavailability.
+    if (certificates.length !== cached.value.outputs.length) this._overlayEvidenceCache.delete(cacheKey)
+    return certificates
+  }
 
   async discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs & { forceRefresh?: boolean },
@@ -831,25 +857,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
-    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
+    // --- Untrusted overlay response cache; verify again before use. ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByIdentityKey',
       identityKey: args.identityKey,
       certifiers
     })
 
-    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if (cached == null || cached.expiresAt <= now) {
-      const value = await queryOverlay({ identityKey: args.identityKey, certifiers }, this.lookupResolver)
-      cached = { value, expiresAt: now + TTL_MS }
-      this._overlayCache.set(cacheKey, cached)
-    }
-
-    if (!cached.value) {
-      return { totalCertificates: 0, certificates: [] }
-    }
-
-    return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
+    const certificates = await this.discoverOverlayCertificates(
+      { identityKey: args.identityKey, certifiers },
+      cacheKey,
+      forceRefresh,
+      now
+    )
+    return transformVerifiableCertificatesWithTrust(trustSettings, certificates)
   }
 
   async discoverByAttributes(
@@ -897,25 +918,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
       attributesKey = JSON.stringify(args.attributes, keys)
     }
 
-    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
+    // --- Untrusted overlay response cache; verify again before use. ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByAttributes',
       attributes: attributesKey,
       certifiers
     })
 
-    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if (cached == null || cached.expiresAt <= now) {
-      const value = await queryOverlay({ attributes: args.attributes, certifiers }, this.lookupResolver)
-      cached = { value, expiresAt: now + TTL_MS }
-      this._overlayCache.set(cacheKey, cached)
-    }
-
-    if (!cached.value) {
-      return { totalCertificates: 0, certificates: [] }
-    }
-
-    return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
+    const certificates = await this.discoverOverlayCertificates(
+      { attributes: args.attributes, certifiers },
+      cacheKey,
+      forceRefresh,
+      now
+    )
+    return transformVerifiableCertificatesWithTrust(trustSettings, certificates)
   }
 
   verifyReturnedTxidOnly(beef: Beef, knownTxids?: string[]): Beef {

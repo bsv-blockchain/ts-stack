@@ -85,6 +85,13 @@ Capability negotiation fails before prefunding against an older server. See
 
 ## Use cases
 
+Final overlay identity discovery uses the configured wallet Services ChainTracker
+to verify transaction evidence before returning certificate results, including
+on response-cache hits. Local contacts retain their separate policy. See the
+[identity verification guide](../docs/identity-verification.md) for configuration,
+compatibility, and chain-cache limits; inclusion is not proof of freshness or
+unspentness.
+
 ### Self-custody BSV wallet on a phone
 
 Run the BRC-100 wallet entirely on-device, with remote storage for cross-device sync.

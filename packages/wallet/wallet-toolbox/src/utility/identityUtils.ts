@@ -1,6 +1,5 @@
 import {
   LookupAnswer,
-  Transaction,
   PushDrop,
   VerifiableCertificate,
   Utils,
@@ -9,9 +8,11 @@ import {
   DiscoverCertificatesResult,
   IdentityCertificate,
   IdentityCertifier,
-  Base64String
+  Base64String,
+  ChainTracker
 } from '@bsv/sdk'
 import { Certifier, TrustSettings } from '../WalletSettingsManager'
+import { OverlayOutputEvidence, verifyOverlayOutput } from './verifyOverlayOutput'
 
 // Our extended certificate includes certifierInfo.
 export interface ExtendedVerifiableCertificate extends IdentityCertificate {
@@ -98,18 +99,41 @@ export const transformVerifiableCertificatesWithTrust = (
 
 /**
  * Performs an identity overlay service lookup query and returns the parsed results.
+ * Requires an independently maintained ChainTracker; missing context returns no identities.
  *
  * Identity paths benefit from a larger grace window (more hosts contribute outputs before the
  * query resolves) — 300 ms is well under the "instant" perception threshold and catches the long
  * tail of healthy-but-slightly-slow hosts.
  */
-export const queryOverlay = async (query: unknown, resolver: LookupResolver): Promise<VerifiableCertificate[]> => {
-  const results = await resolver.query({
-    service: 'ls_identity',
-    query
-  }, undefined, { graceMs: 300 })
+export const queryOverlay = async (
+  query: unknown,
+  resolver: LookupResolver,
+  chainTracker?: ChainTracker
+): Promise<VerifiableCertificate[]> => {
+  if (chainTracker == null) return []
+  return await parseResults(await queryOverlayEvidence(query, resolver), chainTracker)
+}
 
-  return await parseResults(results)
+/** Fetch an owned snapshot of UNTRUSTED evidence, suitable only for revalidation. */
+export const queryOverlayEvidence = async (query: unknown, resolver: LookupResolver): Promise<LookupAnswer> => {
+  const results = await resolver.query(
+    {
+      service: 'ls_identity',
+      query
+    },
+    undefined,
+    { graceMs: 300 }
+  )
+
+  if (results.type !== 'output-list') return results
+  return {
+    type: 'output-list',
+    outputs: results.outputs.map(output => ({
+      ...output,
+      beef: output.beef.slice(),
+      ...(output.context === undefined ? {} : { context: output.context.slice() })
+    }))
+  }
 }
 
 /**
@@ -129,7 +153,7 @@ const isUiRuntime = (): boolean => {
 }
 
 const yieldToUi = async (): Promise<void> => {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  await new Promise<void>(resolve => setTimeout(resolve, 0))
 }
 
 /**
@@ -137,11 +161,12 @@ const yieldToUi = async (): Promise<void> => {
  * parse / decrypt / verify failure so a malformed entry can never block the others.
  */
 const parseOne = async (
-  output: { beef: number[], outputIndex: number, context?: number[] }
+  output: OverlayOutputEvidence,
+  chainTracker: ChainTracker
 ): Promise<VerifiableCertificate | null> => {
   try {
-    const tx = Transaction.fromBEEF(output.beef)
-    const decodedOutput = PushDrop.decode(tx.outputs[output.outputIndex].lockingScript)
+    const verifiedOutput = await verifyOverlayOutput(output, chainTracker)
+    const decodedOutput = PushDrop.decode(verifiedOutput.lockingScript)
     const certificate: VerifiableCertificate = JSON.parse(Utils.toUTF8(decodedOutput.fields[0]))
     const verifiableCert = new VerifiableCertificate(
       certificate.type,
@@ -153,29 +178,48 @@ const parseOne = async (
       certificate.keyring,
       certificate.signature
     )
-    const decryptedFields = await verifiableCert.decryptFields(new ProtoWallet('anyone'))
-    await verifiableCert.verify()
+    // IdentityClient.publiclyRevealAttributes and tm_identity use the subject's
+    // BRC-42 identity key to sign the certificate/keyring fields in this output.
+    const anyoneWallet = new ProtoWallet('anyone')
+    const signature = decodedOutput.fields.pop()
+    if (decodedOutput.fields.length === 0 || signature == null) return null
+    const { valid } = await anyoneWallet.verifySignature({
+      data: decodedOutput.fields.flat(),
+      signature,
+      counterparty: verifiableCert.subject,
+      protocolID: [1, 'identity'],
+      keyID: '1'
+    })
+    if (valid !== true) return null
+    if ((await verifiableCert.verify()) !== true) return null
+    const decryptedFields = await verifiableCert.decryptFields(anyoneWallet)
+    if (Object.keys(decryptedFields).length === 0) return null
     verifiableCert.decryptedFields = decryptedFields
     return verifiableCert
-  } catch (error) {
-    console.error(error)
+  } catch {
+    // Untrusted parsing/decryption errors can contain identity data. Do not log it.
     return null
   }
 }
 
 /**
  * Parse the returned UTXOs, decrypting and verifying each certificate.
+ * An omitted ChainTracker fails closed. Each call revalidates transaction evidence;
+ * returned certificates carry no reusable chain-verdict or unspentness guarantee.
  *
  * On UI runtimes (browser / React Native), yields between iterations so the JS thread does not
  * own the frame for the full duration. On Node, runs straight through.
  */
-export const parseResults = async (lookupResult: LookupAnswer): Promise<VerifiableCertificate[]> => {
-  if (lookupResult.type !== 'output-list') return []
+export const parseResults = async (
+  lookupResult: LookupAnswer,
+  chainTracker?: ChainTracker
+): Promise<VerifiableCertificate[]> => {
+  if (lookupResult.type !== 'output-list' || chainTracker == null) return []
   const parsedResults: VerifiableCertificate[] = []
   const shouldYield = isUiRuntime()
   for (const output of lookupResult.outputs) {
     if (shouldYield) await yieldToUi()
-    const cert = await parseOne(output)
+    const cert = await parseOne(output, chainTracker)
     if (cert != null) parsedResults.push(cert)
   }
   return parsedResults
@@ -185,12 +229,15 @@ export const parseResults = async (lookupResult: LookupAnswer): Promise<Verifiab
  * Iterable variant of {@link parseResults}: emits each successfully parsed certificate as soon as
  * it's ready, so callers can render progressively instead of waiting for the full set.
  */
-export async function * parseResults$ (lookupResult: LookupAnswer): AsyncIterable<VerifiableCertificate> {
-  if (lookupResult.type !== 'output-list') return
+export async function* parseResults$(
+  lookupResult: LookupAnswer,
+  chainTracker?: ChainTracker
+): AsyncIterable<VerifiableCertificate> {
+  if (lookupResult.type !== 'output-list' || chainTracker == null) return
   const shouldYield = isUiRuntime()
   for (const output of lookupResult.outputs) {
     if (shouldYield) await yieldToUi()
-    const cert = await parseOne(output)
+    const cert = await parseOne(output, chainTracker)
     if (cert != null) yield cert
   }
 }
