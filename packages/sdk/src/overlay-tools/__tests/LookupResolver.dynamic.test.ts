@@ -838,4 +838,105 @@ describe('LookupResolver dynamic discovery', () => {
       outputs: [{ beef: makeBeef(91), outputIndex: 0 }]
     })
   })
+
+  it('does not let a tighter-limit cache hide later tracker hosts from a subsequent default query', async () => {
+    const tracker = 'https://tight-cache-tracker.example'
+    const firstHost = 'https://tight-cache-a.example'
+    const laterHost = 'https://tight-cache-b.example'
+    const service = 'ls_tight_cache'
+    const firstReceipt = await slapReceipt(170, firstHost, service)
+    const laterReceipt = await slapReceipt(171, laterHost, service)
+    const firstBeef = makeBeef(101)
+    const laterBeef = makeBeef(102)
+    const lookup = jest.fn(async (url: string) => {
+      if (url === tracker) {
+        return { type: 'output-list' as const, outputs: [firstReceipt, laterReceipt] }
+      }
+      return {
+        type: 'output-list' as const,
+        outputs: [{ beef: url === firstHost ? firstBeef : laterBeef, outputIndex: 0 }]
+      }
+    })
+    const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
+
+    const tight = resolver.query({ service, query: { n: 1 } }, undefined, { limits: { maxHosts: 1 } })
+    await jest.runAllTimersAsync()
+    await tight
+
+    const hostCallsAfterTight = lookup.mock.calls
+      .map(([url]) => url)
+      .filter((url: string) => url === firstHost || url === laterHost)
+    expect(hostCallsAfterTight).toHaveLength(1)
+
+    const full = resolver.query({ service, query: { n: 2 } })
+    await jest.runAllTimersAsync()
+    const answer = await full
+    expect(answer.outputs).toEqual(
+      expect.arrayContaining([
+        { beef: firstBeef, outputIndex: 0 },
+        { beef: laterBeef, outputIndex: 0 }
+      ])
+    )
+    expect(answer.outputs).toHaveLength(2)
+    expect(lookup.mock.calls.filter(([url]) => url === tracker).length).toBeGreaterThan(1)
+    expect(lookup.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([firstHost, laterHost])
+    )
+  })
+
+  it('throws from query() when a deadline expires before any host is admitted', async () => {
+    const tracker = 'https://deadline-miss-tracker.example'
+    const lookup = jest.fn(
+      async (_url: string, _question: unknown, _timeout: unknown, signal?: AbortSignal) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      slapTrackers: [tracker]
+    })
+    const pending = expect(
+      resolver.query({ service: 'ls_deadline_miss', query: {} }, undefined, {
+        deadlineMs: 25
+      })
+    ).rejects.toThrow(
+      'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_deadline_miss'
+    )
+    await jest.advanceTimersByTimeAsync(25)
+    await pending
+  })
+
+  it('keeps query$ deadline snapshots when no host was admitted while Promise callers still throw', async () => {
+    const tracker = 'https://deadline-snapshot-tracker.example'
+    const lookup = jest.fn(
+      async (_url: string, _question: unknown, _timeout: unknown, signal?: AbortSignal) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      slapTrackers: [tracker]
+    })
+    const received: LookupAnswerProgress[] = []
+    const pending = (async () => {
+      for await (const item of resolver.query$(
+        { service: 'ls_deadline_snapshot', query: {} },
+        undefined,
+        { deadlineMs: 25 }
+      )) {
+        received.push(item)
+      }
+    })()
+    await jest.advanceTimersByTimeAsync(25)
+    await pending
+    expect(received).toHaveLength(1)
+    expect(received[0]).toMatchObject({
+      isFinal: true,
+      terminalReason: 'deadline',
+      hostCount: 0,
+      outputs: []
+    })
+  })
 })

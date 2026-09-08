@@ -352,6 +352,66 @@ interface CacheOptions {
   txMemoTtlMs?: number
 }
 
+/** Discovery fields that can truncate the cached SLAP host set. */
+interface LookupDiscoveryBound {
+  maxHosts: number
+  maxHostsPerTracker: number
+  maxTrackers: number
+  maxResponseBytes: number
+  maxTotalBytes: number
+  maxOutputs: number
+}
+
+interface LookupHostsCacheEntry extends LookupDiscoveryBound {
+  hosts: string[]
+  expiresAt: number
+  discoveryComplete?: boolean
+  trackersFailed?: number
+  limitsHit?: string[]
+}
+
+function lookupDiscoveryBound(limits: LookupLimits): LookupDiscoveryBound {
+  return {
+    maxHosts: limits.maxHosts,
+    maxHostsPerTracker: limits.maxHostsPerTracker,
+    maxTrackers: limits.maxTrackers,
+    maxResponseBytes: limits.maxResponseBytes,
+    maxTotalBytes: limits.maxTotalBytes,
+    maxOutputs: limits.maxOutputs
+  }
+}
+
+/** In-flight discovery identity: service plus the limits that shape tracker work. */
+function lookupDiscoveryCacheKey(service: string, limits: LookupLimits): string {
+  const bound = lookupDiscoveryBound(limits)
+  return JSON.stringify([
+    service,
+    bound.maxHosts,
+    bound.maxHostsPerTracker,
+    bound.maxTrackers,
+    limits.trackerConcurrency,
+    bound.maxResponseBytes,
+    bound.maxTotalBytes,
+    bound.maxOutputs
+  ])
+}
+
+/** True when `cached` was produced with bounds at least as permissive as `needed`. */
+function lookupDiscoveryCovers(
+  cached: Partial<LookupDiscoveryBound> | undefined,
+  needed: LookupDiscoveryBound
+): boolean {
+  if (cached === undefined) return false
+  return (
+    (cached.maxHosts ?? 0) >= needed.maxHosts &&
+    (cached.maxHostsPerTracker ?? 0) >= needed.maxHostsPerTracker &&
+    (cached.maxTrackers ?? 0) >= needed.maxTrackers &&
+    (cached.maxResponseBytes ?? 0) >= needed.maxResponseBytes &&
+    (cached.maxTotalBytes ?? 0) >= needed.maxTotalBytes &&
+    (cached.maxOutputs ?? 0) >= needed.maxOutputs
+  )
+}
+
 /** Configuration options for the Lookup resolver. */
 export interface LookupResolverConfig {
   /** Defaults for the bounded discovery, scheduler and receipt intake. */
@@ -777,7 +837,7 @@ export default class LookupResolver {
   private readonly telemetry: Telemetry
 
   // ---- Caches / memoization ----
-  private readonly hostsCache: Map<string, { hosts: string[]; expiresAt: number; discoveryComplete?: boolean; trackersFailed?: number; limitsHit?: string[] }>
+  private readonly hostsCache: Map<string, LookupHostsCacheEntry>
   private readonly hostsInFlight: Map<string, LookupDiscovery>
   private readonly limits: LookupLimits
   private activeQueries = 0
@@ -891,25 +951,34 @@ export default class LookupResolver {
     } finally {
       await iter.return?.(undefined)
     }
+    const progress: LookupAnswerProgress = last ?? {
+      type: 'output-list',
+      outputs: [],
+      txIds: [],
+      isFinal: true,
+      hostCount: 0,
+      completedHosts: 0,
+      successfulHosts: 0,
+      emptyHosts: 0,
+      failedHosts: 0,
+      rejectedHosts: 0,
+      freeformHosts: 0,
+      terminalReason: 'settled',
+      ...(options?.correlationId !== undefined ? { correlationId: options.correlationId } : {})
+    }
+    // Promise callers cannot see terminalReason. A deadline that admitted no
+    // host is a miss, not a successful empty answer from a queried host.
+    if (progress.hostCount === 0 && progress.terminalReason !== 'cancelled') {
+      throw new Error(
+        `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
+      )
+    }
     return {
       answer: {
         type: 'output-list',
-        outputs: last?.outputs ?? []
+        outputs: progress.outputs
       },
-      progress: last ?? {
-        type: 'output-list',
-        outputs: [],
-        txIds: [],
-        isFinal: true,
-        hostCount: 0,
-        completedHosts: 0,
-        successfulHosts: 0,
-        emptyHosts: 0,
-        failedHosts: 0,
-        rejectedHosts: 0,
-        freeformHosts: 0,
-        ...(options?.correlationId !== undefined ? { correlationId: options.correlationId } : {})
-      }
+      progress
     }
   }
 
@@ -1233,14 +1302,23 @@ export default class LookupResolver {
         } else {
           const cached = this.hostsCache.get(question.service)
           const configuredAdditional = this.additionalHosts[question.service] ?? []
-          const cacheAvailable = cached?.hosts.some(host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now()) ?? false
-          const key = JSON.stringify([question.service, limits.maxHosts, limits.maxHostsPerTracker,
-            limits.maxTrackers, limits.trackerConcurrency, limits.maxResponseBytes, limits.maxTotalBytes, limits.maxOutputs])
+          const cacheHasAvailableHost =
+            cached?.hosts.some(host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now()) ??
+            false
+          const cacheCoversCaller = lookupDiscoveryCovers(cached, limits)
+          const cacheFresh = cached !== undefined && cached.expiresAt > Date.now()
+          const key = lookupDiscoveryCacheKey(question.service, limits)
           let discovery = this.hostsInFlight.get(key)
-          const refresh = discovery !== undefined || cached === undefined || cached.expiresAt <= Date.now() || !cacheAvailable
-          const initialSources = Number(cached !== undefined && cacheAvailable) + Number(configuredAdditional.length > 0)
+          const refresh =
+            discovery !== undefined ||
+            cached === undefined ||
+            !cacheCoversCaller ||
+            !cacheFresh ||
+            !cacheHasAvailableHost
+          const initialSources =
+            Number(cached !== undefined && cacheHasAvailableHost) + Number(configuredAdditional.length > 0)
           const initialQuota = refresh ? Math.max(1, Math.floor(limits.maxHosts / (initialSources + Math.max(1, Math.min(this.slapTrackers.length, limits.maxTrackers))))) : limits.maxHosts
-          if (cached !== undefined && cacheAvailable) {
+          if (cached !== undefined && cacheHasAvailableHost) {
             // Reserve a source share for cached membership and each late tracker.
             const cachedLimit = initialQuota
             admit('cache', cached.hosts.slice(0, cachedLimit))
@@ -1275,8 +1353,7 @@ export default class LookupResolver {
                 this.hostsInFlight.delete(key)
                 if (abandoned) return
                 const hosts = Array.from(new Set(Array.from(state.sources.values()).flat())).slice(0, limits.maxHosts)
-                if (!this.hostsCache.has(question.service) && this.hostsCache.size >= this.hostsMaxEntries) this.evictOldest(this.hostsCache)
-                this.hostsCache.set(question.service, { hosts, expiresAt: Date.now() + this.hostsTtlMs, discoveryComplete: state.trackersFailed === 0 && state.limitsHit.size === 0 && state.skippedHosts === 0, trackersFailed: state.trackersFailed, limitsHit: Array.from(state.limitsHit) })
+                this.rememberDiscoveredHosts(question.service, hosts, limits, state)
               })
               if (this.slapTrackers.length > limits.maxTrackers) discovery.state.limitsHit.add('maxTrackers')
               if (normalized.length !== this.slapTrackers.length || trackers.length < Math.min(normalized.length, limits.maxTrackers)) {
@@ -1365,6 +1442,41 @@ export default class LookupResolver {
   private evictOldest<T>(m: Map<string, T>): void {
     const firstKey = m.keys().next().value
     if (firstKey !== undefined) m.delete(firstKey)
+  }
+
+  /**
+   * Remember SLAP hosts for a service. A tighter-limit discovery must not
+   * replace a still-fresh broader cache, and a later broader query must not
+   * treat a truncated entry as complete.
+   */
+  private rememberDiscoveredHosts(
+    service: string,
+    hosts: string[],
+    limits: LookupLimits,
+    state: LookupDiscoveryUpdate
+  ): void {
+    const existing = this.hostsCache.get(service)
+    const now = Date.now()
+    if (
+      existing !== undefined &&
+      existing.expiresAt > now &&
+      lookupDiscoveryCovers(existing, limits) &&
+      !lookupDiscoveryCovers(lookupDiscoveryBound(limits), existing)
+    ) {
+      return
+    }
+    if (existing === undefined && this.hostsCache.size >= this.hostsMaxEntries) {
+      this.evictOldest(this.hostsCache)
+    }
+    this.hostsCache.set(service, {
+      ...lookupDiscoveryBound(limits),
+      hosts,
+      expiresAt: now + this.hostsTtlMs,
+      discoveryComplete:
+        state.trackersFailed === 0 && state.limitsHit.size === 0 && state.skippedHosts === 0,
+      trackersFailed: state.trackersFailed,
+      limitsHit: Array.from(state.limitsHit)
+    })
   }
 
   private assertValidOverrideServices(overrides: Record<string, string[]>): void {
