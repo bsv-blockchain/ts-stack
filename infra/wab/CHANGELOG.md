@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- WAB 1.7.0 accepts explicit `expiresAtEpochMs: null` for store-mandated
+  non-expiring demo credentials. Omitted expiry remains invalid; revocation,
+  admin rotation, namespace isolation and persistent guess limits still apply.
+  No schema migration is required, and older binaries reject these credentials.
 - WAB 1.6.0 adds opt-in, admin-provisioned demonstration identities with expiring,
   rotatable credentials, persisted attempt limits and immediate login revocation.
   The explicit `/demo` base URL supports existing mobile phone interactors while

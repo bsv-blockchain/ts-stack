@@ -55,6 +55,9 @@ function codeDigest(id: string, code: string): Buffer {
 }
 
 function checkedExpiry(expiresAt: unknown): number {
+  // Only an explicit JSON null requests non-expiring review access. Persist a
+  // zero sentinel so an older binary treats this mode as expired on rollback.
+  if (expiresAt === null) return 0
   const now = Date.now()
   if (
     typeof expiresAt !== 'number' ||
@@ -72,7 +75,8 @@ function metadata(account: DemoAccount) {
     id: account.id,
     phoneNumber: account.phoneNumber,
     label: account.label,
-    expiresAtEpochMs: Number(account.expiresAtEpochMs),
+    expiresAtEpochMs:
+      Number(account.expiresAtEpochMs) === 0 ? null : Number(account.expiresAtEpochMs),
     revoked: account.revokedAtEpochMs != null,
     locked: account.failedAttempts >= MAX_FAILURES
   }
@@ -121,7 +125,7 @@ export class DemoAccountService {
       failedAttempts: 0
     })
     if (updated !== 1) throw new DemoAccountError('Demo account was not found.', 404)
-    return { id, code, expiresAtEpochMs: expiry }
+    return { id, code, expiresAtEpochMs: expiry === 0 ? null : expiry }
   }
 
   static async revoke(id: string): Promise<void> {
@@ -145,7 +149,8 @@ export class DemoAccountService {
       if (
         account == null ||
         account.revokedAtEpochMs != null ||
-        Number(account.expiresAtEpochMs) <= Date.now() ||
+        (Number(account.expiresAtEpochMs) !== 0 &&
+          Number(account.expiresAtEpochMs) <= Date.now()) ||
         account.failedAttempts >= MAX_FAILURES
       ) {
         return false

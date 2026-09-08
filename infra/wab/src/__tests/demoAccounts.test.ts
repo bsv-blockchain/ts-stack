@@ -149,6 +149,44 @@ describe('admin-provisioned demo identities', () => {
     expect(await DemoAccountService.verify(alias, rotated.code)).toBe(true)
   })
 
+  it('requires explicit null for non-expiring store access and retains rotation and revocation', async () => {
+    await expect(DemoAccountService.provision(alias, 'Missing expiry', undefined)).rejects.toThrow(
+      '30 days'
+    )
+    await expect(DemoAccountService.provision(alias, 'Invalid sentinel', 0)).rejects.toThrow(
+      '30 days'
+    )
+    const issued = await DemoAccountService.provision(alias, 'Store reviewer', null)
+    expect(issued.expiresAtEpochMs).toBeNull()
+    expect(
+      Number((await db('demo_accounts').where({ id: issued.id }).first()).expiresAtEpochMs)
+    ).toBe(0)
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 365 * 86400000)
+    try {
+      expect(await DemoAccountService.verify(alias, issued.code)).toBe(true)
+      expect((await DemoAccountService.list())[0]?.expiresAtEpochMs).toBeNull()
+      const rotated = await DemoAccountService.rotate(issued.id, null)
+      expect(rotated.expiresAtEpochMs).toBeNull()
+      expect(await DemoAccountService.verify(alias, rotated.code)).toBe(true)
+      for (let index = 0; index < 5; index++) {
+        expect(await DemoAccountService.verify(alias, '000000')).toBe(false)
+      }
+      expect(await DemoAccountService.verify(alias, rotated.code)).toBe(false)
+      expect((await DemoAccountService.list())[0]?.locked).toBe(true)
+      await DemoAccountService.revoke(issued.id)
+      expect(await DemoAccountService.verify(alias, rotated.code)).toBe(false)
+      const expiring = await DemoAccountService.rotate(issued.id, expiry())
+      expect(expiring.expiresAtEpochMs).toEqual(expiry())
+      expect(await DemoAccountService.verify(alias, expiring.code)).toBe(true)
+      await db('demo_accounts')
+        .where({ id: issued.id })
+        .update({ expiresAtEpochMs: Date.now() - 1 })
+      expect(await DemoAccountService.verify(alias, expiring.code)).toBe(false)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('validates admin operations, rotates and revokes access, and returns bounded failures', async () => {
     const manage = async (body: unknown) => {
       const result: { status: number; body: unknown } = { status: 200, body: undefined }

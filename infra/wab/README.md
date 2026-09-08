@@ -316,7 +316,9 @@ characters, and the existing `WAB_ADMIN_TOKEN`, to provision demo access through
 `POST /admin/demo-accounts`. The JSON `action` is one of:
 
 - `provision`: supply `phoneNumber` (an E.164-shaped demo alias), `label`, and
-  `expiresAtEpochMs` within the next 30 days. Returns a random six-digit `code`
+  `expiresAtEpochMs` within the next 30 days, or explicit JSON `null` for
+  non-expiring store-review access (WAB 1.7+). Omitted expiry and numeric zero
+  are rejected. Returns a random six-digit `code`
   once, plus the account `id`. The alias is not proof of telephone ownership.
 - `rotate`: supply `id` and `expiresAtEpochMs`; returns a new code once and
   restores the account's five-attempt budget. The demo identity remains the same.
@@ -331,6 +333,14 @@ it; this budget is database-backed across replicas and does not reset on sign-in
 restart, or a new authentication start. Expired/revoked accounts fail closed.
 Removing the demo key disables the method; rotating that key invalidates all
 existing demo codes until each account's code is rotated.
+
+Use an expiry for temporary demonstrations. Stores that require permanently
+reusable reviewer credentials can use explicit `null`; all admin authentication,
+guess-budget, secret-rotation and revocation controls still apply. Keep a named
+operator responsible for revoking this access when it is no longer needed.
+Changing between expiring and non-expiring modes requires an admin code rotation.
+The non-expiring mode persists zero in the existing expiry column; an older WAB
+binary treats it as expired, so rollback fails closed without a schema change.
 
 Clients can select `DemoPhone` explicitly, or configure the WAB base URL as
 `https://your-wab.example/demo`. The latter advertises only `DemoPhone` so existing
