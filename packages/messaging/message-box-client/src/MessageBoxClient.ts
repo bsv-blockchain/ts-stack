@@ -211,6 +211,7 @@ export class MessageBoxClient {
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
   protected originator?: OriginatorDomainNameStringUnder250Bytes
+  private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   /**
    * @constructor
    * @param {Object} options - Initialization options for the MessageBoxClient.
@@ -218,6 +219,7 @@ export class MessageBoxClient {
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
    * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
+   * @param {MessageBoxSocketOptions} [options.socketOptions] - Options forwarded to the underlying AuthSocketClient, e.g. `{ managerOptions: { transports: ['websocket'] } }`. The client's own wallet and originator always win; deferred connection and Socket.IO message retries are unsupported.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -241,7 +243,8 @@ export class MessageBoxClient {
       walletClient,
       enableLogging = false,
       networkPreset = 'mainnet',
-      originator = undefined
+      originator = undefined,
+      socketOptions = undefined
     } = options
 
     if (networkPreset === 'teratestnet' && host == null) {
@@ -257,6 +260,21 @@ export class MessageBoxClient {
 
     this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator
+    // These options are excluded from the forwarded type; validate JavaScript
+    // callers as well so unsupported socket settings fail before authentication.
+    const forwardedManagerOptions = socketOptions?.managerOptions as
+      { autoConnect?: boolean; retries?: number } | undefined
+    if (forwardedManagerOptions?.autoConnect === false) {
+      throw new Error(
+        '[MB CLIENT ERROR] socketOptions.managerOptions.autoConnect must not be false: deferred connection is unsupported.'
+      )
+    }
+    if ((forwardedManagerOptions?.retries ?? 0) !== 0) {
+      throw new Error(
+        '[MB CLIENT ERROR] socketOptions.managerOptions.retries must be zero or omitted: AuthSocket does not send Socket.IO acknowledgements.'
+      )
+    }
+    this.socketOptions = socketOptions
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)
     this.networkPreset = networkPreset
@@ -435,6 +453,7 @@ export class MessageBoxClient {
     if (this.socket == null) {
       const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
       this.socket = AuthSocketClient(targetHost, {
+        ...this.socketOptions,
         wallet: this.walletClient,
         originator: this.originator
       })

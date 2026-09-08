@@ -7,8 +7,31 @@ import { MerklePath } from '@bsv/sdk'
 import { EntityProvenTxReq } from './EntityProvenTxReq'
 import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
+import { assertSyncProofReplacementAuthorized } from '../../methods/validateSyncProof'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
+  private sameProof(candidate: TableProvenTx): boolean {
+    return this.txid.toLowerCase() === candidate.txid.toLowerCase() &&
+      this.height === candidate.height &&
+      this.index === candidate.index &&
+      arraysEqual(this.merklePath, candidate.merklePath) &&
+      arraysEqual(this.rawTx, candidate.rawTx) &&
+      this.blockHash.toLowerCase() === candidate.blockHash.toLowerCase() &&
+      this.merkleRoot.toLowerCase() === candidate.merkleRoot.toLowerCase()
+  }
+
+  private static async invalidatePreparedProofs(
+    storage: EntityStorage,
+    trx?: TrxToken
+  ): Promise<void> {
+    const extension = storage as EntityStorage & {
+      invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number>
+    }
+    if (typeof extension.invalidatePreparedBeefs === 'function') {
+      await extension.invalidatePreparedBeefs(trx)
+    }
+  }
+
   /**
    * Given a txid and optionally its rawTx, create a new ProvenTx object.
    *
@@ -236,8 +259,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
 
   override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.provenTxId = 0
-    // Since these records are a shared resource, the record should be validated before accepting it
     this.provenTxId = await storage.insertProvenTx(this.toApi(), trx)
+    await EntityProvenTx.invalidatePreparedProofs(storage, trx)
   }
 
   override async mergeExisting(
@@ -247,8 +270,21 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    // ProvenTxs are never updated.
-    return false
+    if (this.sameProof(ei)) return false
+    assertSyncProofReplacementAuthorized(ei)
+    const update: Partial<TableProvenTx> = {
+      updated_at: ei.updated_at,
+      height: ei.height,
+      index: ei.index,
+      merklePath: ei.merklePath,
+      rawTx: ei.rawTx,
+      blockHash: ei.blockHash.toLowerCase(),
+      merkleRoot: ei.merkleRoot.toLowerCase()
+    }
+    await storage.updateProvenTx(this.provenTxId, update, trx)
+    this.api = { ...this.api, ...update }
+    await EntityProvenTx.invalidatePreparedProofs(storage, trx)
+    return true
   }
 
   /**

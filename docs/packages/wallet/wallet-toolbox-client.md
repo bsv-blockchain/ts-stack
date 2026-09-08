@@ -18,19 +18,22 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
+The built-in BRC-177 `p nosend expiry` module works with local IndexedDB or a
+2.11-compatible remote storage service; the active provider owns durable
+expiry monitoring, synchronized lifecycle state, and pre-signed reclaim
+submission.
 IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across short final and out-of-range pages.
-Wallet snapshots are intentionally self-contained and carry everything needed
-to restore sensitive wallet state; possession of a snapshot is possession of
-the wallet. Store the entire value only through browser or extension storage
-backed by an OS Keychain or a comparably trusted secret store, never ordinary
-localStorage, logs, analytics, or unprotected sync. Remote storage and
+Prepared BEEF persistence remains a server-side Knex capability. Browser
+IndexedDB uses the canonical path, and compatible remote servers can enable
+the optimization without a browser configuration or wire change.
+Wallet snapshots are wallet-equivalent secrets and belong only in browser or
+extension storage backed by an OS Keychain or comparably trusted store, never
+ordinary localStorage, logs, analytics, or unprotected sync. Remote storage and
 credential-bearing Arcade SSE require HTTPS except for explicit loopback
-development; SSE dependency debugging is disabled to keep credentials out of
-logs.
-Both direct and issuer-mediated certificate acquisition paths require a valid
-certifier signature before storage. Identity overlay results are verified before
-decryption and trust scoring.
+development, and transport debugging cannot expose credentials. Spending
+approvals are never cached or coalesced; certificate acquisition and identity
+discovery require valid certifier signatures before storage or trust scoring.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

@@ -12,8 +12,9 @@ import { processAction } from './createAction'
 import { AuthId, ReviewActionResult } from '../../sdk/WalletStorage.interfaces'
 import { completeSignedTransaction, verifyUnlockScripts } from './completeSignedTransaction'
 import { Wallet } from '../../Wallet'
-import { WERR_INTERNAL, WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
 import { setResultBeef } from './resultBeef'
+import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
 
 export interface SignActionResultX extends SignActionResult {
   txid?: TXIDHexString
@@ -124,5 +125,14 @@ function mergePriorOptions(
   saOptions.returnTXIDOnly ??= caVargs.options.returnTXIDOnly
   saOptions.noSend ??= caVargs.options.noSend
   saOptions.sendWith ??= caVargs.options.sendWith
+  if ((caVargs as Brc177ValidCreateActionArgs).brc177?.kind === 'protected') {
+    if (saOptions.sendWith.length > 0) {
+      throw new WERR_INVALID_PARAMETER('options.sendWith', 'empty for a BRC-177 protected action')
+    }
+    if (saOptions.returnTXIDOnly) {
+      throw new WERR_INVALID_PARAMETER('options.returnTXIDOnly', 'false for a BRC-177 protected action')
+    }
+    saOptions.noSend = true
+  }
   return Validation.validateSignActionArgs(saArgs)
 }

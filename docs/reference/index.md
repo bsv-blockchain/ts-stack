@@ -3,8 +3,8 @@ id: reference-overview
 title: 'Reference'
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-08-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, api, index]
@@ -23,7 +23,7 @@ Quick reference material for API details and protocol indices.
 - **[Generated stack facts](./stack-facts.md)** — Current source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals
 - **[Licensing policy](./licensing.md)** — Scoped first-party licensing, incorporated-material notices, rights clearance, and release controls
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification
-- **[Package API, declarations, and migrations](./package-api-migrations.md)** — Generated entry points, declaration targets, source candidates, release notes, and migration guidance for all 30 public packages
+- **[Package API, declarations, and migrations](./package-api-migrations.md)** — Generated entry points, declaration targets, source candidates, release notes, and migration guidance for every public package
 - **[Release and operations guide](./release-operations.md)** — Scope, preflight, publication, deployment, failure handling, and rollback
 - **[TerraTestNet rollout gate](./ttn-rollout.md)** — Coordinated package, image, infrastructure, isolation, validation, and rollback prerequisites
 - **[Service operations contract](./service-operations.md)** — Generated health, readiness, state, migration, backup, and workload-hardening contracts
@@ -35,13 +35,19 @@ Quick reference material for API details and protocol indices.
 
 ## Packages by Domain
 
-All 30 public packages in the monorepo, with published npm names.
+All 33 public packages in the monorepo, with published npm names.
 
 ### SDK
 
 | Package | npm        | Purpose                                                                          |
 | ------- | ---------- | -------------------------------------------------------------------------------- |
 | SDK     | `@bsv/sdk` | Zero-dependency crypto primitives, script engine, BEEF, BRC-100 wallet interface |
+
+### Content
+
+| Package | npm        | Purpose                                                                           |
+| ------- | ---------- | --------------------------------------------------------------------------------- |
+| lch     | `@bsv/lch` | BRC-170 licenses, compositions, payments, delivery, and verifiable content access |
 
 ### Wallet
 
@@ -86,6 +92,7 @@ All 30 public packages in the monorepo, with published npm names.
 
 | Package        | npm                  | Purpose                                                                         |
 | -------------- | -------------------- | ------------------------------------------------------------------------------- |
+| air-gap        | `@bsv/air-gap`       | BRC-141 one-way optical transport using fountain-coded QR parts                 |
 | simple         | `@bsv/simple`        | High-level wrapper for app developers (`./browser` and `./server` entry points) |
 | did            | `@bsv/did`           | SD-JWT VC and optional `did:key` helpers                                        |
 | did-client     | `@bsv/did-client`    | DID creation and resolution client                                              |
@@ -97,9 +104,10 @@ All 30 public packages in the monorepo, with published npm names.
 
 ### Network
 
-| Package | npm                      | Purpose                        |
-| ------- | ------------------------ | ------------------------------ |
-| ts-p2p  | `@bsv/teranode-listener` | BSV peer-to-peer node listener |
+| Package | npm                      | Purpose                                                                       |
+| ------- | ------------------------ | ----------------------------------------------------------------------------- |
+| chirp   | `@bsv/chirp`             | Chunked, hashed, interleaved resolution over UHRP for resilient large objects |
+| ts-p2p  | `@bsv/teranode-listener` | BSV peer-to-peer node listener                                                |
 
 ### Verification
 

@@ -78,6 +78,14 @@ The client uses AuthFetch for BRC-105 challenges. It intentionally does not add
 a second Message Box-specific cost-approval mechanism because BRC-100 wallet
 permissions already govern payment authorization.
 
+The UMD bundle includes SDK 2.5.0 support for the optional
+`x-bsv-payment-known-txids` response header; module consumers can enable it by
+using SDK 2.5.0 or later. This SDK extension lets recipients advertise already
+validated payment ancestors so compatible wallets can omit them from payment
+BEEF. It is not a standardized BRC-105 header. Existing compatible SDK peers
+remain supported, and services that omit the header retain existing payment
+behavior. No consumer migration is required.
+
 Explicit `init()` is optional. Public methods initialize the wallet identity
 when needed:
 
@@ -120,6 +128,47 @@ await messages.sendLiveMessage({
 `sendLiveMessage()` uses an authenticated WebSocket and falls back to the HTTP
 send route when the socket is unavailable or does not acknowledge delivery.
 Call `disconnectWebSocket()` when a long-lived client shuts down.
+
+### Socket options
+
+`socketOptions` is forwarded to the underlying `AuthSocketClient` when the live
+socket is created. Use it to select Socket.IO transports when a deployment's
+fronting infrastructure does not carry Engine.IO HTTP polling:
+
+```ts
+const messages = new MessageBoxClient({
+  walletClient: wallet,
+  host: 'https://messagebox.example',
+  socketOptions: { managerOptions: { transports: ['websocket'] } }
+})
+
+await messages.listenForLiveMessages({
+  messageBox: 'general_inbox',
+  onMessage: message => {
+    console.log(message.sender, message.body)
+  }
+})
+```
+
+It also carries `requestedCertificates`, `sessionManager`,
+`maxPendingAuthMessages`, and `onError`.
+
+Four fields are excluded from the type. `wallet` and `originator` are owned by
+the client, which always uses its own values. `managerOptions.autoConnect` is
+excluded because the socket connects when it is created and `AuthSocketClient`
+exposes no way to start one later, so disabling auto-connect could never
+connect; the constructor throws if it is passed as `false`.
+
+`managerOptions.retries` is also excluded: AuthSocket does not send the raw
+Socket.IO acknowledgements that message retries require, so enabling retries
+would block subsequent authentication and application messages. The constructor
+rejects nonzero retries. Connection reconnection settings such as `reconnection`
+and `reconnectionAttempts` remain supported.
+
+`socketOptions` applies **only to the live socket path** — `initializeConnection()`,
+`listenForLiveMessages()`, and `sendLiveMessage()`. It has no effect on
+`sendMessage()`, `listMessages()`, or `acknowledgeMessage()`, which use
+authenticated HTTP.
 
 ## Host selection and public-service access
 

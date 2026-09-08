@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-29",
+  "lastReviewed": "2026-08-30",
   "owner": "ts-stack-maintainers",
-  "reviewBy": "2026-08-29",
+  "reviewBy": "2026-09-30",
   "suites": [
     {
       "path": "packages/wallet/wallet-toolbox/src/services/__tests/ARC.man.test.ts",

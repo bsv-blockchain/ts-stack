@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/lch",
+  "entry": ".",
+  "requiredExports": [
+    "LCHPublisher",
+    "LCHReader",
+    "LCHIssuer",
+    "LCHComposer",
+    "parseLCH",
+    "encryptSegmented"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 550000, "gzip": 145000, "brotli": 125000 },
+    "esbuild": { "raw": 430000, "gzip": 135000, "brotli": 118000 }
+  }
+}

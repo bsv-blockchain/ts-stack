@@ -18,17 +18,22 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
-Wallet snapshots are intentionally self-contained and carry everything needed
-to restore sensitive wallet state; possession of a snapshot is possession of
-the wallet. Store the entire value in the iOS Keychain, Android Keystore-backed
-encrypted storage, or a comparably trusted secret store, never ordinary
-AsyncStorage, logs, analytics, or unprotected backups. Remote storage and
-credential-bearing Arcade SSE require HTTPS except for explicit loopback
-development; SSE dependency debugging is disabled to keep credentials out of
-device logs.
-Both direct and issuer-mediated certificate acquisition paths require a valid
-certifier signature before storage. Identity overlay results are verified before
-decryption and trust scoring.
+Prepared BEEF persistence remains a server-side Knex capability. Mobile remote
+storage uses the canonical path, and compatible remote servers can enable the
+optimization without a mobile configuration or wire change.
+
+The built-in BRC-177 `p nosend expiry` module delegates durable expiry
+monitoring and pre-signed reclaim submission to its 2.11-compatible active
+remote storage service, so mobile process suspension does not restart or lose
+an expiry.
+Wallet snapshots are wallet-equivalent secrets and belong only in the iOS
+Keychain, Android Keystore-backed encrypted storage, or a comparably trusted
+store, never ordinary AsyncStorage, logs, analytics, or unprotected backups.
+Remote storage and credential-bearing Arcade SSE require HTTPS except for
+explicit loopback development, and transport debugging cannot expose
+credentials. Spending approvals are never cached or coalesced; certificate
+acquisition and identity discovery require valid certifier signatures before
+storage or trust scoring.
 Related mobile `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

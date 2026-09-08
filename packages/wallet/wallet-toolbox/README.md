@@ -31,6 +31,15 @@ broadcast, so permission approval does not inherit network-broadcast latency.
 The funding planner prefers settled change and uses queued permission ancestry
 only as a last resort, keeping the application path fast without hiding funds.
 
+Permission modules may transform calls with `onRequest` and `onResponse`, or
+own a P-scheme's semantics with the optional `handleRequest(request, next)`
+hook. A semantic handler can return the normal BRC-100 result directly; if it
+needs the underlying wallet operation, `next` is guarded so it can be invoked
+at most once. Existing transformation-only modules remain compatible. The
+standalone `@bsv/ecpm-permission-module` demonstrates this extension by
+implementing `p ecpm` point multiplication through `getPublicKey`, without a
+new BRC-100 method or wire message.
+
 Immediate actions prefer completed, then unproven, then sending change. A
 pathological settled plan is compared with pending alternatives by exact
 serialized BEEF plus transaction bytes; queued ancestry is used only when it is
@@ -55,6 +64,26 @@ page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
 
 ### UMP account continuity and phone changes
+
+Argon2id password derivation uses a proven-ready host backend when one is
+registered with `registerArgon2idBackend`. This lets React Native applications
+perform the memory-hard operation asynchronously in native code. Browser and
+Node runtimes prefer `hash-wasm`; when WebAssembly is unavailable, Wallet
+Toolbox falls back to an asynchronously yielding JavaScript implementation
+with the same parameters and output. Existing UMP v3 tokens remain
+interoperable and do not need migration; users do not need to enable a device
+or browser setting. A selected host backend is authoritative, so a derivation
+error or malformed output is surfaced instead of silently changing
+implementations. The existing `hash-wasm`-compatible utility export retains its
+full input and output contract; requests with `secret`, non-binary output, or
+non-`Uint8Array` input remain on `hash-wasm` rather than being reinterpreted by
+a backend with narrower capabilities. Registration and unregistration are also
+exported from the mobile and client package roots. Concurrent cold calls share
+one background preload attempt; later calls can retry after it settles. Hosts
+must make preload/readiness checks reentrant and cache permanent failures or
+apply retry backoff. Unrelated `hash-wasm` errors propagate even when the
+WebAssembly global is absent. Native and JavaScript results both pass the same
+byte-type and exact-length validation.
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
 backward-compatible WAB authentication response. Normal verified lookup and
@@ -267,9 +296,20 @@ the 144-output / 5,000-satoshi defaults, gradual legacy-wallet migration,
 pending-parent policy, exact BEEF comparison, operator tuning, action-batch
 alignment, monitoring, and rollout guidance.
 
+See [Prepared BEEF (COOK)](./docs/prepared-beef.md) for the opt-in Knex cache
+that creates an exact, verified proof closure once and keeps it ready for a
+future `createAction`. Reads, writes, and bounded backfill are separately
+controlled and default off; cache misses and failures retain the canonical
+BEEF builder.
+
 See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
+
+See [Expiring `noSend` actions](./docs/no-send-expiry.md) for the built-in
+BRC-111 `p nosend expiry` module, exact label forms, prefunding, durable
+Node/browser/mobile monitoring, storage coordination, and proof-based race
+resolution.
 
 ### `createAction` performance telemetry
 
@@ -301,6 +341,13 @@ The retained fragmented-funding benchmark is runnable with:
 pnpm bench:create-action-funding
 pnpm bench:create-action-beef
 ```
+
+The proof-bearing benchmark includes a prepared-BEEF cohort and asserts that a
+prepared hit does not invoke the canonical BEEF builder. A representative
+local SQLite one-input run reported 8.04 ms on the cold canonical path and
+4.39 ms on the prepared path. Local timings are noise-bound; the intended
+production measurement is the authenticated remote/MySQL cohort, where
+repeated proof reconstruction has materially higher cost.
 
 Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
 fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,

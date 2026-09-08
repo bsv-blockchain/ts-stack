@@ -83,6 +83,13 @@
       "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry."
     },
     {
+      "name": "@bsv/lch",
+      "path": "packages/content/lch",
+      "budget": "packages/content/lch/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The browser entry contains protocol codecs, crypto, acquisition, composition, and storage adapters; the Node CLI and optional C2PA implementation remain outside the browser graph."
+    },
+    {
       "name": "@bsv/sdk",
       "path": "packages/sdk",
       "budget": "packages/sdk/browser-budget.json",
@@ -102,6 +109,13 @@
       "budget": "packages/wallet/ts-wallet-relay/browser-budget.json",
       "entry": "./client",
       "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager."
+    },
+    {
+      "name": "@bsv/ecpm-permission-module",
+      "path": "packages/wallet/ecpm-permission-module",
+      "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled."
     },
     {
       "name": "@bsv/wallet-toolbox-client",

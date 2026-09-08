@@ -619,7 +619,7 @@ describe('update tests', () => {
             spendingDescription: 'Updated spending description',
             spendable: false,
             spentBy: 3,
-            txid: 'updated_txid',
+            txid: 'ab'.repeat(32),
             type: 'updated_type',
             outputDescription: 'outputDescription'
           }

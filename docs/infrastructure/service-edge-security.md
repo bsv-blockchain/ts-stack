@@ -4,7 +4,7 @@ title: 'Public Service Edge Security'
 kind: reference
 version: '1.0.0'
 last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_verified: '2026-08-30'
 review_cadence_days: 30
 status: stable
 tags: [infrastructure, security, cors, rate-limits, authentication, operations]

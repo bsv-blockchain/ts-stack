@@ -26,6 +26,18 @@ import {
 } from '../storage/schema/tables'
 import { StorageProvider } from './StorageProvider'
 
+interface PreparedBeefInvalidationExtension {
+  invalidatePreparedBeefs: (trx?: sdk.TrxToken) => Promise<number>
+  suspendPreparedBeefReads: () => () => void
+}
+
+async function invalidatePreparedBeefs (storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
+  const extension = storage as unknown as Partial<PreparedBeefInvalidationExtension>
+  if (typeof extension.invalidatePreparedBeefs === 'function') {
+    await extension.invalidatePreparedBeefs.call(storage, trx)
+  }
+}
+
 class ManagedStorage {
   isAvailable: boolean
   isStorageProvider: boolean
@@ -381,6 +393,28 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   /**
+   * Reorg notifications call this before aging or replacement-proof I/O. The
+   * active Knex store closes its in-process prepared-read gate synchronously,
+   * then advances the shared database epoch and stales artifacts. A failed
+   * invalidation deliberately leaves reads suspended so canonical BEEF remains
+   * the safe path until a later invalidation succeeds or the process restarts.
+   */
+  invalidatePreparedBeefsForReorg(): Promise<void> {
+    const active = this.getActive()
+    const extension = active as unknown as Partial<PreparedBeefInvalidationExtension>
+    const release = typeof extension.suspendPreparedBeefReads === 'function'
+      ? extension.suspendPreparedBeefReads.call(active)
+      : undefined
+    return this.runAsStorageProvider(async storage => {
+      await storage.transaction(async trx => {
+        await invalidatePreparedBeefs(storage, trx)
+      })
+    }).then(() => {
+      release?.()
+    })
+  }
+
+  /**
    *
    * @returns true if the active `WalletStorageProvider` also implements `StorageProvider`
    */
@@ -481,6 +515,37 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.processAction(auth, args)
+    })
+  }
+
+  async prepareNoSendExpiry(
+    args: Validation.ValidCreateActionArgs
+  ): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.prepareNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      return await writer.prepareNoSendExpiry(await this.getAuth(true), args)
+    })
+  }
+
+  async activateNoSendExpiry(
+    args: sdk.StorageActivateNoSendExpiryArgs
+  ): Promise<sdk.StorageActivateNoSendExpiryResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.activateNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      return await writer.activateNoSendExpiry(await this.getAuth(true), args)
+    })
+  }
+
+  async armNoSendExpiry(args: sdk.StorageArmNoSendExpiryArgs): Promise<void> {
+    await this.runAsWriter(async writer => {
+      if (writer.armNoSendExpiry == null) {
+        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+      }
+      await writer.armNoSendExpiry(await this.getAuth(true), args)
     })
   }
 
@@ -629,12 +694,18 @@ export class WalletStorageManager implements sdk.WalletStorage {
       if (rp.updated != null) r.updated.push({ was: ptx, update: rp.updated.update, logUpdate: rp.updated.logUpdate })
     }
 
-    if (r.updated.length > 0) {
+    // Invalidate as soon as storage contains proof data for the deactivated
+    // header, even when a replacement proof is not available yet. A prepared
+    // artifact carrying the old proof must not remain readable during retries.
+    if (ptxs.length > 0) {
       await this.runAsStorageProvider(async sp => {
-        for (const u of r.updated) {
-          await sp.updateProvenTx(u.was.provenTxId, u.update)
-          r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
-        }
+        await sp.transaction(async trx => {
+          for (const u of r.updated) {
+            await sp.updateProvenTx(u.was.provenTxId, u.update, trx)
+            r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
+          }
+          await invalidatePreparedBeefs(sp, trx)
+        })
       })
     }
 
@@ -666,12 +737,17 @@ export class WalletStorageManager implements sdk.WalletStorage {
       if (rp.updated != null) r.updated.push({ was: ptx, update: rp.updated.update, logUpdate: rp.updated.logUpdate })
     }
 
-    if (r.updated.length > 0) {
+    // A matching stale root invalidates prepared proof material whether or not
+    // this audit can obtain a replacement proof in the same pass.
+    if (ptxs.length > 0) {
       await this.runAsStorageProvider(async sp => {
-        for (const u of r.updated) {
-          await sp.updateProvenTx(u.was.provenTxId, u.update)
-          r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
-        }
+        await sp.transaction(async trx => {
+          for (const u of r.updated) {
+            await sp.updateProvenTx(u.was.provenTxId, u.update, trx)
+            r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
+          }
+          await invalidatePreparedBeefs(sp, trx)
+        })
       })
     }
 
@@ -748,8 +824,11 @@ export class WalletStorageManager implements sdk.WalletStorage {
     if (r.updated != null && noUpdate !== true) {
       const updatedSnapshot = r.updated
       await this.runAsStorageProvider(async sp => {
-        await sp.updateProvenTx(ptx.provenTxId, updatedSnapshot.update)
-        r.log += `    txid ${ptx.txid} proof data updated\n` + updatedSnapshot.logUpdate
+        await sp.transaction(async trx => {
+          await sp.updateProvenTx(ptx.provenTxId, updatedSnapshot.update, trx)
+          await invalidatePreparedBeefs(sp, trx)
+          r.log += `    txid ${ptx.txid} proof data updated\n` + updatedSnapshot.logUpdate
+        })
       })
     }
 

@@ -9,6 +9,7 @@ import {
   canonicalizePackedManifest,
   createLicenseInventory,
   deterministicUuid,
+  loadGovernedProjects,
   mergeCycloneDxDocuments,
   prepareSbomManifest,
   removeInjectedRootDependencies,
@@ -289,6 +290,19 @@ test('release staging requires the exact governed build runtime', () => {
   assert.throws(
     () => validateBuildRuntime({ ...governed, pnpm: '10.33.1' }, policy),
     /does not match release policy/
+  )
+})
+
+test('release staging derives its governed package count from supply-chain policy', async () => {
+  const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'))
+  const projects = await loadGovernedProjects(policy.publicPackageCount)
+
+  assert.equal(projects.length, policy.publicPackageCount)
+  await assert.rejects(
+    loadGovernedProjects(policy.publicPackageCount - 1),
+    new RegExp(
+      `expected ${policy.publicPackageCount - 1} governed npm packages, found ${policy.publicPackageCount}`
+    )
   )
 })
 

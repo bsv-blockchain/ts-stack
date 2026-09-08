@@ -113,6 +113,7 @@ export class MockServices implements WalletServices {
     if (rawTx == null) throw new WERR_INVALID_PARAMETER('rawTx', `present in BEEF for txid: ${txid}`)
 
     const tx = BsvTransaction.fromBinary(rawTx)
+    this.hydrateInputSourcesFromBeef(tx, beef)
     await this.validateTxInputs(tx)
     await this.populateMerklePaths(tx)
 
@@ -122,6 +123,22 @@ export class MockServices implements WalletServices {
     await this.storage.insertTransaction(txid, Array.from(rawTx))
     await this.storeOutputs(tx, txid)
     await this.spendInputs(tx, txid)
+  }
+
+  /** Rebuild the recursive source graph carried by BEEF before script verification. */
+  private hydrateInputSourcesFromBeef(tx: BsvTransaction, beef: Beef, visited = new Set<string>()): void {
+    const txid = tx.id('hex')
+    if (visited.has(txid)) return
+    visited.add(txid)
+    for (const input of tx.inputs) {
+      const sourceTxid = inputSourceTxid(input)
+      if (sourceTxid == null || input.sourceTransaction != null) continue
+      const sourceRaw = beef.findTxid(sourceTxid)?.rawTx
+      if (sourceRaw == null) continue
+      const source = BsvTransaction.fromBinary(sourceRaw)
+      input.sourceTransaction = source
+      this.hydrateInputSourcesFromBeef(source, beef, visited)
+    }
   }
 
   private async validateTxInput(
@@ -172,6 +189,7 @@ export class MockServices implements WalletServices {
     for (const input of tx.inputs) {
       const sourceTransaction = input.sourceTransaction
       if (sourceTransaction == null) continue
+      await this.populateMerklePaths(sourceTransaction)
       if (sourceTransaction.merklePath != null) continue
       const stxid = sourceTransaction.id('hex')
       const stx = await this.storage.getTransaction(stxid)

@@ -27,7 +27,10 @@ describe('ChaintracksStorageKnex tests', () => {
 
     const bfs = await storage.bulkManager.getBulkFiles()
     // Test assumes synchronization has occurred and bulk files are available.
-    if (bfs?.length === 0) return
+    if (bfs?.length === 0) {
+      await storage.shutdown()
+      return
+    }
 
     expect(bfs.length).toBeGreaterThan(7)
 
@@ -42,6 +45,41 @@ describe('ChaintracksStorageKnex tests', () => {
     expect(header.hash).toEqual('000000000001af33247fff33aae7c31baee4148d5a189e7353bf13bcee618202')
 
     await storage.shutdown()
+  })
+
+  test('getBulkFileData binds slice values and rejects unsafe bounds', async () => {
+    const knexInstance = makeKnex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true
+    })
+    const storage = new ChaintracksStorageKnex(ChaintracksStorageKnex.createStorageKnexOptions('main', knexInstance))
+    await storage.makeAvailable()
+    try {
+      const fileId = await storage.insertBulkFile({
+        chain: 'main',
+        fileName: 'slice-test.headers',
+        firstHeight: 0,
+        count: 1,
+        prevChainWork: '00'.repeat(32),
+        lastChainWork: '01'.repeat(32),
+        prevHash: '00'.repeat(32),
+        lastHash: '11'.repeat(32),
+        fileHash: 'AA==',
+        data: Buffer.from([1, 2, 3, 4])
+      })
+
+      await expect(storage.getBulkFileData(fileId, 1, 2))
+        .resolves.toEqual(Uint8Array.from([2, 3]))
+      await expect(storage.getBulkFileData(fileId, -1, 2))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+      await expect(storage.getBulkFileData(fileId, 1))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+      await expect(storage.getBulkFileData(0, 0, 1))
+        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    } finally {
+      await storage.shutdown()
+    }
   })
 
   test('insertHeader preserves linear, duplicate, invalid-parent, and reorg behavior', async () => {

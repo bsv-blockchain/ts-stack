@@ -8,33 +8,91 @@ attention to changes that materially alter behavior or extend functionality.
 
 - Require an affirmative certifier-signature verification result before
   storing directly acquired or issuer-returned certificates. Identity overlay
-  results are now verified before decryption and trust scoring, so forged
+  results are verified before decryption and trust scoring, so forged
   certificates cannot become wallet-held or trusted discovered identities. The
-  reviewed browser Vite raw ceiling advances by 500 bytes to 1,609,000,
-  covering the measured 1,608,566-byte bundle, and its gzip ceiling advances
-  by 1,000 bytes to 379,800, covering the measured 379,333-byte bundle. Its
-  Brotli ceiling advances by 500 bytes to 297,500, covering the measured
-  297,046-byte bundle. The reviewed Hermes raw ceiling advances by 500 bytes to
-  3,368,000, covering the measured 3,367,664-byte bytecode. Remaining
+  synchronized browser Vite ceilings advance to 1,695,000 raw and 401,000 gzip,
+  covering measured 1,694,211-byte and 400,048-byte bundles; Brotli is unchanged.
+  The mobile Metro raw ceiling advances to 1,750,000 for the measured
+  1,748,892-byte bundle. The browser esbuild raw ceiling advances to 1,323,000
+  for the measured 1,321,768-byte bundle, its gzip ceiling advances to 365,000
+  for the measured 364,413-byte bundle, and the optimized Hermes gzip ceiling
+  advances to 1,442,000 for the measured 1,441,531-byte bytecode; remaining
   compressed ceilings are unchanged.
+- Never cache, coalesce, or reuse spending approvals, give each prompt a
+  distinct request identity, and paginate the complete action history before
+  calculating an authorization token's prior spending.
+- Require HTTPS for credential-bearing remote storage and Arcade SSE outside
+  explicit loopback development, disable dependency debug output, and avoid
+  serializing credential-bearing transport errors. Snapshot formats remain
+  unchanged and are documented as wallet-equivalent secrets.
 
-- Prevent spending approvals from being cached or coalesced, account for every
-  paginated action before enforcing a spending token, and require HTTPS for
-  non-loopback remote storage and Arcade SSE endpoints. Arcade SSE dependency
-  debug logging is disabled so callback tokens and authorization headers do not
-  reach device logs. Snapshot formats and APIs remain
-  unchanged; documentation now makes their security boundary explicit:
-  possession of a self-contained snapshot is possession of the wallet, so the
-  entire value belongs in an OS Keychain, hardware-backed keystore, or
-  comparably trusted secret store. These changes are coordinated across the
-  Node, browser, and React Native packages.
-  The reviewed Vite raw ceiling advances by 1,000 bytes to 1,608,500, covering
-  the prior measured 1,608,439-byte bundle. Esbuild advances by 1,000 raw bytes to
-  1,254,000, 100 gzip bytes to 345,600, and 200 Brotli bytes to 277,500,
-  covering measured outputs of 1,253,769, 345,572, and 277,361 bytes. The Hermes
-  raw ceiling advances by 500 bytes to 3,367,500, covering the prior measured
-  3,367,479-byte bytecode. Existing Vite compressed and remaining mobile
-  ceilings cover the other measured outputs.
+- Keep Argon2id-backed UMP v3 wallets available in React Native and other
+  runtimes without WebAssembly by falling back to an asynchronously yielding,
+  standards-compatible JavaScript implementation. The same KDF parameters and
+  derived bytes are preserved, so existing tokens require no migration and
+  WebAssembly-capable runtimes retain the faster path. The existing public
+  `hash-wasm`-compatible utility contract remains intact: secret-bearing,
+  non-binary-output, and non-byte-array requests stay on `hash-wasm` and are
+  never reinterpreted by a host backend or fallback. Native registration is
+  available from both mobile and client roots, concurrent cold callers share
+  one preload attempt, and both alternative implementations validate result
+  type and length. Unrelated validation errors propagate even without the
+  WebAssembly global. The current-main macOS
+  reference fixtures measure 1,690,925 raw / 398,461 gzip / 311,955 Brotli
+  bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
+  esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and
+  3,542,034 raw / 1,419,515 gzip / 1,117,531 Brotli bytes as optimized Hermes
+  bytecode; hosted Linux measures 1,439,166 gzip bytes. The reviewed ceilings
+  advance to 1,693,000 / 400,000 / 314,000 Vite bytes, 1,321,000 / 364,000 /
+  293,000 esbuild bytes, 1,748,000 raw Metro bytes with the compressed ceilings
+  unchanged, and 3,547,000 / 1,441,000 / 1,123,000 Hermes bytes.
+
+- Extend the BRC-98/99/111 permission-module interface with an optional semantic
+  `handleRequest` hook. A module can now return a conforming BRC-100 result
+  directly or invoke the underlying wallet operation at most once, while
+  existing `onRequest`/`onResponse` transformation modules remain compatible.
+  The companion `@bsv/ecpm-permission-module` uses this hook to implement
+  `p ecpm` point multiplication without adding a BRC-100 method or wire call.
+
+- Add opt-in prepared BEEF storage for Knex-backed normal `createAction`
+  funding. COOK (Create Once, Output Kept) stores a user-scoped, exact,
+  independently verified and checksummed proof closure, merges valid hits
+  without invoking the canonical builder, and treats every miss or cache
+  failure as the existing canonical path. Missing roots and newly finalized
+  managed-change transactions are queued only after foreground action work is
+  complete; bounded writes, reads, and gradual backfill are separately
+  controlled and default off. Reorganizations stale derived artifacts, a
+  database proof epoch fences in-flight cross-process writes, purge removes
+  unused rows, and prepared data remains outside wallet sync. The
+  Knex worker is excluded from portable bundles. Reviewed Vite ceilings advance
+  to 1,610,250 raw / 379,750 gzip / 298,000 Brotli bytes and esbuild ceilings
+  to 1,255,000 raw / 346,250 gzip / 278,000 Brotli, covering local measurements
+  of 1,609,783 / 379,492 / 297,253 and 1,254,603 / 344,792 / 277,384 bytes;
+  hosted Linux Vite Brotli and esbuild gzip measured 297,585 and 345,711 bytes.
+  The Hermes raw / gzip ceilings advance to 3,374,500 / 1,369,000 bytes,
+  covering local measurements of 3,372,554 / 1,348,354 and hosted Linux
+  measurements of 3,373,560 / 1,368,128 bytes; Metro and Hermes Brotli
+  ceilings remain unchanged.
+- Add the built-in BRC-177 `p nosend expiry` module for seconds, Unix timestamp,
+  and block-height deadlines. Protected actions are prefunded through an
+  accepted transaction, contain no wallet change, and retain a pre-signed
+  reclaim across restarts, synchronized storage, devices, and keyless remote
+  monitors. Atomic lifecycle transitions, active-storage ownership,
+  fail-closed status checks, backoff-controlled recovery of terminally rejected
+  reclaims, quarantined race outputs, and locally validated proof finality
+  prevent duplicate reclaim activation and unsafe state regression. Wallet
+  Permissions Manager authorizes module use and spending
+  before prefunding, attributes the funding fee to the requesting originator,
+  and rechecks the current monthly ledger before releasing the protected
+  action. Existing actions and ordinary `noSend` calls are unchanged. The
+  current-main macOS reference fixtures measure 1,662,220 raw / 388,763 gzip /
+  305,307 Brotli bytes with Vite, 1,297,621 raw / 355,579 gzip / 285,031 Brotli
+  bytes with esbuild, 1,710,494 raw / 430,613 gzip / 334,490 Brotli bytes with
+  Metro, and 3,474,604 raw / 1,406,878 gzip / 1,090,948 Brotli bytes as
+  optimized Hermes bytecode. The reviewed ceilings advance to 1,665,000 /
+  390,000 / 307,000 Vite bytes, 1,300,000 / 357,000 / 287,000 esbuild bytes,
+  1,712,000 / 455,000 / 360,000 Metro bytes, and 3,480,000 / 1,410,000 /
+  1,095,000 Hermes bytes.
 
 - Report `listOutputs` `totalOutputs` as the size of the whole result set on
   every page, in both the IndexedDB and Knex storage providers. A short final

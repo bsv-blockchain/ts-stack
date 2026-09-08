@@ -32,6 +32,27 @@ The package publishes:
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
 
+### Password derivation without WebAssembly
+
+Argon2id password derivation uses `hash-wasm` when WebAssembly is available.
+React Native engines such as Hermes that do not expose WebAssembly use an
+asynchronously yielding JavaScript fallback with identical parameters and
+output. Existing UMP v3 wallets remain compatible, and users do not need to
+change a device setting or migrate their account.
+
+### Optional native Argon2id backend
+
+Import `registerArgon2idBackend`, `unregisterArgon2idBackend`, and the
+`AsyncArgon2idBackend` type from this package's root export. Register a host
+implementation only after verifying its interoperability; `isReady()` must
+remain false until that verification succeeds. A ready backend is authoritative:
+derivation errors and malformed output are surfaced without switching implementations.
+
+Concurrent cold derivations share one background `preload()` attempt and keep
+the portable path. Later calls can retry after that attempt settles. Hosts must
+make `preload()` and `isReady()` reentrant and cache permanent failures or apply
+backoff. Unregister the same backend object when the host no longer owns it.
+
 ## Remote storage example
 
 ```ts
@@ -55,6 +76,12 @@ const { tx } = await wallet.createAction({
   outputs: [{ satoshis: 1000, lockingScript: recipientScript }]
 })
 ```
+
+The mobile wallet includes the built-in BRC-177 `p nosend expiry` module. Its
+active remote storage must run a migrated Wallet Toolbox 2.11-or-newer service
+and default monitor, which owns expiry enforcement across restarts and devices.
+Capability negotiation fails before prefunding against an older server. See
+[the full expiry guide](../docs/no-send-expiry.md).
 
 ## Use cases
 
@@ -96,6 +123,11 @@ during development. SSE dependency debug logging is disabled so callback
 tokens and authorization headers do not reach device logs.
 
 See the [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) README for full documentation.
+
+Prepared BEEF (COOK) persistence is a server-side Knex capability. Mobile
+storage keeps the canonical BEEF path, while a compatible remote storage
+server can enable prepared reads and writes without a mobile configuration or
+wire-format change.
 
 ## CORS, CSP, and public services
 

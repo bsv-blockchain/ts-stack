@@ -5,8 +5,8 @@ kind: package
 domain: network
 npm: '@bsv/chirp'
 version: '0.1.1'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-08-28'
+last_verified: '2026-08-28'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp'
 status: experimental
@@ -83,6 +83,22 @@ Unknown critical extensions and unsupported node or child kinds fail closed.
   media-aware profiles, proofs, collections, and erasure coding remain reserved
   for later compatible specifications.
 
+## Production readiness
+
+Set `resilienceLevel` to the number of complete hosts required before
+publication succeeds, protect and retain resumable upload checkpoints, and
+monitor root retention and renewal. Bound readers by logical and object bytes,
+object count, depth, redirects, retries, concurrency, and cache use. A
+server-side `urlPolicy` must constrain DNS and pin the connected address; a
+preflight lookup alone does not prevent rebinding.
+
+For licensed media, CHIRP should store LCH ciphertext, not plaintext or keys.
+`CHIRPContentSink` bridges the uploader and LCH representation while
+`UniversalContentSource` bridges the downloader and LCH reader. See the
+[production CHIRP and LCH guide](../../guides/chirp-lch-production.md) for the
+combined code path, ownership model, failure matrix, rollout gate, and agent
+checklist.
+
 ## CLI
 
 ```bash
@@ -95,6 +111,8 @@ chirp verify chirp://...
 ## Reference
 
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp#readme)
-- [BRC-167 proposal](https://github.com/bsv-blockchain/BRCs/pull/235)
+- [Published BRC-167](https://bsv.brc.dev/overlays/0167)
+- [BRC-167 source](https://github.com/bsv-blockchain/BRCs/blob/master/overlays/0167.md)
+- [Production CHIRP and LCH guide](../../guides/chirp-lch-production.md)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp)
 - [npm](https://www.npmjs.com/package/@bsv/chirp)

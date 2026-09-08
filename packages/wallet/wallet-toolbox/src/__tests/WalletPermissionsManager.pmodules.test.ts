@@ -114,6 +114,321 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(testModule.onResponse).toHaveBeenCalledTimes(1)
     })
 
+    it('enables and reserves the BRC-177 nosend module in every permissions manager', async () => {
+      const attemptedOverride: PermissionsModule = {
+        onRequest: jest.fn(async req => req),
+        onResponse: jest.fn(async res => res)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        permissionModules: { nosend: attemptedOverride },
+        seekSpendingPermissions: false,
+        seekBasketInsertionPermissions: false,
+        seekPermissionWhenApplyingActionLabels: false
+      })
+
+      await manager.createAction(
+        {
+          description: 'BRC-177 protected action',
+          labels: ['p nosend expiry seconds 30'],
+          outputs: [
+            {
+              lockingScript: 'abcd',
+              satoshis: 1000,
+              outputDescription: 'protected output'
+            }
+          ],
+          options: { noSend: true }
+        },
+        'app.com'
+      )
+
+      expect(attemptedOverride.onRequest).not.toHaveBeenCalled()
+      expect(attemptedOverride.onResponse).not.toHaveBeenCalled()
+      expect(underlying.createAction).toHaveBeenCalledTimes(1)
+
+      await expect(
+        manager.createAction(
+          {
+            description: 'Malformed BRC-177 action',
+            labels: ['p nosend expiry seconds 030'],
+            outputs: [
+              {
+                lockingScript: 'abcd',
+                satoshis: 1000,
+                outputDescription: 'protected output'
+              }
+            ],
+            options: { noSend: true }
+          },
+          'app.com'
+        )
+      ).rejects.toThrow()
+      expect(underlying.createAction).toHaveBeenCalledTimes(1)
+
+      await expect(
+        manager.internalizeAction(
+          {
+            tx: [],
+            description: 'Inbound transaction cannot claim BRC-177 protection',
+            labels: ['p nosend expiry seconds 30'],
+            outputs: []
+          } as any,
+          'app.com'
+        )
+      ).rejects.toThrow('only valid for createAction and listActions')
+      expect(underlying.internalizeAction).not.toHaveBeenCalled()
+    })
+
+    it('authorizes BRC-177 module use and spending before prefunding can reach the underlying wallet', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        seekBasketInsertionPermissions: false
+      })
+      const order: string[] = []
+      jest.spyOn(manager, 'ensureLabelAccess').mockImplementationOnce(async args => {
+        order.push('module-permission')
+        expect(args).toMatchObject({
+          originator: 'app.com',
+          label: 'BRC-177 noSend expiry',
+          usageType: 'apply'
+        })
+        return true
+      })
+      jest.spyOn(manager, 'ensureSpendingAuthorization').mockImplementationOnce(async args => {
+        order.push('spending-preflight')
+        expect(args).toMatchObject({
+          originator: 'app.com',
+          satoshis: 1000,
+          reason: 'BRC-177 protected action prefunding'
+        })
+        return true
+      })
+      underlying.createAction.mockImplementationOnce(async () => {
+        order.push('underlying-create')
+        return { txid: 'abc123', tx: [] }
+      })
+
+      await manager.createAction(
+        {
+          description: 'BRC-177 protected action',
+          labels: ['p nosend expiry seconds 30'],
+          outputs: [
+            {
+              lockingScript: 'abcd',
+              satoshis: 1000,
+              outputDescription: 'protected output'
+            }
+          ],
+          options: { noSend: true }
+        },
+        'app.com'
+      )
+
+      expect(order).toEqual(['module-permission', 'spending-preflight', 'underlying-create'])
+    })
+
+    it('does not permit a denied BRC-177 spending preflight to incur a funding fee', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        seekBasketInsertionPermissions: false
+      })
+      jest.spyOn(manager, 'ensureLabelAccess').mockResolvedValueOnce(true)
+      jest.spyOn(manager, 'ensureSpendingAuthorization').mockRejectedValueOnce(new Error('denied'))
+
+      await expect(
+        manager.createAction(
+          {
+            description: 'BRC-177 protected action',
+            labels: ['p nosend expiry seconds 30'],
+            outputs: [
+              {
+                lockingScript: 'abcd',
+                satoshis: 1000,
+                outputDescription: 'protected output'
+              }
+            ],
+            options: { noSend: true }
+          },
+          'app.com'
+        )
+      ).rejects.toThrow('denied')
+      expect(underlying.createAction).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [{ outputs: [] }, 'at least one output'],
+      [{ options: { noSend: false } }, 'require noSend'],
+      [{ options: { noSend: true, sendWith: ['01'.repeat(32)] } }, 'cannot use sendWith'],
+      [{ options: { noSend: true, noSendChange: [{ txid: '02'.repeat(32), vout: 0 }] } }, 'cannot supply noSendChange'],
+      [{ options: { noSend: true, returnTXIDOnly: true } }, 'cannot use returnTXIDOnly']
+    ])('rejects malformed BRC-177 action shape %# before requesting permissions', async (override, message) => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      const labels = jest.spyOn(manager, 'ensureLabelAccess')
+      const spending = jest.spyOn(manager, 'ensureSpendingAuthorization')
+
+      const base = {
+        description: 'Malformed BRC-177 protected action',
+        labels: ['p nosend expiry seconds 30'],
+        outputs: [
+          {
+            lockingScript: 'abcd',
+            satoshis: 1000,
+            outputDescription: 'protected output'
+          }
+        ],
+        options: { noSend: true }
+      }
+
+      await expect(
+        manager.createAction(
+          {
+            ...base,
+            ...override,
+            options: { ...base.options, ...override.options }
+          } as any,
+          'app.com'
+        )
+      ).rejects.toThrow(message)
+
+      expect(labels).not.toHaveBeenCalled()
+      expect(spending).not.toHaveBeenCalled()
+      expect(underlying.createAction).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['not-a-number', 'valid satoshi amounts'],
+      [-1, 'valid satoshi amounts'],
+      [1.5, 'valid satoshi amounts']
+    ])('rejects an invalid BRC-177 output amount %p before spending authorization', async (satoshis, message) => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      jest.spyOn(manager, 'ensureLabelAccess').mockResolvedValueOnce(true)
+      const spending = jest.spyOn(manager, 'ensureSpendingAuthorization')
+
+      await expect(
+        manager.createAction(
+          {
+            description: 'Malformed BRC-177 protected amount',
+            labels: ['p nosend expiry seconds 30'],
+            outputs: [{ lockingScript: 'abcd', satoshis, outputDescription: 'protected output' }],
+            options: { noSend: true }
+          } as any,
+          'app.com'
+        )
+      ).rejects.toThrow(message)
+
+      expect(spending).not.toHaveBeenCalled()
+      expect(underlying.createAction).not.toHaveBeenCalled()
+    })
+
+    it('rejects a BRC-177 output total outside the safe integer range', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      jest.spyOn(manager, 'ensureLabelAccess').mockResolvedValueOnce(true)
+
+      await expect(
+        manager.createAction(
+          {
+            description: 'Overflowing BRC-177 protected amount',
+            labels: ['p nosend expiry seconds 30'],
+            outputs: [
+              { lockingScript: '51', satoshis: Number.MAX_SAFE_INTEGER, outputDescription: 'first' },
+              { lockingScript: '51', satoshis: 1, outputDescription: 'second' }
+            ],
+            options: { noSend: true }
+          },
+          'app.com'
+        )
+      ).rejects.toThrow('safely supported range')
+
+      expect(underlying.createAction).not.toHaveBeenCalled()
+    })
+
+    it('uses the built-in BRC-177 module for listActions without a spending preflight', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      const labels = jest.spyOn(manager, 'ensureLabelAccess').mockResolvedValueOnce(true)
+      const spending = jest.spyOn(manager, 'ensureSpendingAuthorization')
+      underlying.listActions.mockResolvedValueOnce({ totalActions: 0, actions: [] })
+
+      await manager.listActions({ labels: ['p nosend expiry seconds 30'] }, 'app.com')
+
+      expect(labels).toHaveBeenCalledWith(
+        expect.objectContaining({ label: 'BRC-177 noSend expiry', usageType: 'list', reason: 'listActions' })
+      )
+      expect(spending).not.toHaveBeenCalled()
+      expect(underlying.listActions).toHaveBeenCalledTimes(1)
+    })
+
+    it('forces the final BRC-177 authorization to bypass an identical recent grant', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        seekBasketInsertionPermissions: false
+      })
+      jest.spyOn(manager, 'ensureLabelAccess').mockResolvedValue(true)
+      const spending = jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+
+      await manager.createAction(
+        {
+          description: 'BRC-177 protected action',
+          labels: ['p nosend expiry seconds 30'],
+          outputs: [
+            {
+              lockingScript: 'abcd',
+              satoshis: 1000,
+              outputDescription: 'protected output'
+            }
+          ],
+          options: { noSend: true }
+        },
+        'app.com'
+      )
+
+      expect(spending).toHaveBeenCalledTimes(2)
+      expect(spending.mock.calls[0][0]).toMatchObject({
+        satoshis: 1000,
+        reason: 'BRC-177 protected action prefunding'
+      })
+      expect(spending.mock.calls[1][0]).toMatchObject({
+        satoshis: 1000,
+        allowRecentGrant: false
+      })
+    })
+
+    it('consults the spending token when recent-grant reuse is disabled', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      const internals = manager as any
+      jest.spyOn(internals, 'hasRecentOrPendingGrant').mockResolvedValue(true)
+      const findToken = jest.spyOn(internals, 'findSpendingToken').mockResolvedValue(undefined)
+      const request = jest.spyOn(internals, 'requestPermissionFlow').mockResolvedValue(true)
+
+      await expect(
+        manager.ensureSpendingAuthorization({
+          originator: 'app.com',
+          satoshis: 1000,
+          allowRecentGrant: false
+        })
+      ).resolves.toBe(true)
+
+      expect(findToken).toHaveBeenCalledTimes(1)
+      expect(request).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not let the compatibility option re-enable recent spending-grant reuse', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
+      const internals = manager as any
+      const recent = jest.spyOn(internals, 'hasRecentOrPendingGrant').mockResolvedValue(true)
+      const findToken = jest.spyOn(internals, 'findSpendingToken').mockResolvedValue(undefined)
+      const request = jest.spyOn(internals, 'requestPermissionFlow').mockResolvedValue(true)
+
+      await expect(manager.ensureSpendingAuthorization({ originator: 'app.com', satoshis: 1000 })).resolves.toBe(true)
+      await expect(
+        manager.ensureSpendingAuthorization({
+          originator: 'app.com',
+          satoshis: 1000,
+          allowRecentGrant: true
+        })
+      ).resolves.toBe(true)
+
+      expect(recent).not.toHaveBeenCalled()
+      expect(findToken).toHaveBeenCalledTimes(2)
+      expect(request).toHaveBeenCalledTimes(2)
+    })
+
     it('should delegate internalizeAction when a P-label is present', async () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => req),
@@ -188,9 +503,10 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', config)
       const storedConfig = (manager as any).config as PermissionsManagerConfig
 
-      expect(Object.keys(storedConfig.permissionModules ?? {})).toHaveLength(2)
+      expect(Object.keys(storedConfig.permissionModules ?? {})).toHaveLength(3)
       expect(storedConfig.permissionModules?.scheme1).toBe(module1)
       expect(storedConfig.permissionModules?.scheme2).toBe(module2)
+      expect(storedConfig.permissionModules?.nosend).toBeDefined()
     })
   })
 
@@ -945,6 +1261,95 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
 
       // P-module should NOT have been called since admin check happens before P-module delegation
       expect(testModule.onRequest).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('P-Module Semantic Handlers', () => {
+    it('allows a module to return a wallet result without invoking the underlying method', async () => {
+      const testModule: PermissionsModule = {
+        handleRequest: jest.fn(async req => {
+          expect(req.method).toBe('getPublicKey')
+          expect(req.originator).toBe('app.com')
+          return { publicKey: `02${'11'.repeat(32)}` }
+        }),
+        onRequest: jest.fn(async req => ({ args: req.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+
+      const result = await manager.getPublicKey(
+        {
+          protocolID: [2, `p semantic apply 02${'22'.repeat(32)} example protocol`],
+          keyID: 'key 1'
+        },
+        'app.com'
+      )
+
+      expect(result).toEqual({ publicKey: `02${'11'.repeat(32)}` })
+      expect(underlying.getPublicKey).not.toHaveBeenCalled()
+      expect(testModule.onRequest).not.toHaveBeenCalled()
+      expect(testModule.onResponse).not.toHaveBeenCalled()
+    })
+
+    it('allows a semantic handler to forward transformed arguments through next', async () => {
+      const transformedProtocol: [2, string] = [2, 'ordinary protocol']
+      const testModule: PermissionsModule = {
+        handleRequest: jest.fn(async (req, next) => {
+          const result = await next({
+            ...req.args,
+            protocolID: transformedProtocol
+          })
+          return { ...(result as object), handled: true }
+        }),
+        onRequest: jest.fn(async req => ({ args: req.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+      underlying.getPublicKey.mockResolvedValue({ publicKey: `03${'33'.repeat(32)}` })
+
+      const result = await manager.getPublicKey(
+        {
+          protocolID: [2, 'p semantic forwarded request'],
+          keyID: 'key 1'
+        },
+        'app.com'
+      )
+
+      expect(underlying.getPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({ protocolID: transformedProtocol }),
+        'app.com'
+      )
+      expect(result).toEqual({ publicKey: `03${'33'.repeat(32)}`, handled: true })
+    })
+
+    it('rejects a semantic handler that invokes the underlying operation twice', async () => {
+      const testModule: PermissionsModule = {
+        handleRequest: async (request, next) => {
+          await next(request.args)
+          return await next(request.args)
+        },
+        onRequest: jest.fn(async request => ({ args: request.args })),
+        onResponse: jest.fn(async result => result)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { semantic: testModule }
+      })
+      underlying.getPublicKey.mockResolvedValue({ publicKey: `03${'44'.repeat(32)}` })
+
+      await expect(
+        manager.getPublicKey(
+          {
+            protocolID: [0, 'p semantic example request'],
+            keyID: '1'
+          },
+          'app.com'
+        )
+      ).rejects.toThrow(/more than once/)
+      expect(underlying.getPublicKey).toHaveBeenCalledTimes(1)
     })
   })
 })

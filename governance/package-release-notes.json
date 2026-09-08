@@ -5,10 +5,10 @@
   "entries": [
     {
       "name": "@bsv/402-pay",
-      "publishedVersion": "0.2.1",
+      "publishedVersion": "0.2.5",
       "releaseType": "minor",
-      "summary": "Binds BRC-121 pricing and internalization to the transaction declared by the BRC-95 Atomic BEEF subject, removes unrelated included branches, rejects trailing bytes and non-atomic envelopes, and requires an affirmative wallet acceptance before serving paid content. Retains the exact-tarball browser contract and incorporated-material notices.",
-      "migration": "Custom clients must send a strictly framed BRC-95 Atomic BEEF envelope whose subject is the payment transaction; plain BEEF is no longer accepted. Legacy Atomic BEEF containing unrelated branches remains compatible because the server reduces it to the declared subject and dependency closure."
+      "summary": "Adds an exact-tarball Vite and esbuild contract for the browser-safe client entry point, including a bundle-size ratchet and an assertion that server exports never leak into browser consumers. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice. Standardizes first-party author metadata on the current BSV Association name. Binds BRC-121 pricing and internalization to the transaction declared by the BRC-95 Atomic BEEF subject, removes unrelated included branches, rejects trailing bytes and non-atomic envelopes, and requires affirmative wallet acceptance before serving paid content.",
+      "migration": "Custom clients must send a strictly framed BRC-95 Atomic BEEF envelope whose subject is the payment transaction; plain BEEF is no longer accepted. Legacy Atomic BEEF containing unrelated branches remains compatible because the server reduces it to the declared subject and dependency closure. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/air-gap",
@@ -61,10 +61,17 @@
     },
     {
       "name": "@bsv/btms-permission-module",
-      "publishedVersion": "1.1.1",
+      "publishedVersion": "1.1.4",
       "releaseType": "major",
-      "summary": "Prevents mixed issuance-and-spend actions from bypassing user authorization: issuance is auto-approved only when the action contains no caller-supplied inputs and carries an exact issuance marker. Retains the governed package-quality contract.",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract. Standardizes first-party author metadata on the current BSV Association name. Prevents mixed issuance-and-spend actions from bypassing user authorization: issuance is auto-approved only when the action contains no caller-supplied inputs and carries an exact issuance marker. Retains the governed package-quality contract.",
       "migration": "Upgrade the peer dependency to @bsv/wallet-toolbox-client 3.x. Applications that intentionally combine issuance outputs with inputs must now surface the normal user approval flow; pure issuance remains auto-approved."
+    },
+    {
+      "name": "@bsv/ecpm-permission-module",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the BRC-98 p ecpm semantic module, applying or removing a wallet-derived scalar from validated secp256k1 points through the existing BRC-100 getPublicKey surface, including reason-scoped privileged authorization and privileged-key-provider hooks.",
+      "migration": "No existing consumer migration is required; this is the first release. Wallet hosts register the module under the ecpm scheme and supply their ordinary key deriver, authorization handler, and optional privileged key provider."
     },
     {
       "name": "@bsv/chirp",
@@ -72,6 +79,13 @@
       "releaseType": "minor",
       "summary": "Introduces the BRC-167 CHIRP reference implementation: canonical Merkle codecs and vectors, progressive and resumable multi-host publication, bounded interleaved and range-aware resolution, a verified-object cache, browser and Node byte-source adapters, closure validation, and publication/retrieval/verification CLI commands. Standardizes first-party author metadata on the current BSV Association name.",
       "migration": "No consumer migration is required; this is the first release of a new additive package. Existing @bsv/sdk StorageUploader, StorageDownloader, StorageUtils, UHRP identifiers, overlays, and server routes remain unchanged. BRC-167 remains authoritative if the implementation and standard differ."
+    },
+    {
+      "name": "@bsv/lch",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the published BRC-170 Licensed Content Header reference implementation: deterministic CBOR and framing, segmented authenticated encryption, signed acquisition objects, deterministic-CBOR HTTP client/server bindings, independently routed and replay-safe Payee receipts, signed readiness and pending settlement, receipt-complete and offline-capable authorized-output settlement profiles, authenticated late Delivery retrieval, an explicit recovery-safe multipay buyer workflow with exact License, fulfillment, and key-grant binding, commit-aware IndexedDB persistence, UHRP and CHIRP content adapters with resolved-host failover, authority revocation, bounded DAG composition, deterministic malformed-input handling, and URL-canonical SSRF protection including IPv4-mapped IPv6 literals.",
+      "migration": "No consumer migration is required; this is the first release of a new additive package. Applications must give quote() the verified Asset encryption descriptor and selected Offer key-delivery mechanism, keep createPayment behind explicit wallet authorization, persist the funded transaction and every partial settlement proof through recovery, retry with that same transaction, distinguish finalized from accepted evidence, fail closed on unknown settlement or evidence profiles, and supply an address-pinning connector for DNS endpoints. Payees should select receipt-complete unless they explicitly accept authorized-output provider, privacy, and pre-internalization key-release tradeoffs. Distributors must retain THIRD_PARTY_NOTICES.md with the package; the new profile adds no dependency. Published BRC-170 remains authoritative if the implementation and standard differ."
     },
     {
       "name": "@bsv/did",
@@ -89,10 +103,10 @@
     },
     {
       "name": "@bsv/fund-wallet",
-      "publishedVersion": "1.4.1",
+      "publishedVersion": "1.4.4",
       "releaseType": "major",
-      "summary": "Removes private-key command-line arguments so wallet secrets cannot leak through shell history or process inspection, adds a non-echoing interactive secret prompt, and preserves protected-stdin automation. Retains the governed package-quality and provenance contract.",
-      "migration": "Replace --private-key/--privateKey with the interactive secret prompt. Automation must provide exactly one private-key line on standard input from a protected file descriptor; funding APIs and transaction behavior are otherwise unchanged."
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract, and retains the imported fund-metanet source's hash-pinned ISC provenance and notice from its exact source and npm publication. Standardizes first-party author metadata on the current BSV Association name. Removes private-key command-line arguments so wallet secrets cannot leak through shell history or process inspection, adds a non-echoing interactive secret prompt, and preserves protected-stdin automation. Retains the governed package-quality and provenance contract.",
+      "migration": "Replace --private-key/--privateKey with the interactive secret prompt. Automation must provide exactly one private-key line on standard input from a protected file descriptor; funding APIs and transaction behavior are otherwise unchanged. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     },
     {
       "name": "@bsv/gasp",
@@ -104,9 +118,9 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "No API migration is required. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it."
+      "releaseType": "minor",
+      "summary": "Adds an optional socketOptions client option that forwards the AuthSocketClient options other than wallet and originator, letting callers select Socket.IO transports such as websocket-only against deployments that do not carry Engine.IO HTTP polling, and reach certificate requests, session management, auth-message concurrency, and error reporting. Also preserves BRC-29 payments, paid messages, remittances, and peer tokens across binary Wallet Wire results and historical numeric-key JSON payloads, rejects sparse or invalid byte records, and ships the complete SDK incorporated-material notice archive with a retained UMD notice banner. Standardizes first-party author metadata on the current BSV Association name. Rebuilds the UMD bundle with SDK 2.5.0 support for optional recipient-declared known payment ancestors, allowing compatible wallets to omit those ancestors from payment BEEF.",
+      "migration": "No API migration is required. socketOptions is optional and nothing is forwarded by default, so socket transport negotiation and every HTTP code path are unchanged for existing callers; wallet and originator stay client-owned and cannot be overridden through it. managerOptions excludes autoConnect and retries: JavaScript callers receive an immediate error for autoConnect: false or nonzero message retries because the live socket starts immediately and AuthSocket does not send Socket.IO acknowledgements. Connection reconnection options remain supported. Upgrade @bsv/sdk and @bsv/message-box-client together; historical number-array wallets, current Uint8Array substrates, and already-pending numeric-key messages interoperate through the same portable transaction form. Distributors who copy the UMD file must keep THIRD_PARTY_NOTICES.md and LICENSES/ with it. No migration is required for the bundled payment optimization. Module consumers can use SDK 2.5.0 or later to enable the same optional extension; existing compatible SDK peer versions remain supported. Recipients must advertise already-validated transaction IDs through x-bsv-payment-known-txids, an optional SDK extension rather than a standardized BRC-105 header; services that omit it retain existing payment behavior."
     },
     {
       "name": "@bsv/overlay",
@@ -152,17 +166,17 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.4.0",
-      "releaseType": "patch",
-      "summary": "Rejects GlobalKVStore overlay values when their controller signature verification returns false and refuses to publish identity certificates whose certifier signature is invalid. Retains the strict BRC-100 byte boundary, browser contracts, cryptographic APIs, and complete incorporated-material notices.",
-      "migration": "No API migration is required. Invalid controller-signed overlay values and invalid identity certificates now fail closed instead of being returned or published; valid data and public method signatures are unchanged. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles."
+      "publishedVersion": "2.4.2",
+      "releaseType": "minor",
+      "summary": "Adds one strict BRC-100 byte-boundary contract and secure React Native bridge validation, and completes incorporated-code compliance with hash-pinned provenance, exact MIT/ISC/BSD/Apache notices, source lineage markers, package payloads, a retained UMD banner, SBOM components, and release enforcement. Removes a broken copied Swagger UI scaffold and screenshot; the first-party OpenAPI source remains available for use with any viewer. Standardizes first-party author metadata on the current BSV Association name. Adds an optional SDK extension for recipient-declared known transaction IDs to AuthFetch payment creation and repricing so compatible wallets can omit already-known ancestors from payment BEEF. Rejects GlobalKVStore overlay values when controller-signature verification returns false and refuses to publish identity certificates whose certifier signature is invalid.",
+      "migration": "No API migration is required. Historical number-array fast paths and React Native behavior remain compatible. Documentation users should load docs/swagger/swagger.yaml into their preferred viewer instead of using the removed static Swagger UI scaffold. Distributors must keep THIRD_PARTY_NOTICES.md and LICENSES/ with source and browser bundles. The optional x-bsv-payment-known-txids response header requires no consumer migration: absent or invalid-only values preserve existing payment creation. Recipients may advertise only transaction IDs they already possess and have validated, as comma-separated 64-character hexadecimal values; AuthFetch forwards at most 256 unique lowercase IDs through createAction options. Browser services must expose the optional response header through their existing CORS policy to enable this optimization. Invalid controller-signed overlay values and invalid identity certificates now fail closed instead of being returned or published; valid data and public method signatures are unchanged."
     },
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.4.1",
       "releaseType": "minor",
-      "summary": "Adds TerraTestNet, preserves Message Box, token send/receive, and server-adapter transaction bytes across wallet runtimes, and restores the exact scoped MIT notice for the pre-monorepo source alongside Open BSV licensing for later first-party changes. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.2 or later. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
+      "summary": "Adds TerraTestNet, preserves Message Box, token send/receive, and server-adapter transaction bytes across wallet runtimes, and restores the exact scoped MIT notice for the pre-monorepo source alongside Open BSV licensing for later first-party changes. Advances the packed Message Box Client dependency to the compatible 2.5.0 line. Standardizes first-party author metadata on the current BSV Association name.",
+      "migration": "Existing overlay configurations and number-array behavior are unchanged. TTN consumers select network teratestnet; all consumers should upgrade to @bsv/sdk 2.4.2 or later. The Message Box Client dependency advance requires no helper API migration and preserves the default HTTP and live-socket behavior. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/."
     },
     {
       "name": "@bsv/templates",
@@ -194,31 +208,31 @@
     },
     {
       "name": "@bsv/wallet-relay",
-      "publishedVersion": "0.2.2",
+      "publishedVersion": "0.3.6",
       "releaseType": "minor",
-      "summary": "Enforces signed pairing metadata before relay resolution, requires HTTPS outside loopback development for pairing origins and directly configured relay APIs, and rejects privileged wallet methods when no explicit approval callback is configured. Retains portable wallet RPC byte handling and the strict package contract.",
-      "migration": "Enable signed QR codes and distribute only HTTPS pairing origins and relay API URLs. Root-relative API paths and loopback HTTP remain supported. Configure onApprovalRequired for every method not deliberately listed in autoApproveMethods; unsigned pairing URIs and implicit approval are no longer accepted."
+      "summary": "Adds the strict package contract and preserves wallet RPC, encrypted relay payloads, signatures, and transaction bytes across number-array, Uint8Array, Buffer, and historical numeric-key JSON runtimes. Standardizes first-party author metadata on the current BSV Association name. Enforces signed pairing metadata before relay resolution, requires HTTPS outside loopback development for pairing origins and directly configured relay APIs, and rejects privileged wallet methods when no explicit approval callback is configured. Retains portable wallet RPC byte handling and the strict package contract.",
+      "migration": "Enable signed QR codes and distribute only HTTPS pairing origins and relay API URLs. Root-relative API paths and loopback HTTP remain supported. Configure onApprovalRequired for every method not deliberately listed in autoApproveMethods; unsigned pairing URIs and implicit approval are no longer accepted. Existing relay sessions and supported wallet RPC byte encodings remain valid, and host applications continue to provide their matching Express runtime and type graph."
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.10.0",
+      "publishedVersion": "2.11.0",
       "releaseType": "major",
-      "summary": "Prevents reuse or coalescing of spending approvals, verifies certificate signatures fail closed during direct acquisition, issuer acquisition, and overlay discovery, paginates complete spending history, requires HTTPS for credential-bearing transports, prevents credential logging, and documents snapshots as wallet-equivalent secrets. Retains existing snapshot formats and BRC-95/BRC-100 compatibility.",
-      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but applications must store each complete snapshot in an OS Keychain, hardware-backed keystore, or comparably trusted secret store because possession of it grants wallet access."
+      "summary": "Adds the built-in BRC-177 noSend-expiry reference implementation with exact prefunding, durable pre-signed reclaim, atomic active-storage monitoring, backoff-controlled recovery, cross-device lifecycle synchronization, and proof-finalized race handling. Adds opt-in prepared BEEF storage for Knex-backed normal createAction funding: verified, checksummed proof closures are persisted after foreground completion and reused on later hits, while broad lookups, misses, and cache failures retain the canonical path. Reads, writes, bounded queueing, and gradual backfill default off; reorganizations stale derived rows and fence in-flight cross-process writes with a database proof epoch. Also adds the optional semantic handleRequest hook for BRC-98/99/111 permission modules, an interoperable asynchronous JavaScript Argon2id fallback when WebAssembly is unavailable, and an optional proven-ready native Argon2id backend for host runtimes, retains BRC-95/BRC-100 compatibility and stable bounded pagination, removes the obsolete JSight application bundle, and preserves the earlier Open BSV grant. Prevents reuse or coalescing of spending approvals, verifies certificate signatures fail closed during direct acquisition, issuer acquisition, and overlay discovery, paginates complete spending history, requires HTTPS for credential-bearing transports, prevents credential logging, and documents snapshots as wallet-equivalent secrets.",
+      "migration": "Existing actions, ordinary noSend calls, permission modules, and UMP v3 tokens require no migration. To use BRC-177, migrate every active Knex store before serving requests and run the default Wallet Toolbox monitor; IndexedDB upgrades automatically to schema version 5. Upgrade signer, active storage service, and remote monitor together to 2.11.0 or later; older remote storage is rejected before prefunding. The Knex migration also adds rebuildable prepared-BEEF and proof-epoch tables with every COOK control disabled. Validate the migration on MySQL before release and the cross-process epoch fence on non-production PXC before enabling writes. Roll out writes before reads, use backfill only after database review, and disable all three flags to roll back. Delete derived prepared rows before downgrading to code that cannot advance the epoch. Semantic modules may add handleRequest; hosts installing @bsv/ecpm-permission-module register it under the ecpm scheme. Argon2id tokens keep the same parameters and derived bytes across WebAssembly and JavaScript runtimes. Host registration is available from each package root; concurrent cold calls share a preload attempt, and hosts must make readiness/preload reentrant and cache permanent failures or back off retries. Native and JavaScript results share byte-type and exact-length validation; unrelated hash-wasm errors still propagate without WebAssembly. Canonical AtomicBEEF and number-array behavior are unchanged; use @bsv/sdk 2.4.2 or later, use docs/storage.md instead of the removed JSight export, and retain THIRD_PARTY_NOTICES.md and LICENSES/. Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but applications must store each complete snapshot in an OS Keychain, hardware-backed keystore, or comparably trusted secret store because possession of it grants wallet access."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.10.0",
+      "publishedVersion": "2.11.0",
       "releaseType": "major",
-      "summary": "Carries Wallet Toolbox spending authorization, certificate-signature enforcement across acquisition and discovery, complete accounting, credential-bearing transport hardening, and credential-log prevention into the browser package while documenting snapshots as wallet-equivalent secrets and preserving browser and byte-boundary contracts.",
-      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot only through browser or extension storage backed by an OS Keychain or comparably trusted secret store."
+      "summary": "Adds the built-in browser BRC-177 noSend-expiry signer, IndexedDB schema version 5 lifecycle state, remote storage capability negotiation, default monitor coordination, the optional semantic handleRequest hook, an interoperable asynchronous JavaScript Argon2id fallback when WebAssembly is unavailable, and an optional proven-ready native Argon2id backend for host runtimes. Carries the shared prepared-BEEF-aware createAction contract while IndexedDB remains canonical-only; compatible remote Knex providers can enable COOK independently. Retains transformation modules, BRC-100 wire compatibility, stable IndexedDB totals, current browser compatibility fixes, and earlier Open BSV grants. Carries the spending-authorization, certificate-signature, complete-accounting, credential-transport, and credential-log security corrections into the browser package while documenting snapshots as wallet-equivalent secrets.",
+      "migration": "Existing browser actions, permission modules, and UMP v3 tokens require no migration; IndexedDB upgrades automatically. To use BRC-177 with remote storage, upgrade the active storage service and its default monitor to Wallet Toolbox 2.11.0 or later before upgrading clients; an older server is rejected before prefunding. Prepared BEEF persistence and rollout controls apply only to the full package's Knex provider, so IndexedDB and remote clients require no COOK configuration. Semantic modules may add handleRequest; installing @bsv/ecpm-permission-module requires registration under the ecpm scheme. Argon2id tokens keep the same parameters and derived bytes across WebAssembly and JavaScript runtimes. Host registration is available from each package root; concurrent cold calls share a preload attempt, and hosts must make readiness/preload reentrant and cache permanent failures or back off retries. Native and JavaScript results share byte-type and exact-length validation; unrelated hash-wasm errors still propagate without WebAssembly. Browser exports, wire types, canonical AtomicBEEF behavior, and pagination contracts are unchanged; use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/. Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot only through browser or extension storage backed by an OS Keychain or comparably trusted secret store."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.10.0",
+      "publishedVersion": "2.11.0",
       "releaseType": "major",
-      "summary": "Carries Wallet Toolbox spending authorization, certificate-signature enforcement across acquisition and discovery, complete accounting, credential-bearing transport hardening, and credential-log prevention into the React Native package while documenting snapshots as wallet-equivalent secrets and preserving mobile and byte-boundary contracts.",
-      "migration": "Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot in the iOS Keychain, Android Keystore-backed encrypted storage, or a comparably trusted secret store."
+      "summary": "Adds the built-in mobile BRC-177 noSend-expiry signer, remote storage capability negotiation, default-monitor ownership coordination across restarts and devices, the optional semantic handleRequest hook, an interoperable asynchronous JavaScript Argon2id fallback for React Native runtimes without WebAssembly, and an optional proven-ready native Argon2id backend for host runtimes. Carries the shared prepared-BEEF-aware createAction contract while mobile storage remains canonical-only; compatible remote Knex providers can enable COOK independently. Retains transformation modules, BRC-100 wire compatibility, current mobile compatibility fixes, and earlier Open BSV grants. Carries the spending-authorization, certificate-signature, complete-accounting, credential-transport, and credential-log security corrections into the React Native package while documenting snapshots as wallet-equivalent secrets.",
+      "migration": "Existing mobile actions, permission modules, and UMP v3 tokens require no migration. To use BRC-177, migrate and upgrade the active remote storage service and its default monitor to Wallet Toolbox 2.11.0 or later before upgrading clients; an older server is rejected before prefunding. Prepared BEEF persistence and rollout controls apply only to the full package's Knex provider, so mobile remote clients require no COOK configuration. Semantic modules may add handleRequest without changing the Wallet interface. Argon2id tokens keep the same parameters and derived bytes across WebAssembly and JavaScript runtimes; no user device setting is required. Host registration is available from the mobile root; concurrent cold calls share a preload attempt, and hosts must make readiness/preload reentrant and cache permanent failures or back off retries. Native and JavaScript results share byte-type and exact-length validation; unrelated hash-wasm errors still propagate without WebAssembly. React Native exports, wire types, and canonical AtomicBEEF behavior are unchanged; use @bsv/sdk 2.4.2 or later and retain THIRD_PARTY_NOTICES.md and LICENSES/. Replace non-loopback HTTP storage and Arcade SSE endpoints with HTTPS. Snapshot APIs and formats are unchanged, but store each complete snapshot in the iOS Keychain, Android Keystore-backed encrypted storage, or a comparably trusted secret store."
     },
     {
       "name": "create-bsv-app",

@@ -343,6 +343,8 @@ export interface SetupWalletArgs {
     active?: WalletStorageProvider;
     backups?: WalletStorageProvider[];
     scriptVerifier?: SpendVerifierInterface;
+    managedChangePolicy?: ManagedChangePolicyOptions;
+    preparedBeef?: PreparedBeefOptions;
 }
 ```
 
@@ -382,6 +384,15 @@ Defaults to undefined.
 
 ```ts
 privilegedKeyGetter?: () => Promise<PrivateKey>
+```
+
+###### Property preparedBeef
+
+Optional Knex prepared-BEEF (COOK) rollout controls. Reads, writes, and
+backfill default off. See [Prepared BEEF (COOK)](./prepared-beef.md).
+
+```ts
+preparedBeef?: PreparedBeefOptions
 ```
 
 ###### Property scriptVerifier

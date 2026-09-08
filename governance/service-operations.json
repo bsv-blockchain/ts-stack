@@ -479,7 +479,8 @@
           "WAB_ADMIN_RATE_LIMIT_WINDOW_MS",
           "WAB_ADMIN_TOKEN",
           "WAB_PRESENTATION_KEY_ENCRYPTION_KEY",
-          "WAB_PRESENTATION_KEY_ENCRYPTION_MODE"
+          "WAB_PRESENTATION_KEY_ENCRYPTION_MODE",
+          "WAB_DEMO_AUTH_SECRET"
         ],
         "secrets": [
           "DB_PASS",
@@ -488,7 +489,8 @@
           "SHARE_ENCRYPTION_KEY",
           "TWILIO_AUTH_TOKEN",
           "WAB_ADMIN_TOKEN",
-          "WAB_PRESENTATION_KEY_ENCRYPTION_KEY"
+          "WAB_PRESENTATION_KEY_ENCRYPTION_KEY",
+          "WAB_DEMO_AUTH_SECRET"
         ]
       },
       "observability": {

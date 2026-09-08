@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -73,7 +73,8 @@ import type { MessageBoxClientOptions } from '@bsv/message-box-client'
 import type { PublicProfile } from '@bsv/paymail'
 
 const exampleMessageBoxOptions: MessageBoxClientOptions = {
-  host: 'https://messagebox.example'
+  host: 'https://messagebox.example',
+  socketOptions: { managerOptions: { transports: ['websocket'] } }
 }
 const exampleProfileConsumer = (profile: PublicProfile): string => profile.name
 

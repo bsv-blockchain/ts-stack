@@ -19,31 +19,40 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
+Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
+pre-funds expiring `noSend` actions, stores a signed reclaim durably across
+active/backup storage and restarts, and lets the authoritative local or remote
+monitor reclaim an unbroadcast action after its time or block-height deadline.
+See [Expiring noSend actions](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/no-send-expiry.md).
+
 Knex and IndexedDB `listOutputs` providers report `totalOutputs` as the full
 matching count on every page, including short final and out-of-range pages.
+
+Knex storage can opt into prepared BEEF (COOK) for normal `createAction`
+funding. Exact verified proof closures are persisted only after foreground
+action work, while reads, writes, and bounded backfill remain separately
+controlled and default off. Every miss or invalid artifact retains the
+canonical BEEF builder.
 
 `WalletAuthenticationManager` supports an additive WAB UMP outpoint pin for
 legacy ambiguity and an OTP-verified phone-number change that always rolls the
 presentation key. The same registered number is valid. A pin is ignored unless
 normal verified lineage resolution remains ambiguous and the outpoint is one
 of the wallet's verified candidates. Applications must persist
-`saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds,
-storing the entire snapshot in an OS Keychain or comparably protected store.
+`saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
 
 Snapshots intentionally carry everything needed to restore sensitive wallet
-state; possession of a snapshot is possession of the wallet. Never place one in
-ordinary browser/mobile storage, logs, analytics, crash reports, clipboard
-data, or unprotected backups. Remote storage and credential-bearing Arcade SSE
-endpoints require HTTPS except for explicit loopback development, and SSE
-dependency debug logging is disabled to protect callback and API credentials.
-Spending approvals are one operation per prompt,
-and spending-token accounting reads every action page before authorizing a
-spend.
+state; possession of a snapshot is possession of the wallet. Store each
+complete snapshot only in an OS Keychain, hardware-backed keystore, or
+comparably trusted secret store. Remote storage and credential-bearing Arcade
+SSE require HTTPS except for explicit loopback development, and transport
+debugging cannot log callback tokens or API credentials.
 
-Certificate handling also fails closed. Both direct and issuer-mediated acquisition
-paths require a valid certifier signature before storage, and identity discovery
-verifies untrusted overlay certificates before decrypting or trust-scoring
-them.
+Spending approvals apply to one operation per prompt and are never cached or
+coalesced. Spending-token accounting reads every action page before authorizing
+a spend. Certificate handling also fails closed: direct and issuer-mediated
+acquisition require a valid certifier signature before storage, and identity
+discovery verifies overlay certificates before decrypting or trust-scoring them.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related
@@ -146,6 +155,18 @@ console.log(publicKey)
 ```
 
 `setup.wallet` is the BRC-100 wallet. The surrounding `setup` object exposes the constructed `rootKey`, `identityKey`, `keyDeriver`, `storage`, `services`, and `monitor` so wallet builders can inspect or replace pieces while developing.
+
+## Permission modules
+
+`WalletPermissionsManager` registers BRC-98/99/111 modules by the scheme after
+the `p` prefix. Existing modules can transform calls with `onRequest` and
+`onResponse`. A semantic module can instead implement
+`handleRequest(request, next)` and return the conforming BRC-100 result itself;
+if it needs the underlying wallet operation, `next` is guarded to one call.
+
+The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
+this hook to implement point multiplication under `p ecpm` while keeping
+`getPublicKey` as the public wallet method.
 
 ## Action Flow
 
