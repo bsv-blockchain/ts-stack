@@ -79,6 +79,24 @@ The root entry point exports:
 imports remain available through the documented package export map, but new
 applications should prefer the root entry point wherever possible.
 
+## Optional persistence capability
+
+`AdmissionStorage` defines an additive v1 atomic admission contract for future
+adapters. `getAdmissionStorage(storage)` detects an explicit provider with both
+commit and reconciliation methods. Existing Knex and injected legacy adapters
+remain supported; their individual methods do not imply atomic submission.
+Current `Engine.submit` does not call this capability, and its early STEAK
+callback is not a durable commit receipt.
+
+The contract separates local commit, index visibility and propagation. It binds
+operation identity to verified transaction, topic/policy and off-chain context;
+uses ready payload references and outbox intents; and fences recovery by both
+chain epoch and topic history generation. Helper functions and shared fixtures
+pin exact integers, deterministic identity, leases and cursor eligibility.
+See the [persistence specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md).
+No consumer migration, Mongo runtime, storage-default change or database migration
+is included in this release candidate.
+
 ## Runtime and package formats
 
 The package supports both module systems:

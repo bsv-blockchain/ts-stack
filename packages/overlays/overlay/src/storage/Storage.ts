@@ -1,4 +1,5 @@
 import type { Output } from '../Output.js'
+import type { AdmissionStorage } from './AdmissionStorage.js'
 import type {
   AdmittedTxRef,
   RawTransactionRecord,
@@ -59,6 +60,9 @@ export interface UnprovenAppliedTransactionCandidate {
  * Defines the Storage Engine interface used internally by the Overlay Services Engine.
  */
 export interface Storage {
+  /** Optional whole-admission contract. Legacy CRUD does not imply this capability. */
+  readonly admission?: AdmissionStorage
+
   /**
    * Adds a new output to storage
    * @param utxo — The output to add

@@ -4,9 +4,9 @@ title: '@bsv/overlay'
 kind: package
 domain: overlays
 npm: '@bsv/overlay'
-version: '2.3.1'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '2.4.0'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay'
 status: stable
@@ -75,6 +75,15 @@ const result = await engine.lookup({
 - **SHIP/SLAP support** — Built-in peer discovery protocols
 - **BASM support** — BRC-136 topic anchors, TAC computation, reorg reconciliation,
   proof refresh, and unproven transaction maintenance
+
+## Optional persistence contracts
+
+The package exports an additive `AdmissionStorage` capability, semantic identity
+helpers and recovery fence/cursor predicates. These define the local durable
+receipt and pending index/propagation boundary for future adapters. Current
+`Engine.submit`, its early STEAK callback and Knex storage do not use the
+capability. See the [persistence v1 specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md)
+for the shared fixtures and explicit limits. No consumer migration is required.
 
 ## Common patterns
 

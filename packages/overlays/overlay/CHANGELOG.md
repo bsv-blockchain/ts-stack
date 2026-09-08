@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
+
 ### Added
 - (Include new features or significant user-visible enhancements here.)
 
