@@ -10,6 +10,23 @@ const mockFacilitator = {
   lookup: jest.fn()
 }
 
+const expectLookupCalls = (actual: unknown[][], expected: unknown[][]): void => {
+  expect(actual.map(call => call.slice(0, 3))).toEqual(expected)
+  for (const call of actual) {
+    expect(call[3]).toEqual(expect.any(AbortSignal))
+    expect(call[4]).toEqual(
+      expect.objectContaining({
+        maxResponseBytes: 32 * 1024 * 1024,
+        consumeBytes: expect.any(Function)
+      })
+    )
+  }
+}
+
+const expectLookupCall = (actual: unknown[], expected: unknown[]): void => {
+  expectLookupCalls([actual], [expected])
+}
+
 const sampleBeef1 = new Transaction(
   1,
   [],
@@ -96,7 +113,7 @@ describe('LookupResolver', () => {
         }
       ]
     })
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -137,40 +154,24 @@ describe('LookupResolver', () => {
       0
     )
 
-    mockFacilitator.lookup
-      .mockReturnValueOnce({
+    mockFacilitator.lookup.mockImplementation((url: string, question: { service: string }) => {
+      if (question.service === 'ls_slap') {
+        return {
+          type: 'output-list',
+          outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
+        }
+      }
+      if (url === 'https://slaphost.com') {
+        return { type: 'output-list', outputs: [{ beef: sampleBeef1, outputIndex: 0 }] }
+      }
+      return {
         type: 'output-list',
         outputs: [
-          {
-            outputIndex: 0,
-            beef: slapTx.toBEEF()
-          }
+          { beef: sampleBeef1, outputIndex: 0 },
+          { beef: sampleBeef2, outputIndex: 1033 }
         ]
-      })
-      .mockReturnValueOnce({
-        type: 'output-list',
-        outputs: [
-          {
-            beef: sampleBeef1,
-            outputIndex: 0
-          }
-        ]
-      })
-      .mockReturnValueOnce({
-        type: 'output-list',
-        outputs: [
-          {
-            // duplicate the output the other host knows about
-            beef: sampleBeef1,
-            outputIndex: 0
-          },
-          {
-            // the additional host also knows about a second output
-            beef: sampleBeef2,
-            outputIndex: 1033
-          }
-        ]
-      })
+      }
+    })
 
     const r = new LookupResolver({
       facilitator: mockFacilitator,
@@ -198,7 +199,18 @@ describe('LookupResolver', () => {
         }
       ]
     })
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
+      [
+        // additional host should also have been queried first
+        'https://additional.host',
+        {
+          service: 'ls_foo',
+          query: {
+            test: 1
+          }
+        },
+        undefined
+      ],
       [
         'https://mock.slap',
         {
@@ -211,17 +223,6 @@ describe('LookupResolver', () => {
       ],
       [
         'https://slaphost.com',
-        {
-          service: 'ls_foo',
-          query: {
-            test: 1
-          }
-        },
-        undefined
-      ],
-      [
-        // additional host should also have been queried
-        'https://additional.host',
         {
           service: 'ls_foo',
           query: {
@@ -264,7 +265,7 @@ describe('LookupResolver', () => {
         }
       ]
     })
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://override.host',
         {
@@ -332,7 +333,7 @@ describe('LookupResolver', () => {
         }
       ]
     })
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://override.host',
         {
@@ -357,7 +358,7 @@ describe('LookupResolver', () => {
     ])
   })
 
-  it('should handle multiple SLAP trackers and resolve with first responder hosts', async () => {
+  it('queries every eligible host advertised during the active attempt, including a later tracker', async () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
@@ -390,36 +391,28 @@ describe('LookupResolver', () => {
       0
     )
 
-    // SLAP trackers return hosts — first responder wins
-    mockFacilitator.lookup
-      .mockReturnValueOnce({
-        type: 'output-list',
-        outputs: [
-          {
-            outputIndex: 0,
-            beef: slapTx1.toBEEF()
+    mockFacilitator.lookup.mockImplementation((url: string, question: { service: string }) => {
+      if (question.service === 'ls_slap') {
+        if (url === 'https://mock.slap1') {
+          return {
+            type: 'output-list',
+            outputs: [{ outputIndex: 0, beef: slapTx1.toBEEF() }]
           }
-        ]
-      })
-      .mockReturnValueOnce({
-        type: 'output-list',
-        outputs: [
-          {
-            outputIndex: 0,
-            beef: slapTx2.toBEEF()
-          }
-        ]
-      })
-
-    // Only the first-resolved tracker's host gets queried
-    mockFacilitator.lookup.mockReturnValueOnce({
-      type: 'output-list',
-      outputs: [
-        {
-          beef: sampleBeef3,
-          outputIndex: 0
         }
-      ]
+        if (url === 'https://mock.slap2') {
+          return {
+            type: 'output-list',
+            outputs: [{ outputIndex: 0, beef: slapTx2.toBEEF() }]
+          }
+        }
+      }
+      if (url === 'https://slaphost1.com') {
+        return { type: 'output-list', outputs: [{ beef: sampleBeef3, outputIndex: 0 }] }
+      }
+      if (url === 'https://slaphost2.com') {
+        return { type: 'output-list', outputs: [{ beef: sampleBeef2, outputIndex: 1 }] }
+      }
+      throw new Error(`unexpected host ${url}`)
     })
 
     const r = new LookupResolver({
@@ -432,15 +425,24 @@ describe('LookupResolver', () => {
       query: { test: 1 }
     })
 
-    // Only the first tracker's host results are returned
-    expect(res).toEqual({
-      type: 'output-list',
-      outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
-    })
+    expect(res.outputs).toEqual(
+      expect.arrayContaining([
+        { beef: sampleBeef3, outputIndex: 0 },
+        { beef: sampleBeef2, outputIndex: 1 }
+      ])
+    )
+    expect(res.outputs).toHaveLength(2)
 
-    // Both SLAP trackers are queried, but only the first host is used for the actual query
-    expect(mockFacilitator.lookup.mock.calls.length).toBeGreaterThanOrEqual(3)
-    expect(mockFacilitator.lookup.mock.calls[0]).toEqual([
+    const calledUrls = mockFacilitator.lookup.mock.calls.map((call: unknown[]) => call[0])
+    expect(calledUrls).toEqual(
+      expect.arrayContaining([
+        'https://mock.slap1',
+        'https://mock.slap2',
+        'https://slaphost1.com',
+        'https://slaphost2.com'
+      ])
+    )
+    expectLookupCall(mockFacilitator.lookup.mock.calls[0], [
       'https://mock.slap1',
       {
         service: 'ls_slap',
@@ -450,7 +452,7 @@ describe('LookupResolver', () => {
       },
       5000
     ])
-    expect(mockFacilitator.lookup.mock.calls[1]).toEqual([
+    expectLookupCall(mockFacilitator.lookup.mock.calls[1], [
       'https://mock.slap2',
       {
         service: 'ls_slap',
@@ -459,16 +461,6 @@ describe('LookupResolver', () => {
         }
       },
       5000
-    ])
-    expect(mockFacilitator.lookup.mock.calls[2]).toEqual([
-      'https://slaphost1.com',
-      {
-        service: 'ls_foo',
-        query: {
-          test: 1
-        }
-      },
-      undefined
     ])
   })
 
@@ -541,7 +533,7 @@ describe('LookupResolver', () => {
       outputs: [duplicateOutput]
     })
 
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -644,7 +636,7 @@ describe('LookupResolver', () => {
       outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
     })
 
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -699,7 +691,7 @@ describe('LookupResolver', () => {
       'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
     )
 
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -786,7 +778,7 @@ describe('LookupResolver', () => {
       ]
     })
 
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -848,7 +840,7 @@ describe('LookupResolver', () => {
         }
       ]
     })
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -884,7 +876,7 @@ describe('LookupResolver', () => {
       'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
     )
 
-    expect(mockFacilitator.lookup.mock.calls).toEqual([
+    expectLookupCalls(mockFacilitator.lookup.mock.calls, [
       [
         'https://mock.slap',
         {
@@ -1115,7 +1107,7 @@ describe('LookupResolver', () => {
         ]
       })
 
-      expect(mockFacilitator.lookup.mock.calls).toEqual([
+      expectLookupCalls(mockFacilitator.lookup.mock.calls, [
         [
           'https://mock.slap1',
           {
@@ -1238,7 +1230,7 @@ describe('LookupResolver', () => {
         outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
       })
 
-      expect(mockFacilitator.lookup.mock.calls).toEqual([
+      expectLookupCalls(mockFacilitator.lookup.mock.calls, [
         [
           'https://mock.slap',
           {
@@ -1341,7 +1333,7 @@ describe('LookupResolver', () => {
         outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
       })
 
-      expect(mockFacilitator.lookup.mock.calls).toEqual([
+      expectLookupCalls(mockFacilitator.lookup.mock.calls, [
         [
           'https://mock.slap',
           {
@@ -1443,7 +1435,7 @@ describe('LookupResolver', () => {
         outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
       })
 
-      expect(mockFacilitator.lookup.mock.calls).toEqual([
+      expectLookupCalls(mockFacilitator.lookup.mock.calls, [
         [
           'https://mock.slap',
           {
@@ -1522,7 +1514,7 @@ describe('LookupResolver', () => {
         outputs: []
       })
 
-      expect(mockFacilitator.lookup.mock.calls).toEqual([
+      expectLookupCalls(mockFacilitator.lookup.mock.calls, [
         [
           'https://mock.slap',
           {
