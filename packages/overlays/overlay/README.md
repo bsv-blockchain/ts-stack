@@ -152,8 +152,12 @@ field, and the engine does not download full blocks to infer it.
 Forward sync pages now contain at most 1,000 anchors to fit the standard HTTP
 server. Proof height, requested original index, canonical hash/root, raw byte
 identity, TAC continuity, and repeated peer anchors are checked before historical
-submission. Historical mode still applies the local TopicManager and suppresses
-broadcast and propagation. Automatic BASM sync remains disabled by default.
+submission. Claimed admitted-list indices are bound to the compound path whenever
+a remote list is used as evidence, including when every remote txid is already
+local. Inclusion uses the chain tracker root/height check rather than
+`MerklePath.verify`, which also enforces coinbase 100-block spendability.
+Historical mode still applies the local TopicManager and suppresses broadcast
+and propagation. Automatic BASM sync remains disabled by default.
 
 This is bounded protocol hardening, not durable recovery. An empty local node
 whose topic genesis precedes the recent bootstrap window now refuses the

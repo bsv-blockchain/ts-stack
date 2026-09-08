@@ -94,6 +94,7 @@ function fixture() {
     transactions,
     ids,
     path,
+    root,
     submit,
     storage,
     tracker,
@@ -119,7 +120,8 @@ describe('BASM reconciliation evidence binding', () => {
       expect(callback).toBeUndefined()
       expect(mode).toBe('historical-tx')
     }
-    expect(f.tracker.isValidRootForHeight).toHaveBeenCalledTimes(2)
+    expect(f.tracker.isValidRootForHeight).toHaveBeenCalledTimes(1)
+    expect(f.tracker.isValidRootForHeight).toHaveBeenCalledWith(f.root, blockHeight)
   })
 
   it('reports stronger position validation only when a trusted count is bound to the canonical header', async () => {
@@ -336,6 +338,83 @@ describe('BASM reconciliation evidence binding', () => {
     expect(report.status).toBe('error')
     expect(report.message).toContain('TAC is inconsistent with its prefix')
     expect(f.submit).not.toHaveBeenCalled()
+  })
+
+  it('binds claimed indices to the compound path when every remote txid is already local', async () => {
+    const f = fixture()
+    f.storage.findAdmittedTransactionsForBlock.mockResolvedValue([...f.admitted])
+    f.admitted[0].blockIndex = 0
+    f.admitted[1].blockIndex = 2
+    f.anchor.basmRoot = computeBasmRoot(f.admitted)
+    f.anchor.tac = computeTac(BASM_ZERO_HASH, blockHash, f.anchor.basmRoot)
+    const [report] = await f.engine.startBASMSync()
+    expect(report.status).toBe('error')
+    expect(report.message).toContain('admitted block index')
+    expect(f.requests.some(request => request.path === '/requestCompoundMerklePath')).toBe(true)
+    expect(f.requests.some(request => request.path === '/requestRawTransactions')).toBe(false)
+    expect(f.submit).not.toHaveBeenCalled()
+  })
+
+  it('still requests a compound path before reporting local-superset divergence', async () => {
+    const f = fixture()
+    f.storage.findAdmittedTransactionsForBlock.mockResolvedValue([...f.admitted])
+    const [report] = await f.engine.startBASMSync()
+    expect(report.status).toBe('diverged')
+    expect(report.positionValidation).toBe('encoded-offset-only')
+    expect(f.requests.some(request => request.path === '/requestCompoundMerklePath')).toBe(true)
+    expect(f.requests.some(request => request.path === '/requestRawTransactions')).toBe(false)
+    expect(f.submit).not.toHaveBeenCalled()
+  })
+
+  it('accepts an admitted coinbase in a block younger than 100 confirmations', async () => {
+    const f = fixture()
+    const coinbase = new Transaction(
+      1,
+      [],
+      [{ satoshis: 50, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const txid = coinbase.id('hex')
+    const path = new MerklePath(blockHeight, [[{ offset: 0, hash: txid, txid: true }]])
+    const admitted = [{ txid, blockIndex: 0 }]
+    const anchor: TopicBlockAnchor = {
+      topic,
+      blockHeight,
+      blockHash,
+      basmRoot: txid,
+      admittedCount: 1,
+      tac: computeTac(BASM_ZERO_HASH, blockHash, txid)
+    }
+    f.tracker.currentHeight.mockResolvedValue(blockHeight + 50)
+    f.tracker.isValidRootForHeight.mockImplementation(
+      async (candidate: string, height: number) => candidate === txid && height === blockHeight
+    )
+    f.engine.topicAnchorHeaderResolver = jest.fn(async height => ({
+      blockHeight: height,
+      blockHash,
+      merkleRoot: txid
+    }))
+    f.responses['/requestTopicAnchorTip'] = anchor
+    f.responses['/requestTopicAnchorRange'] = { topic, anchors: [anchor] }
+    f.responses['/requestAdmittedList'] = { topic, blockHeight, blockHash, admitted }
+    f.responses['/requestCompoundMerklePath'] = {
+      topic,
+      blockHeight,
+      txids: [txid],
+      merklePath: path.toHex()
+    }
+    f.responses['/requestRawTransactions'] = {
+      transactions: [{ txid, rawTx: coinbase.toHex() }],
+      missing: []
+    }
+    const verify = jest.spyOn(MerklePath.prototype, 'verify')
+    const [report] = await f.engine.startBASMSync()
+    expect(report.status).toBe('advanced')
+    expect(report.fetchedTxCount).toBe(1)
+    expect(verify).not.toHaveBeenCalled()
+    expect(f.tracker.isValidRootForHeight).toHaveBeenCalledWith(txid, blockHeight)
+    expect(f.submit).toHaveBeenCalledTimes(1)
+    expect(f.tracker.currentHeight).not.toHaveBeenCalled()
   })
 
   it('reports a finite proof request limit for a block above 1000 admissions (B02 chunking required)', async () => {

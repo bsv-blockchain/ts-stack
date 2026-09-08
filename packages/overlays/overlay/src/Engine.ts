@@ -1724,6 +1724,7 @@ export class Engine {
       if (toHeight === remoteTip.blockHeight) requireBASM(previousTac === remoteTip.tac, 'BASM range differs from its tip')
       for (const remoteAnchor of range.anchors) {
         await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
+        if (report.status === 'diverged') return report
       }
 
       const finalRemoteTip = await remote.requestTopicAnchorTip()
@@ -1803,13 +1804,14 @@ export class Engine {
       .filter(txid => !localTxids.has(txid))
 
     report.missingTxids.push(...missingTxids)
+    // The BASM root only commits to txid order. Bind claimed original indices to
+    // the compound path even when every remote txid is already local.
+    const assurance = await this.fetchBASMMissingTransactions(remote, topic, remoteAnchor, admittedResponse.admitted, missingTxids)
+    if (report.positionValidation !== 'encoded-offset-only') report.positionValidation = assurance
     if (missingTxids.length === 0) {
       report.status = 'diverged'
       return
     }
-
-    const assurance = await this.fetchBASMMissingTransactions(remote, topic, remoteAnchor, admittedResponse.admitted, missingTxids)
-    if (report.positionValidation !== 'encoded-offset-only') report.positionValidation = assurance
     report.fetchedTxCount += missingTxids.length
   }
 
@@ -1839,10 +1841,16 @@ export class Engine {
       const leaf = compoundPath.path[0]?.find(item => item.hash === txid)
       requireBASM(leaf !== undefined && leaf.offset === blockIndex, 'BASM proof does not bind the admitted block index')
       requireBASM(compoundPath.path[0].length !== 1 || compoundPath.path.length !== 1 || blockIndex === 0, 'BASM singleton proof has a nonzero block index')
-      const valid = await compoundPath.verify(txid, this.chainTracker)
-      if (!valid) {
-        throw new Error(`Peer supplied invalid compound Merkle path for ${txid} at height ${anchor.blockHeight}`)
-      }
+      requireBASM(compoundPath.computeRoot(txid) === proofRoot, 'BASM proof root does not match the admitted transaction')
+    }
+    // Inclusion is root/height, not coinbase maturity. MerklePath.verify also
+    // applies the 100-block spendability rule at offset 0.
+    const valid = await this.chainTracker.isValidRootForHeight(proofRoot, compoundPath.blockHeight)
+    if (!valid) {
+      throw new Error(`Peer supplied invalid compound Merkle path at height ${anchor.blockHeight}`)
+    }
+    if (txids.length === 0) {
+      return proofHeader.blockTransactionCount === undefined ? 'encoded-offset-only' : 'canonical-count'
     }
 
     const rawResponse = await remote.requestRawTransactions(txids)

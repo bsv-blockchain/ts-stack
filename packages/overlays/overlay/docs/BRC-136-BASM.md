@@ -13,7 +13,10 @@ performs bounded forward work and refuses historical divergence or an untrusted
 bootstrap prefix. See the [current validation and recovery limits](../README.md#basm-peer-validation-and-current-recovery-limits)
 before interpreting a sync report. Optional canonical full-block counts provide
 stronger original-position evidence; header-only providers retain explicitly
-weaker evidence. Peer anchor equality is not durable or global completeness.
+weaker evidence. A remote admitted list is bound to its compound Merkle path
+even when every claimed txid is already local. Inclusion is canonical
+root/height, not coinbase maturity. Peer anchor equality is not durable or
+global completeness.
 
 ## What BRC-136 gives you
 
