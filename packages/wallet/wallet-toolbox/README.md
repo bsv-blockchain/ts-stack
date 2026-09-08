@@ -133,9 +133,17 @@ run with identical entity counts. Remote reads took 619.2 seconds, local writes
 9.8 seconds after indexed preflight lookup. These are sequential observations,
 not a controlled full-wallet comparison against upstream main. The all-state
 100 ms timer probe reported p95 delay of 908 ms; foreground focus was not recorded,
-so this does not establish foreground UI latency. Retained-backup restart and
-resume validation remains in progress. Personal deployment and wallet details
-are retained privately, outside this repository.
+so this does not establish foreground UI latency. Separate 90-second native
+foreground probes during a retained backup measured p95 delays of 5 ms for
+transactions, 8 ms for outputs, 10 ms for heavier output pages, and 5 ms for
+proof requests. Their maxima were 60, 51, 298, and 62 ms respectively; these
+samples are not a whole-copy latency guarantee. The retained-backup test also
+verified cancellation at a page boundary and automatic checkpoint recovery after
+a full native app restart. Development testing required refreshing Vite's cached
+linked dependencies to load the candidate schema consistently. See
+[PR486](https://github.com/bsv-blockchain/ts-stack/pull/486) for final integration
+completion and release evidence. Personal deployment and wallet details are
+retained privately, outside this repository.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
