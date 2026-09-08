@@ -46,7 +46,9 @@ local-primary uses local identity. An unused provider cannot stand in, and a
 missing participating identity fails closed. Built-in remote ChainTracks
 clients advertise reorg-event capability explicitly; method presence is not
 capability. `Services.getChainTracker()` publishes one coalesced wrapper
-before yielding. A remote tip equality read cannot detect an unobserved ABA
+before yielding. `BHServiceClient` always re-reads the canonical header for
+`isValidRootForHeight` and never treats a previously queried root as a reusable
+positive. A remote tip equality read cannot detect an unobserved ABA
 transition, and a token over multiple sources is not an atomic multi-source
 snapshot. Canonical roots and observed heights remain dependencies that are
 rechecked on each use, including positive-cache reuse. Existing trackers may

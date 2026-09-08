@@ -12,7 +12,8 @@ attention to changes that materially alter behavior or extend functionality.
   envelope, and explicit certificate success. C02/C03 add the exported SDK
   evidence coordinator, optional chain-provider context markers, bounded
   transaction/script work sharing, and revalidation of canonical anchors on
-  positive-cache use. Cached overlay receipts and decrypted certificates remain
+  positive-cache use. BHServiceClient always re-reads the canonical header for
+  height-root checks and does not cache a queried root as a reusable positive. Cached overlay receipts and decrypted certificates remain
   wallet-owned, bounded, and separate from local contacts and trust policy.
   Existing permission negotiation, pagination, wallet RPC shapes, and resolver
   call forms remain characterized as compatible. See [identity verification](docs/identity-verification.md)
