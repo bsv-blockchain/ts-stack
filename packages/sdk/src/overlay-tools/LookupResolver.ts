@@ -384,7 +384,7 @@ function lookupDiscoveryBound(limits: LookupLimits): LookupDiscoveryBound {
 /** In-flight discovery identity: service plus the limits that shape tracker work. */
 function lookupDiscoveryCacheKey(service: string, limits: LookupLimits): string {
   const bound = lookupDiscoveryBound(limits)
-  return JSON.stringify([
+  return stringifyBRC100([
     service,
     bound.maxHosts,
     bound.maxHostsPerTracker,

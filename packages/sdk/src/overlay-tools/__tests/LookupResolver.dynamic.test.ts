@@ -884,6 +884,49 @@ describe('LookupResolver dynamic discovery', () => {
     )
   })
 
+  it('does not coalesce in-flight discovery across distinct caller limits', async () => {
+    const tracker = 'https://inflight-key-tracker.example'
+    const host = 'https://inflight-key-host.example'
+    const service = 'ls_inflight_key'
+    const receipt = await slapReceipt(180, host, service)
+    let finishTracker: (() => void) | undefined
+    const trackerGate = new Promise<void>(resolve => {
+      finishTracker = resolve
+    })
+    const lookup = jest.fn(async (url: string) => {
+      if (url === tracker) {
+        await trackerGate
+        return { type: 'output-list' as const, outputs: [receipt] }
+      }
+      return { type: 'output-list' as const, outputs: [] }
+    })
+    const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
+    const first = resolver.query$({ service, query: { n: 1 } }, undefined, {
+      limits: { maxHosts: 1 }
+    })[Symbol.asyncIterator]()
+    const firstPending = first.next()
+    await Promise.resolve()
+    const second = resolver.query$({ service, query: { n: 2 } }, undefined, {
+      limits: { maxHosts: 2 }
+    })[Symbol.asyncIterator]()
+    const secondPending = second.next()
+    await Promise.resolve()
+
+    expect((resolver as any).hostsInFlight.size).toBe(2)
+    const keys = Array.from((resolver as any).hostsInFlight.keys()) as string[]
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).not.toEqual(keys[1])
+    expect(keys.every(key => key.includes(service))).toBe(true)
+    expect(lookup.mock.calls.filter(([url]) => url === tracker)).toHaveLength(2)
+
+    finishTracker?.()
+    await jest.runAllTimersAsync()
+    await firstPending
+    await secondPending
+    await first.return?.()
+    await second.return?.()
+  })
+
   it('throws from query() when a deadline expires before any host is admitted', async () => {
     const tracker = 'https://deadline-miss-tracker.example'
     const lookup = jest.fn(
