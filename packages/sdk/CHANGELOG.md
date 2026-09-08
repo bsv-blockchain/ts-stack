@@ -107,7 +107,7 @@ All notable changes to this project will be documented in this file. The format 
 - [1.5.3 - 2025-05-29](#153---2025-05-29)
 - [1.5.1 - 2025-05-13](#151---2025-05-13)
 - [1.5.0 - 2025-05-09](#150---2025-05-09)
-    - Hereon compatible with Metanet Mobile v0.0.1
+  - Hereon compatible with Metanet Mobile v0.0.1
 - [1.4.23 - 2025-04-29](#1423---2025-04-29)
 - [1.4.22 - 2025-04-27](#1422---2025-04-27)
 - [1.4.21 - 2025-04-13](#1421---2025-04-17)
@@ -131,7 +131,7 @@ All notable changes to this project will be documented in this file. The format 
 - [1.4.2 - 2025-03-13](#142---2025-03-13)
 - [1.4.1 - 2025-03-12](#141---2025-03-12)
 - [1.4.0 - 2025-03-10](#140---2025-03-7)
-    - Scope increase to include Identity, Storage, and Message Box client functionality
+  - Scope increase to include Identity, Storage, and Message Box client functionality
 - [1.3.36 - 2025-03-07](#1336---2025-03-7)
 - [1.3.35 - 2025-03-07](#1335---2025-03-7)
 - [1.3.34 - 2025-03-06](#1334---2025-03-6)
@@ -165,7 +165,7 @@ All notable changes to this project will be documented in this file. The format 
 - [1.3.2 - 2025-01-13](#132---2025-01-13)
 - [1.3.1 - 2025-01-13](#131---2025-01-13)
 - [1.3.0 - 2025-01-11](#130---2025-01-11)
-    - Scope increase to include [auth](./src/auth/) Mutual Authentication and Monetization Framework
+  - Scope increase to include [auth](./src/auth/) Mutual Authentication and Monetization Framework
 - [1.2.22 - 2025-01-06](#1222---2025-01-06)
 - [1.2.21 - 2025-01-03](#1221---2025-01-03)
 - [1.2.19 - 2024-12-19](#1219---2024-12-19)
@@ -187,7 +187,7 @@ All notable changes to this project will be documented in this file. The format 
 - [1.2.2 - 2024-11-26](#122---2024-11-26)
 - [1.2.1 - 2024-11-25](#121---2024-11-25)
 - [1.2.0 - 2024-11-25](#120---2024-11-25)
-    - Scope increase to include [wallet](./src/wallet/) and [overlay-tools](./src/overlay-tools/)
+  - Scope increase to include [wallet](./src/wallet/) and [overlay-tools](./src/overlay-tools/)
 - [1.1.33 - 2024-11-22](#1133---2024-11-22)
 - [1.1.32 - 2024-11-22](#1132---2024-11-22)
 - [1.1.30 - 2024-11-02](#1130---2024-11-02)
@@ -207,11 +207,11 @@ All notable changes to this project will be documented in this file. The format 
 - [1.1.5 - 2024-06-11](#115---2024-06-11)
 - [1.1.4 - 2024-05-10](#114---2024-05-10)
 - [1.1.0 - 2024-05-06](#110---2024-05-06)
-    - First changes from open source community
+  - First changes from open source community
 - [1.0.0 - 2024-02-10](#100---2024-02-10)
-    - Open Source launch
+  - Open Source launch
 - [Template for New Releases](#template-for-new-releases)
- 
+
 ## [Unreleased]
 
 - Stop late certificate work and session recovery from dispatching requests after
@@ -312,6 +312,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Use asynchronous platform SHA-256 for ProtoWallet signature payloads of at
+  least 64 KiB. Preserve deterministic signatures, direct digests, short input
+  behavior, and portable fallback over a snapshot if native hashing is unavailable
+  or fails. SDK Vite/UMD raw ceilings become 742,500 / 556,000 bytes; the dependent
+  Message Box Client UMD measures 510,540 bytes on hosted Linux and its ceiling
+  becomes 511,000 bytes. No protocol or API migration is required.
+
 - Normalize both supported `CreateActionResult` AtomicBEEF representations,
   `number[]` and Wallet Wire `Uint8Array`, into the portable byte-array form
   emitted by BRC-29 remittance settlements. Binary wallet substrates no longer
@@ -378,6 +385,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.4] - 2026-05-26
 
 ### Fixed
+
 - `Mnemonic.fromString()` now validates the input phrase at parse time and throws if it is not a
   valid BIP-39 mnemonic (unknown words, wrong length, or bad checksum). Previously the method
   accepted any string and the error only surfaced later when `toSeed()` was called.
@@ -387,10 +395,12 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.3] - 2026-05-23
 
 ### Added
+
 - Opt-in `AsyncSessionManager` for auth peers that need async session-store backends; the default
   `SessionManager` remains sync so existing callers are unaffected.
 
 ### Changed
+
 - `AbortActionResult.aborted` is now typed `boolean` (was the literal `true`). Wallets implementing
   the BRC-100 interface may return `aborted: false` when they refuse to abort an action because the
   underlying transaction is positively confirmed on chain. Recommended caller follow-up is
@@ -403,6 +413,7 @@ All notable changes to this project will be documented in this file. The format 
   tolerant).
 
 ### Fixed
+
 - Coinbase transaction validation condition + added immature/mature coinbase spend test cases.
 - `stringifyErrorValue` no longer wraps unknown branches in `String()` (S6551); added branch
   coverage for lookup error normalisation.
@@ -412,6 +423,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.2] - 2026-05-20
 
 ### Changed
+
 - Refactored `HTTPSOverlayLookupFacilitator.lookup` + `mergeAnswer` (extracted
   `parseOctetStreamLookup`, `extractAtomicOutputs`, `resolveTxIdForOutput`) to bring cognitive
   complexity under Sonar's 15-line threshold.
@@ -420,10 +432,12 @@ All notable changes to this project will be documented in this file. The format 
 - `LookupResolver`: drop unnecessary `LookupAnswer` cast in `lookupHostWithTracking`.
 
 ### Removed
+
 - `debug/profiler.ts` and all `plog`/`pstart` instrumentation — the RN perf work is done and the
   spans were a development aid, not part of the public API.
 
 ### Added
+
 - `IdentityClient` branch coverage: contacts-miss paths, parallel hit/miss, legacy boolean opt-in,
   `overrideWithContacts` precedence, `parseIdentities` batched path, `scheduler.yield` fallback.
   Line coverage now 99.5%.
@@ -433,6 +447,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.1] - 2026-05-17
 
 ### Added
+
 - `LookupResolver.query()` accepts an optional `LookupQueryOptions` argument with two new knobs:
   `graceMs` (override the per-call grace window between the first responder and resolution; default
   still 80 ms) and `softTimeoutMs` (resolve early with whatever has arrived once any host has
@@ -447,6 +462,7 @@ All notable changes to this project will be documented in this file. The format 
   overlay answer alongside the contact record is required.
 
 ### Changed
+
 - `HTTPSOverlayLookupFacilitator.lookup()` default per-host timeout dropped from 5 s to 2 s. Real
   user-abandonment threshold is ~2 s; hosts that can't beat it add latency we never collect on.
 - `IdentityClient.resolveByIdentityKey` / `resolveByAttributes` now short-circuit on a contacts hit
@@ -458,6 +474,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.1.0] - 2026-05-04
 
 ### Changed
+
 - Published `@bsv/sdk` from the `ts-stack` monorepo release workflow for the first time.
 
 ---
@@ -465,10 +482,12 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.14] - 2026-04-22
 
 ### Added
+
 - Added multi-provider storage uploads with `DEFAULT_UHRP_SERVERS`, configurable `resilienceLevel`, and public `StorageUploader.estimateCost()` quote previews.
 - Added `RenewResiliencyError` to surface partial per-host renewal outcomes when a multi-host renewal does not meet the required resilience threshold.
 
 ### Changed
+
 - Updated `StorageUploader.publishFile()` to collect bounded cheapest-first quotes and upload to the cheapest hosts until the resilience target is met.
 - Updated storage lookup, listing, and renewal flows to support host-scoped multi-host management for resilient uploads.
 
@@ -477,6 +496,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.13] - 2026-03-19
 
 ### Added
+
 - `MerklePath.extract(txids: string[]): MerklePath` — given a compound `MerklePath` (e.g. a full-block path with all txids at level 0, or any trimmed compound path), extracts a minimal compound proof covering only the requested transaction IDs.
   - For each txid the method walks every tree level and reconstructs the required sibling hashes using `findOrComputeLeaf`, correctly handling odd-level Bitcoin Merkle duplication at every height.
   - The resulting per-txid proofs are combined with `combine()` (which also calls `trim()`) into a single compact compound path.
@@ -489,12 +509,14 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.10] - 2026-03-17
 
 ### Fixed
+
 - **OP_RIGHT** (0xb5): Fixed incorrect slice — `buf.slice(size - len, len)` was returning the wrong bytes; corrected to `buf.slice(size - len)` to match the node's `data.shrink(size-len, len)`.
 - **OP_VER** (0x62): Changed encoding from script-number to 4-byte little-endian, matching the node's `to_le(tx_version, val.data())`.
 - **OP_VERIF / OP_VERNOTIF** (0x65, 0x66): Updated version comparison to use 4-byte little-endian encoding (matches only when the stack item is exactly 4 bytes), consistent with the node's Chronicle-era implementation.
 - Removed OP_NOP11–OP_NOP77 from the interpreter's NOP handler; in node v1.2.0 opcodes >= `FIRST_UNDEFINED_OP_VALUE` (0xba) return `SCRIPT_ERR_BAD_OPCODE`. These byte values are retained in `OP.ts` solely for ASM serialisation round-trips.
 
 ### Added
+
 - Canonical opcode alias names from node v1.2.0: `OP_CHECKLOCKTIMEVERIFY` (0xb1), `OP_CHECKSEQUENCEVERIFY` (0xb2), plus Chronicle-restored aliases `OP_SUBSTR` (0xb3), `OP_LEFT` (0xb4), `OP_RIGHT` (0xb5), `OP_LSHIFTNUM` (0xb6), `OP_RSHIFTNUM` (0xb7).
 - `ChronicleOpcodes.test.ts` — 74 new tests based on the [bitcoin-sv node v1.2.0 chronicle_upgrade_tests](https://github.com/bitcoin-sv/bitcoin-sv/tree/172c8fa38cce30cf4df0327b33c7418ea6289de8/test/functional/chronicle_upgrade_tests) covering:
   - OP_VER 4-byte LE encoding and version matching
@@ -510,9 +532,11 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.9] - 2026-03-16
 
 ### Added
+
 - `Transaction.preimage()` method — returns the sighash preimage for a given input index, signature scope (default `SIGHASH_FORKID | SIGHASH_ALL`), and optional subscript.
 
 ### Fixed
+
 - `TransactionSignature` was not exported as a default export, causing incorrect named-import usage in `Spend.ts` and downstream consumers; corrected to `export default class TransactionSignature`.
 - Export `SignatureHashCache` type from `primitives/index.ts` so consumers can reference it without reaching into internals.
 
@@ -521,6 +545,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.8] - 2026-03-16
 
 ### Fixed
+
 - Added explicit `type` import for `WalletInterface`, `DescriptionString5to50Bytes`, and `CreateActionOptions` in `Transaction.ts` to prevent downstream TypeScript build errors when consuming `@bsv/sdk` (e.g. from `@bsv/wallet`).
 - Fixed `MockWallet` class in `Transaction.test.ts` that used an invalid `implements Partial<WalletInterface>` clause, causing type errors under strict compilation. Replaced with `as unknown as WalletInterface` casts at call sites.
 
@@ -529,6 +554,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [2.0.7] - 2026-03-10
 
 ### Fixed
+
 - `OP_LSHIFT` in the `Spend` script interpreter now correctly truncates the result to the original operand's byte length by masking off overflow MSBs, preventing incorrect stack values when shifts produce more bytes than the input (e.g. `0x6A09E667 << 30` now yields `0xC0000000` instead of overflowing to 8 bytes).
 
 ---
@@ -544,6 +570,7 @@ output tag normalization across createAction and listOutputs.
 ## [2.0.5] - 2026-02-27
 
 ### Fixed
+
 - LookupResolver: Reduced the post-first-response grace window for overlay host aggregation from 200ms to 80ms to improve lookup latency.
 - Overlay lookup path: Removed remaining fixed post-first-response delay bottlenecks; only request timeouts and host backoff remain.
 
@@ -552,6 +579,7 @@ output tag normalization across createAction and listOutputs.
 ## [2.0.4] - 2026-02-17
 
 ### Fixed
+
 - Fix authenticated requests hanging on stale sessions — `Peer.handleIncomingMessage` no longer swallows errors, allowing proper HTTP error responses and client-side recovery.
 - Tighten `AuthFetch` retry to HTTP 401 only (was `< 500`), preventing unsafe retries of non-idempotent requests after 500 errors.
 - Skip sending empty `certificateResponse` messages that raced with `certificateRequest` on the same nonce key, corrupting server-side handle routing.
@@ -563,6 +591,7 @@ output tag normalization across createAction and listOutputs.
 ## [2.0.3] - 2026-02-12
 
 ### Changed
+
 - LookupResolver: First-responder SLAP resolution — resolve as soon as any tracker returns valid hosts
 - LookupResolver: Grace window (200ms) for host queries — prevents slow hosts from blocking lookups
 - ContactsManager: Parallelized `wallet.decrypt` calls via `Promise.allSettled`
@@ -574,6 +603,7 @@ output tag normalization across createAction and listOutputs.
 ## [2.0.2] - 2026-02-09
 
 ### Changed
+
 - Prioritize Cicada over JSON substrate in WalletClient.
 
 ---
@@ -581,6 +611,7 @@ output tag normalization across createAction and listOutputs.
 ## [2.0.1] - 2026-02-04
 
 ### Changed
+
 - Optimized `Script.findAndDelete` to avoid per-chunk script serialization.
 - Expanded `findAndDelete` benchmarks to cover mixed scripts with varied sizes and match ratios.
 - Added tests for `findAndDelete` covering repeated matches, `OP_RETURN` data, and `PUSHDATA2` payloads.
@@ -653,6 +684,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.31] - 2025-12-29
 
 ### Security
+
 - Documented the use of table-based AES and AES-GCM implementations and their associated cache-timing considerations as part of a TOB-5 security review.
 - Clarified that applications requiring strict side-channel resistance should use platform-native cryptography APIs or vetted constant-time libraries.
 
@@ -661,38 +693,47 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.30] - 2025-12-18
 
 ### Added
+
 - Added constant-time scalar multiplication (`mulCT`) for elliptic curve points.
 - Added comprehensive unit tests for constant-time scalar multiplication, including generator and non-generator points, negative scalars, and edge cases.
 - Expanded test coverage across Point, ECDSA, PublicKey, and PrivateKey to validate correctness and edge-case behavior.
 
 ### Changed
+
 - Updated ECDSA signing to use constant-time scalar multiplication internally.
 - Refactored elliptic curve scalar multiplication internals to improve timing consistency without changing public APIs.
 
 ### Fixed
+
 - Fixed incorrect handling of negative scalars during BigInt conversion in scalar multiplication.
 - Corrected discrepancies between constant-time and variable-time scalar multiplication results.
 - Ensured scalar multiplication by zero and point-at-infinity cases behave correctly and consistently.
 
 ### Security
+
 - Reduced timing side-channel risk in elliptic curve scalar multiplication paths by introducing constant-time algorithms (TOB-4).
 
 ---
 
 ## [1.9.29] - 2025-12-12
+
 ### Added
+
 - Introduced constantTimeEquals() utility for timing-safe byte comparisons.
 - Added new unit tests covering constant-time comparison behavior, TOTP validation paths, and ProtoWallet HMAC verification.
 
 ### Changed
+
 - Updated TOTP validation logic to compare passcodes using constant-time comparison.
 - Updated ProtoWallet HMAC verification to avoid string comparison and instead use constant-time byte comparison.
 
 ### Fixed
+
 - Ensured incorrect but same-length HMACs correctly fail validation through secure comparison logic.
 - Fixed timing-side-channel vulnerability (TOB-8) where secrets and HMAC outputs were previously compared using ===.
 
 ### Security
+
 - Hardened TOTP and HMAC verification paths against timing attacks by replacing all secret-derived comparisons with constant-time equivalents.
 
 ---
@@ -700,13 +741,16 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.28] - 2025-12-11
 
 ### Added
+
 - Add getBytes64 helper for 64-bit length fields.
 - Added long ciphertext test case.
 
 ### Changed
+
 - Changed AESGCM to use Uint8Arrays instead of number[] for all inputs and outputs for optimization.
 
 ### Fixed
+
 - Use 64-bit length encoding for GHASH inputs.
 
 ---
@@ -714,6 +758,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.27] - 2025-12-11
 
 ### Fixed
+
 - Addressed TOB-24: hardened elliptic-curve point validation across `fromDER`, `fromX`, and `fromJSON`.
 - Added bigint-secure curve equation checking to `Point.validate()`.
 - Fixed modular sqrt and pow logic (`biModSqrt`, `biModPow`) to correctly detect invalid X coordinates.
@@ -725,6 +770,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.26] - 2025-12-10
 
 ### Security
+
 - Addressed TOB-25 by adding explicit ECDSA and elliptic-curve regression tests
   ensuring correct propagation and handling of the point at infinity during
   scalar multiplication and signature verification.
@@ -736,9 +782,11 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.25] - 2025-12-09
 
 ### Added
+
 - Documentation disclaimer for our specific AESGCM implementation of padding for additional authenticated data (AAD) and ciphertext.
 
 ### Removed
+
 - Removed support for additional authenticated data (AAD) padding in AESGCM.
 
 ---
@@ -746,20 +794,23 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.24] - 2025-12-09
 
 ### Fixed
+
 - Addressed TOB-20: clarified and corrected byte-order helper behavior in
-  `Hash.ts`.  
+  `Hash.ts`.
   - The original `htonl()` implementation (a byte-swap) is now formally
-    exposed as `swapBytes32()` for clarity.  
+    exposed as `swapBytes32()` for clarity.
   - Introduced `realHtonl()`, which applies true host-to-network conversion
-    based on runtime endianness.  
-  - Added `isHostLittleEndian` export to ensure deterministic behavior and 
+    based on runtime endianness.
+  - Added `isHostLittleEndian` export to ensure deterministic behavior and
     allow complete test coverage.
 
 ### Added
+
 - Comprehensive unit tests for `swapBytes32()`, `realHtonl()`, and all
   32-bit edge cases, including simulated big-endian environments.
 
 ### Security
+
 - TOB-20 remediation ensures byte-order correctness for PBKDF2, SHA-family
   padding, and any future code paths relying on word-level endian handling.
 
@@ -768,6 +819,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.23] - 2025-12-08
 
 ### Fixed
+
 - Implemented strict infinity normalization for JacobianPoint, ensuring
   all infinity representations (`null`, `"0"`, or BigNumber(0)) are treated
   canonically and compare equal (TOB-18).
@@ -776,10 +828,11 @@ output tag normalization across createAction and listOutputs.
   of triggering internal assertions when coordinates are null.
 
 ### Security
+
 - Addressed TOB-18 and TOB-19: eliminated assertion failures and ensured
   standards-compliant behavior for malformed or edge-case elliptic curve
   point objects.
-  
+
 ---
 
 ### [1.9.22] - 2025-12-04
@@ -803,9 +856,9 @@ output tag normalization across createAction and listOutputs.
 ### Fixed
 
 - Rewrote the `toArray` and `hexToArray` conversion logic to enforce strict
-  hexadecimal input handling rather than permissive filtering.  
+  hexadecimal input handling rather than permissive filtering.
 - Corrected UTF-8 decoding behavior to ensure invalid byte sequences produce
-  a single `U+FFFD` replacement character as specified.  
+  a single `U+FFFD` replacement character as specified.
 - Updated all internal hash and array conversion utilities to maintain consistent
   behavior with strong input validation.
 
@@ -905,7 +958,6 @@ output tag normalization across createAction and listOutputs.
 
 - Removed dependency on react-native-get-random-values polyfill from Random.ts
 
-
 ---
 
 ### [1.9.10] - 2025-11-17
@@ -994,7 +1046,6 @@ output tag normalization across createAction and listOutputs.
 - These changes are not intended to be breaking, but a minor version increment is performed out of an abundance of caution
 
 ---
-
 
 ### [1.8.13] - 2025-11-06
 
@@ -1111,13 +1162,11 @@ output tag normalization across createAction and listOutputs.
 
 ---
 
-
 ### [1.7.8] - 2025-10-02
 
 ### Added
 
 - **LivePolicy fee model**: New dynamic fee model that fetches current rates from ARC GorillaPool API (`https://arc.gorillapool.io/v1/policy`) with intelligent caching and fallback mechanisms
-
 
 ---
 
@@ -1233,38 +1282,47 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.30] - 2025-12-18
 
 ### Added
+
 - Added constant-time scalar multiplication (`mulCT`) for elliptic curve points.
 - Added comprehensive unit tests for constant-time scalar multiplication, including generator and non-generator points, negative scalars, and edge cases.
 - Expanded test coverage across Point, ECDSA, PublicKey, and PrivateKey to validate correctness and edge-case behavior.
 
 ### Changed
+
 - Updated ECDSA signing to use constant-time scalar multiplication internally.
 - Refactored elliptic curve scalar multiplication internals to improve timing consistency without changing public APIs.
 
 ### Fixed
+
 - Fixed incorrect handling of negative scalars during BigInt conversion in scalar multiplication.
 - Corrected discrepancies between constant-time and variable-time scalar multiplication results.
 - Ensured scalar multiplication by zero and point-at-infinity cases behave correctly and consistently.
 
 ### Security
+
 - Reduced timing side-channel risk in elliptic curve scalar multiplication paths by introducing constant-time algorithms (TOB-4).
 
 ---
 
 ## [1.9.29] - 2025-12-12
+
 ### Added
+
 - Introduced constantTimeEquals() utility for timing-safe byte comparisons.
 - Added new unit tests covering constant-time comparison behavior, TOTP validation paths, and ProtoWallet HMAC verification.
 
 ### Changed
+
 - Updated TOTP validation logic to compare passcodes using constant-time comparison.
 - Updated ProtoWallet HMAC verification to avoid string comparison and instead use constant-time byte comparison.
 
 ### Fixed
+
 - Ensured incorrect but same-length HMACs correctly fail validation through secure comparison logic.
 - Fixed timing-side-channel vulnerability (TOB-8) where secrets and HMAC outputs were previously compared using ===.
 
 ### Security
+
 - Hardened TOTP and HMAC verification paths against timing attacks by replacing all secret-derived comparisons with constant-time equivalents.
 
 ---
@@ -1272,13 +1330,16 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.28] - 2025-12-11
 
 ### Added
+
 - Add getBytes64 helper for 64-bit length fields.
 - Added long ciphertext test case.
 
 ### Changed
+
 - Changed AESGCM to use Uint8Arrays instead of number[] for all inputs and outputs for optimization.
 
 ### Fixed
+
 - Use 64-bit length encoding for GHASH inputs.
 
 ---
@@ -1286,6 +1347,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.27] - 2025-12-11
 
 ### Fixed
+
 - Addressed TOB-24: hardened elliptic-curve point validation across `fromDER`, `fromX`, and `fromJSON`.
 - Added bigint-secure curve equation checking to `Point.validate()`.
 - Fixed modular sqrt and pow logic (`biModSqrt`, `biModPow`) to correctly detect invalid X coordinates.
@@ -1297,6 +1359,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.26] - 2025-12-10
 
 ### Security
+
 - Addressed TOB-25 by adding explicit ECDSA and elliptic-curve regression tests
   ensuring correct propagation and handling of the point at infinity during
   scalar multiplication and signature verification.
@@ -1308,9 +1371,11 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.25] - 2025-12-09
 
 ### Added
+
 - Documentation disclaimer for our specific AESGCM implementation of padding for additional authenticated data (AAD) and ciphertext.
 
 ### Removed
+
 - Removed support for additional authenticated data (AAD) padding in AESGCM.
 
 ---
@@ -1318,20 +1383,23 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.24] - 2025-12-09
 
 ### Fixed
+
 - Addressed TOB-20: clarified and corrected byte-order helper behavior in
-  `Hash.ts`.  
+  `Hash.ts`.
   - The original `htonl()` implementation (a byte-swap) is now formally
-    exposed as `swapBytes32()` for clarity.  
+    exposed as `swapBytes32()` for clarity.
   - Introduced `realHtonl()`, which applies true host-to-network conversion
-    based on runtime endianness.  
-  - Added `isHostLittleEndian` export to ensure deterministic behavior and 
+    based on runtime endianness.
+  - Added `isHostLittleEndian` export to ensure deterministic behavior and
     allow complete test coverage.
 
 ### Added
+
 - Comprehensive unit tests for `swapBytes32()`, `realHtonl()`, and all
   32-bit edge cases, including simulated big-endian environments.
 
 ### Security
+
 - TOB-20 remediation ensures byte-order correctness for PBKDF2, SHA-family
   padding, and any future code paths relying on word-level endian handling.
 
@@ -1340,6 +1408,7 @@ output tag normalization across createAction and listOutputs.
 ## [1.9.23] - 2025-12-08
 
 ### Fixed
+
 - Implemented strict infinity normalization for JacobianPoint, ensuring
   all infinity representations (`null`, `"0"`, or BigNumber(0)) are treated
   canonically and compare equal (TOB-18).
@@ -1348,10 +1417,11 @@ output tag normalization across createAction and listOutputs.
   of triggering internal assertions when coordinates are null.
 
 ### Security
+
 - Addressed TOB-18 and TOB-19: eliminated assertion failures and ensured
   standards-compliant behavior for malformed or edge-case elliptic curve
   point objects.
-  
+
 ---
 
 ### [1.9.22] - 2025-12-04
@@ -1375,9 +1445,9 @@ output tag normalization across createAction and listOutputs.
 ### Fixed
 
 - Rewrote the `toArray` and `hexToArray` conversion logic to enforce strict
-  hexadecimal input handling rather than permissive filtering.  
+  hexadecimal input handling rather than permissive filtering.
 - Corrected UTF-8 decoding behavior to ensure invalid byte sequences produce
-  a single `U+FFFD` replacement character as specified.  
+  a single `U+FFFD` replacement character as specified.
 - Updated all internal hash and array conversion utilities to maintain consistent
   behavior with strong input validation.
 
@@ -1477,7 +1547,6 @@ output tag normalization across createAction and listOutputs.
 
 - Removed dependency on react-native-get-random-values polyfill from Random.ts
 
-
 ---
 
 ### [1.9.10] - 2025-11-17
@@ -1566,7 +1635,6 @@ output tag normalization across createAction and listOutputs.
 - These changes are not intended to be breaking, but a minor version increment is performed out of an abundance of caution
 
 ---
-
 
 ### [1.8.13] - 2025-11-06
 
@@ -1683,13 +1751,11 @@ output tag normalization across createAction and listOutputs.
 
 ---
 
-
 ### [1.7.8] - 2025-10-02
 
 ### Added
 
 - **LivePolicy fee model**: New dynamic fee model that fetches current rates from ARC GorillaPool API (`https://arc.gorillapool.io/v1/policy`) with intelligent caching and fallback mechanisms
-
 
 ---
 
@@ -2506,7 +2572,7 @@ Changes to cleanup and normalize types in Wallet.interfaces.ts and dependent fil
 - WalletWireTranceiver.ts
 - XDM.ts
 - window.CWI.ts
-  
+
 ### Added
 
 - WalletCrypto.ts: Pulled out of ProtoWallet for reuse as a base class.
@@ -2918,15 +2984,18 @@ TOTP class which allows the generation of time based pass codes. Use varies but 
 ### Added
 
 - Ability to create TransactionInputs from a utxo, creating a partial sourceTransaction.
-Use is like so:
+  Use is like so:
 
 ```javascript
-const input = fromUtxo({
+const input = fromUtxo(
+  {
     txid: '434555433eaca96dff6e71a4d02febd0dd3832e5ca4e5734623ca914522e17d5',
     vout: 0,
     script: '76a914d01b0b702ee90e00944342f97c772a8be83e42a288ac',
     satoshis: 1234
-}, new P2PKH().unlock(key))
+  },
+  new P2PKH().unlock(key)
+)
 
 tx.addInput(input)
 ```
@@ -2934,7 +3003,9 @@ tx.addInput(input)
 - Ability to create a transaction from Extended Format bytes or hex. The result being a partial sourceTransaction in each input.
 
 ```javascript
-const tx = Transaction.fromHexEF('020000000000000000ef01b2faffe1e1d3c88f4092f34646c060ea2b6a93acc3010484c747ed4c051c2555080000006a4730440220392bcec91f190ce38db9bf53d03886ab63d9bd24fcf7174e8a8df21d23382ba7022038f20c1f3f6583951d01af0be30612a6c0b46d949b4aae60f42644ce513f3e55412103ea0ff49ec6fbb9cbc942d9c1fce9c04e12a91c1209b239466e0a29147da55db1ffffffff01f45500000000001976a914de337957f543c8d1fad2cfff0b57bb5b4264d91788ac0390010000000000001976a9144d255baa50a14bef4cce1eb8012a02768e8ffaa888acd3600000000000001976a91447e22d8011bb446cc3f606179e333f64a9b6206b88ac04915500000000001976a914d24cb016397008a85c88b1278a36434fdd4e801f88ac00000000')
+const tx = Transaction.fromHexEF(
+  '020000000000000000ef01b2faffe1e1d3c88f4092f34646c060ea2b6a93acc3010484c747ed4c051c2555080000006a4730440220392bcec91f190ce38db9bf53d03886ab63d9bd24fcf7174e8a8df21d23382ba7022038f20c1f3f6583951d01af0be30612a6c0b46d949b4aae60f42644ce513f3e55412103ea0ff49ec6fbb9cbc942d9c1fce9c04e12a91c1209b239466e0a29147da55db1ffffffff01f45500000000001976a914de337957f543c8d1fad2cfff0b57bb5b4264d91788ac0390010000000000001976a9144d255baa50a14bef4cce1eb8012a02768e8ffaa888acd3600000000000001976a91447e22d8011bb446cc3f606179e333f64a9b6206b88ac04915500000000001976a914d24cb016397008a85c88b1278a36434fdd4e801f88ac00000000'
+)
 ```
 
 ### Removed
@@ -3011,22 +3082,22 @@ Replace `X.X.X` with the new version number and `YYYY-MM-DD` with the release da
 ## [X.X.X] - YYYY-MM-DD
 
 ### Added
-- 
+-
 
 ### Changed
-- 
+-
 
 ### Deprecated
-- 
+-
 
 ### Removed
-- 
+-
 
 ### Fixed
-- 
+-
 
 ### Security
-- 
+-
 ```
 
 Use this template as the starting point for each new version. Always update the "Unreleased" section with changes as they're implemented, and then move them under the new version header when that version is released.

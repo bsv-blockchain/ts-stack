@@ -83,6 +83,11 @@ function isSyncChunkResponseTooLarge (error: unknown): boolean {
   return error instanceof Error && /WalletStorageClient rpcCall: network error 413(?:\s|$)/.test(error.message)
 }
 
+type RemoteStorageSettings = TableSettings & {
+  /** Runtime-only RPC advertisement, not a persisted settings-table column. */
+  syncCheckpointVersion?: 1
+}
+
 export interface StorageClientOptions {
   /**
    * Send compact tagged binary request values after the server advertises
@@ -114,7 +119,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   private syncChunkRoughSizeLimit?: number
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
-  public settings?: TableSettings
+  public settings?: RemoteStorageSettings
 
   constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     this.authClient = new AuthFetch(wallet)
@@ -195,7 +200,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns remote storage `TableSettings` if they have been retreived by `makeAvailable`.
    * @throws WERR_INVALID_OPERATION if `makeAvailable` has not yet been called.
    */
-  getSettings(): TableSettings {
+  getSettings(): RemoteStorageSettings {
     if (this.settings == null) {
       throw new WERR_INVALID_OPERATION('call makeAvailable at least once before getSettings')
     }
@@ -207,8 +212,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * Retreives `TableSettings` from remote storage provider.
    * @returns remote storage `TableSettings`
    */
-  async makeAvailable(): Promise<TableSettings> {
-    this.settings ??= await this.rpcCall<TableSettings>('makeAvailable', [])
+  async makeAvailable(): Promise<RemoteStorageSettings> {
+    this.settings ??= await this.rpcCall<RemoteStorageSettings>('makeAvailable', [])
     return this.settings
   }
 

@@ -125,6 +125,18 @@ interruption/resume, user isolation, malformed checkpoints, and legacy-provider
 fallback. Live deployment results must be reported separately with the tested
 revision and scope; a partial page sample is not a full restore verification.
 
+A native desktop integration run against candidate runtime
+`a88d18abf14b75a3227016bfd947d5a08b3ee236` completed a full remote-to-local
+copy in 769.5 seconds, compared with 990.3 seconds for the preceding candidate
+run with identical entity counts. Remote reads took 619.2 seconds, local writes
+146.0 seconds, and measurement 4.1 seconds. Proof-page writes fell from 75.7 to
+9.8 seconds after indexed preflight lookup. These are sequential observations,
+not a controlled full-wallet comparison against upstream main. The all-state
+100 ms timer probe reported p95 delay of 908 ms; foreground focus was not recorded,
+so this does not establish foreground UI latency. Retained-backup restart and
+resume validation remains in progress. Personal deployment and wallet details
+are retained privately, outside this repository.
+
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.

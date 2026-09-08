@@ -32,8 +32,8 @@ attention to changes that materially alter behavior or extend functionality.
   1,753,648 / 445,136 / 345,369 (Metro), and
   3,557,663 / 1,426,740 / 1,121,821 (Hermes). The raw ceilings become
   1,702,000, 1,327,500, 1,755,000, and 3,558,500 respectively.
-  Vite and esbuild gzip ceilings increase to 402,000 and 365,750 bytes.
-  Hosted Linux measures 365,484 esbuild gzip bytes and 1,445,624 Hermes gzip
+  Vite and esbuild gzip ceilings increase to 402,000 and 366,000 bytes.
+  Hosted Linux measures 365,818 esbuild gzip bytes and 1,445,624 Hermes gzip
   bytes; the Hermes gzip ceiling becomes 1,446,500.
   The esbuild Brotli ceiling is 293,750 bytes. Asynchronous platform hashing
   for large SDK signature payloads brings the Vite Brotli ceiling to 314,500

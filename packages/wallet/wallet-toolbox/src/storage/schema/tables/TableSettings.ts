@@ -13,7 +13,5 @@ export interface TableSettings extends sdk.StorageIdentity, sdk.EntityTimeStamp 
   storageName: string
   chain: sdk.Chain
   dbtype: 'SQLite' | 'MySQL' | 'IndexedDB'
-  /** Runtime-only RPC capability advertisement; never persisted as a settings column. */
-  syncCheckpointVersion?: 1
   maxOutputScript: number
 }
