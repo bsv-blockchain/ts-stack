@@ -27,10 +27,15 @@ attention to changes that materially alter behavior or extend functionality.
   bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
   esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and
   3,542,034 raw / 1,419,515 gzip / 1,117,531 Brotli bytes as optimized Hermes
-  bytecode; hosted Linux measures 1,439,166 gzip bytes. Bundle ceilings are
-  updated separately in `platform-budget.json` to reflect measurements that
-  include both this change and the interrupted-registration recovery path
-  above.
+  bytecode; hosted Linux measures 1,439,166 gzip bytes. Combined with the
+  interrupted-registration recovery path above, current measurements are
+  1,694,823 raw / 399,940 gzip / 312,528 Brotli bytes with Vite, 1,322,223 raw
+  / 364,260 gzip / 291,914 Brotli bytes with esbuild, 1,749,694 raw / 443,665
+  gzip / 344,059 Brotli bytes with Metro, and 3,549,495 raw / 1,441,622 gzip /
+  1,119,600 Brotli bytes as optimized Hermes bytecode. The reviewed ceilings
+  advance to 1,697,000 raw / 400,000 gzip Vite bytes, 1,324,000 raw / 365,000
+  gzip esbuild bytes, 1,752,000 raw Metro bytes, and 3,552,000 raw / 1,442,000
+  gzip Hermes bytes; Brotli ceilings remain unchanged.
 
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result
