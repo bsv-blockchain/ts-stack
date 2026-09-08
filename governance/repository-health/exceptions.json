@@ -144,6 +144,21 @@
       "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {
+      "id": "js-yaml-jest-istanbul-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml and infra/wab/package.json overrides for js-yaml releases below 3.15.2",
+      "owner": "ts-stack-maintainers",
+      "reason": "Jest's istanbul reporting chain (@istanbuljs/load-nyc-config, ts-jest, jsdom, webpack-cli) still resolves js-yaml 3.15.1, affected by GHSA-2883-xcg3-v3hh (maxTotalMergeKeys does not limit CPU use for empty merge sources). The patched 3.x line is 3.15.2 and later; selecting 3.15.2 is the narrowest compatible remediation and leaves the public YAML parsing API unchanged. The standalone WAB server resolves the same transitive chain independently through npm and needs its own override.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "infra/wab/package.json#overrides",
+        "https://github.com/advisories/GHSA-2883-xcg3-v3hh"
+      ],
+      "created": "2026-09-08",
+      "reviewBy": "2026-10-08",
+      "removeWhen": "Remove when Jest's istanbul reporting chain and the WAB server's transitive graph naturally resolve js-yaml 3.15.2 or newer and the frozen audit remains green."
+    },
+    {
       "id": "nanoid-postcss-advisory-override",
       "category": "override",
       "target": "pnpm-workspace.yaml override nanoid releases below 3.3.18",
