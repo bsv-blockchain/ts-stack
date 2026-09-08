@@ -134,6 +134,12 @@ export function parseKnownTxidsHeader(headerValue: string | null): string[] | un
  *
  * Additionally, it automatically handles 402 Payment Required responses by creating
  * and sending BSV payment transactions when necessary.
+ * Recipients may advertise already-validated ancestors through the optional
+ * `x-bsv-payment-known-txids` response header. Up to 256 unique, valid lowercase
+ * transaction IDs are forwarded to wallet `createAction` options, including
+ * newly created payments after repricing. An absent or invalid-only header
+ * preserves existing payment creation behavior.
+ * The header is an optional SDK extension, not a standardized BRC-105 header.
  */
 export class AuthFetch {
   private readonly sessionManager: SessionManager

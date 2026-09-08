@@ -322,7 +322,7 @@
     "@bsv/overlay-discovery-services": "2.2.1",
     "@bsv/overlay-express": "2.6.1",
     "@bsv/overlay-topics": "1.7.1",
-    "@bsv/sdk": "2.4.2",
+    "@bsv/sdk": "2.5.0",
     "@bsv/verifast": "0.3.5",
     "@bsv/btms": "1.2.2",
     "@bsv/btms-permission-module": "1.1.4",
