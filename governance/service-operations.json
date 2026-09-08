@@ -477,7 +477,8 @@
           "TWILIO_VERIFY_SERVICE_SID",
           "WAB_ADMIN_RATE_LIMIT_MAX",
           "WAB_ADMIN_RATE_LIMIT_WINDOW_MS",
-          "WAB_ADMIN_TOKEN"
+          "WAB_ADMIN_TOKEN",
+          "WAB_DEMO_AUTH_SECRET"
         ],
         "secrets": [
           "DB_PASS",
@@ -485,7 +486,8 @@
           "SERVER_PRIVATE_KEY",
           "SHARE_ENCRYPTION_KEY",
           "TWILIO_AUTH_TOKEN",
-          "WAB_ADMIN_TOKEN"
+          "WAB_ADMIN_TOKEN",
+          "WAB_DEMO_AUTH_SECRET"
         ]
       },
       "observability": {

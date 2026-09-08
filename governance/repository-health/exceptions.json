@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-04",
+  "lastReviewed": "2026-08-24",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -92,24 +92,6 @@
       "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
     },
     {
-      "id": "fast-uri-ajv-advisory-override",
-      "category": "override",
-      "target": "pnpm-workspace.yaml override fast-uri releases below 3.1.7",
-      "owner": "ts-stack-maintainers",
-      "reason": "The workspace's current Stryker graph resolves AJV 8.18.0, whose compatible fast-uri range selected 3.1.5. That release is affected by four host-confusion and SSRF advisories fixed in 3.1.6; selecting the current 3.1.7 patch is the narrowest compatible remediation and affects development tooling only.",
-      "evidence": [
-        "pnpm-workspace.yaml#overrides",
-        "pnpm-lock.yaml#overrides",
-        "https://github.com/advisories/GHSA-5jgf-p345-68v8",
-        "https://github.com/advisories/GHSA-f65p-4m7j-42xc",
-        "https://github.com/advisories/GHSA-fph4-wmhf-6fwf",
-        "https://github.com/advisories/GHSA-jqff-g426-hqxp"
-      ],
-      "created": "2026-09-04",
-      "reviewBy": "2026-10-04",
-      "removeWhen": "Remove when the supported Stryker and AJV dependency graph naturally resolves fast-uri 3.1.7 or newer and the frozen audit remains green."
-    },
-    {
       "id": "standalone-gaxios-advisory-override",
       "category": "override",
       "target": "All seven standalone service manifests and the cloud-bucket notifier override transitive gaxios 6.x/7.1.3 with 7.3.0",
@@ -176,20 +158,22 @@
       "removeWhen": "Remove when the supported Vite and PostCSS dependency graph naturally resolves nanoid 3.3.18 or newer and the frozen audit remains green."
     },
     {
-      "id": "remark-mdx-frontmatter-toml-override",
+      "id": "toml-frontmatter-advisory-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml override remark-mdx-frontmatter@5.2.0>toml",
+      "target": "pnpm-workspace.yaml override for TOML releases below 4.2.0",
       "owner": "ts-stack-maintainers",
-      "reason": "The latest remark-mdx-frontmatter release still constrains toml to 3.x, whose published line is affected by uncontrolled recursion and prototype pollution. The maintained toml 4.2.0 line contains both fixes, supports the repository's Node runtime, and retains the parse API used by the documentation build.",
+      "reason": "remark-mdx-frontmatter 5.2.0 still constrains its TOML parser dependency to vulnerable 3.x even though it imports only the compatible parse API. GHSA-v5mp-jgw5-2x6j is fixed in 4.1.2, and GHSA-82x6-q7mm-w9cf requires 4.2.0. The workspace already requires Node 24, webpack-cli accepts TOML 4, and the docs validation, tests, and complete production build verify the substitution.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
-        "https://github.com/advisories/GHSA-82x6-q7mm-w9cf",
-        "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j"
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "docs-site/package.json#scripts",
+        "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j",
+        "https://github.com/advisories/GHSA-82x6-q7mm-w9cf"
       ],
       "created": "2026-09-04",
       "reviewBy": "2026-10-04",
-      "removeWhen": "Remove when remark-mdx-frontmatter supports a non-vulnerable toml release directly and the documentation build remains byte-compatible without the substitution."
+      "removeWhen": "Remove when remark-mdx-frontmatter or its supported successor natively resolves TOML 4.2.0 or newer and docs validation, tests, production build, and the frozen high-severity audit remain green."
     },
     {
       "id": "image-size-unpublished-advisory-patch",

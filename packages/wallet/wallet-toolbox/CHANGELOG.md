@@ -11,15 +11,26 @@ attention to changes that materially alter behavior or extend functionality.
   a clean missing-token result only for a server-declared pending registration,
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
-  The additive client path measures 1,671,343 raw Vite bytes locally and
-  1,671,573 bytes on hosted Linux; esbuild raw measures 1,304,944 bytes locally
-  and 1,305,165 bytes on hosted Linux. The reviewed Vite ceilings advance to
-  1,672,000 raw and 307,250 Brotli bytes, and the esbuild raw ceiling advances
-  to 1,305,500 bytes; gzip and esbuild compressed ceilings remain unchanged.
-  Optimized Hermes bytecode measures 3,494,808 raw bytes locally and 3,495,655
-  on hosted Linux. Hosted Linux gzip measures 1,415,730 bytes. Its reviewed raw
-  and gzip ceilings advance to 3,496,500 and 1,416,500 respectively, while the
-  Metro and Hermes Brotli ceilings remain unchanged.
+- Keep Argon2id-backed UMP v3 wallets available in React Native and other
+  runtimes without WebAssembly by falling back to an asynchronously yielding,
+  standards-compatible JavaScript implementation. The same KDF parameters and
+  derived bytes are preserved, so existing tokens require no migration and
+  WebAssembly-capable runtimes retain the faster path. The existing public
+  `hash-wasm`-compatible utility contract remains intact: secret-bearing,
+  non-binary-output, and non-byte-array requests stay on `hash-wasm` and are
+  never reinterpreted by a host backend or fallback. Native registration is
+  available from both mobile and client roots, concurrent cold callers share
+  one preload attempt, and both alternative implementations validate result
+  type and length. Unrelated validation errors propagate even without the
+  WebAssembly global. The current-main macOS
+  reference fixtures measure 1,690,925 raw / 398,461 gzip / 311,955 Brotli
+  bytes with Vite, 1,319,059 raw / 362,220 gzip / 291,206 Brotli bytes with
+  esbuild, 1,746,067 raw / 442,648 gzip / 343,342 Brotli bytes with Metro, and
+  3,542,034 raw / 1,419,515 gzip / 1,117,531 Brotli bytes as optimized Hermes
+  bytecode; hosted Linux measures 1,439,166 gzip bytes. Bundle ceilings are
+  updated separately in `platform-budget.json` to reflect measurements that
+  include both this change and the interrupted-registration recovery path
+  above.
 
 - Extend the BRC-98/99/111 permission-module interface with an optional semantic
   `handleRequest` hook. A module can now return a conforming BRC-100 result

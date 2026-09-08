@@ -8,6 +8,8 @@ import { FaucetController } from './controllers/FaucetController'
 import { AccountDeletionController } from './controllers/AccountDeletionController'
 import { ShareController } from './controllers/ShareController'
 import { AdminController } from './controllers/AdminController'
+import { DemoAccountController } from './controllers/DemoAccountController'
+import { isDemoAuthEnabled } from './services/DemoAccountService'
 import { PhoneChangeController } from './controllers/PhoneChangeController'
 import { RegistrationController } from './controllers/RegistrationController'
 import { requireWABAdmin } from './security/adminAuth'
@@ -108,6 +110,47 @@ app.get('/healthz', (_req, res) => {
 })
 app.get('/info', InfoController.getInfo)
 
+// Existing clients can choose this WAB base URL to automatically select the
+// distinct demo method. Reuse the same limiters on both public entry points.
+app.use('/demo', (req, res, next) => {
+  if (!isDemoAuthEnabled()) {
+    res.status(404).json({ message: 'Not found.' })
+    return
+  }
+  if (req.path === '/info' && req.method === 'GET') {
+    res.json({ supportedAuthMethods: ['DemoPhone'], faucetEnabled: true, faucetAmount: 1000 })
+    return
+  }
+  // Older phone interactors send TwilioPhone regardless of discovery. On this
+  // explicit demo base URL only, translate that wire alias to the demo namespace.
+  if (req.body?.methodType === 'TwilioPhone') req.body.methodType = 'DemoPhone'
+  if (req.body?.methodType !== undefined && req.body.methodType !== 'DemoPhone') {
+    res.status(400).json({ message: 'The demo endpoint requires DemoPhone authentication.' })
+    return
+  }
+  next()
+})
+app.post('/demo/auth/start', authenticationLimiter, AuthController.startAuth)
+app.post('/demo/auth/complete', authenticationLimiter, AuthController.completeAuth)
+app.post('/demo/faucet/request', faucetLimiter, FaucetController.requestFaucet)
+app.post('/demo/user/linkedMethods', userOperationLimiter, UserController.listLinkedMethods)
+app.post('/demo/user/unlinkMethod', userOperationLimiter, UserController.unlinkMethod)
+app.post('/demo/user/delete', userOperationLimiter, UserController.deleteUser)
+app.post(
+  '/demo/account/delete/start',
+  accountDeletionLimiter,
+  AccountDeletionController.startDeletion
+)
+app.post(
+  '/demo/account/delete/complete',
+  accountDeletionLimiter,
+  AccountDeletionController.completeDeletion
+)
+app.post('/demo/share/store', shareLimiter, ShareController.storeShare)
+app.post('/demo/share/retrieve', shareLimiter, ShareController.retrieveShare)
+app.post('/demo/share/update', shareLimiter, ShareController.updateShare)
+app.post('/demo/share/delete', shareLimiter, ShareController.deleteUser)
+
 // Auth routes
 app.post('/auth/start', authenticationLimiter, AuthController.startAuth)
 app.post('/auth/complete', authenticationLimiter, AuthController.completeAuth)
@@ -118,6 +161,7 @@ app.post('/auth/phone-change/commit', authenticationLimiter, PhoneChangeControll
 app.post('/auth/phone-change/finalize', authenticationLimiter, PhoneChangeController.finalize)
 
 // Administrative support routes are unavailable unless WAB_ADMIN_TOKEN is set.
+app.post('/admin/demo-accounts', adminLimiter, requireWABAdmin, DemoAccountController.manage)
 app.post('/admin/ump-pin', adminLimiter, requireWABAdmin, AdminController.setUMPTokenPin)
 app.post(
   '/admin/registration/reopen',

@@ -83,6 +83,7 @@ describe('overlay discovery boundary properties', () => {
       'wss://%',
       'https://xn--0.org',
       'wss://xn--0.org',
+      'https://example.org:99999',
       'https://localhost',
       'wss://localhost',
       'https://example.org/path',

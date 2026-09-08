@@ -13,7 +13,7 @@ export default defineConfig({
   tsconfig: '../tsconfig.client.json',
   deps: {
     neverBundle: true,
-    onlyImport: ['@bsv/sdk', 'hash-wasm', 'idb']
+    onlyImport: ['@bsv/sdk', '@noble/hashes', 'hash-wasm', 'idb']
   },
   checks: {
     legacyCjs: false

@@ -80,6 +80,7 @@
   "dependencies": {
     "@bsv/auth-express-middleware": "workspace:^",
     "@bsv/payment-express-middleware": "workspace:^",
+    "@noble/hashes": "2.4.0",
     "@types/express": "^5.0.6",
     "better-sqlite3": "^13.0.2",
     "body-parser": "^2.3.0",
