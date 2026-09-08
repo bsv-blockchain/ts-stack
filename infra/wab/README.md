@@ -303,6 +303,61 @@ for evidence requirements, commands, auditing, rollout, and rollback.
 
 ## Auth Methods
 
+### Admin-managed demonstration accounts
+
+WAB 1.6 adds opt-in `DemoPhone` accounts for app-store reviewers and other
+shared demonstrations. They use a separate identity namespace: an identical
+phone-shaped alias under `TwilioPhone` continues to require real SMS verification
+and resolves to a different wallet. Demo codes never authenticate an ordinary
+SMS identity or authorize a phone-number transfer.
+
+Set a dedicated, secret-manager-provided `WAB_DEMO_AUTH_SECRET` of at least 32 random
+characters, and the existing `WAB_ADMIN_TOKEN`, to provision demo access through
+`POST /admin/demo-accounts`. The JSON `action` is one of:
+
+- `provision`: supply `phoneNumber` (an E.164-shaped demo alias), `label`, and
+  `expiresAtEpochMs` within the next 30 days. Returns a random six-digit `code`
+  once, plus the account `id`. The alias is not proof of telephone ownership.
+- `rotate`: supply `id` and `expiresAtEpochMs`; returns a new code once and
+  restores the account's five-attempt budget. The demo identity remains the same.
+- `revoke`: supply `id`; disables subsequent demo authentication immediately.
+- `list`: returns metadata for the latest 100 demo accounts, never codes or hashes.
+
+All management actions require the existing administrator bearer credential and
+rate limits. Provision/rotation responses are `Cache-Control: no-store`. Codes
+are stored only as keyed digests, bound to the account's random identifier. An
+account locks after five incorrect codes in total until an administrator rotates
+it; this budget is database-backed across replicas and does not reset on sign-in,
+restart, or a new authentication start. Expired/revoked accounts fail closed.
+Removing the demo key disables the method; rotating that key invalidates all
+existing demo codes until each account's code is rotated.
+
+Clients can select `DemoPhone` explicitly, or configure the WAB base URL as
+`https://your-wab.example/demo`. The latter advertises only `DemoPhone` so existing
+clients that select the first advertised method work without a new binary.
+Use the alias on the phone screen, the administrator-provided code on the OTP
+screen, and a separate wallet password. No SMS is sent for this method.
+For compatibility with older mobile phone interactors, requests to the explicit
+`/demo` base URL translate the wire method `TwilioPhone` to `DemoPhone` before
+authentication. They never resolve a real SMS identity. Ordinary root routes do
+not perform this translation. Phone-number change is not supported on the demo
+base URL; normal authentication, recovery shares and account deletion are.
+
+Ordinary WAB discovery keeps `TwilioPhone` first. The `/demo` routes share normal
+authentication, user-operation, and faucet rate limits.
+
+Initialize the dedicated demo wallet and verify a second clean sign-in before
+sharing its credentials with reviewers. Never reuse a personal or customer
+wallet; shared demo wallets should contain only disposable demonstration data
+and a deliberately limited sample balance. Revocation stops WAB sign-in, but
+cannot erase wallet keys or snapshots already shared with a reviewer. Keep a
+record of the operator, purpose, account id, expiry, and revocation. Do not log
+codes, wallet passwords, presentation keys, or administrative credentials.
+
+The migration adds only `demo_accounts`; existing identities require no
+migration. Retain the table when rolling back to an older image, which ignores
+it. Disable demo access and update reviewer instructions before rollback.
+
 The WAB is **modular**: you can configure multiple ways for users to authenticate. Two example methods are:
 
 1. **Twilio Phone Verification** (SMS-based).
