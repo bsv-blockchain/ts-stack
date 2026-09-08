@@ -20,6 +20,15 @@ AuthFetch stops pending certificate dispatch and session recovery after its
 request deadline. An already dispatched request may still complete on the
 server; callers must resolve its outcome before retrying a non-idempotent write.
 
+For signature payloads of at least 64 KiB, `ProtoWallet` uses asynchronous
+platform SHA-256 when Web Crypto is available, avoiding long synchronous
+hashing on browser UI threads. Unsupported or failed native hashing falls back
+to the existing implementation using the same input snapshot. Short payloads,
+explicit digests, signature bytes, and verification rules remain compatible.
+No host registration or API migration is required. The additional portable
+path measures 742,126 raw bytes in the SDK Vite fixture and 555,548 raw bytes
+in UMD; their reviewed ceilings are 742,500 and 556,000 bytes respectively.
+
 ## Table of Contents
 
 1. [Objective](#objective)
