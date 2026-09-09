@@ -122,6 +122,18 @@ class Budget {
   }
 }
 
+function cloneRequest(request: MongoTransactionRequest): MongoTransactionRequest {
+  return {
+    key: { ...request.key, scope: { ...request.key.scope } },
+    identity: {
+      ...request.identity,
+      scope: { ...request.identity.scope },
+      topics: request.identity.topics.map(topic => ({ ...topic }))
+    },
+    receipt: copyReceipt(request.receipt)
+  }
+}
+
 function copyReceipt(receipt: AdmissionReceipt): AdmissionReceipt {
   if (
     receipt.durability !== 'atomic-local' ||
@@ -233,11 +245,10 @@ export class MongoTransactionRunner {
           await attempt.session.commitTransaction({ timeoutMS: budget.remaining() })
           await this.release(attempt)
           return { state: 'committed', receipt: copyReceipt(attempt.receipt) }
-        } catch (error) {
+        } catch {
           // Unknown wins over any accompanying transient label. Never rerun its body.
           // Even an unexpected unlabeled failure after invocation stays pending.
           // Reconciliation, not error wording, determines its final outcome.
-          void error
           attempt.phase = 'unknown'
           if (budget.signal.aborted) break
         }
@@ -266,72 +277,117 @@ export class MongoTransactionRunner {
   }
 
   async run(request: MongoTransactionRequest, body: (context: MongoTransactionContext) => Promise<void>, options: MongoTransactionOptions = {}): Promise<AdmissionCommitResult> {
-    request = {
-      key: { ...request.key, scope: { ...request.key.scope } },
-      identity: { ...request.identity, scope: { ...request.identity.scope }, topics: request.identity.topics.map(topic => ({ ...topic })) },
-      receipt: copyReceipt(request.receipt)
-    }
+    request = cloneRequest(request)
     const id = this.id(request.key)
-    if (admissionSemanticDigest(request.identity) !== request.key.semanticDigest || mongoNodeKey(request.identity.scope) !== mongoNodeKey(this.scope))
-      return { state: 'rejected', code: 'digest-mismatch' }
     const receipt = copyReceipt(request.receipt)
-    if (receipt.operationId !== request.key.operationId || receipt.semanticDigest !== request.key.semanticDigest)
-      return { state: 'rejected', code: 'invalid-plan' }
+    const rejected = this.rejectRun(request, receipt)
+    if (rejected !== undefined) return rejected
     const budget = new Budget(options)
     this.calls += 1
     try {
       for (let bodyIndex = 0; bodyIndex < this.maxBodyAttempts; bodyIndex += 1) {
-        let previous = await this.read(id, budget)
-        if (previous === null) {
-          try {
-            await this.collection().insertOne({ _id: id, schemaVersion: 1, ...this.scope, operationId: request.key.operationId, semanticDigest: request.key.semanticDigest, txid: request.identity.txid, state: 'aborted', attemptId: randomUUID(), leaseOwner: this.owner, leaseToken: encodeMongoUint64('0'), leaseUntil: new Date(0), guard: randomUUID(), createdAt: new Date(), updatedAt: new Date() }, { ...budget.options(), writeConcern: majority })
-          } catch (error) {
-            if (!duplicateKey(error)) throw error
-          }
-          previous = await this.read(id, budget)
-          if (previous === null) throw new Error('Mongo operation claim was not visible')
-        }
-        const existing = this.result(previous, request.key)
-        if (existing.state !== 'aborted') return existing
-        const attempt = await this.claim(previous, request, receipt, budget)
-        if (attempt === null) {
-          const winner = await this.read(id, budget)
-          if (winner === null) throw new Error('Mongo operation claim disappeared')
-          const result = this.result(winner, request.key)
-          if (result.state !== 'aborted') return result
-          continue
-        }
-        const { session, operation } = attempt
-        let bodyActive = true
-        const context: MongoTransactionContext = { session, signal: budget.signal, options: () => {
-          if (!bodyActive || !session.inTransaction()) throw new Error('Mongo transaction body is no longer active')
-          return { session, ...budget.options() }
-        } }
-        try {
-          session.startTransaction({ readConcern: { level: 'snapshot' }, writeConcern: majority, readPreference: 'primary', maxCommitTimeMS: budget.remaining() })
-          const guarded = await this.collection().updateOne({ ...this.fence(operation), $expr: { $gt: ['$leaseUntil', '$$NOW'] } }, { $set: { guard: randomUUID() } }, context.options())
-          if (guarded.modifiedCount !== 1) throw new Error('Mongo transaction ownership lost')
-          // Never end a session while its body is still running. Trusted bodies
-          // await every bounded database operation and observe the context gate.
-          await body(context)
-          const saved = await this.collection().updateOne(this.fence(operation), { $set: { state: 'committed', receipt: new Binary(Buffer.from(JSON.stringify(receipt), 'utf8')), guard: randomUUID() }, $currentDate: { updatedAt: true } }, context.options())
-          if (saved.modifiedCount !== 1) throw new Error('Mongo transaction ownership lost')
-          bodyActive = false
-          return await this.commit(attempt, budget)
-        } catch (error) {
-          bodyActive = false
-          await this.abort(attempt)
-          if (!hasLabel(error, 'TransientTransactionError') || bodyIndex + 1 >= this.maxBodyAttempts) throw error
-        } finally {
-          bodyActive = false
-          attempt.busy = false
-        }
+        const completed = await this.runBodyAttempt(id, request, receipt, body, budget, bodyIndex)
+        if (completed !== undefined) return completed
       }
       throw new Error('Mongo transaction attempt limit reached')
     } finally {
       this.calls -= 1
       budget.close()
     }
+  }
+
+  private rejectRun(
+    request: MongoTransactionRequest,
+    receipt: AdmissionReceipt
+  ): AdmissionCommitResult | undefined {
+    if (
+      admissionSemanticDigest(request.identity) !== request.key.semanticDigest ||
+      mongoNodeKey(request.identity.scope) !== mongoNodeKey(this.scope)
+    )
+      return { state: 'rejected', code: 'digest-mismatch' }
+    if (receipt.operationId !== request.key.operationId || receipt.semanticDigest !== request.key.semanticDigest)
+      return { state: 'rejected', code: 'invalid-plan' }
+    return undefined
+  }
+
+  private async ensureClaimableRow(
+    id: string,
+    request: MongoTransactionRequest,
+    budget: Budget
+  ): Promise<Operation> {
+    let previous = await this.read(id, budget)
+    if (previous === null) {
+      try {
+        await this.collection().insertOne({ _id: id, schemaVersion: 1, ...this.scope, operationId: request.key.operationId, semanticDigest: request.key.semanticDigest, txid: request.identity.txid, state: 'aborted', attemptId: randomUUID(), leaseOwner: this.owner, leaseToken: encodeMongoUint64('0'), leaseUntil: new Date(0), guard: randomUUID(), createdAt: new Date(), updatedAt: new Date() }, { ...budget.options(), writeConcern: majority })
+      } catch (error) {
+        if (!duplicateKey(error)) throw error
+      }
+      previous = await this.read(id, budget)
+      if (previous === null) throw new Error('Mongo operation claim was not visible')
+    }
+    return previous
+  }
+
+  private async observeClaimWinner(
+    id: string,
+    request: MongoTransactionRequest,
+    budget: Budget
+  ): Promise<AdmissionCommitResult | undefined> {
+    const winner = await this.read(id, budget)
+    if (winner === null) throw new Error('Mongo operation claim disappeared')
+    const result = this.result(winner, request.key)
+    return result.state === 'aborted' ? undefined : result
+  }
+
+  private async executeTrustedBody(
+    attempt: Attempt,
+    receipt: AdmissionReceipt,
+    body: (context: MongoTransactionContext) => Promise<void>,
+    budget: Budget,
+    bodyIndex: number
+  ): Promise<AdmissionCommitResult | undefined> {
+    const { session, operation } = attempt
+    let bodyActive = true
+    const context: MongoTransactionContext = { session, signal: budget.signal, options: () => {
+      if (!bodyActive || !session.inTransaction()) throw new Error('Mongo transaction body is no longer active')
+      return { session, ...budget.options() }
+    } }
+    try {
+      session.startTransaction({ readConcern: { level: 'snapshot' }, writeConcern: majority, readPreference: 'primary', maxCommitTimeMS: budget.remaining() })
+      const guarded = await this.collection().updateOne({ ...this.fence(operation), $expr: { $gt: ['$leaseUntil', '$$NOW'] } }, { $set: { guard: randomUUID() } }, context.options())
+      if (guarded.modifiedCount !== 1) throw new Error('Mongo transaction ownership lost')
+      // Never end a session while its body is still running. Trusted bodies
+      // await every bounded database operation and observe the context gate.
+      await body(context)
+      const saved = await this.collection().updateOne(this.fence(operation), { $set: { state: 'committed', receipt: new Binary(Buffer.from(JSON.stringify(receipt), 'utf8')), guard: randomUUID() }, $currentDate: { updatedAt: true } }, context.options())
+      if (saved.modifiedCount !== 1) throw new Error('Mongo transaction ownership lost')
+      bodyActive = false
+      return await this.commit(attempt, budget)
+    } catch (error) {
+      bodyActive = false
+      await this.abort(attempt)
+      if (!hasLabel(error, 'TransientTransactionError') || bodyIndex + 1 >= this.maxBodyAttempts) throw error
+      return undefined
+    } finally {
+      bodyActive = false
+      attempt.busy = false
+    }
+  }
+
+  private async runBodyAttempt(
+    id: string,
+    request: MongoTransactionRequest,
+    receipt: AdmissionReceipt,
+    body: (context: MongoTransactionContext) => Promise<void>,
+    budget: Budget,
+    bodyIndex: number
+  ): Promise<AdmissionCommitResult | undefined> {
+    const previous = await this.ensureClaimableRow(id, request, budget)
+    const existing = this.result(previous, request.key)
+    if (existing.state !== 'aborted') return existing
+    const attempt = await this.claim(previous, request, receipt, budget)
+    if (attempt === null) return await this.observeClaimWinner(id, request, budget)
+    return await this.executeTrustedBody(attempt, receipt, body, budget, bodyIndex)
   }
 
   async reconcile(key: AdmissionOperationKey, attemptId?: string, options: MongoTransactionOptions = {}): Promise<AdmissionReconcileResult> {

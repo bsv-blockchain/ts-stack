@@ -165,6 +165,12 @@
     },
     {
       "source": "pnpm-workspace.yaml",
+      "selector": "js-yaml@<3.15.2",
+      "value": "3.15.2",
+      "exceptionId": "js-yaml-jest-advisory-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
       "selector": "toml@<4.2.0",
       "value": "4.2.0",
       "exceptionId": "toml-frontmatter-advisory-override"

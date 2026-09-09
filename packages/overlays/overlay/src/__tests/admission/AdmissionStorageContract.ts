@@ -15,7 +15,7 @@ import {
   type AdmissionStorageContractHarness
 } from './ReferenceAdmissionStorage.js'
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const clone = <T>(value: T): T => structuredClone(value)
 const hash = (character: string): string => character.repeat(64)
 
 const history = { chainEpoch: '7', topicHistoryGeneration: '3' }

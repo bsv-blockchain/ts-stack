@@ -123,7 +123,7 @@ describe('Mongo transaction boundary on three data-bearing WiredTiger members', 
     expect(result).toEqual({ state: 'committed', receipt: input.receipt })
     expect(bodies).toBe(1)
     const commits = commands.slice(start).filter(event => event.commandName === 'commitTransaction')
-    expect(commits.length).toBe(3)
+    expect(commits).toHaveLength(3)
     expect(new Set(commits.map(event => `${String(event.command.lsid.id)}:${String(event.command.txnNumber)}`)).size).toBe(1)
   }, 15000)
 

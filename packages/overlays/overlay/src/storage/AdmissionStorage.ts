@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { HistoryRevisionHandoff } from './RecoveryContract.js'
 
 /** Canonical unsigned decimal, 0..2^64-1. Never round through a JS number. */
-export type StorageUint64 = string
+export type StorageUint64 = string & { readonly __brand: unique symbol }
 
 export interface StorageScope {
   network: string
@@ -194,7 +194,7 @@ export function isReplaySafeProjection(projection: unknown): projection is Repla
 }
 
 export function parseStorageUint64(value: string): bigint {
-  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value))
+  if (typeof value !== 'string' || !/^(0|[1-9]\d{0,19})$/.test(value))
     throw new Error('Invalid storage uint64')
   const result = BigInt(value)
   if (result > BigInt('18446744073709551615')) throw new Error('Invalid storage uint64')

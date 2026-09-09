@@ -97,6 +97,18 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
   rejected peer responses reject and clean up the owning request; they do not
   become unhandled process errors or leave listeners behind.
 
+  For BRC-105 payments, a recipient may include the optional
+  `x-bsv-payment-known-txids` response header on its 402 challenge. The value is
+  a comma-separated list of 64-character hexadecimal transaction IDs the
+  recipient already possesses and has validated. `AuthFetch` passes at most
+  256 unique lowercase IDs to the wallet's `createAction` options, including
+  when payment requirements change and a new transaction is created. This
+  lets compatible wallets omit known ancestors from payment BEEF. Whitespace,
+  duplicates, and malformed entries are ignored; an absent or invalid-only
+  header preserves existing payment behavior. Browser services must expose
+  the optional response header through their existing CORS policy.
+  The header is an optional SDK extension, not a standardized BRC-105 header.
+
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.

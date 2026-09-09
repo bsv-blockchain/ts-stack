@@ -5,6 +5,14 @@ const maxFrameBytes = 4 * 1024 * 1024
 const maxBufferedBytes = maxFrameBytes * 2
 const opMessage = 2013
 
+function encodeMongoTxnNumber(value: unknown): string {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return value.toString(10)
+  if (typeof value === 'bigint') return value.toString(10)
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return value
+  if (BSON.Long.isLong(value)) return value.toString()
+  throw new Error('Mongo commit lacks session identity')
+}
+
 export interface CapturedMongoCommit {
   readonly requestId: number
   readonly lsid: string
@@ -165,16 +173,16 @@ export class MongoCommitResponseProxy {
   private observeRequest(connection: Connection, message: Buffer): void {
     const header = this.header(message)
     const command = this.command(message)
-    if (header === undefined || command === undefined || command.commitTransaction !== 1) return
-    const lsid = command.lsid
-    const txnNumber = command.txnNumber
+    if (header === undefined || command?.commitTransaction !== 1) return
+    const lsid = command?.lsid
+    const txnNumber = command?.txnNumber
     if (lsid === undefined || txnNumber === undefined)
       throw new Error('Mongo commit lacks session identity')
     connection.commitRequests.add(header.requestId)
     this.commits.push({
       requestId: header.requestId,
       lsid: JSON.stringify(lsid),
-      txnNumber: String(txnNumber)
+      txnNumber: encodeMongoTxnNumber(txnNumber)
     })
   }
 

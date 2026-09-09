@@ -120,7 +120,7 @@ export interface ReferenceAdmissionStorageOptions {
   projector?: unknown
 }
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const clone = <T>(value: T): T => structuredClone(value)
 
 const scopeKey = (scope: StorageScope): string =>
   JSON.stringify([scope.network, scope.genesisHash, scope.nodeId])
@@ -158,10 +158,9 @@ const sameFence = (left: HistoryFence | undefined, right: HistoryFence): boolean
   left?.chainEpoch === right.chainEpoch &&
   left.topicHistoryGeneration === right.topicHistoryGeneration
 const samePayload = (left: AdmissionPayloadRef | undefined, right: AdmissionPayloadRef): boolean =>
-  left !== undefined &&
-  left.digest === right.digest &&
-  left.byteLength === right.byteLength &&
-  left.kind === right.kind
+  left?.digest === right.digest &&
+  left?.byteLength === right.byteLength &&
+  left?.kind === right.kind
 const isHash = (value: string): boolean => /^[0-9a-f]{64}$/.test(value)
 const isUint64 = (value: string): boolean => {
   try {
@@ -329,21 +328,8 @@ export class ReferenceAdmissionStorage implements AdmissionStorage {
     next: ReferenceState,
     plan: AdmissionCommit
   ): Extract<AdmissionCommitResult, { state: 'rejected' }> | undefined {
-    const topics = new Set(plan.identity.topics.map(item => item.topic))
-    const decisionTopics = new Set(plan.decisions.map(decision => decision.topic))
-    if (
-      topics.size !== plan.identity.topics.length ||
-      plan.decisions.length !== topics.size ||
-      decisionTopics.size !== plan.decisions.length ||
-      decisionTopics.size !== topics.size ||
-      plan.decisions.some(decision => !topics.has(decision.topic)) ||
-      new Set(plan.outbox.map(intent => intent.eventId)).size !== plan.outbox.length ||
-      plan.outbox.some(intent => next.outbox.has(outboxKey(plan.identity.scope, intent.eventId)))
-    ) {
+    if (this.hasInvalidPlanShape(next, plan) || !this.isSupportedPlan(plan, next))
       return { state: 'rejected', code: 'invalid-plan' }
-    }
-    if (!this.isSupportedPlan(plan, next)) return { state: 'rejected', code: 'invalid-plan' }
-
     const references = this.references(plan)
     if (
       references === undefined ||
@@ -351,97 +337,149 @@ export class ReferenceAdmissionStorage implements AdmissionStorage {
     ) {
       return { state: 'rejected', code: 'payload-not-ready' }
     }
+    const conflict = this.decisionPredicateConflict(next, plan)
+    if (conflict !== undefined) return conflict
+    return this.publishPlan(next, plan, references)
+  }
 
+  private hasInvalidPlanShape(next: ReferenceState, plan: AdmissionCommit): boolean {
+    const topics = new Set(plan.identity.topics.map(item => item.topic))
+    const decisionTopics = new Set(plan.decisions.map(decision => decision.topic))
+    return (
+      topics.size !== plan.identity.topics.length ||
+      plan.decisions.length !== topics.size ||
+      decisionTopics.size !== plan.decisions.length ||
+      decisionTopics.size !== topics.size ||
+      plan.decisions.some(decision => !topics.has(decision.topic)) ||
+      new Set(plan.outbox.map(intent => intent.eventId)).size !== plan.outbox.length ||
+      plan.outbox.some(intent => next.outbox.has(outboxKey(plan.identity.scope, intent.eventId)))
+    )
+  }
+
+  private decisionPredicateConflict(
+    next: ReferenceState,
+    plan: AdmissionCommit
+  ): Extract<AdmissionCommitResult, { state: 'rejected' }> | undefined {
     for (const decision of plan.decisions) {
-      if (
-        !sameFence(
-          next.fences.get(topicKey(plan.identity.scope, decision.topic)),
-          decision.expectedHistory
-        )
-      ) {
-        return { state: 'rejected', code: 'read-conflict' }
-      }
-      if (
-        decision.reads.some(
-          read =>
-            (next.reads.get(readKey(plan.identity.scope, decision.topic, read.key)) ?? null) !==
-            read.expectedVersion
-        )
-      ) {
-        return { state: 'rejected', code: 'read-conflict' }
-      }
-      if (
-        decision.spends.some(
-          spend =>
-            next.outputs.get(outputKey(plan.identity.scope, decision.topic, spend.outpoint))
-              ?.version !== spend.expectedVersion ||
-            next.outputs.get(outputKey(plan.identity.scope, decision.topic, spend.outpoint))
-              ?.spentBy !== undefined
-        )
-      ) {
-        return { state: 'rejected', code: 'spend-conflict' }
-      }
-      if (
-        decision.historyUpdate?.handoff !== undefined &&
-        !this.canHandoff(
-          next,
-          plan.identity.scope,
-          decision.topic,
-          decision.expectedHistory,
-          decision.historyUpdate.handoff
-        )
-      ) {
-        return { state: 'rejected', code: 'read-conflict' }
-      }
+      const conflict = this.singleDecisionConflict(next, plan, decision)
+      if (conflict !== undefined) return conflict
     }
+    return undefined
+  }
 
+  private singleDecisionConflict(
+    next: ReferenceState,
+    plan: AdmissionCommit,
+    decision: AdmissionTopicDecision
+  ): Extract<AdmissionCommitResult, { state: 'rejected' }> | undefined {
+    if (
+      !sameFence(
+        next.fences.get(topicKey(plan.identity.scope, decision.topic)),
+        decision.expectedHistory
+      )
+    ) {
+      return { state: 'rejected', code: 'read-conflict' }
+    }
+    if (
+      decision.reads.some(
+        read =>
+          (next.reads.get(readKey(plan.identity.scope, decision.topic, read.key)) ?? null) !==
+          read.expectedVersion
+      )
+    ) {
+      return { state: 'rejected', code: 'read-conflict' }
+    }
+    if (
+      decision.spends.some(
+        spend =>
+          next.outputs.get(outputKey(plan.identity.scope, decision.topic, spend.outpoint))
+            ?.version !== spend.expectedVersion ||
+          next.outputs.get(outputKey(plan.identity.scope, decision.topic, spend.outpoint))
+            ?.spentBy !== undefined
+      )
+    ) {
+      return { state: 'rejected', code: 'spend-conflict' }
+    }
+    if (
+      decision.historyUpdate?.handoff !== undefined &&
+      !this.canHandoff(
+        next,
+        plan.identity.scope,
+        decision.topic,
+        decision.expectedHistory,
+        decision.historyUpdate.handoff
+      )
+    ) {
+      return { state: 'rejected', code: 'read-conflict' }
+    }
+    return undefined
+  }
+
+  private publishPlan(
+    next: ReferenceState,
+    plan: AdmissionCommit,
+    references: AdmissionPayloadRef[]
+  ): Extract<AdmissionCommitResult, { state: 'rejected' }> | undefined {
     for (const reference of references) next.pins.add(reference.digest)
     for (const decision of plan.decisions) {
-      for (const spend of decision.spends) {
-        const stored = next.outputs.get(
-          outputKey(plan.identity.scope, decision.topic, spend.outpoint)
-        )
-        if (stored !== undefined) stored.spentBy = spend.spender
-      }
-      for (const eviction of decision.evictions)
-        next.outputs.delete(outputKey(plan.identity.scope, decision.topic, eviction))
-      for (const output of decision.outputs) {
-        const key = outputKey(plan.identity.scope, decision.topic, output)
-        if (next.outputs.has(key)) return { state: 'rejected', code: 'invalid-plan' }
-        next.outputs.set(key, { version: '1', topic: decision.topic, output: clone(output) })
-      }
-      for (const edge of decision.edges)
-        next.edges.add(edgeKey(plan.identity.scope, decision.topic, edge.source, edge.consumer))
-      next.applied.set(
-        appliedKey(plan.identity.scope, decision.topic, decision.applied.txid),
-        clone(decision.applied)
-      )
-      if (decision.historyUpdate !== undefined) {
-        next.fences.set(topicKey(plan.identity.scope, decision.topic), {
-          chainEpoch: decision.expectedHistory.chainEpoch,
-          topicHistoryGeneration: decision.historyUpdate.nextTopicHistoryGeneration
-        })
-        if (decision.historyUpdate.handoff !== undefined) {
-          const lease = next.leases.get(leaseKey(decision.historyUpdate.handoff.expected))
-          if (lease !== undefined) {
-            lease.topicHistoryGeneration = decision.historyUpdate.nextTopicHistoryGeneration
-          }
-          next.handoffs.set(
-            topicKey(plan.identity.scope, decision.topic),
-            decision.historyUpdate.handoff.checkpoint
-          )
-        }
-        next.historyUpdates.set(topicKey(plan.identity.scope, decision.topic), {
-          affectedFromHeight: decision.historyUpdate.affectedFromHeight,
-          ...(decision.historyUpdate.handoff === undefined
-            ? {}
-            : { checkpoint: decision.historyUpdate.handoff.checkpoint })
-        })
-      }
+      const invalid = this.publishDecision(next, plan, decision)
+      if (invalid !== undefined) return invalid
     }
     for (const intent of plan.outbox)
       next.outbox.set(outboxKey(plan.identity.scope, intent.eventId), clone(intent))
     return undefined
+  }
+
+  private publishDecision(
+    next: ReferenceState,
+    plan: AdmissionCommit,
+    decision: AdmissionTopicDecision
+  ): Extract<AdmissionCommitResult, { state: 'rejected' }> | undefined {
+    for (const spend of decision.spends) {
+      const stored = next.outputs.get(
+        outputKey(plan.identity.scope, decision.topic, spend.outpoint)
+      )
+      if (stored !== undefined) stored.spentBy = spend.spender
+    }
+    for (const eviction of decision.evictions)
+      next.outputs.delete(outputKey(plan.identity.scope, decision.topic, eviction))
+    for (const output of decision.outputs) {
+      const key = outputKey(plan.identity.scope, decision.topic, output)
+      if (next.outputs.has(key)) return { state: 'rejected', code: 'invalid-plan' }
+      next.outputs.set(key, { version: '1', topic: decision.topic, output: clone(output) })
+    }
+    for (const edge of decision.edges)
+      next.edges.add(edgeKey(plan.identity.scope, decision.topic, edge.source, edge.consumer))
+    next.applied.set(
+      appliedKey(plan.identity.scope, decision.topic, decision.applied.txid),
+      clone(decision.applied)
+    )
+    if (decision.historyUpdate !== undefined) this.publishHistoryUpdate(next, plan, decision)
+    return undefined
+  }
+
+  private publishHistoryUpdate(
+    next: ReferenceState,
+    plan: AdmissionCommit,
+    decision: AdmissionTopicDecision
+  ): void {
+    const historyUpdate = decision.historyUpdate
+    if (historyUpdate === undefined) return
+    next.fences.set(topicKey(plan.identity.scope, decision.topic), {
+      chainEpoch: decision.expectedHistory.chainEpoch,
+      topicHistoryGeneration: historyUpdate.nextTopicHistoryGeneration
+    })
+    if (historyUpdate.handoff !== undefined) {
+      const lease = next.leases.get(leaseKey(historyUpdate.handoff.expected))
+      if (lease !== undefined) {
+        lease.topicHistoryGeneration = historyUpdate.nextTopicHistoryGeneration
+      }
+      next.handoffs.set(topicKey(plan.identity.scope, decision.topic), historyUpdate.handoff.checkpoint)
+    }
+    next.historyUpdates.set(topicKey(plan.identity.scope, decision.topic), {
+      affectedFromHeight: historyUpdate.affectedFromHeight,
+      ...(historyUpdate.handoff === undefined ? {} : { checkpoint: historyUpdate.handoff.checkpoint })
+    })
   }
 
   private references(plan: AdmissionCommit): AdmissionPayloadRef[] | undefined {
@@ -470,77 +508,85 @@ export class ReferenceAdmissionStorage implements AdmissionStorage {
     )
       return false
     if (!this.isBoundSteak(statePlan)) return false
-    for (const decision of statePlan.decisions) {
-      if (
-        !isUint64(decision.expectedHistory.chainEpoch) ||
-        !isUint64(decision.expectedHistory.topicHistoryGeneration)
+    return statePlan.decisions.every(decision => this.decisionIsSupported(statePlan, state, decision))
+  }
+
+  private decisionIsSupported(
+    statePlan: AdmissionCommit,
+    state: ReferenceState,
+    decision: AdmissionTopicDecision
+  ): boolean {
+    if (
+      !isUint64(decision.expectedHistory.chainEpoch) ||
+      !isUint64(decision.expectedHistory.topicHistoryGeneration)
+    )
+      return false
+    if (
+      decision.spends.some(
+        spend => !isWireOutpoint(spend.outpoint) || spend.spender !== statePlan.identity.txid
       )
-        return false
-      if (
-        decision.spends.some(
-          spend => !isWireOutpoint(spend.outpoint) || spend.spender !== statePlan.identity.txid
-        )
+    )
+      return false
+    if (
+      decision.evictions.some(
+        eviction =>
+          !isWireOutpoint(eviction) ||
+          !state.outputs.has(outputKey(statePlan.identity.scope, decision.topic, eviction))
       )
-        return false
-      if (
-        decision.evictions.some(
-          eviction =>
-            !isWireOutpoint(eviction) ||
-            !state.outputs.has(outputKey(statePlan.identity.scope, decision.topic, eviction))
-        )
-      )
-        return false
-      if (
-        decision.outputs.some(output => {
-          if (output.txid !== statePlan.identity.txid || !isWireOutpoint(output)) return true
-          if (
-            ![output.satoshis, output.score, output.script.offset, output.script.byteLength].every(
-              isUint64
-            )
-          )
-            return true
-          if (!isHash(output.script.payload.digest) || !isUint64(output.script.payload.byteLength))
-            return true
-          return (
-            parseStorageUint64(output.script.offset) +
-              parseStorageUint64(output.script.byteLength) >
-            parseStorageUint64(output.script.payload.byteLength)
-          )
-        })
-      )
-        return false
-      if (
-        decision.edges.some(edge => !isWireOutpoint(edge.source) || !isWireOutpoint(edge.consumer))
-      )
-        return false
-      const applied = decision.applied
-      if (
-        applied.txid !== statePlan.identity.txid ||
-        !isHash(applied.txid) ||
-        state.applied.has(appliedKey(statePlan.identity.scope, decision.topic, applied.txid))
-      )
-        return false
-      if (
-        (applied.firstSeenHeight !== undefined && !isUint64(applied.firstSeenHeight)) ||
-        (applied.proof !== undefined &&
-          (!isHash(applied.proof.digest) || !isUint64(applied.proof.byteLength))) ||
-        (applied.block !== undefined &&
-          (![applied.block.height, applied.block.index].every(isUint64) ||
-            !isHash(applied.block.hash) ||
-            !isHash(applied.block.merkleRoot)))
-      )
-        return false
-      if (decision.historyUpdate !== undefined) {
-        if (
-          !isUint64(decision.historyUpdate.nextTopicHistoryGeneration) ||
-          !isUint64(decision.historyUpdate.affectedFromHeight) ||
-          parseStorageUint64(decision.historyUpdate.nextTopicHistoryGeneration) <=
-            parseStorageUint64(decision.expectedHistory.topicHistoryGeneration)
-        )
-          return false
-      }
-    }
-    return true
+    )
+      return false
+    if (decision.outputs.some(output => this.outputViolatesPlan(statePlan, output))) return false
+    if (decision.edges.some(edge => !isWireOutpoint(edge.source) || !isWireOutpoint(edge.consumer)))
+      return false
+    if (this.appliedViolatesPlan(statePlan, state, decision)) return false
+    return !this.historyUpdateViolatesPlan(decision)
+  }
+
+  private outputViolatesPlan(statePlan: AdmissionCommit, output: AdmissionOutput): boolean {
+    if (output.txid !== statePlan.identity.txid || !isWireOutpoint(output)) return true
+    if (
+      ![output.satoshis, output.score, output.script.offset, output.script.byteLength].every(isUint64)
+    )
+      return true
+    if (!isHash(output.script.payload.digest) || !isUint64(output.script.payload.byteLength))
+      return true
+    return (
+      parseStorageUint64(output.script.offset) + parseStorageUint64(output.script.byteLength) >
+      parseStorageUint64(output.script.payload.byteLength)
+    )
+  }
+
+  private appliedViolatesPlan(
+    statePlan: AdmissionCommit,
+    state: ReferenceState,
+    decision: AdmissionTopicDecision
+  ): boolean {
+    const applied = decision.applied
+    if (
+      applied.txid !== statePlan.identity.txid ||
+      !isHash(applied.txid) ||
+      state.applied.has(appliedKey(statePlan.identity.scope, decision.topic, applied.txid))
+    )
+      return true
+    return (
+      (applied.firstSeenHeight !== undefined && !isUint64(applied.firstSeenHeight)) ||
+      (applied.proof !== undefined &&
+        (!isHash(applied.proof.digest) || !isUint64(applied.proof.byteLength))) ||
+      (applied.block !== undefined &&
+        (![applied.block.height, applied.block.index].every(isUint64) ||
+          !isHash(applied.block.hash) ||
+          !isHash(applied.block.merkleRoot)))
+    )
+  }
+
+  private historyUpdateViolatesPlan(decision: AdmissionTopicDecision): boolean {
+    if (decision.historyUpdate === undefined) return false
+    return (
+      !isUint64(decision.historyUpdate.nextTopicHistoryGeneration) ||
+      !isUint64(decision.historyUpdate.affectedFromHeight) ||
+      parseStorageUint64(decision.historyUpdate.nextTopicHistoryGeneration) <=
+        parseStorageUint64(decision.expectedHistory.topicHistoryGeneration)
+    )
   }
 
   private isBoundSteak(plan: AdmissionCommit): boolean {
@@ -674,7 +720,7 @@ export class ReferenceAdmissionHarness implements AdmissionStorageContractHarnes
       })),
       leases: [...state.leases.values()].map(lease => clone(lease)),
       outputs: [...state.outputs].map(([key, output]) => ({ key, ...clone(output) })),
-      edges: [...state.edges].sort(),
+      edges: [...state.edges].sort((left, right) => left.localeCompare(right, 'en')),
       applied: [...state.applied].map(([key, record]) => ({ key, record: clone(record) })),
       outbox: [...state.outbox.keys()].map(key => {
         const [network, genesisHash, nodeId, eventId] = JSON.parse(key) as [

@@ -45,25 +45,10 @@ export const MongoGridFsBucketName = 'overlayPayloads'
 const schemaVersion = 1
 const maxUint64 = '18446744073709551615'
 const maxUint32 = 4294967295
-const paddedUint64Pattern = '^[0-9]{20}$'
+const paddedUint64Pattern = String.raw`^\d{20}$`
 const hashPattern = '^[0-9a-f]{64}$'
 const uuidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-const safeStringPattern = '^[^\\x00]+$'
-
-function isWellFormed(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const unit = value.charCodeAt(index)
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      if (index + 1 >= value.length) return false
-      const next = value.charCodeAt(index + 1)
-      if (next < 0xdc00 || next > 0xdfff) return false
-      index += 1
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-      return false
-    }
-  }
-  return true
-}
+const safeStringPattern = String.raw`^[^\x00]+$`
 
 function validPart(value: string): string {
   if (
@@ -71,7 +56,7 @@ function validPart(value: string): string {
     value.length === 0 ||
     Buffer.byteLength(value, 'utf8') > 1024 ||
     value.includes('\u0000') ||
-    !isWellFormed(value)
+    !value.isWellFormed()
   ) {
     throw new Error('Invalid Mongo record key component')
   }
@@ -793,7 +778,7 @@ function stable(value: unknown): string {
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>
     return `{${Object.keys(record)
-      .sort()
+      .sort((left, right) => left.localeCompare(right, 'en'))
       .map(key => `${JSON.stringify(key)}:${stable(record[key])}`)
       .join(',')}}`
   }
@@ -844,27 +829,47 @@ export async function bootstrapMongoOverlay(
 }
 
 async function ensureCollection(db: Db, definition: MongoCollectionDefinition): Promise<void> {
-  const existing = await db.listCollections<CollectionInfo>({ name: definition.name }).next()
-  if (existing === null) {
-    try {
-      await db.createCollection(definition.name, {
-        validator: definition.validator,
-        validationLevel: 'strict',
-        validationAction: 'error',
-        collation: { locale: 'simple' }
-      })
-    } catch (error) {
-      if ((error as { code?: number }).code !== 48) throw error
-    }
-  }
+  await createCollectionIfMissing(db, definition)
   const actual = await db.listCollections<CollectionInfo>({ name: definition.name }).next()
-  if (
-    actual === null ||
-    stable(actual.options?.validator) !== stable(definition.validator) ||
-    (actual.options?.collation !== undefined &&
-      stable(actual.options.collation) !== stable({ locale: 'simple' }))
-  )
+  if (!collectionMatchesDefinition(actual, definition))
     throw new Error(`Incompatible Mongo Overlay validator for ${definition.name}`)
+  await ensureCollectionIndexes(db, definition)
+}
+
+async function createCollectionIfMissing(
+  db: Db,
+  definition: MongoCollectionDefinition
+): Promise<void> {
+  const existing = await db.listCollections<CollectionInfo>({ name: definition.name }).next()
+  if (existing !== null) return
+  try {
+    await db.createCollection(definition.name, {
+      validator: definition.validator,
+      validationLevel: 'strict',
+      validationAction: 'error',
+      collation: { locale: 'simple' }
+    })
+  } catch (error) {
+    if ((error as { code?: number }).code !== 48) throw error
+  }
+}
+
+function collectionMatchesDefinition(
+  actual: CollectionInfo | null,
+  definition: MongoCollectionDefinition
+): boolean {
+  return (
+    actual !== null &&
+    stable(actual.options?.validator) === stable(definition.validator) &&
+    (actual.options?.collation === undefined ||
+      stable(actual.options.collation) === stable({ locale: 'simple' }))
+  )
+}
+
+async function ensureCollectionIndexes(
+  db: Db,
+  definition: MongoCollectionDefinition
+): Promise<void> {
   const collection = db.collection<Document>(definition.name)
   for (const expected of definition.indexes) {
     const { key, ...options } = expected
@@ -876,17 +881,28 @@ async function ensureCollection(db: Db, definition: MongoCollectionDefinition): 
   }
   const actualIndexes = await collection.listIndexes().toArray()
   for (const expected of definition.indexes) {
-    const actualIndex = actualIndexes.find(candidate => candidate.name === expected.name)
     if (
-      actualIndex === undefined ||
-      stable(actualIndex.key) !== stable(expected.key) ||
-      Boolean(actualIndex.unique) !== Boolean(expected.unique) ||
-      stable(actualIndex.partialFilterExpression) !== stable(expected.partialFilterExpression) ||
-      Boolean(actualIndex.sparse) !== Boolean(expected.sparse) ||
-      actualIndex.expireAfterSeconds !== expected.expireAfterSeconds
+      !indexMatchesDefinition(
+        actualIndexes.find(candidate => candidate.name === expected.name),
+        expected
+      )
     )
       throw new Error(`Incompatible Mongo Overlay index for ${definition.name}:${expected.name}`)
   }
+}
+
+function indexMatchesDefinition(
+  actualIndex: Document | undefined,
+  expected: IndexDescription
+): boolean {
+  return (
+    actualIndex !== undefined &&
+    stable(actualIndex.key) === stable(expected.key) &&
+    Boolean(actualIndex.unique) === Boolean(expected.unique) &&
+    stable(actualIndex.partialFilterExpression) === stable(expected.partialFilterExpression) &&
+    Boolean(actualIndex.sparse) === Boolean(expected.sparse) &&
+    actualIndex.expireAfterSeconds === expected.expireAfterSeconds
+  )
 }
 
 async function ensureGridFs(db: Db): Promise<void> {
