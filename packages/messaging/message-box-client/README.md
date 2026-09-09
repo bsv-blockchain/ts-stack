@@ -78,6 +78,14 @@ The client uses AuthFetch for BRC-105 challenges. It intentionally does not add
 a second Message Box-specific cost-approval mechanism because BRC-100 wallet
 permissions already govern payment authorization.
 
+The UMD bundle includes SDK 2.5.0 support for the optional
+`x-bsv-payment-known-txids` response header; module consumers can enable it by
+using SDK 2.5.0 or later. This SDK extension lets recipients advertise already
+validated payment ancestors so compatible wallets can omit them from payment
+BEEF. It is not a standardized BRC-105 header. Existing compatible SDK peers
+remain supported, and services that omit the header retain existing payment
+behavior. No consumer migration is required.
+
 Explicit `init()` is optional. Public methods initialize the wallet identity
 when needed:
 
