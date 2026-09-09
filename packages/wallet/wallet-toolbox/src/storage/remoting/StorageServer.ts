@@ -178,7 +178,8 @@ function requiredAuthenticatedIdentityKey(req: Request): string {
 }
 
 function escapeRpcJson(serialized: string): string {
-  return serialized.replace(/[<>&]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`)
+  const escapes: Record<string, string> = { '<': String.raw`\u003c`, '>': String.raw`\u003e`, '&': String.raw`\u0026` }
+  return serialized.replace(/[<>&]/g, character => escapes[character])
 }
 
 function firstRequestHeader(req: Request, name: string): string | undefined {
@@ -607,19 +608,26 @@ export class StorageServer {
         ? syncChunkBinary(dispatch.result as SyncChunk)
         : dispatch.result
       const payload = { jsonrpc: '2.0', result, id }
-      if (method === 'getSyncChunk' && params[0]?.syncTransferVersion === 1 && this.syncTransfers != null) {
-        const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
-        if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
-          const manifest = await this.syncTransfers.beginRead(requiredAuthenticatedIdentityKey(req),
-            syncTransferDigest(encodeSyncTransfer(params[0])), encodeSyncTransfer(syncChunkBinary(result as SyncChunk)))
-          return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result: { syncTransfer: manifest }, id })
-        }
-        return this.sendRpc(res, useBinary, payload, 200, serialized)
+      const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
+      // Apply the response bound before consulting any client transport preference.
+      if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
+        return await this.sendOversizedSyncResponse(req, res, useBinary, method, params, payload)
       }
-      return this.sendRpc(res, useBinary, payload)
+      return this.sendRpc(res, useBinary, payload, 200, serialized)
     } catch (error: unknown) {
       return this.sendRpcError(res, useBinary, id, error)
     }
+  }
+
+  private async sendOversizedSyncResponse(req: Request, res: Response, useBinary: boolean,
+    method: string, params: any[], payload: { jsonrpc: string; result: unknown; id: unknown }): Promise<Response> {
+    // Dispatch already applied normal RPC authorization. Negotiation changes only framing.
+    if (method !== 'getSyncChunk' || params[0]?.syncTransferVersion !== 1 || this.syncTransfers == null) {
+      return this.sendRpc(res, useBinary, payload)
+    }
+    const manifest = await this.syncTransfers.beginRead(requiredAuthenticatedIdentityKey(req),
+      syncTransferDigest(encodeSyncTransfer(params[0])), encodeSyncTransfer(syncChunkBinary(payload.result as SyncChunk)))
+    return this.sendRpc(res, useBinary, { ...payload, result: { syncTransfer: manifest } })
   }
 
   private traceHttpRequest(req: Request, res: Response, next: express.NextFunction): void {
@@ -841,7 +849,7 @@ export class StorageServer {
     switch (method) {
       case 'beginReadSyncTransfer': {
         const args = input.args
-        if (args == null || args.identityKey !== identityKey ||
+        if (args?.identityKey !== identityKey ||
           args.fromStorageIdentityKey !== this.storage.getSettings().storageIdentityKey) {
           throw new WERR_UNAUTHORIZED('Sync transfer source must match authenticated storage')
         }

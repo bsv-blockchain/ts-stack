@@ -673,30 +673,51 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
     for (let retries = 0; ; retries++) {
       try {
-        const r = await this.rpcCall<SyncChunk | { syncTransfer: SyncTransferManifest }>('getSyncChunk', [requestArgs])
-        if ('syncTransfer' in r) {
-          if (transfer == null || Object.keys(r).length !== 1) throw new Error('Unexpected wallet sync transfer response')
-          return await this.downloadSyncTransfer(requestArgs, transfer, r.syncTransfer)
-        }
-        if (requestArgs.maxRoughSize < args.maxRoughSize) {
-          this.syncChunkRoughSizeLimit = requestArgs.maxRoughSize
-        }
-        return validateSyncChunkEntities(r)
+        return await this.readSyncChunkResponse(requestArgs, args.maxRoughSize, transfer)
       } catch (error: unknown) {
         if (!isSyncChunkResponseTooLarge(error)) throw error
-        const nextRoughSize = Math.max(minimumSyncChunkRoughSize, Math.floor(requestArgs.maxRoughSize / 2))
-        if (retries >= syncChunkResponseRetryLimit || nextRoughSize >= requestArgs.maxRoughSize) {
-          if (requestArgs.maxItems !== 1) {
-            requestArgs = { ...requestArgs, maxItems: 1, maxRoughSize: minimumSyncChunkRoughSize }
-            continue
-          }
-          const capabilities = this.syncTransferCapabilities()
-          if (capabilities == null) throw error
-          return await this.downloadSyncTransfer(requestArgs, capabilities)
-        }
-        requestArgs = { ...requestArgs, maxRoughSize: nextRoughSize }
+        const smaller = this.smallerSyncRequest(requestArgs, retries)
+        if (smaller != null) { requestArgs = smaller; continue }
+        if (transfer == null) throw error
+        return await this.downloadSyncTransfer(requestArgs, transfer)
       }
     }
+  }
+
+  private async readSyncChunkResponse(args: RequestSyncChunkArgs, originalMaxRoughSize: number,
+    transfer: SyncTransferCapabilities | undefined): Promise<SyncChunk> {
+    const r = await this.rpcCall<SyncChunk | { syncTransfer: SyncTransferManifest }>('getSyncChunk', [args])
+    if ('syncTransfer' in r) {
+      if (transfer == null || Object.keys(r).length !== 1) throw new Error('Unexpected wallet sync transfer response')
+      return await this.downloadSyncTransfer(args, transfer, r.syncTransfer)
+    }
+    if (args.maxRoughSize < originalMaxRoughSize) {
+      this.syncChunkRoughSizeLimit = args.maxRoughSize
+    }
+    return validateSyncChunkEntities(r)
+  }
+
+  protected requestUsesBinary(method: string): boolean {
+    const transferPart = method === 'writeSyncTransferPart' && this.settings?.syncTransfer?.version === 1
+    return (this.binaryRequests || transferPart) && this.serverSupportsBinary
+  }
+
+  protected rpcResponseError(response: Response): Error {
+    const error = new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+    if (response.status !== 429) return error
+    const after = response.headers.get('retry-after')
+    let delay = 1000
+    if (after != null) delay = /^\d+$/.test(after) ? Number(after) * 1000 : Date.parse(after) - Date.now()
+    return Object.assign(error, { retryAfterMs: delay })
+  }
+
+  private smallerSyncRequest(args: RequestSyncChunkArgs, retries: number): RequestSyncChunkArgs | undefined {
+    const nextRoughSize = Math.max(minimumSyncChunkRoughSize, Math.floor(args.maxRoughSize / 2))
+    if (retries < syncChunkResponseRetryLimit && nextRoughSize < args.maxRoughSize) {
+      return { ...args, maxRoughSize: nextRoughSize }
+    }
+    if (args.maxItems === 1) return undefined
+    return { ...args, maxItems: 1, maxRoughSize: minimumSyncChunkRoughSize }
   }
 
   private syncTransferCapabilities(): SyncTransferCapabilities | undefined {
@@ -704,16 +725,22 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return value == null ? undefined : validateSyncTransferCapabilities(value)
   }
 
+  private syncTransferRetryDelay(error: unknown, attempt: number): number | undefined {
+    const message = error instanceof Error ? error.message : ''
+    if (attempt >= 2 || !/network error (?:429|502|503|504)|timed out waiting for authenticated response|fetch failed|Failed to fetch/i.test(message)) return undefined
+    if (!/network error 429/.test(message)) return 250 * 2 ** attempt
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error
+    const retryAfter = cause != null && typeof cause === 'object' ? Reflect.get(cause, 'retryAfterMs') : undefined
+    const delay = retryAfter ?? 1000
+    return Number.isFinite(delay) && delay >= 0 && delay <= 60_000 ? delay : undefined
+  }
+
   private async transferPartCall<T>(method: string, input: Record<string, unknown>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try { return await this.rpcCall<T>(method, [input]) } catch (error) {
         // Only immutable reads and identical staged part writes may be retried here. Never commit.
-        const message = error instanceof Error ? error.message : ''
-        if (attempt >= 2 || !/network error (?:429|502|503|504)|timed out waiting for authenticated response|fetch failed|Failed to fetch/i.test(message)) throw error
-        const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error
-        const retryAfter = cause != null && typeof cause === 'object' ? Reflect.get(cause, 'retryAfterMs') : undefined
-        const delay = /network error 429/.test(message) ? retryAfter ?? 1000 : 250 * 2 ** attempt
-        if (!Number.isFinite(delay) || delay < 0 || delay > 60_000) throw error
+        const delay = this.syncTransferRetryDelay(error, attempt)
+        if (delay == null) throw error
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     }

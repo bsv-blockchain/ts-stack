@@ -1,33 +1,53 @@
 import knexFactory from 'knex'
 import { KnexMigrations, SYNC_TRANSFER_MIGRATION } from '../schema/KnexMigrations'
 import { KnexSyncTransferStore } from './KnexSyncTransferStore'
-import { encodeSyncTransfer, receiveSyncTransfer, syncTransferDigest,
-  decodeSyncTransfer, validateSyncTransferCapabilities, validateSyncTransferManifest } from './SyncTransfer'
+import {
+  encodeSyncTransfer,
+  receiveSyncTransfer,
+  syncTransferDigest,
+  decodeSyncTransfer,
+  validateSyncTransferCapabilities,
+  validateSyncTransferManifest
+} from './SyncTransfer'
 
 const capabilities = { version: 1 as const, partBytes: 1024, maxBytes: 1024 * 1024 }
 
 describe('bounded durable sync transport', () => {
-  const knex = knexFactory({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true,
-    pool: { min: 1, max: 1 } })
+  const knex = knexFactory({
+    client: 'better-sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    pool: { min: 1, max: 1 }
+  })
   let store: KnexSyncTransferStore
   beforeAll(async () => {
-    await (await new KnexMigrations('test', 'synthetic', 'a'.repeat(64), 100).getMigration(SYNC_TRANSFER_MIGRATION)).up(knex)
+    await (
+      await new KnexMigrations('test', 'synthetic', 'a'.repeat(64), 100).getMigration(SYNC_TRANSFER_MIGRATION)
+    ).up(knex)
   })
   beforeEach(async () => {
     await knex('sync_transfer_parts').delete()
     await knex('sync_transfers').where('slot', '>', 0).update({ expiresAt: 0 })
     store = new KnexSyncTransferStore(knex, capabilities)
   })
-  afterAll(async () => { await knex.destroy() })
+  afterAll(async () => {
+    await knex.destroy()
+  })
 
   test('migration replay preserves staging and rollback preserves unrelated wallet data', async () => {
-    const migration = await new KnexMigrations('test', 'synthetic', 'a'.repeat(64), 100).getMigration(SYNC_TRANSFER_MIGRATION)
-    await knex.schema.createTable('wallet_rollback_sentinel', table => { table.integer('value') })
+    const migration = await new KnexMigrations('test', 'synthetic', 'a'.repeat(64), 100).getMigration(
+      SYNC_TRANSFER_MIGRATION
+    )
+    await knex.schema.createTable('wallet_rollback_sentinel', table => {
+      table.integer('value')
+    })
     await knex('wallet_rollback_sentinel').insert({ value: 123 })
     const bytes = encodeSyncTransfer({ data: 'record' })
     const m = await store.beginRead('alice', syncTransferDigest(bytes), bytes)
     await migration.up(knex)
-    expect(await receiveSyncTransfer(m, offset => store.read('alice', m.transferId, offset))).toEqual({ data: 'record' })
+    expect(await receiveSyncTransfer(m, offset => store.read('alice', m.transferId, offset))).toEqual({
+      data: 'record'
+    })
     await migration.down!(knex)
     expect(await knex('wallet_rollback_sentinel')).toEqual([{ value: 123 }])
     expect(await knex.schema.hasTable('sync_transfers')).toBe(false)
@@ -70,6 +90,17 @@ describe('bounded durable sync transport', () => {
     expect(await knex('sync_transfer_parts')).toHaveLength(0)
   })
 
+  test('rejects changed upload metadata and invalid part size', async () => {
+    const bytes = encodeSyncTransfer({ bytes: new Uint8Array(3000).fill(1) })
+    const digest = syncTransferDigest(bytes)
+    const m = await store.beginWrite('alice', digest, bytes.length)
+    await expect(store.beginWrite('alice', digest, bytes.length + 1)).rejects.toThrow('metadata changed')
+    await expect(store.write('alice', m.transferId, 0, bytes.subarray(0, 1023))).rejects.toThrow(
+      'Invalid wallet sync part'
+    )
+    expect((await store.beginWrite('alice', digest, bytes.length)).receivedBytes).toBe(0)
+  })
+
   test('rejects corrupted and out-of-order parts without accepting a complete record', async () => {
     const bytes = encodeSyncTransfer({ bytes: new Uint8Array(2000).fill(53) })
     const m = await store.beginWrite('alice', syncTransferDigest(bytes), bytes.length)
@@ -77,7 +108,9 @@ describe('bounded durable sync transport', () => {
     for (let offset = 0; offset < bytes.length; offset += capabilities.partBytes) {
       await store.write('alice', m.transferId, offset, bytes.subarray(offset, offset + capabilities.partBytes))
     }
-    await knex('sync_transfer_parts').where({ offset: 0 }).update({ bytes: Buffer.alloc(1024) })
+    await knex('sync_transfer_parts')
+      .where({ offset: 0 })
+      .update({ bytes: Buffer.alloc(1024) })
     await expect(store.loadWrite('alice', m.transferId)).rejects.toThrow('integrity')
   })
 
@@ -92,8 +125,11 @@ describe('bounded durable sync transport', () => {
   })
 
   test('binary framing preserves bytes, dates and reserved metadata without expanding raw data', () => {
-    const value = { when: new Date('2026-01-01T00:00:00.000Z'),
-      bytes: new Uint8Array(10_000).fill(255), marker: { $bsvBinary: 'base64', data: 'AAAA' } }
+    const value = {
+      when: new Date('2026-01-01T00:00:00.000Z'),
+      bytes: new Uint8Array(10_000).fill(255),
+      marker: { $bsvBinary: 'base64', data: 'AAAA' }
+    }
     const frame = encodeSyncTransfer(value)
     expect(frame.length).toBeLessThan(10_500)
     expect(decodeSyncTransfer(frame)).toEqual({ ...value, when: value.when.toISOString() })
@@ -115,7 +151,14 @@ describe('bounded durable sync transport', () => {
     for (const path of [['missing'], ['__proto__', 'polluted'], [-1], ['bytes', 'deep']]) {
       expect(() => decodeSyncTransfer(frame([{ path, length: 1 }]))).toThrow('frame')
     }
-    expect(() => decodeSyncTransfer(frame([{ path: ['bytes'], length: 1 }, { path: ['bytes'], length: 0 }]))).toThrow('frame')
+    expect(() =>
+      decodeSyncTransfer(
+        frame([
+          { path: ['bytes'], length: 1 },
+          { path: ['bytes'], length: 0 }
+        ])
+      )
+    ).toThrow('frame')
     expect(() => decodeSyncTransfer(frame([{ path: ['bytes'], length: 0 }]))).toThrow('frame')
     expect(Object.hasOwn(Object.prototype, 'polluted')).toBe(false)
   })
@@ -129,8 +172,9 @@ describe('bounded durable sync transport', () => {
     await knex('sync_transfers').where({ transferId: first.transferId }).update({ state: 'building' })
     await knex('sync_transfer_parts').delete()
     const rebuilt = await store.beginRead('alice', context, changed)
-    expect(await receiveSyncTransfer(rebuilt, offset => store.read('alice', rebuilt.transferId, offset)))
-      .toEqual({ bytes: new Uint8Array(2000).fill(62) })
+    expect(await receiveSyncTransfer(rebuilt, offset => store.read('alice', rebuilt.transferId, offset))).toEqual({
+      bytes: new Uint8Array(2000).fill(62)
+    })
   })
 
   test('rejects invalid advertised limits and corrupted download parts', async () => {
@@ -139,8 +183,11 @@ describe('bounded durable sync transport', () => {
     const m = await store.beginRead('alice', syncTransferDigest(bytes), bytes)
     expect(validateSyncTransferManifest(m, capabilities)).toEqual(m)
     expect(() => validateSyncTransferManifest({ ...m, totalBytes: -1 }, capabilities)).toThrow('manifest')
-    await expect(receiveSyncTransfer(m, async offset => ({ offset, bytes: new Uint8Array(Math.min(1024, bytes.length - offset)) })))
-      .rejects.toThrow('integrity')
-    await expect(receiveSyncTransfer(m, async () => ({ offset: 1, bytes: new Uint8Array(1024) }))).rejects.toThrow('part')
+    await expect(
+      receiveSyncTransfer(m, async offset => ({ offset, bytes: new Uint8Array(Math.min(1024, bytes.length - offset)) }))
+    ).rejects.toThrow('integrity')
+    await expect(receiveSyncTransfer(m, async () => ({ offset: 1, bytes: new Uint8Array(1024) }))).rejects.toThrow(
+      'part'
+    )
   })
 })

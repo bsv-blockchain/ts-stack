@@ -116,9 +116,9 @@ claim that every wallet feature or legacy migration is strictly conformant.
 ## Artifact cost requiring review
 
 The proposed package budgets include the new framing, validation, integrity and
-retry code. Exact packed consumers measured Vite 1,710,390 bytes (403,378 gzip),
-esbuild 1,334,082 (366,703 gzip), Metro 1,761,339 (447,423 gzip), and Hermes
-3,575,840 (1,435,359 gzip). Browser composition contains only the existing SDK,
+retry code. Exact packed consumers measured Vite 1,710,722 bytes (403,503 gzip),
+esbuild 1,334,466 (366,821 gzip), Metro 1,761,902 (447,577 gzip), and Hermes
+3,576,912 (1,435,912 gzip). Browser composition contains only the existing SDK,
 wallet client, noble hashes, hash-wasm and IndexedDB dependencies; no Node
 storage or new dependency enters the graph. The server staging adapter remains
 outside browser/mobile exports.

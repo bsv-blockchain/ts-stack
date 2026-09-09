@@ -64,34 +64,58 @@ export function encodeSyncTransfer(value: unknown): Uint8Array {
   new DataView(frame.buffer).setUint32(0, header.length, false)
   frame.set(header, 4)
   let offset = 4 + header.length
-  for (const part of parts) { frame.set(part, offset); offset += part.length }
+  for (const part of parts) {
+    frame.set(part, offset)
+    offset += part.length
+  }
   return frame
 }
 
+function invalid(): never {
+  throw new TypeError('Invalid wallet sync transfer frame')
+}
+
+function restoreBinaryField(holder: { value: unknown }, fieldPath: Array<string | number>, bytes: Uint8Array): void {
+  let target: Record<string | number, unknown> = holder
+  const path: Array<string | number> = ['value', ...fieldPath]
+  for (let i = 0; i < path.length; i++) {
+    const key = path[i]
+    if (
+      (typeof key !== 'string' && (!Number.isSafeInteger(key) || key < 0)) ||
+      target == null ||
+      typeof target !== 'object' ||
+      !Object.hasOwn(target, key)
+    )
+      invalid()
+    if (i === path.length - 1) {
+      if (target[key] !== null) invalid()
+      Object.defineProperty(target, key, { value: bytes, enumerable: true, writable: true, configurable: true })
+    } else target = target[key] as Record<string | number, unknown>
+  }
+}
+
 export function decodeSyncTransfer(bytes: Uint8Array): unknown {
-  const invalid = (): never => { throw new TypeError('Invalid wallet sync transfer frame') }
   if (bytes.length < 4 || bytes.length > SYNC_TRANSFER_MAX_BYTES) invalid()
   const headerLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false)
   if (headerLength > bytes.length - 4) invalid()
-  const header = parseJsonRpc(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + headerLength)), true)
+  const header = parseJsonRpc(
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(4, 4 + headerLength)),
+    true
+  )
   if (header?.version !== 1 || !Array.isArray(header.fields) || header.fields.length > 4096) invalid()
   const holder: { value: unknown } = { value: header.value }
   let offset = 4 + headerLength
   for (const field of header.fields as BinaryField[]) {
-    if (field == null || !Array.isArray(field.path) || field.path.length > 64 ||
-      !Number.isSafeInteger(field.length) || field.length < 0 || field.length > bytes.length - offset) invalid()
-    let target: Record<string | number, unknown> = holder
-    const path: Array<string | number> = ['value', ...field.path]
-    for (let i = 0; i < path.length; i++) {
-      const key = path[i]
-      if ((typeof key !== 'string' && (!Number.isSafeInteger(key) || key < 0)) ||
-        target == null || typeof target !== 'object' || !Object.hasOwn(target, key)) invalid()
-      if (i === path.length - 1) {
-        if (target[key] !== null) invalid()
-        Object.defineProperty(target, key, { value: bytes.subarray(offset, offset + field.length),
-          enumerable: true, writable: true, configurable: true })
-      } else target = target[key] as Record<string | number, unknown>
-    }
+    if (
+      field == null ||
+      !Array.isArray(field.path) ||
+      field.path.length > 64 ||
+      !Number.isSafeInteger(field.length) ||
+      field.length < 0 ||
+      field.length > bytes.length - offset
+    )
+      invalid()
+    restoreBinaryField(holder, field.path, bytes.subarray(offset, offset + field.length))
     offset += field.length
   }
   if (offset !== bytes.length) invalid()
@@ -99,21 +123,39 @@ export function decodeSyncTransfer(bytes: Uint8Array): unknown {
 }
 
 export function validateSyncTransferCapabilities(value: SyncTransferCapabilities): SyncTransferCapabilities {
-  if (value?.version !== 1 || !Number.isSafeInteger(value.maxBytes) || value.maxBytes < 1 ||
-    value.maxBytes > SYNC_TRANSFER_MAX_BYTES || !Number.isSafeInteger(value.partBytes) ||
-    value.partBytes < 1024 || value.partBytes > SYNC_TRANSFER_PART_BYTES ||
-    (value.inlineBytes != null && (!Number.isSafeInteger(value.inlineBytes) || value.inlineBytes < 1024 || value.inlineBytes > SYNC_TRANSFER_MAX_BYTES))) {
+  if (
+    value?.version !== 1 ||
+    !Number.isSafeInteger(value.maxBytes) ||
+    value.maxBytes < 1 ||
+    value.maxBytes > SYNC_TRANSFER_MAX_BYTES ||
+    !Number.isSafeInteger(value.partBytes) ||
+    value.partBytes < 1024 ||
+    value.partBytes > SYNC_TRANSFER_PART_BYTES ||
+    (value.inlineBytes != null &&
+      (!Number.isSafeInteger(value.inlineBytes) ||
+        value.inlineBytes < 1024 ||
+        value.inlineBytes > SYNC_TRANSFER_MAX_BYTES))
+  ) {
     throw new TypeError('Unsupported wallet sync transfer capabilities')
   }
   return value
 }
 
 export function validateSyncTransferManifest(
-  value: SyncTransferManifest, capabilities: SyncTransferCapabilities
+  value: SyncTransferManifest,
+  capabilities: SyncTransferCapabilities
 ): SyncTransferManifest {
-  if (value == null || !/^[a-f0-9]{64}$/.test(value.transferId) || !/^[a-f0-9]{64}$/.test(value.digest) ||
-    !Number.isSafeInteger(value.totalBytes) || value.totalBytes < 1 || value.totalBytes > capabilities.maxBytes ||
-    value.partBytes !== capabilities.partBytes || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now()) {
+  if (
+    value == null ||
+    !/^[a-f0-9]{64}$/.test(value.transferId) ||
+    !/^[a-f0-9]{64}$/.test(value.digest) ||
+    !Number.isSafeInteger(value.totalBytes) ||
+    value.totalBytes < 1 ||
+    value.totalBytes > capabilities.maxBytes ||
+    value.partBytes !== capabilities.partBytes ||
+    !Number.isSafeInteger(value.expiresAt) ||
+    value.expiresAt <= Date.now()
+  ) {
     throw new TypeError('Invalid wallet sync transfer manifest')
   }
   return value
