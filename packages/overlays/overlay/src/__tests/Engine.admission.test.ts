@@ -2,6 +2,7 @@ import { Engine } from '../Engine.js'
 import type { LookupService } from '../LookupService.js'
 import type { TopicManager } from '../TopicManager.js'
 import type { Storage } from '../storage/Storage.js'
+import type { OverlayAdmissionHost } from '../EngineAdmission.js'
 import type {
   AdmissionCommit,
   AdmissionReceipt,
@@ -48,7 +49,8 @@ function receiptFor(plan: AdmissionCommit): AdmissionReceipt {
 describe('Engine admission submit', () => {
   let mockTopicManager: TopicManager
   let mockLookupService: LookupService
-  let mockStorage: Storage & { admission: AdmissionStorage; admissionScope: StorageScope }
+  let mockStorage: Storage &
+    OverlayAdmissionHost & { admission: AdmissionStorage; admissionScope: StorageScope }
   let commitAdmission: jest.Mock
   let saved: AdmissionReceipt | undefined
 
@@ -235,5 +237,106 @@ describe('Engine admission submit', () => {
     expect(plan.decisions[0].applied.proof?.kind).toBe('merkle-path')
     expect(plan.decisions[0].applied.firstSeenHeight).toBe('800000')
     expect(plan.decisions[0].applied.block).toBeUndefined()
+  })
+
+  test('returns STEAK without commit when no topic is accepted', async () => {
+    mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+      outputsToAdmit: [],
+      coinsToRetain: []
+    }))
+    const onReady = jest.fn()
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    const steak = await engine.submit({ beef: exampleBeef, topics: ['Hello'] }, onReady)
+    expect(steak).toEqual({ Hello: { outputsToAdmit: [], coinsToRetain: [] } })
+    expect(commitAdmission).not.toHaveBeenCalled()
+    expect(onReady).toHaveBeenCalledWith(steak)
+  })
+
+  test('uses host payload, fence, and enlisted index hooks', async () => {
+    const publishAdmissionPayload = jest.fn(
+      async (input: { kind: string; bytes: Uint8Array; txid?: string }) => ({
+        kind: input.kind,
+        digest: 'ab'.repeat(32),
+        byteLength: String(input.bytes.byteLength)
+      })
+    )
+    const getHistoryFence = jest.fn(async () => ({
+      chainEpoch: '1',
+      topicHistoryGeneration: '2'
+    }))
+    mockStorage.publishAdmissionPayload = publishAdmissionPayload
+    mockStorage.enlistedIndexTargets = () => ['Hello']
+    mockStorage.getHistoryFence = getHistoryFence
+    mockStorage.findOutput = jest.fn(async () => ({
+      txid:
+        exampleTX.inputs[0].sourceTXID ??
+        '3ecead27a44d013ad1aae40038acbb1883ac9242406808bb4667c15b4f164eac',
+      outputIndex: exampleTX.inputs[0].sourceOutputIndex,
+      outputScript: [],
+      satoshis: 1,
+      topic: 'Hello',
+      spent: false,
+      outputsConsumed: [],
+      consumedBy: []
+    }))
+    mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+      outputsToAdmit: [0],
+      coinsToRetain: [0]
+    }))
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    await engine.submit({ beef: exampleBeef, topics: ['Hello'] }, undefined, 'current-tx', [7, 8])
+    const submitted = commitAdmission.mock.calls[0][0] as AdmissionCommit
+    expect(publishAdmissionPayload).toHaveBeenCalled()
+    expect(getHistoryFence).toHaveBeenCalledWith('Hello')
+    expect(submitted.decisions[0].expectedHistory).toEqual({
+      chainEpoch: '1',
+      topicHistoryGeneration: '2'
+    })
+    expect(submitted.decisions[0].spends).toHaveLength(1)
+    expect(submitted.outbox.some(intent => intent.target === 'Hello')).toBe(false)
+    expect(submitted.identity.contextDigest.length).toBe(64)
+  })
+
+  test('surfaces admission rejection and recovers a pending receipt', async () => {
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    commitAdmission.mockResolvedValueOnce({ state: 'rejected', code: 'spend-conflict' })
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).rejects.toThrow(
+      'Overlay admission rejected: spend-conflict'
+    )
+
+    commitAdmission
+      .mockResolvedValueOnce({ state: 'rejected', code: 'read-conflict' })
+      .mockImplementation(async (plan: AdmissionCommit) => {
+        saved = receiptFor(plan)
+        return { state: 'committed' as const, receipt: saved }
+      })
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual(
+      expect.objectContaining({ Hello: expect.objectContaining({ outputsToAdmit: [0] }) })
+    )
+
+    commitAdmission.mockResolvedValue({ state: 'pending', attemptId: 'lost-ack' })
+    const lastPlan = commitAdmission.mock.calls[commitAdmission.mock.calls.length - 1]?.[0] as
+      AdmissionCommit | undefined
+    mockStorage.admission.reconcileAdmission = jest.fn(async () => ({
+      state: 'committed' as const,
+      receipt:
+        saved ?? receiptFor(lastPlan ?? (commitAdmission.mock.calls[0][0] as AdmissionCommit))
+    }))
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toBeDefined()
   })
 })

@@ -4,6 +4,7 @@ import type { Knex } from 'knex'
 import { KnexStorage } from '../storage/knex/KnexStorage.js'
 import {
   admissionSemanticDigest,
+  asStorageUint64,
   getAdmissionStorage,
   isReplaySafeProjection,
   parseStorageOutputIndex,
@@ -91,6 +92,13 @@ describe('S01 portable persistence contract', () => {
 
   test('does not coerce a JavaScript number at a runtime boundary', () => {
     expect(() => parseStorageUint64(1 as unknown as string)).toThrow()
+  })
+
+  test('asStorageUint64 returns the canonical decimal after validation', () => {
+    expect(asStorageUint64('0')).toBe('0')
+    expect(asStorageUint64('18446744073709551615')).toBe('18446744073709551615')
+    expect(() => asStorageUint64('01')).toThrow('Invalid storage uint64')
+    expect(() => asStorageUint64('-1')).toThrow('Invalid storage uint64')
   })
 
   test.each(fixture.outputIndices)('exact output index: "$value"', ({ value, valid }) => {

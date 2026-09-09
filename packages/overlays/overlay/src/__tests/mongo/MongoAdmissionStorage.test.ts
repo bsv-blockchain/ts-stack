@@ -3,7 +3,14 @@ import { admissionPlan, admissionStorageContract } from '../admission/AdmissionS
 import { getAdmissionStorage } from '../../storage/AdmissionStorage.js'
 import { MongoAdmissionStorage } from '../../storage/mongo/MongoAdmissionStorage.js'
 import { MongoOverlayStorage } from '../../storage/mongo/MongoOverlayStorage.js'
-import { bootstrapMongoOverlay, MongoCollectionNames } from '../../storage/mongo/MongoSchema.js'
+import {
+  bootstrapMongoOverlay,
+  encodeMongoOutputIndex,
+  encodeMongoUint64,
+  MongoCollectionNames,
+  mongoNodeKey,
+  mongoRecordKey
+} from '../../storage/mongo/MongoSchema.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
 import { MongoAdmissionHarness } from './MongoAdmissionHarness.js'
 import type { MongoEnlistedLookupIndex } from '../../storage/mongo/MongoAdmissionStorage.js'
@@ -327,6 +334,223 @@ describe('Mongo admission storage', () => {
     expect(await replacement.commitAdmission(plan)).toEqual(committed)
     await replacement.close()
   }, 60000)
+
+  test('covers overlay storage fences, CRUD filters, and unimplemented BEEF updates', async () => {
+    await harness.reset()
+    const storage = new MongoOverlayStorage(fixture.db, fixture.scope)
+    expect(await storage.getHistoryFence('tm_missing')).toEqual({
+      chainEpoch: '0',
+      topicHistoryGeneration: '0'
+    })
+    const now = new Date()
+    await storage.admission.generations().insertOne({
+      _id: storage.admission.generationId('tm_contract'),
+      schemaVersion: 1,
+      network: fixture.scope.network,
+      genesisHash: fixture.scope.genesisHash,
+      nodeId: fixture.scope.nodeId,
+      topic: 'tm_contract',
+      chainEpoch: encodeMongoUint64('3'),
+      topicHistoryGeneration: encodeMongoUint64('4'),
+      policyId: 'policy-1',
+      createdAt: now,
+      updatedAt: now
+    })
+    expect(await storage.getHistoryFence('tm_contract')).toEqual({
+      chainEpoch: '3',
+      topicHistoryGeneration: '4'
+    })
+
+    const published = await storage.publishAdmissionPayload({
+      kind: 'locking-script',
+      bytes: new Uint8Array([0x76, 0xa9])
+    })
+    expect(published.byteLength).toBe('2')
+    expect(published.digest).toHaveLength(64)
+
+    const beef = hydrationBeef()
+    const txid = Transaction.fromBEEF(beef).id('hex')
+    const script = [0x76, 0xa9, 0x14, 0x00, 0x88, 0xac]
+    await storage.insertOutput({
+      txid,
+      outputIndex: 0,
+      outputScript: script,
+      satoshis: 50,
+      topic: 'tm_contract',
+      spent: false,
+      outputsConsumed: [],
+      consumedBy: [],
+      score: 8,
+      beef
+    })
+    expect(await storage.findOutput(txid, 0, undefined, false)).toEqual(
+      expect.objectContaining({ txid, spent: false, satoshis: 50 })
+    )
+    expect(await storage.findOutput(txid, 0, 'tm_contract', true)).toBeNull()
+    expect(await storage.findOutputsForTransaction(txid)).toHaveLength(1)
+    expect(await storage.findUTXOsForTopic('tm_contract', 0, 0)).toHaveLength(1)
+    expect(await storage.findUTXOsForTopic('tm_contract', 8, 1, true)).toHaveLength(1)
+    expect(await storage.findUTXOsForTopic('tm_contract', 9, 1)).toHaveLength(0)
+
+    await storage.updateConsumedBy(txid, 0, 'tm_contract', [
+      { txid: 'ab'.repeat(32), outputIndex: 1 }
+    ])
+    await storage.insertAppliedTransaction({ txid, topic: 'tm_contract', proven: false })
+    await storage.insertAppliedTransaction({
+      txid: 'dd'.repeat(32),
+      topic: 'tm_contract',
+      proven: true
+    })
+    expect(await storage.doesAppliedTransactionExist({ txid, topic: 'tm_contract' })).toBe(true)
+    expect(
+      await storage.doesAppliedTransactionExist({ txid: 'cd'.repeat(32), topic: 'tm_contract' })
+    ).toBe(false)
+    await storage.updateLastInteraction('peer.example', 'tm_contract', 42)
+    expect(await storage.getLastInteraction('peer.example', 'tm_contract')).toBe(42)
+    expect(await storage.getLastInteraction('missing', 'tm_contract')).toBe(0)
+
+    await storage.markUTXOAsSpent(txid, 0, 'tm_contract')
+    expect(await storage.findOutput(txid, 0, 'tm_contract', true)).toEqual(
+      expect.objectContaining({ spent: true })
+    )
+    await storage.deleteOutput(txid, 0, 'tm_contract')
+    expect(await storage.findOutput(txid, 0, 'tm_contract', false)).toBeNull()
+    await expect(storage.updateTransactionBEEF(txid, [])).rejects.toThrow(
+      `Mongo overlay storage does not implement updateTransactionBEEF for ${txid}`
+    )
+
+    const outputDoc = {
+      schemaVersion: 1,
+      network: fixture.scope.network,
+      genesisHash: fixture.scope.genesisHash,
+      nodeId: fixture.scope.nodeId,
+      scriptPayloadId: storage.admission.payloadId(published),
+      scriptOffset: encodeMongoUint64('0'),
+      scriptByteLength: encodeMongoUint64(published.byteLength),
+      state: 'unspent' as const,
+      version: '1',
+      createdAt: now,
+      updatedAt: now
+    }
+    await fixture.db.collection(MongoCollectionNames.outputs).insertOne({
+      ...outputDoc,
+      _id: mongoRecordKey(
+        mongoNodeKey(fixture.scope),
+        'output',
+        'tm_unsafe',
+        'ee'.repeat(32),
+        encodeMongoOutputIndex('0')
+      ),
+      topic: 'tm_unsafe',
+      txid: 'ee'.repeat(32),
+      outputIndex: encodeMongoOutputIndex('0'),
+      satoshis: encodeMongoUint64('9007199254740993'),
+      score: encodeMongoUint64('1')
+    })
+    await expect(storage.findOutput('ee'.repeat(32), 0, 'tm_unsafe')).rejects.toThrow(
+      'Mongo satoshis exceeds a safe JavaScript integer'
+    )
+
+    await fixture.db.collection(MongoCollectionNames.outputs).insertOne({
+      ...outputDoc,
+      _id: mongoRecordKey(
+        mongoNodeKey(fixture.scope),
+        'output',
+        'tm_score',
+        'cc'.repeat(32),
+        encodeMongoOutputIndex('0')
+      ),
+      topic: 'tm_score',
+      txid: 'cc'.repeat(32),
+      outputIndex: encodeMongoOutputIndex('0'),
+      satoshis: encodeMongoUint64('1'),
+      score: encodeMongoUint64('9007199254740993')
+    })
+    await expect(storage.findOutput('cc'.repeat(32), 0, 'tm_score')).rejects.toThrow(
+      'Mongo score exceeds a safe JavaScript integer'
+    )
+
+    await fixture.db.collection(MongoCollectionNames.outputs).insertOne({
+      ...outputDoc,
+      _id: mongoRecordKey(
+        mongoNodeKey(fixture.scope),
+        'output',
+        'tm_script',
+        'ff'.repeat(32),
+        encodeMongoOutputIndex('0')
+      ),
+      topic: 'tm_script',
+      txid: 'ff'.repeat(32),
+      outputIndex: encodeMongoOutputIndex('0'),
+      satoshis: encodeMongoUint64('1'),
+      score: encodeMongoUint64('1'),
+      scriptPayloadId: 'missing-payload'
+    })
+    await expect(storage.findOutput('ff'.repeat(32), 0, 'tm_script')).rejects.toThrow(
+      'Mongo output script payload is not ready'
+    )
+    await expect(harness.adapter.acknowledgeOutbox('lookup', 'missing-event')).rejects.toThrow(
+      'Mongo outbox event is not leased'
+    )
+    await storage.close()
+  })
+
+  test('rejects a missing eviction and a history update from an empty fence', async () => {
+    await harness.reset()
+    const missingEviction = admissionPlan('missing-eviction')
+    missingEviction.decisions[0].evictions = [{ txid: 'aa'.repeat(32), outputIndex: '0' }]
+    for (const decision of missingEviction.decisions) {
+      await harness.seed.history(
+        missingEviction.identity.scope,
+        decision.topic,
+        decision.expectedHistory
+      )
+      for (const read of decision.reads) {
+        if (read.expectedVersion !== null) {
+          await harness.seed.read(
+            missingEviction.identity.scope,
+            decision.topic,
+            read.key,
+            read.expectedVersion
+          )
+        }
+      }
+      for (const spend of decision.spends) {
+        await harness.seed.spendable(
+          missingEviction.identity.scope,
+          decision.topic,
+          spend.outpoint,
+          spend.expectedVersion
+        )
+      }
+    }
+    for (const payload of missingEviction.payloads) await harness.seed.readyPayload(payload)
+    expect(await harness.adapter.commitAdmission(missingEviction)).toEqual({
+      state: 'rejected',
+      code: 'invalid-plan'
+    })
+
+    await harness.reset()
+    const fromZero = admissionPlan('history-zero')
+    fromZero.decisions[0].expectedHistory = { chainEpoch: '0', topicHistoryGeneration: '0' }
+    fromZero.decisions[0].historyUpdate = {
+      nextTopicHistoryGeneration: '1',
+      affectedFromHeight: '0'
+    }
+    fromZero.decisions[0].spends = []
+    for (const read of fromZero.decisions[0].reads) {
+      if (read.expectedVersion !== null) {
+        await harness.seed.read(
+          fromZero.identity.scope,
+          fromZero.decisions[0].topic,
+          read.key,
+          read.expectedVersion
+        )
+      }
+    }
+    for (const payload of fromZero.payloads) await harness.seed.readyPayload(payload)
+    expect((await harness.adapter.commitAdmission(fromZero)).state).toBe('committed')
+  })
 })
 
 function hydrationBeef(): number[] {
