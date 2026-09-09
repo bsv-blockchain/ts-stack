@@ -304,7 +304,7 @@ describe('Engine admission submit', () => {
     })
     expect(submitted.decisions[0].spends).toHaveLength(1)
     expect(submitted.outbox.some(intent => intent.target === 'Hello')).toBe(false)
-    expect(submitted.identity.contextDigest.length).toBe(64)
+    expect(submitted.identity.contextDigest).toHaveLength(64)
   })
 
   test('surfaces admission rejection and recovers a pending receipt', async () => {
