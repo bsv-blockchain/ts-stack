@@ -612,9 +612,9 @@ export interface RequestSyncChunkArgs {
    */
   toStorageIdentityKey: string
 
-  /**
-   * The identity of whose data is being requested
-   */
+  /** Require the writer checkpoint to still match before applying a staged transfer. */
+  requireMatchingCheckpoint?: boolean
+  /** The identity of whose data is being requested. */
   identityKey: string
   /**
    * The max updated_at time received from the storage service receiving the request.

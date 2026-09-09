@@ -1,3 +1,6 @@
+import { type SyncTransferCapabilities, type SyncTransferManifest, type SyncTransferPart,
+  encodeSyncTransfer, syncTransferDigest, receiveSyncTransfer,
+  validateSyncTransferCapabilities, validateSyncTransferManifest } from './SyncTransfer'
 import { syncChunkBinary } from './syncChunkBinary'
 import { validateSyncCheckpoint } from '../sync/syncCheckpoint'
 import {
@@ -86,6 +89,7 @@ function isSyncChunkResponseTooLarge (error: unknown): boolean {
 type RemoteStorageSettings = TableSettings & {
   /** Runtime-only RPC advertisement, not a persisted settings-table column. */
   syncCheckpointVersion?: 1
+  syncTransfer?: SyncTransferCapabilities
 }
 
 export interface StorageClientOptions {
@@ -117,6 +121,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected readonly binaryRequests: boolean
   protected readonly telemetry: Telemetry
   private syncChunkRoughSizeLimit?: number
+  /** Optional progress/cancellation hook for a bounded transfer; never receives wallet contents. */
+  onSyncTransferProgress?: (progress: { direction: 'read' | 'write'; bytes: number; totalBytes: number }) => void
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: RemoteStorageSettings
@@ -637,7 +643,14 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
     const wireChunk = this.binaryRequests && this.serverSupportsBinary ? syncChunkBinary(chunk) : chunk
-    const r = await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
+    const capabilities = this.syncTransferCapabilities()
+    // Keep ordinary pages on the existing RPC. Only an oversized encoded payload uses staging.
+    const bytes = capabilities == null ? undefined : encodeSyncTransfer({ args, chunk: syncChunkBinary(chunk) })
+    // Legacy numeric byte arrays can require four JSON characters per byte.
+    const expansion = this.binaryRequests && this.serverSupportsBinary ? 1 : 4
+    const r = bytes != null && bytes.length * expansion > (capabilities!.inlineBytes ?? 6 * 1024 * 1024)
+      ? await this.uploadSyncTransfer(args.identityKey, bytes, capabilities!)
+      : await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
     if (r.nextCheckpoint != null) r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args)
     return r
   }
@@ -652,25 +665,108 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns the next "chunk" of replication data
    */
   async getSyncChunk(args: RequestSyncChunkArgs): Promise<SyncChunk> {
-    let requestArgs = { ...args }
+    const transfer = this.syncTransferCapabilities()
+    let requestArgs = { ...args, ...(transfer == null ? {} : { syncTransferVersion: 1 }) }
     if (this.syncChunkRoughSizeLimit != null) {
       requestArgs.maxRoughSize = Math.min(requestArgs.maxRoughSize, this.syncChunkRoughSizeLimit)
     }
 
     for (let retries = 0; ; retries++) {
       try {
-        const r = await this.rpcCall<SyncChunk>('getSyncChunk', [requestArgs])
+        const r = await this.rpcCall<SyncChunk | { syncTransfer: SyncTransferManifest }>('getSyncChunk', [requestArgs])
+        if ('syncTransfer' in r) {
+          if (transfer == null || Object.keys(r).length !== 1) throw new Error('Unexpected wallet sync transfer response')
+          return await this.downloadSyncTransfer(requestArgs, transfer, r.syncTransfer)
+        }
         if (requestArgs.maxRoughSize < args.maxRoughSize) {
           this.syncChunkRoughSizeLimit = requestArgs.maxRoughSize
         }
         return validateSyncChunkEntities(r)
       } catch (error: unknown) {
-        if (!isSyncChunkResponseTooLarge(error) || retries >= syncChunkResponseRetryLimit) throw error
+        if (!isSyncChunkResponseTooLarge(error)) throw error
         const nextRoughSize = Math.max(minimumSyncChunkRoughSize, Math.floor(requestArgs.maxRoughSize / 2))
-        if (nextRoughSize >= requestArgs.maxRoughSize) throw error
+        if (retries >= syncChunkResponseRetryLimit || nextRoughSize >= requestArgs.maxRoughSize) {
+          if (requestArgs.maxItems !== 1) {
+            requestArgs = { ...requestArgs, maxItems: 1, maxRoughSize: minimumSyncChunkRoughSize }
+            continue
+          }
+          const capabilities = this.syncTransferCapabilities()
+          if (capabilities == null) throw error
+          return await this.downloadSyncTransfer(requestArgs, capabilities)
+        }
         requestArgs = { ...requestArgs, maxRoughSize: nextRoughSize }
       }
     }
+  }
+
+  private syncTransferCapabilities(): SyncTransferCapabilities | undefined {
+    const value = this.settings?.syncTransfer
+    return value == null ? undefined : validateSyncTransferCapabilities(value)
+  }
+
+  private async transferPartCall<T>(method: string, input: Record<string, unknown>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.rpcCall<T>(method, [input]) } catch (error) {
+        // Only immutable reads and identical staged part writes may be retried here. Never commit.
+        const message = error instanceof Error ? error.message : ''
+        if (attempt >= 2 || !/network error (?:429|502|503|504)|timed out waiting for authenticated response|fetch failed|Failed to fetch/i.test(message)) throw error
+        const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error
+        const retryAfter = cause != null && typeof cause === 'object' ? Reflect.get(cause, 'retryAfterMs') : undefined
+        const delay = /network error 429/.test(message) ? retryAfter ?? 1000 : 250 * 2 ** attempt
+        if (!Number.isFinite(delay) || delay < 0 || delay > 60_000) throw error
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  private async releaseSyncTransfer(identityKey: string, transferId: string): Promise<void> {
+    try { await this.rpcCall('releaseSyncTransfer', [{ identityKey, transferId }]) } catch {
+      // Expiry reclaims staging if the connection is gone. Wallet records are never removed.
+    }
+  }
+
+  private async downloadSyncTransfer(args: RequestSyncChunkArgs, capabilities: SyncTransferCapabilities,
+    suppliedManifest?: SyncTransferManifest): Promise<SyncChunk> {
+    const manifest = validateSyncTransferManifest(suppliedManifest ?? await this.transferPartCall<SyncTransferManifest>(
+      'beginReadSyncTransfer', { identityKey: args.identityKey, args }), capabilities)
+    try {
+      const chunk = await receiveSyncTransfer(manifest, async offset => {
+        this.onSyncTransferProgress?.({ direction: 'read', bytes: offset, totalBytes: manifest.totalBytes })
+        return await this.transferPartCall<SyncTransferPart>('readSyncTransferPart', {
+          identityKey: args.identityKey, transferId: manifest.transferId, offset })
+      }) as SyncChunk
+      this.onSyncTransferProgress?.({ direction: 'read', bytes: manifest.totalBytes, totalBytes: manifest.totalBytes })
+      if (chunk?.userIdentityKey !== args.identityKey || chunk.fromStorageIdentityKey !== args.fromStorageIdentityKey ||
+        chunk.toStorageIdentityKey !== args.toStorageIdentityKey) throw new Error('Wallet sync transfer identities changed')
+      return validateSyncChunkEntities(chunk)
+    } finally {
+      await this.releaseSyncTransfer(args.identityKey, manifest.transferId)
+    }
+  }
+
+  private async uploadSyncTransfer(identityKey: string, bytes: Uint8Array, capabilities: SyncTransferCapabilities): Promise<ProcessSyncChunkResult> {
+    if (bytes.length > capabilities.maxBytes) throw new RangeError('Wallet sync record exceeds the negotiated transfer size limit')
+    const response = await this.transferPartCall<SyncTransferManifest & { receivedBytes: number }>(
+      'beginWriteSyncTransfer', { identityKey, digest: syncTransferDigest(bytes), totalBytes: bytes.length })
+    const manifest = validateSyncTransferManifest(response, capabilities)
+    if (manifest.digest !== syncTransferDigest(bytes) || manifest.totalBytes !== bytes.length ||
+      !Number.isSafeInteger(response.receivedBytes) || response.receivedBytes < 0 || response.receivedBytes > bytes.length ||
+      (response.receivedBytes !== bytes.length && response.receivedBytes % manifest.partBytes !== 0)) {
+      throw new Error('Invalid wallet sync upload checkpoint')
+    }
+    for (let offset = response.receivedBytes; offset < bytes.length;) {
+      this.onSyncTransferProgress?.({ direction: 'write', bytes: offset, totalBytes: bytes.length })
+      const part = bytes.subarray(offset, offset + manifest.partBytes)
+      const next = await this.transferPartCall<number>('writeSyncTransferPart', {
+        identityKey, transferId: manifest.transferId, offset, bytes: part
+      })
+      if (next !== offset + part.length) throw new Error('Invalid wallet sync upload acknowledgement')
+      offset = next
+    }
+    // An uncertain commit is surfaced. The next sync starts from the writer's durable checkpoint.
+    const result = await this.rpcCall<ProcessSyncChunkResult>('commitSyncTransfer', [{ identityKey, transferId: manifest.transferId }])
+    await this.releaseSyncTransfer(identityKey, manifest.transferId)
+    return result
   }
 
   /**

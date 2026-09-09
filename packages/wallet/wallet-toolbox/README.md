@@ -9,8 +9,8 @@ A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) confo
 ## Backup and sync: tested results
 
 **Live E2E testing used a large wallet in the native desktop client**, covering
-complete local copies, restart recovery, and repeat sync. Transfer size was
-measured separately with a synthetic fixture.
+complete local copies, restart recovery, and repeat sync. Transfer size and oversized-record recovery were
+measured separately with synthetic fixtures.
 
 | Test                         | Verified result                                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -18,6 +18,7 @@ measured separately with a synthetic fixture.
 | Retained local backup        | Completed after cancellation, a connectivity pause, and restart recovery; all **12 entity-store counts preserved** on another restart.                  |
 | Local reads and repeat sync  | Transaction/output reads passed; sampled transaction bytes matched; repeat sync made **0 inserts, 0 updates**.                                          |
 | Transfer size                | **62.7% smaller** encoded byte payload in a synthetic fixture.                                                                                          |
+| Oversized single record      | **7 MiB restored in real browser IndexedDB**, matching SHA-256; interrupted upload resumed, corrupt download rejected, repeat sync unchanged.           |
 | Automated integration        | Authenticated HTTP backup/restore, interrupted pages, lost acknowledgements, binary byte round-trips, user isolation, and legacy compatibility covered. |
 
 Timing compares successive candidates, not a controlled comparison against upstream
@@ -73,6 +74,15 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; remote wallet storage plus portable local ChainTracks components and adapter contracts
 
 ### Sync performance and recovery
+
+Large individual records can use the negotiated
+[bounded transfer protocol](./docs/sync-transfer.md), with durable staging,
+integrity verification and checkpoint replay protection. Its authenticated
+HTTP/SQLite/IndexedDB regression exercises a 7 MiB binary record, an interrupted
+upload across client/server restart, a lost part acknowledgement, corrupted
+download rejection and a verified restore followed by an unchanged resync.
+The current frame limit is 64 MiB; legacy providers must be upgraded to use it.
+This synthetic regression is separate from the large-wallet timing evidence above.
 
 Wallet storage replication applies each received page and its durable sync
 checkpoint in one provider transaction. IndexedDB and Knex therefore avoid

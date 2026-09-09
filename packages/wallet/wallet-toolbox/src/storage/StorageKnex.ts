@@ -1398,6 +1398,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findSyncStates (args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.findSyncStatesQuery(args)
+    // Serialize sync checkpoint reads with the page transaction on MySQL too.
+    if (args.trx != null && this.dbtype === 'MySQL' && args.partial.userId != null &&
+      (args.partial.syncStateId != null || args.partial.storageIdentityKey != null)) q.forUpdate()
     const r = await q
     return this.validateEntities(r, ['when'], ['init'])
   }

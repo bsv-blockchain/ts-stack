@@ -161,6 +161,13 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(chunk.provenTxs[0].rawTx).toBe(bytes)
   })
 
+  test('accounts for HTML escaping when enforcing the response-size ceiling', async () => {
+    const server = makeServer({ getSettings: () => ({ value: '<'.repeat(25) }) }, { maxRpcResponseBytes: 100 })
+    const captured = makeResponse()
+    await invoke(server, 'handleRpcRequest', makeRequest({ jsonrpc: '2.0', method: 'getSettings', params: [], id: 1 }), captured.response)
+    expect(captured.statusCode).toBe(413)
+  })
+
   test('advertises compact checkpoints without modifying stored settings and authenticates checkpoint reads', async () => {
     const settings = { storageIdentityKey: 'storage-key' }
     const getSyncCheckpoint = jest.fn(async () => ({ syncStateId: 1, offsets: [] }))

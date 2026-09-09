@@ -11,6 +11,8 @@ import {
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
 
+export const SYNC_TRANSFER_MIGRATION = '2026-09-09-001 add bounded sync transfers'
+
 export const AUTH_SESSION_MIGRATION = '2026-07-14-001 add shared auth sessions'
 export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor created index'
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
@@ -87,6 +89,39 @@ export class KnexMigrations implements MigrationSource<string> {
       } else {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+      }
+    }
+
+    migrations[SYNC_TRANSFER_MIGRATION] = {
+      config: { transaction: true },
+      async up(knex) {
+        // MySQL DDL commits implicitly; table/slot creation also tolerates an interrupted migration.
+        if (!await knex.schema.hasTable('sync_transfers')) await knex.schema.createTable('sync_transfers', table => {
+          table.integer('slot').primary()
+          table.string('transferId', 64).unique().nullable()
+          table.string('identityKey', 130).nullable()
+          table.string('context', 64).nullable()
+          table.string('direction', 8).nullable()
+          table.string('digest', 64).nullable()
+          table.integer('totalBytes').nullable()
+          table.integer('receivedBytes').notNullable().defaultTo(0)
+          table.integer('partBytes').nullable()
+          table.bigInteger('expiresAt').notNullable().defaultTo(0)
+          table.string('state', 16).nullable()
+          table.text('result').nullable()
+        })
+        // Slot zero serializes allocation across replicas; eight slots bound total disk usage.
+        await knex('sync_transfers').insert(Array.from({ length: 9 }, (_, slot) => ({ slot }))).onConflict('slot').ignore()
+        if (!await knex.schema.hasTable('sync_transfer_parts')) await knex.schema.createTable('sync_transfer_parts', table => {
+          table.integer('slot').notNullable().references('slot').inTable('sync_transfers')
+          table.integer('offset').notNullable()
+          table.specificType('bytes', String(knex.client.config.client).includes('mysql') ? 'mediumblob' : 'blob').notNullable()
+          table.primary(['slot', 'offset'])
+        })
+      },
+      async down(knex) {
+        await knex.schema.dropTableIfExists('sync_transfer_parts')
+        await knex.schema.dropTableIfExists('sync_transfers')
       }
     }
 

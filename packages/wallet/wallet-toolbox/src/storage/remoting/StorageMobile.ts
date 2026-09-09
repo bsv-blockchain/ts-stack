@@ -44,7 +44,7 @@ export class StorageClient extends StorageClientBase {
         id
       }
 
-      const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
+      const requestUsesBinary = (this.binaryRequests || (method === 'writeSyncTransferPart' && this.settings?.syncTransfer?.version === 1)) && this.serverSupportsBinary
       const requestBody = await this.traceRpcStep(
         'wallet.storage.request.serialize',
         rpcSpan,
@@ -71,7 +71,13 @@ export class StorageClient extends StorageClientBase {
       )
 
       if (!response.ok) {
-        throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+        const error = new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+        if (response.status === 429) {
+          const after = response.headers.get('retry-after')
+          const delay = after == null ? 1000 : /^\d+$/.test(after) ? Number(after) * 1000 : Date.parse(after) - Date.now()
+          Object.assign(error, { retryAfterMs: delay })
+        }
+        throw error
       }
 
       const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING

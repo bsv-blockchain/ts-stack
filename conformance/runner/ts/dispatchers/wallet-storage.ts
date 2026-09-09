@@ -25,8 +25,14 @@
  */
 
 import { expect } from '@jest/globals'
+import {
+  encodeSyncTransfer,
+  decodeSyncTransfer,
+  syncTransferDigest
+} from '@wallet-toolbox/storage/remoting/SyncTransfer'
+import { parseJsonRpc } from '@wallet-toolbox/storage/remoting/BinaryJson'
 
-export const categories: ReadonlyArray<string> = ['adapter-conformance']
+export const categories: ReadonlyArray<string> = ['adapter-conformance', 'sync-transfer']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -546,6 +552,20 @@ export function dispatch(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
+  if (category === 'sync-transfer') {
+    if (typeof input.hex === 'string') {
+      expect(() => decodeSyncTransfer(Buffer.from(input.hex as string, 'hex'))).toThrow(
+        String(expected.error)
+      )
+    } else {
+      const value = parseJsonRpc(JSON.stringify(input.value), true)
+      const bytes = encodeSyncTransfer(value)
+      expect(Buffer.from(bytes).toString('hex')).toBe(expected.hex)
+      expect(syncTransferDigest(bytes)).toBe(expected.digest)
+      expect(decodeSyncTransfer(bytes)).toEqual(value)
+    }
+    return
+  }
   if (category !== 'adapter-conformance') {
     throw new Error(`wallet-storage dispatcher: unknown category '${category}'`)
   }

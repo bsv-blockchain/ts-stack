@@ -11,6 +11,13 @@ attention to changes that materially alter behavior or extend functionality.
   a clean missing-token result only for a server-declared pending registration,
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
+- Add optional bounded sync transfers for oversized records, authenticated pieces,
+  durable Knex staging, full-frame SHA-256 verification, and stale-checkpoint
+  rejection before merging. Add the two staging tables through migration
+  `2026-09-09-001`; reverse only that migration before restarting older code. Frames are limited
+  to 64 MiB and ordinary pages keep their existing transport. See
+  [the transport and migration guide](./docs/sync-transfer.md).
+
 - Upgrade IndexedDB to schema version 6 with a non-unique transaction-ID/user
   index. Use existing reference, reclaim, commission, and relation keys for
   sync lookups, avoiding repeated scans as a local wallet grows. Preserve

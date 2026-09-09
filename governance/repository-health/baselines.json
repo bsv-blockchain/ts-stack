@@ -14,11 +14,11 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6479,
+    "passed": 6483,
     "skipped": 211,
-    "total": 6690,
-    "vectorFiles": 76,
-    "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
+    "total": 6694,
+    "vectorFiles": 77,
+    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test --runInBand (2026-09-09); 6483 passed, 211 existing skips"
   },
   "testExceptions": {
     "explicitSkipDeclarations": 60,

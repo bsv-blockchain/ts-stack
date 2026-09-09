@@ -61,7 +61,7 @@ describe('StorageClientBase sync response retry', () => {
     expect(client.calls).toHaveLength(1)
   })
 
-  test('stops after the bounded number of oversized-response retries', async () => {
+  test('stops after bounded retries and a final single-record request', async () => {
     const client = new RetryingStorageClient(10)
 
     await expect(client.getSyncChunk(makeArgs())).rejects.toThrow('network error 413')
@@ -70,8 +70,10 @@ describe('StorageClientBase sync response retry', () => {
       5_000_000,
       2_500_000,
       1_250_000,
-      625_000
+      625_000,
+      65_536
     ])
+    expect(client.calls.at(-1)?.maxItems).toBe(1)
   })
 
   test.each([
@@ -120,4 +122,29 @@ describe('StorageClientBase sync response retry', () => {
     ])
     expect(args.maxRoughSize).toBe(10_000_000)
   })
+  test.each([
+    ['full client', FullStorageClient],
+    ['mobile client', MobileStorageClient]
+  ])('%s respects Retry-After for an idempotent transfer part and bounds retries', async (_name, Client) => {
+    const client = new Client({} as WalletInterface, 'https://storage.example.test')
+    let remainingFailures = 1
+    const fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body))
+      if (remainingFailures-- > 0) return new Response('', {
+        status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After': '0' }
+      })
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: 1024 }), {
+        status: 200, headers: { 'Content-Type': 'application/json' }
+      })
+    })
+    Reflect.set(client, 'authClient', { fetch })
+    const call = Reflect.get(client, 'transferPartCall').bind(client)
+    await expect(call('writeSyncTransferPart', { identityKey: makeArgs().identityKey })).resolves.toBe(1024)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    remainingFailures = 10
+    fetch.mockClear()
+    await expect(call('writeSyncTransferPart', { identityKey: makeArgs().identityKey })).rejects.toThrow('429')
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
 })

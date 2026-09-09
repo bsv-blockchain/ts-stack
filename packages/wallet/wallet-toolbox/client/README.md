@@ -13,6 +13,14 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## Large wallet records
+
+Compatible providers negotiate authenticated, integrity-checked transfers for
+records that exceed a single HTTP message. Uploads resume saved pieces after
+interruption; ordinary pages and legacy providers retain their existing protocol.
+Version 1 is bounded to 64 MiB per frame and requires an upgraded provider.
+See the [transfer and migration guide](../docs/sync-transfer.md).
+
 ## Install
 
 Install the `@bsv/sdk` peer dependency alongside this package:

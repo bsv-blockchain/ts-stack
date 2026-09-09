@@ -262,6 +262,31 @@ describe('compact sync checkpoints', () => {
     }
   }, 60000)
 
+  test('rejects replay of a staged page after its checkpoint has already committed', async () => {
+    const writer = await makeStorage()
+    const identityKey = PrivateKey.fromRandom().toPublicKey().toString()
+    try {
+      const { user } = await writer.findOrInsertUser(identityKey)
+      const checkpoint = await writer.getSyncCheckpoint({ identityKey }, 'source', 'source')
+      const args = { ...checkpoint, identityKey, fromStorageIdentityKey: 'source',
+        toStorageIdentityKey: writer.getSettings().storageIdentityKey, maxItems: 1, maxRoughSize: 1024,
+        requireMatchingCheckpoint: true }
+      const now = new Date()
+      const chunk = { userIdentityKey: identityKey, fromStorageIdentityKey: 'source',
+        toStorageIdentityKey: args.toStorageIdentityKey,
+        outputTags: [{ outputTagId: 1234, userId: user.userId, created_at: now, updated_at: now,
+          tag: 'staged replay fixture', isDeleted: false }] }
+      await expect(writer.processSyncChunk(args, chunk)).resolves.toMatchObject({ inserts: 1 })
+      await expect(writer.processSyncChunk(args, chunk)).rejects.toThrow('checkpoint changed')
+      const saved = await writer.getSyncCheckpoint({ identityKey }, 'source', 'source')
+      expect(saved.offsets.find(entry => entry.name === 'outputTag')?.offset).toBe(1)
+      expect(await writer.countOutputTags({ partial: { userId: user.userId } })).toBe(1)
+    } finally {
+      await writer.destroy()
+      await writer.dropAllData()
+    }
+  })
+
   test('uses advertised support without probing legacy providers or hiding gateway failures', async () => {
     const client = new StorageClient({} as never, 'https://storage.example')
     const rpc = jest.spyOn(client as never, 'rpcCall' as never) as jest.SpyInstance

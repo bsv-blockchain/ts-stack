@@ -1359,6 +1359,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           })
         )
       )
+      if (args.requireMatchingCheckpoint === true) {
+        const checkpoint = ss.makeSyncCheckpoint()
+        const sameSince = (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
+          (args.since == null ? undefined : new Date(args.since).getTime())
+        if (!sameSince || checkpoint.offsets.length !== args.offsets.length || checkpoint.offsets.some((entry, index) =>
+          entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset)) {
+          throw new WERR_INVALID_OPERATION('Wallet sync checkpoint changed; resume from its durable state before retrying')
+        }
+      }
       const result = await ss.processSyncChunk(this, args, chunk, trx)
       return args.includeNextCheckpoint === true
         ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() }

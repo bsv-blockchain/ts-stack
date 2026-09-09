@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bsv-blockchain.github.io/ts-stack/specs/wallet/storage-sync-transfer.schema.json",
+  "title": "Wallet storage bounded sync transfer v1",
+  "description": "Additive authenticated transport for complete BRC-40 objects. Logical BRC-40 records and merge semantics remain unchanged. See wallet-toolbox/docs/sync-transfer.md for framing, integrity, authorization and recovery.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "beginReadSyncTransfer"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "args": {
+                  "type": "object",
+                  "required": [
+                    "identityKey",
+                    "fromStorageIdentityKey",
+                    "toStorageIdentityKey",
+                    "maxItems",
+                    "maxRoughSize",
+                    "offsets"
+                  ],
+                  "properties": {
+                    "identityKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 130
+                    },
+                    "fromStorageIdentityKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 130
+                    },
+                    "toStorageIdentityKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 130
+                    },
+                    "maxItems": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "maxRoughSize": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "offsets": {
+                      "type": "array",
+                      "minItems": 12,
+                      "maxItems": 12
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "required": ["identityKey", "args"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "readSyncTransferPart"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "transferId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 67108863
+                }
+              },
+              "required": ["identityKey", "transferId", "offset"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "beginWriteSyncTransfer"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "totalBytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 67108864
+                }
+              },
+              "required": ["identityKey", "digest", "totalBytes"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "writeSyncTransferPart"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "transferId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 67108863
+                },
+                "bytes": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "$bsvBinary": {
+                      "const": "base64"
+                    },
+                    "data": {
+                      "type": "string",
+                      "maxLength": 349528,
+                      "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+                    }
+                  },
+                  "required": ["$bsvBinary", "data"]
+                }
+              },
+              "required": ["identityKey", "transferId", "offset", "bytes"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "commitSyncTransfer"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "transferId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": ["identityKey", "transferId"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        },
+        "method": {
+          "const": "releaseSyncTransfer"
+        },
+        "params": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "identityKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 130
+                },
+                "transferId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": ["identityKey", "transferId"]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"]
+    }
+  ],
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "partBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 262144
+        },
+        "inlineBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864
+        }
+      },
+      "required": ["version", "maxBytes", "partBytes"]
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transferId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "partBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 262144
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["transferId", "digest", "totalBytes", "partBytes", "expiresAt"]
+    }
+  }
+}
