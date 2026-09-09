@@ -6,8 +6,10 @@ import {
   type AdmissionCommitResult,
   type AdmissionOutboxIntent,
   type AdmissionOutpoint,
+  type AdmissionOutput,
   type AdmissionPayloadRef,
   type AdmissionReceipt,
+  type AdmissionTopicDecision,
   type StorageScope
 } from '../AdmissionStorage.js'
 
@@ -57,10 +59,9 @@ export const samePayload = (
   left: AdmissionPayloadRef | undefined,
   right: AdmissionPayloadRef
 ): boolean =>
-  left !== undefined &&
-  left.digest === right.digest &&
-  left.byteLength === right.byteLength &&
-  left.kind === right.kind
+  left?.digest === right.digest &&
+  left?.byteLength === right.byteLength &&
+  left?.kind === right.kind
 
 export const admissionPlanPayloads = (plan: AdmissionCommit): AdmissionPayloadRef[] => {
   const references = [...plan.payloads]
@@ -109,9 +110,23 @@ export const isBoundSteak = (plan: AdmissionCommit): boolean => {
   })
 }
 
-export const validateAdmissionPlan = (
-  plan: AdmissionCommit
-): AdmissionRejectionCode | undefined => {
+const hasInvalidTopicSet = (plan: AdmissionCommit): boolean => {
+  const topics = new Set(plan.identity.topics.map(item => item.topic))
+  const decisionTopics = new Set(plan.decisions.map(decision => decision.topic))
+  return (
+    topics.size !== plan.identity.topics.length ||
+    plan.decisions.length !== topics.size ||
+    decisionTopics.size !== plan.decisions.length ||
+    decisionTopics.size !== topics.size ||
+    plan.decisions.some(decision => !topics.has(decision.topic)) ||
+    new Set(plan.outbox.map(intent => intent.eventId)).size !== plan.outbox.length
+  )
+}
+
+const hasHistoricalPropagation = (plan: AdmissionCommit): boolean =>
+  plan.identity.mode === 'historical' && plan.outbox.some(intent => intent.kind === 'propagation')
+
+const identityRejection = (plan: AdmissionCommit): AdmissionRejectionCode | undefined => {
   let semanticDigest: string
   try {
     semanticDigest = admissionSemanticDigest(plan.identity)
@@ -124,112 +139,100 @@ export const validateAdmissionPlan = (
   ) {
     return 'digest-mismatch'
   }
-  const topics = new Set(plan.identity.topics.map(item => item.topic))
-  const decisionTopics = new Set(plan.decisions.map(decision => decision.topic))
+  if (hasInvalidTopicSet(plan) || hasHistoricalPropagation(plan)) return 'invalid-plan'
+  return undefined
+}
+
+const hasUnreadyPayloads = (plan: AdmissionCommit): boolean =>
+  admissionPlanPayloads(plan).some(
+    ref => !isHash(ref.digest) || !isUint64(ref.byteLength) || ref.digest.length === 0
+  )
+
+const isInvalidOutboxIntent = (intent: AdmissionOutboxIntent): boolean =>
+  intent.eventId.length === 0 ||
+  !intent.eventId.isWellFormed() ||
+  intent.target.length === 0 ||
+  !intent.target.isWellFormed() ||
+  (intent.kind !== 'lookup' && intent.kind !== 'propagation')
+
+const isInvalidSpend = (
+  spend: { outpoint: AdmissionOutpoint; spender: string },
+  txid: string
+): boolean => !isWireOutpoint(spend.outpoint) || spend.spender !== txid
+
+const isInvalidEdge = (edge: {
+  source: AdmissionOutpoint
+  consumer: AdmissionOutpoint
+}): boolean => !isWireOutpoint(edge.source) || !isWireOutpoint(edge.consumer)
+
+const isInvalidOutput = (output: AdmissionOutput, txid: string): boolean => {
+  if (output.txid !== txid || !isWireOutpoint(output)) return true
   if (
-    topics.size !== plan.identity.topics.length ||
-    plan.decisions.length !== topics.size ||
-    decisionTopics.size !== plan.decisions.length ||
-    decisionTopics.size !== topics.size ||
-    plan.decisions.some(decision => !topics.has(decision.topic)) ||
-    new Set(plan.outbox.map(intent => intent.eventId)).size !== plan.outbox.length
+    ![output.satoshis, output.score, output.script.offset, output.script.byteLength].every(isUint64)
   ) {
-    return 'invalid-plan'
+    return true
   }
+  if (!isHash(output.script.payload.digest) || !isUint64(output.script.payload.byteLength)) {
+    return true
+  }
+  return (
+    parseStorageUint64(output.script.offset) + parseStorageUint64(output.script.byteLength) >
+    parseStorageUint64(output.script.payload.byteLength)
+  )
+}
+
+const isInvalidApplied = (applied: AdmissionTopicDecision['applied'], txid: string): boolean => {
+  if (applied.txid !== txid || !isHash(applied.txid)) return true
+  if (applied.firstSeenHeight !== undefined && !isUint64(applied.firstSeenHeight)) return true
   if (
-    plan.identity.mode === 'historical' &&
-    plan.outbox.some(intent => intent.kind === 'propagation')
+    applied.proof !== undefined &&
+    (!isHash(applied.proof.digest) || !isUint64(applied.proof.byteLength))
   ) {
-    return 'invalid-plan'
+    return true
   }
-  const payloads = admissionPlanPayloads(plan)
+  return (
+    applied.block !== undefined &&
+    (![applied.block.height, applied.block.index].every(isUint64) ||
+      !isHash(applied.block.hash) ||
+      !isHash(applied.block.merkleRoot))
+  )
+}
+
+const isInvalidHistoryUpdate = (decision: AdmissionTopicDecision): boolean => {
+  const update = decision.historyUpdate
+  if (update === undefined) return false
+  return (
+    !isUint64(update.nextTopicHistoryGeneration) ||
+    !isUint64(update.affectedFromHeight) ||
+    parseStorageUint64(update.nextTopicHistoryGeneration) <=
+      parseStorageUint64(decision.expectedHistory.topicHistoryGeneration)
+  )
+}
+
+const isInvalidDecision = (decision: AdmissionTopicDecision, txid: string): boolean => {
   if (
-    payloads.some(
-      ref => !isHash(ref.digest) || !isUint64(ref.byteLength) || ref.digest.length === 0
-    )
+    !isUint64(decision.expectedHistory.chainEpoch) ||
+    !isUint64(decision.expectedHistory.topicHistoryGeneration)
   ) {
-    return 'payload-not-ready'
+    return true
   }
+  if (decision.spends.some(spend => isInvalidSpend(spend, txid))) return true
+  if (decision.evictions.some(eviction => !isWireOutpoint(eviction))) return true
+  if (decision.outputs.some(output => isInvalidOutput(output, txid))) return true
+  if (decision.edges.some(isInvalidEdge)) return true
+  return isInvalidApplied(decision.applied, txid) || isInvalidHistoryUpdate(decision)
+}
+
+export const validateAdmissionPlan = (
+  plan: AdmissionCommit
+): AdmissionRejectionCode | undefined => {
+  const rejected = identityRejection(plan)
+  if (rejected !== undefined) return rejected
+  if (hasUnreadyPayloads(plan)) return 'payload-not-ready'
   if (!isBoundSteak(plan)) return 'invalid-plan'
-  for (const intent of plan.outbox) {
-    if (
-      intent.eventId.length === 0 ||
-      !intent.eventId.isWellFormed() ||
-      intent.target.length === 0 ||
-      !intent.target.isWellFormed() ||
-      (intent.kind !== 'lookup' && intent.kind !== 'propagation')
-    ) {
-      return 'invalid-plan'
-    }
-  }
-  for (const decision of plan.decisions) {
-    if (
-      !isUint64(decision.expectedHistory.chainEpoch) ||
-      !isUint64(decision.expectedHistory.topicHistoryGeneration)
-    ) {
-      return 'invalid-plan'
-    }
-    if (
-      decision.spends.some(
-        spend => !isWireOutpoint(spend.outpoint) || spend.spender !== plan.identity.txid
-      )
-    ) {
-      return 'invalid-plan'
-    }
-    if (decision.evictions.some(eviction => !isWireOutpoint(eviction))) return 'invalid-plan'
-    if (
-      decision.outputs.some(output => {
-        if (output.txid !== plan.identity.txid || !isWireOutpoint(output)) return true
-        if (
-          ![output.satoshis, output.score, output.script.offset, output.script.byteLength].every(
-            isUint64
-          )
-        ) {
-          return true
-        }
-        if (!isHash(output.script.payload.digest) || !isUint64(output.script.payload.byteLength))
-          return true
-        return (
-          parseStorageUint64(output.script.offset) + parseStorageUint64(output.script.byteLength) >
-          parseStorageUint64(output.script.payload.byteLength)
-        )
-      })
-    ) {
-      return 'invalid-plan'
-    }
-    if (
-      decision.edges.some(edge => !isWireOutpoint(edge.source) || !isWireOutpoint(edge.consumer))
-    ) {
-      return 'invalid-plan'
-    }
-    const applied = decision.applied
-    if (applied.txid !== plan.identity.txid || !isHash(applied.txid)) return 'invalid-plan'
-    if (applied.firstSeenHeight !== undefined && !isUint64(applied.firstSeenHeight))
-      return 'invalid-plan'
-    if (
-      applied.proof !== undefined &&
-      (!isHash(applied.proof.digest) || !isUint64(applied.proof.byteLength))
-    ) {
-      return 'invalid-plan'
-    }
-    if (
-      applied.block !== undefined &&
-      (![applied.block.height, applied.block.index].every(isUint64) ||
-        !isHash(applied.block.hash) ||
-        !isHash(applied.block.merkleRoot))
-    ) {
-      return 'invalid-plan'
-    }
-    if (decision.historyUpdate !== undefined) {
-      if (
-        !isUint64(decision.historyUpdate.nextTopicHistoryGeneration) ||
-        !isUint64(decision.historyUpdate.affectedFromHeight) ||
-        parseStorageUint64(decision.historyUpdate.nextTopicHistoryGeneration) <=
-          parseStorageUint64(decision.expectedHistory.topicHistoryGeneration)
-      ) {
-        return 'invalid-plan'
-      }
-    }
+  if (plan.outbox.some(isInvalidOutboxIntent)) return 'invalid-plan'
+  if (plan.decisions.some(decision => isInvalidDecision(decision, plan.identity.txid))) {
+    return 'invalid-plan'
   }
   return undefined
 }

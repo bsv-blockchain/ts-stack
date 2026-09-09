@@ -30,7 +30,7 @@ import {
 import type { MongoReplicaFixture } from './MongoReplicaFixture.js'
 import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const clone = <T>(value: T): T => structuredClone(value)
 const scopeKey = (scope: StorageScope): string =>
   JSON.stringify([scope.network, scope.genesisHash, scope.nodeId])
 const operationKey = (key: AdmissionOperationKey): string =>

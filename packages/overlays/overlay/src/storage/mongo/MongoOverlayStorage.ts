@@ -290,7 +290,9 @@ export class MongoOverlayStorage implements Storage {
     }
   }
 
-  async updateTransactionBEEF(_txid: string, _beef: number[]): Promise<void> {}
+  async updateTransactionBEEF(txid: string, _beef: number[]): Promise<void> {
+    throw new Error(`Mongo overlay storage does not implement updateTransactionBEEF for ${txid}`)
+  }
 
   async insertAppliedTransaction(tx: AppliedTransaction): Promise<void> {
     const now = new Date()

@@ -80,7 +80,8 @@ export function overlayAdmissionOperationId(
   txid: string,
   topics: string[]
 ): string {
-  const raw = `submit:${mode}:${txid}:${[...topics].sort().join('\n')}`
+  const topicKey = [...topics].sort((a, b) => a.localeCompare(b, 'en')).join('\n')
+  const raw = `submit:${mode}:${txid}:${topicKey}`
   if (Buffer.byteLength(raw, 'utf8') <= 512 && raw.isWellFormed()) return raw
   return `submit:${createHash('sha256').update(raw, 'utf8').digest('hex')}`
 }
