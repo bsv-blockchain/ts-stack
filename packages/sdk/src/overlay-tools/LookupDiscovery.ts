@@ -18,6 +18,15 @@ export class LookupDiscovery {
   private readonly listeners = new Set<(state: LookupDiscoveryUpdate) => void>()
   private started = false
   private abandoned = false
+  private readonly consume = (bytes: number): void => {
+    if (this.abandoned) throw new LookupResourceLimitError('abandoned')
+    if (bytes > this.limits.maxTotalBytes - this.state.receivedBytes) {
+      this.state.limitsHit.add('maxTotalBytes')
+      throw new LookupResourceLimitError('maxTotalBytes')
+    }
+    this.state.receivedBytes += bytes
+    this.emit()
+  }
 
   constructor(
     private readonly trackers: string[],
@@ -50,49 +59,59 @@ export class LookupDiscovery {
     for (const listener of this.listeners) listener(this.state)
   }
 
-  private consume = (bytes: number): void => {
-    if (this.abandoned) throw new LookupResourceLimitError('abandoned')
-    if (bytes > this.limits.maxTotalBytes - this.state.receivedBytes) {
-      this.state.limitsHit.add('maxTotalBytes')
-      throw new LookupResourceLimitError('maxTotalBytes')
+  private collectTrackerHosts(candidates: string[], share: number): string[] {
+    const hosts = new Set<string>()
+    for (const candidate of candidates) {
+      const host = normalizeLookupHost(candidate)
+      if (host === null) {
+        this.state.skippedHosts++
+        continue
+      }
+      if (hosts.has(host)) continue
+      if (hosts.size >= share) {
+        this.state.skippedHosts++
+        this.state.limitsHit.add('maxHostsPerTracker')
+      } else {
+        hosts.add(host)
+      }
     }
-    this.state.receivedBytes += bytes
-    this.emit()
+    return Array.from(hosts)
+  }
+
+  private recordTrackerFailure(error: unknown): void {
+    if (error instanceof LookupResourceLimitError) this.state.limitsHit.add(error.limit)
+    else if (!this.controller.signal.aborted) this.state.trackersFailed++
+  }
+
+  private async processTracker(tracker: string, share: number): Promise<void> {
+    try {
+      const candidates = await this.lookup(tracker, this.controller.signal, this.consume)
+      if (this.abandoned) return
+      this.state.sources.set(tracker, this.collectTrackerHosts(candidates, share))
+    } catch (error) {
+      this.recordTrackerFailure(error)
+    } finally {
+      this.state.trackersCompleted++
+      this.emit()
+    }
+  }
+
+  private async drainTrackers(share: number, cursor: { value: number }): Promise<void> {
+    while (!this.controller.signal.aborted && cursor.value < this.trackers.length) {
+      await this.processTracker(this.trackers[cursor.value++], share)
+    }
   }
 
   private async run(): Promise<void> {
-    let cursor = 0
+    const cursor = { value: 0 }
     // Each tracker keeps a reserved share, so an early advertisement flood
     // cannot consume the complete candidate budget before later sources reply.
     const share = Math.min(this.limits.maxHostsPerTracker,
       Math.max(1, Math.floor(this.limits.maxHosts / Math.max(1, this.trackers.length))))
-    const worker = async (): Promise<void> => {
-      while (!this.controller.signal.aborted && cursor < this.trackers.length) {
-        const tracker = this.trackers[cursor++]
-        try {
-          const candidates = await this.lookup(tracker, this.controller.signal, this.consume)
-          if (this.abandoned) return
-          const hosts = new Set<string>()
-          for (const candidate of candidates) {
-            const host = normalizeLookupHost(candidate)
-            if (host === null) { this.state.skippedHosts++; continue }
-            if (hosts.has(host)) continue
-            if (hosts.size >= share) {
-              this.state.skippedHosts++
-              this.state.limitsHit.add('maxHostsPerTracker')
-            } else hosts.add(host)
-          }
-          this.state.sources.set(tracker, Array.from(hosts))
-        } catch (error) {
-          if (error instanceof LookupResourceLimitError) this.state.limitsHit.add(error.limit)
-          else if (!this.controller.signal.aborted) this.state.trackersFailed++
-        } finally {
-          this.state.trackersCompleted++
-          this.emit()
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(this.limits.trackerConcurrency, this.trackers.length) }, worker))
+    await Promise.all(Array.from(
+      { length: Math.min(this.limits.trackerConcurrency, this.trackers.length) },
+      () => this.drainTrackers(share, cursor)
+    ))
     this.state.done = true
     this.finish(this.state, this.abandoned)
     this.emit()

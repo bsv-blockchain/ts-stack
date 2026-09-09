@@ -291,6 +291,20 @@ function isFreeformAnswer(value: unknown): value is LookupFreeformAnswer {
   return answer.type === 'freeform' && Object.hasOwn(answer, 'result')
 }
 
+function lookupAnswerRetainedBytes(answer: LookupAnswer): number {
+  let retained = 0
+  for (const output of answer.outputs) retained += output.beef.length + (output.context?.length ?? 0)
+  return retained
+}
+
+function copyLookupOutput(output: LookupAnswer['outputs'][number]): LookupAnswer['outputs'][number] {
+  return {
+    ...output,
+    beef: output.beef.slice(),
+    ...(output.context === undefined ? {} : { context: output.context.slice() })
+  }
+}
+
 /** A wall-clock deadline that rejects after `timeoutMs`, optionally aborting a controller. */
 interface Deadline {
   /** Rejects with `Error('Request timed out')` once the timer fires. */
@@ -643,7 +657,7 @@ interface LookupQuerySessionOptions {
   waitForAllHosts: boolean
   correlationId?: string
   limits: LookupLimits
-  onEvidence?: LookupQueryOptions['onEvidence']
+  onEvidence: LookupQueryOptions['onEvidence']
   resolveTxId: (output: LookupAnswer['outputs'][number], now: number) => string | null
 }
 
@@ -822,6 +836,38 @@ interface LookupHostFailureContext {
   correlationId: string | undefined
   onUnreachableHost: LookupQueryOptions['onUnreachableHost']
   notificationCooldownMs: number
+}
+
+/** Mutable orchestration state for one raw lookup query. */
+interface LookupQueryRun {
+  question: LookupQuestion
+  timeout: number | undefined
+  options: LookupQueryOptions | undefined
+  limits: LookupLimits
+  session: LookupQuerySession
+  controller: AbortController
+  queue: LookupHostQueue
+  seen: Set<string>
+  sourceQuota: number
+  discoveryBytes: number
+  discoverySkipped: number
+  processedSources: Set<string>
+  releaseDiscovery: (() => void) | undefined
+  discoveryFinished: boolean
+  noHostsError: Error | undefined
+  cleaned: boolean
+  timer: ReturnType<typeof setTimeout>
+  abort: () => void
+  iteratorSignal: AbortSignal
+}
+
+interface LookupDiscoveryPlan {
+  key: string
+  cached: LookupHostsCacheEntry | undefined
+  configuredAdditional: string[]
+  cacheHasAvailableHost: boolean
+  refresh: boolean
+  initialQuota: number
 }
 
 /**
@@ -1117,276 +1163,529 @@ export default class LookupResolver {
     }
   }
 
-  private async *queryProgress(inputQuestion: LookupQuestion, timeout: number | undefined,
-    options: LookupQueryOptions | undefined, iteratorSignal: AbortSignal): AsyncIterable<LookupAnswerProgress> {
-    // Capture JSON wire values once, before any discovery or queued host can
-    // observe a caller's later mutation. Custom non-JSON questions retain their
-    // historical facilitator-defined semantics when they cannot be cloned.
-    let question: LookupQuestion
-    try { question = structuredClone(inputQuestion) }
-    catch {
-      if (this.facilitator instanceof HTTPSOverlayLookupFacilitator) question = JSON.parse(stringifyBRC100(inputQuestion)) as LookupQuestion
-      else question = { ...inputQuestion }
+  private cloneLookupQuestion(inputQuestion: LookupQuestion): LookupQuestion {
+    try {
+      return structuredClone(inputQuestion)
+    } catch {
+      if (this.facilitator instanceof HTTPSOverlayLookupFacilitator) {
+        return JSON.parse(stringifyBRC100(inputQuestion)) as LookupQuestion
+      }
+      return { ...inputQuestion }
     }
-    const limits = lookupLimits(this.limits, options?.limits, {
+  }
+
+  private lookupQueryLimits(options: LookupQueryOptions | undefined): LookupLimits {
+    return lookupLimits(this.limits, options?.limits, {
       ...(options?.evidenceLimits?.maxOutputs === undefined ? {} : { maxEvidenceOutputs: options.evidenceLimits.maxOutputs }),
       ...(options?.evidenceLimits?.maxBytes === undefined ? {} : { maxEvidenceBytes: options.evidenceLimits.maxBytes })
     })
-    const deadlineMs = options?.deadlineMs ?? 10_000
+  }
+
+  private assertLookupDeadline(deadlineMs: number): void {
     if (!Number.isFinite(deadlineMs) || deadlineMs < 0 || deadlineMs > 2_147_483_647) {
       throw new RangeError('Lookup deadlineMs must be between 0 and 2147483647')
     }
-    if (this.activeQueries >= 128) throw new LookupResourceLimitError('activeQueries')
-    this.activeQueries++
+  }
+
+  private lookupQueryStopped(run: LookupQueryRun): boolean {
+    return run.controller.signal.aborted || run.session.closed
+  }
+
+  private consumeLookupQueryBytes(run: LookupQueryRun, bytes: number): void {
+    if (run.controller.signal.aborted) throw lookupAbortError()
+    if (bytes > run.limits.maxTotalBytes - run.session.receivedBytes) {
+      run.session.limit('maxTotalBytes')
+      throw new LookupResourceLimitError('maxTotalBytes')
+    }
+    run.session.receivedBytes += bytes
+  }
+
+  private skipQueuedLookupHosts(run: LookupQueryRun, count: number, limited: boolean): void {
+    if (count <= 0) return
+    run.session.skippedHosts += count
+    if (limited) run.session.limit('maxHosts')
+  }
+
+  private stopLookupQueryRun(run: LookupQueryRun, reason: 'deadline' | 'cancelled'): void {
+    if (run.controller.signal.aborted) return
+    run.session.limit(reason)
+    run.session.terminalReason = reason
+    run.session.accepting = false
+    run.session.discoveryComplete = false
+    run.controller.abort()
+    run.releaseDiscovery?.()
+    run.discoveryFinished = true
+    run.queue.cancel()
+  }
+
+  private cleanupLookupQueryRun(run: LookupQueryRun): void {
+    if (run.cleaned) return
+    run.cleaned = true
+    run.session.close()
+    clearTimeout(run.timer)
+    run.options?.signal?.removeEventListener('abort', run.abort)
+    run.iteratorSignal.removeEventListener('abort', run.abort)
+    run.controller.abort()
+    run.releaseDiscovery?.()
+    run.queue.cancel()
+    this.activeQueries--
+  }
+
+  private finishLookupSources(run: LookupQueryRun): void {
+    run.discoveryFinished = true
+    run.queue.finishSources()
+  }
+
+  private lookupQueryNoHostsError(run: LookupQueryRun): Error | undefined {
+    if (run.session.hostCount !== 0 || run.session.terminalReason !== 'settled') return undefined
+    if (run.noHostsError !== undefined) return run.noHostsError
+    return new Error(
+      `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${run.question.service}`
+    )
+  }
+
+  private finishLookupQueryRun(run: LookupQueryRun): void {
+    if (!run.discoveryFinished) return
+    run.session.finish(this.lookupQueryNoHostsError(run))
+  }
+
+  private createLookupQueryRun(
+    question: LookupQuestion,
+    timeout: number | undefined,
+    options: LookupQueryOptions | undefined,
+    limits: LookupLimits,
+    iteratorSignal: AbortSignal,
+    deadlineMs: number
+  ): LookupQueryRun {
     const controller = new AbortController()
     const session = new LookupQuerySession({
-      graceMs: options?.graceMs ?? 80, softTimeoutMs: options?.softTimeoutMs,
+      graceMs: options?.graceMs ?? 80,
+      softTimeoutMs: options?.softTimeoutMs,
       waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
       correlationId: options?.correlationId ?? (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined),
-      limits, onEvidence: options?.onEvidence, resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
+      limits,
+      onEvidence: options?.onEvidence,
+      resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
     })
-    let releaseDiscovery: (() => void) | undefined
-    let discoveryFinished = false
-    let noHostsError: Error | undefined
-    const seen = new Set<string>()
-    let sourceQuota = limits.maxHosts
-    let discoveryBytes = 0
-    let discoverySkipped = 0
-    const processedSources = new Set<string>()
-    const consume = (bytes: number): void => {
-      if (controller.signal.aborted) throw lookupAbortError()
-      if (bytes > limits.maxTotalBytes - session.receivedBytes) {
-        session.limit('maxTotalBytes')
-        throw new LookupResourceLimitError('maxTotalBytes')
-      }
-      session.receivedBytes += bytes
+    let run: LookupQueryRun
+    run = {
+      question,
+      timeout,
+      options,
+      limits,
+      session,
+      controller,
+      seen: new Set<string>(),
+      sourceQuota: limits.maxHosts,
+      discoveryBytes: 0,
+      discoverySkipped: 0,
+      processedSources: new Set<string>(),
+      releaseDiscovery: undefined,
+      discoveryFinished: false,
+      noHostsError: undefined,
+      cleaned: false,
+      iteratorSignal,
+      abort: () => this.stopLookupQueryRun(run, 'cancelled'),
+      queue: new LookupHostQueue(
+        limits.maxHosts,
+        limits.hostConcurrency,
+        async host => await this.runQueuedLookupHost(run, host),
+        (count, limited) => this.skipQueuedLookupHosts(run, count, limited)
+      ),
+      timer: setTimeout(() => this.stopLookupQueryRun(run, 'deadline'), deadlineMs)
     }
-    const queue = new LookupHostQueue(limits.maxHosts, limits.hostConcurrency, async host => {
-      if (controller.signal.aborted) return
-      session.hostCount++
-      const startedAt = Date.now()
-      try {
-        const answer = await this.lookupHostWithTracking(host, question, timeout, controller.signal, {
-          maxResponseBytes: limits.maxResponseBytes, maxOutputs: limits.maxOutputs, consumeBytes: consume
-        })
-        if (controller.signal.aborted || session.closed) return
-        let ownedAnswer = answer
-        if (isOutputListAnswer(answer)) {
-          let retained = 0
-          for (const output of answer.outputs) retained += output.beef.length + (output.context?.length ?? 0)
-          if (retained > limits.maxTotalBytes - session.retainedBytes) throw new LookupResourceLimitError('maxTotalBytes')
-          session.retainedBytes += retained
-          ownedAnswer = { type: 'output-list', outputs: answer.outputs.map(output => ({
-            ...output, beef: output.beef.slice(), ...(output.context === undefined ? {} : { context: output.context.slice() })
-          })) }
-          session.receiveEvidence(host, ownedAnswer, options?.onEvidence)
-        }
-        if (controller.signal.aborted || session.closed) return
-        this.recordLookupHostAnswer(session, question.service, host, ownedAnswer, startedAt, session.correlationId)
-      } catch (error) {
-        if (controller.signal.aborted || session.closed) return
-        if (error instanceof LookupResourceLimitError) session.limit(error.limit)
-        else this.recordLookupHostFailure({
-          session, service: question.service, host, hostStartedAt: startedAt,
-          correlationId: session.correlationId, onUnreachableHost: options?.onUnreachableHost,
-          notificationCooldownMs: this.unreachableNotificationCooldown(options)
-        }, error)
-      } finally { session.recordDone() }
-    }, (count, limited) => { if (count > 0) { session.skippedHosts += count; if (limited) session.limit('maxHosts') } })
+    options?.signal?.addEventListener('abort', run.abort, { once: true })
+    iteratorSignal.addEventListener('abort', run.abort, { once: true })
+    return run
+  }
 
-    const stop = (reason: 'deadline' | 'cancelled'): void => {
-      if (controller.signal.aborted) return
-      session.limit(reason)
-      session.terminalReason = reason
-      session.accepting = false
-      session.discoveryComplete = false
-      controller.abort()
-      releaseDiscovery?.()
-      discoveryFinished = true
-      queue.cancel()
+  private retainLookupHostAnswer(
+    run: LookupQueryRun,
+    host: string,
+    answer: LookupFacilitatorAnswer
+  ): LookupFacilitatorAnswer {
+    if (!isOutputListAnswer(answer)) return answer
+    const retained = lookupAnswerRetainedBytes(answer)
+    if (retained > run.limits.maxTotalBytes - run.session.retainedBytes) {
+      throw new LookupResourceLimitError('maxTotalBytes')
     }
-    const abort = (): void => stop('cancelled')
-    options?.signal?.addEventListener('abort', abort, { once: true })
-    iteratorSignal.addEventListener('abort', abort, { once: true })
-    const timer = setTimeout(() => stop('deadline'), deadlineMs)
+    run.session.retainedBytes += retained
+    const ownedAnswer: LookupAnswer = {
+      type: 'output-list',
+      outputs: answer.outputs.map(copyLookupOutput)
+    }
+    run.session.receiveEvidence(host, ownedAnswer, run.options?.onEvidence)
+    return ownedAnswer
+  }
 
-    let cleaned = false
-    const cleanup = (): void => {
-      if (cleaned) return
-      cleaned = true
-      session.close()
-      clearTimeout(timer)
-      options?.signal?.removeEventListener('abort', abort)
-      iteratorSignal.removeEventListener('abort', abort)
-      controller.abort()
-      releaseDiscovery?.()
-      queue.cancel()
-      this.activeQueries--
+  private recordQueuedLookupHostFailure(
+    run: LookupQueryRun,
+    host: string,
+    startedAt: number,
+    error: unknown
+  ): void {
+    if (this.lookupQueryStopped(run)) return
+    if (error instanceof LookupResourceLimitError) {
+      run.session.limit(error.limit)
+      return
     }
+    this.recordLookupHostFailure({
+      session: run.session,
+      service: run.question.service,
+      host,
+      hostStartedAt: startedAt,
+      correlationId: run.session.correlationId,
+      onUnreachableHost: run.options?.onUnreachableHost,
+      notificationCooldownMs: this.unreachableNotificationCooldown(run.options)
+    }, error)
+  }
 
-    const admit = (source: string, candidates: string[]): void => {
-      if (controller.signal.aborted) return
-      const hosts: string[] = []
-      const scanLimit = Math.min(candidates.length, limits.maxHosts * 4)
-      if (candidates.length > scanLimit) { session.skippedHosts += candidates.length - scanLimit; session.limit('maxHosts') }
-      for (let candidateIndex = 0; candidateIndex < scanLimit; candidateIndex++) {
-        const candidate = candidates[candidateIndex]
-        const host = normalizeLookupHost(candidate, source === 'configured' || source === 'additional')
-        if (host === null) { session.skippedHosts++; continue }
-        if (seen.has(host)) continue
-        // Keep this dedup set finite, too. Source-level discovery reservations
-        // protect later trackers before candidates reach this queue.
-        if (seen.size >= limits.maxHosts) { session.skippedHosts++; session.limit('maxHosts'); continue }
-        seen.add(host)
-        session.discoveredHosts++
-        hosts.push(host)
-      }
-      if (hosts.length === 0) return
-      try {
-        const available = this.prepareHostsForQuery(hosts, `lookup service ${question.service}`)
-        session.skippedHosts += hosts.length - available.length
-        queue.add(source, available)
-      } catch (error) {
-        session.skippedHosts += hosts.length
-        noHostsError = error instanceof Error ? error : new Error(lookupErrorMessage(error))
-      }
-    }
-    const sourcesDone = (): void => {
-      discoveryFinished = true
-      queue.finishSources()
-    }
-    const acceptDiscovery = (state: LookupDiscoveryUpdate): void => {
-      if (controller.signal.aborted) return
-      session.trackersTotal = state.trackersTotal
-      session.trackersCompleted = state.trackersCompleted
-      session.trackersFailed = state.trackersFailed
-      session.skippedHosts += state.skippedHosts - discoverySkipped
-      discoverySkipped = state.skippedHosts
-      for (const name of state.limitsHit) session.limit(name)
-      try { consume(state.receivedBytes - discoveryBytes) } catch (error) {
-        if (error instanceof LookupResourceLimitError) session.limit(error.limit)
-        controller.abort()
-        releaseDiscovery?.()
-        queue.cancel()
-        discoveryFinished = true
-        return
-      }
-      discoveryBytes = state.receivedBytes
-      for (const [source, hosts] of state.sources) {
-        if (processedSources.has(source)) continue
-        processedSources.add(source)
-        admit(source, hosts.slice(0, sourceQuota))
-        if (hosts.length > sourceQuota) {
-          session.skippedHosts += hosts.length - sourceQuota
-          session.limit('maxHostsPerTracker')
-        }
-      }
-      session.discoveryComplete = state.done && state.trackersFailed === 0 && state.limitsHit.size === 0 && state.skippedHosts === 0
-      session.wake()
-      if (state.done) sourcesDone()
-    }
+  private async settleQueuedLookupHost(run: LookupQueryRun, host: string, startedAt: number): Promise<void> {
+    const answer = await this.lookupHostWithTracking(host, run.question, run.timeout, run.controller.signal, {
+      maxResponseBytes: run.limits.maxResponseBytes,
+      maxOutputs: run.limits.maxOutputs,
+      consumeBytes: bytes => this.consumeLookupQueryBytes(run, bytes)
+    })
+    if (this.lookupQueryStopped(run)) return
+    const ownedAnswer = this.retainLookupHostAnswer(run, host, answer)
+    if (this.lookupQueryStopped(run)) return
+    this.recordLookupHostAnswer(
+      run.session,
+      run.question.service,
+      host,
+      ownedAnswer,
+      startedAt,
+      run.session.correlationId
+    )
+  }
+
+  private async runQueuedLookupHost(run: LookupQueryRun, host: string): Promise<void> {
+    if (run.controller.signal.aborted) return
+    run.session.hostCount++
+    const startedAt = Date.now()
     try {
-      this.telemetry.capture({ name: 'sdk.overlay.lookup.started', component: 'sdk.lookup-resolver',
-        severity: 'debug', correlationId: session.correlationId,
-        attributes: { service: question.service, network: this.networkPreset, hostCount: 0 } })
-      if (options?.signal?.aborted === true || iteratorSignal.aborted) abort()
-      if (!controller.signal.aborted) {
-        if (question.service === 'ls_slap' || this.hostOverrides[question.service] != null || this.networkPreset === 'local') {
-          const direct = question.service === 'ls_slap'
-            ? (this.networkPreset === 'local' ? ['http://localhost:8080'] : this.slapTrackers)
-            : this.hostOverrides[question.service] ?? ['http://localhost:8080']
-          admit('configured', direct)
-          admit('additional', this.additionalHosts[question.service] ?? [])
-          session.discoveryComplete = true
-          sourcesDone()
-        } else {
-          const cached = this.hostsCache.get(question.service)
-          const configuredAdditional = this.additionalHosts[question.service] ?? []
-          const cacheHasAvailableHost =
-            cached?.hosts.some(host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now()) ??
-            false
-          const cacheCoversCaller = lookupDiscoveryCovers(cached, limits)
-          const cacheFresh = cached !== undefined && cached.expiresAt > Date.now()
-          const key = lookupDiscoveryCacheKey(question.service, limits)
-          let discovery = this.hostsInFlight.get(key)
-          const refresh =
-            discovery !== undefined ||
-            cached === undefined ||
-            !cacheCoversCaller ||
-            !cacheFresh ||
-            !cacheHasAvailableHost
-          const initialSources =
-            Number(cached !== undefined && cacheHasAvailableHost) + Number(configuredAdditional.length > 0)
-          const initialQuota = refresh ? Math.max(1, Math.floor(limits.maxHosts / (initialSources + Math.max(1, Math.min(this.slapTrackers.length, limits.maxTrackers))))) : limits.maxHosts
-          if (cached !== undefined && cacheHasAvailableHost) {
-            // Reserve a source share for cached membership and each late tracker.
-            const cachedLimit = initialQuota
-            admit('cache', cached.hosts.slice(0, cachedLimit))
-            if (cached.hosts.length > cachedLimit) { session.skippedHosts += cached.hosts.length - cachedLimit; session.limit('maxHosts') }
-          }
-          if (configuredAdditional.length > 0) {
-            admit('additional', configuredAdditional.slice(0, initialQuota))
-            if (configuredAdditional.length > initialQuota) { session.skippedHosts += configuredAdditional.length - initialQuota; session.limit('maxHosts') }
-          }
-          if (refresh) {
-            sourceQuota = Math.max(1, Math.floor((limits.maxHosts - seen.size) / Math.max(1, Math.min(this.slapTrackers.length, limits.maxTrackers))))
-            if (discovery === undefined) {
-              let trackers: string[] = []
-              const selected: string[] = []
-              const scan = Math.min(this.slapTrackers.length, limits.maxTrackers)
-              for (let i = 0; i < scan; i++) selected.push(this.slapTrackers[(this.trackerCursor + i) % this.slapTrackers.length])
-              this.trackerCursor = (this.trackerCursor + scan) % Math.max(1, this.slapTrackers.length)
-              const normalized = Array.from(new Set(selected.map(host => normalizeLookupHost(host)).filter((host): host is string => host !== null)))
-              try { trackers = this.prepareHostsForQuery(normalized.slice(0, limits.maxTrackers), 'SLAP trackers') }
-              catch (error) { noHostsError = error instanceof Error ? error : new Error(lookupErrorMessage(error)) }
-              discovery = new LookupDiscovery(trackers, limits, async (tracker, signal, charge) => {
-                const answer = await this.lookupHostWithTracking(tracker, { service: 'ls_slap', query: { service: question.service } }, MAX_TRACKER_WAIT_TIME, signal,
-                  { maxResponseBytes: limits.maxResponseBytes, maxOutputs: limits.maxOutputs, consumeBytes: charge })
-                const hosts = isOutputListAnswer(answer) ? this.extractHostsFromAnswer(answer, question.service) : []
-                for (const host of hosts) {
-                  if (this.advertisedBy.size >= this.hostsMaxEntries * limits.maxHosts) this.evictOldest(this.advertisedBy)
-                  this.advertisedBy.set(host, tracker)
-                }
-                return hosts
-              }, (state, abandoned) => {
-                if (this.hostsInFlight.get(key) !== discovery) return
-                this.hostsInFlight.delete(key)
-                if (abandoned) return
-                const hosts = Array.from(new Set(Array.from(state.sources.values()).flat())).slice(0, limits.maxHosts)
-                this.rememberDiscoveredHosts(question.service, hosts, limits, state)
-              })
-              if (this.slapTrackers.length > limits.maxTrackers) discovery.state.limitsHit.add('maxTrackers')
-              if (normalized.length !== this.slapTrackers.length || trackers.length < Math.min(normalized.length, limits.maxTrackers)) {
-                discovery.state.skippedHosts += this.slapTrackers.length - trackers.length
-              }
-              this.hostsInFlight.set(key, discovery)
-            }
-            releaseDiscovery = discovery.subscribe(acceptDiscovery)
-            if (controller.signal.aborted) releaseDiscovery()
-          } else {
-            session.discoveryComplete = cached?.discoveryComplete ?? true
-            session.trackersFailed = cached?.trackersFailed ?? 0
-            for (const name of cached?.limitsHit ?? []) session.limit(name)
-            sourcesDone()
-          }
-        }
-      } else queue.cancel()
-      void queue.done.then(() => {
-        const error = session.hostCount === 0 && session.terminalReason === 'settled'
-          ? noHostsError ?? new Error(`No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`)
-          : undefined
-        if (discoveryFinished) session.finish(error)
-      })
-      for await (const progress of session.progress()) {
+      await this.settleQueuedLookupHost(run, host, startedAt)
+    } catch (error) {
+      this.recordQueuedLookupHostFailure(run, host, startedAt, error)
+    } finally {
+      run.session.recordDone()
+    }
+  }
+
+  private collectAdmittedLookupHosts(run: LookupQueryRun, source: string, candidates: string[]): string[] {
+    const hosts: string[] = []
+    const scanLimit = Math.min(candidates.length, run.limits.maxHosts * 4)
+    if (candidates.length > scanLimit) {
+      run.session.skippedHosts += candidates.length - scanLimit
+      run.session.limit('maxHosts')
+    }
+    const allowParameters = source === 'configured' || source === 'additional'
+    for (const candidate of candidates.slice(0, scanLimit)) {
+      const host = normalizeLookupHost(candidate, allowParameters)
+      if (host === null) {
+        run.session.skippedHosts++
+        continue
+      }
+      if (run.seen.has(host)) continue
+      if (run.seen.size >= run.limits.maxHosts) {
+        run.session.skippedHosts++
+        run.session.limit('maxHosts')
+        continue
+      }
+      run.seen.add(host)
+      run.session.discoveredHosts++
+      hosts.push(host)
+    }
+    return hosts
+  }
+
+  private admitLookupHosts(run: LookupQueryRun, source: string, candidates: string[]): void {
+    if (run.controller.signal.aborted) return
+    const hosts = this.collectAdmittedLookupHosts(run, source, candidates)
+    if (hosts.length === 0) return
+    try {
+      const available = this.prepareHostsForQuery(hosts, `lookup service ${run.question.service}`)
+      run.session.skippedHosts += hosts.length - available.length
+      run.queue.add(source, available)
+    } catch (error) {
+      run.session.skippedHosts += hosts.length
+      run.noHostsError = error instanceof Error ? error : new Error(lookupErrorMessage(error))
+    }
+  }
+
+  private admitQuotaLimitedLookupHosts(
+    run: LookupQueryRun,
+    source: string,
+    hosts: string[],
+    quota: number,
+    limitName: string
+  ): void {
+    this.admitLookupHosts(run, source, hosts.slice(0, quota))
+    if (hosts.length > quota) {
+      run.session.skippedHosts += hosts.length - quota
+      run.session.limit(limitName)
+    }
+  }
+
+  private configuredLookupHosts(question: LookupQuestion): string[] {
+    if (question.service === 'ls_slap') {
+      if (this.networkPreset === 'local') return ['http://localhost:8080']
+      return this.slapTrackers
+    }
+    return this.hostOverrides[question.service] ?? ['http://localhost:8080']
+  }
+
+  private admitConfiguredLookupSources(run: LookupQueryRun): void {
+    this.admitLookupHosts(run, 'configured', this.configuredLookupHosts(run.question))
+    this.admitLookupHosts(run, 'additional', this.additionalHosts[run.question.service] ?? [])
+    run.session.discoveryComplete = true
+    this.finishLookupSources(run)
+  }
+
+  private lookupCacheHasAvailableHost(cached: LookupHostsCacheEntry | undefined): boolean {
+    if (cached === undefined) return false
+    return cached.hosts.some(host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now())
+  }
+
+  private planLookupDiscovery(run: LookupQueryRun): LookupDiscoveryPlan {
+    const cached = this.hostsCache.get(run.question.service)
+    const configuredAdditional = this.additionalHosts[run.question.service] ?? []
+    const cacheHasAvailableHost = this.lookupCacheHasAvailableHost(cached)
+    const cacheCoversCaller = lookupDiscoveryCovers(cached, run.limits)
+    const cacheFresh = cached !== undefined && cached.expiresAt > Date.now()
+    const key = lookupDiscoveryCacheKey(run.question.service, run.limits)
+    const discovery = this.hostsInFlight.get(key)
+    const refresh =
+      discovery !== undefined ||
+      cached === undefined ||
+      !cacheCoversCaller ||
+      !cacheFresh ||
+      !cacheHasAvailableHost
+    const initialSources =
+      Number(cached !== undefined && cacheHasAvailableHost) + Number(configuredAdditional.length > 0)
+    const trackerShare = Math.max(1, Math.min(this.slapTrackers.length, run.limits.maxTrackers))
+    const initialQuota = refresh
+      ? Math.max(1, Math.floor(run.limits.maxHosts / (initialSources + trackerShare)))
+      : run.limits.maxHosts
+    return { key, cached, configuredAdditional, cacheHasAvailableHost, refresh, initialQuota }
+  }
+
+  private reuseCachedLookupDiscovery(run: LookupQueryRun, cached: LookupHostsCacheEntry | undefined): void {
+    run.session.discoveryComplete = cached?.discoveryComplete ?? true
+    run.session.trackersFailed = cached?.trackersFailed ?? 0
+    for (const name of cached?.limitsHit ?? []) run.session.limit(name)
+    this.finishLookupSources(run)
+  }
+
+  private selectSlapTrackers(run: LookupQueryRun): { trackers: string[], normalized: string[] } {
+    const scan = Math.min(this.slapTrackers.length, run.limits.maxTrackers)
+    const selected = Array.from(
+      { length: scan },
+      (_unused, offset) => this.slapTrackers[(this.trackerCursor + offset) % this.slapTrackers.length]
+    )
+    this.trackerCursor = (this.trackerCursor + scan) % Math.max(1, this.slapTrackers.length)
+    const normalized = Array.from(new Set(selected.map(host => normalizeLookupHost(host)).filter((host): host is string => host !== null)))
+    try {
+      return {
+        trackers: this.prepareHostsForQuery(normalized.slice(0, run.limits.maxTrackers), 'SLAP trackers'),
+        normalized
+      }
+    } catch (error) {
+      run.noHostsError = error instanceof Error ? error : new Error(lookupErrorMessage(error))
+      return { trackers: [], normalized }
+    }
+  }
+
+  private async lookupSlapTrackerHosts(
+    run: LookupQueryRun,
+    tracker: string,
+    signal: AbortSignal,
+    charge: (bytes: number) => void
+  ): Promise<string[]> {
+    const answer = await this.lookupHostWithTracking(
+      tracker,
+      { service: 'ls_slap', query: { service: run.question.service } },
+      MAX_TRACKER_WAIT_TIME,
+      signal,
+      {
+        maxResponseBytes: run.limits.maxResponseBytes,
+        maxOutputs: run.limits.maxOutputs,
+        consumeBytes: charge
+      }
+    )
+    const hosts = isOutputListAnswer(answer) ? this.extractHostsFromAnswer(answer, run.question.service) : []
+    for (const host of hosts) {
+      if (this.advertisedBy.size >= this.hostsMaxEntries * run.limits.maxHosts) this.evictOldest(this.advertisedBy)
+      this.advertisedBy.set(host, tracker)
+    }
+    return hosts
+  }
+
+  private completeLookupDiscoveryRefresh(
+    run: LookupQueryRun,
+    key: string,
+    discovery: LookupDiscovery,
+    state: LookupDiscoveryUpdate,
+    abandoned: boolean
+  ): void {
+    if (this.hostsInFlight.get(key) !== discovery) return
+    this.hostsInFlight.delete(key)
+    if (abandoned) return
+    const hosts = Array.from(new Set(Array.from(state.sources.values()).flat())).slice(0, run.limits.maxHosts)
+    this.rememberDiscoveredHosts(run.question.service, hosts, run.limits, state)
+  }
+
+  private createLookupDiscovery(run: LookupQueryRun, key: string): LookupDiscovery {
+    const selected = this.selectSlapTrackers(run)
+    let discovery: LookupDiscovery
+    discovery = new LookupDiscovery(
+      selected.trackers,
+      run.limits,
+      async (tracker, signal, charge) => await this.lookupSlapTrackerHosts(run, tracker, signal, charge),
+      (state, abandoned) => this.completeLookupDiscoveryRefresh(run, key, discovery, state, abandoned)
+    )
+    if (this.slapTrackers.length > run.limits.maxTrackers) discovery.state.limitsHit.add('maxTrackers')
+    if (
+      selected.normalized.length !== this.slapTrackers.length ||
+      selected.trackers.length < Math.min(selected.normalized.length, run.limits.maxTrackers)
+    ) {
+      discovery.state.skippedHosts += this.slapTrackers.length - selected.trackers.length
+    }
+    return discovery
+  }
+
+  private refreshLookupDiscovery(run: LookupQueryRun, plan: LookupDiscoveryPlan): void {
+    run.sourceQuota = Math.max(
+      1,
+      Math.floor(
+        (run.limits.maxHosts - run.seen.size) /
+          Math.max(1, Math.min(this.slapTrackers.length, run.limits.maxTrackers))
+      )
+    )
+    let discovery = this.hostsInFlight.get(plan.key)
+    if (discovery === undefined) {
+      discovery = this.createLookupDiscovery(run, plan.key)
+      this.hostsInFlight.set(plan.key, discovery)
+    }
+    run.releaseDiscovery = discovery.subscribe(state => this.acceptLookupDiscovery(run, state))
+    if (run.controller.signal.aborted) run.releaseDiscovery()
+  }
+
+  private admitDiscoveredLookupSources(run: LookupQueryRun): void {
+    const plan = this.planLookupDiscovery(run)
+    if (plan.cached !== undefined && plan.cacheHasAvailableHost) {
+      this.admitQuotaLimitedLookupHosts(run, 'cache', plan.cached.hosts, plan.initialQuota, 'maxHosts')
+    }
+    if (plan.configuredAdditional.length > 0) {
+      this.admitQuotaLimitedLookupHosts(run, 'additional', plan.configuredAdditional, plan.initialQuota, 'maxHosts')
+    }
+    if (plan.refresh) this.refreshLookupDiscovery(run, plan)
+    else this.reuseCachedLookupDiscovery(run, plan.cached)
+  }
+
+  private admitLookupSources(run: LookupQueryRun): void {
+    if (
+      run.question.service === 'ls_slap' ||
+      this.hostOverrides[run.question.service] != null ||
+      this.networkPreset === 'local'
+    ) {
+      this.admitConfiguredLookupSources(run)
+      return
+    }
+    this.admitDiscoveredLookupSources(run)
+  }
+
+  private syncLookupDiscoveryProgress(run: LookupQueryRun, state: LookupDiscoveryUpdate): void {
+    run.session.trackersTotal = state.trackersTotal
+    run.session.trackersCompleted = state.trackersCompleted
+    run.session.trackersFailed = state.trackersFailed
+    run.session.skippedHosts += state.skippedHosts - run.discoverySkipped
+    run.discoverySkipped = state.skippedHosts
+    for (const name of state.limitsHit) run.session.limit(name)
+  }
+
+  private chargeLookupDiscoveryBytes(run: LookupQueryRun, state: LookupDiscoveryUpdate): boolean {
+    try {
+      this.consumeLookupQueryBytes(run, state.receivedBytes - run.discoveryBytes)
+    } catch (error) {
+      if (error instanceof LookupResourceLimitError) run.session.limit(error.limit)
+      run.controller.abort()
+      run.releaseDiscovery?.()
+      run.queue.cancel()
+      run.discoveryFinished = true
+      return false
+    }
+    run.discoveryBytes = state.receivedBytes
+    return true
+  }
+
+  private admitLookupDiscoverySources(run: LookupQueryRun, state: LookupDiscoveryUpdate): void {
+    for (const [source, hosts] of state.sources) {
+      if (run.processedSources.has(source)) continue
+      run.processedSources.add(source)
+      this.admitQuotaLimitedLookupHosts(run, source, hosts, run.sourceQuota, 'maxHostsPerTracker')
+    }
+  }
+
+  private acceptLookupDiscovery(run: LookupQueryRun, state: LookupDiscoveryUpdate): void {
+    if (run.controller.signal.aborted) return
+    this.syncLookupDiscoveryProgress(run, state)
+    if (!this.chargeLookupDiscoveryBytes(run, state)) return
+    this.admitLookupDiscoverySources(run, state)
+    run.session.discoveryComplete =
+      state.done &&
+      state.trackersFailed === 0 &&
+      state.limitsHit.size === 0 &&
+      state.skippedHosts === 0
+    run.session.wake()
+    if (state.done) this.finishLookupSources(run)
+  }
+
+  private beginLookupQueryRun(run: LookupQueryRun): void {
+    this.telemetry.capture({
+      name: 'sdk.overlay.lookup.started',
+      component: 'sdk.lookup-resolver',
+      severity: 'debug',
+      correlationId: run.session.correlationId,
+      attributes: { service: run.question.service, network: this.networkPreset, hostCount: 0 }
+    })
+    if (run.options?.signal?.aborted === true || run.iteratorSignal.aborted) {
+      this.stopLookupQueryRun(run, 'cancelled')
+    }
+    if (!run.controller.signal.aborted) this.admitLookupSources(run)
+    else run.queue.cancel()
+    void run.queue.done.then(() => this.finishLookupQueryRun(run))
+  }
+
+  private async *queryProgress(
+    inputQuestion: LookupQuestion,
+    timeout: number | undefined,
+    options: LookupQueryOptions | undefined,
+    iteratorSignal: AbortSignal
+  ): AsyncIterable<LookupAnswerProgress> {
+    // Capture JSON wire values once, before any discovery or queued host can
+    // observe a caller's later mutation. Custom non-JSON questions retain their
+    // historical facilitator-defined semantics when they cannot be cloned.
+    const question = this.cloneLookupQuestion(inputQuestion)
+    const limits = this.lookupQueryLimits(options)
+    const deadlineMs = options?.deadlineMs ?? 10_000
+    this.assertLookupDeadline(deadlineMs)
+    if (this.activeQueries >= 128) throw new LookupResourceLimitError('activeQueries')
+    this.activeQueries++
+    const run = this.createLookupQueryRun(question, timeout, options, limits, iteratorSignal, deadlineMs)
+    try {
+      this.beginLookupQueryRun(run)
+      for await (const progress of run.session.progress()) {
         if (progress.isFinal) {
-          this.captureLookupCompletedTelemetry(question.service, progress, Date.now() - session.startedAt)
-          cleanup()
+          this.captureLookupCompletedTelemetry(question.service, progress, Date.now() - run.session.startedAt)
+          this.cleanupLookupQueryRun(run)
         }
         yield progress
       }
-    } finally { cleanup() }
+    } finally {
+      this.cleanupLookupQueryRun(run)
+    }
   }
-
 
   /**
    * Extracts competent host domains from a SLAP tracker response.
@@ -1501,6 +1800,105 @@ export default class LookupResolver {
     )
   }
 
+  private effectiveLookupTimeout(timeout: number | undefined): number {
+    if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0) return timeout
+    return DEFAULT_LOOKUP_TIMEOUT
+  }
+
+  private startTrackedLookup(args: {
+    host: string
+    question: LookupQuestion
+    timeout: number | undefined
+    signal: AbortSignal | undefined
+    controller: AbortController
+    options: LookupRequestOptions | undefined
+    reported: { bytes: number }
+  }): Promise<LookupFacilitatorAnswer> {
+    const { host, question, timeout, signal, controller, options, reported } = args
+    const requestOptions = {
+      ...options,
+      consumeBytes: (bytes: number): void => {
+        options?.consumeBytes?.(bytes)
+        reported.bytes += bytes
+      }
+    }
+    // Start the custom facilitator in a promise chain so synchronous throws
+    // become rejections governed by the same wall-clock deadline.
+    const lookupPromise = Promise.resolve().then(() => {
+      if (signal?.aborted === true) return Promise.reject(lookupAbortError())
+      return this.facilitator.lookup(host, question, timeout, controller.signal, requestOptions)
+    })
+    lookupPromise.catch(() => {
+      /* deadline may win while custom facilitator settles later */
+    })
+    return lookupPromise
+  }
+
+  private assertTrackedOutputBudget(
+    answer: LookupAnswer,
+    options: LookupRequestOptions | undefined,
+    reportedBytes: number
+  ): void {
+    let bytes = 0
+    for (const output of answer.outputs) {
+      bytes += output.beef.length + (output.context?.length ?? 0)
+      if (bytes > (options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes)) {
+        throw new LookupResourceLimitError('maxResponseBytes')
+      }
+    }
+    if (reportedBytes === 0) options?.consumeBytes?.(bytes)
+  }
+
+  private assertTrackedLookupAnswer(
+    answer: LookupFacilitatorAnswer,
+    options: LookupRequestOptions | undefined,
+    reportedBytes: number
+  ): void {
+    if (answer?.type !== 'output-list' || !Array.isArray(answer.outputs)) return
+    if (answer.outputs.length > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs)) {
+      throw new LookupResourceLimitError('maxOutputs')
+    }
+    if (!isOutputListAnswer(answer)) return
+    this.assertTrackedOutputBudget(answer, options, reportedBytes)
+  }
+
+  private completeTrackedLookup(
+    host: string,
+    answer: LookupFacilitatorAnswer,
+    startedAt: number,
+    reportedBytes: number,
+    options: LookupRequestOptions | undefined,
+    signal: AbortSignal | undefined
+  ): LookupFacilitatorAnswer {
+    if (signal?.aborted === true) throw lookupAbortError()
+    this.assertTrackedLookupAnswer(answer, options, reportedBytes)
+    if (isOutputListAnswer(answer)) {
+      this.hostReputation.recordSuccess(host, Date.now() - startedAt)
+      return answer
+    }
+    // A valid freeform response is neutral: it proves this request reached the
+    // service, but it must not erase an availability backoff established by a
+    // concurrent failing request and cannot contribute to output aggregation.
+    if (isFreeformAnswer(answer)) return answer
+    const malformed = new Error('Malformed lookup response')
+    this.hostReputation.recordFailure(host, malformed)
+    throw malformed
+  }
+
+  private throwTrackedLookupFailure(
+    host: string,
+    err: unknown,
+    signal: AbortSignal | undefined,
+    deadline: Deadline
+  ): never {
+    if (signal?.aborted === true) throw lookupAbortError()
+    if (err instanceof LookupResourceLimitError) throw err
+    if (isSemanticLookupRejection(err)) throw err
+    const normalized = normalizeLookupError(err, deadline.didTimeOut())
+    this.hostReputation.recordFailure(host, normalized)
+    throw normalized
+  }
+
   private async lookupHostWithTracking(
     host: string,
     question: LookupQuestion,
@@ -1509,63 +1907,31 @@ export default class LookupResolver {
     options?: LookupRequestOptions
   ): Promise<LookupFacilitatorAnswer> {
     const startedAt = Date.now()
-    const effectiveTimeout =
-      typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0
-        ? timeout
-        : DEFAULT_LOOKUP_TIMEOUT
     const controller = new AbortController()
     const abort = (): void => controller.abort()
     signal?.addEventListener('abort', abort, { once: true })
-    const deadline = createDeadline(effectiveTimeout, controller)
-    let reportedBytes = 0
-    const requestOptions = { ...options, consumeBytes: (bytes: number): void => {
-      options?.consumeBytes?.(bytes); reportedBytes += bytes
-    } }
-    // Start the custom facilitator in a promise chain so synchronous throws
-    // become rejections governed by the same wall-clock deadline.
-    const lookupPromise = Promise.resolve().then(() =>
-      signal?.aborted === true ? Promise.reject(lookupAbortError()) : this.facilitator.lookup(host, question, timeout, controller.signal, requestOptions)
-    )
-    lookupPromise.catch(() => {
-      /* deadline may win while custom facilitator settles later */
+    const deadline = createDeadline(this.effectiveLookupTimeout(timeout), controller)
+    const reported = { bytes: 0 }
+    const lookupPromise = this.startTrackedLookup({
+      host,
+      question,
+      timeout,
+      signal,
+      controller,
+      options,
+      reported
     })
-
     let answer: LookupFacilitatorAnswer
     try {
       answer = await withLookupAbort(Promise.race([lookupPromise, deadline.promise]), signal)
     } catch (err) {
-      if (signal?.aborted === true) throw lookupAbortError()
-      if (err instanceof LookupResourceLimitError) throw err
-      const normalized = normalizeLookupError(err, deadline.didTimeOut())
-      if (!isSemanticLookupRejection(err)) this.hostReputation.recordFailure(host, normalized)
-      throw isSemanticLookupRejection(err) ? err : normalized
+      this.throwTrackedLookupFailure(host, err, signal, deadline)
     } finally {
       deadline.cancel()
       signal?.removeEventListener('abort', abort)
       controller.abort()
     }
-
-    if (signal?.aborted === true) throw lookupAbortError()
-    if (answer != null && answer.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.length > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs)) throw new LookupResourceLimitError('maxOutputs')
-    if (isOutputListAnswer(answer)) {
-      let bytes = 0
-      for (const output of answer.outputs) {
-        bytes += output.beef.length + (output.context?.length ?? 0)
-        if (bytes > (options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes)) throw new LookupResourceLimitError('maxResponseBytes')
-      }
-      if (reportedBytes === 0) options?.consumeBytes?.(bytes)
-      this.hostReputation.recordSuccess(host, Date.now() - startedAt)
-      return answer
-    }
-
-    // A valid freeform response is neutral: it proves this request reached the
-    // service, but it must not erase an availability backoff established by a
-    // concurrent failing request and cannot contribute to output aggregation.
-    if (isFreeformAnswer(answer)) return answer
-
-    const malformed = new Error('Malformed lookup response')
-    this.hostReputation.recordFailure(host, malformed)
-    throw malformed
+    return this.completeTrackedLookup(host, answer, startedAt, reported.bytes, options, signal)
   }
 
   private captureHostTelemetry(

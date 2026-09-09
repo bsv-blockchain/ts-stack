@@ -27,7 +27,7 @@ function assertDeclaredLengthIsWithinLimit(response: Response, maxResponseBytes:
   const normalized = contentLength.trim()
   // Content-Length is decimal bytes. Treat malformed fields as unknown rather
   // than accidentally accepting a notation such as "1e6".
-  if (!/^[0-9]+$/.test(normalized)) return
+  if (!/^\d+$/.test(normalized)) return
 
   const declaredLength = Number(normalized)
   if (!Number.isSafeInteger(declaredLength) || declaredLength > maxResponseBytes) {
@@ -53,14 +53,12 @@ async function readWithAbort(
     const onAbort = (): void => finish(() => reject(abortReason(signal)))
 
     signal.addEventListener('abort', onAbort, { once: true })
-    try {
-      Promise.resolve(reader.read()).then(
+    Promise.resolve()
+      .then(() => reader.read())
+      .then(
         result => finish(() => resolve(result)),
         error => finish(() => reject(error))
       )
-    } catch (error) {
-      finish(() => reject(error))
-    }
 
     // Do not miss an abort that happened while registering the listener.
     if (signal.aborted) onAbort()
@@ -68,11 +66,9 @@ async function readWithAbort(
 }
 
 function cleanUpFailedRead(reader: ReadableStreamDefaultReader<Uint8Array>, reason: unknown): void {
-  try {
-    void Promise.resolve(reader.cancel(reason)).catch(() => undefined)
-  } catch {
-    // A broken stream implementation must not replace the response read error.
-  }
+  Promise.resolve()
+    .then(() => reader.cancel(reason))
+    .catch(() => undefined)
 
   try {
     reader.releaseLock()
@@ -112,6 +108,86 @@ async function yieldAfterReadIfNeeded(
   if (signal?.aborted) throw abortReason(signal)
 }
 
+async function accumulateLookupResponseChunk(
+  bytes: Uint8Array<ArrayBufferLike>,
+  totalLength: number,
+  value: Uint8Array,
+  readOperations: number,
+  options: LookupResponseReaderOptions
+): Promise<{ bytes: Uint8Array<ArrayBufferLike>, totalLength: number }> {
+  const { signal, maxResponseBytes, consumeBytes } = options
+  if (value.byteLength === 0) {
+    // An eagerly fulfilled read() still schedules only microtasks. Yielding
+    // periodically lets timers deliver cancellation for endless empty input.
+    await yieldAfterReadIfNeeded(readOperations, signal)
+    return { bytes, totalLength }
+  }
+
+  if (value.byteLength > maxResponseBytes - totalLength) {
+    throw new LookupResourceLimitError('maxResponseBytes')
+  }
+
+  consumeBytes?.(value.byteLength)
+  const nextLength = totalLength + value.byteLength
+  const expanded = expandedBuffer(bytes, nextLength, maxResponseBytes)
+  // Streams are allowed to reuse a producer-owned Uint8Array. Copy each
+  // accepted chunk now instead of retaining a mutable producer reference.
+  expanded.set(value, totalLength)
+  // Copy before yielding: a producer may reuse or mutate its buffer while
+  // the task queue runs.
+  await yieldAfterReadIfNeeded(readOperations, signal)
+  return { bytes: expanded, totalLength: nextLength }
+}
+
+function releaseLookupResponseReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  try {
+    reader.releaseLock()
+  } catch {
+    // A nonstandard stream may have released its lock itself.
+  }
+}
+
+async function readLookupResponseStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  response: Response,
+  options: LookupResponseReaderOptions
+): Promise<Uint8Array> {
+  const { signal } = options
+  let succeeded = false
+  let failure: unknown
+  try {
+    assertDeclaredLengthIsWithinLimit(response, options.maxResponseBytes)
+    if (signal?.aborted === true) throw abortReason(signal)
+
+    let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array(0)
+    let totalLength = 0
+    let readOperations = 0
+    while (true) {
+      const { done, value } = await readWithAbort(reader, signal)
+      readOperations++
+      if (done) break
+      const next = await accumulateLookupResponseChunk(
+        bytes,
+        totalLength,
+        value ?? new Uint8Array(0),
+        readOperations,
+        options
+      )
+      bytes = next.bytes
+      totalLength = next.totalLength
+    }
+
+    succeeded = true
+    return bytes.subarray(0, totalLength)
+  } catch (error) {
+    failure = error
+    throw error
+  } finally {
+    if (succeeded) releaseLookupResponseReader(reader)
+    else cleanUpFailedRead(reader, failure)
+  }
+}
+
 /**
  * Reads a lookup response incrementally while enforcing a per-response bound.
  *
@@ -122,7 +198,7 @@ export async function readLookupResponseBytes(
   response: Response,
   options: LookupResponseReaderOptions
 ): Promise<Uint8Array> {
-  const { signal, maxResponseBytes, consumeBytes } = options
+  const { signal, maxResponseBytes } = options
   assertValidMaximum(maxResponseBytes)
 
   const body = response.body
@@ -132,58 +208,5 @@ export async function readLookupResponseBytes(
     return new Uint8Array(0)
   }
 
-  const reader = body.getReader()
-  let succeeded = false
-  let failure: unknown
-  try {
-    assertDeclaredLengthIsWithinLimit(response, maxResponseBytes)
-    if (signal?.aborted === true) throw abortReason(signal)
-
-    let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array(0)
-    let totalLength = 0
-    let readOperations = 0
-    while (true) {
-      const { done, value } = await readWithAbort(reader, signal)
-      readOperations++
-      if (done) break
-
-      if (value.byteLength === 0) {
-        // An eagerly fulfilled read() still schedules only microtasks. Yielding
-        // periodically lets timers deliver cancellation for endless empty input.
-        await yieldAfterReadIfNeeded(readOperations, signal)
-        continue
-      }
-
-      if (value.byteLength > maxResponseBytes - totalLength) {
-        throw new LookupResourceLimitError('maxResponseBytes')
-      }
-
-      consumeBytes?.(value.byteLength)
-      const nextLength = totalLength + value.byteLength
-      bytes = expandedBuffer(bytes, nextLength, maxResponseBytes)
-      // Streams are allowed to reuse a producer-owned Uint8Array. Copy each
-      // accepted chunk now instead of retaining a mutable producer reference.
-      bytes.set(value, totalLength)
-      totalLength = nextLength
-      // Copy before yielding: a producer may reuse or mutate its buffer while
-      // the task queue runs.
-      await yieldAfterReadIfNeeded(readOperations, signal)
-    }
-
-    succeeded = true
-    return bytes.subarray(0, totalLength)
-  } catch (error) {
-    failure = error
-    throw error
-  } finally {
-    if (succeeded) {
-      try {
-        reader.releaseLock()
-      } catch {
-        // A nonstandard stream may have released its lock itself.
-      }
-    } else {
-      cleanUpFailedRead(reader, failure)
-    }
-  }
+  return await readLookupResponseStream(body.getReader(), response, options)
 }

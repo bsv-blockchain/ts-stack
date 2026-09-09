@@ -46,11 +46,15 @@ export class LookupHostQueue {
 
   private next(): string | undefined {
     const sources = Array.from(this.queues.values())
-    for (let i = 0; i < sources.length; i++) {
-      const index = this.cursor++ % sources.length
+    for (const [offset] of sources.entries()) {
+      const index = (this.cursor + offset) % sources.length
       const host = sources[index].shift()
-      if (host !== undefined) return host
+      if (host !== undefined) {
+        this.cursor = index + 1
+        return host
+      }
     }
+    this.cursor += sources.length
     return undefined
   }
 
