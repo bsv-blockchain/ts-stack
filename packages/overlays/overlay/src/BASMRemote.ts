@@ -168,7 +168,7 @@ export class BASMRemote {
   private async readResponse(response: Response, signal: AbortSignal): Promise<string> {
     const advertisedLength = response.headers?.get('content-length')
     if (advertisedLength !== null && advertisedLength !== undefined) {
-      if (!(Number(advertisedLength) <= this.limits.maxResponseBytes)) {
+      if (Number(advertisedLength) > this.limits.maxResponseBytes) {
         void response.body?.cancel().catch(() => {})
         requireBASMLimit(false, 'BASM response exceeds byte limit')
       }

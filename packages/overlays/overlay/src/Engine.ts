@@ -116,6 +116,12 @@ function findSpendingInputIndex(tx: Transaction, output: Output): number {
   })
 }
 
+function requireBASMDefined<T>(value: T | undefined, aligned: boolean, message: string): T {
+  requireBASM(aligned, message)
+  requireBASM(value !== undefined, message)
+  return value
+}
+
 /**
  * An engine for running BSV Overlay Services (topic managers and lookup services).
  */
@@ -1685,70 +1691,120 @@ export class Engine {
       ])
       report.localTip = localTip
       report.remoteTip = remoteTip
-
-      if (remoteTip.blockHeight >= 0) {
-        const tipRange = await remote.requestTopicAnchorRange(remoteTip.blockHeight, remoteTip.blockHeight)
-        const tipAnchor = tipRange.anchors[0]
-        requireBASM(tipAnchor !== undefined && tipAnchor.tac === remoteTip.tac, 'BASM tip does not match its anchor')
-        for (const field of ['blockHash', 'basmRoot', 'admittedCount'] as const) {
-          requireBASM(remoteTip[field] === undefined || remoteTip[field] === tipAnchor[field], 'BASM tip metadata does not match its anchor')
-        }
-        await this.requireCanonicalBASMAnchor(tipAnchor)
-      }
-
+      await this.requireMatchingRemoteBASMTip(remote, remoteTip)
       if (localTip.blockHeight >= remoteTip.blockHeight) {
-        if (localTip.blockHeight >= 0 && localTip.blockHeight === remoteTip.blockHeight && localTip.tac === remoteTip.tac) {
-          const localAnchor = await this.storage.findTopicBlockAnchor?.(topic, localTip.blockHeight)
-          requireBASM(localAnchor !== undefined && localAnchor.tac === localTip.tac, 'Local BASM tip lacks its anchor')
-          await this.requireCanonicalBASMAnchor(localAnchor)
-        }
-        report.status = localTip.tac === remoteTip.tac && localTip.blockHeight === remoteTip.blockHeight ? 'matched' : 'diverged'
-        report.message = report.status === 'matched'
-          ? 'Topic anchor tips match'
-          : 'Remote tip is not ahead; historical divergence needs manual or binary-search reconciliation'
-        return report
+        return await this.finishBASMWhenRemoteIsNotAhead(topic, localTip, remoteTip, report)
       }
-
-      const fromHeight = localTip.blockHeight < 0
-        ? Math.max(remoteTip.blockHeight - DEFAULT_BASM_SYNC_PAGE_SIZE + 1, 0)
-        : localTip.blockHeight + 1
-      const toHeight = Math.min(fromHeight + DEFAULT_BASM_SYNC_PAGE_SIZE - 1, remoteTip.blockHeight)
-      const range = await remote.requestTopicAnchorRange(fromHeight, toHeight)
-      requireBASM(range.anchors.length > 0 && range.anchors.at(-1)?.blockHeight === toHeight, 'BASM range omits its requested target')
-      requireBASM(localTip.blockHeight < 0 || range.anchors[0].blockHeight === fromHeight, 'BASM range omits its next height')
-      let previousTac = localTip.tac
-      for (const anchor of range.anchors) {
-        requireBASM(anchor.tac === computeTac(previousTac, anchor.blockHash, anchor.basmRoot), 'BASM range TAC is inconsistent with its prefix')
-        previousTac = anchor.tac
-      }
-      if (toHeight === remoteTip.blockHeight) requireBASM(previousTac === remoteTip.tac, 'BASM range differs from its tip')
-      for (const remoteAnchor of range.anchors) {
-        await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
-        if (report.status === 'diverged') return report
-      }
-
-      const finalRemoteTip = await remote.requestTopicAnchorTip()
-      requireBASM(finalRemoteTip.blockHeight === remoteTip.blockHeight && finalRemoteTip.tac === remoteTip.tac, 'BASM peer history changed during reconciliation')
-
-      const refreshedTip = await this.provideTopicAnchorTip(topic)
-      report.localTip = refreshedTip
-      report.status = refreshedTip.blockHeight === remoteTip.blockHeight && refreshedTip.tac === remoteTip.tac ? 'matched' : 'advanced'
-      return report
+      return await this.advanceBASMWithRemoteAnchors(topic, remote, localTip, remoteTip, report)
     } catch (error) {
-      report.status = 'error'
-      if (error instanceof Error && 'code' in error && typeof error.code === 'string') report.errorCode = error.code
-      report.message = error instanceof Error ? error.message : String(error)
-      this.logger.error(`[BASM SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`, error)
-      return report
+      return this.markBASMPeerSyncError(report, topic, endpoint, error)
     }
+  }
+
+  private async requireMatchingRemoteBASMTip(remote: BASMRemote, remoteTip: TopicAnchorTip): Promise<void> {
+    if (remoteTip.blockHeight < 0) {
+      return
+    }
+    const tipRange = await remote.requestTopicAnchorRange(remoteTip.blockHeight, remoteTip.blockHeight)
+    const remoteTipAnchor = tipRange.anchors[0]
+    const tipAnchor = requireBASMDefined(
+      remoteTipAnchor,
+      remoteTipAnchor?.tac === remoteTip.tac,
+      'BASM tip does not match its anchor'
+    )
+    for (const field of ['blockHash', 'basmRoot', 'admittedCount'] as const) {
+      requireBASM(remoteTip[field] === undefined || remoteTip[field] === tipAnchor[field], 'BASM tip metadata does not match its anchor')
+    }
+    await this.requireCanonicalBASMAnchor(tipAnchor)
+  }
+
+  private async finishBASMWhenRemoteIsNotAhead(
+    topic: string,
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    report: BASMPeerSyncReport
+  ): Promise<BASMPeerSyncReport> {
+    const tipsMatch = localTip.tac === remoteTip.tac && localTip.blockHeight === remoteTip.blockHeight
+    if (localTip.blockHeight >= 0 && tipsMatch) {
+      const localAnchor = await this.storage.findTopicBlockAnchor?.(topic, localTip.blockHeight)
+      await this.requireCanonicalBASMAnchor(
+        requireBASMDefined(localAnchor, localAnchor?.tac === localTip.tac, 'Local BASM tip lacks its anchor')
+      )
+    }
+    report.status = tipsMatch ? 'matched' : 'diverged'
+    report.message = tipsMatch
+      ? 'Topic anchor tips match'
+      : 'Remote tip is not ahead; historical divergence needs manual or binary-search reconciliation'
+    return report
+  }
+
+  private requireBASMRangePrefix(
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    fromHeight: number,
+    toHeight: number,
+    anchors: TopicBlockAnchor[]
+  ): void {
+    requireBASM(anchors.length > 0 && anchors.at(-1)?.blockHeight === toHeight, 'BASM range omits its requested target')
+    requireBASM(localTip.blockHeight < 0 || anchors[0].blockHeight === fromHeight, 'BASM range omits its next height')
+    let previousTac = localTip.tac
+    for (const anchor of anchors) {
+      requireBASM(anchor.tac === computeTac(previousTac, anchor.blockHash, anchor.basmRoot), 'BASM range TAC is inconsistent with its prefix')
+      previousTac = anchor.tac
+    }
+    if (toHeight === remoteTip.blockHeight) requireBASM(previousTac === remoteTip.tac, 'BASM range differs from its tip')
+  }
+
+  private async advanceBASMWithRemoteAnchors(
+    topic: string,
+    remote: BASMRemote,
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    report: BASMPeerSyncReport
+  ): Promise<BASMPeerSyncReport> {
+    const fromHeight = localTip.blockHeight < 0
+      ? Math.max(remoteTip.blockHeight - DEFAULT_BASM_SYNC_PAGE_SIZE + 1, 0)
+      : localTip.blockHeight + 1
+    const toHeight = Math.min(fromHeight + DEFAULT_BASM_SYNC_PAGE_SIZE - 1, remoteTip.blockHeight)
+    const range = await remote.requestTopicAnchorRange(fromHeight, toHeight)
+    this.requireBASMRangePrefix(localTip, remoteTip, fromHeight, toHeight, range.anchors)
+    for (const remoteAnchor of range.anchors) {
+      await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
+      if (report.status === 'diverged') return report
+    }
+
+    const finalRemoteTip = await remote.requestTopicAnchorTip()
+    requireBASM(finalRemoteTip.blockHeight === remoteTip.blockHeight && finalRemoteTip.tac === remoteTip.tac, 'BASM peer history changed during reconciliation')
+
+    const refreshedTip = await this.provideTopicAnchorTip(topic)
+    report.localTip = refreshedTip
+    report.status = refreshedTip.blockHeight === remoteTip.blockHeight && refreshedTip.tac === remoteTip.tac ? 'matched' : 'advanced'
+    return report
+  }
+
+  private markBASMPeerSyncError(
+    report: BASMPeerSyncReport,
+    topic: string,
+    endpoint: string,
+    error: unknown
+  ): BASMPeerSyncReport {
+    report.status = 'error'
+    if (error instanceof Error && 'code' in error && typeof error.code === 'string') report.errorCode = error.code
+    report.message = error instanceof Error ? error.message : String(error)
+    this.logger.error(`[BASM SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`, error)
+    return report
   }
 
   private async requireCanonicalBASMAnchor(anchor: TopicBlockAnchor, proofRoot?: string): Promise<TopicAnchorHeader> {
     if (this.chainTracker === 'scripts only' || this.topicAnchorHeaderResolver === undefined) {
       throw new Error('BASM reconciliation requires a ChainTracker and canonical header resolver')
     }
-    const header = await this.topicAnchorHeaderResolver(anchor.blockHeight)
-    requireBASM(header !== undefined && header.blockHeight === anchor.blockHeight, 'BASM canonical header is unavailable or has the wrong height')
+    const resolvedHeader = await this.topicAnchorHeaderResolver(anchor.blockHeight)
+    const header = requireBASMDefined(
+      resolvedHeader,
+      resolvedHeader?.blockHeight === anchor.blockHeight,
+      'BASM canonical header is unavailable or has the wrong height'
+    )
     requireBASM(basmHash(header.blockHash.toLowerCase(), 'canonical block hash') === anchor.blockHash, 'BASM anchor block hash is not canonical')
     if (proofRoot !== undefined && header.merkleRoot !== undefined) {
       requireBASM(header.merkleRoot.toLowerCase() === proofRoot, 'BASM proof root differs from its canonical header')
@@ -1839,7 +1895,7 @@ export class Engine {
     }
     for (const { txid, blockIndex } of admitted) {
       const leaf = compoundPath.path[0]?.find(item => item.hash === txid)
-      requireBASM(leaf !== undefined && leaf.offset === blockIndex, 'BASM proof does not bind the admitted block index')
+      requireBASM(leaf?.offset === blockIndex, 'BASM proof does not bind the admitted block index')
       requireBASM(compoundPath.path[0].length !== 1 || compoundPath.path.length !== 1 || blockIndex === 0, 'BASM singleton proof has a nonzero block index')
       requireBASM(compoundPath.computeRoot(txid) === proofRoot, 'BASM proof root does not match the admitted transaction')
     }
@@ -1868,9 +1924,10 @@ export class Engine {
     })
     const refreshedAnchor = (await remote.requestTopicAnchorRange(anchor.blockHeight, anchor.blockHeight)).anchors[0]
     requireBASM(
-      refreshedAnchor !== undefined && refreshedAnchor.blockHash === anchor.blockHash &&
-      refreshedAnchor.basmRoot === anchor.basmRoot && refreshedAnchor.admittedCount === anchor.admittedCount &&
-      refreshedAnchor.tac === anchor.tac,
+      refreshedAnchor?.blockHash === anchor.blockHash &&
+      refreshedAnchor?.basmRoot === anchor.basmRoot &&
+      refreshedAnchor?.admittedCount === anchor.admittedCount &&
+      refreshedAnchor?.tac === anchor.tac,
       'BASM peer anchor changed before admission'
     )
     const commitHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
