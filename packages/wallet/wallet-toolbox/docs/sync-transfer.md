@@ -125,8 +125,8 @@ outside browser/mobile exports.
 
 The raw ceilings increase by 9,000 / 7,500 / 7,500 / 17,500 bytes respectively;
 compressed ceilings increase only where the measurement requires it. Linux CI
-measured Vite gzip at 404,050 bytes and Hermes gzip at 1,454,799 bytes,
-above the macOS measurements; their proposed ceilings are 404,500 and
-1,455,000 bytes respectively. These
+measured Vite gzip at 404,050 bytes, esbuild gzip at 367,979 bytes, and
+Hermes gzip at 1,454,799 bytes, above the macOS measurements; their proposed
+ceilings are 404,500, 368,500, and 1,455,000 bytes respectively. These
 narrow budget changes need explicit maintainer review under the repository
 artifact-growth policy. They are feature cost, not a performance improvement.
