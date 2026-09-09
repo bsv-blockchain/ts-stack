@@ -27,6 +27,7 @@ import {
   TelemetryConfig
 } from '@bsv/sdk'
 
+import { maxPossibleSatoshis } from './storage/methods/generateChange'
 import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
 import { parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
 
@@ -4380,7 +4381,10 @@ export class WalletPermissionsManager implements WalletInterface {
    * Outputs are matched as a multiset on (lockingScript, satoshis): the
    * transaction also contains change/commission outputs and the output order is
    * randomized by default, and a caller may legitimately request the same
-   * script+amount more than once.
+   * script+amount more than once. A requested amount of `maxPossibleSatoshis`
+   * is a documented "send remaining funds minus fee" sentinel; funding replaces
+   * it with the real amount, so amount is treated as a wildcard while the
+   * locking script must still match exactly.
    *
    * @throws Error if any caller-requested output is absent from the transaction.
    */
@@ -4399,7 +4403,9 @@ export class WalletPermissionsManager implements WalletInterface {
     for (let i = 0; i < requested.length; i++) {
       const wantScript = (requested[i].lockingScript ?? '').toLowerCase()
       const wantSats = requested[i].satoshis
-      const match = available.find(a => !a.used && a.script === wantScript && a.satoshis === wantSats)
+      const match = available.find(
+        a => !a.used && a.script === wantScript && (wantSats === maxPossibleSatoshis || a.satoshis === wantSats)
+      )
       if (match == null) {
         throw new Error(
           `The transaction returned for signing does not contain caller-requested output ${i} ` +

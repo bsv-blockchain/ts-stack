@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Honor the documented `maxPossibleSatoshis` sentinel in
+  `WalletPermissionsManager.createAction` output verification. Funding replaces
+  that amount with the real spendable value; the permissions-layer GHSA-36f9-7rg5-cpf8
+  check now wildcards the amount while still requiring an exact locking-script
+  match, matching the signer. Exact-amount outputs are unchanged.
+
 - Keep Argon2id-backed UMP v3 wallets available in React Native and other
   runtimes without WebAssembly by falling back to an asynchronously yielding,
   standards-compatible JavaScript implementation. The same KDF parameters and

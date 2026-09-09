@@ -1,4 +1,5 @@
 import { LockingScript, Transaction } from '@bsv/sdk'
+import { maxPossibleSatoshis } from '../storage/methods/generateChange'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
 
 /**
@@ -83,5 +84,17 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     const tx = txWithOutputs([{ hex: SCRIPT_A, satoshis: 1000 }, { hex: CHANGE_SCRIPT, satoshis: 9000 }])
     const args = requested([{ hex: SCRIPT_A, satoshis: 1000 }, { hex: SCRIPT_B, satoshis: 2000 }])
     expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).toThrow(/output 1/i)
+  })
+
+  test('6 accepts maxPossibleSatoshis when the locking script is present at a smaller funded amount', () => {
+    const tx = txWithOutputs([{ hex: SCRIPT_A, satoshis: 12345 }, { hex: CHANGE_SCRIPT, satoshis: 1 }])
+    const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
+    expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).not.toThrow()
+  })
+
+  test('7 still rejects a substituted script when the requested amount is maxPossibleSatoshis', () => {
+    const tx = txWithOutputs([{ hex: SCRIPT_B, satoshis: 12345 }, { hex: CHANGE_SCRIPT, satoshis: 1 }])
+    const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
+    expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).toThrow(/substituted by storage/i)
   })
 })
