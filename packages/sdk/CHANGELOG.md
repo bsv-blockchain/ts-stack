@@ -222,6 +222,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add optional `x-bsv-payment-known-txids` support to AuthFetch BRC-105 payment
+  creation and repricing. Forward up to 256 unique, valid lowercase recipient
+  transaction IDs to wallet `createAction` options so compatible wallets can
+  omit known BEEF ancestors. Existing services require no migration; an absent
+  or invalid-only header preserves payment behavior.
 - Add shared BRC-100 byte-boundary helpers that preserve valid `number[]` and
   `Uint8Array` fast paths by identity, recover the numeric-key form emitted by
   historical JSON transports, serialize typed arrays portably, and reject

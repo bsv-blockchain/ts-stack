@@ -37,6 +37,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Rebuild the UMD bundle with SDK 2.5.0 support for the optional
+  `x-bsv-payment-known-txids` payment-ancestry extension. Compatible wallets can
+  omit recipient-declared known ancestors from payment BEEF; absent headers
+  preserve existing behavior. No consumer migration is required, and module
+  consumers can enable the same extension with SDK 2.5.0 or later.
+
 ### Deprecated
 
 ### Removed
