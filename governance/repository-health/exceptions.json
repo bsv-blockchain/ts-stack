@@ -158,6 +158,20 @@
       "removeWhen": "Remove when the supported Vite and PostCSS dependency graph naturally resolves nanoid 3.3.18 or newer and the frozen audit remains green."
     },
     {
+      "id": "js-yaml-jest-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override js-yaml releases below 3.15.2",
+      "owner": "ts-stack-maintainers",
+      "reason": "Jest's istanbul/nyc coverage graph still resolves js-yaml 3.15.1. GHSA-2883-xcg3-v3hh is fixed in 3.15.2 with no public API change on the 3.x line. Selecting 3.15.2 is the narrowest compatible remediation and leaves runtime application packages on js-yaml 4.x overrides unchanged.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-2883-xcg3-v3hh"
+      ],
+      "created": "2026-09-09",
+      "reviewBy": "2026-10-09",
+      "removeWhen": "Remove when the supported Jest coverage graph naturally resolves js-yaml 3.15.2 or newer and the frozen audit remains green."
+    },
+    {
       "id": "toml-frontmatter-advisory-override",
       "category": "override",
       "target": "pnpm-workspace.yaml override for TOML releases below 4.2.0",
