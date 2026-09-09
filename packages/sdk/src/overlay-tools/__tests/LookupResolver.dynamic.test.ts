@@ -1058,7 +1058,7 @@ describe('LookupResolver dynamic discovery', () => {
       await jest.runAllTimersAsync()
       await pending
     }
-    expect(lookup.mock.calls.filter(([url]) => url === tracker).length).toBe(missingFields.length)
+    expect(lookup.mock.calls.filter(([url]) => url === tracker)).toHaveLength(missingFields.length)
   })
 
   it('rejects a deadline outside the accepted range', async () => {
