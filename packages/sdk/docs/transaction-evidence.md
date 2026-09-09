@@ -60,7 +60,8 @@ unobserved ABA transition back to the same tip, and a token over multiple
 sources is not an atomic multi-source snapshot. Canonical roots and observed
 heights are therefore still rechecked on every use, including positive-cache
 reuse. The required tracker methods accept optional abort signals; existing
-implementations may ignore them.
+implementations may ignore them. `isChainTracker(value)` is a runtime type
+guard for those required methods; optional context methods are not required.
 
 The limits in [`TransactionEvidence.ts`](../src/transaction/TransactionEvidence.ts)
 are local admission and memory policy, not consensus limits. Defaults are:

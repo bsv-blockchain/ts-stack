@@ -10,6 +10,7 @@ export type { default as TransactionOutput } from './TransactionOutput.js'
 export type { Broadcaster, BroadcastFailure, BroadcastResponse } from './Broadcaster.js'
 export { isBroadcastResponse, isBroadcastFailure } from './Broadcaster.js'
 export type { default as ChainTracker } from './ChainTracker.js'
+export { isChainTracker } from './ChainTracker.js'
 export { TransactionEvidenceCoordinator } from './TransactionEvidenceCoordinator.js'
 export type {
   TransactionEvidenceContext,

@@ -41,3 +41,16 @@ export default interface ChainTracker {
    */
   getVerificationContextToken?: (signal?: AbortSignal) => Promise<string>
 }
+
+/**
+ * Convenience type guard for a `ChainTracker` implementation.
+ * Optional verification-context methods are not required.
+ */
+export function isChainTracker(value: unknown): value is ChainTracker {
+  if (value == null || typeof value !== 'object') return false
+  const tracker = value as Partial<ChainTracker>
+  return (
+    typeof tracker.isValidRootForHeight === 'function' &&
+    typeof tracker.currentHeight === 'function'
+  )
+}

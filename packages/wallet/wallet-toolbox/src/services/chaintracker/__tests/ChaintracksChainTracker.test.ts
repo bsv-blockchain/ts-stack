@@ -229,6 +229,110 @@ describe('ChaintracksChaintracker tests', () => {
     await expect(tracker.getVerificationContextToken()).rejects.toThrow('Method not implemented.')
     expect(subscribe).toHaveBeenCalled()
   })
+
+  test('ignores a chaintracks setter that does not change the provider', async () => {
+    const provider = makeChaintracksClient([HEADER_877599])
+    const tracker = new ChaintracksChainTracker('main', provider)
+    const context = tracker.getVerificationContext()
+    tracker.chaintracks = provider
+    expect(tracker.getVerificationContext()).toBe(context)
+  })
+
+  test('obtains a token without reorg events and rejects a promised-events client without subscribeReorgs', async () => {
+    const silent = makeChaintracksClient([])
+    silent.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    const silentTracker = new ChaintracksChainTracker('main', silent)
+    await expect(silentTracker.getVerificationContextToken()).resolves.toContain('aa'.repeat(32))
+
+    const promised = makeChaintracksClient([])
+    promised.supportsReorgEvents = true
+    promised.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    const promisedTracker = new ChaintracksChainTracker('main', promised)
+    await expect(promisedTracker.getVerificationContextToken()).rejects.toThrow(
+      'promised reorg events but subscribeReorgs is not implemented'
+    )
+  })
+
+  test('shares one in-flight reorg registration across concurrent token lookups', async () => {
+    let release: ((value: string) => void) | undefined
+    const pending = new Promise<string>(resolve => {
+      release = resolve
+    })
+    const provider = makeChaintracksClient([])
+    provider.findChainTipHash = jest.fn(async () => 'aa'.repeat(32))
+    provider.subscribeReorgs = jest.fn(async () => await pending)
+    provider.unsubscribe = jest.fn(async () => true)
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    const first = tracker.getVerificationContextToken()
+    const second = tracker.getVerificationContextToken()
+    release!('shared-subscription')
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.stringContaining('aa'.repeat(32)),
+      expect.stringContaining('aa'.repeat(32))
+    ])
+    expect(provider.subscribeReorgs).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects height and token lookups when the provider changes while they are pending', async () => {
+    let tracker: ChaintracksChainTracker
+    const heightProvider = makeChaintracksClient([])
+    heightProvider.getPresentHeight.mockImplementation(async () => {
+      tracker.chaintracks = makeChaintracksClient([])
+      return 950000
+    })
+    tracker = new ChaintracksChainTracker('main', heightProvider, { maxRetries: 1, retryDelayMs: 0 })
+    await expect(tracker.currentHeight()).rejects.toThrow('provider changed during height lookup')
+
+    const tokenProvider = makeChaintracksClient([])
+    tokenProvider.findChainTipHash = jest.fn(async () => {
+      tracker.chaintracks = makeChaintracksClient([])
+      return 'aa'.repeat(32)
+    })
+    tracker = new ChaintracksChainTracker('main', tokenProvider)
+    await expect(tracker.getVerificationContextToken()).rejects.toThrow(
+      'provider changed during canonical token lookup'
+    )
+  })
+
+  test('aborts height lookup with the signal reason after the provider returns', async () => {
+    const abort = new AbortController()
+    const provider = makeChaintracksClient([])
+    provider.getPresentHeight.mockImplementation(async () => {
+      abort.abort(new Error('height-aborted'))
+      return 950000
+    })
+    const tracker = new ChaintracksChainTracker('main', provider)
+    await expect(tracker.currentHeight(abort.signal)).rejects.toThrow('height-aborted')
+    await expect(tracker.currentHeight({ aborted: true } as AbortSignal)).rejects.toThrow(
+      'Chaintracks verification aborted'
+    )
+  })
+
+  test('prunes diagnostic cache entries older than five minutes', async () => {
+    jest.useFakeTimers({ now: Date.now() })
+    try {
+      const older = HEADER_877599
+      const newer = {
+        ...HEADER_877599,
+        height: 877600,
+        merkleRoot: '22'.repeat(32),
+        hash: '33'.repeat(32)
+      }
+      const provider = {
+        getPresentHeight: jest.fn(async () => 950000),
+        findHeaderForHeight: jest.fn(async (height: number) => (height === older.height ? older : newer))
+      }
+      const tracker = new ChaintracksChainTracker('main', provider as any, { maxRetries: 1, retryDelayMs: 0 })
+      await expect(tracker.isValidRootForHeight(older.merkleRoot, older.height)).resolves.toBe(true)
+      await jest.advanceTimersByTimeAsync(5 * 60 * 1000 + 1)
+      await expect(tracker.isValidRootForHeight(newer.merkleRoot, newer.height)).resolves.toBe(true)
+      expect(tracker.cache[older.height]).toBeUndefined()
+      expect(tracker.cache[newer.height]).toBe(newer.merkleRoot)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
 })
 
 async function testChaintracksChaintracker(chain: sdk.Chain) {

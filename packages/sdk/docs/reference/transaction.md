@@ -3063,7 +3063,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [evidenceError](#function-evidenceerror)                     | [scriptVerificationBackend](#function-scriptverificationbackend)                     |
 | [evidenceScriptScope](#function-evidencescriptscope)         | [unregisterScriptVerificationBackend](#function-unregisterscriptverificationbackend) |
 | [executeNodejsRequest](#function-executenodejsrequest)       | [withEvidenceScriptWork](#function-withevidencescriptwork)                           |
-| [isBroadcastFailure](#function-isbroadcastfailure)           |                                                                                      |
+| [isBroadcastFailure](#function-isbroadcastfailure)           | [isChainTracker](#function-ischaintracker)                                           |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3203,6 +3203,20 @@ export function isBroadcastResponse(r: BroadcastResponse | BroadcastFailure): r 
 ```
 
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Function: isChainTracker
+
+Convenience type guard for a `ChainTracker` implementation. Optional verification-context methods are not required.
+
+```ts
+export function isChainTracker(value: unknown): value is ChainTracker
+```
+
+See also: [ChainTracker](./transaction.md#interface-chaintracker)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

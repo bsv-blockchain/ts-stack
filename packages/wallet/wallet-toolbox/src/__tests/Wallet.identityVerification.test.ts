@@ -5,6 +5,7 @@ import {
   MerklePath,
   PrivateKey,
   Transaction,
+  TransactionEvidenceError,
   Validation,
   VerifiableCertificate
 } from '@bsv/sdk'
@@ -12,6 +13,7 @@ import { Wallet } from '../Wallet'
 import { WalletSettingsManager } from '../WalletSettingsManager'
 import { WalletStorageManager } from '../storage/WalletStorageManager'
 import { WalletServices } from '../sdk/WalletServices.interfaces'
+import { IdentityEvidenceVerifier } from '../utility/identityUtils'
 import {
   createIdentityVerificationFixture,
   IdentityVerificationFixture
@@ -234,5 +236,74 @@ describe('Wallet final identity verification and compatibility', () => {
     await expect(wallet.discoverByIdentityKey({ ...identityArgs, limit: 10_001 })).rejects.toThrow()
     await expect(wallet.discoverByAttributes({ attributes: {}, offset: -1 })).rejects.toThrow()
     expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns no overlay certificates when services are omitted without forceRefresh', async () => {
+    const { wallet, query } = walletFor(fixture)
+    wallet.services = undefined
+    await expect(wallet.discoverByIdentityKey({ identityKey: fixture.certificate.subject })).resolves.toEqual({
+      totalCertificates: 0,
+      certificates: []
+    })
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('returns no overlay certificates after destroy closes identity evidence', async () => {
+    const { wallet, query } = walletFor(fixture)
+    await wallet.destroy()
+    await expect(wallet.discoverByIdentityKey({ identityKey: fixture.certificate.subject })).resolves.toEqual({
+      totalCertificates: 0,
+      certificates: []
+    })
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('drops an in-flight overlay lookup after destroy closes identity evidence', async () => {
+    const { wallet, query } = walletFor(fixture)
+    let resolveLookup: ((value: LookupAnswer) => void) | undefined
+    const started = new Promise<void>(resolve => {
+      query.mockImplementation(
+        async () =>
+          await new Promise<LookupAnswer>(resolveAnswer => {
+            resolve()
+            resolveLookup = resolveAnswer
+          })
+      )
+    })
+    const pending = wallet.discoverByIdentityKey({ identityKey: fixture.certificate.subject })
+    await started
+    await wallet.destroy()
+    resolveLookup!({ type: 'output-list', outputs: [{ beef: fixture.certificateBEEF, outputIndex: 0 }] })
+    await expect(pending).resolves.toEqual({ totalCertificates: 0, certificates: [] })
+  })
+
+  it('deletes overlay evidence when parseResults throws a bounded limit', async () => {
+    const { wallet, query } = walletFor(fixture)
+    const parse = jest
+      .spyOn(IdentityEvidenceVerifier.prototype, 'parse')
+      .mockRejectedValue(new TransactionEvidenceError('limit'))
+    const args = { identityKey: fixture.certificate.subject }
+    try {
+      await expect(wallet.discoverByIdentityKey(args)).rejects.toMatchObject({ code: 'limit' })
+    } finally {
+      parse.mockRestore()
+    }
+    await expect(wallet.discoverByIdentityKey(args)).resolves.toMatchObject({ totalCertificates: 1 })
+    expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it('expires overlay evidence through its scheduled prune', async () => {
+    jest.useFakeTimers({ now: Date.now() })
+    try {
+      const { wallet, query } = walletFor(fixture)
+      const args = { identityKey: fixture.certificate.subject }
+      await expect(wallet.discoverByIdentityKey(args)).resolves.toMatchObject({ totalCertificates: 1 })
+      expect(query).toHaveBeenCalledTimes(1)
+      await jest.advanceTimersByTimeAsync(2 * 60 * 1000 + 1)
+      await expect(wallet.discoverByIdentityKey(args)).resolves.toMatchObject({ totalCertificates: 1 })
+      expect(query).toHaveBeenCalledTimes(2)
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })

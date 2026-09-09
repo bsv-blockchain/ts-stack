@@ -1082,4 +1082,50 @@ describe('TransactionEvidenceCoordinator', () => {
       await expectCode(subject.verify({ beef: evidence, outputIndex: 0 }), 'limit')
     }
   )
+
+  it('rejects invalid constructor context and limits, then a disposed or pre-aborted verify', async () => {
+    const { tracker, evidence } = await fixture()
+    expect(
+      () =>
+        new TransactionEvidenceCoordinator({
+          chainTracker: null as unknown as ChainTracker,
+          chainNamespace: 'local-canonical-chain',
+          policyId: 'p2pkh-consensus'
+        })
+    ).toThrow(TransactionEvidenceError)
+    expect(
+      () =>
+        new TransactionEvidenceCoordinator({
+          chainTracker: tracker,
+          chainNamespace: '',
+          policyId: 'p2pkh-consensus'
+        })
+    ).toThrow(TransactionEvidenceError)
+    expect(() => coordinator(tracker, { consumers: 0 })).toThrow(TransactionEvidenceError)
+
+    const disposed = coordinator(tracker)
+    disposed.dispose()
+    await expectCode(disposed.verify({ beef: evidence, outputIndex: 0 }), 'disposed')
+
+    const abort = new AbortController()
+    abort.abort()
+    await expectCode(
+      coordinator(tracker).verify({ beef: evidence, outputIndex: 0 }, { signal: abort.signal }),
+      'cancelled'
+    )
+  })
+
+  it('rejects a second distinct transaction once the pending-transaction limit is full', async () => {
+    const { tracker, firstEvidence, secondEvidence } = await sharedAncestorFixture()
+    const release = deferred<void>()
+    const entered = deferred<void>()
+    tracker.gate = release.promise
+    tracker.onRootCall = () => entered.resolve()
+    const limited = coordinator(tracker, { pendingTransactions: 1 })
+    const first = limited.verify({ beef: firstEvidence, outputIndex: 0 })
+    await entered.promise
+    await expectCode(limited.verify({ beef: secondEvidence, outputIndex: 0 }), 'limit')
+    release.resolve()
+    await expect(first).resolves.toMatchObject({ outputIndex: 0 })
+  })
 })
