@@ -1,4 +1,7 @@
-import LookupResolver, { LookupAnswerProgress } from '../LookupResolver'
+import LookupResolver, {
+  HTTPSOverlayLookupFacilitator,
+  LookupAnswerProgress
+} from '../LookupResolver'
 import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../OverlayAdminTokenTemplate'
 import { CompletedProtoWallet } from '../../auth/certificates/__tests/CompletedProtoWallet'
@@ -859,7 +862,9 @@ describe('LookupResolver dynamic discovery', () => {
     })
     const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
 
-    const tight = resolver.query({ service, query: { n: 1 } }, undefined, { limits: { maxHosts: 1 } })
+    const tight = resolver.query({ service, query: { n: 1 } }, undefined, {
+      limits: { maxHosts: 1 }
+    })
     await jest.runAllTimersAsync()
     await tight
 
@@ -901,14 +906,18 @@ describe('LookupResolver dynamic discovery', () => {
       return { type: 'output-list' as const, outputs: [] }
     })
     const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
-    const first = resolver.query$({ service, query: { n: 1 } }, undefined, {
-      limits: { maxHosts: 1 }
-    })[Symbol.asyncIterator]()
+    const first = resolver
+      .query$({ service, query: { n: 1 } }, undefined, {
+        limits: { maxHosts: 1 }
+      })
+      [Symbol.asyncIterator]()
     const firstPending = first.next()
     await Promise.resolve()
-    const second = resolver.query$({ service, query: { n: 2 } }, undefined, {
-      limits: { maxHosts: 2 }
-    })[Symbol.asyncIterator]()
+    const second = resolver
+      .query$({ service, query: { n: 2 } }, undefined, {
+        limits: { maxHosts: 2 }
+      })
+      [Symbol.asyncIterator]()
     const secondPending = second.next()
     await Promise.resolve()
 
@@ -981,5 +990,175 @@ describe('LookupResolver dynamic discovery', () => {
       hostCount: 0,
       outputs: []
     })
+  })
+
+  it('reuses a covering cache that omitted optional discovery metadata', async () => {
+    const host = 'https://cached-meta.example'
+    const tracker = 'https://cached-meta-tracker.example'
+    const service = 'ls_cached_meta'
+    const beef = makeBeef(201)
+    const lookup = jest.fn(async (url: string) => {
+      if (url === tracker) throw new Error('tracker should not run')
+      return { type: 'output-list' as const, outputs: [{ beef, outputIndex: 0 }] }
+    })
+    const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
+    const limits = (resolver as any).limits
+    ;(resolver as any).hostsCache.set(service, {
+      maxHosts: limits.maxHosts,
+      maxHostsPerTracker: limits.maxHostsPerTracker,
+      maxTrackers: limits.maxTrackers,
+      maxResponseBytes: limits.maxResponseBytes,
+      maxTotalBytes: limits.maxTotalBytes,
+      maxOutputs: limits.maxOutputs,
+      hosts: [host],
+      expiresAt: Date.now() + 60_000
+    })
+    const pending = resolver.query({ service, query: {} })
+    await jest.runAllTimersAsync()
+    await expect(pending).resolves.toEqual({
+      type: 'output-list',
+      outputs: [{ beef, outputIndex: 0 }]
+    })
+    expect(lookup.mock.calls.map(([url]) => url)).toEqual([host])
+  })
+
+  it('refreshes when a planted cache is missing any discovery bound', async () => {
+    const tracker = 'https://missing-bound-tracker.example'
+    const host = 'https://missing-bound-host.example'
+    const receipt = await slapReceipt(210, host, 'ls_missing_bound')
+    const lookup = jest.fn(async (url: string) => {
+      if (url === tracker) return { type: 'output-list' as const, outputs: [receipt] }
+      return { type: 'output-list' as const, outputs: [] }
+    })
+    const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [tracker] })
+    const limits = (resolver as any).limits
+    const missingFields = [
+      'maxHosts',
+      'maxHostsPerTracker',
+      'maxTrackers',
+      'maxResponseBytes',
+      'maxTotalBytes',
+      'maxOutputs'
+    ] as const
+    for (const missing of missingFields) {
+      const service = `ls_missing_${missing}`
+      const cached: Record<string, unknown> = {
+        maxHosts: limits.maxHosts,
+        maxHostsPerTracker: limits.maxHostsPerTracker,
+        maxTrackers: limits.maxTrackers,
+        maxResponseBytes: limits.maxResponseBytes,
+        maxTotalBytes: limits.maxTotalBytes,
+        maxOutputs: limits.maxOutputs,
+        hosts: [host],
+        expiresAt: Date.now() + 60_000
+      }
+      delete cached[missing]
+      ;(resolver as any).hostsCache.set(service, cached)
+      const pending = resolver.query({ service, query: {} })
+      await jest.runAllTimersAsync()
+      await pending
+    }
+    expect(lookup.mock.calls.filter(([url]) => url === tracker).length).toBe(missingFields.length)
+  })
+
+  it('rejects a deadline outside the accepted range', async () => {
+    const resolver = new LookupResolver({
+      facilitator: { lookup: async () => ({ type: 'output-list' as const, outputs: [] }) },
+      hostOverrides: { ls_deadline_range: ['https://deadline-range.example'] }
+    })
+    await expect(
+      resolver.query({ service: 'ls_deadline_range', query: {} }, undefined, { deadlineMs: -1 })
+    ).rejects.toBeInstanceOf(RangeError)
+    await expect(
+      resolver.query({ service: 'ls_deadline_range', query: {} }, undefined, {
+        deadlineMs: 2_147_483_648
+      })
+    ).rejects.toBeInstanceOf(RangeError)
+    await expect(
+      resolver.query({ service: 'ls_deadline_range', query: {} }, undefined, {
+        deadlineMs: Number.NaN
+      })
+    ).rejects.toBeInstanceOf(RangeError)
+  })
+
+  it('cancels immediately when the caller signal is already aborted', async () => {
+    const lookup = jest.fn(async () => ({ type: 'output-list' as const, outputs: [] }))
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      hostOverrides: { ls_preabort: ['https://preabort.example'] }
+    })
+    const controller = new AbortController()
+    controller.abort()
+    const received: LookupAnswerProgress[] = []
+    const pending = (async () => {
+      for await (const item of resolver.query$({ service: 'ls_preabort', query: {} }, undefined, {
+        signal: controller.signal
+      })) {
+        received.push(item)
+      }
+    })()
+    await jest.runAllTimersAsync()
+    await pending
+    expect(lookup).not.toHaveBeenCalled()
+    expect(received.at(-1)).toMatchObject({ isFinal: true, terminalReason: 'cancelled' })
+  })
+
+  it('aborts an in-flight query$ when the iterator throws', async () => {
+    const lookup = jest.fn(
+      async (_url: string, _question: unknown, _timeout: unknown, signal?: AbortSignal) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      hostOverrides: { ls_iter_throw: ['https://iter-throw.example'] }
+    })
+    const iterator = resolver
+      .query$({ service: 'ls_iter_throw', query: {} })
+      [Symbol.asyncIterator]()
+    const first = iterator.next()
+    await Promise.resolve()
+    await expect(iterator.throw(new Error('iterator failed'))).rejects.toThrow('iterator failed')
+    await first.catch(() => undefined)
+  })
+
+  it('shallow-copies a question that structuredClone cannot clone for a custom facilitator', async () => {
+    const query: { nested: { n: number }; fn?: () => number } = { nested: { n: 1 }, fn: () => 1 }
+    const lookup = jest.fn(async (_url: string, question: { query: typeof query }) => {
+      expect(question.query).toEqual(query)
+      expect(question.query).not.toBe(query)
+      expect(question.query.nested).toBe(query.nested)
+      return { type: 'output-list' as const, outputs: [] }
+    })
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      hostOverrides: { ls_clone: ['https://clone.example'] }
+    })
+    const pending = resolver.query({ service: 'ls_clone', query })
+    await jest.runAllTimersAsync()
+    await pending
+    expect(lookup).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-serializes a non-cloneable question for the HTTPS facilitator', async () => {
+    const fetchClient = jest.fn(
+      async () =>
+        new Response(JSON.stringify({ type: 'output-list', outputs: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+    )
+    const resolver = new LookupResolver({
+      facilitator: new HTTPSOverlayLookupFacilitator(fetchClient as any, true),
+      hostOverrides: { ls_https_clone: ['https://https-clone.example'] }
+    })
+    const pending = resolver.query({
+      service: 'ls_https_clone',
+      query: { fn: () => 1 }
+    } as any)
+    await jest.runAllTimersAsync()
+    await pending
+    expect(fetchClient).toHaveBeenCalled()
   })
 })

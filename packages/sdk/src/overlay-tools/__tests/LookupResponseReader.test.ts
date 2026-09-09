@@ -240,4 +240,132 @@ describe('readLookupResponseBytes', () => {
       readLookupResponseBytes(responseForReader(reader), { maxResponseBytes: 10 })
     ).rejects.toBe(readFailure)
   })
+
+  it('rejects a maxResponseBytes that is not a non-negative safe integer', async () => {
+    const response = responseForReader(readerForChunks([]))
+    await expect(
+      readLookupResponseBytes(response, { maxResponseBytes: -1 })
+    ).rejects.toBeInstanceOf(RangeError)
+    await expect(readLookupResponseBytes(response, { maxResponseBytes: 1.5 })).rejects.toThrow(
+      'maxResponseBytes must be a non-negative safe integer'
+    )
+    await expect(
+      readLookupResponseBytes(response, { maxResponseBytes: Number.MAX_SAFE_INTEGER + 1 })
+    ).rejects.toBeInstanceOf(RangeError)
+  })
+
+  it('treats a malformed Content-Length as unknown and still reads the body', async () => {
+    const bytes = await readLookupResponseBytes(
+      responseForReader(readerForChunks([new Uint8Array([9])]), '1e6'),
+      { maxResponseBytes: 1 }
+    )
+    expect(bytes).toEqual(new Uint8Array([9]))
+  })
+
+  it('returns an empty body when the response has no stream', async () => {
+    const headers = new Headers()
+    const empty = { body: null, headers } as unknown as Response
+    await expect(readLookupResponseBytes(empty, { maxResponseBytes: 0 })).resolves.toEqual(
+      new Uint8Array(0)
+    )
+
+    headers.set('content-length', '4')
+    await expect(
+      readLookupResponseBytes({ body: null, headers } as unknown as Response, {
+        maxResponseBytes: 1
+      })
+    ).rejects.toMatchObject({ name: 'LookupResourceLimitError', limit: 'maxResponseBytes' })
+  })
+
+  it('rejects an already-aborted empty body using the AbortError fallback when no reason is set', async () => {
+    const signal = {
+      aborted: true,
+      reason: undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    } as unknown as AbortSignal
+    await expect(
+      readLookupResponseBytes({ body: null, headers: new Headers() } as unknown as Response, {
+        maxResponseBytes: 0,
+        signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('rejects an already-aborted stream before the first read', async () => {
+    const controller = new AbortController()
+    const read = jest.fn()
+    controller.abort(new Error('already aborted'))
+    const reader = {
+      read,
+      cancel: async () => undefined,
+      releaseLock: () => undefined
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>
+    await expect(
+      readLookupResponseBytes(responseForReader(reader), {
+        maxResponseBytes: 10,
+        signal: controller.signal
+      })
+    ).rejects.toThrow('already aborted')
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('treats a missing chunk value as empty input', async () => {
+    const consumed: number[] = []
+    const reader = {
+      read: jest
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: undefined })
+        .mockResolvedValueOnce({ done: true, value: undefined }),
+      cancel: async () => undefined,
+      releaseLock: () => undefined
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>
+
+    await expect(
+      readLookupResponseBytes(responseForReader(reader), {
+        maxResponseBytes: 4,
+        consumeBytes: byteCount => consumed.push(byteCount)
+      })
+    ).resolves.toEqual(new Uint8Array(0))
+    expect(consumed).toEqual([])
+  })
+
+  it('rejects a later read when consumeBytes aborts the signal', async () => {
+    const controller = new AbortController()
+    const cancel = jest.fn(async () => undefined)
+    const reader = {
+      read: jest
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: new Uint8Array([1]) })
+        .mockResolvedValueOnce({ done: false, value: new Uint8Array([2]) }),
+      cancel,
+      releaseLock: jest.fn()
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>
+
+    await expect(
+      readLookupResponseBytes(responseForReader(reader), {
+        maxResponseBytes: 10,
+        signal: controller.signal,
+        consumeBytes: () => controller.abort()
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an abort that races listener registration', async () => {
+    const signal = {
+      aborted: false,
+      reason: new Error('raced abort'),
+      addEventListener: () => {
+        signal.aborted = true
+      },
+      removeEventListener: () => undefined
+    }
+    await expect(
+      readLookupResponseBytes(responseForReader(readerForChunks([new Uint8Array([1])])), {
+        maxResponseBytes: 10,
+        signal: signal as unknown as AbortSignal
+      })
+    ).rejects.toThrow('raced abort')
+  })
 })
