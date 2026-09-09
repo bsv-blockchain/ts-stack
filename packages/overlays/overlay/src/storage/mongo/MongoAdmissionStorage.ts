@@ -44,6 +44,18 @@ import {
   type MongoTransactionOptions
 } from './MongoTransactionRunner.js'
 
+function isMongoWriteConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const code = 'code' in error ? error.code : undefined
+  if (code === 112 || code === '112') return true
+  if ('codeName' in error && error.codeName === 'WriteConflict') return true
+  const text = [
+    error instanceof Error ? error.message : '',
+    'errmsg' in error ? String(error.errmsg) : ''
+  ].join(' ')
+  return text.includes('Write conflict')
+}
+
 export interface MongoEnlistedLookupIndex {
   readonly protocol: 'overlay-mongo-index-v1'
   readonly target: string
@@ -214,18 +226,22 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     }
     await this.prepareReadGuards(plan)
     await this.publishHistoryUpdatePayloads(plan)
-    try {
-      const result = await this.runner.run(
-        { key: plan.key, identity: plan.identity, receipt },
-        async context => {
-          await this.applyPlan(context, plan)
-        }
-      )
-      if (result.state !== 'pending') return result
-      return await this.waitForPending(plan.key, result.attemptId)
-    } catch (error) {
-      return this.asResult(error)
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        const result = await this.runner.run(
+          { key: plan.key, identity: plan.identity, receipt },
+          async context => {
+            await this.applyPlan(context, plan)
+          }
+        )
+        if (result.state !== 'pending') return result
+        return await this.waitForPending(plan.key, result.attemptId)
+      } catch (error) {
+        if (isMongoWriteConflict(error) && attempt < 7) continue
+        return this.asResult(error)
+      }
     }
+    return { state: 'rejected', code: 'spend-conflict' }
   }
 
   private async waitForPending(
