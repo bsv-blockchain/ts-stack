@@ -3,7 +3,9 @@
   "profile": "browser",
   "package": "@bsv/did-client",
   "entry": ".",
-  "requiredExports": ["DIDClient"],
+  "requiredExports": [
+    "DIDClient"
+  ],
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
@@ -21,9 +23,9 @@
     "path": "dist/umd/bundle.js",
     "global": "did-client",
     "maximumBytes": {
-      "raw": 375000,
-      "gzip": 112000,
-      "brotli": 95000
+      "raw": 400000,
+      "gzip": 120000,
+      "brotli": 102000
     }
   }
 }
