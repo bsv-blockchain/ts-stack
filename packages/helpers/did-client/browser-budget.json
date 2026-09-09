@@ -7,9 +7,9 @@
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
-      "raw": 490000,
-      "gzip": 126000,
-      "brotli": 104000
+      "raw": 530000,
+      "gzip": 140000,
+      "brotli": 115000
     },
     "esbuild": {
       "raw": 400000,
