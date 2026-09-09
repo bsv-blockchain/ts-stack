@@ -3,9 +3,7 @@
   "profile": "browser",
   "package": "@bsv/did-client",
   "entry": ".",
-  "requiredExports": [
-    "DIDClient"
-  ],
+  "requiredExports": ["DIDClient"],
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
