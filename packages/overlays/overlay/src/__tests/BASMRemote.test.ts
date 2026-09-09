@@ -377,4 +377,207 @@ describe('BASMRemote', () => {
       tac: ZERO
     })
   })
+
+  it.each([
+    ['a non-integer timeout', { timeoutMs: 20.5 }, 'Invalid BASM limit: timeoutMs'],
+    ['a zero timeout', { timeoutMs: 0 }, 'Invalid BASM limit: timeoutMs'],
+    ['a negative response cap', { maxResponseBytes: -1 }, 'Invalid BASM limit: maxResponseBytes']
+  ])('rejects %s', (_label, limits, message) => {
+    expect(() => new BASMRemote(ENDPOINT, TOPIC, async () => response({}), limits)).toThrow(
+      new TypeError(message)
+    )
+  })
+
+  it('rejects a timeout that exceeds the platform timer range', () => {
+    expect(
+      () =>
+        new BASMRemote(ENDPOINT, TOPIC, async () => response({}), {
+          timeoutMs: 2147483648
+        })
+    ).toThrow(new TypeError('BASM timeout exceeds timer range'))
+  })
+
+  it('reads a response whose advertised length is within the configured cap', async () => {
+    const payload = JSON.stringify({ topic: TOPIC, blockHeight: -1, tac: ZERO })
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () =>
+        new Response(payload, {
+          headers: { 'content-length': String(Buffer.byteLength(payload)) }
+        }),
+      { maxResponseBytes: Buffer.byteLength(payload) }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).resolves.toEqual({
+      topic: TOPIC,
+      blockHeight: -1,
+      tac: ZERO
+    })
+  })
+
+  it('reads a body-less response through text() when headers are absent', async () => {
+    const payload = JSON.stringify({ topic: TOPIC, blockHeight: -1, tac: ZERO })
+    const remote = new BASMRemote(ENDPOINT, TOPIC, async () => {
+      return {
+        ok: true,
+        status: 200,
+        body: null,
+        text: async () => payload
+      } as unknown as Response
+    })
+
+    await expect(remote.requestTopicAnchorTip()).resolves.toEqual({
+      topic: TOPIC,
+      blockHeight: -1,
+      tac: ZERO
+    })
+  })
+
+  it('rejects a body-less response whose decoded text exceeds the byte cap', async () => {
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () => {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          body: undefined,
+          text: async () => '{"topic":"tm_example"}'
+        } as unknown as Response
+      },
+      { maxResponseBytes: 4 }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_RESOURCE_LIMIT'
+    })
+  })
+
+  it('cancels an oversized advertised body even when cancel rejects', async () => {
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () => {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => '64' },
+          body: {
+            cancel: async () => {
+              throw new Error('cancel failed')
+            }
+          },
+          text: async () => '{"topic":"tm_example"}'
+        } as unknown as Response
+      },
+      { maxResponseBytes: 8 }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_RESOURCE_LIMIT'
+    })
+  })
+
+  it('skips body cancel when an oversized advertised response has no body', async () => {
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () => {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => '64' },
+          body: null,
+          text: async () => '{"topic":"tm_example"}'
+        } as unknown as Response
+      },
+      { maxResponseBytes: 8 }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_RESOURCE_LIMIT'
+    })
+  })
+
+  it('classifies malformed JSON on a failed HTTP response as an HTTP error', async () => {
+    const remote = new BASMRemote(ENDPOINT, TOPIC, async () => new Response('{', { status: 503 }))
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_HTTP_ERROR'
+    })
+  })
+
+  it.each([
+    ['resolves', async () => {}],
+    [
+      'rejects',
+      async () => {
+        throw new Error('cancel failed')
+      }
+    ]
+  ])('cancels a late response body whose cancel %s after abort', async (_label, cancel) => {
+    let completeFetch: ((value: Response) => void) | undefined
+    let cancelled = false
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () =>
+        await new Promise<Response>(resolve => {
+          completeFetch = resolve
+        }),
+      { timeoutMs: 20 }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_TIMEOUT'
+    })
+
+    completeFetch?.({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: {
+        cancel: async () => {
+          cancelled = true
+          await cancel()
+        }
+      },
+      text: async () => ''
+    } as unknown as Response)
+
+    const deadline = Date.now() + 1000
+    while (!cancelled && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    expect(cancelled).toBe(true)
+  })
+
+  it('does not require a body when cancelling a late aborted response', async () => {
+    let completeFetch: ((value: Response) => void) | undefined
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () =>
+        await new Promise<Response>(resolve => {
+          completeFetch = resolve
+        }),
+      { timeoutMs: 20 }
+    )
+
+    await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
+      code: 'BASM_TIMEOUT'
+    })
+    expect(completeFetch).toBeDefined()
+
+    completeFetch?.({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: null,
+      text: async () => ''
+    } as unknown as Response)
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+  })
 })

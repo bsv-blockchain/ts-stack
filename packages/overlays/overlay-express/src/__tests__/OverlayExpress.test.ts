@@ -1728,11 +1728,16 @@ describe('OverlayExpress', () => {
         ...topicRequest,
         body: { blockHeight: 3, blockHash: 'BB'.repeat(32) }
       })
+      await invokeCapturedRoute(postSpy, '/requestAdmittedList', {
+        ...topicRequest,
+        body: { blockHeight: 4 }
+      })
       await invokeCapturedRoute(postSpy, '/requestCompoundMerklePath', {
         ...topicRequest,
         body: { blockHeight: 3, txids: ['AB'.repeat(32)] }
       })
       expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 3, 'bb'.repeat(32))
+      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 4, undefined)
       expect(mockEngine.provideCompoundMerklePath).toHaveBeenCalledWith('tm_test', 3, [
         'ab'.repeat(32)
       ])
@@ -1772,6 +1777,24 @@ describe('OverlayExpress', () => {
           '/requestAdmittedList',
           { ...topicRequest, body: { blockHeight: {}, blockHash: 'aa'.repeat(32) } },
           'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: -1 } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: 1.5 } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestTopicAnchorRange',
+          {
+            ...topicRequest,
+            body: { fromHeight: Number.MAX_SAFE_INTEGER + 1, toHeight: 1 }
+          },
+          'fromHeight must be a nonnegative safe integer'
         ],
         [
           '/requestAdmittedList',
