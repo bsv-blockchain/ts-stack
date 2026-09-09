@@ -85,8 +85,16 @@ function hasLabel(error: unknown, label: string): boolean {
 
 function isTransientTransactionError(error: unknown): boolean {
   if (hasLabel(error, 'TransientTransactionError')) return true
-  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 112) return true
-  return error instanceof Error && error.message.includes('Write conflict')
+  if (typeof error !== 'object' || error === null) return false
+  const code = 'code' in error ? error.code : undefined
+  if (code === 112 || code === '112') return true
+  if ('codeName' in error && error.codeName === 'WriteConflict') return true
+  const text = [
+    error instanceof Error ? error.message : '',
+    'errmsg' in error ? String(error.errmsg) : '',
+    'cause' in error && error.cause instanceof Error ? error.cause.message : ''
+  ].join(' ')
+  return text.includes('Write conflict')
 }
 
 function duplicateKey(error: unknown): boolean {
@@ -292,8 +300,12 @@ export class MongoTransactionRunner {
     this.calls += 1
     try {
       for (let bodyIndex = 0; bodyIndex < this.maxBodyAttempts; bodyIndex += 1) {
-        const completed = await this.runBodyAttempt(id, request, receipt, body, budget, bodyIndex)
-        if (completed !== undefined) return completed
+        try {
+          const completed = await this.runBodyAttempt(id, request, receipt, body, budget, bodyIndex)
+          if (completed !== undefined) return completed
+        } catch (error) {
+          if (!isTransientTransactionError(error) || bodyIndex + 1 >= this.maxBodyAttempts) throw error
+        }
       }
       throw new Error('Mongo transaction attempt limit reached')
     } finally {
