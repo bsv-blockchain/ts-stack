@@ -109,6 +109,14 @@ test('copies an oversized binary record through authenticated HTTP and restores 
         strangerRpc('readSyncTransferPart', [{ identityKey, transferId: staged.transferId, offset: 0 }])
       ).rejects.toThrow('match authentication')
       await expect(
+        strangerRpc('beginReadSyncTransfer', [
+          {
+            identityKey: strangerKey.toPublicKey().toString(),
+            args: { identityKey, fromStorageIdentityKey: remote.activeStorage.getSettings().storageIdentityKey }
+          }
+        ])
+      ).rejects.toThrow('source must match authenticated storage')
+      await expect(
         strangerRpc('readSyncTransferPart', [
           { identityKey: strangerKey.toPublicKey().toString(), transferId: staged.transferId, offset: 0 }
         ])
@@ -161,11 +169,19 @@ test('copies an oversized binary record through authenticated HTTP and restores 
     const restoreManager = new WalletStorageManager(identityKey, restored)
     await restoreManager.makeAvailable()
     const receiveRpc = Reflect.get(client, 'rpcCall').bind(client)
+    const rejectedInlineRequests: Array<{ maxItems: number }> = []
+    let explicitReads = 0
     let corrupt = true
     const receiveSpy = jest.spyOn(client as never, 'rpcCall' as never).mockImplementation((async (
       method: string,
       params: any[]
     ) => {
+      // A proxy can reject inline responses even when the provider supports staged reads.
+      if (method === 'getSyncChunk') {
+        rejectedInlineRequests.push({ maxItems: params[0].maxItems })
+        throw new Error('WalletStorageClient rpcCall: network error 413 proxy response limit')
+      }
+      if (method === 'beginReadSyncTransfer') explicitReads++
       const value = await receiveRpc(method, params)
       if (method === 'readSyncTransferPart' && corrupt) {
         corrupt = false
@@ -175,6 +191,8 @@ test('copies an oversized binary record through authenticated HTTP and restores 
     }) as never)
     await expect(restoreManager.syncFromReader(identityKey, client)).rejects.toThrow('integrity')
     expect(await restored.countTransactions({ partial: {} })).toBe(0)
+    expect(rejectedInlineRequests.at(-1)?.maxItems).toBe(1)
+    expect(explicitReads).toBe(1)
     receiveSpy.mockRestore()
     await restoreManager.syncFromReader(identityKey, client)
     const { user: target } = await restored.findOrInsertUser(identityKey)
