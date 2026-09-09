@@ -835,7 +835,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     now: number
   ): Promise<VerifiableCertificate[]> {
     // Use the wallet's existing network/chain configuration, never the overlay host's verdict.
-    const chainTracker = await this.getServices().getChainTracker()
+    // Wallets constructed without services have no chain tracker; do not throw and do not
+    // emit identities that cannot be verified.
+    if (this.services == null) return []
+    const chainTracker = await this.services.getChainTracker()
     if (this._identityEvidenceClosed) return []
     const chainNamespace = `wallet:${this.chain}`
     if (
