@@ -1825,7 +1825,7 @@ export default class LookupResolver {
     // Start the custom facilitator in a promise chain so synchronous throws
     // become rejections governed by the same wall-clock deadline.
     const lookupPromise = Promise.resolve().then(() => {
-      if (signal?.aborted === true) return Promise.reject(lookupAbortError())
+      if (signal?.aborted === true) throw lookupAbortError()
       return this.facilitator.lookup(host, question, timeout, controller.signal, requestOptions)
     })
     lookupPromise.catch(() => {
