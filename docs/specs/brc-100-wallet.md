@@ -19,6 +19,9 @@ The authoritative sources for this page are:
 - `specs/sdk/brc-100-wallet.json` (wire-format schema)
 - [BRC-100 in the BRC repository](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md)
 
+For how these methods behave once called — storage interactions, status transitions, and
+implementation differences — see [Wallet UTXO Lifecycle](../architecture/wallet-utxo-lifecycle.md).
+
 This MD is a human-readable summary. Implement against the TS interfaces and JSON schema. The TypeScript interface passes `originator?: OriginatorDomainNameStringUnder250Bytes` as an optional second method parameter (wire formats carry it in the request envelope). See `ReviewActionResult` for delayed-broadcast responses.
 
 ## Data Conventions
