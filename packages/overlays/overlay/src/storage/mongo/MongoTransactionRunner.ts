@@ -83,6 +83,12 @@ function hasLabel(error: unknown, label: string): boolean {
   )
 }
 
+function isTransientTransactionError(error: unknown): boolean {
+  if (hasLabel(error, 'TransientTransactionError')) return true
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 112) return true
+  return error instanceof Error && error.message.includes('Write conflict')
+}
+
 function duplicateKey(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000
 }
@@ -366,7 +372,7 @@ export class MongoTransactionRunner {
     } catch (error) {
       bodyActive = false
       await this.abort(attempt)
-      if (!hasLabel(error, 'TransientTransactionError') || bodyIndex + 1 >= this.maxBodyAttempts) throw error
+      if (!isTransientTransactionError(error) || bodyIndex + 1 >= this.maxBodyAttempts) throw error
       return undefined
     } finally {
       bodyActive = false
