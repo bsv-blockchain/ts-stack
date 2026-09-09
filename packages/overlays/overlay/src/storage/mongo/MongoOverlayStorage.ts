@@ -4,6 +4,7 @@ import { MerklePath, Transaction } from '@bsv/sdk'
 import type { Output } from '../../Output.js'
 import type { AppliedTransaction, Storage } from '../Storage.js'
 import {
+  asStorageUint64,
   parseStorageOutputIndex,
   parseStorageUint64,
   type AdmissionPayloadRef,
@@ -64,7 +65,9 @@ export class MongoOverlayStorage implements Storage {
     const document = await this.admission.generations().findOne({
       _id: this.admission.generationId(topic)
     })
-    if (document === null) return { chainEpoch: '0', topicHistoryGeneration: '0' }
+    if (document === null) {
+      return { chainEpoch: asStorageUint64('0'), topicHistoryGeneration: asStorageUint64('0') }
+    }
     return {
       chainEpoch: decodeMongoUint64(document.chainEpoch),
       topicHistoryGeneration: decodeMongoUint64(document.topicHistoryGeneration)
@@ -81,7 +84,7 @@ export class MongoOverlayStorage implements Storage {
     const published = await this.payloads.publish({
       kind: input.kind,
       digest,
-      byteLength: String(input.bytes.byteLength),
+      byteLength: asStorageUint64(String(input.bytes.byteLength)),
       txid: input.txid,
       bytes: (async function* () {
         yield input.bytes
@@ -90,7 +93,7 @@ export class MongoOverlayStorage implements Storage {
     return {
       kind: published.kind,
       digest: published.digest,
-      byteLength: published.byteLength
+      byteLength: asStorageUint64(published.byteLength)
     }
   }
 

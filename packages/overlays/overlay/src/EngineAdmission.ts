@@ -3,6 +3,7 @@ import type { STEAK, Transaction } from '@bsv/sdk'
 import { extractMerkleProofMetadata } from './BASM.js'
 import {
   admissionSemanticDigest,
+  asStorageUint64,
   getAdmissionStorage,
   type AdmissionCommit,
   type AdmissionCommitResult,
@@ -104,7 +105,7 @@ async function localPayload(
   return {
     kind,
     digest: createHash('sha256').update(bytes).digest('hex'),
-    byteLength: String(bytes.byteLength)
+    byteLength: asStorageUint64(String(bytes.byteLength))
   }
 }
 
@@ -178,7 +179,7 @@ export async function buildOverlayAdmissionPlan(input: {
     const { outputsConsumed, outputsToMarkStale } = classifyCoins(input.tx, validation)
     const fence =
       input.host.getHistoryFence === undefined
-        ? { chainEpoch: '0', topicHistoryGeneration: '0' }
+        ? { chainEpoch: asStorageUint64('0'), topicHistoryGeneration: asStorageUint64('0') }
         : await input.host.getHistoryFence(validation.topic)
     const outputs: AdmissionTopicDecision['outputs'] = []
     for (const outputIndex of validation.admissibleOutputs.outputsToAdmit) {
@@ -189,10 +190,10 @@ export async function buildOverlayAdmissionPlan(input: {
       payloads.push(script)
       outputs.push({
         txid: input.txid,
-        outputIndex: String(outputIndex),
-        satoshis: String(txOut.satoshis),
-        score: String(Date.now()),
-        script: { payload: script, offset: '0', byteLength: script.byteLength }
+        outputIndex: asStorageUint64(String(outputIndex)),
+        satoshis: asStorageUint64(String(txOut.satoshis)),
+        score: asStorageUint64(String(Date.now())),
+        script: { payload: script, offset: asStorageUint64('0'), byteLength: script.byteLength }
       })
     }
     const spends = validation.previousOutputs.flatMap(output =>
@@ -200,7 +201,7 @@ export async function buildOverlayAdmissionPlan(input: {
         ? []
         : [
             {
-              outpoint: { txid: output.txid, outputIndex: String(output.outputIndex) },
+              outpoint: { txid: output.txid, outputIndex: asStorageUint64(String(output.outputIndex)) },
               expectedVersion: '1',
               spender: input.txid
             }
@@ -213,12 +214,12 @@ export async function buildOverlayAdmissionPlan(input: {
       spends,
       evictions: outputsToMarkStale.map(item => ({
         txid: item.txid,
-        outputIndex: String(item.previousOutputIndex)
+        outputIndex: asStorageUint64(String(item.previousOutputIndex))
       })),
       outputs,
       edges: outputsConsumed.flatMap(source =>
         outputs.map(output => ({
-          source: { txid: source.txid, outputIndex: String(source.outputIndex) },
+          source: { txid: source.txid, outputIndex: asStorageUint64(String(source.outputIndex)) },
           consumer: { txid: output.txid, outputIndex: output.outputIndex }
         }))
       ),
@@ -309,7 +310,7 @@ function appliedRecord(
 ): AdmissionTopicDecision['applied'] {
   const applied: AdmissionTopicDecision['applied'] = { txid: input.txid }
   const firstSeen = input.applied?.firstSeenHeight ?? merkle?.blockHeight
-  if (firstSeen !== undefined) applied.firstSeenHeight = String(firstSeen)
+  if (firstSeen !== undefined) applied.firstSeenHeight = asStorageUint64(String(firstSeen))
   if (proof !== undefined) applied.proof = proof
   const blockHash = input.applied?.blockHash
   const height = input.applied?.blockHeight ?? merkle?.blockHeight
@@ -322,9 +323,9 @@ function appliedRecord(
     merkleRoot !== undefined
   ) {
     applied.block = {
-      height: String(height),
+      height: asStorageUint64(String(height)),
       hash: blockHash,
-      index: String(index),
+      index: asStorageUint64(String(index)),
       merkleRoot
     }
   }

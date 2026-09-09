@@ -201,6 +201,11 @@ export function parseStorageUint64(value: string): bigint {
   return result
 }
 
+export function asStorageUint64(value: string): StorageUint64 {
+  parseStorageUint64(value)
+  return value as StorageUint64
+}
+
 /** Validate the wire outpoint domain before conversion to an exact STEAK number. */
 export function parseStorageOutputIndex(value: string): number {
   const result = parseStorageUint64(value)

@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { Collection, Db, Document } from 'mongodb'
 import {
   admissionSemanticDigest,
+  asStorageUint64,
   isReplaySafeProjection,
   type AdmissionCommit,
   type AdmissionCommitResult,
@@ -706,7 +707,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     const ref: AdmissionPayloadRef = {
       kind: 'outbox-data',
       digest,
-      byteLength: String(bytes.byteLength)
+      byteLength: asStorageUint64(String(bytes.byteLength))
     }
     const payload = await this.db
       .collection<IdDocument>(MongoCollectionNames.payloads)

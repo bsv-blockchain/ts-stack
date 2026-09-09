@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import type { CollectionInfo, Db, Document, IndexDescription } from 'mongodb'
 import {
+  asStorageUint64,
   parseStorageOutputIndex,
   parseStorageUint64,
-  type StorageScope
+  type StorageScope,
+  type StorageUint64
 } from '../AdmissionStorage.js'
 
 /** The immutable chain namespace shared by all Overlay nodes. */
@@ -110,13 +112,13 @@ export function encodeMongoUint64(value: string): string {
 }
 
 /** Strict inverse of encodeMongoUint64; rejects non-canonical padded values. */
-export function decodeMongoUint64(value: string): string {
+export function decodeMongoUint64(value: string): StorageUint64 {
   if (typeof value !== 'string' || !new RegExp(paddedUint64Pattern).test(value))
     throw new Error('Invalid Mongo uint64')
   if (value > maxUint64) throw new Error('Invalid Mongo uint64')
   const decoded = BigInt(value).toString(10)
   if (encodeMongoUint64(decoded) !== value) throw new Error('Invalid Mongo uint64')
-  return decoded
+  return asStorageUint64(decoded)
 }
 
 /** Validates the wire uint32 domain and returns its canonical decimal spelling. */
