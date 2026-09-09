@@ -81,7 +81,7 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports admissionSemanticDigest,canAdvanceGaspCursor,getAdmissionStorage,isRecoveryLeaseCurrent,isReplaySafeProjection,parseStorageUint64,parseStorageOutputIndex,BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=;./storage/knex/KnexStorage=KnexStorage\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports admissionSemanticDigest,canAdvanceGaspCursor,getAdmissionStorage,isRecoveryLeaseCurrent,isReplaySafeProjection,parseStorageUint64,parseStorageOutputIndex,storageHasAdmission,BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=storageHasAdmission;./storage/knex/KnexStorage=KnexStorage\"",
     "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",

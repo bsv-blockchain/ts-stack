@@ -82,11 +82,12 @@ applications should prefer the root entry point wherever possible.
 ## Optional persistence capability
 
 `AdmissionStorage` defines an additive v1 atomic admission contract for future
-adapters. `getAdmissionStorage(storage)` detects an explicit provider with both
-commit and reconciliation methods. Existing Knex and injected legacy adapters
-remain supported; their individual methods do not imply atomic submission.
-Current `Engine.submit` does not call this capability, and its early STEAK
-callback is not a durable commit receipt.
+adapters. `storageHasAdmission(storage)` reports whether the optional
+`admission` field is present. `getAdmissionStorage(storage)` additionally
+requires the v1 protocol and both commit and reconciliation methods. Existing
+Knex and injected legacy adapters remain supported; their individual methods do
+not imply atomic submission. Current `Engine.submit` does not call this
+capability, and its early STEAK callback is not a durable commit receipt.
 
 The contract separates local commit, index visibility and propagation. It binds
 operation identity to verified transaction, topic/policy and off-chain context;

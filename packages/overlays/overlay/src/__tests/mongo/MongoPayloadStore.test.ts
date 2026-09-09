@@ -561,4 +561,166 @@ describe('MongoPayloadStore', () => {
     })
     await session.endSession()
   })
+
+  test('cancels an in-flight stream after the first chunk has been accepted', async () => {
+    const content = Buffer.alloc(64 * 1024, 0x5e)
+    const hash = digest(content)
+    const controller = new AbortController()
+    const pending = store.publish({
+      kind: 'outbox-data',
+      digest: hash,
+      byteLength: String(content.byteLength),
+      bytes: (async function* () {
+        yield content.subarray(0, 32 * 1024)
+        await delay(100)
+        yield content.subarray(32 * 1024)
+      })(),
+      signal: controller.signal
+    })
+    await delay(20)
+    controller.abort(new Error('mid-stream cancel'))
+    await expect(pending).rejects.toThrow('mid-stream cancel')
+  })
+
+  test('rejects a non-byte stream, over-length stream, and iterator failure', async () => {
+    const hash = digest(Buffer.from('stream-guards'))
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: '1',
+        bytes: {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => ({ done: false, value: 'nope' }),
+              return: async () => ({ done: true, value: undefined })
+            }
+          }
+        } as AsyncIterable<Uint8Array>
+      })
+    ).rejects.toThrow('non-byte chunk')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: digest(Buffer.from('too-long')),
+        byteLength: '1',
+        bytes: bytes(Buffer.from('ab'))
+      })
+    ).rejects.toThrow('exceeds declared length')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: digest(Buffer.from('iterator-failed')),
+        byteLength: '1',
+        bytes: {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                throw new Error('iterator-failed')
+              },
+              return: async () => ({ done: true, value: undefined })
+            }
+          }
+        }
+      })
+    ).rejects.toThrow('iterator-failed')
+  })
+
+  test('reuses a reference slot for the same content and rejects a conflicting slot', async () => {
+    const content = Buffer.from('slot-reuse')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const reference = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'output' as const,
+      ownerId: 'slot-reuse',
+      slot: '0'
+    }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      await store.addReference(session, reference)
+      await store.addReference(session, reference)
+    })
+    await expect(
+      session.withTransaction(async () => {
+        await store.addReference(session, {
+          ...reference,
+          payload: { kind: 'locking-script', digest: hash }
+        })
+      })
+    ).rejects.toThrow('already names different content')
+    await session.withTransaction(async () => {
+      await store.releaseReference(session, reference)
+    })
+    await expect(
+      session.withTransaction(async () => {
+        await store.releaseReference(session, reference)
+      })
+    ).rejects.toThrow('does not exist')
+    await session.endSession()
+  })
+
+  test('rejects a reference to a payload that is not ready and reuses a matching manifest ordinal', async () => {
+    const missing = { kind: 'outbox-data' as const, digest: digest(Buffer.from('missing-ready')) }
+    const session = fixture.client.startSession()
+    await expect(
+      session.withTransaction(async () => {
+        await store.addReference(session, {
+          scope: fixture.scope,
+          payload: missing,
+          ownerKind: 'output',
+          ownerId: 'missing-ready',
+          slot: '0'
+        })
+      })
+    ).rejects.toThrow('not ready for reference')
+    const content = Buffer.from('manifest-ordinal')
+    const hash = digest(content)
+    const payload = { kind: 'raw-transaction' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const component = {
+      manifestId: 'manifest-ordinal',
+      ordinal: '0',
+      kind: 'raw-transaction' as const,
+      payload
+    }
+    await session.withTransaction(async () => {
+      await store.addManifestComponent(session, component)
+      await store.addManifestComponent(session, component)
+    })
+    await fixture.db
+      .collection('overlay_manifest_components')
+      .updateOne({ manifestId: component.manifestId }, { $set: { kind: 'outbox-data' } })
+    await expect(
+      session.withTransaction(async () => {
+        await store.addManifestComponent(session, component)
+      })
+    ).rejects.toThrow('already names different content')
+    await session.endSession()
+  })
+
+  test('keeps an oversized inline payload from exceeding the BSON safety ceiling', async () => {
+    const tight = new MongoPayloadStore(fixture.db, fixture.scope, {
+      inlineCeilingBytes: 1024 * 1024
+    })
+    const content = Buffer.alloc(1024 * 1024, 0x21)
+    await expect(
+      tight.publish({
+        kind: 'outbox-data',
+        digest: digest(content),
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024)
+      })
+    ).rejects.toThrow('inline BSON document exceeds safety ceiling')
+  }, 30000)
 })
