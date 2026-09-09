@@ -97,6 +97,36 @@ describe('Mongo read guards', () => {
     }
   })
 
+  test('changeVersion conflicts when the persisted version no longer matches', async () => {
+    const session = fixture.client.startSession()
+    try {
+      session.startTransaction()
+      await guards.changeVersion(session, absentRead(), 'v1')
+      await session.commitTransaction()
+    } finally {
+      await session.endSession()
+    }
+    const stale = fixture.client.startSession()
+    try {
+      stale.startTransaction()
+      await expect(guards.changeVersion(stale, absentRead(), 'v2')).rejects.toBeInstanceOf(
+        MongoReadGuardConflictError
+      )
+      await stale.abortTransaction()
+    } finally {
+      await stale.endSession()
+    }
+  })
+
+  test('refuses a sentinel whose stored identity no longer matches the requested key', async () => {
+    await fixture.db
+      .collection(MongoCollectionNames.readGuards)
+      .updateOne({ key }, { $set: { network: 'other-network' } })
+    await expect(guards.initialize(fixture.scope, key)).rejects.toThrow(
+      'Incompatible Mongo read guard sentinel'
+    )
+  })
+
   test('rejects malformed read inputs and bounded operation controls', async () => {
     await expect(guards.initialize(fixture.scope, '', { timeoutMS: 1 })).rejects.toThrow(
       'Invalid Mongo read guard key'

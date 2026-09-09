@@ -18,6 +18,11 @@ describe('Mongo schema codecs', () => {
     expect('bootstrapMongoOverlay' in overlay).toBe(false)
     expect('MongoPayloadStore' in overlay).toBe(false)
     expect('MongoTransactionRunner' in overlay).toBe(false)
+    const mongo = await import('../../storage/mongo.js')
+    expect(mongo.bootstrapMongoOverlay).toEqual(expect.any(Function))
+    expect(mongo.MongoPayloadStore).toEqual(expect.any(Function))
+    expect(mongo.MongoReadGuards).toEqual(expect.any(Function))
+    expect(mongo.MongoTransactionRunner).toEqual(expect.any(Function))
   })
 
   test('uses framed values rather than separator-concatenated keys', () => {
@@ -311,6 +316,37 @@ describe('Mongo schema bootstrap', () => {
         leaseUntil: new Date()
       })
     ).rejects.toThrow()
+  })
+
+  test('refuses a ledger whose schema fingerprint is not this Overlay schema', async () => {
+    const database = fixture.client.db(`overlay_s02_ledger_${Date.now()}`)
+    await bootstrapMongoOverlay(database, fixture.scope)
+    await database
+      .collection(MongoCollectionNames.schema)
+      .updateOne(
+        { _id: mongoNodeKey(fixture.scope) },
+        { $set: { schemaFingerprint: 'aa'.repeat(32) } }
+      )
+    await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toThrow(
+      'Incompatible Mongo Overlay schema ledger'
+    )
+  })
+
+  test('refuses an existing collection whose collation is not Overlay simple', async () => {
+    const definition = MongoCollectionDefinitions.find(
+      item => item.name === MongoCollectionNames.outputs
+    )
+    if (definition === undefined) throw new Error('Missing outputs schema definition')
+    const database = fixture.client.db(`overlay_s02_collation_${Date.now()}`)
+    await database.createCollection(MongoCollectionNames.outputs, {
+      validator: definition.validator,
+      validationLevel: 'strict',
+      validationAction: 'error',
+      collation: { locale: 'en' }
+    })
+    await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toThrow(
+      `Incompatible Mongo Overlay validator for ${MongoCollectionNames.outputs}`
+    )
   })
 
   test('rejects a pre-existing partial index whose predicate has drifted', async () => {

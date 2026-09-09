@@ -262,3 +262,8 @@ export interface Storage {
    */
   getLastInteraction: (host: string, topic: string) => Promise<number>
 }
+
+/** True when the optional admission field is present. Protocol detection is separate. */
+export function storageHasAdmission(storage: Storage): boolean {
+  return storage.admission !== undefined
+}

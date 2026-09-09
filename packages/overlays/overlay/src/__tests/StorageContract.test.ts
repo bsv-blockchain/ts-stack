@@ -10,6 +10,7 @@ import {
   parseStorageUint64,
   type AdmissionIdentity
 } from '../storage/AdmissionStorage.js'
+import { storageHasAdmission, type Storage } from '../storage/Storage.js'
 import {
   canAdvanceGaspCursor,
   isRecoveryLeaseCurrent,
@@ -121,7 +122,9 @@ describe('S01 portable persistence contract', () => {
 
   test('legacy Knex CRUD cannot advertise atomic admission', () => {
     const knex = jest.fn() as unknown as Knex
-    expect(getAdmissionStorage(new KnexStorage(knex))).toBeUndefined()
+    const storage = new KnexStorage(knex)
+    expect(getAdmissionStorage(storage)).toBeUndefined()
+    expect(storageHasAdmission(storage)).toBe(false)
     expect(knex).not.toHaveBeenCalled()
   })
 
@@ -145,6 +148,7 @@ describe('S01 portable persistence contract', () => {
       expect(getAdmissionStorage(storage)).toBeUndefined()
     }
     expect(getAdmissionStorage({ admission })).toBe(admission)
+    expect(storageHasAdmission({ admission } as Storage)).toBe(true)
     expect(admission.commitAdmission).not.toHaveBeenCalled()
   })
 

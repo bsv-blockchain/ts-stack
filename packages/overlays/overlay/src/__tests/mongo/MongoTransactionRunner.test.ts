@@ -51,6 +51,32 @@ describe('Mongo transaction boundary on three data-bearing WiredTiger members', 
     expect(getAdmissionStorage(runner)).toBeUndefined()
   })
 
+  test('rejects a committed row whose receipt is missing or identity-corrupt', async () => {
+    const input = request()
+    await runner.run(input, async () => {})
+    const collection = fixture.db.collection(MongoCollectionNames.submissionOperations)
+    await collection.updateOne({ _id: operationId(input) }, { $unset: { receipt: '' } })
+    await expect(runner.reconcile(input.key)).rejects.toThrow('Committed Mongo operation has no receipt')
+    await collection.updateOne(
+      { _id: operationId(input) },
+      { $set: { receipt: new Binary(Buffer.from(JSON.stringify({ ...input.receipt, operationId: randomUUID() }))) } }
+    )
+    await expect(runner.reconcile(input.key)).rejects.toThrow('Corrupt Mongo operation receipt identity')
+  })
+
+  test('cannot close while a trusted body is still running', async () => {
+    const input = request()
+    let resume!: () => void
+    const barrier = new Promise<void>(resolve => { resume = resolve })
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const pending = runner.run(input, async () => { entered(); await barrier })
+    await started
+    await expect(runner.close()).rejects.toThrow('during a call')
+    resume()
+    expect((await pending).state).toBe('committed')
+  })
+
   test('saves exact receipt with effects and replays it after runner restart', async () => {
     const input = request()
     let bodies = 0
