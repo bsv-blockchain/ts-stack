@@ -828,15 +828,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this._overlayEvidenceExpiryTimer.unref?.()
   }
 
-  private async discoverOverlayCertificates(
-    query: unknown,
-    cacheKey: string,
-    forceRefresh: boolean,
-    now: number
-  ): Promise<VerifiableCertificate[]> {
-    // Use the wallet's existing network/chain configuration, never the overlay host's verdict.
-    // Wallets constructed without services have no chain tracker. Overlay lookup then yields
-    // no identities, except forceRefresh which still requires services (contact bypass).
+  private async requireOverlayChainTracker(forceRefresh: boolean) {
     if (this.services == null) {
       if (forceRefresh) {
         throw new WERR_INVALID_PARAMETER(
@@ -844,9 +836,19 @@ export class Wallet implements WalletInterface, ProtoWallet {
           'valid in constructor arguments to be retreived here.'
         )
       }
-      return []
+      return undefined
     }
-    const chainTracker = await this.services.getChainTracker()
+    return await this.services.getChainTracker()
+  }
+
+  private async discoverOverlayCertificates(
+    query: unknown,
+    cacheKey: string,
+    forceRefresh: boolean,
+    now: number
+  ): Promise<VerifiableCertificate[]> {
+    const chainTracker = await this.requireOverlayChainTracker(forceRefresh)
+    if (chainTracker == null) return []
     if (this._identityEvidenceClosed) return []
     const chainNamespace = `wallet:${this.chain}`
     if (
