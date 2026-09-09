@@ -8,7 +8,9 @@ A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) confo
 
 ## Backup and sync: tested results
 
-Faster large-wallet backups, smaller transfers, and reliable recovery into local storage.
+**Live E2E testing used a large wallet in the native desktop client**, covering
+complete local copies, restart recovery, and repeat sync. Transfer size was
+measured separately with a synthetic fixture.
 
 | Test                         | Verified result                                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
