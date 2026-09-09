@@ -3,7 +3,7 @@ id: pkg-fund-wallet
 title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: '2.0.0'
+version: '1.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'

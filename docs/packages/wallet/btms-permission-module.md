@@ -4,7 +4,7 @@ title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/btms-permission-module'
-version: '2.0.0'
+version: '1.2.0'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -21,10 +21,11 @@ BSV Desktop and BSV Browser show a spend authorization modal whenever BSV is spe
 
 `@bsv/btms-permission-module` implements the BRC-98/99 permission hooks interface to intercept BTMS token spend and burn operations, prompt users via a callback, and enforce authorization decisions. Works with any UI framework (React, Vue, Angular, vanilla JS, or no UI at all).
 
-Version 2 auto-approves only pure issuance: the action must contain no
+Version 1.2 auto-approves only pure issuance: the action must contain no
 caller-supplied inputs and must carry an exact issuance marker. An action that
 mixes an issuance output with any input follows the normal transaction-bound
-user approval flow. Version 2 peers with `@bsv/wallet-toolbox-client` 3.x.
+user approval flow. Existing `@bsv/wallet-toolbox-client` 2.x integrations
+remain supported.
 
 ## Install
 

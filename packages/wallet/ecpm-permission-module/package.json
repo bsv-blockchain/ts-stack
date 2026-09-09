@@ -50,7 +50,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
     "@bsv/sdk": "^2.4.1",
-    "@bsv/wallet-toolbox-client": "^3.0.0"
+    "@bsv/wallet-toolbox-client": "^2.11.0"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
