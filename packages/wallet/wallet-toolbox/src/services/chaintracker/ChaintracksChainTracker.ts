@@ -179,75 +179,19 @@ export class ChaintracksChainTracker implements ChainTracker {
     parent?: TelemetrySpan,
     signal?: AbortSignal
   ): Promise<boolean> {
-    const chaintracks = this.chaintracks
-    const context = this.verificationContext
-    let header: BlockHeader | undefined
-
-    const retries = Math.max(1, this.options.maxRetries ?? 6)
-    const retryDelayMs = this.options.retryDelayMs ?? 250
-
-    let error: WalletError | undefined
-
-    for (let tryCount = 1; tryCount <= retries; tryCount++) {
-      try {
-        this.throwIfAborted(signal)
-        if (this.chaintracks !== chaintracks || this.verificationContext !== context) {
-          throw new Error('Chaintracks provider changed during header lookup')
-        }
-        header =
-          parent == null
-            ? await chaintracks.findHeaderForHeight(height)
-            : await this.telemetry.withSpan(
-                'wallet.chaintracks.find_header',
-                {
-                  component: 'chaintracks-chain-tracker',
-                  kind: 'client',
-                  parent: parent.context,
-                  attributes: {
-                    'retry.attempt': tryCount
-                  }
-                },
-                async () => await chaintracks.findHeaderForHeight(height)
-              )
-
-        if (this.chaintracks !== chaintracks || this.verificationContext !== context) {
-          throw new Error('Chaintracks provider changed during header lookup')
-        }
-
-        if (header == null) {
-          if (tryCount >= retries) return false
-          this.throwIfAborted(signal)
-          await wait(retryDelayMs)
-          continue
-        }
-
-        break
-      } catch (error_: unknown) {
-        this.throwIfAborted(signal)
-        if (this.chaintracks !== chaintracks || this.verificationContext !== context) {
-          throw new Error('Chaintracks provider changed during header lookup')
-        }
-        error = WalletError.fromUnknown(error_)
-        if (tryCount >= retries) {
-          throw error
-        }
-        this.throwIfAborted(signal)
-        await wait(retryDelayMs)
-      }
-    }
-
+    const header = await this.fetchCanonicalHeader(
+      this.chaintracks,
+      this.verificationContext,
+      height,
+      parent,
+      signal
+    )
     if (header == null) return false
 
     // Diagnostic only: a root is always freshly read from the current canonical source above.
     this.cache[height] = header.merkleRoot
     this.cacheUpdatedAt[height] = Date.now()
-    const now = Date.now()
-    const entries = Object.entries(this.cacheUpdatedAt).sort(([, a], [, b]) => a - b)
-    for (const [index, [cachedHeight, updatedAt]] of entries.entries()) {
-      if (index >= entries.length - 256 && now - updatedAt <= 5 * 60 * 1000) continue
-      delete this.cache[Number(cachedHeight)]
-      delete this.cacheUpdatedAt[Number(cachedHeight)]
-    }
+    this.pruneDiagnosticCache()
 
     const valid = header.merkleRoot === root
     parent?.end({
@@ -257,6 +201,74 @@ export class ChaintracksChainTracker implements ChainTracker {
       }
     })
     return valid
+  }
+
+  private assertProviderUnchanged(chaintracks: ChaintracksClientApi, context: number): void {
+    if (this.chaintracks !== chaintracks || this.verificationContext !== context) {
+      throw new Error('Chaintracks provider changed during header lookup')
+    }
+  }
+
+  private async readHeaderForHeight(
+    chaintracks: ChaintracksClientApi,
+    height: number,
+    tryCount: number,
+    parent?: TelemetrySpan
+  ): Promise<BlockHeader | undefined> {
+    if (parent == null) return await chaintracks.findHeaderForHeight(height)
+    return await this.telemetry.withSpan(
+      'wallet.chaintracks.find_header',
+      {
+        component: 'chaintracks-chain-tracker',
+        kind: 'client',
+        parent: parent.context,
+        attributes: {
+          'retry.attempt': tryCount
+        }
+      },
+      async () => await chaintracks.findHeaderForHeight(height)
+    )
+  }
+
+  private async fetchCanonicalHeader(
+    chaintracks: ChaintracksClientApi,
+    context: number,
+    height: number,
+    parent: TelemetrySpan | undefined,
+    signal: AbortSignal | undefined
+  ): Promise<BlockHeader | undefined> {
+    const retries = Math.max(1, this.options.maxRetries ?? 6)
+    const retryDelayMs = this.options.retryDelayMs ?? 250
+    for (let tryCount = 1; tryCount <= retries; tryCount++) {
+      try {
+        this.throwIfAborted(signal)
+        this.assertProviderUnchanged(chaintracks, context)
+        const header = await this.readHeaderForHeight(chaintracks, height, tryCount, parent)
+        this.assertProviderUnchanged(chaintracks, context)
+        if (header != null) return header
+        if (tryCount >= retries) return undefined
+        this.throwIfAborted(signal)
+        await wait(retryDelayMs)
+      } catch (error_: unknown) {
+        this.throwIfAborted(signal)
+        this.assertProviderUnchanged(chaintracks, context)
+        const error = WalletError.fromUnknown(error_)
+        if (tryCount >= retries) throw error
+        this.throwIfAborted(signal)
+        await wait(retryDelayMs)
+      }
+    }
+    return undefined
+  }
+
+  private pruneDiagnosticCache(): void {
+    const now = Date.now()
+    const entries = Object.entries(this.cacheUpdatedAt).sort(([, a], [, b]) => a - b)
+    for (const [index, [cachedHeight, updatedAt]] of entries.entries()) {
+      if (index >= entries.length - 256 && now - updatedAt <= 5 * 60 * 1000) continue
+      delete this.cache[Number(cachedHeight)]
+      delete this.cacheUpdatedAt[Number(cachedHeight)]
+    }
   }
 
   private throwIfAborted(signal?: AbortSignal): void {

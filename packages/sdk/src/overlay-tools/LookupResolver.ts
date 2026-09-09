@@ -524,7 +524,7 @@ interface LookupQuerySessionOptions {
   softTimeoutMs?: number
   waitForAllHosts: boolean
   correlationId?: string
-  evidenceLimits?: LookupQueryOptions['evidenceLimits']
+  evidenceLimits?: { maxOutputs?: number; maxBytes?: number }
   resolveTxId: (output: LookupAnswer['outputs'][number], now: number) => string | null
 }
 

@@ -173,8 +173,8 @@ export class TransactionEvidenceCoordinator {
     let candidate: EvidenceCandidate
     try {
       candidate = parseEvidence(evidence, this.limits)
-    } catch (error) {
-      throw outcome(error)
+    } catch (error_) {
+      throw outcome(error_)
     }
     let job = this.work.get(candidate.txid)
     if (job === undefined) {
@@ -287,8 +287,8 @@ export class TransactionEvidenceCoordinator {
           this.check(job, job.controller.signal)
           this.finish(job, cached)
           return
-        } catch (failure) {
-          error = outcome(failure)
+        } catch (error_) {
+          error = outcome(error_)
           this.removePositive(job.txid)
         }
       }
@@ -363,12 +363,12 @@ export class TransactionEvidenceCoordinator {
           this.cache(job.txid, positive)
           this.finish(job, positive)
           return
-        } catch (failure) {
-          error = outcome(failure)
+        } catch (error_) {
+          error = outcome(error_)
         }
       }
-    } catch (failure) {
-      error = outcome(failure)
+    } catch (error_) {
+      error = outcome(error_)
     }
     this.finish(job, undefined, error)
   }
