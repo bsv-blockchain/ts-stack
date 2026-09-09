@@ -226,6 +226,13 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     }
     await this.prepareReadGuards(plan)
     await this.publishHistoryUpdatePayloads(plan)
+    return await this.runAdmissionWithWriteConflictRetry(plan, receipt)
+  }
+
+  private async runAdmissionWithWriteConflictRetry(
+    plan: AdmissionCommit,
+    receipt: ReturnType<typeof admissionReceiptFor>
+  ): Promise<AdmissionCommitResult> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const result = await this.runner.run(
