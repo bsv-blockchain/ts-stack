@@ -42,6 +42,12 @@ import {
 } from './BASM.js'
 import { BASMRemote } from './BASMRemote.js'
 import { serializeErrorForLog, serializeLogValue } from './SafeLog.js'
+import {
+  buildOverlayAdmissionPlan,
+  getOverlayAdmissionHost,
+  overlayAdmissionMode,
+  waitForAdmissionReceipt
+} from './EngineAdmission.js'
 
 const DEFAULT_GASP_SYNC_LIMIT = 10000
 const DEFAULT_BASM_RANGE_LIMIT = 1024
@@ -102,6 +108,19 @@ type StorageMutationContext = {
   txid: string
   beef: number[]
   offChainValues: number[] | undefined
+}
+
+type OverlayAdmissionSubmitContext = {
+  taggedBEEF: TaggedBEEF
+  steak: STEAK
+  tx: Transaction
+  txid: string
+  mode: SubmissionMode
+  offChainValues: number[] | undefined
+  validations: TopicValidation[]
+  failedTopics: Set<string>
+  anyTopicAccepted: boolean
+  onSteakReady?: (steak: STEAK) => void
 }
 
 function findSpendingInputIndex(tx: Transaction, output: Output): number {
@@ -1037,6 +1056,69 @@ export class Engine {
     this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
   }
 
+  private assertSupportedTopics(topics: string[]): void {
+    for (const topic of topics) {
+      if (this.managers[topic] === undefined || this.managers[topic] === null) {
+        throw new Error(`This server does not support this topic: ${topic}`)
+      }
+    }
+  }
+
+  private shouldSkipPropagation(mode: SubmissionMode): boolean {
+    return (
+      this.advertiser === undefined ||
+      mode === 'historical-tx' ||
+      mode === 'historical-tx-no-spv'
+    )
+  }
+
+  private async acknowledgeOverlayAdmission(
+    context: OverlayAdmissionSubmitContext
+  ): Promise<STEAK | undefined> {
+    const admissionHost = getOverlayAdmissionHost(this.storage)
+    if (admissionHost === undefined) return undefined
+    const {
+      taggedBEEF,
+      steak,
+      tx,
+      txid,
+      mode,
+      offChainValues,
+      validations,
+      failedTopics,
+      anyTopicAccepted,
+      onSteakReady
+    } = context
+    if (!anyTopicAccepted) {
+      if (onSteakReady !== undefined) onSteakReady(steak)
+      return steak
+    }
+    const applied = await this.buildAppliedTransactionRecord(tx)
+    const buildPlan = async () =>
+      await buildOverlayAdmissionPlan({
+        host: admissionHost,
+        tx,
+        txid,
+        beef: taggedBEEF.beef,
+        topics: taggedBEEF.topics,
+        mode: overlayAdmissionMode(mode),
+        offChainValues,
+        validations,
+        failedTopics,
+        lookupServices: this.lookupServices,
+        includePropagation: !this.shouldSkipPropagation(mode),
+        applied
+      })
+    const committed = await waitForAdmissionReceipt(
+      admissionHost.admission,
+      await buildPlan(),
+      buildPlan
+    )
+    const acknowledged = JSON.parse(committed.receipt.steak) as STEAK
+    if (onSteakReady !== undefined) onSteakReady(acknowledged)
+    return acknowledged
+  }
+
   /**
    * Submits a transaction for processing by Overlay Services.
    * @param {TaggedBEEF} taggedBEEF - The transaction to process
@@ -1049,11 +1131,7 @@ export class Engine {
    * @returns {Promise<STEAK>} The submitted transaction execution acknowledgement
    */
   async submit(taggedBEEF: TaggedBEEF, onSteakReady?: (steak: STEAK) => void, mode: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv' = 'current-tx', offChainValues?: number[]): Promise<STEAK> {
-    for (const t of taggedBEEF.topics) {
-      if (this.managers[t] === undefined || this.managers[t] === null) {
-        throw new Error(`This server does not support this topic: ${t}`)
-      }
-    }
+    this.assertSupportedTopics(taggedBEEF.topics)
 
     // Validate the transaction SPV information
     const tx = Transaction.fromBEEF(taggedBEEF.beef)
@@ -1116,6 +1194,20 @@ export class Engine {
       throw error
     }
 
+    const admissionSteak = await this.acknowledgeOverlayAdmission({
+      taggedBEEF,
+      steak,
+      tx,
+      txid,
+      mode,
+      offChainValues,
+      validations,
+      failedTopics,
+      anyTopicAccepted,
+      onSteakReady
+    })
+    if (admissionSteak !== undefined) return admissionSteak
+
     // Call the callback function with STEAK if it is provided (before storage mutations)
     if (onSteakReady !== undefined) {
       onSteakReady(steak)
@@ -1144,7 +1236,7 @@ export class Engine {
     })
 
     // If we don't have an advertiser or we are dealing with historical transactions, just return the steak
-    if (this.advertiser === undefined || mode === 'historical-tx' || mode === 'historical-tx-no-spv') {
+    if (this.shouldSkipPropagation(mode)) {
       return steak
     }
 

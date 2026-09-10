@@ -22,6 +22,7 @@ test('dependency and release governance is internally complete', () => {
 
   const overrides = collectOverrides()
   assert.equal(overrides.length, 23)
+  assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)

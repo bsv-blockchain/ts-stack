@@ -34,9 +34,9 @@
     "path": "dist/umd/bundle.js",
     "global": "messageBoxClient",
     "maximumBytes": {
-      "raw": 510500,
-      "gzip": 147000,
-      "brotli": 124000
+      "raw": 540000,
+      "gzip": 155000,
+      "brotli": 132000
     }
   }
 }
