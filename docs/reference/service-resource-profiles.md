@@ -4,7 +4,7 @@ title: 'Service Resource Profiles, Scaling, and Message Box Economics'
 kind: reference
 version: '1.0.0'
 last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+last_verified: '2026-09-10'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, resource-safety, scaling, message-box, brc-105]

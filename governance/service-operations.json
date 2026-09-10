@@ -502,6 +502,7 @@
       },
       "criticalJourneys": [
         "start and complete an authentication challenge",
+        "resume and finalize an interrupted WAB-to-UMP account registration",
         "pin a verified legacy UMP outpoint and clear the pin after recovery",
         "verify, commit, and if necessary restore a phone-number association change",
         "reconcile presentation-key ciphertext and keyed lookups before listen",
@@ -513,12 +514,12 @@
         "share encryption, retrieval, or deletion failures repeat",
         "database migration or pool failures consume error budget"
       ],
-      "state": "Authentication, identity-link, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.",
-      "migration": "Migrations complete before listen. The presentation-key vault uses additive nullable columns, legacy then dual-write rollout, and an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.",
+      "state": "Authentication, identity-link, pending-registration, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.",
+      "migration": "Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.",
       "backup": "Take an encrypted database snapshot, retain the presentation-key vault key separately, and test identity/share and presentation-key recovery without logging secrets.",
       "rpo": "15 minutes for authentication and encrypted share state.",
       "rto": "4 hours from a verified encrypted backup and independently retained encryption keys.",
-      "restoreValidation": "Verify migration and vault reconciliation state, legacy-client authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
+      "restoreValidation": "Verify migration and vault reconciliation state, legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.",

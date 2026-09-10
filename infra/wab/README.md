@@ -38,6 +38,7 @@ Additionally, the WAB provides a **faucet** feature that can make a one-time BSV
 8. **UMP support pinning** – An authenticated operator can select one UMP outpoint as a legacy-ambiguity fallback.
 9. **Verified phone changes** – Authenticated wallets can verify the same or a new number, rotate their presentation key, and retain reversible ownership history.
 10. **Optional presentation-key vault** – A staged, rolling-upgrade-compatible mode can AES-256-GCM encrypt presentation keys at rest and index them with a keyed lookup digest without changing the client API.
+11. **Recoverable registration** – New identities remain pending until the wallet confirms its UMP token was published, so interrupted account creation can resume safely.
 
 ---
 
@@ -279,6 +280,14 @@ clients still run normal verified UMP lookup and lineage selection first. They
 use the pin only if the result remains ambiguous and the pin names one of the
 verified candidates.
 
+New registrations use a two-phase lifecycle. OTP completion atomically creates
+and links the WAB identity with `registrationStatus: "pending"`. The wallet
+publishes its UMP token and then calls `/auth/registration/finalize`; retries
+reuse the same WAB presentation key. If publication succeeded but the finalize
+response was interrupted, the next verified login finds the token and
+finalizes idempotently. Existing rows migrate as `active`, so a missing UMP
+token never makes an established account silently replaceable.
+
 Phone changes use four calls: `/auth/phone-change/start`,
 `/auth/phone-change/complete`, `/auth/phone-change/commit`, and
 `/auth/phone-change/finalize`. The first two prove possession of the requested
@@ -300,6 +309,9 @@ only an absent/empty value intentionally disables the routes.
 
 - `POST /admin/ump-pin` sets or clears a pin after identifying a user by
   presentation key or authentication method payload.
+- `POST /admin/registration/reopen` performs a verified UMP lookup, then marks a
+  support-verified, pre-migration stranded registration pending only when the
+  lookup is cleanly empty, without deleting its identity or faucet history.
 - `POST /admin/phone-change/restore` restores the associations recorded for a
   `changeId`; it refuses automatic restoration after another ownership change.
 

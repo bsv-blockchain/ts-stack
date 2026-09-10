@@ -1,5 +1,5 @@
 import { TelemetryEvent, WalletInterface } from '@bsv/sdk'
-import { UMPTokenInteractor } from '../../CWIStyleWalletManager'
+import { CWIStyleWalletManager, UMPTokenInteractor } from '../../CWIStyleWalletManager'
 import { WABAccountContinuityError, WalletAuthenticationManager } from '../../WalletAuthenticationManager'
 import { WABClient } from '../WABClient'
 import { WABClientError } from '../WABTransport'
@@ -14,6 +14,10 @@ function jsonResponse(value: unknown, status: number = 200, headers: Record<stri
 }
 
 describe('WAB transport hardening', () => {
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   it('rejects malformed URLs, invalid limits, and missing fetch implementations', () => {
     expect(() => new WABClient('not-an-absolute-url')).toThrow('absolute URL')
     expect(() => new WABClient('https://wab.example', { timeoutMs: 0 })).toThrow('timeoutMs')
@@ -407,6 +411,150 @@ describe('WAB transport hardening', () => {
     await expect(manager.completeAuth({})).rejects.toBeInstanceOf(WABAccountContinuityError)
     expect(lookup).not.toHaveBeenCalled()
     expect(manager.authenticationFlow).toBe('unknown')
+  })
+
+  it('resumes only an explicitly pending WAB registration when no UMP token exists', async () => {
+    const existingPresentationKey = 'b'.repeat(64)
+    const wabClient = {
+      startAuthMethod: jest.fn(async () => ({ success: true })),
+      completeAuthMethod: jest.fn(async () => ({
+        success: true,
+        presentationKey: existingPresentationKey,
+        accountStatus: 'existing-user',
+        existingUser: true,
+        registrationStatus: 'pending'
+      })),
+      finalizeRegistration: jest.fn(async () => ({ success: true, registrationStatus: 'active' }))
+    } as unknown as WABClient
+    const interactor: UMPTokenInteractor = {
+      findByPresentationKeyHash: jest.fn(async () => undefined),
+      findByRecoveryKeyHash: jest.fn(async () => undefined),
+      buildAndSend: jest.fn(async () => `${'c'.repeat(64)}.0`)
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      interactor,
+      async (): Promise<true> => true,
+      async () => 'password',
+      wabClient,
+      new DevConsoleInteractor()
+    )
+
+    await manager.startAuth({})
+    await expect(manager.completeAuth({})).resolves.toBeUndefined()
+    expect(manager.authenticationFlow).toBe('new-user')
+    expect(wabClient.finalizeRegistration).not.toHaveBeenCalled()
+
+    const basePassword = jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValueOnce()
+    await expect(manager.providePassword('password')).resolves.toBeUndefined()
+    expect(basePassword).toHaveBeenCalledWith('password')
+    expect(wabClient.finalizeRegistration).toHaveBeenCalledWith(existingPresentationKey)
+  })
+
+  it('repairs pending WAB state after finding an already-published UMP token', async () => {
+    const existingPresentationKey = 'd'.repeat(64)
+    const finalizeRegistration = jest.fn(async () => ({ success: true, registrationStatus: 'active' }))
+    const wabClient = {
+      startAuthMethod: jest.fn(async () => ({ success: true })),
+      completeAuthMethod: jest.fn(async () => ({
+        success: true,
+        presentationKey: existingPresentationKey,
+        accountStatus: 'existing-user',
+        existingUser: true,
+        registrationStatus: 'pending'
+      })),
+      finalizeRegistration
+    } as unknown as WABClient
+    const interactor: UMPTokenInteractor = {
+      findByPresentationKeyHash: jest.fn(async () => ({ currentOutpoint: `${'e'.repeat(64)}.0` }) as any),
+      findByRecoveryKeyHash: jest.fn(async () => undefined),
+      buildAndSend: jest.fn(async () => `${'f'.repeat(64)}.0`)
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      interactor,
+      async (): Promise<true> => true,
+      async () => 'password',
+      wabClient,
+      new DevConsoleInteractor()
+    )
+
+    await manager.startAuth({})
+    await expect(manager.completeAuth({})).resolves.toBeUndefined()
+    expect(manager.authenticationFlow).toBe('existing-user')
+    expect(finalizeRegistration).toHaveBeenCalledWith(existingPresentationKey)
+  })
+
+  it('keeps WAB finalization failures non-fatal and rejects invalid lifecycle states', async () => {
+    const events: TelemetryEvent[] = []
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      {
+        findByPresentationKeyHash: jest.fn(async () => undefined),
+        findByRecoveryKeyHash: jest.fn(async () => undefined),
+        buildAndSend: jest.fn(async () => `${'a'.repeat(64)}.0`)
+      },
+      async (): Promise<true> => true,
+      async () => 'password',
+      {
+        finalizeRegistration: jest.fn(async () => {
+          throw new Error('network unavailable')
+        })
+      } as unknown as WABClient,
+      new DevConsoleInteractor(),
+      undefined,
+      { telemetry: { sink: { capture: event => events.push(event) }, minimumSeverity: 'debug' } }
+    )
+    manager.authenticationFlow = 'new-user'
+    ;(manager as any).pendingRegistrationPresentationKey = 'a'.repeat(64)
+    jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValueOnce()
+
+    await expect(manager.providePassword('password')).resolves.toBeUndefined()
+    expect(JSON.stringify(events)).toContain('registration-finalize.deferred')
+
+    const readRegistrationStatus = (manager as any).readRegistrationStatus.bind(manager)
+    expect(() => readRegistrationStatus({ registrationStatus: 'unknown' })).toThrow(WABAccountContinuityError)
+  })
+
+  it('keeps every unacknowledged registration-finalization response retryable', async () => {
+    const events: TelemetryEvent[] = []
+    const finalizeRegistration = jest
+      .fn()
+      .mockResolvedValueOnce({ success: false, message: 'finalization rejected' })
+      .mockResolvedValueOnce({ success: true, registrationStatus: 'pending' })
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      {
+        findByPresentationKeyHash: jest.fn(async () => undefined),
+        findByRecoveryKeyHash: jest.fn(async () => undefined),
+        buildAndSend: jest.fn(async () => `${'a'.repeat(64)}.0`)
+      },
+      async (): Promise<true> => true,
+      async () => 'password',
+      { finalizeRegistration } as unknown as WABClient,
+      new DevConsoleInteractor(),
+      undefined,
+      { telemetry: { sink: { capture: event => events.push(event) }, minimumSeverity: 'debug' } }
+    )
+    jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValue()
+
+    manager.authenticationFlow = 'new-user'
+    await expect(manager.providePassword('password')).resolves.toBeUndefined()
+    expect(finalizeRegistration).not.toHaveBeenCalled()
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+
+    ;(manager as any).pendingRegistrationPresentationKey = 'a'.repeat(64)
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+    await expect((manager as any).finalizePendingRegistration()).resolves.toBeUndefined()
+
+    expect(finalizeRegistration).toHaveBeenCalledTimes(2)
+    expect(events.filter(event => event.name.endsWith('registration-finalize.deferred'))).toHaveLength(2)
+    manager.authenticationFlow = 'existing-user'
+    expect((manager as any).describeContinuity('new-user', 'active')).toBe('ump-existing')
   })
 
   it('maps the legacy existingUser signal without a nested status expression', () => {

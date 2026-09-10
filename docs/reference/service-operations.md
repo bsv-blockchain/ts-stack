@@ -270,6 +270,7 @@ Incident handling follows this evidence-preserving sequence:
   `--require ./dist/telemetry.js`.
 - Critical journeys:
 - start and complete an authentication challenge
+- resume and finalize an interrupted WAB-to-UMP account registration
 - pin a verified legacy UMP outpoint and clear the pin after recovery
 - verify, commit, and if necessary restore a phone-number association change
 - reconcile presentation-key ciphertext and keyed lookups before listen
@@ -279,12 +280,12 @@ Incident handling follows this evidence-preserving sequence:
 - SMS challenge, completion, replay, or abuse-control failures spike
 - share encryption, retrieval, or deletion failures repeat
 - database migration or pool failures consume error budget
-- State: Authentication, identity-link, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
-- Migration/startup: Migrations complete before listen. The presentation-key vault uses additive nullable columns, legacy then dual-write rollout, and an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.
+- State: Authentication, identity-link, pending-registration, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
+- Migration/startup: Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.
 - Backup/restore: Take an encrypted database snapshot, retain the presentation-key vault key separately, and test identity/share and presentation-key recovery without logging secrets.
 - RPO starting point: 15 minutes for authentication and encrypted share state.
 - RTO starting point: 4 hours from a verified encrypted backup and independently retained encryption keys.
-- Restore validation: Verify migration and vault reconciliation state, legacy-client authentication completion, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
+- Restore validation: Verify migration and vault reconciliation state, legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.
 - Scaling: Multiple replicas require shared rate limits and any authentication challenge/session state to remain database-backed.
 - Disruption: Preserve at least one ready replica after shared abuse-control state is verified.
