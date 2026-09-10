@@ -49,6 +49,7 @@ import {
  * ISSUANCE HANDLING:
  * Token issuance is auto-approved (no user prompt) because:
  * - Issuance creates new tokens (doesn't spend existing ones)
+ * - It has no caller-supplied inputs that could spend an existing token
  * - It must be identified explicitly by ISSUE_MARKER or a btms_type_issue tag
  * - Unmarked actions and short signature payloads require user approval
  */
@@ -258,8 +259,8 @@ export class BasicTokenModule implements PermissionsModule {
    *
    * ISSUANCE DETECTION: Token issuance is auto-approved because it creates new
    * tokens rather than spending existing ones. Detected by:
-   * - ISSUE_MARKER in locking script
-   * - btms_type_issue tag in outputs
+   * - no caller-supplied inputs
+   * - ISSUE_MARKER in locking script or btms_type_issue tag in outputs
    *
    * @param args - createAction arguments
    * @param originator - dApp identifier
@@ -271,7 +272,9 @@ export class BasicTokenModule implements PermissionsModule {
       throw new Error('Invalid createAction args')
     }
 
-    // Check if this is token issuance - auto-approve
+    // Auto-approve only a pure issuance action. Any caller-supplied input can
+    // spend an existing token, so a mixed issuance/spend must follow the normal
+    // prompt and transaction-binding path.
     const isIssuance = this.isTokenIssuance(args)
     if (isIssuance) {
       this.grantSessionAuthorization(originator)
@@ -1020,17 +1023,21 @@ export class BasicTokenModule implements PermissionsModule {
   }
 
   /**
-   * Checks if the createAction is for token issuance.
+   * Checks if the createAction is a pure token issuance operation.
    *
-   * ISSUANCE DETECTION: Token issuance is detected by:
-   * 1. Output tags containing 'btms_type_issue'
-   * 2. Locking script contains ISSUE_MARKER in assetId field
+   * Pure issuance requires both:
+   * 1. No caller-supplied inputs that could spend an existing BTMS token
+   * 2. At least one exact issuance marker in an output tag or locking script
    *
    * @param args - createAction arguments
    * @returns true if this is a token issuance operation
    */
   private isTokenIssuance(args: CreateActionArgs): boolean {
     if (!args || !Array.isArray(args.outputs)) {
+      return false
+    }
+
+    if (args.inputs != null && (!Array.isArray(args.inputs) || args.inputs.length > 0)) {
       return false
     }
 

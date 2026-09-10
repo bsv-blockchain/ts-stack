@@ -2,9 +2,9 @@
 id: wab-ump-account-support
 title: 'WAB UMP Account Support'
 kind: infra
-version: '1.0.0'
-last_updated: '2026-08-13'
-last_verified: '2026-08-13'
+version: '1.1.0'
+last_updated: '2026-09-04'
+last_verified: '2026-09-04'
 review_cadence_days: 30
 status: stable
 tags: [wab, ump, support, phone, recovery]
@@ -17,6 +17,37 @@ presentation or recovery hash, or for a disputed phone-number transfer. Never
 pin an outpoint merely because a requester supplies it. Preserve the ticket,
 the candidate set, the operator identity, and the final action without copying
 presentation keys, OTPs, admin tokens, or full phone numbers into broad logs.
+
+## Recover an interrupted account creation
+
+Current WAB registrations are created as pending and become active only after
+the wallet publishes its UMP token. Updated clients resume a pending account
+when verified lookup returns a clean empty result, or finalize it when the UMP
+token is already visible. They never treat an active or legacy account as new.
+
+Accounts stranded before the registration-state migration are deliberately
+backfilled active. Reopen one only after support has independently verified the
+requester. The WAB support route performs its own verified `ls_users` lookup for
+the stored presentation hash and reopens the registration only when that lookup
+is cleanly empty. A timeout, incomplete host set, malformed answer, ambiguity,
+or published token fails closed and leaves the registration active.
+
+```bash
+curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/registration/reopen" \
+  --header "Authorization: Bearer ${WAB_ADMIN_TOKEN}" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "methodType": "TwilioPhone",
+    "payload": { "phoneNumber": "+12065550100" }
+  }'
+```
+
+Ask the user to repeat ordinary phone verification and account creation. The
+WAB reuses the original presentation key, preserves faucet history, and returns
+to active after publication. Record the ticket, operator, redacted identity,
+lookup evidence, WAB version, and successful final state. Never delete the auth
+method as a shortcut: deletion can lose ownership evidence and does not prove
+that the UMP side is empty.
 
 ## Prerequisites
 
@@ -128,14 +159,16 @@ Roll out in this order:
    and merge its generated infrastructure dependency-sync PR;
 3. release and deploy the reservation-aware UMP overlay, then validate
    duplicate rejection;
-4. apply the WAB additive migration and deploy WAB with its admin secret;
+4. apply the WAB additive migrations and deploy WAB with its admin secret;
 5. publish/deploy Wallet Toolbox clients; and
 6. enable desktop/mobile phone-change UI.
 
 Validate an ordinary existing login, a clean new account, an ambiguity login
 with a valid pin, rejection of a pin absent from candidates, same-number
 rotation, different-number rotation, takeover, and restore in a non-production
-environment before production enablement.
+environment before production enablement. Also interrupt a new registration
+before UMP publication and after publication but before WAB finalization; both
+must resume without changing the stored presentation key.
 
 The previous overlay and WAB binaries ignore the additive reservation and
 history data, so an image rollback can retain both schemas. Do not run the WAB

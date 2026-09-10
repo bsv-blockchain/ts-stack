@@ -91,14 +91,15 @@ export class AuthController {
                 return res.json(result);
             }
 
-            // Auth successful, find or create user by auth method config
+            // Auth successful, atomically find or create a pending registration.
             const config = authMethod.buildConfigFromPayload(payload)
-            let user = await UserService.findUserByConfig(methodType, config)
-            const existingUser = user != null
-            if (!user) {
-                user = await UserService.createUser(presentationKey)
-                await UserService.linkAuthMethod(user.id, methodType, config);
-            }
+            const registration = await UserService.findOrCreatePendingRegistration(
+                presentationKey,
+                methodType,
+                config
+            )
+            const user = registration.user
+            const existingUser = !registration.created
             const pendingPhoneChange = existingUser
                 ? await PhoneChangeService.findPending(user.id, methodType, config)
                 : undefined;
@@ -109,6 +110,7 @@ export class AuthController {
                 presentationKey: user.presentationKey,
                 accountStatus: existingUser ? "existing-user" : "new-user",
                 existingUser,
+                registrationStatus: user.registrationStatus,
                 ...(user.umpTokenOutpoint ? { umpTokenOutpoint: user.umpTokenOutpoint } : {}),
                 ...(pendingPhoneChange == null ? {} : {
                     pendingPresentationKey: pendingPhoneChange.presentationKey,

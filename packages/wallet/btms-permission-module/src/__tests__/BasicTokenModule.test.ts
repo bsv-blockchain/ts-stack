@@ -134,6 +134,44 @@ describe('BasicTokenModule authorization boundary', () => {
     expect(state(module).sessionAuthorizations.has(ORIGINATOR)).toBe(true)
   })
 
+  it('does not auto-authorize an issuance marker when the action also spends an input', async () => {
+    const prompt = jestApi.fn().mockResolvedValue(false)
+    const module = new BasicTokenModule(prompt)
+    const args = {
+      description: 'Mixed issuance and token spend',
+      inputs: [
+        {
+          outpoint: `${'ab'.repeat(32)}.0`,
+          unlockingScriptLength: 108,
+          inputDescription: 'Existing BTMS token'
+        }
+      ],
+      outputs: [{ tags: ['btms_type_issue'] }]
+    }
+
+    await expect(request(module, 'createAction', args)).rejects.toThrow(
+      'User denied permission to spend BTMS tokens'
+    )
+    expect(prompt).toHaveBeenCalledTimes(1)
+    expect(state(module).sessionAuthorizations.has(ORIGINATOR)).toBe(false)
+  })
+
+  it('does not interpret malformed inputs as an input-free issuance', async () => {
+    const prompt = jestApi.fn().mockResolvedValue(false)
+    const module = new BasicTokenModule(prompt)
+    const args = {
+      description: 'Malformed mixed issuance',
+      inputs: { outpoint: `${'ab'.repeat(32)}.0` },
+      outputs: [{ tags: ['btms_type_issue'] }]
+    }
+
+    await expect(request(module, 'createAction', args)).rejects.toThrow(
+      'User denied permission to spend BTMS tokens'
+    )
+    expect(prompt).toHaveBeenCalledTimes(1)
+    expect(state(module).sessionAuthorizations.has(ORIGINATOR)).toBe(false)
+  })
+
   it('prompts for an unmarked action even when it has no explicit inputs', async () => {
     const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)

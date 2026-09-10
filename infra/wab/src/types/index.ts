@@ -6,6 +6,7 @@ import { HexString } from "@bsv/sdk";
 export interface User {
     id: number;
     presentationKey: string;
+    registrationStatus: 'pending' | 'active';
     pendingPresentationKey?: string | null;
     umpTokenOutpoint?: string | null;
     userIdHash?: string;  // SHA256 of identity key (for Shamir flow)

@@ -26,7 +26,7 @@ function sigPayload(
  *   - protocol is in acceptedSchemas (default: bsv-browser:)
  *   - all required fields present
  *   - expiry not passed
- *   - origin is http:// or https://
+ *   - origin is HTTPS, or HTTP on a loopback host for local development
  *   - backendIdentityKey is a compressed secp256k1 public key
  *   - protocolID is a valid [number, string] JSON tuple
  *
@@ -76,8 +76,15 @@ export function parsePairingUri(
     } catch {
       return { params: null, error: 'Origin URL is not valid' }
     }
-    if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
-      return { params: null, error: 'Origin must use http:// or https://' }
+    const isLoopback =
+      originUrl.hostname === 'localhost' ||
+      originUrl.hostname === '127.0.0.1' ||
+      originUrl.hostname === '[::1]'
+    if (originUrl.protocol !== 'https:' && !(originUrl.protocol === 'http:' && isLoopback)) {
+      return {
+        params: null,
+        error: 'Origin must use HTTPS (HTTP is allowed only for loopback development)'
+      }
     }
     if (
       originUrl.username !== '' ||
@@ -161,12 +168,10 @@ export function buildPairingUri(params: {
  * signature over `topic|backendIdentityKey|origin|expiry` was produced by the
  * private key behind `backendIdentityKey`. No mobile wallet is needed.
  *
- * Returns `true` immediately (no-op) when `params.sig` is absent — backward
- * compatible with servers that have `signQrCodes: false`.
- * Returns `false` on any verification failure.
+ * Returns `false` when `params.sig` is absent or on any verification failure.
  */
 export async function verifyPairingSignature(params: PairingParams): Promise<boolean> {
-  if (!params.sig) return true
+  if (!params.sig) return false
   try {
     const anyoneWallet = new ProtoWallet(new PrivateKey(1))
     const { valid } = await anyoneWallet.verifySignature({
