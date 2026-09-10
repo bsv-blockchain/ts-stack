@@ -102,7 +102,7 @@ client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.
 include the combined upstream security fixes. These are explicit feature costs;
 the RPC validation coordinator remains excluded from browser/mobile bundles.
 
-The transfer extension is an **unpublished 2.12.0 candidate**. Published 2.11.0
+The transfer extension is an **unpublished 2.13.0 candidate**. Published 2.12.0
 has no record-transfer methods. Check exact build provenance and authenticated
 runtime capabilities, not a version label alone. An oversized record on a legacy
 source cannot be rescued by upgrading only its destination; upgrade the source

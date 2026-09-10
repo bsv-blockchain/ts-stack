@@ -14,7 +14,7 @@ attention to changes that materially alter behavior or extend functionality.
 - Start sync copies conservatively and adapt page work after committed responses.
   Validate at most eight remote proofs concurrently, draining failure work before
   rejecting the page. Preserve all proof and checkpoint checks. Record-transfer
-  candidates now use 2.12.0 to distinguish them from published 2.11.0.
+  candidates now use 2.13.0 to distinguish them from published 2.12.0.
 
 - Require an affirmative certifier-signature verification result before
   storing directly acquired or issuer-returned certificates. Identity overlay
