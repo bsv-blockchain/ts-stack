@@ -167,6 +167,10 @@ describe('Mongo admission plan validation', () => {
   })
 
   test('rejects malformed spends, edges, outputs, and applied history', () => {
+    const outputIndex = clone(admissionPlan('output-index'))
+    outputIndex.decisions[0].spends[0].outpoint.outputIndex = '4294967296'
+    expect(validateAdmissionPlan(outputIndex)).toBe('invalid-plan')
+
     const spendTxid = clone(admissionPlan('spend-txid'))
     spendTxid.decisions[0].spends[0].outpoint.txid = 'nope'
     expect(validateAdmissionPlan(spendTxid)).toBe('invalid-plan')
