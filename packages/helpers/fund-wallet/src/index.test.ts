@@ -98,6 +98,22 @@ describe('parseCliArguments', () => {
       kind: 'error',
       message: expect.stringContaining('not accepted in command-line arguments')
     })
+    expect(parseCliArguments(['--chain', 'main', '--privateKey', VALID_PRIVATE_KEY])).toMatchObject(
+      {
+        kind: 'error',
+        message: expect.stringContaining('not accepted in command-line arguments')
+      }
+    )
+    expect(
+      parseCliArguments(['--chain', 'main', `--privateKey=${VALID_PRIVATE_KEY}`])
+    ).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('not accepted in command-line arguments')
+    })
+    expect(parseCliArguments(['--chain'])).toEqual({
+      kind: 'error',
+      message: 'Missing required argument: --chain'
+    })
   })
 
   it('rejects invalid chains, URLs, credentials, and amounts', () => {
@@ -109,7 +125,9 @@ describe('parseCliArguments', () => {
     for (const url of [
       'http://store.example.com',
       'not-a-url',
-      'https://user:pass@store.example.com'
+      'https://user:pass@store.example.com',
+      'https://user@store.example.com',
+      'https://:pass@store.example.com'
     ]) {
       expect(parseCliArguments([...base, '--storage-url', url])).toMatchObject({
         kind: 'error',
@@ -145,6 +163,10 @@ describe('parseCliArguments', () => {
     expect(parseCliArguments(['--chain', 'main'])).toMatchObject({
       kind: 'prompt-key',
       options: { storageURL: DEFAULT_STORAGE_URL, amount: 0 }
+    })
+    expect(parseCliArguments(['--chain', 'test', '--satoshis', ''])).toEqual({
+      kind: 'prompt-key',
+      options: { chain: 'test', storageURL: DEFAULT_STORAGE_URL, amount: 0 }
     })
   })
 })
@@ -242,6 +264,7 @@ describe('fundWallet', () => {
       })
     )
     expect(io.logs.flat().join(' ')).toContain('abc123')
+    expect(io.logs.flat().join(' ')).toContain('Wallet funded! {"accepted":true}')
   })
 
   it('fails safely when the local wallet is unavailable or returns no transaction', async () => {
@@ -288,13 +311,56 @@ describe('runCli', () => {
   })
 
   it('rejects invalid private keys obtained from the secure prompt', async () => {
-    const runtime = makeRuntime()
-    const io = makeIO()
-    expect(
-      await runCli(['--chain', 'main'], runtime.dependencies, io, () => makeSecretPrompt('bad'))
-    ).toBe(1)
-    expect(io.errors.flat().join(' ')).toContain('Invalid private key')
-    expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+    for (const privateKey of ['bad', 'g'.repeat(64), '0'.repeat(64), 'f'.repeat(64)]) {
+      const runtime = makeRuntime()
+      const io = makeIO()
+      expect(
+        await runCli(['--chain', 'main'], runtime.dependencies, io, () =>
+          makeSecretPrompt(privateKey)
+        )
+      ).toBe(1)
+      expect(io.errors.flat().join(' ')).toContain('Invalid private key')
+      expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+    }
+  })
+
+  it('validates every interactive option before funding', async () => {
+    const cases: Array<{ answers: string[]; secret: string; message: string }> = [
+      {
+        answers: ['stn', '', ''],
+        secret: VALID_PRIVATE_KEY,
+        message: 'Invalid network: stn. Must be "test" or "main"'
+      },
+      {
+        answers: ['main', 'https://user@store.example.com', ''],
+        secret: VALID_PRIVATE_KEY,
+        message:
+          'Invalid storage URL: https://user@store.example.com. Must be a credential-free HTTPS URL'
+      },
+      {
+        answers: ['main', '', '-1'],
+        secret: VALID_PRIVATE_KEY,
+        message: 'Invalid satoshis: -1. Must be a non-negative safe integer'
+      }
+    ]
+
+    for (const testCase of cases) {
+      const runtime = makeRuntime()
+      const io = makeIO()
+      const prompt: PromptSession = {
+        ask: vi
+          .fn()
+          .mockResolvedValueOnce(testCase.answers[0])
+          .mockResolvedValueOnce(testCase.answers[1])
+          .mockResolvedValueOnce(testCase.answers[2]),
+        askSecret: vi.fn().mockResolvedValue(testCase.secret),
+        close: vi.fn()
+      }
+      expect(await runCli([], runtime.dependencies, io, () => prompt)).toBe(1)
+      expect(io.errors.flat().join(' ')).toContain(testCase.message)
+      expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+      expect(prompt.close).toHaveBeenCalledOnce()
+    }
   })
 
   it('collects interactive defaults, closes the prompt, and validates input', async () => {
