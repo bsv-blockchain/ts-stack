@@ -28,6 +28,8 @@ explicit digests, signature bytes, and verification rules remain compatible.
 No host registration or API migration is required. The additional portable
 path measures 742,126 raw bytes in the SDK Vite fixture and 555,548 raw bytes
 in UMD; their reviewed ceilings are 742,500 and 556,000 bytes respectively.
+The combined sync and security candidate measures 560,560 raw bytes with esbuild;
+its reviewed raw ceiling is 561,000 bytes. Compression ceilings are unchanged.
 
 ## Table of Contents
 
@@ -125,6 +127,11 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.
+
+Identity publication rejects a certificate unless its certifier signature
+verifies affirmatively. `GlobalKVStore` likewise treats overlay responses as
+untrusted and returns only entries with a valid controller signature; a
+verification error or `valid: false` result is rejected.
 
 - **Distributed Storage**: Scalable and secure distributed data storage solutions to support blockchain applications.
 

@@ -82,7 +82,7 @@ const { tx } = await wallet.createAction({
 
 ### BRC-100 wallet inside a browser extension
 
-Talk to a remote `StorageServer` over HTTP, sign locally with a key the user controls.
+Talk to a remote `StorageServer` over HTTPS, sign locally with a key the user controls.
 
 ### Authenticated app with `WalletClient`
 
@@ -123,6 +123,21 @@ older server. See [the full expiry guide](../docs/no-send-expiry.md).
 | Node-only filesystem helpers  | Not available in browsers               |
 
 The browser entry includes `Wallet`, `WalletSigner`, `WalletStorageManager`, `StorageClient`, `StorageIdb`, `Services`, `Monitor`, `WalletPermissionsManager`, `WalletSettingsManager`, and related browser-safe APIs. It does not promise every full-package or test-only export.
+
+## Wallet snapshot security
+
+Wallet-manager snapshots contain root key material and intentionally include
+the decryption key needed by their self-contained format, so access to the
+snapshot is access to the wallet. Store the complete snapshot only through a browser or
+extension facility backed by an OS Keychain or comparably trusted secret store.
+Do not use ordinary localStorage, logs, analytics, crash reports, clipboard
+data, or unprotected synchronization. Treat any snapshot that leaves trusted
+storage as a wallet-credential compromise and rotate the affected wallet.
+
+`StorageClient` and credential-bearing Arcade SSE clients require HTTPS for
+remote endpoints. Plain HTTP is accepted only for explicit loopback hosts such
+as `localhost` during development. SSE dependency debug logging is disabled so
+callback tokens and authorization headers do not reach application logs.
 
 See the [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) README for full documentation.
 

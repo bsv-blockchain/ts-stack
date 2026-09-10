@@ -125,15 +125,18 @@ substituted, unbound, or expired requests are rejected.
 ### Issuance
 
 Issuance does not spend an existing BTMS asset, so it can proceed without a
-prompt only when the request proves issuance. Accepted markers are:
+prompt only when the request has no caller-supplied inputs and proves issuance.
+An issuance marker never authorizes inputs in the same action. Accepted markers
+for an otherwise input-free action are:
 
 - an exact `btms_type_issue` output tag; or
 - an exact `ISSUE` value in the PushDrop asset field, including a valid
   signature preimage's script code.
 
-An unmarked action, a digest-only signature request, or a malformed preimage is
-not treated as issuance and therefore cannot take the automatic path. Unbound
-signature approval is one-shot and is not inherited from a token-access grant.
+An action containing an input, an unmarked action, a digest-only signature
+request, or a malformed preimage is not treated as issuance and therefore
+cannot take the automatic path. Unbound signature approval is one-shot and is
+not inherited from a token-access grant.
 
 ## Failure Handling
 

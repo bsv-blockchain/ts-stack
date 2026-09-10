@@ -98,11 +98,9 @@ Timeouts remain possible during dependency outages; writes are never blindly
 replayed, and resumed sync rereads durable destination progress.
 
 The adaptive page controller and optional validated-proof lookup add a small
-client bundle cost. Reviewed raw-size ceilings increase by 4,000 bytes for Vite,
-3,000 for esbuild, 4,000 for Metro and 8,000 for Hermes; Brotli ceilings increase
-by 500 bytes for Vite and 1,500 for Hermes. Gzip ceilings increase by 1,000 bytes
-for Vite, 500 for esbuild and 3,500 for Hermes to account for Linux artifact costs.
-The RPC validation coordinator is excluded from browser/mobile bundles.
+client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.md#artifact-cost-requiring-review)
+include the combined upstream security fixes. These are explicit feature costs;
+the RPC validation coordinator remains excluded from browser/mobile bundles.
 
 The transfer extension is an **unpublished 2.12.0 candidate**. Published 2.11.0
 has no record-transfer methods. Check exact build provenance and authenticated
@@ -261,7 +259,7 @@ key, including when the user enters the same phone number:
 ```ts
 await manager.startPhoneNumberChange('+12065550100')
 await manager.completePhoneNumberChange(code)
-await persist(manager.saveSnapshot())
+await platformKeyStore.storeSecret('wallet-snapshot', manager.saveSnapshot())
 ```
 
 The completion call first stages the verified phone association and new key in
@@ -274,6 +272,29 @@ verified UMP token before idempotently finalizing. Repeating phone verification
 also resumes an unpublished staged change without committing another key.
 Persist the snapshot immediately after success. Deploy the compatible overlay
 topic and WAB schema/routes before enabling this UI.
+
+### Snapshot security
+
+`CWIStyleWalletManager` and `SimpleWalletManager` snapshots contain wallet root
+key material and intentionally embed the key needed to restore that material.
+Encryption protects their internal representation, but it does not make the
+snapshot safe to disclose: **access to a snapshot is access to the wallet**.
+Store the complete snapshot as a secret in an OS Keychain, hardware-backed
+keystore, or comparably trusted storage. Do not put snapshots in ordinary
+localStorage/AsyncStorage, logs, analytics, crash reports, unprotected backups,
+clipboard data, or cloud sync. If a snapshot may have escaped trusted storage,
+treat the wallet credentials as compromised and rotate them; deleting one copy
+does not revoke other copies.
+
+Remote `StorageClient` and credential-bearing Arcade SSE endpoints require
+HTTPS. Plain HTTP is accepted only for explicit loopback hosts during local
+development. Arcade SSE dependency debug logging remains disabled because its
+request URL and headers carry wallet callback credentials.
+
+Certificate signatures fail closed at every wallet trust boundary. Direct and
+issuer-mediated acquisition require an affirmative certifier-signature result
+before storage, and identity discovery verifies each untrusted overlay
+certificate before decryption or trust scoring.
 
 ### ChainTracks sources and networks
 

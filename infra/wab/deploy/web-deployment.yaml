@@ -75,6 +75,12 @@ spec:
                   name: wab-secrets
                   key: wab-admin-token
                   optional: true
+            - name: WAB_PRESENTATION_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wab-secrets
+                  key: wab-presentation-key-encryption-key
+                  optional: true
             - name: NODE_ENV
               value: production
             - name: PORT

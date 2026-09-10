@@ -52,6 +52,51 @@ describe('pending WAB registration recovery', () => {
     await expect(db('auth_methods')).resolves.toHaveLength(1)
   })
 
+  it('keeps pending registration recovery compatible with encrypted presentation keys', async () => {
+    const originalKey = process.env.WAB_PRESENTATION_KEY_ENCRYPTION_KEY
+    const originalMode = process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE
+    process.env.WAB_PRESENTATION_KEY_ENCRYPTION_KEY = '2'.repeat(64)
+    process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE = 'encrypted'
+
+    try {
+      const presentationKey = '2a'.repeat(32)
+      const first = await UserService.findOrCreatePendingRegistration(
+        presentationKey,
+        'TwilioPhone',
+        '+14155550129'
+      )
+      const retry = await UserService.findOrCreatePendingRegistration(
+        '2b'.repeat(32),
+        'TwilioPhone',
+        '+14155550129'
+      )
+
+      expect(first).toMatchObject({
+        created: true,
+        user: { presentationKey, registrationStatus: 'pending' }
+      })
+      expect(retry).toMatchObject({
+        created: false,
+        user: { presentationKey, registrationStatus: 'pending' }
+      })
+
+      const stored = await db('users').where({ id: first.user.id }).first()
+      expect(stored.presentationKey).not.toBe(presentationKey)
+      expect(stored.presentationKeyLookup).toMatch(/^[0-9a-f]{64}$/)
+      expect(stored.presentationKeyCiphertext).toMatch(/^v1\./)
+
+      await expect(UserService.finalizeRegistration(presentationKey)).resolves.toMatchObject({
+        presentationKey,
+        registrationStatus: 'active'
+      })
+    } finally {
+      if (originalKey == null) delete process.env.WAB_PRESENTATION_KEY_ENCRYPTION_KEY
+      else process.env.WAB_PRESENTATION_KEY_ENCRYPTION_KEY = originalKey
+      if (originalMode == null) delete process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE
+      else process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE = originalMode
+    }
+  })
+
   it('finalizes a registration idempotently without changing its key or auth identity', async () => {
     const presentationKey = 'c'.repeat(64)
     const { user } = await UserService.findOrCreatePendingRegistration(

@@ -115,28 +115,28 @@ claim that every wallet feature or legacy migration is strictly conformant.
 
 ## Artifact cost requiring review
 
-The proposed package budgets include the new framing, validation, integrity and
-retry code. Exact packed consumers measured Vite 1,710,722 bytes (403,503 gzip),
-esbuild 1,334,466 (366,821 gzip), Metro 1,761,902 (447,577 gzip), and Hermes
-3,576,912 (1,435,912 gzip). Browser composition contains only the existing SDK,
-wallet client, noble hashes, hash-wasm and IndexedDB dependencies; no Node
-storage or new dependency enters the graph. The server staging adapter remains
-outside browser/mobile exports.
+The framing, integrity checks, adaptive page controller and validated proof-provider
+lookup add portable code. After integrating upstream security fixes, exact packed
+macOS consumers measured the following bytes. Hermes compression varies slightly
+with build paths.
 
-The raw ceilings increase by 9,000 / 7,500 / 7,500 / 17,500 bytes respectively;
-compressed ceilings increase only where the measurement requires it. Linux CI
-measured Vite gzip at 404,050 bytes, esbuild gzip at 367,979 bytes, and
-Hermes gzip at 1,454,799 bytes, above the macOS measurements; their proposed
-ceilings are 404,500, 368,500, and 1,455,000 bytes respectively. These
-narrow budget changes need explicit maintainer review under the repository
-artifact-growth policy. They are feature cost, not a performance improvement.
+| Artifact | Raw | Gzip | Brotli | Raw ceiling | Gzip ceiling | Brotli ceiling |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Vite | 1,716,150 | 404,965 | 316,747 | 1,717,000 | 406,500 | 317,000 |
+| esbuild | 1,338,800 | 368,089 | 295,540 | 1,339,500 | 369,000 | 296,000 |
+| Metro | 1,767,013 | 448,892 | 347,746 | 1,768,000 | 455,000 | 360,000 |
+| Hermes | 3,586,809 | 1,439,723 | 1,133,805 | 3,588,000 | 1,460,500 | 1,135,000 |
 
-The proof-recovery follow-up adds the per-copy work controller, optional validated
-proof-provider traversal and reconciliation timestamps. RPC proof orchestration
-remains server-only. macOS exact packed artifacts measured Vite 1,714,512 bytes
-(404,411 gzip), esbuild 1,337,378 (367,559 gzip), Metro 1,765,466 (448,347 gzip),
-and Hermes 3,584,469 (1,438,776 gzip). Linux CI measured Vite gzip at 404,970 and
-Hermes gzip at 1,457,902. The incremental raw, Brotli and gzip ceiling changes are
-documented in the README; compressed measurements differ across platforms and
-Hermes build paths. These are explicit feature costs requiring review, not
-claims of reduced application bundle size.
+Before upstream integration, Linux CI measured Vite gzip at 404,970 and Hermes
+gzip at 1,457,902, above the corresponding macOS measurements. The combined
+ceilings retain that platform allowance and the upstream security artifact costs.
+The complete hosted platform checks must pass these limits before review.
+
+Browser composition contains only the existing SDK, wallet client, noble hashes,
+hash-wasm and IndexedDB dependencies. No Node storage or new dependency enters
+the graph. Server staging and RPC proof orchestration remain outside
+browser/mobile exports. The SDK's combined esbuild consumer measures 560,560 raw
+bytes against a 561,000-byte ceiling; its compressed ceilings are unchanged.
+
+These are explicit feature costs requiring maintainer review under the repository
+artifact-growth policy, not claims of reduced application bundle size.

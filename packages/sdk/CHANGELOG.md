@@ -365,6 +365,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
+- Treat cryptographic verification as successful only when it returns an
+  affirmative result: `GlobalKVStore` rejects forged controller-signed overlay
+  values, and `IdentityClient` refuses to publish signature-invalid identity
+  certificates. The reviewed UMD raw ceiling advances by 1 kB to 556 kB,
+  covering the measured 555,017-byte bundle; compressed and module-bundle
+  ceilings remain unchanged.
 - Reject non-object BRC-103 messages before field access, await asynchronous
   general-message and certificate listeners so their failures reach the owning
   request, register initial-response waiters before transports can answer,

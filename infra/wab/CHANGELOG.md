@@ -26,6 +26,10 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- WAB 1.8.0 adds an optional, staged defense-in-depth vault for presentation-key bearer
+  credentials and phone-change history. The additive schema, legacy fallback,
+  dual-write backfill, and unchanged HTTP API support rolling upgrades from
+  existing WAB servers; operators explicitly enable final plaintext redaction.
 - Make account creation a two-phase WAB/UMP transition: new identities are
   atomically linked as pending, wallet publication is finalized idempotently,
   and only an explicit pending state may resume when no UMP token exists.
@@ -33,7 +37,6 @@ All notable changes to this project will be documented in this file.
   pre-migration stranded registration without deleting phone or faucet state.
 - Backfill every existing WAB account as active so an absent or unavailable UMP
   result cannot implicitly reset an established identity.
-
 - Add bearer-authenticated, rate-limited operator routes to pin a WAB account
   to a verified UMP outpoint and restore a disputed phone-association transfer.
 - Require current-account knowledge plus Twilio OTP possession before a phone

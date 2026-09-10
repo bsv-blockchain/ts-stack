@@ -400,7 +400,15 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/helpers/fund-wallet',
       manifest: 'packages/helpers/fund-wallet/package.json',
       propertyTest: 'packages/helpers/fund-wallet/src/cli.property.test.ts',
-      mutate: ['src/cli.ts:188-256'],
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/helpers/fund-wallet',
+          'src/cli.ts',
+          'function argumentValue(',
+          'function printHelp('
+        )
+      ],
       ...vitestTarget('vitest.config.ts')
     },
     'payment-402': {
