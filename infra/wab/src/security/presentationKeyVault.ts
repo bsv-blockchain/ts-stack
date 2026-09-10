@@ -34,12 +34,10 @@ export function hasPresentationKeyVaultKey(): boolean {
 export function presentationKeyVaultMode(): PresentationKeyVaultMode {
   const configuredMode = process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE?.trim().toLowerCase()
   const hasKey = hasPresentationKeyVaultKey()
-  const mode =
-    configuredMode === '' || configuredMode == null
-      ? hasKey
-        ? 'dual-write'
-        : 'legacy'
-      : configuredMode
+  let mode = configuredMode
+  if (configuredMode === '' || configuredMode == null) {
+    mode = hasKey ? 'dual-write' : 'legacy'
+  }
   if (mode !== 'legacy' && mode !== 'dual-write' && mode !== 'encrypted') {
     throw new Error(
       'WAB_PRESENTATION_KEY_ENCRYPTION_MODE must be legacy, dual-write, or encrypted.'

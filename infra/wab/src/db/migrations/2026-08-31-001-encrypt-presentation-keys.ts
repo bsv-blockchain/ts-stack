@@ -37,7 +37,7 @@ export async function up(knex: Knex): Promise<void> {
   // nullable sidecar columns, so it is safe to apply before a rolling deployment.
 }
 
-export async function down(knex: Knex): Promise<void> {
+async function restoreUserKeys(knex: Knex): Promise<void> {
   const users = await knex<LegacyUserRow>('users').select('*')
   for (const user of users) {
     const update: Record<string, string | null> = {}
@@ -59,7 +59,9 @@ export async function down(knex: Knex): Promise<void> {
     }
     if (Object.keys(update).length > 0) await knex('users').where({ id: user.id }).update(update)
   }
+}
 
+async function restoreHistoryKeys(knex: Knex): Promise<void> {
   const history = await knex<HistoryRow>('phone_change_history').select('*')
   for (const row of history) {
     const update: Record<string, string> = {}
@@ -83,6 +85,11 @@ export async function down(knex: Knex): Promise<void> {
       await knex('phone_change_history').where({ id: row.id }).update(update)
     }
   }
+}
+
+export async function down(knex: Knex): Promise<void> {
+  await restoreUserKeys(knex)
+  await restoreHistoryKeys(knex)
 
   await knex.schema.alterTable('phone_change_history', table => {
     table.dropColumn('previousPresentationKeyCiphertext')

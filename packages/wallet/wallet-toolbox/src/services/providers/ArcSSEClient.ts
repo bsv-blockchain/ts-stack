@@ -22,6 +22,12 @@ function isLoopbackHost(hostname: string): boolean {
   )
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1
+  return value.slice(0, end)
+}
+
 function normalizeArcadeBaseUrl(baseUrl: string): string {
   let parsed: URL
   try {
@@ -35,8 +41,8 @@ function normalizeArcadeBaseUrl(baseUrl: string): string {
   if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname))) {
     throw new TypeError('Arcade SSE base URL requires HTTPS except on localhost.')
   }
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '')
-  return parsed.toString().replace(/\/$/, '')
+  parsed.pathname = trimTrailingSlashes(parsed.pathname)
+  return trimTrailingSlashes(parsed.toString())
 }
 
 export interface ArcSSEEvent {

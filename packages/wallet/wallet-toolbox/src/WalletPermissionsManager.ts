@@ -1005,6 +1005,53 @@ export class WalletPermissionsManager implements WalletInterface {
    *  2) PERMISSION (GRANT / DENY) METHODS
    * --------------------------------------------------------------------- */
 
+  private async grantPersistentPermission(request: PermissionRequest, expiry: number, amount?: number): Promise<void> {
+    const key = this.buildRequestKey(request)
+
+    // Several first-contact prompts for the same permission can stack up
+    // before any token exists (e.g. one per usage type). Granting them all
+    // should yield ONE token: if an identical non-renewal grant just minted
+    // (or is minting), don't mint a duplicate. Spending authorizations are
+    // excluded — their tokens carry amounts, so every grant is honored.
+    let skipDuplicateMint =
+      !request.renewal &&
+      request.type !== 'spending' &&
+      (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
+
+    if (skipDuplicateMint) {
+      const inFlight = this.mintsInFlight.get(key)
+      if (inFlight != null) {
+        await inFlight
+        // The awaited mint may have failed; only skip if it landed.
+        skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
+      }
+    }
+
+    if (!skipDuplicateMint) {
+      const mint = request.renewal
+        ? this.renewPermissionOnChain(request.previousToken!, request, expiry, amount)
+        : this.createPermissionOnChain(request, expiry, amount)
+      // Publish the in-flight mint so concurrent ensures for the same
+      // permission wait for it instead of re-prompting (stored promise
+      // never rejects; failures still propagate to this caller below).
+      this.mintsInFlight.set(
+        key,
+        mint.then(
+          () => {},
+          () => {}
+        )
+      )
+      try {
+        await mint
+      } finally {
+        this.mintsInFlight.delete(key)
+      }
+    }
+
+    if (request.type !== 'spending') this.cachePermission(key, expiry)
+    this.markRecentGrant(request)
+  }
+
   /**
    * Grants a previously requested permission.
    * This method:
@@ -1032,57 +1079,9 @@ export class WalletPermissionsManager implements WalletInterface {
     }
     this.activeRequests.delete(params.requestID)
 
-    // 3) If `ephemeral !== true`, we create or renew an on-chain token
-    // Only cache non-ephemeral permissions
-    // Ephemeral permissions should not be cached as they are one-time authorizations
-    if (!params.ephemeral) {
-      const request = matching.request as PermissionRequest
-      const expiry = params.expiry || 0 // default: never expires
-      const key = this.buildRequestKey(request)
-
-      // Several first-contact prompts for the same permission can stack up
-      // before any token exists (e.g. one per usage type). Granting them all
-      // should yield ONE token: if an identical non-renewal grant just minted
-      // (or is minting), don't mint a duplicate. Spending authorizations are
-      // excluded — their tokens carry amounts, so every grant is honored.
-      let skipDuplicateMint =
-        !request.renewal &&
-        request.type !== 'spending' &&
-        (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
-
-      if (skipDuplicateMint) {
-        const inFlight = this.mintsInFlight.get(key)
-        if (inFlight != null) {
-          await inFlight
-          // The awaited mint may have failed; only skip if it landed.
-          skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
-        }
-      }
-
-      if (!skipDuplicateMint) {
-        const mint = request.renewal
-          ? this.renewPermissionOnChain(request.previousToken!, request, expiry, params.amount)
-          : this.createPermissionOnChain(request, expiry, params.amount)
-        // Publish the in-flight mint so concurrent ensures for the same
-        // permission wait for it instead of re-prompting (stored promise
-        // never rejects; failures still propagate to this caller below).
-        this.mintsInFlight.set(
-          key,
-          mint.then(
-            () => {},
-            () => {}
-          )
-        )
-        try {
-          await mint
-        } finally {
-          this.mintsInFlight.delete(key)
-        }
-      }
-
-      if (request.type !== 'spending') this.cachePermission(key, expiry)
-      this.markRecentGrant(request)
-    }
+    // 3) Ephemeral permissions are one-time authorizations and never persist.
+    if (params.ephemeral) return
+    await this.grantPersistentPermission(matching.request as PermissionRequest, params.expiry || 0, params.amount)
   }
 
   /**

@@ -62,14 +62,16 @@ function setIfChanged(
   if (current !== next) update[column] = next
 }
 
+function primaryKeyFromRow(row: UserVaultRow): string | undefined {
+  if (isPresentationKey(row.presentationKey)) return row.presentationKey
+  if (!isRedactedPresentationKey(row.presentationKey)) return undefined
+  return keyFromCiphertext(row.presentationKeyCiphertext, `User ${row.id} presentation key`)
+}
+
 function userUpdate(row: UserVaultRow, mode: Exclude<PresentationKeyVaultMode, 'legacy'>) {
   const update: Record<string, string | null> = {}
   const primaryWasRedacted = isRedactedPresentationKey(row.presentationKey)
-  const plaintextPrimary = isPresentationKey(row.presentationKey)
-    ? row.presentationKey
-    : primaryWasRedacted
-      ? keyFromCiphertext(row.presentationKeyCiphertext, `User ${row.id} presentation key`)
-      : undefined
+  const plaintextPrimary = primaryKeyFromRow(row)
 
   // Shamir-only rows deliberately retain their non-key legacy placeholder.
   if (plaintextPrimary != null) {

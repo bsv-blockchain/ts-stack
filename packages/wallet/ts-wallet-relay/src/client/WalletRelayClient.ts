@@ -82,13 +82,19 @@ function isLoopbackRelayHost(hostname: string): boolean {
   )
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1
+  return value.slice(0, end)
+}
+
 function normalizeRelayApiUrl(apiUrl: string): string {
   let normalized: string
   if (apiUrl.startsWith('/') && !apiUrl.startsWith('//')) {
     if (apiUrl.includes('\\') || apiUrl.includes('?') || apiUrl.includes('#')) {
       throw new TypeError('Relay API path cannot include backslashes, query, or fragment.')
     }
-    normalized = apiUrl.replace(/\/+$/, '')
+    normalized = trimTrailingSlashes(apiUrl)
   } else {
     let parsed: URL
     try {
@@ -110,8 +116,8 @@ function normalizeRelayApiUrl(apiUrl: string): string {
     ) {
       throw new TypeError('Relay API URL requires HTTPS except on localhost.')
     }
-    parsed.pathname = parsed.pathname.replace(/\/+$/, '')
-    normalized = parsed.toString().replace(/\/$/, '')
+    parsed.pathname = trimTrailingSlashes(parsed.pathname)
+    normalized = trimTrailingSlashes(parsed.toString())
   }
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`
 }

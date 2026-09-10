@@ -59,39 +59,52 @@ export function storedPendingPresentationKeyColumns(key: string): Record<string,
     };
 }
 
+function hydratedPresentationKey(
+    row: UserStorageRow,
+    mode: ReturnType<typeof presentationKeyVaultMode>
+): string {
+    if (mode !== "encrypted") {
+        if (!isRedactedPresentationKey(row.presentationKey)) return row.presentationKey;
+        if (mode === "dual-write" && row.presentationKeyCiphertext != null) {
+            return decryptPresentationKey(row.presentationKeyCiphertext);
+        }
+        throw new Error("The presentation key is redacted but the vault is not in encrypted mode.");
+    }
+
+    if (row.presentationKeyCiphertext != null) {
+        return decryptPresentationKey(row.presentationKeyCiphertext);
+    }
+    const isShamirPlaceholder = row.userIdHash != null && row.presentationKey.startsWith("shamir_");
+    if (!isShamirPlaceholder) {
+        throw new Error(
+            "Encrypted mode requires presentation-key ciphertext on every legacy account."
+        );
+    }
+    return row.presentationKey;
+}
+
+function hydratedPendingPresentationKey(
+    row: UserStorageRow,
+    mode: ReturnType<typeof presentationKeyVaultMode>
+): string | null | undefined {
+    if (mode !== "encrypted") return row.pendingPresentationKey;
+    if (row.pendingPresentationKeyCiphertext != null) {
+        return decryptPresentationKey(row.pendingPresentationKeyCiphertext);
+    }
+    if (row.pendingPresentationKey != null) {
+        throw new Error("Encrypted mode requires ciphertext for a pending presentation key.");
+    }
+    return row.pendingPresentationKey;
+}
+
 export function hydrateUserRow(row: UserStorageRow | undefined): User | undefined {
     if (row == null) return undefined;
     const mode = presentationKeyVaultMode();
-    let presentationKey = row.presentationKey;
-    if (mode === "encrypted") {
-        if (row.presentationKeyCiphertext == null) {
-            const isShamirPlaceholder = row.userIdHash != null && row.presentationKey.startsWith("shamir_");
-            if (!isShamirPlaceholder) {
-                throw new Error("Encrypted mode requires presentation-key ciphertext on every legacy account.");
-            }
-        } else {
-            presentationKey = decryptPresentationKey(row.presentationKeyCiphertext);
-        }
-    } else if (isRedactedPresentationKey(presentationKey)) {
-        if (mode === "dual-write" && row.presentationKeyCiphertext != null) {
-            presentationKey = decryptPresentationKey(row.presentationKeyCiphertext);
-        } else {
-            throw new Error("The presentation key is redacted but the vault is not in encrypted mode.");
-        }
-    }
-    let pendingPresentationKey = row.pendingPresentationKey;
-    if (mode === "encrypted") {
-        if (row.pendingPresentationKeyCiphertext != null) {
-            pendingPresentationKey = decryptPresentationKey(row.pendingPresentationKeyCiphertext);
-        } else if (row.pendingPresentationKey != null) {
-            throw new Error("Encrypted mode requires ciphertext for a pending presentation key.");
-        }
-    }
     return {
         id: row.id,
-        presentationKey,
+        presentationKey: hydratedPresentationKey(row, mode),
         registrationStatus: row.registrationStatus,
-        pendingPresentationKey,
+        pendingPresentationKey: hydratedPendingPresentationKey(row, mode),
         umpTokenOutpoint: row.umpTokenOutpoint,
         userIdHash: row.userIdHash,
         createdAt: row.createdAt,
