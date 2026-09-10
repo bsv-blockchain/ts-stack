@@ -10,6 +10,7 @@ describe('WABClient endpoint mapping', () => {
     await client.listLinkedMethods(key)
     await client.unlinkMethod(key, 7)
     await client.requestFaucet(key)
+    await client.finalizeRegistration(key)
     await client.deleteUser(key)
     await client.startShareAuth('TwilioPhone', key, phonePayload)
     await client.storeShare('TwilioPhone', phonePayload, 'share-b', key)
@@ -21,6 +22,7 @@ describe('WABClient endpoint mapping', () => {
       '/user/linkedMethods',
       '/user/unlinkMethod',
       '/faucet/request',
+      '/auth/registration/finalize',
       '/user/delete',
       '/auth/start',
       '/share/store',
