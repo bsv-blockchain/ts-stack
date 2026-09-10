@@ -24,6 +24,8 @@ interface BHSHeaderState {
 }
 
 export class BHServiceClient implements ChaintracksServiceClient {
+  /** HTTP polling client; callback event methods are legacy unsupported stubs. */
+  readonly supportsReorgEvents = false
   bhs: BlockHeadersService
   cache: Record<number, string>
   chain: Chain
@@ -45,13 +47,12 @@ export class BHServiceClient implements ChaintracksServiceClient {
   }
 
   async isValidRootForHeight(root: string, height: number): Promise<boolean> {
-    const cachedRoot = this.cache[height]
-    if (cachedRoot) {
-      return cachedRoot === root
-    }
-    const isValid = await this.bhs.isValidRootForHeight(root, height)
-    this.cache[height] = root
-    return isValid
+    const header = await this.findHeaderForHeight(height)
+    const merkleRoot = header?.merkleRoot
+    if (typeof merkleRoot !== 'string' || merkleRoot.length === 0) return false
+    // Diagnostic only: validity is always decided from a freshly read canonical header.
+    this.cache[height] = merkleRoot
+    return merkleRoot === root
   }
 
   async getPresentHeight(): Promise<number> {

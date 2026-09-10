@@ -16,6 +16,11 @@ emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
 and JSON transports preserve identical transaction bytes. The same boundary
 protects overlay lookup queries and JSON BEEF responses.
 
+Security-sensitive overlay consumers can use the exported bounded transaction
+evidence coordinator to verify copied BEEF against a caller-owned chain tracker.
+See the [transaction evidence guide](./docs/transaction-evidence.md) for the
+receipt, graph, cache, cancellation, and resolver-intake contracts.
+
 ## Table of Contents
 
 1. [Objective](#objective)
@@ -135,6 +140,7 @@ Comprehensive documentation is available in several formats:
   - **[🔧 How-To Guides](https://bsv-blockchain.github.io/ts-stack/guides/)**: Practical solutions to specific problems
   - **[📚 Reference](https://bsv-blockchain.github.io/ts-stack/reference/)**: Complete technical specifications and API documentation
   - **[🏗️ Architecture](https://bsv-blockchain.github.io/ts-stack/architecture/)**: Architecture and design explanations
+- **[Transaction evidence](./docs/transaction-evidence.md)**: Bounded verification of untrusted BEEF and overlay receipts
 - **[⚡ Examples](https://docs.bsvblockchain.org/guides/sdks/ts/examples)**: Practical code examples
 - **Code Annotations**: The SDK is richly documented with code-level annotations that show up in editors like VSCode
 

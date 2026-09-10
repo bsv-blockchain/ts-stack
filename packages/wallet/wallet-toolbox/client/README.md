@@ -141,6 +141,15 @@ CSP is an application and deployment concern rather than a package-level access 
 
 ## Contributor checks
 
+Final overlay identity discovery copies bounded resolver receipts, verifies the
+complete transaction graph and canonical anchors with the configured wallet
+Services ChainTracker, and validates the standard subject-signed certificate
+envelope. Cached transaction evidence is rechecked before use; local contacts
+retain their separate policy. See the [identity verification guide](../docs/identity-verification.md)
+for C01/C02/C03 compatibility characterization and limits. Inclusion is not
+proof of freshness or unspentness. Current package and packed-consumer
+validation remains pending the release review.
+
 From the repository root, build the SDK and package before running the installed-consumer browser gate:
 
 ```bash

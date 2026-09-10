@@ -48,6 +48,8 @@ import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 import { classifyOutputUtxo, requireConclusiveUtxo } from './classifyOutputUtxo'
 
 export class Services implements WalletServices {
+  private identityChainTracker?: ChaintracksChainTracker
+  private identityChainTrackerInit?: Promise<ChaintracksChainTracker>
   static readonly getStatusForTxidsBatchLimit = 20
 
   static createDefaultOptions(chain: Chain): WalletServicesOptions {
@@ -229,16 +231,36 @@ export class Services implements WalletServices {
   }
 
   async getChainTracker(): Promise<ChainTracker> {
-    if (this.options.chainTracker != null) return this.options.chainTracker
-    if (this.options.chaintracks == null) {
-      throw new WERR_INVALID_PARAMETER(
-        'options.chainTracker or options.chaintracks',
-        "valid to enable 'getChainTracker' service."
-      )
+    while (true) {
+      if (this.options.chainTracker != null) return this.options.chainTracker
+      if (this.options.chaintracks == null) {
+        throw new WERR_INVALID_PARAMETER(
+          'options.chainTracker or options.chaintracks',
+          "valid to enable 'getChainTracker' service."
+        )
+      }
+      const desired = this.options.chaintracks
+      if (this.identityChainTracker?.chaintracks === desired) return this.identityChainTracker
+      if (this.identityChainTrackerInit != null) {
+        await this.identityChainTrackerInit.catch(() => undefined)
+        continue
+      }
+      const previous = this.identityChainTracker
+      const created = new ChaintracksChainTracker(this.chain, desired, {
+        telemetry: this.options.telemetry
+      })
+      this.identityChainTracker = created
+      const init = Promise.resolve().then(async () => {
+        if (previous != null) await previous.dispose()
+        return created
+      })
+      this.identityChainTrackerInit = init
+      try {
+        await init.catch(() => created)
+      } finally {
+        if (this.identityChainTrackerInit === init) this.identityChainTrackerInit = undefined
+      }
     }
-    return new ChaintracksChainTracker(this.chain, this.options.chaintracks, {
-      telemetry: this.options.telemetry
-    })
   }
 
   async getBsvExchangeRate(): Promise<number> {

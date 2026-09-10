@@ -34,6 +34,11 @@ import TransactionSignature, {
 import Random from '../primitives/Random.js'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 import { scriptVerificationBackend } from './ScriptVerificationBackend.js'
+import {
+  evidenceScriptScope,
+  scopedScriptBackend,
+  type EvidenceScriptScope
+} from './EvidenceScriptWork.js'
 
 /** Post-Chronicle height used when an input's source UTXO mined-height is unobtainable. */
 const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
@@ -59,6 +64,7 @@ type UnminedTransactionVerificationContext = TransactionVerificationState & {
   feeModel: FeeModel | undefined
   selectedVerifier: BdkVerifierInterface | undefined
   verifierQueue: QueuedScriptVerification[]
+  scriptWork?: EvidenceScriptScope
 }
 
 /**
@@ -1141,10 +1147,7 @@ export default class Transaction {
       }
       return
     }
-    if (
-      !state.verifiedTxids.has(sourceTxid) &&
-      !state.queuedTxids.has(sourceTxid)
-    ) {
+    if (!state.verifiedTxids.has(sourceTxid) && !state.queuedTxids.has(sourceTxid)) {
       state.txQueue.push(sourceTransaction)
       state.queuedTxids.add(sourceTxid)
     }
@@ -1177,11 +1180,7 @@ export default class Transaction {
         state.scriptsOnly && input.sourceTXID !== undefined
           ? input.sourceTXID
           : sourceTransaction.id('hex')
-      this.queueSourceTransactionForVerification(
-        sourceTransaction,
-        sourceTxid,
-        state
-      )
+      this.queueSourceTransactionForVerification(sourceTransaction, sourceTxid, state)
       input.sourceTXID ??= sourceTxid
       if (
         !useVerifier &&
@@ -1229,9 +1228,7 @@ export default class Transaction {
     const scriptVerdicts =
       selectedVerifier.verifyScriptsBatch === undefined
         ? await Promise.all(
-            verifierQueue.map(
-              async params => await selectedVerifier.verifyScripts(params)
-            )
+            verifierQueue.map(async params => await selectedVerifier.verifyScripts(params))
           )
         : await selectedVerifier.verifyScriptsBatch(verifierQueue)
     if (scriptVerdicts.length !== verifierQueue.length) {
@@ -1270,15 +1267,14 @@ export default class Transaction {
     } as const
     const useVerifier =
       selectedVerifier !== undefined &&
-      (memoryLimit === undefined ||
-        selectedVerifier.supportsMemoryLimit === true) &&
+      (memoryLimit === undefined || selectedVerifier.supportsMemoryLimit === true) &&
       (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
-    const inputVerification = this.verifyTransactionInputs(
-      tx,
-      useVerifier,
-      getTxid,
-      context
-    )
+    const verifyInputs = (skipScripts: boolean): { valid: boolean; inputTotal: number } =>
+      this.verifyTransactionInputs(tx, skipScripts, getTxid, context)
+    const inputVerification =
+      !useVerifier && context.scriptWork !== undefined
+        ? context.scriptWork.work.inputs(context.scriptWork, verifierParams, verifyInputs)
+        : verifyInputs(useVerifier)
     if (!inputVerification.valid) return false
     if (useVerifier) verifierQueue.push(verifierParams)
     if (this.totalVerifiedOutputs(tx) > inputVerification.inputTotal) return false
@@ -1308,7 +1304,12 @@ export default class Transaction {
     verifier?: BdkVerifierInterface
   ): Promise<boolean> {
     const scriptsOnly = chainTracker === 'scripts only'
-    const selectedVerifier = verifier ?? scriptVerificationBackend()
+    const backend = verifier ?? scriptVerificationBackend()
+    const scriptWork = scriptsOnly ? undefined : evidenceScriptScope(this)
+    const selectedVerifier =
+      scriptWork !== undefined && backend !== undefined
+        ? scopedScriptBackend(scriptWork, backend)
+        : backend
     if (!scriptsOnly) this.materializeSourceTXIDs()
     const verifiedTxids = new Set<string>()
     const verifiedTransactions = new Set<Transaction>()
@@ -1327,7 +1328,8 @@ export default class Transaction {
       verifiedTxids,
       feeModel,
       selectedVerifier,
-      verifierQueue
+      verifierQueue,
+      scriptWork
     }
     let queueIndex = 0
 
@@ -1338,13 +1340,7 @@ export default class Transaction {
         txid ??= tx.id('hex')
         return txid
       }
-      if (
-        this.isTransactionAlreadyVerified(
-          tx,
-          getTxid,
-          verificationContext
-        )
-      ) {
+      if (this.isTransactionAlreadyVerified(tx, getTxid, verificationContext)) {
         continue
       }
 
@@ -1360,11 +1356,7 @@ export default class Transaction {
       ) {
         continue
       }
-      if (!(await this.verifyUnminedTransaction(
-        tx,
-        getTxid,
-        verificationContext
-      ))) return false
+      if (!(await this.verifyUnminedTransaction(tx, getTxid, verificationContext))) return false
     }
 
     await this.verifyQueuedScripts(verifierQueue, selectedVerifier)
@@ -1403,9 +1395,10 @@ export default class Transaction {
     }
   }
 
-  private collectBEEFTransactions(
-    allowPartial?: boolean
-  ): { bumps: MerklePath[]; txs: Array<{ tx: Transaction; pathIndex?: number }> } {
+  private collectBEEFTransactions(allowPartial?: boolean): {
+    bumps: MerklePath[]
+    txs: Array<{ tx: Transaction; pathIndex?: number }>
+  } {
     const bumps: MerklePath[] = []
     const bumpIndexByInstance = new Map<MerklePath, number>()
     const bumpIndexByRoot = new Map<string, number>()
@@ -1418,7 +1411,14 @@ export default class Transaction {
       const frame = stack.pop()
       if (frame == null) continue
       if (frame.expanded) {
-        this.appendBEEFTransaction(frame.tx, seenTxids, txs, bumps, bumpIndexByInstance, bumpIndexByRoot)
+        this.appendBEEFTransaction(
+          frame.tx,
+          seenTxids,
+          txs,
+          bumps,
+          bumpIndexByInstance,
+          bumpIndexByRoot
+        )
         continue
       }
       this.scheduleBEEFTransaction(frame.tx, allowPartial, scheduledTxids, stack)
