@@ -72,6 +72,28 @@ function resolverFor(
 }
 
 describe('LookupResolver additive evidence intake', () => {
+  it('rejects unusable evidence limits before starting a lookup', async () => {
+    const resolver = resolverFor(['https://limits.example'], async () => ({
+      type: 'output-list',
+      outputs: []
+    }))
+
+    await expect(
+      resolver.query(
+        { service, query: {} },
+        undefined,
+        { evidenceLimits: { maxOutputs: 0, maxBytes: 1 } }
+      )
+    ).rejects.toThrow('Evidence intake limits must be positive safe integers')
+    await expect(
+      resolver.query(
+        { service, query: {} },
+        undefined,
+        { evidenceLimits: { maxOutputs: 1, maxBytes: Number.POSITIVE_INFINITY } }
+      )
+    ).rejects.toThrow('Evidence intake limits must be positive safe integers')
+  })
+
   it('delivers both owned receipts before legacy first-wins aggregation and isolates callback mutations', async () => {
     const { bad, valid } = await sameTransactionReceipts()
     const firstHost = 'https://first.invalid-proof.example'
