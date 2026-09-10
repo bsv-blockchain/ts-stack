@@ -48,6 +48,12 @@ describe("UserService", () => {
 
             const fetched = await UserService.getUserByPresentationKey(key);
             expect(fetched?.presentationKey).toBe(key);
+
+            const stored = await db("users").where({ id: user.id }).first();
+            expect(stored.presentationKey).not.toBe(key);
+            expect(stored.presentationKeyCiphertext).toMatch(/^v1\./);
+            expect(stored.presentationKeyLookup).toMatch(/^[0-9a-f]{64}$/);
+            expect(JSON.stringify(stored)).not.toContain(key);
         });
 
         it("should get user by ID", async () => {

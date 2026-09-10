@@ -19,6 +19,11 @@ The foundational cryptographic and transaction library for the BSV blockchain. Z
 
 Provides low-level primitives (keys, signatures, hashing), script construction and execution, transaction creation and signing, and integration interfaces for wallets and overlay networks.
 
+Security-sensitive consumers require affirmative cryptographic verdicts.
+`IdentityClient` will not publish a certificate whose certifier signature is
+invalid, and `GlobalKVStore` discards untrusted overlay entries unless their
+controller signature verifies as valid.
+
 ## Install
 
 ```bash

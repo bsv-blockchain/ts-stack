@@ -187,12 +187,32 @@ describe('WalletRelayService E2E', () => {
     })
 
     it('resolveRelay() throws when the origin returns 404', async () => {
-      const { params } = parsePairingUri(
-        `bsv-browser://pair?topic=no-such-session&backendIdentityKey=${PrivateKey.fromRandom().toPublicKey()}&protocolID=%5B0%2C%22mobile+wallet+session%22%5D&origin=${encodeURIComponent(baseUrl)}&expiry=${Math.floor(Date.now() / 1000) + 120}`
-      )
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: false, status: 404 } as Response)
       const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
-      await expect(session.resolveRelay()).rejects.toThrow(/HTTP 404/)
+      try {
+        await expect(session.resolveRelay()).rejects.toThrow(/HTTP 404/)
+      } finally {
+        fetchMock.mockRestore()
+      }
     }, 10_000)
+
+    it('resolveRelay() rejects an unsigned pairing before fetching its origin', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const fetchMock = jest.spyOn(globalThis, 'fetch')
+      const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), {
+        ...params!,
+        sig: undefined
+      })
+
+      await expect(session.resolveRelay()).rejects.toThrow(/signature is missing or invalid/)
+      expect(fetchMock).not.toHaveBeenCalled()
+      fetchMock.mockRestore()
+    })
   })
 
   // ── Pairing ─────────────────────────────────────────────────────────────────
@@ -266,6 +286,45 @@ describe('WalletRelayService E2E', () => {
   // ── RPC round-trip ───────────────────────────────────────────────────────────
 
   describe('RPC round-trip', () => {
+    it('rejects privileged methods when no approval handler is configured', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const onRequest = jest.fn().mockResolvedValue({ txid: 'unauthorized' })
+      const mobile = new WalletPairingSession(mobileWallet, params!, {
+        implementedMethods: new Set(['createAction']),
+        autoApproveMethods: new Set()
+      }).onRequest(onRequest)
+
+      await mobile.resolveRelay()
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('pairing timed out')), 5000)
+        mobile
+          .on('connected', () => {
+            clearTimeout(timeout)
+            resolve()
+          })
+          .on('error', message => {
+            clearTimeout(timeout)
+            reject(new Error(message))
+          })
+        void mobile.connect()
+      })
+
+      const rpc = await service.sendRequest(
+        created.sessionId,
+        'createAction',
+        { description: 'unauthorized action' },
+        created.desktopToken
+      )
+      expect(rpc.error).toEqual({
+        code: 4001,
+        message: 'Approval required but no approval handler is configured'
+      })
+      expect(onRequest).not.toHaveBeenCalled()
+      mobile.disconnect()
+    }, 10_000)
+
     it('getPublicKey returns the mobile wallet public key (service API)', async () => {
       const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
       const { publicKey: expectedKey } = await mobileWallet.getPublicKey({ identityKey: true })
@@ -370,7 +429,7 @@ describe('WalletRelayService E2E', () => {
       expect(await verifyPairingSignature(params!)).toBe(true)
     })
 
-    it('signQrCodes: false omits the sig from the pairing URI', async () => {
+    it('signQrCodes: false produces an unsigned URI that secure clients reject', async () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const unsigned = new WalletRelayService({
@@ -385,6 +444,8 @@ describe('WalletRelayService E2E', () => {
         const s = await unsigned.createSession()
         const url = new URL(s.pairingUri)
         expect(url.searchParams.get('sig')).toBeNull()
+        const { params } = parsePairingUri(s.pairingUri)
+        expect(await verifyPairingSignature(params!)).toBe(false)
       } finally {
         unsigned.stop()
         await stopServer(server)

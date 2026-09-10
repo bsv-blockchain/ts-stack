@@ -16,8 +16,6 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-const privateKey = '1'.repeat(64)
-
 describe('fund-wallet CLI boundary properties', () => {
   test('preserves arbitrary valid network and safe-integer funding options', () => {
     fc.assert(
@@ -25,21 +23,11 @@ describe('fund-wallet CLI boundary properties', () => {
         fc.constantFrom('main', 'test'),
         fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER }),
         (chain, amount) => {
-          expect(
-            parseCliArguments([
-              '--chain',
-              chain,
-              '--private-key',
-              privateKey,
-              '--satoshis',
-              String(amount)
-            ])
-          ).toEqual({
-            kind: 'run',
+          expect(parseCliArguments(['--chain', chain, '--satoshis', String(amount)])).toEqual({
+            kind: 'prompt-key',
             options: {
               chain,
               storageURL: DEFAULT_STORAGE_URL,
-              privateKey,
               amount
             }
           })
@@ -51,9 +39,24 @@ describe('fund-wallet CLI boundary properties', () => {
   test('rejects arbitrary credential-bearing and non-HTTPS storage URLs', () => {
     fc.assert(
       fc.property(fc.domain(), fc.constantFrom('http:', 'ftp:'), (domain, insecureProtocol) => {
-        const base = ['--chain', 'main', '--private-key', privateKey, '--storage-url']
+        const base = ['--chain', 'main', '--storage-url']
         expect(parseCliArguments([...base, `${insecureProtocol}//${domain}`]).kind).toBe('error')
         expect(parseCliArguments([...base, `https://user:secret@${domain}`]).kind).toBe('error')
+      })
+    )
+  })
+
+  test('rejects arbitrary private-key values in process arguments', () => {
+    fc.assert(
+      fc.property(fc.string({ maxLength: 256 }), value => {
+        expect(parseCliArguments(['--chain', 'main', '--private-key', value])).toMatchObject({
+          kind: 'error',
+          message: expect.stringContaining('not accepted in command-line arguments')
+        })
+        expect(parseCliArguments(['--chain', 'main', `--privateKey=${value}`])).toMatchObject({
+          kind: 'error',
+          message: expect.stringContaining('not accepted in command-line arguments')
+        })
       })
     )
   })

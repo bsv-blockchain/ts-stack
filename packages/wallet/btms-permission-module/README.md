@@ -107,8 +107,9 @@ The module:
 - invalidates authorization if the returned transaction cannot be parsed and
   bound;
 - treats malformed or unbound signature payloads conservatively;
-- auto-approves issuance only when an output has the exact
-  `btms_type_issue` tag or its PushDrop asset field is exactly `ISSUE`; and
+- auto-approves issuance only when the action has no caller-supplied inputs and
+  an output has the exact `btms_type_issue` tag or its PushDrop asset field is
+  exactly `ISSUE`; mixed issuance/spend actions require approval; and
 - performs expiry cleanup during requests, without a background timer.
 
 A prompt approval is not a general-purpose wallet grant. Hosts should preserve
