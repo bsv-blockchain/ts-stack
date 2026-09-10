@@ -1,0 +1,536 @@
+{
+  "version": 1,
+  "provenance": "Synthetic S01 logical contract; SHA256 expectations calculated independently with Python hashlib and UTF-8 byte framing. No database durability or protocol activation evidence.",
+  "identities": [
+    {
+      "name": "unsorted-topics",
+      "identity": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "txid": "1111111111111111111111111111111111111111111111111111111111111111",
+        "mode": "live",
+        "contextDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "topics": [
+          {
+            "topic": "tm_z",
+            "policyId": "v1"
+          },
+          {
+            "topic": "tm_a",
+            "policyId": "v2"
+          }
+        ]
+      },
+      "digest": "c5f5a8fd3e13865abb215aca4e43b6a55b08573d5448aecc7d50111c0b8d3688"
+    },
+    {
+      "name": "historical-mode",
+      "identity": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "txid": "1111111111111111111111111111111111111111111111111111111111111111",
+        "mode": "historical",
+        "contextDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "topics": [
+          {
+            "topic": "tm_z",
+            "policyId": "v1"
+          },
+          {
+            "topic": "tm_a",
+            "policyId": "v2"
+          }
+        ]
+      },
+      "digest": "71ac68769556e6b6ca885588f7f6533bb716e9b98ce6dad59e1618174937958a"
+    },
+    {
+      "name": "utf8-order",
+      "identity": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "txid": "1111111111111111111111111111111111111111111111111111111111111111",
+        "mode": "live",
+        "contextDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "topics": [
+          {
+            "topic": "𐀀",
+            "policyId": "policy:1"
+          },
+          {
+            "topic": "",
+            "policyId": "policy:2"
+          }
+        ]
+      },
+      "digest": "8a8dbf7a4a5422a15f4e36856a1feda982ae65b6ad92dd0aaecd753e157ebd98"
+    },
+    {
+      "name": "framed-delimiters",
+      "identity": {
+        "scope": {
+          "network": "test:net",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "n:1"
+        },
+        "txid": "1111111111111111111111111111111111111111111111111111111111111111",
+        "mode": "live",
+        "contextDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "topics": [
+          {
+            "topic": "tm:1",
+            "policyId": "a:b"
+          }
+        ]
+      },
+      "digest": "38a2ac07d4e5108c0c60fa37d682580aa6a8be865b8f84347c64b8fc2b734833"
+    }
+  ],
+  "uint64": [
+    {
+      "value": "0",
+      "valid": true
+    },
+    {
+      "value": "1",
+      "valid": true
+    },
+    {
+      "value": "9007199254740993",
+      "valid": true
+    },
+    {
+      "value": "18446744073709551615",
+      "valid": true
+    },
+    {
+      "value": "18446744073709551616",
+      "valid": false
+    },
+    {
+      "value": "01",
+      "valid": false
+    },
+    {
+      "value": "-1",
+      "valid": false
+    },
+    {
+      "value": "+1",
+      "valid": false
+    },
+    {
+      "value": "1.0",
+      "valid": false
+    },
+    {
+      "value": "1e3",
+      "valid": false
+    },
+    {
+      "value": "",
+      "valid": false
+    },
+    {
+      "value": " 1",
+      "valid": false
+    }
+  ],
+  "cursors": [
+    {
+      "name": "negotiated-tuple",
+      "evidence": {
+        "mode": "negotiated-tuple",
+        "pageFinalized": true,
+        "negotiated": true
+      },
+      "advance": true
+    },
+    {
+      "name": "negotiated-tuple-uncommitted",
+      "evidence": {
+        "mode": "negotiated-tuple",
+        "pageFinalized": false,
+        "negotiated": true
+      },
+      "advance": false
+    },
+    {
+      "name": "negotiated-tuple-negotiated-false",
+      "evidence": {
+        "mode": "negotiated-tuple",
+        "pageFinalized": true,
+        "negotiated": false
+      },
+      "advance": false
+    },
+    {
+      "name": "inclusive-since",
+      "evidence": {
+        "mode": "inclusive-since",
+        "pageFinalized": true,
+        "inclusiveSemanticsProven": true,
+        "equalScoreDrained": true
+      },
+      "advance": true
+    },
+    {
+      "name": "inclusive-since-uncommitted",
+      "evidence": {
+        "mode": "inclusive-since",
+        "pageFinalized": false,
+        "inclusiveSemanticsProven": true,
+        "equalScoreDrained": true
+      },
+      "advance": false
+    },
+    {
+      "name": "inclusive-since-inclusiveSemanticsProven-false",
+      "evidence": {
+        "mode": "inclusive-since",
+        "pageFinalized": true,
+        "inclusiveSemanticsProven": false,
+        "equalScoreDrained": true
+      },
+      "advance": false
+    },
+    {
+      "name": "inclusive-since-equalScoreDrained-false",
+      "evidence": {
+        "mode": "inclusive-since",
+        "pageFinalized": true,
+        "inclusiveSemanticsProven": true,
+        "equalScoreDrained": false
+      },
+      "advance": false
+    },
+    {
+      "name": "full-resync",
+      "evidence": {
+        "mode": "full-resync",
+        "pageFinalized": true,
+        "noSkipSemanticsProven": true,
+        "resyncCompleted": true
+      },
+      "advance": true
+    },
+    {
+      "name": "full-resync-uncommitted",
+      "evidence": {
+        "mode": "full-resync",
+        "pageFinalized": false,
+        "noSkipSemanticsProven": true,
+        "resyncCompleted": true
+      },
+      "advance": false
+    },
+    {
+      "name": "full-resync-noSkipSemanticsProven-false",
+      "evidence": {
+        "mode": "full-resync",
+        "pageFinalized": true,
+        "noSkipSemanticsProven": false,
+        "resyncCompleted": true
+      },
+      "advance": false
+    },
+    {
+      "name": "full-resync-resyncCompleted-false",
+      "evidence": {
+        "mode": "full-resync",
+        "pageFinalized": true,
+        "noSkipSemanticsProven": true,
+        "resyncCompleted": false
+      },
+      "advance": false
+    },
+    {
+      "name": "unsupported",
+      "evidence": {
+        "mode": "unsupported",
+        "pageFinalized": true
+      },
+      "advance": false
+    },
+    {
+      "name": "unsupported-uncommitted",
+      "evidence": {
+        "mode": "unsupported",
+        "pageFinalized": false
+      },
+      "advance": false
+    }
+  ],
+  "leases": [
+    {
+      "name": "current",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": true
+    },
+    {
+      "name": "expired",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "1000",
+      "valid": false
+    },
+    {
+      "name": "chain-reorg",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740994",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": false
+    },
+    {
+      "name": "same-block-history",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "6",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": false
+    },
+    {
+      "name": "replaced-worker",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "8",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": false
+    },
+    {
+      "name": "different-peer",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-b",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": false
+    },
+    {
+      "name": "different-node",
+      "expected": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-a"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "current": {
+        "scope": {
+          "network": "test",
+          "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nodeId": "node-b"
+        },
+        "topic": "tm_a",
+        "peerId": "peer-a",
+        "jobId": "job-a",
+        "chainEpoch": "9007199254740993",
+        "topicHistoryGeneration": "5",
+        "leaseToken": "7",
+        "expiresAtMs": "1000"
+      },
+      "nowMs": "999",
+      "valid": false
+    }
+  ],
+  "outputIndices": [
+    {
+      "value": "0",
+      "valid": true
+    },
+    {
+      "value": "4294967295",
+      "valid": true
+    },
+    {
+      "value": "4294967296",
+      "valid": false
+    },
+    {
+      "value": "9007199254740992",
+      "valid": false
+    },
+    {
+      "value": "9007199254740993",
+      "valid": false
+    },
+    {
+      "value": "01",
+      "valid": false
+    },
+    {
+      "value": "-1",
+      "valid": false
+    }
+  ]
+}
