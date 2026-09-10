@@ -292,6 +292,7 @@ describe('validatePayment', () => {
       [HEADERS.TIME, '9007199254740992'],
       [HEADERS.VOUT, '0junk'],
       [HEADERS.VOUT, '-1'],
+      [HEADERS.VOUT, '00'],
       [HEADERS.VOUT, '01']
     ] as const) {
       const headers = { ...validHeaders(beefBase64, now), [header]: value }
