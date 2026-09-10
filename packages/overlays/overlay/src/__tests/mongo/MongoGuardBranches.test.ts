@@ -154,6 +154,14 @@ describe('Mongo payload store input and operation guards', () => {
       store.publish({
         kind: 'outbox-data',
         digest,
+        byteLength: '18446744073709551616',
+        bytes: bytes()
+      })
+    ).rejects.toThrow('Invalid Mongo payload byte length')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest,
         byteLength: '2',
         bytes: bytes(),
         txid: 'bb'.repeat(32)
