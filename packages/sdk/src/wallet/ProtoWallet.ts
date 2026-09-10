@@ -36,6 +36,23 @@ import {
 } from './Wallet.interfaces.js'
 import { constantTimeEquals, toArray } from '../primitives/utils.js'
 
+async function hashSignatureData(data: number[]): Promise<number[]> {
+  const subtle = globalThis.crypto?.subtle
+  if (!Array.isArray(data) || data.length < 65536 || subtle === undefined) {
+    return Hash.sha256(data)
+  }
+  // Snapshot before yielding: a caller changing its array while native hashing
+  // runs must not change the bytes used by a fallback after a host failure.
+  const bytes = new Uint8Array(data)
+  try {
+    const digest = new Uint8Array(await subtle.digest('SHA-256', bytes))
+    if (digest.length === 32) return Array.from(digest)
+  } catch {
+    // Some browser/mobile hosts expose Web Crypto without supporting digest.
+  }
+  return Hash.sha256(bytes)
+}
+
 function keyDeriverOrThrow(keyDeriver?: KeyDeriverApi): KeyDeriverApi {
   return (
     keyDeriver ??
@@ -266,7 +283,7 @@ export class ProtoWallet {
       throw new Error('args.data or args.hashToDirectlySign must be valid')
     }
 
-    const hash: number[] = args.hashToDirectlySign ?? Hash.sha256(args.data ?? [])
+    const hash: number[] = args.hashToDirectlySign ?? (await hashSignatureData(args.data ?? []))
     const key = derivePrivateKey(
       keyDeriverOrThrow(this.keyDeriver),
       args.protocolID,
@@ -299,7 +316,7 @@ export class ProtoWallet {
       throw new Error('args.data or args.hashToDirectlyVerify must be valid')
     }
 
-    const hash: number[] = args.hashToDirectlyVerify ?? Hash.sha256(args.data ?? [])
+    const hash: number[] = args.hashToDirectlyVerify ?? (await hashSignatureData(args.data ?? []))
     const key = await derivePublicKey(keyDeriverOrThrow(this.keyDeriver), args)
     const parsedSignature = Signature.fromDER(args.signature)
     const backend = isAsyncCryptoDigest(hash) ? readyAsyncCryptoBackend('verifyDigest') : undefined

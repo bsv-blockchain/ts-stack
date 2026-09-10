@@ -147,6 +147,13 @@ export interface WalletStorageProvider extends WalletStorageSync {
 }
 
 export interface WalletStorageSync extends WalletStorageWriter {
+  /** Compact writer checkpoint. Undefined means a legacy remote provider. */
+  getSyncCheckpoint?: (
+    auth: AuthId,
+    storageIdentityKey: string,
+    storageName: string
+  ) => Promise<SyncCheckpoint | undefined>
+
   findOrInsertSyncStateAuth: (
     auth: AuthId,
     storageIdentityKey: string,
@@ -579,7 +586,23 @@ export type SyncStatus = 'success' | 'error' | 'identified' | 'updated' | 'unkno
 
 export type SyncProtocolVersion = '0.1.0'
 
+/** Compact writer progress; omits the durable ID mapping from this response. */
+export interface SyncCheckpoint {
+  syncStateId: number
+  since?: Date
+  offsets: Array<{ name: string, offset: number }>
+}
+
 export interface RequestSyncChunkArgs {
+  /** Request committed progress with the write response; legacy writers ignore it. */
+  includeNextCheckpoint?: boolean
+
+  /**
+   * The writer-local sync state selected when the source provider was
+   * registered. New clients include this to disambiguate legacy databases
+   * that contain multiple rows for a reused storage identity key.
+   */
+  syncStateId?: number
   /**
    * The storageIdentityKey of the storage supplying the update SyncChunk data.
    */
@@ -589,9 +612,9 @@ export interface RequestSyncChunkArgs {
    */
   toStorageIdentityKey: string
 
-  /**
-   * The identity of whose data is being requested
-   */
+  /** Require the writer checkpoint to still match before applying a staged transfer. */
+  requireMatchingCheckpoint?: boolean
+  /** The identity of whose data is being requested. */
   identityKey: string
   /**
    * The max updated_at time received from the storage service receiving the request.
@@ -609,6 +632,12 @@ export interface RequestSyncChunkArgs {
    * The maximum number of items (records) to be returned.
    */
   maxItems: number
+  /**
+   * Include source-side record totals for this `since` window when the
+   * provider can calculate them efficiently. Older providers ignore this
+   * optional hint and remain wire-compatible.
+   */
+  includeTotals?: boolean
   /**
    * For each entity in dependency order, the offset at which to start returning items
    * from `since`.
@@ -630,6 +659,24 @@ export interface RequestSyncChunkArgs {
   offsets: Array<{ name: string, offset: number }>
 }
 
+export interface SyncChunkTotals {
+  totalRecords: number
+  records: {
+    provenTxs: number
+    outputBaskets: number
+    outputTags: number
+    txLabels: number
+    transactions: number
+    outputs: number
+    txLabelMaps: number
+    outputTagMaps: number
+    certificates: number
+    certificateFields: number
+    commissions: number
+    provenTxReqs: number
+  }
+}
+
 /**
  * Result received from remote `WalletStorage` in response to a `RequestSyncChunkArgs` request.
  *
@@ -641,6 +688,9 @@ export interface SyncChunk {
   fromStorageIdentityKey: string
   toStorageIdentityKey: string
   userIdentityKey: string
+
+  /** Optional progress totals requested with `includeTotals`. */
+  totals?: SyncChunkTotals
 
   user?: TableUser
   provenTxs?: TableProvenTx[]
@@ -658,6 +708,9 @@ export interface SyncChunk {
 }
 
 export interface ProcessSyncChunkResult {
+  /** Present only when requested, after the page and checkpoint commit together. */
+  nextCheckpoint?: SyncCheckpoint
+
   done: boolean
   maxUpdated_at: Date | undefined
   updates: number

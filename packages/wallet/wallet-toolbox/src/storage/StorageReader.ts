@@ -105,6 +105,15 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   abstract getTxLabelMapsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableTxLabelMap[]>
   abstract getOutputTagMapsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableOutputTagMap[]>
 
+  /**
+   * Optional efficient source-side totals for synchronization progress.
+   * Providers without a native count implementation omit the metadata rather
+   * than loading every matching record merely to count it.
+   */
+  async getSyncChunkTotals (_args: sdk.RequestSyncChunkArgs, _userId: number): Promise<sdk.SyncChunkTotals | undefined> {
+    return undefined
+  }
+
   async findUserByIdentityKey (key: string): Promise<TableUser | undefined> {
     return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key } }))
   }

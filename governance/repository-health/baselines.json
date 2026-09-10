@@ -14,11 +14,11 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6479,
+    "passed": 6483,
     "skipped": 211,
-    "total": 6690,
-    "vectorFiles": 76,
-    "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
+    "total": 6694,
+    "vectorFiles": 77,
+    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test --runInBand (2026-09-09); 6483 passed, 211 existing skips"
   },
   "testExceptions": {
     "explicitSkipDeclarations": 60,
@@ -322,14 +322,14 @@
     "@bsv/overlay-discovery-services": "2.2.1",
     "@bsv/overlay-express": "2.6.1",
     "@bsv/overlay-topics": "1.7.1",
-    "@bsv/sdk": "2.5.0",
+    "@bsv/sdk": "2.6.0",
     "@bsv/verifast": "0.3.5",
     "@bsv/btms": "1.2.2",
     "@bsv/btms-permission-module": "1.2.0",
     "@bsv/ecpm-permission-module": "0.1.0",
     "@bsv/wallet-relay": "0.4.0",
-    "@bsv/wallet-toolbox-client": "2.12.0",
-    "@bsv/wallet-toolbox-mobile": "2.12.0",
-    "@bsv/wallet-toolbox": "2.12.0"
+    "@bsv/wallet-toolbox-client": "2.13.0",
+    "@bsv/wallet-toolbox-mobile": "2.13.0",
+    "@bsv/wallet-toolbox": "2.13.0"
   }
 }

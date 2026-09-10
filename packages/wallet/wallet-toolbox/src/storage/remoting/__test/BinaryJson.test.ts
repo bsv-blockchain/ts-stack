@@ -23,6 +23,25 @@ describe('binary JSON-RPC encoding', () => {
     expect(decoded.result.bytes).toEqual(bytes)
   })
 
+  it('matches bottom-up reviver behavior for nested marker collisions and mixed arrays', () => {
+    const fixture = {
+      bytes: Array.from({ length: 10000 }, (_, index) => index & 255),
+      nested: [{ raw: new Uint8Array([4, 5]) }, { $bsvBinary: BINARY_ENCODING, data: 'AQID' }],
+      escaped: { $bsvBinary: 'escaped', entries: [['x', new Uint8Array([8])]] }
+    }
+    const text = stringifyJsonRpc(fixture, true)
+    expect(parseJsonRpc(text, true)).toEqual(JSON.parse(text, binaryJsonReviver))
+    const overwritten = '{"$bsvBinary":"escaped","entries":[["x",{"$bsvBinary":"base64-v1","data":"!!!="}],["x",1]]}'
+      .replace('base64-v1', BINARY_ENCODING)
+    expect(() => parseJsonRpc(overwritten, true)).toThrow('Invalid base64')
+    expect(() => JSON.parse(overwritten, binaryJsonReviver)).toThrow('Invalid base64')
+  })
+
+  it('parses deep negotiated JSON without recursive reviver overflow', () => {
+    const text = '{"next":'.repeat(10000) + '1' + '}'.repeat(10000)
+    expect(() => parseJsonRpc(text, true)).not.toThrow()
+  })
+
   it('compacts Node Buffer values after Buffer.toJSON has run', () => {
     const BufferCtor = (globalThis as any).Buffer
     if (BufferCtor == null) return

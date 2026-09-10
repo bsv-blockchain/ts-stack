@@ -783,6 +783,32 @@ export class Services implements WalletServices {
     return r0
   }
 
+  async getValidatedMerklePath(
+    txid: string,
+    validate: (result: GetMerklePathResult) => Promise<void>
+  ): Promise<GetMerklePathResult> {
+    const services = this.getMerklePathServices
+    const calls = services.allServicesToCall
+    const start = services.index
+    let error: WalletError | undefined
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[(start + i) % calls.length]
+      try {
+        const result = await call.service(txid, this)
+        if (result.merklePath == null) {
+          throw result.error ?? new WERR_INVALID_OPERATION('Proof provider returned no Merkle path')
+        }
+        await validate(result)
+        services.addServiceCallSuccess(call)
+        return result
+      } catch (cause) {
+        error = WalletError.fromUnknown(cause)
+        services.addServiceCallError(call, error)
+      }
+    }
+    return { error, notes: [] }
+  }
+
   async updateFiatExchangeRates(
     targetCurrencies: FiatCurrencyCode[],
     updateMsecs?: number

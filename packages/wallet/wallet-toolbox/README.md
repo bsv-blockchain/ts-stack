@@ -6,6 +6,27 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Backup and sync: tested results
+
+**Live E2E testing used a large wallet in the native desktop client**, covering
+complete local copies, restart recovery, and repeat sync. Transfer size and oversized-record recovery were
+measured separately with synthetic fixtures. The latest proof-recovery follow-up
+has synthetic HTTP and read-only source-data validation; its live full-backup
+retest is pending.
+
+| Test                         | Verified result                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full native desktop restores | **Two complete copies; identical entity counts.** Second run: **12m 50s vs 16m 30s (22.3% less time)**.                                                 |
+| Retained local backup        | Completed after cancellation, a connectivity pause, and restart recovery; all **12 entity-store counts preserved** on another restart.                  |
+| Local reads and repeat sync  | Transaction/output reads passed; sampled transaction bytes matched; repeat sync made **0 inserts, 0 updates**.                                          |
+| Transfer size                | **62.7% smaller** encoded byte payload in a synthetic fixture.                                                                                          |
+| Oversized single record      | **7 MiB restored in real browser IndexedDB**, matching SHA-256; interrupted upload resumed, corrupt download rejected, repeat sync unchanged.           |
+| Automated integration        | Authenticated HTTP backup/restore, interrupted pages, lost acknowledgements, binary byte round-trips, user isolation, and legacy compatibility covered. |
+
+Timing compares successive candidates, not a controlled comparison against upstream
+`main`. Byte verification was sampled, not database-wide. See
+[test methods and limits](#sync-performance-and-recovery) for details.
+
 ## Overview
 
 The Wallet Toolbox is the reference implementation of the BRC-100 wallet interface. It connects the BSV SDK's cryptographic primitives to real storage backends, network services, and signing flows so that application developers don't have to wire these layers together themselves.
@@ -54,10 +75,141 @@ The toolbox publishes three npm packages from this repo:
 - **[`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client)** — Browser build; excludes Node-only backends (Knex/SQLite/MySQL)
 - **[`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)** — Mobile build; remote wallet storage plus portable local ChainTracks components and adapter contracts
 
+### Sync performance and recovery
+
+Sync pages start at 64 records and adapt after successful commits toward a
+five-second page budget. Proof-bearing pages cap growth at 128 records; cheap
+metadata pages can grow to 1,000, while provider byte/item ceilings still apply.
+The server checks at most eight proofs concurrently and waits for all started
+checks to settle on failure before rejecting the page. Every proof still passes
+transaction, Merkle path, active-root and active-header validation before a merge.
+An authenticated HTTP regression covers 250 synthetic proofs and confirms that
+an invalid follow-up page cannot change the committed checkpoint. Stale proofs
+can be reconciled through another provider, but only after the replacement passes
+the same transaction, membership and active-chain checks. Transaction bytes,
+wallet references and source cursor timestamps are preserved. Corrected destination
+proofs receive a fresh local timestamp for incremental replication. Unverifiable replacements
+stop the page with a recovery message; no record is silently skipped.
+
+A read-only deployment-host sample of 250 proofs took 42.6 seconds with sequential
+validation and 5.58 seconds with bounded concurrency, with the same 250 root and
+250 header checks. This measures validation only, not full-copy throughput.
+Timeouts remain possible during dependency outages; writes are never blindly
+replayed, and resumed sync rereads durable destination progress.
+
+The adaptive page controller and optional validated-proof lookup add a small
+client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.md#artifact-cost-requiring-review)
+include the combined upstream security fixes. These are explicit feature costs;
+the RPC validation coordinator remains excluded from browser/mobile bundles.
+
+The transfer extension is an **unpublished 2.13.0 candidate**. Published 2.12.0
+has no record-transfer methods. Check exact build provenance and authenticated
+runtime capabilities, not a version label alone. An oversized record on a legacy
+source cannot be rescued by upgrading only its destination; upgrade the source
+before retrying. Records exceeding the negotiated 64 MiB frame limit fail safely
+without being skipped or advancing their checkpoint.
+
+Large individual records can use the negotiated
+[bounded transfer protocol](./docs/sync-transfer.md), with durable staging,
+integrity verification and checkpoint replay protection. Its authenticated
+HTTP/SQLite/IndexedDB regression exercises a 7 MiB binary record, an interrupted
+upload across client/server restart, a lost part acknowledgement, corrupted
+download rejection and a verified restore followed by an unchanged resync.
+The current frame limit is 64 MiB; legacy providers must be upgraded to use it.
+It also passes with a one-second delay on every authenticated transport send;
+that models added latency, not a measured bandwidth limit or a real mobile network.
+These synthetic regressions are separate from the large-wallet timing evidence above.
+
 Wallet storage replication applies each received page and its durable sync
 checkpoint in one provider transaction. IndexedDB and Knex therefore avoid
 per-record transaction startup, and a failed page rolls back without advancing
-the checkpoint. The sync wire format and persisted schemas are unchanged.
+the checkpoint. Sources fill each bounded page with adaptive, size-aware reads,
+and Knex storage adds user-scoped proof lookup indexes. Clients may set
+`includeTotals` on a sync-chunk request to receive optional source record totals
+for exact progress reporting. Older providers ignore the hint, and totals are
+not counted unless requested. New clients also send the writer-local sync-state
+identifier selected during provider registration. New providers use it to
+disambiguate legacy duplicate checkpoints, while either side remains compatible
+with older protocol peers. When a provider rejects a sync page because its
+serialized RPC response exceeds the service ceiling, remote clients retry the
+read-only request with a smaller chunk budget and remember the working limit
+for the rest of the session.
+
+IndexedDB schema version 6 adds a non-unique transaction-ID/user index. Sync
+identity lookups, commissions, and relation maps use selective indexes or exact
+keys instead of scanning the growing wallet for each row. Proof batch checks
+resolve requested transaction IDs through the existing index, preserving primary-key
+ordering, pagination, and proof-validation rules. Existing bytes and
+legacy duplicate transaction IDs are preserved. Databases upgrade automatically;
+older clients that open schema version 5 cannot reopen an upgraded database, so
+keep a compatible client when retaining a local backup.
+
+Updated servers advertise `syncCheckpointVersion: 1` in runtime settings.
+Compatible clients fetch a compact checkpoint once, then use the checkpoint
+returned by each committed page. The complete ID mapping remains durable on
+the writer and is no longer downloaded before every page. Older providers use
+the existing full-state path; authentication, gateway, and malformed checkpoint
+errors remain failures rather than compatibility fallbacks. A retry starts
+from the writer's durable checkpoint. `includeNextCheckpoint` is optional, and
+legacy requests retain their existing response shape.
+
+When a reader negotiates binary JSON, large schema-defined sync byte fields
+are encoded as base64 instead of decimal number arrays. Legacy readers retain
+the existing arrays; unrelated numeric fields are never reinterpreted as bytes.
+Clients with `binaryRequests: true` use the same compact representation for
+sync uploads after the server negotiates binary request support. The default
+request setting is unchanged.
+Binary JSON parsing preserves the existing marker and escaping rules while
+avoiding a JavaScript reviver callback for every scalar byte. The SDK also
+prevents certificate work or session recovery from dispatching another request
+after the caller's authentication deadline has expired. This does not cancel a
+write already received by a server or automatically replay failed writes.
+
+Run the authenticated candidate-provider sync benchmark with:
+
+```sh
+pnpm bench:storage-sync
+```
+
+Set `WALLET_TOOLBOX_BENCH_MYSQL=true`, `MYSQL_CONNECTION`, and optionally
+`WALLET_TOOLBOX_BENCH_MYSQL_DATABASE` to exercise the same fixture through a
+MySQL-backed provider. The benchmark reports HTTP p50/p95 latency and the
+source-query limits used to fill a 250-record page; it is observational rather
+than a cross-machine latency SLA. It also compares the old reviver with the
+current parser on identical synthetic data and measures checkpoint size. On
+one local Node 24 run, a 1 MiB numeric-array fixture (3.74 MB of JSON) measured
+501.2 ms versus 10.1 ms median parsing time across nine alternating samples.
+A synthetic 50,000-entry mapping occupied 678,850 bytes; its compact checkpoint
+occupied 432 bytes. These are CPU and payload measurements, not a claim of the
+same end-to-end network speedup. Encoding the synthetic byte field through
+the negotiated sync codec reduced its JSON payload from 3,743,771 to 1,398,163
+bytes (62.7%).
+
+Retained integration tests cover authenticated HTTP backup and complete restore
+into a fresh IndexedDB store, multipage progression, no-change resync,
+interruption/resume, user isolation, malformed checkpoints, and legacy-provider
+fallback. Live deployment results must be reported separately with the tested
+revision and scope; a partial page sample is not a full restore verification.
+
+A native desktop integration run against candidate runtime
+`a88d18abf14b75a3227016bfd947d5a08b3ee236` completed a full remote-to-local
+copy in 769.5 seconds, compared with 990.3 seconds for the preceding candidate
+run with identical entity counts. Remote reads took 619.2 seconds, local writes
+146.0 seconds, and measurement 4.1 seconds. Proof-page writes fell from 75.7 to
+9.8 seconds after indexed preflight lookup. These are sequential observations,
+not a controlled full-wallet comparison against upstream main. The all-state
+100 ms timer probe reported p95 delay of 908 ms; foreground focus was not recorded,
+so this does not establish foreground UI latency. Separate 90-second native
+foreground probes during a retained backup measured p95 delays of 5 ms for
+transactions, 8 ms for outputs, 10 ms for heavier output pages, and 5 ms for
+proof requests. Their maxima were 60, 51, 298, and 62 ms respectively; these
+samples are not a whole-copy latency guarantee. The retained-backup test also
+verified cancellation at a page boundary and automatic checkpoint recovery after
+a full native app restart. Development testing required refreshing Vite's cached
+linked dependencies to load the candidate schema consistently. See
+[PR486](https://github.com/bsv-blockchain/ts-stack/pull/486) for final integration
+completion and release evidence. Personal deployment and wallet details are
+retained privately, outside this repository.
 
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages

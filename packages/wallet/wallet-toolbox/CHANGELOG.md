@@ -6,6 +6,16 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Integrate upstream security corrections without dropping the sync recovery contracts.
+  Record combined browser/mobile artifact costs and limits in the sync transfer guide.
+
+- Validate replacement proofs across providers before reconciling stale RPC sync metadata; preserve raw transactions and checkpoints on failure.
+
+- Start sync copies conservatively and adapt page work after committed responses.
+  Validate at most eight remote proofs concurrently, draining failure work before
+  rejecting the page. Preserve all proof and checkpoint checks. Record-transfer
+  candidates now use 2.13.0 to distinguish them from published 2.12.0.
+
 - Require an affirmative certifier-signature verification result before
   storing directly acquired or issuer-returned certificates. Identity overlay
   results are verified before decryption and trust scoring, so forged
@@ -30,6 +40,44 @@ attention to changes that materially alter behavior or extend functionality.
   a clean missing-token result only for a server-declared pending registration,
   finalizes after successful publication, repairs a lost acknowledgement on the
   next login, and preserves fail-closed continuity for active and legacy WABs.
+- Add optional bounded sync transfers for oversized records, authenticated pieces,
+  durable Knex staging, full-frame SHA-256 verification, and stale-checkpoint
+  rejection before merging. Add the two staging tables through migration
+  `2026-09-09-001`; reverse only that migration before restarting older code. Frames are limited
+  to 64 MiB and ordinary pages keep their existing transport. See
+  [the transport and migration guide](./docs/sync-transfer.md).
+
+- Upgrade IndexedDB to schema version 6 with a non-unique transaction-ID/user
+  index. Use existing reference, reclaim, commission, and relation keys for
+  sync lookups, avoiding repeated scans as a local wallet grows. Preserve
+  user filtering, pagination, existing bytes, and duplicate transaction IDs.
+  Proof-batch preflight checks resolve only requested transaction IDs through
+  the existing index, preserving proof validation and primary-key ordering.
+  Older clients requesting schema version 5 cannot open the upgraded database.
+
+- Add negotiated compact sync checkpoints, reusing committed page progress while
+  retaining complete writer-side ID mappings and the legacy provider fallback.
+  Avoid per-scalar reviver callbacks when decoding binary JSON pages without
+  changing marker escaping or byte semantics. Use the already negotiated binary
+  codec for large schema-defined sync response byte arrays, reducing wire and
+  authentication payload size while preserving legacy arrays and unrelated data.
+  Retain authenticated full-copy,
+  resume, malformed-input, and transport CPU/payload regression coverage.
+  Local packed measurements are 1,701,711 raw / 401,038 gzip / 314,272 Brotli
+  bytes (Vite), 1,327,368 / 364,550 / 293,224 (esbuild),
+  1,753,648 / 445,136 / 345,369 (Metro), and
+  3,557,663 / 1,426,740 / 1,121,821 (Hermes). The raw ceilings become
+  1,702,000, 1,327,500, 1,755,000, and 3,558,500 respectively.
+  Vite and esbuild gzip ceilings increase to 402,000 and 366,000 bytes.
+  Hosted Linux measures 365,818 esbuild gzip bytes and 1,445,624 Hermes gzip
+  bytes; the Hermes gzip ceiling becomes 1,446,500.
+  The esbuild Brotli ceiling is 293,750 bytes. Asynchronous platform hashing
+  for large SDK signature payloads brings the Vite Brotli ceiling to 314,500
+  bytes, the Hermes raw ceiling to 3,560,000 bytes, and its Brotli ceiling to
+  1,125,000 bytes (measured 1,124,446); other compressed ceilings remain unchanged.
+  The added portable sync/progress and decoding paths account for
+  the increase; no Node-only backend is introduced into portable bundles.
+
 - Keep Argon2id-backed UMP v3 wallets available in React Native and other
   runtimes without WebAssembly by falling back to an asynchronously yielding,
   standards-compatible JavaScript implementation. The same KDF parameters and
@@ -135,6 +183,25 @@ attention to changes that materially alter behavior or extend functionality.
   one provider transaction. Large IndexedDB replications avoid thousands of
   transaction startup/commit cycles, failed pages roll back without advancing
   the checkpoint, and abort cleanup preserves the original storage error.
+
+- Fill wallet-storage sync pages with adaptive, size-aware source queries and
+  add composite SQL indexes for user-scoped proof lookups. Sync clients may
+  request optional source record totals for exact progress and ETA displays;
+  older clients and providers remain wire-compatible and do not incur count
+  queries unless totals are requested. Remote clients also recover from a
+  provider's HTTP 413 response ceiling by retrying the read-only sync request
+  with a smaller chunk budget and reusing the working limit for later pages.
+  Runtime validation rejects malformed remote totals, and MySQL rollback
+  restores the foreign-key support index before removing the new composites.
+  The retained authenticated candidate-provider benchmark fills a 250-record
+  proof page with three source reads (`10, 80, 160`) on SQLite and MySQL.
+  Clean macOS fixtures measure Vite at 1,609,916 raw, 379,552 gzip, and 297,188
+  Brotli bytes; esbuild at 1,254,827 raw, 344,883 gzip, and 277,729 Brotli
+  bytes; Metro at 1,662,714 raw, 419,740 gzip, and 326,785 Brotli bytes; and
+  Hermes at 3,371,236 raw, 1,347,950 gzip, and 1,061,946 Brotli bytes. The
+  reviewed ceilings advance to 1,611,000/380,000/297,500 for Vite,
+  1,256,000/346,000/278,200 for esbuild, and 3,373,000/1,368,000 raw/gzip for
+  Hermes. Metro and the Hermes Brotli ceiling remain unchanged.
 
 - Make verified phone changes interruption-safe by staging the replacement key
   in WAB, publishing the UMP rotation, and then finalizing WAB. Authentication
