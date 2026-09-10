@@ -118,6 +118,11 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.
 
+Identity publication rejects a certificate unless its certifier signature
+verifies affirmatively. `GlobalKVStore` likewise treats overlay responses as
+untrusted and returns only entries with a valid controller signature; a
+verification error or `valid: false` result is rejected.
+
 - **Distributed Storage**: Scalable and secure distributed data storage solutions to support blockchain applications.
 
 - **Wallet Interface**: Standardized interface for wallet operations, supporting multiple cryptocurrencies and protocols.

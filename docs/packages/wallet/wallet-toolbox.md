@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.11.1'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+version: '2.12.0'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -40,6 +40,19 @@ presentation key. The same registered number is valid. A pin is ignored unless
 normal verified lineage resolution remains ambiguous and the outpoint is one
 of the wallet's verified candidates. Applications must persist
 `saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
+
+Snapshots intentionally carry everything needed to restore sensitive wallet
+state; possession of a snapshot is possession of the wallet. Store each
+complete snapshot only in an OS Keychain, hardware-backed keystore, or
+comparably trusted secret store. Remote storage and credential-bearing Arcade
+SSE require HTTPS except for explicit loopback development, and transport
+debugging cannot log callback tokens or API credentials.
+
+Spending approvals apply to one operation per prompt and are never cached or
+coalesced. Spending-token accounting reads every action page before authorizing
+a spend. Certificate handling also fails closed: direct and issuer-mediated
+acquisition require a valid certifier signature before storage, and identity
+discovery verifies overlay certificates before decrypting or trust-scoring them.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related

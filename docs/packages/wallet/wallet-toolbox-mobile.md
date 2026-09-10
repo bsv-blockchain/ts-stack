@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.11.1'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+version: '2.12.0'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -26,6 +26,14 @@ The built-in BRC-177 `p nosend expiry` module delegates durable expiry
 monitoring and pre-signed reclaim submission to its 2.11-compatible active
 remote storage service, so mobile process suspension does not restart or lose
 an expiry.
+Wallet snapshots are wallet-equivalent secrets and belong only in the iOS
+Keychain, Android Keystore-backed encrypted storage, or a comparably trusted
+store, never ordinary AsyncStorage, logs, analytics, or unprotected backups.
+Remote storage and credential-bearing Arcade SSE require HTTPS except for
+explicit loopback development, and transport debugging cannot expose
+credentials. Spending approvals are never cached or coalesced; certificate
+acquisition and identity discovery require valid certifier signatures before
+storage or trust scoring.
 Related mobile `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

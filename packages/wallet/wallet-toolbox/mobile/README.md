@@ -62,7 +62,7 @@ import { KeyDeriver, PrivateKey } from '@bsv/sdk'
 const chain = 'main'
 const keyDeriver = new KeyDeriver(new PrivateKey(privateKeyHex, 'hex'))
 
-// Remote storage over HTTP is the default mobile-safe backend.
+// Remote storage over HTTPS is the default mobile-safe backend.
 const storageManager = new WalletStorageManager(keyDeriver.identityKey)
 await storageManager.addWalletStorageProvider(new StorageClient(keyDeriver, 'https://storage.example.com'))
 await storageManager.makeAvailable()
@@ -115,6 +115,21 @@ Spin up a minimal wallet that watches for inbound payments via a remote storage 
 | Node-only filesystem and `os` helpers | Not available on mobile                                       |
 
 The mobile entry includes `Wallet`, `WalletSigner`, `WalletStorageManager`, the mobile `StorageClient`, `Services`, `Monitor`, `WalletPermissionsManager`, `WalletSettingsManager`, `ArcSSEClient`, and related mobile-safe APIs. It does not export `StorageIdb`, `StorageKnex`, `SetupClient`, or test-only chain implementations.
+
+## Wallet snapshot security
+
+Wallet-manager snapshots contain root key material and intentionally include
+the decryption key needed by their self-contained format, so access to the
+snapshot is access to the wallet. Store the complete snapshot in the iOS Keychain, Android
+Keystore-backed encrypted storage, or a comparably trusted secret store. Do not
+use ordinary AsyncStorage, logs, analytics, crash reports, clipboard data, or
+unprotected device/cloud backups. Treat any snapshot that leaves trusted
+storage as a wallet-credential compromise and rotate the affected wallet.
+
+`StorageClient` and credential-bearing Arcade SSE clients require HTTPS for
+remote endpoints. Plain HTTP is accepted only for explicit loopback hosts
+during development. SSE dependency debug logging is disabled so callback
+tokens and authorization headers do not reach device logs.
 
 See the [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) README for full documentation.
 

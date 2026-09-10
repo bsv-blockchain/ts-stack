@@ -1,7 +1,9 @@
 import type { WalletInterface } from '@bsv/sdk'
 import { StorageClient, Wallet, WalletStorageManager } from '@bsv/wallet-toolbox'
+import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createPromptSession,
   createDestinationWallet,
   DEFAULT_STORAGE_URL,
   type CliIO,
@@ -23,6 +25,14 @@ function makeIO(): CliIO & { logs: unknown[][]; errors: unknown[][] } {
     errors,
     log: (...values) => logs.push(values),
     error: (...values) => errors.push(values)
+  }
+}
+
+function makeSecretPrompt(privateKey = VALID_PRIVATE_KEY): PromptSession {
+  return {
+    ask: vi.fn(),
+    askSecret: vi.fn().mockResolvedValue(privateKey),
+    close: vi.fn()
   }
 }
 
@@ -73,48 +83,53 @@ describe('parseCliArguments', () => {
     expect(parseCliArguments([])).toEqual({ kind: 'interactive' })
   })
 
-  it('requires a chain and private key', () => {
+  it('requires a chain and rejects private keys in process arguments', () => {
     expect(parseCliArguments(['--private-key', VALID_PRIVATE_KEY])).toMatchObject({
       kind: 'error',
       message: expect.stringContaining('--chain')
     })
-    expect(parseCliArguments(['--chain', 'main'])).toMatchObject({
+    expect(
+      parseCliArguments(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY])
+    ).toMatchObject({
       kind: 'error',
-      message: expect.stringContaining('--private-key')
+      message: expect.stringContaining('not accepted in command-line arguments')
+    })
+    expect(
+      parseCliArguments(['--chain', 'main', `--private-key=${VALID_PRIVATE_KEY}`])
+    ).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('not accepted in command-line arguments')
+    })
+    expect(parseCliArguments(['--chain', 'main', '--privateKey', VALID_PRIVATE_KEY])).toMatchObject(
+      {
+        kind: 'error',
+        message: expect.stringContaining('not accepted in command-line arguments')
+      }
+    )
+    expect(
+      parseCliArguments(['--chain', 'main', `--privateKey=${VALID_PRIVATE_KEY}`])
+    ).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('not accepted in command-line arguments')
+    })
+    expect(parseCliArguments(['--chain'])).toEqual({
+      kind: 'error',
+      message: 'Missing required argument: --chain'
     })
   })
 
-  it('rejects invalid chains, keys, URLs, credentials, and amounts', () => {
-    const base = ['--chain', 'main', '--private-key', VALID_PRIVATE_KEY]
-    expect(parseCliArguments(['--chain', 'stn', '--private-key', VALID_PRIVATE_KEY])).toMatchObject(
-      {
-        kind: 'error',
-        message: expect.stringContaining('Invalid network')
-      }
-    )
-    expect(parseCliArguments(['--chain', 'main', '--private-key', 'bad'])).toMatchObject({
+  it('rejects invalid chains, URLs, credentials, and amounts', () => {
+    const base = ['--chain', 'main']
+    expect(parseCliArguments(['--chain', 'stn'])).toMatchObject({
       kind: 'error',
-      message: expect.stringContaining('Invalid private key')
-    })
-    expect(parseCliArguments(['--chain', 'main', '--private-key', '0'.repeat(64)])).toMatchObject({
-      kind: 'error',
-      message: expect.stringContaining('Invalid private key')
-    })
-    expect(
-      parseCliArguments([
-        '--chain',
-        'main',
-        '--private-key',
-        'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'
-      ])
-    ).toMatchObject({
-      kind: 'error',
-      message: expect.stringContaining('Invalid private key')
+      message: expect.stringContaining('Invalid network')
     })
     for (const url of [
       'http://store.example.com',
       'not-a-url',
-      'https://user:pass@store.example.com'
+      'https://user:pass@store.example.com',
+      'https://user@store.example.com',
+      'https://:pass@store.example.com'
     ]) {
       expect(parseCliArguments([...base, '--storage-url', url])).toMatchObject({
         kind: 'error',
@@ -134,27 +149,26 @@ describe('parseCliArguments', () => {
       parseCliArguments([
         '--network',
         'test',
-        '--privateKey',
-        VALID_PRIVATE_KEY,
         '--storageURL',
         'https://storage.example.com',
         '--satoshis',
         '1000'
       ])
     ).toEqual({
-      kind: 'run',
+      kind: 'prompt-key',
       options: {
         chain: 'test',
         storageURL: 'https://storage.example.com',
-        privateKey: VALID_PRIVATE_KEY,
         amount: 1000
       }
     })
-    expect(
-      parseCliArguments(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY])
-    ).toMatchObject({
-      kind: 'run',
+    expect(parseCliArguments(['--chain', 'main'])).toMatchObject({
+      kind: 'prompt-key',
       options: { storageURL: DEFAULT_STORAGE_URL, amount: 0 }
+    })
+    expect(parseCliArguments(['--chain', 'test', '--satoshis', ''])).toEqual({
+      kind: 'prompt-key',
+      options: { chain: 'test', storageURL: DEFAULT_STORAGE_URL, amount: 0 }
     })
   })
 })
@@ -252,6 +266,7 @@ describe('fundWallet', () => {
       })
     )
     expect(io.logs.flat().join(' ')).toContain('abc123')
+    expect(io.logs.flat().join(' ')).toContain('Wallet funded! {"accepted":true}')
   })
 
   it('fails safely when the local wallet is unavailable or returns no transaction', async () => {
@@ -280,35 +295,93 @@ describe('runCli', () => {
 
   it('runs validated CLI arguments and reports funding failures', async () => {
     const success = makeRuntime()
+    const successPrompt = makeSecretPrompt()
     expect(
-      await runCli(
-        ['--chain', 'main', '--private-key', VALID_PRIVATE_KEY],
-        success.dependencies,
-        makeIO()
-      )
+      await runCli(['--chain', 'main'], success.dependencies, makeIO(), () => successPrompt)
     ).toBe(0)
     expect(success.dependencies.createDestinationWallet).toHaveBeenCalledOnce()
+    expect(successPrompt.askSecret).toHaveBeenCalledOnce()
 
     const failed = makeRuntime()
     vi.mocked(failed.dependencies.createDestinationWallet).mockRejectedValueOnce(
       new Error('storage unavailable')
     )
     const io = makeIO()
-    expect(
-      await runCli(['--chain', 'main', '--private-key', VALID_PRIVATE_KEY], failed.dependencies, io)
-    ).toBe(1)
+    const failedPrompt = makeSecretPrompt()
+    expect(await runCli(['--chain', 'main'], failed.dependencies, io, () => failedPrompt)).toBe(1)
     expect(io.errors.flat().join(' ')).toContain('storage unavailable')
+  })
+
+  it('rejects invalid private keys obtained from the secure prompt', async () => {
+    for (const privateKey of ['bad', 'g'.repeat(64), '0'.repeat(64), 'f'.repeat(64)]) {
+      const runtime = makeRuntime()
+      const io = makeIO()
+      expect(
+        await runCli(['--chain', 'main'], runtime.dependencies, io, () =>
+          makeSecretPrompt(privateKey)
+        )
+      ).toBe(1)
+      expect(io.errors.flat().join(' ')).toContain('Invalid private key')
+      expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+    }
+  })
+
+  it('reports cancellation while prompting for a private key', async () => {
+    const runtime = makeRuntime()
+    const io = makeIO()
+    const prompt = makeSecretPrompt()
+    vi.mocked(prompt.askSecret).mockRejectedValueOnce('input closed')
+
+    expect(await runCli(['--chain', 'main'], runtime.dependencies, io, () => prompt)).toBe(1)
+    expect(io.errors.flat().join(' ')).toContain('input closed')
+    expect(prompt.close).toHaveBeenCalledOnce()
+    expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+  })
+
+  it('validates every interactive option before funding', async () => {
+    const cases: Array<{ answers: string[]; secret: string; message: string }> = [
+      {
+        answers: ['stn', '', ''],
+        secret: VALID_PRIVATE_KEY,
+        message: 'Invalid network: stn. Must be "test" or "main"'
+      },
+      {
+        answers: ['main', 'https://user@store.example.com', ''],
+        secret: VALID_PRIVATE_KEY,
+        message:
+          'Invalid storage URL: https://user@store.example.com. Must be a credential-free HTTPS URL'
+      },
+      {
+        answers: ['main', '', '-1'],
+        secret: VALID_PRIVATE_KEY,
+        message: 'Invalid satoshis: -1. Must be a non-negative safe integer'
+      }
+    ]
+
+    for (const testCase of cases) {
+      const runtime = makeRuntime()
+      const io = makeIO()
+      const prompt: PromptSession = {
+        ask: vi
+          .fn()
+          .mockResolvedValueOnce(testCase.answers[0])
+          .mockResolvedValueOnce(testCase.answers[1])
+          .mockResolvedValueOnce(testCase.answers[2]),
+        askSecret: vi.fn().mockResolvedValue(testCase.secret),
+        close: vi.fn()
+      }
+      expect(await runCli([], runtime.dependencies, io, () => prompt)).toBe(1)
+      expect(io.errors.flat().join(' ')).toContain(testCase.message)
+      expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+      expect(prompt.close).toHaveBeenCalledOnce()
+    }
   })
 
   it('collects interactive defaults, closes the prompt, and validates input', async () => {
     const runtime = makeRuntime()
     const prompt: PromptSession = {
-      ask: vi
-        .fn()
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce(VALID_PRIVATE_KEY)
-        .mockResolvedValueOnce(''),
+      ask: vi.fn().mockResolvedValueOnce('').mockResolvedValueOnce('').mockResolvedValueOnce(''),
+      askSecret: vi.fn().mockResolvedValue(VALID_PRIVATE_KEY),
       close: vi.fn()
     }
     expect(await runCli([], runtime.dependencies, makeIO(), () => prompt)).toBe(0)
@@ -320,14 +393,81 @@ describe('runCli', () => {
     expect(prompt.close).toHaveBeenCalledOnce()
 
     const invalidPrompt: PromptSession = {
-      ask: vi
-        .fn()
-        .mockResolvedValueOnce('main')
-        .mockResolvedValueOnce('')
-        .mockResolvedValueOnce(''),
+      ask: vi.fn().mockResolvedValueOnce('main').mockResolvedValueOnce(''),
+      askSecret: vi.fn().mockResolvedValue(''),
       close: vi.fn()
     }
     expect(await runCli([], runtime.dependencies, makeIO(), () => invalidPrompt)).toBe(1)
     expect(invalidPrompt.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('createPromptSession', () => {
+  function makeTerminal({ raw = false, paused = false } = {}) {
+    const input = new PassThrough()
+    const isPaused = vi.spyOn(input, 'isPaused').mockReturnValue(paused)
+    const pause = vi.spyOn(input, 'pause')
+    const resume = vi.spyOn(input, 'resume')
+    const setRawMode = vi.fn()
+    Object.assign(input, { isTTY: true, isRaw: raw, setRawMode })
+
+    const output = new PassThrough()
+    const write = vi.spyOn(output, 'write')
+    const prompt = createPromptSession(
+      input as unknown as typeof process.stdin,
+      output as unknown as typeof process.stdout
+    )
+    return { input, output, write, isPaused, pause, resume, setRawMode, prompt }
+  }
+
+  it('collects printable input without echoing and restores terminal state', async () => {
+    const { input, write, pause, resume, setRawMode, prompt } = makeTerminal()
+    const secret = prompt.askSecret('Private key: ')
+
+    input.emit('keypress', 'a', { name: 'a', ctrl: false, meta: false })
+    input.emit('keypress', 'b', { name: 'b', ctrl: false, meta: false })
+    input.emit('keypress', '', { name: 'backspace', ctrl: false, meta: false })
+    input.emit('keypress', 'x', { name: 'x', ctrl: true, meta: false })
+    input.emit('keypress', 'y', { name: 'y', ctrl: false, meta: true })
+    input.emit('keypress', 'zz', { name: 'z', ctrl: false, meta: false })
+    input.emit('keypress', '\u001f', { name: 'unknown', ctrl: false, meta: false })
+    input.emit('keypress', '', { name: 'enter', ctrl: false, meta: false })
+
+    await expect(secret).resolves.toBe('a')
+    expect(setRawMode).toHaveBeenNthCalledWith(1, true)
+    expect(setRawMode).toHaveBeenNthCalledWith(2, false)
+    expect(resume).toHaveBeenCalled()
+    expect(pause).not.toHaveBeenCalled()
+    expect(write).toHaveBeenNthCalledWith(1, 'Private key: ')
+    expect(write).toHaveBeenNthCalledWith(2, '\n')
+  })
+
+  it('reads one line when standard input is not a terminal', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const write = vi.spyOn(output, 'write')
+    const prompt = createPromptSession(
+      input as unknown as typeof process.stdin,
+      output as unknown as typeof process.stdout
+    )
+
+    const secret = prompt.askSecret('Private key: ')
+    input.write('from-pipe\n')
+
+    await expect(secret).resolves.toBe('from-pipe')
+    expect(write).toHaveBeenCalledWith('Private key: ')
+  })
+
+  it('cancels on control-c and restores a paused raw terminal', async () => {
+    const { input, write, pause, setRawMode, prompt } = makeTerminal({ raw: true, paused: true })
+    const secret = prompt.askSecret('Private key: ')
+
+    input.emit('keypress', '\u0003', { name: 'c', ctrl: true, meta: false })
+
+    await expect(secret).rejects.toThrow('Private key input cancelled')
+    expect(setRawMode).toHaveBeenNthCalledWith(1, true)
+    expect(setRawMode).toHaveBeenNthCalledWith(2, true)
+    expect(pause).toHaveBeenCalledOnce()
+    expect(write).toHaveBeenLastCalledWith('\n')
   })
 })

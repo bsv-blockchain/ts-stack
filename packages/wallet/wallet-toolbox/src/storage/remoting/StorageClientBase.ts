@@ -87,6 +87,35 @@ export interface StorageClientOptions {
   telemetry?: TelemetryConfig
 }
 
+function isLoopbackStorageHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '[::1]' ||
+    normalized.endsWith('.localhost')
+  )
+}
+
+function normalizeStorageEndpointUrl(endpointUrl: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(endpointUrl)
+  } catch {
+    throw new TypeError('Wallet storage endpoint must be an absolute URL.')
+  }
+  if (parsed.username !== '' || parsed.password !== '' || parsed.search !== '' || parsed.hash !== '') {
+    throw new TypeError('Wallet storage endpoint cannot include credentials, query, or fragment.')
+  }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackStorageHost(parsed.hostname))) {
+    throw new TypeError('Wallet storage endpoint requires HTTPS except on localhost.')
+  }
+  // Preserve the caller's path spelling because endpoint URLs are also
+  // surfaced through WalletStorageManager. Parsing above is the security
+  // boundary; canonicalizing here would be an unrelated observable change.
+  return endpointUrl
+}
+
 /**
  * Abstract base class shared by `StorageClient` and `StorageMobile`.
  *
@@ -107,7 +136,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     this.authClient = new AuthFetch(wallet)
-    this.endpointUrl = endpointUrl
+    this.endpointUrl = normalizeStorageEndpointUrl(endpointUrl)
     this.binaryRequests = options.binaryRequests === true
     this.telemetry = new Telemetry(options.telemetry)
   }

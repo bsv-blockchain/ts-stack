@@ -15,27 +15,34 @@ All notable changes to this project will be documented in this file. The format 
   lookup routing and TTN wallet services.
 
 ### Changed
+
 - Preserve the historical plain `Error` contract for malformed lookup queries
   while validating every optional topics-array element.
 - Share SHIP/SLAP admittance logging without changing emitted messages.
 
 ### Deprecated
+
 - (List features that are in the process of being phased out or replaced.)
 
 ### Removed
+
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
+
 - Describe the accepted zero lookup limit accurately.
 
 ### Security
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+
+- Reject punycode host labels explicitly instead of relying on Node's evolving
+  URL parser validation for advertisable transport endpoints.
 
 ---
 
 ## [1.6.1] - 2026-02-05
 
 ### Changed
+
 - Updated dependencies
 
 ---

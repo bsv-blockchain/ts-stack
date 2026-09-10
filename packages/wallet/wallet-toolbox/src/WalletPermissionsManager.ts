@@ -601,6 +601,14 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   private readonly mintsInFlight: Map<string, Promise<void>> = new Map()
 
+  /**
+   * Monotonic nonce used to keep spending prompts one-to-one with the wallet
+   * operations they authorize. Unlike capability permissions, spending
+   * requests must never share a pending approval merely because their amounts
+   * happen to match.
+   */
+  private spendingRequestSequence = 0
+
   private readonly manifestCache: Map<
     string,
     {
@@ -997,6 +1005,53 @@ export class WalletPermissionsManager implements WalletInterface {
    *  2) PERMISSION (GRANT / DENY) METHODS
    * --------------------------------------------------------------------- */
 
+  private async grantPersistentPermission(request: PermissionRequest, expiry: number, amount?: number): Promise<void> {
+    const key = this.buildRequestKey(request)
+
+    // Several first-contact prompts for the same permission can stack up
+    // before any token exists (e.g. one per usage type). Granting them all
+    // should yield ONE token: if an identical non-renewal grant just minted
+    // (or is minting), don't mint a duplicate. Spending authorizations are
+    // excluded — their tokens carry amounts, so every grant is honored.
+    let skipDuplicateMint =
+      !request.renewal &&
+      request.type !== 'spending' &&
+      (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
+
+    if (skipDuplicateMint) {
+      const inFlight = this.mintsInFlight.get(key)
+      if (inFlight != null) {
+        await inFlight
+        // The awaited mint may have failed; only skip if it landed.
+        skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
+      }
+    }
+
+    if (!skipDuplicateMint) {
+      const mint = request.renewal
+        ? this.renewPermissionOnChain(request.previousToken!, request, expiry, amount)
+        : this.createPermissionOnChain(request, expiry, amount)
+      // Publish the in-flight mint so concurrent ensures for the same
+      // permission wait for it instead of re-prompting (stored promise
+      // never rejects; failures still propagate to this caller below).
+      this.mintsInFlight.set(
+        key,
+        mint.then(
+          () => {},
+          () => {}
+        )
+      )
+      try {
+        await mint
+      } finally {
+        this.mintsInFlight.delete(key)
+      }
+    }
+
+    if (request.type !== 'spending') this.cachePermission(key, expiry)
+    this.markRecentGrant(request)
+  }
+
   /**
    * Grants a previously requested permission.
    * This method:
@@ -1024,57 +1079,9 @@ export class WalletPermissionsManager implements WalletInterface {
     }
     this.activeRequests.delete(params.requestID)
 
-    // 3) If `ephemeral !== true`, we create or renew an on-chain token
-    // Only cache non-ephemeral permissions
-    // Ephemeral permissions should not be cached as they are one-time authorizations
-    if (!params.ephemeral) {
-      const request = matching.request as PermissionRequest
-      const expiry = params.expiry || 0 // default: never expires
-      const key = this.buildRequestKey(request)
-
-      // Several first-contact prompts for the same permission can stack up
-      // before any token exists (e.g. one per usage type). Granting them all
-      // should yield ONE token: if an identical non-renewal grant just minted
-      // (or is minting), don't mint a duplicate. Spending authorizations are
-      // excluded — their tokens carry amounts, so every grant is honored.
-      let skipDuplicateMint =
-        !request.renewal &&
-        request.type !== 'spending' &&
-        (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
-
-      if (skipDuplicateMint) {
-        const inFlight = this.mintsInFlight.get(key)
-        if (inFlight != null) {
-          await inFlight
-          // The awaited mint may have failed; only skip if it landed.
-          skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
-        }
-      }
-
-      if (!skipDuplicateMint) {
-        const mint = request.renewal
-          ? this.renewPermissionOnChain(request.previousToken!, request, expiry, params.amount)
-          : this.createPermissionOnChain(request, expiry, params.amount)
-        // Publish the in-flight mint so concurrent ensures for the same
-        // permission wait for it instead of re-prompting (stored promise
-        // never rejects; failures still propagate to this caller below).
-        this.mintsInFlight.set(
-          key,
-          mint.then(
-            () => {},
-            () => {}
-          )
-        )
-        try {
-          await mint
-        } finally {
-          this.mintsInFlight.delete(key)
-        }
-      }
-
-      this.cachePermission(key, expiry)
-      this.markRecentGrant(request)
-    }
+    // 3) Ephemeral permissions are one-time authorizations and never persist.
+    if (params.ephemeral) return
+    await this.grantPersistentPermission(matching.request as PermissionRequest, params.expiry || 0, params.amount)
   }
 
   /**
@@ -1616,8 +1623,7 @@ export class WalletPermissionsManager implements WalletInterface {
     satoshis,
     lineItems,
     reason,
-    seekPermission = true,
-    allowRecentGrant = true
+    seekPermission = true
   }: {
     originator: string
     satoshis: number
@@ -1629,10 +1635,8 @@ export class WalletPermissionsManager implements WalletInterface {
     reason?: string
     seekPermission?: boolean
     /**
-     * Whether an identical grant from the short-lived permission cache can
-     * satisfy this check. BRC-177 disables this for its final authorization
-     * because prefunding has changed the authoritative spending ledger since
-     * the preflight grant.
+     * @deprecated Retained for source compatibility. Spending grants are never
+     * cached or reused, regardless of this value.
      */
     allowRecentGrant?: boolean
   }): Promise<boolean> {
@@ -1643,19 +1647,11 @@ export class WalletPermissionsManager implements WalletInterface {
       // We skip spending permission entirely
       return true
     }
-    const cacheKey = this.buildRequestKey({ type: 'spending', originator, spending: { satoshis } })
-    // Spending keys are amount-scoped. The recent-grant window this adds sits
-    // inside the pre-existing permissionCache window grantPermission already
-    // wrote for spending, so accounting exposure is unchanged.
-    if (allowRecentGrant && (await this.hasRecentOrPendingGrant(cacheKey))) {
-      return true
-    }
     const token = await this.findSpendingToken(originator, lookupValues)
     if (token?.authorizedAmount) {
       // Check how much has been spent so far
       const spentSoFar = await this.querySpentSince(token)
       if (spentSoFar + satoshis <= token.authorizedAmount) {
-        this.cachePermission(cacheKey, token.expiry)
         return true
       } else {
         // Renew if possible
@@ -3115,14 +3111,26 @@ export class WalletPermissionsManager implements WalletInterface {
     let total = 0
 
     for (const labelOrigin of labelOrigins) {
-      const { actions } = await this.underlying.listActions(
-        {
-          labels: [`admin originator ${labelOrigin}`, `admin month ${this.getCurrentMonthYearUTC()}`],
-          labelQueryMode: 'all'
-        },
-        this.adminOriginator
-      )
-      total += actions.reduce((a, e) => a - e.satoshis, 0)
+      let offset = 0
+      let totalActions = 0
+      do {
+        const result = await this.underlying.listActions(
+          {
+            labels: [`admin originator ${labelOrigin}`, `admin month ${this.getCurrentMonthYearUTC()}`],
+            labelQueryMode: 'all',
+            limit: 10000,
+            offset
+          },
+          this.adminOriginator
+        )
+        total += result.actions.reduce((a, e) => a - e.satoshis, 0)
+        offset += result.actions.length
+        totalActions = result.totalActions
+
+        // A provider that reports more results but returns an empty page must
+        // not trap the wallet in an infinite accounting loop.
+        if (result.actions.length === 0) break
+      } while (offset < totalActions)
     }
 
     return total
@@ -5348,6 +5356,10 @@ export class WalletPermissionsManager implements WalletInterface {
 
   private buildActiveRequestKey(r: PermissionRequest): string {
     const base = this.buildRequestKey(r)
+    if (r.type === 'spending') {
+      this.spendingRequestSequence += 1
+      return `${base}:request:${this.spendingRequestSequence}`
+    }
     if (r.type === 'protocol' || r.type === 'basket' || r.type === 'certificate') {
       return `${base}:${r.usageType ?? ''}`
     }
