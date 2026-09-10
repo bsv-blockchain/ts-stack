@@ -206,6 +206,8 @@ export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<
       blockHeight: number
       blockHash: string
       merkleRoot?: string
+      /** Independent full block count bound to blockHash; never an overlay subset count. */
+      blockTransactionCount?: number
     }
   | undefined
 >
@@ -248,6 +250,15 @@ class PublicRequestError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'PublicRequestError'
+  }
+}
+
+class UnsupportedBasmCapabilityError extends PublicRequestError {
+  readonly code = 'BASM_UNSUPPORTED'
+
+  constructor() {
+    super('BASM capability is not supported by this Overlay engine')
+    this.name = 'UnsupportedBasmCapabilityError'
   }
 }
 
@@ -2249,6 +2260,13 @@ export default class OverlayExpress {
               return res.status(200).json(await handler(req))
             } catch (error) {
               console.error(chalk.red(`Error in ${path}:`), error)
+              if (error instanceof Error && 'code' in error && error.code === 'BASM_UNSUPPORTED') {
+                return res.status(400).json({
+                  status: 'error',
+                  message: 'BASM capability is not supported by this Overlay engine',
+                  code: error.code
+                })
+              }
               return res.status(400).json({
                 status: 'error',
                 message: publicErrorMessage(error)
@@ -2261,26 +2279,73 @@ export default class OverlayExpress {
       )
     }
 
-    const requireTxids = (value: unknown): string[] => {
-      if (!Array.isArray(value) || !value.every(txid => typeof txid === 'string')) {
-        throw new PublicRequestError('txids must be an array of strings')
+    type BasmCapability =
+      | 'provideTopicAnchorTip'
+      | 'provideTopicAnchorRange'
+      | 'provideAdmittedList'
+      | 'provideCompoundMerklePath'
+      | 'provideRawTransactions'
+    const requireBasmCapability = (capability: BasmCapability): void => {
+      if (typeof (engine as Partial<BASMCapableEngine>)[capability] !== 'function') {
+        throw new UnsupportedBasmCapabilityError()
+      }
+    }
+
+    const requireBasmHeight = (value: unknown, field: string): number => {
+      if (
+        (typeof value !== 'number' && typeof value !== 'string') ||
+        (typeof value === 'string' && value.trim().length === 0)
+      ) {
+        throw new PublicRequestError(`${field} must be a nonnegative safe integer`)
+      }
+      const height = Number(value)
+      if (!Number.isSafeInteger(height) || height < 0) {
+        throw new PublicRequestError(`${field} must be a nonnegative safe integer`)
+      }
+      return height
+    }
+
+    const requireBlockHash = (value: unknown): string | undefined => {
+      if (value === undefined) return undefined
+      if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value)) {
+        throw new PublicRequestError('blockHash must be a 32-byte hexadecimal string')
+      }
+      return value.toLowerCase()
+    }
+
+    const requireTxids = (value: unknown, requireAtLeastOne: boolean = true): string[] => {
+      if (!Array.isArray(value) || (requireAtLeastOne && value.length === 0)) {
+        throw new PublicRequestError('txids must be a non-empty array')
       }
       if (maxBasmTxids !== -1 && value.length > maxBasmTxids) {
         throw new PublicRequestError(`txids must contain at most ${maxBasmTxids} entries`)
       }
-      return value
+      const seen = new Set<string>()
+      const txids: string[] = []
+      for (const txid of value) {
+        if (typeof txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(txid)) {
+          throw new PublicRequestError('txids must contain 32-byte hexadecimal transaction IDs')
+        }
+        const normalized = txid.toLowerCase()
+        if (seen.has(normalized)) {
+          throw new PublicRequestError('txids must not contain duplicates')
+        }
+        seen.add(normalized)
+        txids.push(normalized)
+      }
+      return txids
     }
 
-    registerJsonRoute(
-      '/requestTopicAnchorTip',
-      async req => await basmEngine.provideTopicAnchorTip(readBasmTopic(req))
-    )
+    registerJsonRoute('/requestTopicAnchorTip', async req => {
+      requireBasmCapability('provideTopicAnchorTip')
+      return await basmEngine.provideTopicAnchorTip(readBasmTopic(req))
+    })
 
     registerJsonRoute('/requestTopicAnchorRange', async req => {
       const { fromHeight, toHeight } = req.body
-      const from = Number(fromHeight)
-      const to = Number(toHeight)
-      if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from) {
+      const from = requireBasmHeight(fromHeight, 'fromHeight')
+      const to = requireBasmHeight(toHeight, 'toHeight')
+      if (to < from) {
         throw new PublicRequestError('fromHeight and toHeight must define a valid ascending range')
       }
       if (maxBasmAnchorRange !== -1 && to - from + 1 > maxBasmAnchorRange) {
@@ -2288,32 +2353,32 @@ export default class OverlayExpress {
           `topic anchor range must contain at most ${maxBasmAnchorRange} blocks`
         )
       }
+      requireBasmCapability('provideTopicAnchorRange')
       return await basmEngine.provideTopicAnchorRange(readBasmTopic(req), from, to)
     })
 
     registerJsonRoute('/requestAdmittedList', async req => {
       const { blockHeight, blockHash } = req.body
-      return await basmEngine.provideAdmittedList(
-        readBasmTopic(req),
-        Number(blockHeight),
-        typeof blockHash === 'string' ? blockHash : undefined
-      )
+      const height = requireBasmHeight(blockHeight, 'blockHeight')
+      const hash = requireBlockHash(blockHash)
+      requireBasmCapability('provideAdmittedList')
+      return await basmEngine.provideAdmittedList(readBasmTopic(req), height, hash)
     })
 
     registerJsonRoute('/requestCompoundMerklePath', async req => {
       const topic = readBasmTopic(req)
       const { blockHeight, txids } = req.body
-      return await basmEngine.provideCompoundMerklePath(
-        topic,
-        Number(blockHeight),
-        requireTxids(txids)
-      )
+      const height = requireBasmHeight(blockHeight, 'blockHeight')
+      const requestedTxids = requireTxids(txids)
+      requireBasmCapability('provideCompoundMerklePath')
+      return await basmEngine.provideCompoundMerklePath(topic, height, requestedTxids)
     })
 
-    registerJsonRoute(
-      '/requestRawTransactions',
-      async req => await basmEngine.provideRawTransactions(requireTxids(req.body.txids))
-    )
+    registerJsonRoute('/requestRawTransactions', async req => {
+      const txids = requireTxids(req.body.txids, false)
+      requireBasmCapability('provideRawTransactions')
+      return await basmEngine.provideRawTransactions(txids)
+    })
 
     /**
      * ============== ADMIN ROUTES ==============

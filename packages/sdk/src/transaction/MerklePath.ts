@@ -10,6 +10,23 @@ export interface MerklePathLeaf {
   duplicate?: boolean
 }
 
+function assertOffset(offset: number): void {
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error('Invalid offset')
+  }
+}
+
+// JavaScript bitwise operators truncate offsets to signed 32 bits. Division by
+// a power of two is exact over the supported safe-integer offset domain.
+const offsetAtHeight = (offset: number, height: number): number => Math.floor(offset / 2 ** height)
+
+const siblingOf = (offset: number): number => offset % 2 === 0 ? offset + 1 : offset - 1
+
+const sameNodeAtHeight = (index: number, maxOffset: number, height: number): boolean =>
+  offsetAtHeight(index, height) === offsetAtHeight(maxOffset, height)
+
+const offsetTreeHeight = (offset: number): number => offset === 0 ? 0 : offset.toString(2).length
+
 function hashPair(left: string | undefined, right: string | undefined): string {
   return toHex(hash256(toArray((left ?? '') + (right ?? ''), 'hex').reverse()).reverse())
 }
@@ -191,6 +208,7 @@ export default class MerklePath {
       }
       const offsetsAtThisHeight = new Set<number>()
       leaves.forEach(leaf => {
+        assertOffset(leaf.offset)
         if (offsetsAtThisHeight.has(leaf.offset)) {
           throw new Error(`Duplicate offset: ${leaf.offset}, at height: ${height}`)
         }
@@ -198,7 +216,7 @@ export default class MerklePath {
         if (height === 0) {
           if (leaf.duplicate !== true) {
             for (let h = 1; h < this.path.length; h++) {
-              legalOffsets[h].add((leaf.offset >> h) ^ 1)
+              legalOffsets[h].add(siblingOf(offsetAtHeight(leaf.offset, h)))
             }
           }
         } else if (legalOffsetsOnly && !legalOffsets[height].has(leaf.offset)) {
@@ -317,14 +335,14 @@ export default class MerklePath {
     if (typeof txid !== 'string') throw new TypeError('Transaction ID is undefined')
     const index = this.indexOf(txid)
     if (this.path.length === 1 && this.path[0].length === 1) return txid
-    const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
+    const treeHeight = Math.max(this.path.length, offsetTreeHeight(maxOffset))
     let workingHash = txid
     for (let height = 0; height < treeHeight; height++) {
-      const nodeKey = `${height}:${index >> height}`
+      const nodeKey = `${height}:${offsetAtHeight(index, height)}`
       const cachedRoot = cachedMerkleRoot(nodeKey, workingHash, treeHeight, nodeHashCache)
       if (cachedRoot != null) return cachedRoot
       nodeHashCache.set(nodeKey, workingHash)
-      const offset = (index >> height) ^ 1
+      const offset = siblingOf(offsetAtHeight(index, height))
       const leaf = this.cachedFindLeaf(height, offset, sourceIndex, hashCache, maxOffset)
       workingHash = nextCachedHash(
         workingHash,
@@ -332,30 +350,11 @@ export default class MerklePath {
         offset,
         index,
         height,
-        this.path.length === 1 && index >> height === maxOffset >> height
+        this.path.length === 1 && sameNodeAtHeight(index, maxOffset, height)
       )
     }
     nodeHashCache.set(`${treeHeight}:0`, workingHash)
     return workingHash
-  }
-
-  private nextRootHash(
-    workingHash: string,
-    index: number,
-    height: number,
-    maxOffset: number
-  ): string {
-    const offset = (index >> height) ^ 1
-    const leaf = this.findOrComputeLeaf(height, offset)
-    if (leaf == null) {
-      const isLastOddNode = this.path.length === 1 && index >> height === maxOffset >> height
-      if (isLastOddNode) return hashPair(workingHash, workingHash)
-      throw new Error(`Missing hash for index ${index} at height ${height}`)
-    }
-    if (leaf.duplicate === true) return hashPair(workingHash, workingHash)
-    return offset % 2 === 1
-      ? hashPair(leaf.hash, workingHash)
-      : hashPair(workingHash, leaf.hash)
   }
 
   /**
@@ -387,10 +386,18 @@ export default class MerklePath {
     // (path.length === 1 or intermediate levels are empty/trimmed), we need to compute up
     // to the height implied by the highest offset present in path[0].
     const maxOffset = this.path[0].reduce((max, l) => Math.max(max, l.offset), 0)
-    const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
+    const treeHeight = Math.max(this.path.length, offsetTreeHeight(maxOffset))
 
     for (let height = 0; height < treeHeight; height++) {
-      workingHash = this.nextRootHash(workingHash, index, height, maxOffset)
+      const offset = siblingOf(offsetAtHeight(index, height))
+      workingHash = nextCachedHash(
+        workingHash,
+        this.findOrComputeLeaf(height, offset),
+        offset,
+        index,
+        height,
+        this.path.length === 1 && sameNodeAtHeight(index, maxOffset, height)
+      )
     }
     return workingHash
   }
@@ -404,7 +411,7 @@ export default class MerklePath {
    * @param offset
    */
   findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined {
-    const hash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
+    assertOffset(offset)
 
     let leaf: MerklePathLeaf | undefined =
       height < this.path.length ? this.path[height].find(l => l.offset === offset) : undefined
@@ -414,7 +421,9 @@ export default class MerklePath {
     if (height === 0) return undefined
 
     const h = height - 1
-    const l = offset << 1
+    const l = offset * 2
+    // No descendant of this node is representable by a supported leaf offset.
+    if (!Number.isSafeInteger(l)) return undefined
 
     const leaf0 = this.findOrComputeLeaf(h, l)
     if (leaf0?.hash == null || leaf0.hash === '') return undefined
@@ -423,13 +432,13 @@ export default class MerklePath {
     if (leaf1?.hash == null) {
       // Explicit duplicate marker — duplicate leaf0 regardless of path depth.
       if (leaf1?.duplicate === true) {
-        return { offset, hash: hash(leaf0.hash + leaf0.hash) }
+        return { offset, hash: hashPair(leaf0.hash, leaf0.hash) }
       }
       // For single-level paths, leaf0 may be the last odd node at height h — duplicate it.
       if (this.path.length === 1) {
         const maxOffset0 = this.path[0].reduce((max, lf) => Math.max(max, lf.offset), 0)
-        if (l === maxOffset0 >> h) {
-          return { offset, hash: hash(leaf0.hash + leaf0.hash) }
+        if (l === offsetAtHeight(maxOffset0, h)) {
+          return { offset, hash: hashPair(leaf0.hash, leaf0.hash) }
         }
       }
       return undefined
@@ -437,9 +446,9 @@ export default class MerklePath {
 
     let workinghash: string
     if (leaf1.duplicate === true) {
-      workinghash = hash(leaf0.hash + leaf0.hash)
+      workinghash = hashPair(leaf0.hash, leaf0.hash)
     } else {
-      workinghash = hash((leaf1.hash ?? '') + (leaf0.hash ?? ''))
+      workinghash = hashPair(leaf1.hash, leaf0.hash)
     }
     leaf = {
       offset,
@@ -530,7 +539,7 @@ export default class MerklePath {
     const nextComputedOffsets = (cos: number[]): number[] => {
       const ncos: number[] = []
       for (const o of cos) {
-        pushIfNew(o >> 1, ncos)
+        pushIfNew(offsetAtHeight(o, 1), ncos)
       }
       return ncos
     }
@@ -545,7 +554,7 @@ export default class MerklePath {
       const n = this.path[0][l]
       if (n.txid === true) {
         // level 0 must enable computing level 1 for txid nodes
-        pushIfNew(n.offset >> 1, computedOffsets)
+        pushIfNew(offsetAtHeight(n.offset, 1), computedOffsets)
       } else {
         const isOdd = n.offset % 2 === 1
         const peer = this.path[0][l + (isOdd ? -1 : 1)]
@@ -577,7 +586,6 @@ export default class MerklePath {
     const key = `${height}:${offset}`
     if (hashCache.has(key)) return hashCache.get(key)
 
-    const doHash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
 
     let leaf: MerklePathLeaf | undefined =
       height < sourceIndex.length ? sourceIndex[height].get(offset) : undefined
@@ -593,7 +601,8 @@ export default class MerklePath {
     }
 
     const h = height - 1
-    const l = offset << 1
+    const l = offset * 2
+    if (!Number.isSafeInteger(l)) return undefined
     const leaf0 = this.cachedFindLeaf(h, l, sourceIndex, hashCache, maxOffset)
     if (leaf0?.hash == null || leaf0.hash === '') {
       hashCache.set(key, undefined)
@@ -602,8 +611,8 @@ export default class MerklePath {
 
     const leaf1 = this.cachedFindLeaf(h, l + 1, sourceIndex, hashCache, maxOffset)
     if (leaf1?.hash == null) {
-      if (leaf1?.duplicate === true || (this.path.length === 1 && l === maxOffset >> h)) {
-        leaf = { offset, hash: doHash(leaf0.hash + leaf0.hash) }
+      if (leaf1?.duplicate === true || (this.path.length === 1 && l === offsetAtHeight(maxOffset, h))) {
+        leaf = { offset, hash: hashPair(leaf0.hash, leaf0.hash) }
         hashCache.set(key, leaf)
         return leaf
       }
@@ -613,8 +622,8 @@ export default class MerklePath {
 
     const workinghash =
       leaf1.duplicate === true
-        ? doHash(leaf0.hash + leaf0.hash)
-        : doHash((leaf1.hash ?? '') + (leaf0.hash ?? ''))
+        ? hashPair(leaf0.hash, leaf0.hash)
+        : hashPair(leaf1.hash, leaf0.hash)
     leaf = { offset, hash: workinghash }
     hashCache.set(key, leaf)
     return leaf
@@ -648,7 +657,7 @@ export default class MerklePath {
 
     const originalRoot = this.computeRoot()
     const maxOffset = this.path[0].reduce((max, l) => Math.max(max, l.offset), 0)
-    const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
+    const treeHeight = Math.max(this.path.length, offsetTreeHeight(maxOffset))
 
     const sourceIndex = this.createSourceLeafIndex()
     const hashCache = new Map<string, MerklePathLeaf | undefined>()
@@ -720,7 +729,7 @@ export default class MerklePath {
 
     // Level 0: the txid leaf + its sibling.
     neededPerLevel[0].set(txOffset, { offset: txOffset, txid: true, hash: txid })
-    const levelZeroSiblingOffset = txOffset ^ 1
+    const levelZeroSiblingOffset = siblingOf(txOffset)
     if (!neededPerLevel[0].has(levelZeroSiblingOffset)) {
       const sibling = this.cachedFindLeaf(0, levelZeroSiblingOffset, sourceIndex, hashCache, maxOffset)
       if (sibling != null) neededPerLevel[0].set(levelZeroSiblingOffset, sibling)
@@ -728,12 +737,12 @@ export default class MerklePath {
 
     // Higher levels need only the sibling at each height.
     for (let h = 1; h < treeHeight; h++) {
-      const siblingOffset = (txOffset >> h) ^ 1
+      const siblingOffset = siblingOf(offsetAtHeight(txOffset, h))
       if (neededPerLevel[h].has(siblingOffset)) continue
       const sibling = this.cachedFindLeaf(h, siblingOffset, sourceIndex, hashCache, maxOffset)
       if (sibling != null) {
         neededPerLevel[h].set(siblingOffset, sibling)
-      } else if (txOffset >> h === maxOffset >> h) {
+      } else if (sameNodeAtHeight(txOffset, maxOffset, h)) {
         neededPerLevel[h].set(siblingOffset, { offset: siblingOffset, duplicate: true })
       }
     }

@@ -214,6 +214,12 @@ All notable changes to this project will be documented in this file. The format 
  
 ## [Unreleased]
 
+- Corrected Merkle-path parent, sibling, cache, effective-depth, extraction and
+  trimming arithmetic for safe-integer transaction positions above 32 bits.
+  Unsafe, fractional, negative and non-finite offsets are rejected explicitly.
+  No valid BUMP wire change or consumer migration is required. This correction
+  joins the coordinated, unpublished 2.5.0 candidate.
+
 ### Added
 
 - Add optional `x-bsv-payment-known-txids` support to AuthFetch BRC-105 payment

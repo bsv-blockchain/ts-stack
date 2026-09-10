@@ -85,6 +85,11 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 
 - **Merkle Proof Verification**: Tools for representing and verifying merkle proofs, adhering to various serialization standards.
 
+  BUMP transaction offsets retain their exact nonnegative safe-integer domain,
+  including positions above 32 bits. Root calculation, proof extraction,
+  combination, and trimming use the same full-width arithmetic. Offsets outside
+  that domain are rejected; no new wire format or application migration is needed.
+
 - **Serializable SPV Structures**: Structures and interfaces for full SPV verification.
 
 - **Secure Encryption and Signed Messages**: Enhanced mechanisms for encryption and digital signatures, replacing outdated methods.
