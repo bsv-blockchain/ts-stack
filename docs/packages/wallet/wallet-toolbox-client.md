@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.11.0'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+version: '2.12.0'
+last_updated: '2026-09-08'
+last_verified: '2026-09-08'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -27,6 +27,13 @@ count across short final and out-of-range pages.
 Prepared BEEF persistence remains a server-side Knex capability. Browser
 IndexedDB uses the canonical path, and compatible remote servers can enable
 the optimization without a browser configuration or wire change.
+Wallet snapshots are wallet-equivalent secrets and belong only in browser or
+extension storage backed by an OS Keychain or comparably trusted store, never
+ordinary localStorage, logs, analytics, or unprotected sync. Remote storage and
+credential-bearing Arcade SSE require HTTPS except for explicit loopback
+development, and transport debugging cannot expose credentials. Spending
+approvals are never cached or coalesced; certificate acquisition and identity
+discovery require valid certifier signatures before storage or trust scoring.
 Related browser `noSend` chains retain local action batching, while unrelated
 actions cannot join or commit the active workspace. Supported remote providers
 can resume a soft-expired workspace using its exact persisted inputs.

@@ -61,11 +61,17 @@ ORIGIN=http://localhost:5173
 
 > **Production note:** in a typical deployment, both `RELAY_URL` and `ORIGIN` share the same domain (`wss://yourapp.com` + `https://yourapp.com`). No extra configuration is needed. The relay can freely be on a separate domain or a third-party service — the mobile fetches the relay address from the origin server over HTTPS, making the origin's TLS certificate the trust anchor rather than hostname matching.
 
+> **Desktop API transport:** an absolute `WalletRelayClient.apiUrl` must use
+> HTTPS in production because its requests carry the desktop session token and
+> wallet RPC payloads. Root-relative same-origin paths and HTTP loopback hosts
+> remain available; credential-bearing URLs, query strings, and fragments are
+> rejected.
+
 > **Multi-app deployments:** one relay can serve N webapps. Pass an `allowedOrigins` allowlist (`string[]`, `RegExp`, or predicate) to `WalletRelayService` and the built-in `GET /api/session` route forwards each browser's `Origin` header into `createSession({ origin })` — every QR points back at the calling webapp instead of the relay's own URL. See [API.md](./API.md#walletrelayservice) for the full option.
 
 > **Public-service default:** when neither `allowedOrigins` nor a constructor `origin` is supplied, the relay accepts browser origins from previously unknown domains. `ORIGIN` remains the fallback URL placed in a QR; setting it as an environment variable does not silently create a WebSocket allowlist. The scaffold mirrors this with public reflected CORS by default and an optional comma-separated `ALLOWED_ORIGINS` whitelist. Origin checks and CORS are deployment controls, not authentication: desktop tokens, topic validation, QR signatures, and encrypted pairing remain enforced in either mode.
 
-> **Local dev with split frontend/backend:** if Vite and your Node server run on different ports, add `MOBILE_ORIGIN=http://<your-lan-ip>:3000` (the backend port) so the mobile device can reach `GET /api/session/:id`. `ORIGIN` stays as the Vite URL for browser CORS. This variable is not needed in production.
+> **Local dev with split frontend/backend:** a physical mobile device must use an HTTPS origin with a valid certificate (for example, a trusted development tunnel) to reach `GET /api/session/:id`. Plain HTTP pairing origins are accepted only on `localhost`, `127.0.0.1`, or `[::1]`; an `http://<lan-ip>` QR is rejected. `ORIGIN` stays as the Vite URL for browser CORS. This variable is not needed in production.
 
 ### 3. App setup
 
@@ -434,7 +440,12 @@ await session.resolveRelay()
 await session.connect()
 ```
 
-The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere.
+The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` verifies the required QR signature, then calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere. Plain HTTP origins and unsigned QR codes are rejected except that loopback HTTP remains available for same-device development.
+
+Methods outside `autoApproveMethods` fail closed when `onApprovalRequired` is
+omitted. Configure an approval UI for signing, spending, decryption, HMAC, and
+other privileged operations; the default auto-approved set contains only
+`getPublicKey`.
 
 To resume after a network drop, call `resolveRelay()` again before `reconnect()` (it is a lightweight HTTP call):
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-04",
+  "lastReviewed": "2026-09-08",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,10 +144,10 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-09-04",
-    "method": "Carried forward the complete 2026-08-30 removal rehearsal within its monthly review window, reviewed the TOML advisories against the frozen graph, and immediately rehearsed adding the js-yaml 3.15.2 substitution for GHSA-2883-xcg3-v3hh. Regenerating the lock without that override still selects js-yaml 3.15.1 via Jest's istanbul/nyc graph; 3.15.2 is the first patched 3.x release and leaves the existing js-yaml 4.x Redocly override unchanged.",
-    "retainedCount": 22,
-    "result": "All 22 retained overrides still prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The js-yaml 3.15.2 substitution removes GHSA-2883-xcg3-v3hh from the frozen high-severity audit; image-size advisories remain independently patched.",
+    "reviewedAt": "2026-09-08",
+    "method": "Carried forward the complete 2026-09-04 removal rehearsal within its monthly review window and immediately reviewed the newly disclosed js-yaml advisory against the frozen graph and current package metadata. Verified that Jest's istanbul reporting chain and the standalone WAB server both still resolve js-yaml 3.15.1, that the patched 3.x line is 3.15.2, and that a 3.15.2 substitution passes the complete build and test suite in both the pnpm workspace and the standalone WAB npm project.",
+    "retainedCount": 23,
+    "result": "All 23 retained overrides prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The new js-yaml 3.15.2 substitution removes the newly disclosed high-severity CPU-exhaustion advisory in both the pnpm workspace and the standalone WAB server; the frozen high-severity audit now reports only the two independently patched and governed image-size advisories.",
     "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch/js-yaml, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO, Vite/PostCSS, remark-mdx-frontmatter/TOML, Metro, or image-size dependency changes."
   },
   "overrideRegistry": [
@@ -165,12 +165,6 @@
     },
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "js-yaml@<3.15.2",
-      "value": "3.15.2",
-      "exceptionId": "js-yaml-jest-advisory-override"
-    },
-    {
-      "source": "pnpm-workspace.yaml",
       "selector": "toml@<4.2.0",
       "value": "4.2.0",
       "exceptionId": "toml-frontmatter-advisory-override"
@@ -180,6 +174,12 @@
       "selector": "typed-rest-client@2.3.1>qs",
       "value": "6.15.3",
       "exceptionId": "typed-rest-client-qs-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "js-yaml@<3.15.2",
+      "value": "3.15.2",
+      "exceptionId": "js-yaml-jest-istanbul-advisory-override"
     },
     {
       "source": "tools/codegen/node/package.json",
@@ -281,6 +281,12 @@
       "selector": "gaxios",
       "value": "7.3.0",
       "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/wab/package.json",
+      "selector": "js-yaml",
+      "value": "3.15.2",
+      "exceptionId": "js-yaml-jest-istanbul-advisory-override"
     },
     {
       "source": "infra/wallet-infra/package.json",

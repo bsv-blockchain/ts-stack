@@ -104,9 +104,10 @@ describe("Controllers", () => {
     describe("AuthController with verified phone", () => {
         it("should complete auth successfully after provider verification", async () => {
             // Mock UserService so controller test doesn't depend on DB specifics
-            jest.spyOn(UserService, "findUserByConfig").mockResolvedValueOnce(undefined as any);
-            jest.spyOn(UserService, "createUser").mockResolvedValueOnce({ id: 1, presentationKey: testPresentationKey } as any);
-            jest.spyOn(UserService, "linkAuthMethod").mockResolvedValueOnce({ id: 1 } as any);
+            jest.spyOn(UserService, "findOrCreatePendingRegistration").mockResolvedValueOnce({
+                user: { id: 1, presentationKey: testPresentationKey, registrationStatus: "pending" },
+                created: true
+            });
 
             const req = mockRequest({
                 methodType: "TwilioPhone",
@@ -120,7 +121,9 @@ describe("Controllers", () => {
             expect(res.json).toHaveBeenCalledWith(
                 expect.objectContaining({
                     success: true,
-                    presentationKey: testPresentationKey
+                    presentationKey: testPresentationKey,
+                    accountStatus: "new-user",
+                    registrationStatus: "pending"
                 })
             );
             jest.restoreAllMocks();
@@ -141,6 +144,29 @@ describe("Controllers", () => {
                     success: false
                 })
             );
+        });
+
+        it("returns the stored key and pending lifecycle on a retried registration", async () => {
+            const storedPresentationKey = "cd".repeat(32);
+            jest.spyOn(UserService, "findOrCreatePendingRegistration").mockResolvedValueOnce({
+                user: { id: 2, presentationKey: storedPresentationKey, registrationStatus: "pending" },
+                created: false
+            });
+            const res = mockResponse();
+
+            await AuthController.completeAuth(mockRequest({
+                methodType: "TwilioPhone",
+                presentationKey: testPresentationKey,
+                payload: { phoneNumber: verifiedPhone, otp: "123456" }
+            }), res);
+
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                presentationKey: storedPresentationKey,
+                accountStatus: "existing-user",
+                existingUser: true,
+                registrationStatus: "pending"
+            }));
         });
     });
 

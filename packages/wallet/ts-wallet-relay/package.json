@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-relay",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
