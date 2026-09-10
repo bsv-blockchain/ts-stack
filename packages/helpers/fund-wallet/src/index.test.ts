@@ -1,7 +1,9 @@
 import type { WalletInterface } from '@bsv/sdk'
 import { StorageClient, Wallet, WalletStorageManager } from '@bsv/wallet-toolbox'
+import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createPromptSession,
   createDestinationWallet,
   DEFAULT_STORAGE_URL,
   type CliIO,
@@ -324,6 +326,18 @@ describe('runCli', () => {
     }
   })
 
+  it('reports cancellation while prompting for a private key', async () => {
+    const runtime = makeRuntime()
+    const io = makeIO()
+    const prompt = makeSecretPrompt()
+    vi.mocked(prompt.askSecret).mockRejectedValueOnce('input closed')
+
+    expect(await runCli(['--chain', 'main'], runtime.dependencies, io, () => prompt)).toBe(1)
+    expect(io.errors.flat().join(' ')).toContain('input closed')
+    expect(prompt.close).toHaveBeenCalledOnce()
+    expect(runtime.dependencies.createDestinationWallet).not.toHaveBeenCalled()
+  })
+
   it('validates every interactive option before funding', async () => {
     const cases: Array<{ answers: string[]; secret: string; message: string }> = [
       {
@@ -385,5 +399,75 @@ describe('runCli', () => {
     }
     expect(await runCli([], runtime.dependencies, makeIO(), () => invalidPrompt)).toBe(1)
     expect(invalidPrompt.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('createPromptSession', () => {
+  function makeTerminal({ raw = false, paused = false } = {}) {
+    const input = new PassThrough()
+    const isPaused = vi.spyOn(input, 'isPaused').mockReturnValue(paused)
+    const pause = vi.spyOn(input, 'pause')
+    const resume = vi.spyOn(input, 'resume')
+    const setRawMode = vi.fn()
+    Object.assign(input, { isTTY: true, isRaw: raw, setRawMode })
+
+    const output = new PassThrough()
+    const write = vi.spyOn(output, 'write')
+    const prompt = createPromptSession(
+      input as unknown as typeof process.stdin,
+      output as unknown as typeof process.stdout
+    )
+    return { input, output, write, isPaused, pause, resume, setRawMode, prompt }
+  }
+
+  it('collects printable input without echoing and restores terminal state', async () => {
+    const { input, write, pause, resume, setRawMode, prompt } = makeTerminal()
+    const secret = prompt.askSecret('Private key: ')
+
+    input.emit('keypress', 'a', { name: 'a', ctrl: false, meta: false })
+    input.emit('keypress', 'b', { name: 'b', ctrl: false, meta: false })
+    input.emit('keypress', '', { name: 'backspace', ctrl: false, meta: false })
+    input.emit('keypress', 'x', { name: 'x', ctrl: true, meta: false })
+    input.emit('keypress', 'y', { name: 'y', ctrl: false, meta: true })
+    input.emit('keypress', 'zz', { name: 'z', ctrl: false, meta: false })
+    input.emit('keypress', '\u001f', { name: 'unknown', ctrl: false, meta: false })
+    input.emit('keypress', '', { name: 'enter', ctrl: false, meta: false })
+
+    await expect(secret).resolves.toBe('a')
+    expect(setRawMode).toHaveBeenNthCalledWith(1, true)
+    expect(setRawMode).toHaveBeenNthCalledWith(2, false)
+    expect(resume).toHaveBeenCalled()
+    expect(pause).not.toHaveBeenCalled()
+    expect(write).toHaveBeenNthCalledWith(1, 'Private key: ')
+    expect(write).toHaveBeenNthCalledWith(2, '\n')
+  })
+
+  it('reads one line when standard input is not a terminal', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const write = vi.spyOn(output, 'write')
+    const prompt = createPromptSession(
+      input as unknown as typeof process.stdin,
+      output as unknown as typeof process.stdout
+    )
+
+    const secret = prompt.askSecret('Private key: ')
+    input.write('from-pipe\n')
+
+    await expect(secret).resolves.toBe('from-pipe')
+    expect(write).toHaveBeenCalledWith('Private key: ')
+  })
+
+  it('cancels on control-c and restores a paused raw terminal', async () => {
+    const { input, write, pause, setRawMode, prompt } = makeTerminal({ raw: true, paused: true })
+    const secret = prompt.askSecret('Private key: ')
+
+    input.emit('keypress', '\u0003', { name: 'c', ctrl: true, meta: false })
+
+    await expect(secret).rejects.toThrow('Private key input cancelled')
+    expect(setRawMode).toHaveBeenNthCalledWith(1, true)
+    expect(setRawMode).toHaveBeenNthCalledWith(2, true)
+    expect(pause).toHaveBeenCalledOnce()
+    expect(write).toHaveBeenLastCalledWith('\n')
   })
 })

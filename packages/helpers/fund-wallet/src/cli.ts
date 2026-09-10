@@ -320,10 +320,13 @@ provide one line on standard input from a protected file descriptor.
 `)
 }
 
-function createPromptSession(): PromptSession {
+export function createPromptSession(
+  input: typeof process.stdin = process.stdin,
+  output: typeof process.stdout = process.stdout
+): PromptSession {
   const ask = async (question: string): Promise<string> =>
     await new Promise(resolve => {
-      const readline = createInterface({ input: process.stdin, output: process.stdout })
+      const readline = createInterface({ input, output })
       readline.question(question, answer => {
         readline.close()
         resolve(answer)
@@ -334,11 +337,9 @@ function createPromptSession(): PromptSession {
     // Raw-mode secrecy depends on the input terminal. Keep it enabled even
     // when stdout is redirected; falling back to cooked readline in that case
     // would echo the key on the user's terminal.
-    if (!process.stdin.isTTY) return await ask(question)
+    if (!input.isTTY) return await ask(question)
 
     return await new Promise<string>((resolve, reject) => {
-      const input = process.stdin
-      const output = process.stdout
       const wasRaw = input.isRaw
       const wasPaused = input.isPaused()
       let secret = ''
