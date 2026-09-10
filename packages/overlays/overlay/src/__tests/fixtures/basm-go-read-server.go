@@ -77,7 +77,8 @@ func listen(provider engine.BASMProvider) (string, error) {
 			fmt.Fprintln(os.Stderr, serveErr)
 		}
 	}()
-	return "http://" + listener.Addr().String(), nil
+	// Keep the advertised host explicitly loopback, matching the bound listener.
+	return fmt.Sprintf("http://127.0.0.1:%d", listener.Addr().(*net.TCPAddr).Port), nil
 }
 
 func newReadyService() (*engine.BASMReadService, error) {

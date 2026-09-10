@@ -24,3 +24,6 @@ values as authoritative without that independent check.
 `basm-go-read-server.go` is a local B01 interop host compiled into a temporary
 module. It replaces onto the Go overlay-services worktree and must not modify
 that tree's uncommitted S04 files.
+
+The temporary interop server binds and advertises only `127.0.0.1`; its HTTP
+transport never exposes the fixture on an external network interface.
