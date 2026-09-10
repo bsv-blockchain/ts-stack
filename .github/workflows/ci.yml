@@ -1137,9 +1137,9 @@ jobs:
           commit_url="https://api.codecov.io/api/v2/github/bsv-blockchain/repos/ts-stack/commits/${CODECOV_COMMIT}/"
           uploads_url="${commit_url}uploads/"
           while true; do
-            if commit=$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 15 "$commit_url") &&
+            if commit=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 "$commit_url") &&
               [ "$(jq --raw-output '.state // empty' <<<"$commit")" = 'complete' ] &&
-              uploads=$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 15 "$uploads_url") &&
+              uploads=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 "$uploads_url") &&
               [ "$(jq --arg build_url "$CODECOV_BUILD_URL" --arg name "$CODECOV_UPLOAD_NAME" '[.results[]? | select(.build_url == $build_url and .name == $name and .state_name == "MERGED")] | length' <<<"$uploads")" -gt 0 ]; then
               echo "Codecov merged ${CODECOV_UPLOAD_NAME} for ${CODECOV_COMMIT}."
               break
