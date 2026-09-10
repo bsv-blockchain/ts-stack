@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { createInterface } from 'node:readline'
+import { createInterface, emitKeypressEvents, type Key } from 'node:readline'
 import chalk from 'chalk'
 import type { InternalizeActionArgs, WalletInterface } from '@bsv/sdk' with {
   'resolution-mode': 'require'
@@ -58,12 +58,16 @@ export interface CliIO {
 
 export interface PromptSession {
   ask(question: string): Promise<string>
+  askSecret(question: string): Promise<string>
   close(): void
 }
+
+type FundingOptionsWithoutKey = Omit<FundingOptions, 'privateKey'>
 
 export type CliParseResult =
   | { kind: 'help' }
   | { kind: 'interactive' }
+  | { kind: 'prompt-key'; options: FundingOptionsWithoutKey }
   | { kind: 'run'; options: FundingOptions }
   | { kind: 'error'; message: string }
 
@@ -236,6 +240,30 @@ function validateOptions(
   }
 }
 
+function validatePublicOptions(
+  chain: string,
+  storageURL: string,
+  satoshis?: string
+): CliParseResult {
+  if (chain !== 'test' && chain !== 'main') {
+    return { kind: 'error', message: `Invalid network: ${chain}. Must be "test" or "main"` }
+  }
+  if (!validStorageURL(storageURL)) {
+    return {
+      kind: 'error',
+      message: `Invalid storage URL: ${storageURL}. Must be a credential-free HTTPS URL`
+    }
+  }
+  const amount = satoshis === undefined || satoshis === '' ? 0 : Number(satoshis)
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    return {
+      kind: 'error',
+      message: `Invalid satoshis: ${satoshis}. Must be a non-negative safe integer`
+    }
+  }
+  return { kind: 'prompt-key', options: { chain, storageURL, amount } }
+}
+
 export function parseCliArguments(arguments_: string[]): CliParseResult {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return { kind: 'help' }
   if (arguments_.length === 0) return { kind: 'interactive' }
@@ -243,17 +271,27 @@ export function parseCliArguments(arguments_: string[]): CliParseResult {
   const chain = argumentValue(arguments_, 'chain') ?? argumentValue(arguments_, 'network')
   if (!chain) return { kind: 'error', message: 'Missing required argument: --chain' }
 
-  const privateKey =
-    argumentValue(arguments_, 'private-key') ?? argumentValue(arguments_, 'privateKey')
-  if (!privateKey) {
-    return { kind: 'error', message: 'Missing required argument: --private-key' }
+  if (
+    arguments_.some(
+      argument =>
+        argument === '--private-key' ||
+        argument === '--privateKey' ||
+        argument.startsWith('--private-key=') ||
+        argument.startsWith('--privateKey=')
+    )
+  ) {
+    return {
+      kind: 'error',
+      message:
+        'Private keys are not accepted in command-line arguments; use the secure prompt or stdin'
+    }
   }
 
   const storageURL =
     argumentValue(arguments_, 'storage-url') ??
     argumentValue(arguments_, 'storageURL') ??
     DEFAULT_STORAGE_URL
-  return validateOptions(chain, storageURL, privateKey, argumentValue(arguments_, 'satoshis'))
+  return validatePublicOptions(chain, storageURL, argumentValue(arguments_, 'satoshis'))
 }
 
 function printHelp(io: CliIO, errorMessage?: string): void {
@@ -265,7 +303,6 @@ ${chalk.bold('USAGE:')}
 
 ${chalk.bold('OPTIONS:')}
   --chain <network>           Network to use: "test" or "main" (required)
-  --private-key <hex>         Wallet private key in hex format (required)
   --storage-url <url>         Credential-free HTTPS storage provider URL
                               (default: ${DEFAULT_STORAGE_URL})
   --satoshis <amount>         Non-negative integer amount to fund
@@ -273,21 +310,79 @@ ${chalk.bold('OPTIONS:')}
   --help                      Show this help message
 
 ${chalk.bold('EXAMPLES:')}
-  fund-metanet --chain main --private-key <hex> --satoshis 1000
-  fund-metanet --chain main --private-key <hex>
-  fund-metanet --chain test --private-key <hex> \
+  fund-metanet --chain main --satoshis 1000
+  fund-metanet --chain main
+  fund-metanet --chain test \
     --storage-url ${DEFAULT_STORAGE_URL} --satoshis 500
+
+The wallet private key is read from a non-echoing prompt. For automation,
+provide one line on standard input from a protected file descriptor.
 `)
 }
 
-function createPromptSession(): PromptSession {
-  const readline = createInterface({
-    input: process.stdin,
-    output: process.stdout
-  })
+export function createPromptSession(
+  input: typeof process.stdin = process.stdin,
+  output: typeof process.stdout = process.stdout
+): PromptSession {
+  const ask = async (question: string): Promise<string> =>
+    await new Promise(resolve => {
+      const readline = createInterface({ input, output })
+      readline.question(question, answer => {
+        readline.close()
+        resolve(answer)
+      })
+    })
+
+  const askSecret = async (question: string): Promise<string> => {
+    // Raw-mode secrecy depends on the input terminal. Keep it enabled even
+    // when stdout is redirected; falling back to cooked readline in that case
+    // would echo the key on the user's terminal.
+    if (!input.isTTY) return await ask(question)
+
+    return await new Promise<string>((resolve, reject) => {
+      const wasRaw = input.isRaw
+      const wasPaused = input.isPaused()
+      let secret = ''
+
+      const cleanup = (): void => {
+        input.off('keypress', onKeypress)
+        input.setRawMode(wasRaw)
+        if (wasPaused) input.pause()
+      }
+      const onKeypress = (character: string, key: Key): void => {
+        if (key.ctrl && key.name === 'c') {
+          cleanup()
+          output.write('\n')
+          reject(new Error('Private key input cancelled'))
+          return
+        }
+        if (key.name === 'return' || key.name === 'enter') {
+          cleanup()
+          output.write('\n')
+          resolve(secret)
+          return
+        }
+        if (key.name === 'backspace') {
+          secret = secret.slice(0, -1)
+          return
+        }
+        if (!key.ctrl && !key.meta && character.length === 1 && character >= ' ') {
+          secret += character
+        }
+      }
+
+      output.write(question)
+      emitKeypressEvents(input)
+      input.on('keypress', onKeypress)
+      input.setRawMode(true)
+      input.resume()
+    })
+  }
+
   return {
-    ask: question => new Promise(resolve => readline.question(question, resolve)),
-    close: () => readline.close()
+    ask,
+    askSecret,
+    close: () => {}
   }
 }
 
@@ -296,7 +391,7 @@ async function interactiveOptions(prompt: PromptSession): Promise<CliParseResult
   const storageURL =
     (await prompt.ask(`Enter Wallet Storage URL, default ${DEFAULT_STORAGE_URL}: `)) ||
     DEFAULT_STORAGE_URL
-  const privateKey = await prompt.ask('Enter wallet private key: ')
+  const privateKey = await prompt.askSecret('Enter wallet private key: ')
   if (!privateKey) return { kind: 'error', message: 'Missing required input: private key' }
   const satoshis = await prompt.ask('Enter amount in satoshis or leave blank for balance: ')
   return validateOptions(chain, storageURL, privateKey, satoshis)
@@ -317,6 +412,23 @@ export async function runCli(
     const prompt = promptFactory()
     try {
       parsed = await interactiveOptions(prompt)
+    } finally {
+      prompt.close()
+    }
+  }
+  if (parsed.kind === 'prompt-key') {
+    const prompt = promptFactory()
+    try {
+      const privateKey = await prompt.askSecret('Enter wallet private key: ')
+      parsed = validateOptions(
+        parsed.options.chain,
+        parsed.options.storageURL,
+        privateKey,
+        String(parsed.options.amount)
+      )
+    } catch (error) {
+      io.error(chalk.red(`❌ ${error instanceof Error ? error.message : String(error)}`))
+      return 1
     } finally {
       prompt.close()
     }

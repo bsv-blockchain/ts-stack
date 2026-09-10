@@ -168,6 +168,24 @@ describe('IdentityClient', () => {
       ).rejects.toThrow('Certificate verification failed!')
     })
 
+    it('should throw an error when certificate verification returns false', async () => {
+      const certificate = {
+        fields: { name: 'Alice' },
+        type: 'xCert',
+        serialNumber: '12345',
+        subject: 'abcdef1234567890',
+        certifier: 'CertifierX',
+        revocationOutpoint: 'outpoint1',
+        signature: 'signature1'
+      } as any as WalletCertificate
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+
+      await expect(identityClient.publiclyRevealAttributes(certificate, ['name'])).rejects.toThrow(
+        'Certificate verification failed!'
+      )
+      expect(walletMock.proveCertificate).not.toHaveBeenCalled()
+    })
+
     it('should publicly reveal attributes successfully', async () => {
       // Prepare a dummy certificate with all required properties.
       const certificate = {
@@ -183,7 +201,7 @@ describe('IdentityClient', () => {
 
       // Ensure that Certificate.verify (called on the re-instantiated Certificate)
       // resolves successfully.
-      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(true)
 
       const fieldsToReveal = ['name']
       const result = await identityClient.publiclyRevealAttributes(certificate, fieldsToReveal)
@@ -213,7 +231,7 @@ describe('IdentityClient', () => {
         revocationOutpoint: 'outpoint1',
         signature: 'signature1'
       } as any as WalletCertificate
-      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(true)
       const client = new IdentityClient(walletMock as WalletInterface, {
         networkPreset: 'teratestnet'
       })
@@ -350,7 +368,7 @@ describe('IdentityClient', () => {
       signature: 'signature1'
     } as any as WalletCertificate
 
-    jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+    jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(true)
 
     // Simulate createAction returning an object with tx = undefined
     walletMock.createAction = jest.fn().mockResolvedValue({

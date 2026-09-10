@@ -1,7 +1,20 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Knex } from 'knex'
 import { db } from '../db/knex'
-import type { AuthMethodEntity, User } from '../types'
+import type { AuthMethodEntity } from '../types'
+import {
+  hydrateUserRow,
+  storedPendingPresentationKeyColumns,
+  storedPresentationKeyColumns,
+  type UserStorageRow
+} from './UserService'
+import {
+  decryptPresentationKey,
+  encryptPresentationKey,
+  isRedactedPresentationKey,
+  presentationKeyVaultMode,
+  redactedPresentationKey
+} from '../security/presentationKeyVault'
 
 const PHONE_CHANGE_TTL_MS = 10 * 60 * 1000
 type EpochMilliseconds = string | number
@@ -28,6 +41,8 @@ interface PhoneChangeHistoryEntity {
   config: string
   previousPresentationKey: string
   newPresentationKey: string
+  previousPresentationKeyCiphertext: string | null
+  newPresentationKeyCiphertext: string | null
   createdAtEpochMs: EpochMilliseconds
   finalizedAtEpochMs: EpochMilliseconds | null
   restoredAtEpochMs: EpochMilliseconds | null
@@ -58,6 +73,67 @@ function insertedId(result: unknown): number | undefined {
   if (candidate == null || typeof candidate !== 'object' || !('id' in candidate)) return undefined
   const id = (candidate as { id?: unknown }).id
   return typeof id === 'number' ? id : undefined
+}
+
+function historyKeys(history: PhoneChangeHistoryEntity): { previous: string; next: string } {
+  const mode = presentationKeyVaultMode()
+  if (mode === 'encrypted') {
+    if (
+      history.previousPresentationKeyCiphertext != null &&
+      history.newPresentationKeyCiphertext != null
+    ) {
+      return {
+        previous: decryptPresentationKey(history.previousPresentationKeyCiphertext),
+        next: decryptPresentationKey(history.newPresentationKeyCiphertext)
+      }
+    }
+    throw new Error('Encrypted mode requires ciphertext for phone-change key history.')
+  }
+  if (
+    mode === 'dual-write' &&
+    (isRedactedPresentationKey(history.previousPresentationKey) ||
+      isRedactedPresentationKey(history.newPresentationKey)) &&
+    history.previousPresentationKeyCiphertext != null &&
+    history.newPresentationKeyCiphertext != null
+  ) {
+    return {
+      previous: decryptPresentationKey(history.previousPresentationKeyCiphertext),
+      next: decryptPresentationKey(history.newPresentationKeyCiphertext)
+    }
+  }
+  if (
+    isRedactedPresentationKey(history.previousPresentationKey) ||
+    isRedactedPresentationKey(history.newPresentationKey)
+  ) {
+    throw new Error('Phone-change key history is redacted and its vault key is unavailable.')
+  }
+  return {
+    previous: history.previousPresentationKey,
+    next: history.newPresentationKey
+  }
+}
+
+function storedHistoryKeyColumns(
+  previousPresentationKey: string,
+  newPresentationKey: string
+): Record<string, string | null> {
+  const mode = presentationKeyVaultMode()
+  if (mode === 'legacy') {
+    return {
+      previousPresentationKey,
+      newPresentationKey,
+      previousPresentationKeyCiphertext: null,
+      newPresentationKeyCiphertext: null
+    }
+  }
+  return {
+    previousPresentationKey:
+      mode === 'dual-write' ? previousPresentationKey : redactedPresentationKey(0, 'previous'),
+    newPresentationKey:
+      mode === 'dual-write' ? newPresentationKey : redactedPresentationKey(0, 'new'),
+    previousPresentationKeyCiphertext: encryptPresentationKey(previousPresentationKey),
+    newPresentationKeyCiphertext: encryptPresentationKey(newPresentationKey)
+  }
 }
 
 async function findOrCreatePhoneMethod(
@@ -94,20 +170,19 @@ export class PhoneChangeService {
     methodType?: string,
     config?: string
   ): Promise<PendingPhoneChange | undefined> {
-    const user = await db<User>('users').where({ id: userId }).first()
+    const user = hydrateUserRow(await db<UserStorageRow>('users').where({ id: userId }).first())
     if (user?.pendingPresentationKey == null) return undefined
-    const query = db<PhoneChangeHistoryEntity>('phone_change_history')
-      .where({
-        targetUserId: userId,
-        newPresentationKey: user.pendingPresentationKey,
-        finalizedAtEpochMs: null,
-        restoredAtEpochMs: null
-      })
+    const query = db<PhoneChangeHistoryEntity>('phone_change_history').where({
+      targetUserId: userId,
+      finalizedAtEpochMs: null,
+      restoredAtEpochMs: null
+    })
     if (methodType != null) query.andWhere({ methodType })
     if (config != null) query.andWhere({ config })
-    const history = await query
-      .orderBy('id', 'desc')
-      .first()
+    const histories = await query.orderBy('id', 'desc')
+    const history = histories.find(
+      candidate => historyKeys(candidate).next === user.pendingPresentationKey
+    )
     return history == null
       ? undefined
       : { changeId: history.id, presentationKey: user.pendingPresentationKey }
@@ -154,7 +229,7 @@ export class PhoneChangeService {
         const committed = await trx<PhoneChangeHistoryEntity>('phone_change_history')
           .where({ id: session.committedChangeId })
           .first()
-        if (committed?.newPresentationKey !== newPresentationKey) {
+        if (committed == null || historyKeys(committed).next !== newPresentationKey) {
           throw new PhoneChangeError('Phone change authorization was already used.', 401)
         }
         return committed.id
@@ -163,7 +238,9 @@ export class PhoneChangeService {
         throw new PhoneChangeError('Phone change authorization is invalid or expired.', 401)
       }
 
-      const user = await trx<User>('users').where({ id: session.userId }).forUpdate().first()
+      const user = hydrateUserRow(
+        await trx<UserStorageRow>('users').where({ id: session.userId }).forUpdate().first()
+      )
       if (user?.presentationKey !== currentPresentationKey) {
         throw new PhoneChangeError('The current wallet account could not be verified.', 401)
       }
@@ -196,7 +273,10 @@ export class PhoneChangeService {
 
       await trx('users')
         .where({ id: user.id })
-        .update({ pendingPresentationKey: newPresentationKey })
+        .update({
+          pendingPresentationKey: null,
+          ...storedPendingPresentationKeyColumns(newPresentationKey)
+        })
 
       const now = Date.now()
       const historyResult = await trx('phone_change_history').insert(
@@ -207,8 +287,7 @@ export class PhoneChangeService {
           replacedAuthMethodId: currentMethod?.id ?? null,
           methodType: session.methodType,
           config: session.config,
-          previousPresentationKey: currentPresentationKey,
-          newPresentationKey,
+          ...storedHistoryKeyColumns(currentPresentationKey, newPresentationKey),
           createdAtEpochMs: now,
           finalizedAtEpochMs: null,
           restoredAtEpochMs: null
@@ -236,16 +315,19 @@ export class PhoneChangeService {
         .where({ id: changeId })
         .forUpdate()
         .first()
+      const keys = history == null ? undefined : historyKeys(history)
       if (
         history?.targetUserId == null ||
         history.restoredAtEpochMs != null ||
-        history.previousPresentationKey !== currentPresentationKey ||
-        history.newPresentationKey !== newPresentationKey
+        keys?.previous !== currentPresentationKey ||
+        keys?.next !== newPresentationKey
       ) {
         throw new PhoneChangeError('Phone change finalization could not be verified.', 401)
       }
 
-      const user = await trx<User>('users').where({ id: history.targetUserId }).forUpdate().first()
+      const user = hydrateUserRow(
+        await trx<UserStorageRow>('users').where({ id: history.targetUserId }).forUpdate().first()
+      )
       if (history.finalizedAtEpochMs != null) {
         if (user?.presentationKey !== newPresentationKey) {
           throw new PhoneChangeError('Phone change finalization no longer matches the account.')
@@ -260,11 +342,15 @@ export class PhoneChangeService {
       }
 
       const now = Date.now()
-      await trx('users').where({ id: user.id }).update({
-        presentationKey: newPresentationKey,
-        pendingPresentationKey: null,
-        umpTokenOutpoint: null
-      })
+      await trx('users')
+        .where({ id: user.id })
+        .update({
+          ...storedPresentationKeyColumns(newPresentationKey),
+          pendingPresentationKey: null,
+          pendingPresentationKeyLookup: null,
+          pendingPresentationKeyCiphertext: null,
+          umpTokenOutpoint: null
+        })
       await trx('phone_change_history')
         .where({ id: history.id })
         .update({ finalizedAtEpochMs: now })
@@ -284,9 +370,16 @@ export class PhoneChangeService {
       }
 
       if (history.finalizedAtEpochMs == null) {
-        await trx('users')
-          .where({ id: history.targetUserId, pendingPresentationKey: history.newPresentationKey })
-          .update({ pendingPresentationKey: null })
+        const user = hydrateUserRow(
+          await trx<UserStorageRow>('users').where({ id: history.targetUserId }).forUpdate().first()
+        )
+        if (user?.pendingPresentationKey === historyKeys(history).next) {
+          await trx('users').where({ id: history.targetUserId }).update({
+            pendingPresentationKey: null,
+            pendingPresentationKeyLookup: null,
+            pendingPresentationKeyCiphertext: null
+          })
+        }
       }
 
       const phoneMethod = await trx<AuthMethodEntity>('auth_methods')

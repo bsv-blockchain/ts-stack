@@ -107,7 +107,7 @@ key, including when the user enters the same phone number:
 ```ts
 await manager.startPhoneNumberChange('+12065550100')
 await manager.completePhoneNumberChange(code)
-await persist(manager.saveSnapshot())
+await platformKeyStore.storeSecret('wallet-snapshot', manager.saveSnapshot())
 ```
 
 The completion call first stages the verified phone association and new key in
@@ -120,6 +120,29 @@ verified UMP token before idempotently finalizing. Repeating phone verification
 also resumes an unpublished staged change without committing another key.
 Persist the snapshot immediately after success. Deploy the compatible overlay
 topic and WAB schema/routes before enabling this UI.
+
+### Snapshot security
+
+`CWIStyleWalletManager` and `SimpleWalletManager` snapshots contain wallet root
+key material and intentionally embed the key needed to restore that material.
+Encryption protects their internal representation, but it does not make the
+snapshot safe to disclose: **access to a snapshot is access to the wallet**.
+Store the complete snapshot as a secret in an OS Keychain, hardware-backed
+keystore, or comparably trusted storage. Do not put snapshots in ordinary
+localStorage/AsyncStorage, logs, analytics, crash reports, unprotected backups,
+clipboard data, or cloud sync. If a snapshot may have escaped trusted storage,
+treat the wallet credentials as compromised and rotate them; deleting one copy
+does not revoke other copies.
+
+Remote `StorageClient` and credential-bearing Arcade SSE endpoints require
+HTTPS. Plain HTTP is accepted only for explicit loopback hosts during local
+development. Arcade SSE dependency debug logging remains disabled because its
+request URL and headers carry wallet callback credentials.
+
+Certificate signatures fail closed at every wallet trust boundary. Direct and
+issuer-mediated acquisition require an affirmative certifier-signature result
+before storage, and identity discovery verifies each untrusted overlay
+certificate before decryption or trust scoring.
 
 ### ChainTracks sources and networks
 

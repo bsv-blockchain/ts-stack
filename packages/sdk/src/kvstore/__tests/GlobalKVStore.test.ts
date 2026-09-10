@@ -668,6 +668,15 @@ describe('GlobalKVStore', () => {
           ;(MockPushDrop as any).decode = originalDecode
         }
       })
+
+      it('rejects an overlay value when signature verification returns valid false', async () => {
+        primeResolverWithOneOutput(mockResolver)
+        mockProtoWallet.verifySignature.mockResolvedValue({ valid: false })
+
+        const result = await kvStore.get({ key: TEST_KEY })
+
+        expect(result).toEqual([])
+      })
     })
 
     describe('Query Parameter Combinations', () => {

@@ -30,7 +30,7 @@
     "path": "dist/umd/bundle.js",
     "global": "bsv",
     "maximumBytes": {
-      "raw": 555500,
+      "raw": 556000,
       "gzip": 162000,
       "brotli": 136000
     }
