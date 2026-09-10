@@ -7,4 +7,6 @@ export default async function globalSetup() {
   process.env.STORAGE_URL = 'https://storage.example.com'
   process.env.BSV_NETWORK = 'testnet'
   process.env.COMMISSION_FEE = '1000'
+  process.env.WAB_PRESENTATION_KEY_ENCRYPTION_KEY = '1'.repeat(64)
+  process.env.WAB_PRESENTATION_KEY_ENCRYPTION_MODE = 'encrypted'
 }

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

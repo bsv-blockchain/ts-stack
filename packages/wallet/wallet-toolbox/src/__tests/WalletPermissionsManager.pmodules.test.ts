@@ -408,15 +408,25 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(request).toHaveBeenCalledTimes(1)
     })
 
-    it('reuses an amount-scoped recent spending grant by default', async () => {
+    it('does not let the compatibility option re-enable recent spending-grant reuse', async () => {
       const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com')
       const internals = manager as any
-      jest.spyOn(internals, 'hasRecentOrPendingGrant').mockResolvedValue(true)
-      const findToken = jest.spyOn(internals, 'findSpendingToken')
+      const recent = jest.spyOn(internals, 'hasRecentOrPendingGrant').mockResolvedValue(true)
+      const findToken = jest.spyOn(internals, 'findSpendingToken').mockResolvedValue(undefined)
+      const request = jest.spyOn(internals, 'requestPermissionFlow').mockResolvedValue(true)
 
       await expect(manager.ensureSpendingAuthorization({ originator: 'app.com', satoshis: 1000 })).resolves.toBe(true)
+      await expect(
+        manager.ensureSpendingAuthorization({
+          originator: 'app.com',
+          satoshis: 1000,
+          allowRecentGrant: true
+        })
+      ).resolves.toBe(true)
 
-      expect(findToken).not.toHaveBeenCalled()
+      expect(recent).not.toHaveBeenCalled()
+      expect(findToken).toHaveBeenCalledTimes(2)
+      expect(request).toHaveBeenCalledTimes(2)
     })
 
     it('should delegate internalizeAction when a P-label is present', async () => {

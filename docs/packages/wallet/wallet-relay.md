@@ -4,9 +4,9 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.3.6'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '0.4.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'relay']
@@ -111,7 +111,7 @@ function WalletConnection() {
 
 - **Encryption** — `encryptEnvelope()`, `decryptEnvelope()` for AES-256-GCM authenticated encryption
 - **URI handling** — `buildPairingUri()`, `parsePairingUri()` for QR encoding
-- **Signature verification** — `verifyPairingSignature()` for ECDSA signature validation
+- **Signature verification** — Signed pairing metadata is verified before any relay resolution request
 - **Encoding** — `bytesToBase64url()`, `base64urlToBytes()` for URL-safe binary
 
 ### CLI Scaffolding
@@ -175,14 +175,23 @@ async function sendPayment(client: WalletRelayClient) {
 ### Mobile wallet implementation
 
 ```typescript
-import { WalletPairingSession, parsePairingUri } from '@bsv/wallet-relay/client'
+import {
+  WalletPairingSession,
+  parsePairingUri,
+  verifyPairingSignature
+} from '@bsv/wallet-relay/client'
 
 // Scan desktop QR code to get the pairing URI.
 const { params, error } = parsePairingUri(scannedQR)
 if (!params) throw new Error(error ?? 'Invalid pairing URI')
+if (!(await verifyPairingSignature(params))) {
+  throw new Error('Unsigned or invalid pairing URI')
+}
 
 const session = new WalletPairingSession(myWalletInstance, params, {
-  autoApproveMethods: new Set(['getPublicKey'])
+  autoApproveMethods: new Set(['getPublicKey']),
+  onApprovalRequired: async (method, requestParams) =>
+    await showApprovalModal(method, requestParams)
 })
 
 session.onRequest(async (method, params) => {
@@ -227,6 +236,11 @@ await session.connect()
 ## Common pitfalls
 
 > **Backend key stability** — `PrivateKey` must be the same across server restarts. Store in env var or secure vault, never generate new key each start.
+
+> **Unsigned pairing or missing approval UI** — Version 0.4 rejects unsigned
+> pairing URIs, non-loopback HTTP origins or direct relay API URLs, and every
+> non-auto-approved wallet method when `onApprovalRequired` is absent. Enable
+> signed QR codes and wire an explicit approval callback before upgrading.
 
 > **Missing X-Desktop-Token header** — `POST /api/request/:id` requires `X-Desktop-Token` header. Browser CORS preflight must allow this header in `allowedHeaders`.
 

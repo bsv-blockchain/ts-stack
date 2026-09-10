@@ -119,6 +119,12 @@ Wallet initialization and invalid server pricing are treated as server errors
 (`500`). Malformed, invalid, insufficient, or replayed payments receive a fresh
 `402`, as required by BRC-121.
 
+The server requires a strictly framed BRC-95 Atomic BEEF envelope. It prices
+the transaction named by the atomic subject and gives the wallet only that
+transaction and its dependency closure. Legacy atomic envelopes containing
+unrelated branches are reduced to that closure; plain BEEF, trailing bytes,
+and a non-affirmative wallet internalization result are rejected.
+
 ## License
 
 Current TS Stack changes are licensed under the Open BSV License Version 6; see

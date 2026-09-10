@@ -49,15 +49,18 @@ describe('PhoneChangeService', () => {
     await expect(db('auth_methods').where({ id: method.id }).first()).resolves.toMatchObject({
       userId: user.id
     })
-    await expect(db('phone_change_history').where({ id: changeId }).first()).resolves.toMatchObject(
-      {
-        targetUserId: user.id,
-        previousPhoneOwnerUserId: user.id,
-        previousPresentationKey: oldKey,
-        newPresentationKey: newKey,
-        finalizedAtEpochMs: expect.anything()
-      }
-    )
+    const history = await db('phone_change_history').where({ id: changeId }).first()
+    expect(history).toMatchObject({
+      targetUserId: user.id,
+      previousPhoneOwnerUserId: user.id,
+      previousPresentationKey: expect.stringMatching(/^redacted_/),
+      newPresentationKey: expect.stringMatching(/^redacted_/),
+      previousPresentationKeyCiphertext: expect.stringMatching(/^v1\./),
+      newPresentationKeyCiphertext: expect.stringMatching(/^v1\./),
+      finalizedAtEpochMs: expect.anything()
+    })
+    expect(JSON.stringify(history)).not.toContain(oldKey)
+    expect(JSON.stringify(history)).not.toContain(newKey)
   })
 
   it('transfers a verified phone and lets support restore the prior ownership record', async () => {

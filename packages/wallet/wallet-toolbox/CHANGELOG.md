@@ -6,6 +6,25 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Require an affirmative certifier-signature verification result before
+  storing directly acquired or issuer-returned certificates. Identity overlay
+  results are verified before decryption and trust scoring, so forged
+  certificates cannot become wallet-held or trusted discovered identities. The
+  synchronized browser Vite ceilings advance to 1,695,000 raw and 401,000 gzip,
+  covering measured 1,694,211-byte and 400,048-byte bundles; Brotli is unchanged.
+  The mobile Metro raw ceiling advances to 1,750,000 for the measured
+  1,748,892-byte bundle. The browser esbuild raw ceiling advances to 1,323,000
+  for the measured 1,321,768-byte bundle, its gzip ceiling advances to 365,000
+  for the measured 364,413-byte bundle, and the optimized Hermes gzip ceiling
+  advances to 1,442,000 for the measured 1,441,531-byte bytecode; remaining
+  compressed ceilings are unchanged.
+- Never cache, coalesce, or reuse spending approvals, give each prompt a
+  distinct request identity, and paginate the complete action history before
+  calculating an authorization token's prior spending.
+- Require HTTPS for credential-bearing remote storage and Arcade SSE outside
+  explicit loopback development, disable dependency debug output, and avoid
+  serializing credential-bearing transport errors. Snapshot formats remain
+  unchanged and are documented as wallet-equivalent secrets.
 - Make new WAB account creation resumable when wallet setup, funding, KDF, UMP
   publication, or the final acknowledgement is interrupted. The manager accepts
   a clean missing-token result only for a server-declared pending registration,
