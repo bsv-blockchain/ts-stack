@@ -130,3 +130,13 @@ Hermes gzip at 1,454,799 bytes, above the macOS measurements; their proposed
 ceilings are 404,500, 368,500, and 1,455,000 bytes respectively. These
 narrow budget changes need explicit maintainer review under the repository
 artifact-growth policy. They are feature cost, not a performance improvement.
+
+The proof-recovery follow-up adds the per-copy work controller, optional validated
+proof-provider traversal and reconciliation timestamps. RPC proof orchestration
+remains server-only. macOS exact packed artifacts measured Vite 1,714,512 bytes
+(404,411 gzip), esbuild 1,337,378 (367,559 gzip), Metro 1,765,466 (448,347 gzip),
+and Hermes 3,584,469 (1,438,776 gzip). Linux CI measured Vite gzip at 404,970 and
+Hermes gzip at 1,457,902. The incremental raw, Brotli and gzip ceiling changes are
+documented in the README; compressed measurements differ across platforms and
+Hermes build paths. These are explicit feature costs requiring review, not
+claims of reduced application bundle size.

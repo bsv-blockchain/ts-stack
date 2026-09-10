@@ -100,7 +100,8 @@ replayed, and resumed sync rereads durable destination progress.
 The adaptive page controller and optional validated-proof lookup add a small
 client bundle cost. Reviewed raw-size ceilings increase by 4,000 bytes for Vite,
 3,000 for esbuild, 4,000 for Metro and 8,000 for Hermes; Brotli ceilings increase
-by 500 bytes for Vite and 1,500 for Hermes. Other compression limits stay fixed.
+by 500 bytes for Vite and 1,500 for Hermes. Gzip ceilings increase by 1,000 bytes
+for Vite, 500 for esbuild and 3,500 for Hermes to account for Linux artifact costs.
 The RPC validation coordinator is excluded from browser/mobile bundles.
 
 The transfer extension is an **unpublished 2.12.0 candidate**. Published 2.11.0
