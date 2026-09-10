@@ -92,6 +92,23 @@ describe('ArcSSEClient', () => {
       client.connect()
       expect(FakeEventSource.instances[0].url).toContain('callbackToken=tok%20with%20spaces%20%26%20chars')
     })
+
+    test('requires HTTPS except for explicit loopback development', () => {
+      expect(() => makeClient({ baseUrl: 'http://arcade.example.com' })).toThrow('requires HTTPS')
+      expect(() => makeClient({ baseUrl: 'http://localhost:8080' })).not.toThrow()
+      expect(() => makeClient({ baseUrl: 'http://127.0.0.1:8080' })).not.toThrow()
+      expect(() => makeClient({ baseUrl: 'http://[::1]:8080' })).not.toThrow()
+    })
+
+    test('rejects credentials, query parameters, and fragments in the base URL', () => {
+      expect(() => makeClient({ baseUrl: 'https://user:pass@arcade.example.com' })).toThrow(
+        'cannot include credentials'
+      )
+      expect(() => makeClient({ baseUrl: 'https://arcade.example.com?token=secret' })).toThrow(
+        'cannot include credentials'
+      )
+      expect(() => makeClient({ baseUrl: 'https://arcade.example.com#events' })).toThrow('cannot include credentials')
+    })
   })
 
   // ── connect ───────────────────────────────────────────────────────────────
@@ -102,6 +119,7 @@ describe('ArcSSEClient', () => {
       client.connect()
       const es = FakeEventSource.instances[0]
       expect(es.opts.headers['Last-Event-ID']).toBe('0')
+      expect(es.opts.debug).toBe(false)
     })
 
     test('uses lastEventId from options as Last-Event-ID header', () => {
@@ -180,14 +198,18 @@ describe('ArcSSEClient', () => {
 
     test('reports a synchronous processing failure without acknowledging the event', () => {
       const { client, errors, lastEventIds } = makeClient({
-        onEvent: () => { throw new Error('synchronous storage failure') }
+        onEvent: () => {
+          throw new Error('synchronous storage failure')
+        }
       })
       client.connect()
 
-      expect(() => FakeEventSource.instances[0].emit('status', {
-        data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
-        lastEventId: '101'
-      })).not.toThrow()
+      expect(() =>
+        FakeEventSource.instances[0].emit('status', {
+          data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+          lastEventId: '101'
+        })
+      ).not.toThrow()
 
       expect(client.lastEventId).toBeUndefined()
       expect(lastEventIds).toEqual([])
@@ -220,9 +242,18 @@ describe('ArcSSEClient', () => {
     test('calls onError with message from event', () => {
       const { client, errors } = makeClient()
       client.connect()
-      FakeEventSource.instances[0].emit('error', { message: 'connection refused' })
+      const logSpy = jest.spyOn(console, 'log')
+      FakeEventSource.instances[0].emit('error', {
+        message: 'connection refused',
+        url: 'https://arcade.example.com/events?callbackToken=tok-abc123',
+        headers: { Authorization: 'Bearer arc-secret' }
+      })
       expect(errors).toHaveLength(1)
       expect(errors[0].message).toBe('connection refused')
+      const logged = logSpy.mock.calls.map(call => call.join(' ')).join('\n')
+      expect(logged).toContain('connection error')
+      expect(logged).not.toContain('tok-abc123')
+      expect(logged).not.toContain('arc-secret')
     })
 
     test('calls onError with generic message when event has no message', () => {

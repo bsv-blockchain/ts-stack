@@ -589,14 +589,14 @@ export class GlobalKVStore {
   ): Promise<boolean> {
     try {
       const anyoneWallet = new ProtoWallet('anyone')
-      await anyoneWallet.verifySignature({
+      const { valid } = await anyoneWallet.verifySignature({
         data: fields.flat(),
         signature,
         counterparty: Utils.toHex(fields[kvProtocol.controller]),
         protocolID: JSON.parse(Utils.toUTF8(fields[kvProtocol.protocolID])),
         keyID: Utils.toUTF8(fields[kvProtocol.key])
       })
-      return true
+      return valid
     } catch {
       return false
     }

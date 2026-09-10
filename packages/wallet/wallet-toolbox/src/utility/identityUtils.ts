@@ -153,8 +153,8 @@ const parseOne = async (
       certificate.keyring,
       certificate.signature
     )
+    if (!(await verifiableCert.verify())) return null
     const decryptedFields = await verifiableCert.decryptFields(new ProtoWallet('anyone'))
-    await verifiableCert.verify()
     verifiableCert.decryptedFields = decryptedFields
     return verifiableCert
   } catch (error) {

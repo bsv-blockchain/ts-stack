@@ -4,9 +4,9 @@ title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/btms-permission-module'
-version: '1.1.4'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.2.0'
+last_updated: '2026-08-31'
+last_verified: '2026-08-31'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'permissions']
@@ -20,6 +20,12 @@ The core permission module for BTMS token operations. Framework-agnostic with no
 BSV Desktop and BSV Browser show a spend authorization modal whenever BSV is spent. For a BTMS token output the raw satoshi value is typically 1 sat — not the token's actual denomination. This module gives the wallet enough context to show the correct value to the user and gate authorization appropriately. A USD stablecoin issuer, for example, ships a module that causes the modal to display "$1.00 USD" rather than "1 satoshi."
 
 `@bsv/btms-permission-module` implements the BRC-98/99 permission hooks interface to intercept BTMS token spend and burn operations, prompt users via a callback, and enforce authorization decisions. Works with any UI framework (React, Vue, Angular, vanilla JS, or no UI at all).
+
+Version 1.2 auto-approves only pure issuance: the action must contain no
+caller-supplied inputs and must carry an exact issuance marker. An action that
+mixes an issuance output with any input follows the normal transaction-bound
+user approval flow. Existing `@bsv/wallet-toolbox-client` 2.x integrations
+remain supported.
 
 ## Install
 

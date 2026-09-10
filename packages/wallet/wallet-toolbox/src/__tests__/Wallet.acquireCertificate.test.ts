@@ -136,6 +136,65 @@ describe('Wallet.acquireCertificate compatibility', () => {
     }
   })
 
+  test('rejects a direct certificate when verification returns false', async () => {
+    const { wallet, storage } = await _tu.createSQLiteTestWallet({
+      databaseName: 'acquireCertificateCompatibilityFalseDirect',
+      dropAll: true
+    })
+    try {
+      jest.spyOn(MasterCertificate.prototype, 'verify').mockResolvedValue(false)
+      jest.spyOn(MasterCertificate, 'decryptFields').mockResolvedValue({ name: 'Alice' })
+
+      await expect(
+        wallet.acquireCertificate({
+          acquisitionProtocol: 'direct',
+          type: Buffer.alloc(32, 1).toString('base64'),
+          serialNumber: Buffer.alloc(32, 2).toString('base64'),
+          certifier: '02' + '22'.repeat(32),
+          revocationOutpoint: `${'ab'.repeat(32)}.0`,
+          fields: { name: 'encrypted-name' },
+          signature: '3006020101020101',
+          keyringRevealer: 'certifier',
+          keyringForSubject: { name: Buffer.alloc(32, 3).toString('base64') }
+        })
+      ).rejects.toThrow('valid encrypted and signed certificate')
+      await expect(wallet.listCertificates({ types: [], certifiers: [] })).resolves.toMatchObject({
+        totalCertificates: 0
+      })
+    } finally {
+      await storage.destroy()
+    }
+  })
+
+  test('rejects an issued certificate when verification returns false', async () => {
+    const { wallet, storage } = await _tu.createSQLiteTestWallet({
+      databaseName: 'acquireCertificateCompatibilityFalseIssued',
+      dropAll: true
+    })
+    try {
+      const args = issuanceArgs()
+      const certificateFields = { name: 'encrypted-name' }
+      mockIssuanceDependencies(
+        wallet,
+        args,
+        certificateFields,
+        { name: 'encrypted-key' },
+        {
+          certificate: issuedCertificate(wallet, args, certificateFields),
+          serverNonce: Buffer.alloc(48, 2).toString('base64')
+        }
+      )
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(false)
+
+      await expect(wallet.acquireCertificate(args)).rejects.toThrow('Certificate verification failed')
+      await expect(wallet.listCertificates({ types: [], certifiers: [] })).resolves.toMatchObject({
+        totalCertificates: 0
+      })
+    } finally {
+      await storage.destroy()
+    }
+  })
+
   test.each([
     {
       name: 'rejects a response authenticated as another certifier',

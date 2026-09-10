@@ -138,6 +138,15 @@ describe('parsePairingUri validation', () => {
     const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/origin/i)
   })
+
+  it('rejects remote HTTP origins but allows loopback development origins', () => {
+    const remote = buildPairingUri({ ...VALID_BUILD_PARAMS, origin: 'http://app.example.com' })
+    expect(parsePairingUri(remote).error).toMatch(/HTTPS/)
+
+    for (const origin of ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://[::1]:3000']) {
+      expect(parsePairingUri(buildPairingUri({ ...VALID_BUILD_PARAMS, origin })).error).toBeNull()
+    }
+  })
 })
 
 // ── Signature tests ───────────────────────────────────────────────────────────
@@ -209,9 +218,9 @@ describe('verifyPairingSignature', () => {
     ).toBe(false)
   })
 
-  it('returns true (no-op) when sig is absent', async () => {
+  it('returns false when sig is absent', async () => {
     const { sig: _sig, ...unsigned } = await makeSignedParams()
-    expect(await verifyPairingSignature(unsigned)).toBe(true)
+    expect(await verifyPairingSignature(unsigned)).toBe(false)
   })
 
   it('returns false for a corrupted sig string', async () => {

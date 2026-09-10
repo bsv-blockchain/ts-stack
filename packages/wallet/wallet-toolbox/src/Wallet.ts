@@ -641,7 +641,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
         vargs.keyringForSubject,
         vargs.signature
       )
-      await certificate.verify()
+      if (!(await certificate.verify())) throw new Error('Certificate verification failed')
       await MasterCertificate.decryptFields(
         this,
         vargs.keyringForSubject,
@@ -740,7 +740,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     })
     if (!valid) throw new Error('Invalid serialNumber')
     this.validateIssuedCertificate(signedCertificate, vargs, certificateFields)
-    await signedCertificate.verify()
+    if (!(await signedCertificate.verify())) throw new Error('Certificate verification failed')
     await MasterCertificate.decryptFields(this, masterKeyring, certificate.fields, vargs.certifier)
     return await acquireDirectCertificate(this, auth, {
       ...certificate,

@@ -18,7 +18,7 @@ import { HEADERS } from './constants.js'
 const IDENTITY_KEY = '03f8104e2b313136ef1b84fcd9c8aadb775beb89a8207c942b31ab89e160ba4c86'
 const NONCE = 'YWJjMTIzbm9uY2U='
 
-/** Builds a minimal valid BEEF containing a single transaction with one output. */
+/** Builds a minimal valid Atomic BEEF containing a single transaction with one output. */
 function makeBEEF(satoshis: number): { beefBase64: string; txid: string } {
   const tx = new Transaction()
   tx.addInput({
@@ -33,9 +33,48 @@ function makeBEEF(satoshis: number): { beefBase64: string; txid: string } {
   })
   const beef = new Beef()
   beef.mergeTransaction(tx)
+  const txid = tx.id('hex')
   return {
-    beefBase64: Buffer.from(beef.toBinary()).toString('base64'),
-    txid: tx.id('hex')
+    beefBase64: Buffer.from(beef.toBinaryAtomic(txid)).toString('base64'),
+    txid
+  }
+}
+
+function makeOverinclusiveAtomicBEEF(
+  paymentSatoshis: number,
+  unrelatedSatoshis: number
+): { beefBase64: string; paymentTxid: string; unrelatedTxid: string } {
+  const dependency = new Transaction()
+  dependency.addOutput({ satoshis: paymentSatoshis + 1, lockingScript: Script.fromASM('OP_TRUE') })
+
+  const payment = new Transaction()
+  payment.addInput({
+    sourceTransaction: dependency,
+    sourceOutputIndex: 0,
+    unlockingScript: Script.fromASM('OP_TRUE')
+  })
+  payment.addOutput({ satoshis: paymentSatoshis, lockingScript: Script.fromASM('OP_TRUE') })
+
+  const unrelated = new Transaction()
+  unrelated.addOutput({ satoshis: unrelatedSatoshis, lockingScript: Script.fromASM('OP_TRUE') })
+
+  const beef = new Beef()
+  beef.mergeTransaction(dependency)
+  beef.mergeTransaction(payment)
+  beef.mergeTransaction(unrelated)
+
+  const paymentTxid = payment.id('hex')
+  const atomicHeader = beef.toBinaryAtomic(paymentTxid).slice(0, 36)
+  const bytes = [...atomicHeader, ...beef.toBinary()]
+  const parsed = Beef.fromBinary(bytes)
+  expect(parsed.atomicTxid).toBe(paymentTxid)
+  expect(parsed.isAtomic()).toBe(false)
+  expect(parsed.txs.at(-1)?.txid).toBe(unrelated.id('hex'))
+
+  return {
+    beefBase64: Buffer.from(bytes).toString('base64'),
+    paymentTxid,
+    unrelatedTxid: unrelated.id('hex')
   }
 }
 
@@ -76,11 +115,11 @@ function validHeaders(beefBase64: string, now = Date.now()): Record<string, stri
 }
 
 /** Builds a minimal wallet mock that accepts a payment (no replay). */
-function makeWallet(opts: { isMerge?: boolean } = {}): WalletInterface {
+function makeWallet(opts: { accepted?: boolean; isMerge?: boolean } = {}): WalletInterface {
   return {
     internalizeAction: vi
       .fn()
-      .mockResolvedValue({ accepted: true, isMerge: opts.isMerge ?? false }),
+      .mockResolvedValue({ accepted: opts.accepted ?? true, isMerge: opts.isMerge ?? false }),
     getPublicKey: vi.fn().mockResolvedValue({ publicKey: IDENTITY_KEY }),
     createAction: vi.fn(),
     // Fulfil the interface shape — unused methods
@@ -253,6 +292,7 @@ describe('validatePayment', () => {
       [HEADERS.TIME, '9007199254740992'],
       [HEADERS.VOUT, '0junk'],
       [HEADERS.VOUT, '-1'],
+      [HEADERS.VOUT, '00'],
       [HEADERS.VOUT, '01']
     ] as const) {
       const headers = { ...validHeaders(beefBase64, now), [header]: value }
@@ -359,6 +399,19 @@ describe('validatePayment', () => {
     await expect(validatePayment({ path: '/test', headers }, wallet, 100)).resolves.toBeNull()
   })
 
+  it('rejects a valid Atomic BEEF envelope with trailing bytes', async () => {
+    const wallet = makeWallet()
+    const bytes = Buffer.from(beefBase64, 'base64')
+    const withTrailingBytes = Buffer.concat([bytes, Buffer.from([0xaa, 0xbb])]).toString('base64')
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    await expect(
+      validatePayment({ path: '/test', headers: validHeaders(withTrailingBytes, now) }, wallet, 100)
+    ).resolves.toBeNull()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
   // --- Output value checks ---
 
   it('returns null when vout index is out of bounds', async () => {
@@ -380,6 +433,47 @@ describe('validatePayment', () => {
       100
     )
     expect(result).toBeNull()
+    vi.restoreAllMocks()
+  })
+
+  it('prices the declared Atomic BEEF subject rather than an unrelated included transaction', async () => {
+    const wallet = makeWallet()
+    const { beefBase64: overinclusiveBEEF } = makeOverinclusiveAtomicBEEF(1, 1_000)
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const result = await validatePayment(
+      { path: '/test', headers: validHeaders(overinclusiveBEEF, now) },
+      wallet,
+      100
+    )
+
+    expect(result).toBeNull()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('internalizes only the declared Atomic BEEF subject and its dependencies', async () => {
+    const wallet = makeWallet()
+    const {
+      beefBase64: overinclusiveBEEF,
+      paymentTxid,
+      unrelatedTxid
+    } = makeOverinclusiveAtomicBEEF(100, 1_000)
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const result = await validatePayment(
+      { path: '/test', headers: validHeaders(overinclusiveBEEF, now) },
+      wallet,
+      100
+    )
+
+    expect(result).toMatchObject({ accepted: true, satoshisPaid: 100, txid: paymentTxid })
+    const internalized = Beef.fromBinary(
+      vi.mocked(wallet.internalizeAction).mock.calls[0][0].tx as number[]
+    )
+    expect(internalized.atomicTxid).toBe(paymentTxid)
+    expect(internalized.isAtomic()).toBe(true)
+    expect(internalized.findTxid(unrelatedTxid)).toBeUndefined()
     vi.restoreAllMocks()
   })
 
@@ -447,6 +541,21 @@ describe('validatePayment', () => {
       100
     )) as PaymentError
     expect(result.reason.toLowerCase()).toContain('replay')
+    vi.restoreAllMocks()
+  })
+
+  it('returns a PaymentError when the wallet declines internalization', async () => {
+    const wallet = makeWallet({ accepted: false })
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const result = await validatePayment(
+      { path: '/test', headers: validHeaders(beefBase64, now) },
+      wallet,
+      100
+    )
+
+    expect(result).toMatchObject({ accepted: false })
+    expect((result as PaymentError).reason).toContain('Wallet rejected transaction')
     vi.restoreAllMocks()
   })
 
@@ -521,7 +630,7 @@ describe('validatePayment', () => {
     })
     const beef = new Beef()
     beef.mergeTransaction(tx)
-    const b64 = Buffer.from(beef.toBinary()).toString('base64')
+    const b64 = Buffer.from(beef.toBinaryAtomic(tx.id('hex'))).toString('base64')
 
     vi.spyOn(Date, 'now').mockReturnValue(now)
     const headers = { ...validHeaders(b64, now), [HEADERS.VOUT]: '1' }
