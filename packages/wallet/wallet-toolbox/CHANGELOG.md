@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Validate replacement proofs across providers before reconciling stale RPC sync metadata; preserve raw transactions and checkpoints on failure.
+
+- Start sync copies conservatively and adapt page work after committed responses.
+  Validate at most eight remote proofs concurrently, draining failure work before
+  rejecting the page. Preserve all proof and checkpoint checks. Record-transfer
+  candidates now use 2.12.0 to distinguish them from published 2.11.0.
+
 - Make new WAB account creation resumable when wallet setup, funding, KDF, UMP
   publication, or the final acknowledgement is interrupted. The manager accepts
   a clean missing-token result only for a server-declared pending registration,

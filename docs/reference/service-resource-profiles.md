@@ -4,7 +4,7 @@ title: 'Service Resource Profiles, Scaling, and Message Box Economics'
 kind: reference
 version: '1.0.0'
 last_updated: '2026-08-10'
-last_verified: '2026-08-10'
+last_verified: '2026-09-10'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, resource-safety, scaling, message-box, brc-105]
@@ -98,7 +98,7 @@ an unsafe query internally.
 
 `governance/service-resource-profiles.json` is the machine-readable profile
 contract. `pnpm resource-profiles:check` launches each of its 21 scenarios in a
-fresh Node 24.18 process with a profile-constrained V8 heap. It constructs the
+fresh Node process using the repository toolchain with a profile-constrained V8 heap. It constructs the
 maximum representative page, retains an object graph, JSON text, and transport
 bytes, and fails if that page exceeds the configured response cap or if the
 three-copy concurrency model consumes more than 80% of profile memory.

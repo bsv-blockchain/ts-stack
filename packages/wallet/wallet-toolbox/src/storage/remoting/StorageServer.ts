@@ -61,7 +61,7 @@ import {
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
 import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
-import { validateSyncProof } from '../methods/validateSyncProof'
+import { validateSyncProofs } from './validateRpcSyncProofs'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -940,9 +940,7 @@ export class StorageServer {
       case 'processSyncChunk':
         await this.validateParam0(params, req)
         validateSyncChunkEntities(params[1] as SyncChunk)
-        for (const proof of (params[1] as SyncChunk).provenTxs ?? []) {
-          await validateSyncProof(this.storage, proof)
-        }
+        await validateSyncProofs(this.storage, (params[1] as SyncChunk).provenTxs ?? [])
         return true
       default:
         await this.authorizeStandardRpcCall(method, params, req)

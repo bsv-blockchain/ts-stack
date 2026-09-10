@@ -138,7 +138,7 @@ export class ServiceCollection<T> {
     call.result = result
     call.error = undefined
     call.msecs = this.getDuration(call.when)
-    const h = this._addServiceCall(this.name, call)
+    const h = this._addServiceCall(stc.providerName, call)
     h.totalCounts.failure++
     h.resetCounts[0].failure++
   }
@@ -149,7 +149,7 @@ export class ServiceCollection<T> {
     call.result = undefined
     call.error = error
     call.msecs = this.getDuration(call.when)
-    const h = this._addServiceCall(this.name, call)
+    const h = this._addServiceCall(stc.providerName, call)
     h.totalCounts.failure++
     h.totalCounts.error++
     h.resetCounts[0].failure++

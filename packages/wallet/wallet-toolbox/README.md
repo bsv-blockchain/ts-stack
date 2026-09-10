@@ -10,7 +10,9 @@ A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) confo
 
 **Live E2E testing used a large wallet in the native desktop client**, covering
 complete local copies, restart recovery, and repeat sync. Transfer size and oversized-record recovery were
-measured separately with synthetic fixtures.
+measured separately with synthetic fixtures. The latest proof-recovery follow-up
+has synthetic HTTP and read-only source-data validation; its live full-backup
+retest is pending.
 
 | Test                         | Verified result                                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -75,6 +77,39 @@ The toolbox publishes three npm packages from this repo:
 
 ### Sync performance and recovery
 
+Sync pages start at 64 records and adapt after successful commits toward a
+five-second page budget. Proof-bearing pages cap growth at 128 records; cheap
+metadata pages can grow to 1,000, while provider byte/item ceilings still apply.
+The server checks at most eight proofs concurrently and waits for all started
+checks to settle on failure before rejecting the page. Every proof still passes
+transaction, Merkle path, active-root and active-header validation before a merge.
+An authenticated HTTP regression covers 250 synthetic proofs and confirms that
+an invalid follow-up page cannot change the committed checkpoint. Stale proofs
+can be reconciled through another provider, but only after the replacement passes
+the same transaction, membership and active-chain checks. Transaction bytes,
+wallet references and source cursor timestamps are preserved. Corrected destination
+proofs receive a fresh local timestamp for incremental replication. Unverifiable replacements
+stop the page with a recovery message; no record is silently skipped.
+
+A read-only deployment-host sample of 250 proofs took 42.6 seconds with sequential
+validation and 5.58 seconds with bounded concurrency, with the same 250 root and
+250 header checks. This measures validation only, not full-copy throughput.
+Timeouts remain possible during dependency outages; writes are never blindly
+replayed, and resumed sync rereads durable destination progress.
+
+The adaptive page controller and optional validated-proof lookup add a small
+client bundle cost. Reviewed raw-size ceilings increase by 4,000 bytes for Vite,
+3,000 for esbuild, 4,000 for Metro and 8,000 for Hermes; Brotli ceilings increase
+by 500 bytes for Vite and 1,500 for Hermes. Other compression limits stay fixed.
+The RPC validation coordinator is excluded from browser/mobile bundles.
+
+The transfer extension is an **unpublished 2.12.0 candidate**. Published 2.11.0
+has no record-transfer methods. Check exact build provenance and authenticated
+runtime capabilities, not a version label alone. An oversized record on a legacy
+source cannot be rescued by upgrading only its destination; upgrade the source
+before retrying. Records exceeding the negotiated 64 MiB frame limit fail safely
+without being skipped or advancing their checkpoint.
+
 Large individual records can use the negotiated
 [bounded transfer protocol](./docs/sync-transfer.md), with durable staging,
 integrity verification and checkpoint replay protection. Its authenticated
@@ -82,7 +117,9 @@ HTTP/SQLite/IndexedDB regression exercises a 7 MiB binary record, an interrupted
 upload across client/server restart, a lost part acknowledgement, corrupted
 download rejection and a verified restore followed by an unchanged resync.
 The current frame limit is 64 MiB; legacy providers must be upgraded to use it.
-This synthetic regression is separate from the large-wallet timing evidence above.
+It also passes with a one-second delay on every authenticated transport send;
+that models added latency, not a measured bandwidth limit or a real mobile network.
+These synthetic regressions are separate from the large-wallet timing evidence above.
 
 Wallet storage replication applies each received page and its durable sync
 checkpoint in one provider transaction. IndexedDB and Knex therefore avoid

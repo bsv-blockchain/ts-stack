@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
-import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet, SimplifiedFetchTransport } from '@bsv/sdk'
 import { _tu } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageServer } from '../remoting/StorageServer'
 import { StorageClient } from '../remoting/StorageClient'
@@ -18,7 +18,12 @@ async function local(): Promise<StorageIdb> {
   return s
 }
 
-test('copies an oversized binary record through authenticated HTTP and restores it into IndexedDB', async () => {
+test.each([0, 1000])('copies an oversized binary record through authenticated HTTP with %i ms request latency and restores it into IndexedDB', async requestLatencyMs => {
+  const originalSend = SimplifiedFetchTransport.prototype.send
+  const delayedTransport = jest.spyOn(SimplifiedFetchTransport.prototype, 'send').mockImplementation(async function (message) {
+    if (requestLatencyMs > 0) await new Promise(resolve => setTimeout(resolve, requestLatencyMs))
+    return await originalSend.call(this, message)
+  })
   const remote = await _tu.createSQLiteTestWallet({ databaseName: 'largeRecordHttp', dropAll: true })
   const source = await local()
   const restored = await local()
@@ -202,6 +207,7 @@ test('copies an oversized binary record through authenticated HTTP and restores 
     const again = await restoreManager.syncFromReader(identityKey, client)
     expect(again.inserts).toBe(0)
     expect(again.updates).toBe(0)
+    expect(delayedTransport.mock.calls.length).toBeGreaterThan(20)
     expect(await remote.activeStorage.knex('sync_transfer_parts')).toHaveLength(0)
   } finally {
     await client?.destroy()
@@ -211,5 +217,6 @@ test('copies an oversized binary record through authenticated HTTP and restores 
     await restored.destroy()
     await source.dropAllData()
     await restored.dropAllData()
+    delayedTransport.mockRestore()
   }
 }, 180000)

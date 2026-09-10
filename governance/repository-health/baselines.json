@@ -328,8 +328,8 @@
     "@bsv/btms-permission-module": "1.1.4",
     "@bsv/ecpm-permission-module": "0.1.0",
     "@bsv/wallet-relay": "0.3.6",
-    "@bsv/wallet-toolbox-client": "2.11.0",
-    "@bsv/wallet-toolbox-mobile": "2.11.0",
-    "@bsv/wallet-toolbox": "2.11.0"
+    "@bsv/wallet-toolbox-client": "2.12.0",
+    "@bsv/wallet-toolbox-mobile": "2.12.0",
+    "@bsv/wallet-toolbox": "2.12.0"
   }
 }

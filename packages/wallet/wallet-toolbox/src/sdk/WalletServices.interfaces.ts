@@ -96,6 +96,16 @@ export interface WalletServices {
   getMerklePath: (txid: string, useNext?: boolean) => Promise<GetMerklePathResult>
 
   /**
+   * Try each configured proof provider once, accepting a result only after the
+   * caller's validator succeeds. Each call uses its own provider order so
+   * concurrent lookups cannot skip providers. Optional for custom services.
+   */
+  getValidatedMerklePath?: (
+    txid: string,
+    validate: (result: GetMerklePathResult) => Promise<void>
+  ) => Promise<GetMerklePathResult>
+
+  /**
    *
    * @param beef
    * @param txids

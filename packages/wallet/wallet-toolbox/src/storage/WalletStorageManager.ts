@@ -1,3 +1,4 @@
+import { SyncPageBudget } from './sync/SyncPageBudget'
 import { validateSyncCheckpoint } from './sync/syncCheckpoint'
 import {
   AbortActionArgs,
@@ -877,16 +878,22 @@ export class WalletStorageManager implements sdk.WalletStorage {
       const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
         await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
+      const budget = new SyncPageBudget()
       let i = -1
       for (;;) {
         i++
-        args.includeNextCheckpoint = true
-        const chunk = await reader.getSyncChunk(args)
+        // Keep the caller/provider ceiling independent from this session's
+        // adaptive limit so a fast page can grow the next request again.
+        const pageArgs = budget.apply(args)
+        pageArgs.includeNextCheckpoint = true
+        const startedAt = Date.now()
+        const chunk = await reader.getSyncChunk(pageArgs)
         if (chunk.user != null) {
           // Merging state from a reader cannot update activeStorage
           chunk.user.activeStorage = ((this._active as ManagedStorage).user as TableUser).activeStorage
         }
-        const r = await writer.processSyncChunk(args, chunk)
+        const r = await writer.processSyncChunk(pageArgs, chunk)
+        budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
         log += `chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`
@@ -925,13 +932,19 @@ export class WalletStorageManager implements sdk.WalletStorage {
       const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
         await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
+      const budget = new SyncPageBudget()
       let i = -1
       for (;;) {
         i++
-        args.includeNextCheckpoint = true
-        const chunk = await reader.getSyncChunk(args)
+        // Keep the caller/provider ceiling independent from this session's
+        // adaptive limit so a fast page can grow the next request again.
+        const pageArgs = budget.apply(args)
+        pageArgs.includeNextCheckpoint = true
+        const startedAt = Date.now()
+        const chunk = await reader.getSyncChunk(pageArgs)
         log += EntitySyncState.syncChunkSummary(chunk)
-        const r = await writer.processSyncChunk(args, chunk)
+        const r = await writer.processSyncChunk(pageArgs, chunk)
+        budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
         log += progLog(`chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`)

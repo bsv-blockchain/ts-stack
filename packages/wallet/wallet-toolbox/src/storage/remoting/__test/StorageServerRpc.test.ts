@@ -1,7 +1,10 @@
 import { parseJsonRpc } from '../BinaryJson'
 import { validateSyncChunkEntities } from '../entityValidationHelpers'
 import { type Request, type Response } from 'express'
-import { TelemetryEvent, WalletLoggerInterface } from '@bsv/sdk'
+import { TelemetryEvent, WalletLoggerInterface, Transaction, Script, MerklePath } from '@bsv/sdk'
+import { toBinaryBaseBlockHeader } from '../../../services/Services'
+import { doubleSha256BE } from '../../../utility/utilityHelpers'
+import { asString } from '../../../utility/utilityHelpers.noBuffer'
 import { WalletLogger } from '../../../WalletLogger'
 import { SyncChunk } from '../../../sdk/WalletStorage.interfaces'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
@@ -95,6 +98,19 @@ const emptyChunk: SyncChunk = {
   fromStorageIdentityKey: 'from',
   toStorageIdentityKey: 'to',
   userIdentityKey: 'alice'
+}
+
+function proofValidationFixture() {
+  const transaction = new Transaction()
+  transaction.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
+  const txid = transaction.id('hex')
+  const path = new MerklePath(100, [[{ offset: 0, hash: txid, txid: true }]])
+  const header = toBinaryBaseBlockHeader({ version: 1, previousHash: '0'.repeat(64),
+    merkleRoot: txid, time: 1, bits: 0, nonce: 0 })
+  const proof = { provenTxId: 1, created_at: new Date(), updated_at: new Date(), txid,
+    height: 100, index: 0, merklePath: path.toBinary(), rawTx: transaction.toBinary(),
+    blockHash: asString(doubleSha256BE(header)), merkleRoot: txid }
+  return proof
 }
 
 describe('StorageServer JSON-RPC boundary', () => {
@@ -642,6 +658,74 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('first-trace'))
     expect(consoleLog).not.toHaveBeenCalledWith(expect.stringContaining('second-trace'))
     use.mockRestore()
+  })
+
+  test('bounds parallel proof checks and waits for every proof before admitting a page', async () => {
+    const proof = proofValidationFixture()
+    const header = toBinaryBaseBlockHeader({ version: 1, previousHash: '0'.repeat(64),
+      merkleRoot: proof.merkleRoot, time: 1, bits: 0, nonce: 0 })
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let active = 0
+    let maximum = 0
+    const validateRoot = jest.fn(async () => {
+      active++
+      maximum = Math.max(maximum, active)
+      await gate
+      active--
+      return true
+    })
+    const server = makeServer({ getServices: () => ({
+      getChainTracker: async () => ({ isValidRootForHeight: validateRoot }),
+      getHeaderForHeight: async () => header
+    }) })
+    let admitted = false
+    const request = invoke(server, 'authorizeRpcCall', 'processSyncChunk', [{ identityKey: 'alice' },
+      { ...emptyChunk, provenTxs: Array.from({ length: 24 }, (_, index) => ({ ...proof, provenTxId: index + 1 })) }],
+    makeRequest({})).then(value => { admitted = true; return value })
+    try {
+      await new Promise(resolve => setImmediate(resolve))
+      expect(admitted).toBe(false)
+      expect(maximum).toBeGreaterThan(1)
+      expect(maximum).toBeLessThanOrEqual(8)
+    } finally {
+      release()
+      await request
+    }
+    expect(validateRoot).toHaveBeenCalledTimes(24)
+    expect(active).toBe(0)
+    expect(admitted).toBe(true)
+  })
+
+  test('rejects a failed proof page after draining started checks without scheduling the rest', async () => {
+    const proof = proofValidationFixture()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let calls = 0
+    let completed = 0
+    const getChainTracker = async () => ({ isValidRootForHeight: async () => {
+      const index = calls++
+      if (index === 0) return false
+      await gate
+      completed++
+      return false
+    } })
+    const server = makeServer({ getServices: () => ({ getChainTracker }) })
+    let settled = false
+    const request = invoke(server, 'authorizeRpcCall', 'processSyncChunk', [{ identityKey: 'alice' },
+      { ...emptyChunk, provenTxs: Array.from({ length: 24 }, () => ({ ...proof })) }], makeRequest({}))
+      .catch(error => { settled = true; return error })
+    try {
+      await new Promise(resolve => setImmediate(resolve))
+      expect(calls).toBeGreaterThan(1)
+      expect(calls).toBeLessThanOrEqual(8)
+      expect(settled).toBe(false)
+    } finally {
+      release()
+    }
+    expect(await request).toMatchObject({ message: expect.stringContaining('Merkle root is not active') })
+    expect(completed).toBe(calls - 1)
+    expect(calls).toBeLessThan(24)
   })
 
   test('enforces method-specific authorization and validates sync chunks', async () => {
