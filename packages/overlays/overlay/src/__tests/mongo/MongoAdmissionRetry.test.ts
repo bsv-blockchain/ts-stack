@@ -13,10 +13,19 @@ import {
 import { MongoAdmissionStorage } from '../../storage/mongo/MongoAdmissionStorage.js'
 import { MongoOverlayStorage } from '../../storage/mongo/MongoOverlayStorage.js'
 import type { MongoTransactionRunner } from '../../storage/mongo/MongoTransactionRunner.js'
+import { encodeMongoUint64 } from '../../storage/mongo/MongoSchema.js'
 import { admissionPlan } from '../admission/AdmissionStorageContract.js'
 import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
 
 const dummyDb = { collection: () => ({}) } as unknown as Db
+
+function cursorDb(score?: string): Db {
+  return {
+    collection: () => ({
+      findOne: async () => (score === undefined ? null : { score })
+    })
+  } as unknown as Db
+}
 
 const clone = <T>(value: T): T => structuredClone(value)
 
@@ -287,6 +296,34 @@ describe('Mongo admission commit guards and write-conflict retry', () => {
 })
 
 describe('Mongo overlay storage admission guards', () => {
+  test('preserves safe GASP cursors and rejects unsafe persisted values', async () => {
+    const maxSafe = BigInt(Number.MAX_SAFE_INTEGER)
+    const getCursor = (score?: string): Promise<number> =>
+      new MongoOverlayStorage(cursorDb(score), referenceScope).getLastInteraction(
+        'peer.example',
+        'tm_contract'
+      )
+
+    await expect(getCursor(encodeMongoUint64('42'))).resolves.toBe(42)
+    await expect(getCursor()).resolves.toBe(0)
+    await expect(getCursor(encodeMongoUint64(maxSafe.toString()))).resolves.toBe(
+      Number.MAX_SAFE_INTEGER
+    )
+    await expect(getCursor(encodeMongoUint64((maxSafe + 1n).toString()))).rejects.toThrow(
+      'Mongo GASP cursor exceeds a safe JavaScript integer'
+    )
+    await expect(getCursor(encodeMongoUint64((maxSafe + 3n).toString()))).rejects.toThrow(
+      'Mongo GASP cursor exceeds a safe JavaScript integer'
+    )
+    // These specific values rounded down/up in the old Number-only decoder.
+    await expect(getCursor(encodeMongoUint64('9007199254740993'))).rejects.toThrow(
+      'Mongo GASP cursor exceeds a safe JavaScript integer'
+    )
+    await expect(getCursor(encodeMongoUint64('9007199254740995'))).rejects.toThrow(
+      'Mongo GASP cursor exceeds a safe JavaScript integer'
+    )
+  })
+
   test('updateTransactionBEEF is intentionally unimplemented', async () => {
     const overlay = new MongoOverlayStorage(dummyDb, referenceScope)
     const txid = 'ab'.repeat(32)

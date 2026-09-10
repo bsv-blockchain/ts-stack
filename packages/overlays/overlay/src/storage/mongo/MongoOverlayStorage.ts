@@ -372,7 +372,7 @@ export class MongoOverlayStorage implements Storage {
       topic
     })
     if (found?.score === undefined) return 0
-    return Number(decodeMongoUint64(found.score as string))
+    return this.toSafeNumber(decodeMongoUint64(found.score as string), 'GASP cursor')
   }
 
   private outputId(topic: string, txid: string, outputIndex: number): string {
