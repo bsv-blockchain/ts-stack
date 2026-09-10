@@ -250,9 +250,18 @@ All notable changes to this project will be documented in this file. The format 
 - Add `LookupResolver.queryDetailed()` and per-outcome host-settlement counts
   so security-sensitive callers can distinguish authoritative empty answers
   from partial availability.
+- Add bounded LookupResolver discovery: later SLAP tracker advertisements can
+  join an active query, hosts are scheduled fairly under concurrency and byte
+  limits, and HTTP bodies are read incrementally. Raw `query$` output remains
+  unverified; `onEvidence` is the C02 intake seam. Existing 2s host / 5s
+  tracker delays, reputation/backoff, freeform answers, and CORS/public
+  lookup request headers are unchanged.
 
 ### Changed
 
+- LookupResolver host cache no longer lets a tighter-limit discovery satisfy a
+  later larger query, and `query()` still throws the historical no-competent-hosts
+  error when a deadline expires before any host is admitted.
 - Batch BEEF mutation bookkeeping and reuse compound Merkle intermediate hashes.
   The optional asynchronous P2PKH backend now forwards its already validated
   compressed public key directly into the unlocking script. Existing BEEF
