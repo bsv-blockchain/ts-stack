@@ -3,8 +3,8 @@ id: about-doc-agent
 title: 'Documentation Maintenance'
 kind: meta
 version: '2.1.0'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+last_updated: '2026-09-14'
+last_verified: '2026-09-14'
 review_cadence_days: 30
 status: stable
 tags: [about, documentation, maintenance, automation]
@@ -64,9 +64,11 @@ tags: [protocol, reference]
 - `last_updated` changes when prose or structure changes.
 - `last_verified` changes only after checking the page against its current
   source and applicable commands.
-- `review_cadence_days` is enforced. Use 30 days for active package, protocol,
-  operational, and security pages; use a longer cadence only for truly stable
-  conceptual material.
+- `review_cadence_days` is enforced for pages edited in the change and pages
+  documenting directly changed sources. Use 30 days for active package,
+  protocol, operational, and security pages; use a longer cadence only for
+  truly stable conceptual material. An unrelated page's review deadline does
+  not block the change.
 - `status` describes the documented contract, not whether the page is finished.
 
 ## Blocking checks
@@ -76,7 +78,7 @@ tags: [protocol, reference]
 pnpm docs:facts
 
 # Verify generated facts, parity metadata, package README contracts,
-# package-doc versions, and review cadence
+# package-doc versions, and review cadence for affected pages
 pnpm docs:facts:check
 
 # Validate frontmatter and source links
@@ -85,6 +87,37 @@ pnpm --filter docs-site validate
 # Render the complete site and check built links
 pnpm docs:build
 ```
+
+Freshness scope is independent of the build/test dependency graph. Package
+pages are associated by title with their inventory project's path and shared
+`sourceRoots`. Each service's `docs/infrastructure/<service-name>.md` page and
+operator guide are associated with that service's path. Additional architecture,
+guide, protocol, and generated-page source relationships are declared in
+`governance/documentation-policy.json` under `freshness.sourcePaths`. Entries
+are repository-relative files or directories, with directory-boundary matching.
+Add or update those relationships when introducing documentation about code.
+Conceptual pages without a source association are selected when edited.
+Changing root tooling does not implicitly select every package's documentation.
+
+GitHub PR checks use the merge-base diff between the event's base and head
+commits. Push checks use the event's before/after diff. Renames select both the
+old and new paths. Locally, the default includes changes from `origin/main`
+plus staged, unstaged, and untracked files. Fetch `origin/main` first; missing
+or invalid comparison commits fail rather than silently disabling the check.
+Explicit comparisons and a full maintenance audit are also available:
+
+```sh
+node scripts/documentation-policy.mjs --base origin/main --head HEAD
+node scripts/documentation-policy.mjs --all
+```
+
+Release, scheduled, and manual GitHub runs have no change scope unless one is
+provided explicitly. All invocations still enforce package documentation,
+generated-content consistency through `docs:facts:check`, and date consistency
+(verification cannot predate an update or be in the future). Only review expiry
+is scoped. The full audit is an opt-in maintenance command, not an unrelated
+PR's merge requirement. Re-verify an affected expired page against its source
+before updating its date; do not bulk-advance unrelated verification dates.
 
 The package README contract covers every public package and requires registry
 consumers to be able to identify, install, exercise, and license it. Package

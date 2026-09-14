@@ -3,8 +3,8 @@ id: repository-health
 title: 'Repository Health Controls'
 kind: reference
 version: '1.4.1'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+last_updated: '2026-09-14'
+last_verified: '2026-09-14'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -55,6 +55,15 @@ package/version/runtime/release and conformance facts, while
 package READMEs that do not identify, install, demonstrate, and license the
 registry artifact, and missing, duplicated, version-drifted, or
 pre-consolidation public package pages.
+
+Documentation review expiry applies only to edited pages and pages associated
+with directly changed sources. Package and service inventories supply their
+page relationships; `freshness.sourcePaths` in the documentation policy maps
+other pages to source files or directories. The check uses the PR merge-base
+diff, the push before/after diff, or local changes against `origin/main`.
+Unrelated expired pages do not block repository health. See
+[Documentation Maintenance](../about/doc-agent.md) for explicit comparison and
+full-audit commands. Structural and generated-content checks remain global.
 
 `governance/repository-health/baselines.json` records the dated starting
 measurements for CI, conformance, lint, TypeScript, coverage, security,
