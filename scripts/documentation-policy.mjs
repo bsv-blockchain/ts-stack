@@ -140,7 +140,7 @@ for (const docPath of await walkMarkdown(join(ROOT, 'docs'))) {
   const updated = frontmatter.match(/^last_updated:\s*["']?(\d{4}-\d{2}-\d{2})/m)?.[1]
   const verified = frontmatter.match(/^last_verified:\s*["']?(\d{4}-\d{2}-\d{2})/m)?.[1]
   const cadence = Number(frontmatter.match(/^review_cadence_days:\s*(\d+)/m)?.[1])
-  const relativePath = relative(ROOT, docPath).split('\\').join('/')
+  const relativePath = relative(ROOT, docPath).replaceAll('\\', '/')
 
   if (!updated || !verified || !Number.isInteger(cadence)) continue
   freshnessDocCount += 1

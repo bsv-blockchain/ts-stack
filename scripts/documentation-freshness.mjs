@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 
 function git(root, ...args) {
-  return execFileSync('git', args, {
+  return execFileSync('/usr/bin/git', args, {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
@@ -11,6 +11,11 @@ function git(root, ...args) {
 }
 
 function revision(root, ref) {
+  if (typeof ref !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_./~^-]*$/.test(ref)) {
+    throw new Error(
+      'A comparison requires a commit ID or a named Git ref with optional ^/~ ancestry'
+    )
+  }
   return git(root, 'rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`).trim()
 }
 

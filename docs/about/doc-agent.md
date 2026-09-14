@@ -111,6 +111,11 @@ node scripts/documentation-policy.mjs --base origin/main --head HEAD
 node scripts/documentation-policy.mjs --all
 ```
 
+Comparison refs accept commit IDs and named refs such as `origin/main`, with
+optional `^`/`~` ancestry suffixes. The checker uses `/usr/bin/git`, matching
+the repository's existing CI scope tooling, and rejects option-like values and
+revision expressions outside that syntax.
+
 Release, scheduled, and manual GitHub runs have no change scope unless one is
 provided explicitly. All invocations still enforce package documentation,
 generated-content consistency through `docs:facts:check`, and date consistency

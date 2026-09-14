@@ -129,7 +129,7 @@
       ],
       "docs/reference/repository-health.md": [
         "scripts/repository-health.mjs",
-        "governance/repository-health",
+        "governance/repository-health/projects.json",
         "governance/documentation-policy.json"
       ],
       "docs/reference/service-operations.md": [

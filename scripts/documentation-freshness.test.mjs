@@ -74,6 +74,12 @@ test('edited pages are selected without expanding root controls or documentation
       false
     )
   }
+  assert.equal(
+    affected('docs/reference/repository-health.md', undefined, [
+      'governance/repository-health/baselines.json'
+    ]),
+    false
+  )
 })
 
 test('only selected pages fail on review expiry; date consistency always applies', () => {
@@ -112,7 +118,7 @@ function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'documentation-scope-'))
   t.after(() => rmSync(directory, { recursive: true, force: true }))
   const git = (...args) =>
-    execFileSync('git', args, {
+    execFileSync('/usr/bin/git', args, {
       cwd: directory,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe']
@@ -209,6 +215,7 @@ test('an initial push selects its files, and an empty push selects none', t => {
   assert.deepEqual(documentationChangedFiles(directory, [], env), ['later.ts', 'source.ts'])
   write('event.json', JSON.stringify({ before: head, after: head }))
   assert.deepEqual(documentationChangedFiles(directory, [], env), [])
+  assert.deepEqual(documentationChangedFiles(directory, ['--base', 'HEAD~1'], {}), ['later.ts'])
 })
 
 test('a local checkout without origin/main requires an explicit comparison', t => {
@@ -224,6 +231,12 @@ test('full audit is explicit, and missing or invalid comparisons fail', t => {
   assert.throws(() => documentationChangedFiles(directory, ['--head', 'HEAD'], {}))
   assert.throws(() => documentationChangedFiles(directory, ['--all', '--base', 'HEAD'], {}))
   assert.throws(() => documentationChangedFiles(directory, ['--base', 'missing-ref'], {}))
+  for (const ref of ['--all', 'HEAD:README.md', 'HEAD with spaces']) {
+    assert.throws(
+      () => documentationChangedFiles(directory, [`--base=${ref}`], {}),
+      /comparison requires/
+    )
+  }
   assert.throws(() => documentationChangedFiles(directory, ['--unknown'], {}))
   write(
     'event.json',
