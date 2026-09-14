@@ -11,7 +11,7 @@ function git(root, ...args) {
 }
 
 function revision(root, ref) {
-  if (typeof ref !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_./~^-]*$/.test(ref)) {
+  if (typeof ref !== 'string' || !/^\w[\w./~^-]*$/.test(ref)) {
     throw new Error(
       'A comparison requires a commit ID or a named Git ref with optional ^/~ ancestry'
     )
