@@ -94,6 +94,7 @@ describe('OverlayExpress', () => {
       expect(overlayExpress.port).toBe(3000)
       expect(overlayExpress.network).toBe('main')
       expect(overlayExpress.enableGASPSync).toBe(true)
+      expect(overlayExpress.enableBASMSync).toBe(false)
       expect(overlayExpress.verboseRequestLogging).toBe(false)
       expect(overlayExpress.managers).toEqual({})
       expect(overlayExpress.services).toEqual({})
@@ -1692,20 +1693,54 @@ describe('OverlayExpress', () => {
       })
       await invokeCapturedRoute(postSpy, '/requestAdmittedList', {
         ...topicRequest,
-        body: { blockHeight: 2, blockHash: 'hash' }
+        body: { blockHeight: '2', blockHash: 'aa'.repeat(32) }
       })
       await invokeCapturedRoute(postSpy, '/requestCompoundMerklePath', {
         ...topicRequest,
-        body: { blockHeight: 2, txids: ['01', '02'] }
+        body: { blockHeight: '2', txids: ['01'.repeat(32), '02'.repeat(32)] }
       })
       await invokeCapturedRoute(postSpy, '/requestRawTransactions', {
-        body: { txids: ['01'] }
+        body: { txids: ['01'.repeat(32)] }
       })
       expect(mockEngine.provideTopicAnchorTip).toHaveBeenCalledWith('tm_test')
       expect(mockEngine.provideTopicAnchorRange).toHaveBeenCalledWith('tm_test', 1, 3)
-      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 2, 'hash')
-      expect(mockEngine.provideCompoundMerklePath).toHaveBeenCalledWith('tm_test', 2, ['01', '02'])
-      expect(mockEngine.provideRawTransactions).toHaveBeenCalledWith(['01'])
+      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 2, 'aa'.repeat(32))
+      expect(mockEngine.provideCompoundMerklePath).toHaveBeenCalledWith('tm_test', 2, [
+        '01'.repeat(32),
+        '02'.repeat(32)
+      ])
+      expect(mockEngine.provideRawTransactions).toHaveBeenCalledWith(['01'.repeat(32)])
+
+      const tipRoute = postSpy.mock.calls.find(
+        (call: any[]) => call[0] === '/requestTopicAnchorTip'
+      )
+      const rawRoute = postSpy.mock.calls.find(
+        (call: any[]) => call[0] === '/requestRawTransactions'
+      )
+      const adminRoute = postSpy.mock.calls.find(
+        (call: any[]) => call[0] === '/admin/startBASMSync'
+      )
+      expect(tipRoute).toHaveLength(2)
+      expect(rawRoute).toHaveLength(2)
+      expect(adminRoute.length).toBeGreaterThan(2)
+
+      await invokeCapturedRoute(postSpy, '/requestAdmittedList', {
+        ...topicRequest,
+        body: { blockHeight: 3, blockHash: 'BB'.repeat(32) }
+      })
+      await invokeCapturedRoute(postSpy, '/requestAdmittedList', {
+        ...topicRequest,
+        body: { blockHeight: 4 }
+      })
+      await invokeCapturedRoute(postSpy, '/requestCompoundMerklePath', {
+        ...topicRequest,
+        body: { blockHeight: 3, txids: ['AB'.repeat(32)] }
+      })
+      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 3, 'bb'.repeat(32))
+      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 4, undefined)
+      expect(mockEngine.provideCompoundMerklePath).toHaveBeenCalledWith('tm_test', 3, [
+        'ab'.repeat(32)
+      ])
 
       for (const [path, request] of [
         ['/requestTopicAnchorTip', { headers: {} }],
@@ -1720,6 +1755,141 @@ describe('OverlayExpress', () => {
       }
 
       consoleError.mockRestore()
+    })
+
+    it('rejects malformed BASM JSON requests before invoking the engine', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const { postSpy } = await startAndCaptureRoutes()
+      const topicRequest = { headers: { 'x-bsv-topic': 'tm_test' } }
+
+      for (const [path, request, message] of [
+        [
+          '/requestTopicAnchorRange',
+          { ...topicRequest, body: { fromHeight: null, toHeight: 1 } },
+          'fromHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestTopicAnchorRange',
+          { ...topicRequest, body: { fromHeight: false, toHeight: 1 } },
+          'fromHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: {}, blockHash: 'aa'.repeat(32) } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: -1 } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: 1.5 } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestTopicAnchorRange',
+          {
+            ...topicRequest,
+            body: { fromHeight: Number.MAX_SAFE_INTEGER + 1, toHeight: 1 }
+          },
+          'fromHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestAdmittedList',
+          { ...topicRequest, body: { blockHeight: '2', blockHash: 'not-a-hash' } },
+          'blockHash must be a 32-byte hexadecimal string'
+        ],
+        [
+          '/requestCompoundMerklePath',
+          { ...topicRequest, body: { blockHeight: '', txids: ['01'.repeat(32)] } },
+          'blockHeight must be a nonnegative safe integer'
+        ],
+        [
+          '/requestCompoundMerklePath',
+          { ...topicRequest, body: { blockHeight: 2, txids: [] } },
+          'txids must be a non-empty array'
+        ],
+        [
+          '/requestRawTransactions',
+          { body: { txids: ['not-a-txid'] } },
+          'txids must contain 32-byte hexadecimal transaction IDs'
+        ],
+        [
+          '/requestRawTransactions',
+          { body: { txids: ['01'.repeat(32), '01'.repeat(32).toUpperCase()] } },
+          'txids must not contain duplicates'
+        ]
+      ] as const) {
+        const response = await invokeCapturedRoute(postSpy, path, request)
+        expect(response.status).toHaveBeenCalledWith(400)
+        expect(response.json).toHaveBeenCalledWith({ status: 'error', message })
+      }
+
+      expect(mockEngine.provideTopicAnchorRange).not.toHaveBeenCalled()
+      expect(mockEngine.provideAdmittedList).not.toHaveBeenCalled()
+      expect(mockEngine.provideCompoundMerklePath).not.toHaveBeenCalled()
+      expect(mockEngine.provideRawTransactions).not.toHaveBeenCalled()
+      consoleError.mockRestore()
+    })
+
+    it('preserves empty BASM responses and reports unsupported capabilities', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const emptyTip = {
+        topic: 'tm_test',
+        blockHeight: -1,
+        tac: '00'.repeat(32)
+      }
+      mockEngine.provideTopicAnchorTip.mockResolvedValue(emptyTip)
+      const { postSpy } = await startAndCaptureRoutes()
+
+      const tip = await invokeCapturedRoute(postSpy, '/requestTopicAnchorTip', {
+        headers: { 'x-bsv-topic': 'tm_test' }
+      })
+      expect(tip.status).toHaveBeenCalledWith(200)
+      expect(tip.json).toHaveBeenCalledWith(emptyTip)
+
+      const raw = await invokeCapturedRoute(postSpy, '/requestRawTransactions', {
+        body: { txids: [] }
+      })
+      expect(raw.status).toHaveBeenCalledWith(200)
+      expect(mockEngine.provideRawTransactions).toHaveBeenCalledWith([])
+
+      delete mockEngine.provideRawTransactions
+      const unsupported = await invokeCapturedRoute(postSpy, '/requestRawTransactions', {
+        body: { txids: ['01'.repeat(32)] }
+      })
+      expect(unsupported.status).toHaveBeenCalledWith(400)
+      expect(unsupported.json).toHaveBeenCalledWith({
+        status: 'error',
+        message: 'BASM capability is not supported by this Overlay engine',
+        code: 'BASM_UNSUPPORTED'
+      })
+      consoleError.mockRestore()
+    })
+
+    it('honors the unlimited BASM transaction limit override', async () => {
+      const previousLimit = process.env.OVERLAY_MAX_BASM_TXIDS
+      process.env.OVERLAY_MAX_BASM_TXIDS = '-1'
+      try {
+        const { postSpy } = await startAndCaptureRoutes()
+        const txids = Array.from({ length: 1001 }, (_, index) =>
+          index.toString(16).padStart(64, '0')
+        )
+        const response = await invokeCapturedRoute(postSpy, '/requestRawTransactions', {
+          body: { txids }
+        })
+
+        expect(response.status).toHaveBeenCalledWith(200)
+        expect(mockEngine.provideRawTransactions).toHaveBeenCalledWith(txids)
+      } finally {
+        if (previousLimit === undefined) {
+          delete process.env.OVERLAY_MAX_BASM_TXIDS
+        } else {
+          process.env.OVERLAY_MAX_BASM_TXIDS = previousLimit
+        }
+      }
     })
 
     it('enforces admin authentication and executes bounded record and ban operations', async () => {

@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Advances the packed overlay dependency candidate for BASM validation hardening.
+  Package runtime behavior is unchanged; no consumer migration is required.
+
 ### Added
 
 - Support `ttn` WalletAdvertiser instances with chain-isolated TerraTestNet
