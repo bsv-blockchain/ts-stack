@@ -28,7 +28,9 @@ const anchored = (subject: MandalaTopicManager, action = details, admitted = new
 
 describe('Mandala admin authority contract', () => {
   test('requires a state verifier for non-genesis admission', async () => {
-    await expect(anchored(manager().subject)).rejects.toThrow('requires stateStore.isAdminOutpoint')
+    await expect(anchored(manager().subject)).rejects.toThrow(
+      new TypeError('Mandala admin admission requires stateStore.isAdminOutpoint')
+    )
   })
 
   test('requires both the admitted input and the exact per-asset history entry', async () => {

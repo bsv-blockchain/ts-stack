@@ -148,7 +148,7 @@ export class MandalaTopicManager implements TopicManager {
     if (typeof details.priorOutpoint !== 'string' || details.priorOutpoint === '') return false
     if (!admittedInputs.has(details.priorOutpoint)) return false
     if (typeof this.deps.stateStore.isAdminOutpoint !== 'function') {
-      throw new Error('Mandala admin admission requires stateStore.isAdminOutpoint')
+      throw new TypeError('Mandala admin admission requires stateStore.isAdminOutpoint')
     }
     if (typeof details.assetId !== 'string' || details.assetId === '') return false
     const parts = splitOutpoint(details.priorOutpoint)
