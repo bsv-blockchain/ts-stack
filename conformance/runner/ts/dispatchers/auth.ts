@@ -55,7 +55,7 @@ function dispatchInitialRequest(
   expect(getString(body, 'messageType')).toBe('initialRequest')
   expect(typeof body['version']).toBe('string')
   expect(getString(body, 'identityKey')).toMatch(PUBKEY_HEX_PATTERN)
-  expect(Object.keys(body).sort()).toEqual([
+  expect(Object.keys(body).sort((left, right) => left.localeCompare(right))).toEqual([
     'identityKey',
     'initialNonce',
     'messageType',

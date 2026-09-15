@@ -219,7 +219,7 @@ export class Peer {
     return certificates.every(
       certificate =>
         policy.certifiers.includes(certificate.certifier) &&
-        Object.prototype.hasOwnProperty.call(policy.types, certificate.type)
+        Object.hasOwn(policy.types, certificate.type)
     )
   }
 
@@ -229,12 +229,13 @@ export class Peer {
     sessionNonce: string,
     update: (session: PeerSession) => Promise<T>
   ): Promise<T> {
+    const manager = this.sessionManager as SessionManager | AsyncSessionManager
     const previous = this.certificateSessionUpdates.get(sessionNonce) ?? Promise.resolve()
     const pending = previous.then(async () => {
-      const session = await this.sessionManager.getSession(sessionNonce)
+      const session = await manager.getSession(sessionNonce)
       if (session == null) throw new Error(`Session not found for nonce: ${sessionNonce}`)
       const result = await update(session)
-      await this.sessionManager.updateSession(session)
+      await manager.updateSession(session)
       return result
     })
     const settled = pending.then(

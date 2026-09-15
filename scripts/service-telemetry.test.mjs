@@ -160,10 +160,12 @@ if (process.argv.includes('--bootstrap-probe')) {
   }
 } else {
   test('all seven telemetry bootstraps preserve quiet defaults, explicit console mode, OTLP precedence and application shutdown', () => {
-    execFileSync(
-      process.execPath,
-      ['--experimental-vm-modules', fileURLToPath(import.meta.url), '--bootstrap-probe'],
-      { cwd: root, stdio: 'pipe', timeout: 30000 }
+    assert.doesNotThrow(() =>
+      execFileSync(
+        process.execPath,
+        ['--experimental-vm-modules', fileURLToPath(import.meta.url), '--bootstrap-probe'],
+        { cwd: root, stdio: 'pipe', timeout: 30000 }
+      )
     )
   })
 }
