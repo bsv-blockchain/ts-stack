@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
+
 ### Added
 
 - `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation

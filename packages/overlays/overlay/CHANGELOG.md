@@ -20,6 +20,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
+- Adds `storageHasAdmission` for the optional `Storage.admission` field.
+- Adds an opt-in MongoDB schema, payload-publication, reference-guard, and
+  payload-GC foundation behind an optional `mongodb` peer. It does not activate
+  MongoDB as the overlay default or select a new SQL adapter.
+- Adds an opt-in Mongo `AdmissionStorage` adapter and Engine submit path that
+  uses `commitAdmission` when `overlay-admission-v1` is advertised, with
+  enlisted same-session indexes or a durable projection outbox, majority ACK,
+  and SQL/Knex compatibility retained.
+
 ### Added
 - (Include new features or significant user-visible enhancements here.)
 

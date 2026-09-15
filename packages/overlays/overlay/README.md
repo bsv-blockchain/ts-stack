@@ -79,6 +79,52 @@ The root entry point exports:
 imports remain available through the documented package export map, but new
 applications should prefer the root entry point wherever possible.
 
+## Optional persistence capability
+
+`AdmissionStorage` defines an additive v1 atomic admission contract for future
+adapters. `storageHasAdmission(storage)` reports whether the optional
+`admission` field is present. `getAdmissionStorage(storage)` detects an explicit provider with both
+commit and reconciliation methods. Existing Knex and injected legacy adapters
+remain supported; their individual methods do not imply atomic submission.
+When `getAdmissionStorage(storage)` observes a complete `overlay-admission-v1`
+provider, `Engine.submit` builds an admission plan and returns the saved STEAK
+only after majority commit. The SQL/Knex path and its early STEAK callback are
+unchanged; that callback is not a durable commit receipt.
+
+The contract separates local commit, index visibility and propagation. It binds
+operation identity to verified transaction, topic/policy and off-chain context;
+uses ready payload references and outbox intents; and fences recovery by both
+chain epoch and topic history generation. Helper functions and shared fixtures
+pin exact integers, deterministic identity, leases and cursor eligibility.
+See the [persistence specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md).
+No consumer migration, storage-default change or database migration is included
+in this release candidate.
+
+## Optional Mongo foundation
+
+The package also contains an opt-in MongoDB foundation for schema bootstrap,
+content-addressed payload publication, reference guards, payload collection,
+and an explicit `AdmissionStorage` adapter. Mongo is not the default Engine
+storage selection; importing `@bsv/overlay` alone does not load MongoDB.
+
+Applications using a Mongo deep entry point install the optional peer first:
+
+```sh
+npm install @bsv/overlay mongodb@^7.5.0
+```
+
+The initial entry points are
+`@bsv/overlay/storage/mongo/MongoSchema`,
+`@bsv/overlay/storage/mongo/MongoPayloadStore`,
+`@bsv/overlay/storage/mongo/MongoAdmissionStorage`, and
+`@bsv/overlay/storage/mongo/MongoOverlayStorage`. They require an explicitly
+operated unsharded replica set; the supported deployment profile is three
+members. Payload publication makes GridFS bytes physically `published` before
+the guarded payload row becomes `ready`; caller-session reference and GC
+operations share that row guard. See the [Mongo v1
+foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md)
+for operational bounds, recovery rules, and the opt-in admission path.
+
 ## Runtime and package formats
 
 The package supports both module systems:

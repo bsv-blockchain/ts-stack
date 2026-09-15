@@ -6,6 +6,9 @@ export type { TopicAdmittanceContext, TopicManager } from './src/TopicManager.js
 
 // Interfaces and structures
 export type { Storage, AppliedTransaction } from './src/storage/Storage.js'
+export { storageHasAdmission } from './src/storage/Storage.js'
+export * from './src/storage/AdmissionStorage.js'
+export * from './src/storage/RecoveryContract.js'
 export type { Output } from './src/Output.js'
 export type {
   TaggedBEEF,

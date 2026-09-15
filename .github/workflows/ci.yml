@@ -1115,10 +1115,42 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.cov.outputs.files }}
-          name: ts-stack
+          # Make the current attempt distinguishable from a previous rerun of
+          # the same commit when waiting for Codecov to finish processing it.
+          name: ts-stack-${{ github.run_id }}-${{ github.run_attempt }}
           slug: bsv-blockchain/ts-stack
+          # CI checks out GitHub's synthetic PR merge commit but Codecov
+          # reports against the branch head.  Give Codecov the actual base
+          # parent so it does not fall back to its last covered main commit.
+          commit_parent: ${{ github.event.pull_request.base.sha || github.event.before }}
           # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
           fail_ci_if_error: false
+
+      - name: Wait for Codecov to merge the uploaded report
+        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          CODECOV_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          CODECOV_BUILD_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CODECOV_UPLOAD_NAME: ts-stack-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          deadline=$((SECONDS + 300))
+          commit_url="https://api.codecov.io/api/v2/github/bsv-blockchain/repos/ts-stack/commits/${CODECOV_COMMIT}/"
+          uploads_url="${commit_url}uploads/"
+          while true; do
+            if commit=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 "$commit_url") &&
+              [ "$(jq --raw-output '.state // empty' <<<"$commit")" = 'complete' ] &&
+              uploads=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 "$uploads_url") &&
+              [ "$(jq --arg build_url "$CODECOV_BUILD_URL" --arg name "$CODECOV_UPLOAD_NAME" '[.results[]? | select(.build_url == $build_url and .name == $name and .state_name == "MERGED")] | length' <<<"$uploads")" -gt 0 ]; then
+              echo "Codecov merged ${CODECOV_UPLOAD_NAME} for ${CODECOV_COMMIT}."
+              break
+            fi
+
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Codecov did not merge coverage for ${CODECOV_COMMIT} within five minutes."
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Publish finalized Codecov notifications
         if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
