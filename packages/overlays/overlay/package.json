@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -81,7 +81,7 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=;./storage/knex/KnexStorage=KnexStorage\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports admissionSemanticDigest,canAdvanceGaspCursor,getAdmissionStorage,isRecoveryLeaseCurrent,isReplaySafeProjection,parseStorageUint64,parseStorageOutputIndex,storageHasAdmission,BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=storageHasAdmission;./storage/knex/KnexStorage=KnexStorage\"",
     "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
@@ -117,18 +117,24 @@
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "mongodb": "7.5.0",
+    "mongodb-memory-server": "^11.2.0"
   },
   "dependencies": {
     "@bsv/gasp": "workspace:^",
     "knex": "^3.3.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6",
+    "mongodb": "^7.5.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    },
+    "mongodb": {
+      "optional": true
     }
   },
   "typesVersions": {
