@@ -135,6 +135,50 @@ describe('MandalaTopicManager admin chain anchoring', () => {
     expect(res.outputsToAdmit).toEqual([0])
   })
 
+  it('refuses a non-register action that names no prior at all', async () => {
+    const { tx } = fundedTx()
+    const details: MandalaActionDetails = { kind: 'unpause', assetId }
+    tx.addOutput({ satoshis: 1, lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: details }) })
+    const res = await run(makeManager([]), tx, details, [0])
+    expect(res.outputsToAdmit).toEqual([])
+  })
+
+  it('refuses a prior it cannot parse as an outpoint, or one without an assetId to look up', async () => {
+    for (const priorOutpoint of ['not-an-outpoint', `${'b'.repeat(64)}.-1`, `${'b'.repeat(64)}.x`]) {
+      const { tx } = fundedTx()
+      // The spent input's outpoint is what admittedInputs holds; the payload's
+      // prior must equal it to pass the first check, so name the input's
+      // outpoint here and break only the parse in the assetId-less variant.
+      const details: MandalaActionDetails = { kind: 'unpause', assetId, priorOutpoint }
+      tx.addOutput({ satoshis: 1, lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: details }) })
+      const res = await run(makeManager([`${assetId}|${priorOutpoint}`]), tx, details, [0])
+      expect(res.outputsToAdmit).toEqual([])
+    }
+    const { tx, outpoint } = fundedTx()
+    const noAsset = { kind: 'unpause', priorOutpoint: outpoint } as unknown as MandalaActionDetails
+    tx.addOutput({ satoshis: 1, lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: noAsset }) })
+    const res = await run(makeManager([`${assetId}|${outpoint}`]), tx, noAsset, [0])
+    expect(res.outputsToAdmit).toEqual([])
+  })
+
+  it('a store without isAdminOutpoint anchors on the spent prior alone', async () => {
+    const { tx, outpoint } = fundedTx()
+    const details: MandalaActionDetails = { kind: 'unpause', assetId, priorOutpoint: outpoint }
+    tx.addOutput({ satoshis: 1, lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: details }) })
+    const legacy = new MandalaTopicManager({
+      verifierWallet: overlay as any,
+      screeningProvider: new InMemoryScreeningProvider([]),
+      adminWallet: issuer as any,
+      adminProtocolID: ADMIN_PROTOCOL,
+      stateStore: {
+        getAssetState: async (id: string) => ({ ...defaultAssetState(id), isPaused: true }),
+        getTokenRow: async () => null
+      }
+    })
+    const res = await run(legacy, tx, details, [0])
+    expect(res.outputsToAdmit).toEqual([0])
+  })
+
   it('needs no prior for a genesis register', async () => {
     const { tx } = fundedTx()
     const details: MandalaActionDetails = { kind: 'register', assetId }
