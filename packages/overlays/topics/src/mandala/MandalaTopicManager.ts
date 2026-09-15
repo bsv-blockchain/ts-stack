@@ -1,7 +1,7 @@
 import { TopicManager } from '@bsv/overlay'
 import { AdmittanceInstructions, Hash, LockingScript, Transaction, Utils, WalletInterface, WalletProtocol } from '@bsv/sdk'
 import { MandalaToken, MandalaAdmin, MandalaActionDetails } from '@bsv/templates'
-import { verifyKeyLinkage } from './verifyKeyLinkage.js'
+import { verifyKeyLinkage, verifyInputKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage, MandalaTokenRecord } from './types.js'
 import { AssetAdminState } from './AssetStateReducer.js'
 import docs from './MandalaTopicDocs.md.js'
@@ -14,6 +14,15 @@ export interface MandalaTopicManagerDeps {
   stateStore: {
     getAssetState: (assetId: string) => Promise<AssetAdminState>
     getTokenRow: (txid: string, outputIndex: number) => Promise<MandalaTokenRecord | null>
+    /**
+     * Has this topic already admitted `txid.outputIndex` as an admin-auth
+     * output of `assetId`? This anchors the admin chain — see
+     * {@link MandalaTopicManager.priorAnchored}. Optional so existing
+     * deployments keep building; when it is absent the anchor falls back to
+     * requiring the prior to be a previously admitted coin of this topic,
+     * which is still strictly stronger than the old any-input check.
+     */
+    isAdminOutpoint?: (assetId: string, txid: string, outputIndex: number) => Promise<boolean>
   }
 }
 
@@ -28,12 +37,15 @@ const decodeFtOutput = (ls: LockingScript): { assetId: string, amount: number, p
   }
 }
 
-const priorOutpointSpent = (tx: Transaction, details: MandalaActionDetails): boolean => {
-  if (details.kind === 'register') return true
-  if (typeof details.priorOutpoint !== 'string') return false
-  return tx.inputs.some(
-    inp => `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}` === details.priorOutpoint
-  )
+const outpointOfInput = (inp: Transaction['inputs'][number]): string =>
+  `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}`
+
+const splitOutpoint = (op: string): { txid: string, vout: number } | null => {
+  const dot = op.lastIndexOf('.')
+  if (dot <= 0) return null
+  const vout = Number(op.slice(dot + 1))
+  if (!Number.isInteger(vout) || vout < 0) return null
+  return { txid: op.slice(0, dot), vout }
 }
 
 export class MandalaTopicManager implements TopicManager {
@@ -41,7 +53,8 @@ export class MandalaTopicManager implements TopicManager {
 
   private async classifyOutputs (
     tx: Transaction,
-    payload: ReturnType<typeof decodeLinkagePayload> & { admin?: Array<{ index: number, actionDetails: MandalaActionDetails }> }
+    payload: ReturnType<typeof decodeLinkagePayload> & { admin?: Array<{ index: number, actionDetails: MandalaActionDetails }> },
+    admittedInputs: Set<string>
   ): Promise<{ ftOutputs: FtOutput[], adminIndices: number[], authorizedIssuance: Map<string, number>, verifiedAdminAssetKinds: Map<string, MandalaActionDetails> }> {
     const ftOutputs: FtOutput[] = []
     const authorizedIssuance = new Map<string, number>()
@@ -54,7 +67,7 @@ export class MandalaTopicManager implements TopicManager {
     const adminDetails = new Map<number, MandalaActionDetails>()
     for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
     for (let i = 0; i < tx.outputs.length; i++) {
-      const classified = await this.classifyOutput(tx, i, adminDetails.get(i))
+      const classified = await this.classifyOutput(tx, i, adminDetails.get(i), admittedInputs)
       if (classified.kind === 'skip') continue
       if (classified.kind === 'ft') {
         ftOutputs.push(classified.ft)
@@ -78,7 +91,8 @@ export class MandalaTopicManager implements TopicManager {
   private async classifyOutput (
     tx: Transaction,
     i: number,
-    adminDetail: MandalaActionDetails | undefined
+    adminDetail: MandalaActionDetails | undefined,
+    admittedInputs: Set<string>
   ): Promise<
   { kind: 'ft', ft: FtOutput } |
   { kind: 'admin', index: number, details: MandalaActionDetails | undefined, issuance?: { assetId: string, amount: number } } |
@@ -94,7 +108,7 @@ export class MandalaTopicManager implements TopicManager {
       this.requireOneSat(tx, i, 'token')
       return { kind: 'ft', ft: { index: i, ...ft } }
     }
-    const admin = await this.verifyAdminOutput(tx, ls, adminDetail)
+    const admin = await this.verifyAdminOutput(tx, ls, adminDetail, admittedInputs)
     if (!admin.admitted) return { kind: 'skip' }
     // Same 1-satoshi rule for admin-auth outputs — enforced only AFTER
     // verifyAdminOutput admits: MandalaAdmin.decode matches any bare
@@ -111,10 +125,45 @@ export class MandalaTopicManager implements TopicManager {
     }
   }
 
+  /**
+   * Is this admin action anchored to the asset's admin chain?
+   *
+   * Authority on the admin chain is the CHAIN OF SPENDS, not key
+   * re-derivation. `details.counterparty` arrives in the unauthenticated
+   * off-chain payload, and BRC-42 derivation against a counterparty yields a
+   * key that counterparty can itself compute — and spend — from its own root
+   * key plus this overlay's PUBLIC identity key. So re-deriving the lock key
+   * proves nothing about who authored the action; a third party could
+   * otherwise forge `unpause`, `unfreeze`, `allowIdentity` and, because a
+   * verified admin output credits authorized issuance, `issue`/`reissue`.
+   *
+   * What does prove authorship is the prior: the action must SPEND the admin
+   * output this topic already admitted for that asset. Delegation still works,
+   * because whoever the new output is locked to holds authority next.
+   *
+   * `register` is exempt: its assetId is its own genesis outpoint, so it
+   * confers authority over nothing that already exists.
+   */
+  private async priorAnchored (
+    details: MandalaActionDetails,
+    admittedInputs: Set<string>
+  ): Promise<boolean> {
+    if (details.kind === 'register') return true
+    if (typeof details.priorOutpoint !== 'string' || details.priorOutpoint === '') return false
+    if (!admittedInputs.has(details.priorOutpoint)) return false
+    const isAdminOutpoint = this.deps.stateStore.isAdminOutpoint
+    if (isAdminOutpoint == null) return true
+    if (typeof details.assetId !== 'string' || details.assetId === '') return false
+    const parts = splitOutpoint(details.priorOutpoint)
+    if (parts == null) return false
+    return await isAdminOutpoint(details.assetId, parts.txid, parts.vout)
+  }
+
   private async verifyAdminOutput (
     tx: Transaction,
     ls: LockingScript,
-    details: MandalaActionDetails | undefined
+    details: MandalaActionDetails | undefined,
+    admittedInputs: Set<string>
   ): Promise<{ admitted: boolean, issuance?: { assetId: string, amount: number } }> {
     let decodedAdmin
     try {
@@ -135,7 +184,7 @@ export class MandalaTopicManager implements TopicManager {
     const expected = Hash.hash160(Utils.toArray(publicKey, 'hex'))
     const pkhMatches = expected.length === decodedAdmin.pubKeyHash.length &&
       expected.every((b, i) => b === decodedAdmin.pubKeyHash[i])
-    if (!pkhMatches || !priorOutpointSpent(tx, details)) {
+    if (!pkhMatches || !await this.priorAnchored(details, admittedInputs)) {
       return { admitted: false }
     }
     if ((details.kind === 'issue' || details.kind === 'reissue') && typeof details.assetId === 'string') {
@@ -196,16 +245,68 @@ export class MandalaTopicManager implements TopicManager {
     return true
   }
 
+  /**
+   * Name the party spending each token input.
+   *
+   * An output's owner is bound once, when this topic admits it, from the
+   * recipient its output linkage declares — the lookup service stores that on
+   * the token row. A spend is therefore named from that stored owner, which is
+   * payload-independent (a submitter cannot steer it) and unaffected by sender
+   * blinding: the blinded key that PAID the coin is never an identity and is
+   * never consulted.
+   *
+   * An input linkage, when supplied, is treated as a proof rather than as the
+   * source of identity: it must reconstruct the very key that locks the coin
+   * being spent (`prover + L*G`) and must agree with the stored owner. A
+   * linkage failing either check rejects the whole transaction.
+   */
+  private async resolveSpendIdentities (
+    tx: Transaction,
+    previousCoins: number[],
+    payload: ReturnType<typeof decodeLinkagePayload>
+  ): Promise<string[]> {
+    const linkByIndex = new Map<number, SpecificLinkage>()
+    for (const inp of payload.inputs) linkByIndex.set(inp.index, inp.linkage)
+
+    const seen = new Set<string>()
+    for (const ci of previousCoins) {
+      const input = tx.inputs[ci]
+      if (input == null) continue
+      const src = input.sourceTransaction?.outputs[input.sourceOutputIndex]
+      if (src == null) continue
+      const decoded = decodeFtOutput(src.lockingScript)
+      if (decoded == null) continue
+
+      const txid = input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? ''
+      const row = await this.deps.stateStore.getTokenRow(txid, input.sourceOutputIndex)
+      const stored = row?.identityKey ?? ''
+
+      const linkage = linkByIndex.get(ci)
+      if (linkage != null) {
+        const v = await verifyInputKeyLinkage(linkage, this.deps.verifierWallet)
+        const controls = v.pubKeyHash.length === decoded.pubKeyHash.length &&
+          v.pubKeyHash.every((b, i) => b === decoded.pubKeyHash[i])
+        if (!controls) {
+          throw new Error(`input ${ci} linkage does not control the coin being spent`)
+        }
+        if (stored !== '' && stored.toLowerCase() !== v.identityKey.toLowerCase()) {
+          throw new Error(`input ${ci} linkage names ${v.identityKey} but the coin is owned by ${stored}`)
+        }
+        seen.add(v.identityKey)
+        continue
+      }
+      if (stored !== '') seen.add(stored)
+    }
+    return [...seen]
+  }
+
   private async anySanctioned (
     admittedFt: AdmittedFt[],
-    payload: ReturnType<typeof decodeLinkagePayload>
+    spenders: string[]
   ): Promise<boolean> {
     const identityKeys = new Set<string>()
     for (const ft of admittedFt) identityKeys.add(ft.identityKey)
-    for (const inp of payload.inputs) {
-      const v = await verifyKeyLinkage(inp.linkage, this.deps.verifierWallet)
-      identityKeys.add(v.identityKey)
-    }
+    for (const k of spenders) identityKeys.add(k)
     for (const key of identityKeys) {
       if (await this.deps.screeningProvider.isSanctioned(key)) return true
     }
@@ -290,7 +391,7 @@ export class MandalaTopicManager implements TopicManager {
     tx: Transaction,
     admittedFt: AdmittedFt[],
     adminAssetKinds: Map<string, MandalaActionDetails>,
-    payload: ReturnType<typeof decodeLinkagePayload>
+    spenders: string[]
   ): Promise<boolean> {
     const assets = new Set<string>(admittedFt.map(f => f.assetId))
     for (const ci of tx.inputs) {
@@ -302,19 +403,9 @@ export class MandalaTopicManager implements TopicManager {
       i => `${i.sourceTXID ?? i.sourceTransaction?.id('hex') ?? ''}.${i.sourceOutputIndex}`
     )
 
-    // Senders are derived once (shared across assets) from the input linkages.
-    let senders: string[] | null = null
-    const resolveSenders = async (): Promise<string[]> => {
-      if (senders != null) return senders
-      const out: string[] = []
-      for (const inp of payload.inputs) {
-        try {
-          out.push((await verifyKeyLinkage(inp.linkage, this.deps.verifierWallet)).identityKey)
-        } catch { /* unverifiable input linkage — not counted as a party */ }
-      }
-      senders = out
-      return out
-    }
+    // Senders were resolved once, from the owner bound when each coin was
+    // admitted (see resolveSpendIdentities).
+    const resolveSenders = async (): Promise<string[]> => spenders
 
     for (const assetId of assets) {
       if (!(await this.assetGatePasses(assetId, tx, admittedFt, adminAssetKinds, inputOutpoints, resolveSenders))) {
@@ -334,7 +425,13 @@ export class MandalaTopicManager implements TopicManager {
 
       const payload = offChainValues == null ? { inputs: [], outputs: [] } : decodeLinkagePayload(offChainValues)
 
-      const { ftOutputs, adminIndices, authorizedIssuance, verifiedAdminAssetKinds } = await this.classifyOutputs(tx, payload as any)
+      // Outpoints of inputs the engine says this topic previously admitted.
+      // The admin chain is anchored to these; see priorAnchored.
+      const admittedInputs = new Set<string>(
+        previousCoins.filter(ci => ci < tx.inputs.length).map(ci => outpointOfInput(tx.inputs[ci]))
+      )
+
+      const { ftOutputs, adminIndices, authorizedIssuance, verifiedAdminAssetKinds } = await this.classifyOutputs(tx, payload as any, admittedInputs)
 
       const outputLinkage = new Map<number, SpecificLinkage>()
       for (const o of payload.outputs) outputLinkage.set(o.index, o.linkage)
@@ -351,11 +448,16 @@ export class MandalaTopicManager implements TopicManager {
         throw new Error('conservation violated: outputs exceed authorized inputs/issuance')
       }
 
-      if (await this.anySanctioned(admittedFt, payload)) {
+      // Name each spender from the owner bound when this topic admitted the
+      // coin. Input linkages, when present, are proofs checked against the
+      // spent key — never the source of identity.
+      const spenders = await this.resolveSpendIdentities(tx, previousCoins, payload)
+
+      if (await this.anySanctioned(admittedFt, spenders)) {
         throw new Error('sanctioned party involved in transfer')
       }
 
-      if (!(await this.controlGate(tx, admittedFt, verifiedAdminAssetKinds, payload))) {
+      if (!(await this.controlGate(tx, admittedFt, verifiedAdminAssetKinds, spenders))) {
         throw new Error('control gate rejected the transaction (paused asset or access mode)')
       }
 

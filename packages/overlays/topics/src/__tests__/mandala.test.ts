@@ -17,9 +17,12 @@ const keyID = 'tkn'
 const stubStore = (
   state: AssetAdminState,
   rows: Record<string, MandalaTokenRecord> = {}
-): { getAssetState: (assetId: string) => Promise<AssetAdminState>, getTokenRow: (txid: string, outputIndex: number) => Promise<MandalaTokenRecord | null> } => ({
+): { getAssetState: (assetId: string) => Promise<AssetAdminState>, getTokenRow: (txid: string, outputIndex: number) => Promise<MandalaTokenRecord | null>, isAdminOutpoint: (assetId: string, txid: string, outputIndex: number) => Promise<boolean> } => ({
   getAssetState: async () => state,
-  getTokenRow: async (t: string, i: number) => rows[`${t}.${i}`] ?? null
+  getTokenRow: async (t: string, i: number) => rows[`${t}.${i}`] ?? null,
+  // These fixtures model legitimate issuer actions, so the prior each one
+  // spends is a recorded admin-auth output of that asset.
+  isAdminOutpoint: async () => true
 })
 
 // Default permissive store for the pre-existing admit/conservation/sanctions tests:
@@ -195,7 +198,7 @@ describe('MandalaTopicManager admin chain', () => {
     } as any)
 
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any, stateStore: defaultStore() })
-    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [0], offChainValues)
     expect(result.outputsToAdmit).toEqual([0, 1]) // minted FT + next auth outpoint both admitted
   })
 
@@ -235,7 +238,7 @@ describe('MandalaTopicManager admin chain', () => {
     } as any)
 
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any, stateStore: defaultStore() })
-    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [0], offChainValues)
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [0, 1], offChainValues)
     expect(result.outputsToAdmit).toEqual([0, 1]) // redeem auth + FT change both admitted; 70 === 100 - 30
   })
 })
@@ -292,7 +295,7 @@ describe('MandalaTopicManager control gate', () => {
     adminTx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: pauseDetails }), satoshis: 1 })
     const adminOffChain = encodeLinkagePayload({ inputs: [], outputs: [], admin: [{ index: 0, actionDetails: pauseDetails }] } as any)
     const tmAdmin = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(paused) })
-    const adminResult = await tmAdmin.identifyAdmissibleOutputs(adminTx.toBEEF(), [], adminOffChain)
+    const adminResult = await tmAdmin.identifyAdmissibleOutputs(adminTx.toBEEF(), [0], adminOffChain)
     expect(adminResult.outputsToAdmit).toEqual([0])
   })
 
@@ -413,7 +416,7 @@ describe('MandalaTopicManager control gate', () => {
       frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }]
     }
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(state) })
-    const result = await tm.identifyAdmissibleOutputs(r.beef, [], r.offChainValues)
+    const result = await tm.identifyAdmissibleOutputs(r.beef, [0], r.offChainValues)
     expect(result.outputsToAdmit).toEqual([0, 1])
   })
 
@@ -427,13 +430,13 @@ describe('MandalaTopicManager control gate', () => {
     const rA = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
     const stateNotFrozen: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [] }
     const tmA = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateNotFrozen) })
-    await expect(tmA.identifyAdmissibleOutputs(rA.beef, [], rA.offChainValues)).rejects.toThrow()
+    await expect(tmA.identifyAdmissibleOutputs(rA.beef, [0], rA.offChainValues)).rejects.toThrow()
 
     // (b) amount mismatch (frozen row says 99, reissue mints 50) -> rejected.
     const rB = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
     const stateWrongAmount: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 99, owner: 'evictee' }] }
     const tmB = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateWrongAmount) })
-    await expect(tmB.identifyAdmissibleOutputs(rB.beef, [], rB.offChainValues)).rejects.toThrow()
+    await expect(tmB.identifyAdmissibleOutputs(rB.beef, [0], rB.offChainValues)).rejects.toThrow()
 
     // (c) tx has an FT input of the asset -> rejected.
     const sender = new ProtoWallet(PrivateKey.fromRandom())
@@ -457,13 +460,13 @@ describe('MandalaTopicManager control gate', () => {
     const offChainC = encodeLinkagePayload({ inputs: [], outputs: [{ index: 0, linkage: linkageC as any }], admin: [{ index: 1, actionDetails: reissueDetailsC }] } as any)
     const stateFrozenC: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }] }
     const tmC = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateFrozenC) })
-    await expect(tmC.identifyAdmissibleOutputs(txC.toBEEF(), [0], offChainC)).rejects.toThrow()
+    await expect(tmC.identifyAdmissibleOutputs(txC.toBEEF(), [0, 1], offChainC)).rejects.toThrow()
 
     // Positive: frozen, amount matches, zero FT inputs -> admitted.
     const rOk = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
     const stateOk: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }] }
     const tmOk = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateOk) })
-    expect((await tmOk.identifyAdmissibleOutputs(rOk.beef, [], rOk.offChainValues)).outputsToAdmit).toEqual([0, 1])
+    expect((await tmOk.identifyAdmissibleOutputs(rOk.beef, [0], rOk.offChainValues)).outputsToAdmit).toEqual([0, 1])
   })
 
   it('a sanctioned identity is rejected even for an admin action', async () => {
@@ -476,7 +479,7 @@ describe('MandalaTopicManager control gate', () => {
     // (sanctions is universal and applies even to admin actions).
     const state: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }] }
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([r.receiverKey]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(state) })
-    await expect(tm.identifyAdmissibleOutputs(r.beef, [], r.offChainValues)).rejects.toThrow('sanctioned')
+    await expect(tm.identifyAdmissibleOutputs(r.beef, [0], r.offChainValues)).rejects.toThrow('sanctioned')
   })
 })
 

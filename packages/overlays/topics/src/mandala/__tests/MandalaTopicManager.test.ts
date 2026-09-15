@@ -31,7 +31,10 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
     adminProtocolID: ADMIN_PROTOCOL,
     stateStore: {
       getAssetState: async (id: string) => defaultAssetState(id),
-      getTokenRow: async () => null
+      getTokenRow: async () => null,
+      // The funded input is this asset's recorded admin-auth output, so the
+      // issue below is a legitimately chained action.
+      isAdminOutpoint: async () => true
     }
   })
 
@@ -63,7 +66,8 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
       outputs: [{ index: 0, linkage: linkage as any }],
       admin: [{ index: 1, actionDetails: details }]
     }
-    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [], encodeLinkagePayload(payload))
+    // previousCoins names input 0: the admin-auth coin this action spends.
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0], encodeLinkagePayload(payload))
     expect(result.outputsToAdmit).toEqual([0, 1])
   })
 
