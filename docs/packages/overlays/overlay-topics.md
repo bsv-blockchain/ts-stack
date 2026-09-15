@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.7.2'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.7.3'
+last_updated: '2026-09-15'
+last_verified: '2026-09-15'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
@@ -207,6 +207,29 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-topics/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-topics)
+
+## Mandala admin chain and spender identity (1.7.3)
+
+Version 1.7.3 closes two admission holes in `tm_mandala`:
+
+- Admin actions are anchored to the chain of spends. A non-genesis action
+  (`issue`, `reissue`, `unpause`, `unfreeze`, `allowIdentity`, …) must spend a
+  prior the engine lists in `previousCoins`, and when the optional
+  `stateStore.isAdminOutpoint(assetId, txid, vout)` is supplied, one recorded
+  as an admin output of that asset. Re-deriving the lock key from
+  `details.counterparty` proved nothing, because BRC-42 lets the named
+  counterparty compute and spend that key itself.
+- Spenders are named from the owner bound at admission
+  (`stateStore.getTokenRow`), not from input linkage. A supplied input linkage
+  is verified as proof with `verifyInputKeyLinkage` (`prover + L*G`): it must
+  control the coin being spent and agree with the stored owner, or the
+  transaction is rejected. Sanctions and access-mode screening therefore run
+  against the actual spender, and spends of sender-blinded receipts are no
+  longer refused.
+
+Operators should supply `isAdminOutpoint` from their lookup store; without it
+the prior check still requires the spent input to be one the engine admitted.
+Topic and lookup identifiers, persisted schemas and query shapes are unchanged.
 
 ## UORA v3 reader compatibility
 
