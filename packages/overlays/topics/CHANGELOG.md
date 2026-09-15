@@ -42,7 +42,31 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- `tm_mandala`: anchor the admin chain to the chain of spends. `verifyAdminOutput`
+  re-derived the expected lock key from `details.counterparty`, which arrives in
+  the unauthenticated off-chain payload; by BRC-42 that key belongs to the named
+  counterparty, who can compute and spend it from their own root key plus the
+  overlay's public identity key, so any third party could reproduce the expected
+  `pubKeyHash`. The prior check accepted any input of the same transaction.
+  Together these admitted forged `unpause`, `unfreeze`, `allowIdentity` and —
+  because a verified admin output credits authorized issuance — forged `issue`
+  and `reissue`, an unbounded mint. A non-genesis action must now spend a prior
+  that the engine lists in `previousCoins` and, when the new optional
+  `stateStore.isAdminOutpoint` is supplied, one recorded as an admin output of
+  that asset. Delegation is unaffected: authority passes to whoever the next
+  admin output is locked to.
+- `tm_mandala`: name a spend from the owner bound at admission rather than from
+  the submitted payload. `verifyKeyLinkage` returns `linkage.counterparty`,
+  which for an input is whoever *paid* that coin, not the spender, and can
+  never be checked against the coin being spent. Sanctions and access-mode
+  screening therefore ran against the wrong party, a submitter could steer
+  screening by choosing what to reveal, and omitting input linkages skipped
+  sender screening entirely. Spenders now come from `stateStore.getTokenRow`; a
+  supplied input linkage is verified as proof via the new
+  `verifyInputKeyLinkage` (`prover + L*G`), which must control the spent coin
+  and agree with the stored owner. This also unblocks sender blinding, whose
+  one-time key is never registry-admitted and would otherwise have caused every
+  spend of a blinded receipt to be refused.
 
 ---
 
