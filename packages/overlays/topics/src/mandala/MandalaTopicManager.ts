@@ -270,34 +270,44 @@ export class MandalaTopicManager implements TopicManager {
 
     const seen = new Set<string>()
     for (const ci of previousCoins) {
-      const input = tx.inputs[ci]
-      if (input == null) continue
-      const src = input.sourceTransaction?.outputs[input.sourceOutputIndex]
-      if (src == null) continue
-      const decoded = decodeFtOutput(src.lockingScript)
-      if (decoded == null) continue
-
-      const txid = input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? ''
-      const row = await this.deps.stateStore.getTokenRow(txid, input.sourceOutputIndex)
-      const stored = row?.identityKey ?? ''
-
-      const linkage = linkByIndex.get(ci)
-      if (linkage != null) {
-        const v = await verifyInputKeyLinkage(linkage, this.deps.verifierWallet)
-        const controls = v.pubKeyHash.length === decoded.pubKeyHash.length &&
-          v.pubKeyHash.every((b, i) => b === decoded.pubKeyHash[i])
-        if (!controls) {
-          throw new Error(`input ${ci} linkage does not control the coin being spent`)
-        }
-        if (stored !== '' && stored.toLowerCase() !== v.identityKey.toLowerCase()) {
-          throw new Error(`input ${ci} linkage names ${v.identityKey} but the coin is owned by ${stored}`)
-        }
-        seen.add(v.identityKey)
-        continue
-      }
-      if (stored !== '') seen.add(stored)
+      const spender = await this.spenderOfInput(tx, ci, linkByIndex.get(ci))
+      if (spender !== undefined) seen.add(spender)
     }
     return [...seen]
+  }
+
+  /**
+   * The identity spending token input `ci`, or `undefined` when the input is
+   * not a token coin or has no owner on record and no linkage.
+   *
+   * Throws when a supplied linkage does not control the coin or names a party
+   * other than the stored owner — either rejects the whole transaction.
+   */
+  private async spenderOfInput (
+    tx: Transaction,
+    ci: number,
+    linkage: SpecificLinkage | undefined
+  ): Promise<string | undefined> {
+    const input = tx.inputs[ci]
+    const src = input?.sourceTransaction?.outputs[input.sourceOutputIndex]
+    if (input == null || src == null) return undefined
+    const decoded = decodeFtOutput(src.lockingScript)
+    if (decoded == null) return undefined
+
+    const txid = input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? ''
+    const row = await this.deps.stateStore.getTokenRow(txid, input.sourceOutputIndex)
+    const stored = row?.identityKey ?? ''
+
+    if (linkage == null) return stored === '' ? undefined : stored
+
+    const v = await verifyInputKeyLinkage(linkage, this.deps.verifierWallet)
+    if (!sameBytes(v.pubKeyHash, decoded.pubKeyHash)) {
+      throw new Error(`input ${ci} linkage does not control the coin being spent`)
+    }
+    if (stored !== '' && stored.toLowerCase() !== v.identityKey.toLowerCase()) {
+      throw new Error(`input ${ci} linkage names ${v.identityKey} but the coin is owned by ${stored}`)
+    }
+    return v.identityKey
   }
 
   private async anySanctioned (
@@ -481,4 +491,8 @@ export class MandalaTopicManager implements TopicManager {
       shortDescription: 'BRC-92 Mandala regulated fungible-token transfers with key-linkage verification and sanctions screening.'
     }
   }
+}
+
+function sameBytes (a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i])
 }
