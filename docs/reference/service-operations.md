@@ -42,13 +42,13 @@ critical-journey monitoring.
 
 ## Observability contract
 
-Each standalone service retains a self-contained bootstrap because infrastructure build contexts cannot safely depend on an unpublished shared runtime package. CI enforces one behavioral and dependency contract across those bootstraps.
+Each standalone service retains a self-contained bootstrap because infrastructure build contexts cannot safely depend on an unpublished shared runtime package. CI enforces one behavioral and dependency contract across those bootstraps. Without a collector endpoint, telemetry is disabled by default; OTEL_CONSOLE_EXPORTERS=true explicitly enables local diagnostics. Application logging remains active, and console calls are bridged only in OTLP mode.
 
-Every service preloads telemetry before application imports and emits
+Every service preloads telemetry before application imports and supports
 traces, metrics, logs, runtime-metrics. Structured logs use
 `service`, `env`, `operation`, `outcome`, `duration_ms`, `err` and correlate through
 `trace_id`, `span_id`. Every environment
-example documents `DEPLOY_ENV`, `LOG_LEVEL`, `OTEL_DIAG`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME`;
+example documents `DEPLOY_ENV`, `LOG_LEVEL`, `OTEL_CONSOLE_EXPORTERS`, `OTEL_DIAG`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME`;
 `OTEL_EXPORTER_OTLP_HEADERS` is secret-bearing.
 
 | Dependency                                    | Aligned direct range |

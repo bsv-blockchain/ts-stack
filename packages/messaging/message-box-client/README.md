@@ -340,3 +340,26 @@ TS Stack first-party material is under the [Open BSV License Version 6](./LICENS
 The UMD bundle incorporates separately licensed SDK material; keep
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
 with the bundle.
+
+## Payment acceptance and acknowledgment ordering
+
+`acknowledgeNotification` checks the original notification envelope, internalizes
+a present recipient payment with the configured originator, and acknowledges
+only after the wallet returns `accepted: true`. A notification without a
+payment can be acknowledged immediately. Failures, incomplete envelopes and payments with no wallet-payment outputs
+remain queued. Its boolean return contract is unchanged: `false` can
+mean no payment or a retained failed payment.
+
+`acceptPayment` also requires affirmative wallet acceptance before acknowledgment.
+For refundable amounts, `rejectPayment` internalizes first, sends the refund,
+and then acknowledges. A failed internalization prevents both refund and
+acknowledgment; a failed refund send leaves the message queued. The existing
+small-payment policy is unchanged.
+
+This is the initial ordering remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
+It does not provide a durable refund journal or exactly-once delivery. Reconcile
+uncertain refund-send outcomes before retrying, since a send may have completed
+before its response was lost. Payment-envelope retention and outcome reporting
+through `listMessages`/`listMessagesLite`, basket-insertion policy, and resumable
+refund semantics remain open. Use the original envelope for notification payment
+processing; a plain acknowledgment is not evidence that a payment was accepted.

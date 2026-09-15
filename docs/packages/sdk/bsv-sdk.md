@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.6.0'
+version: '2.7.0'
 npm: '@bsv/sdk'
 last_updated: '2026-09-10'
 last_verified: '2026-09-10'
@@ -289,3 +289,32 @@ const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/sdk/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack)
 - [npm](https://www.npmjs.com/package/@bsv/sdk)
+
+## Certificate policy and observer callbacks
+
+SDK 2.7 records the locally requested certificate policy for each BRC-103
+session. Standalone responses must match one complete outstanding dynamic
+request or the session's handshake policy. Policies are copied before sending,
+so a later edit of the caller's object does not change validation. Responses
+never select their own validation policy. A different dynamic request cannot
+satisfy an unmet handshake requirement.
+
+The v0.1 AuthMessage fields, signatures and encodings are unchanged. Because a
+certificateResponse does not echo the request nonce, concurrent responses are
+matched against complete local requested sets, not individual request IDs. A
+successful dynamic response consumes one matching request; failed validation
+keeps it available for retry. Request the intended set explicitly instead of
+relying on unrequested certificates.
+
+`listenForCertificatesReceived` is an observer. The SDK commits certificate
+validation and releases its waiters before invoking listeners. A throwing or
+rejecting listener stops later listeners and rejects message handling, but does
+not roll back validation. Apply the requested certificate policy and explicit
+application authorization before performing protected work.
+
+Custom `AsyncSessionManager` implementations must retain the complete
+`PeerSession`, including the optional local `certificatePolicy` and
+`pendingCertificateRequests` fields. They are never serialized into AuthMessage.
+Peer serializes its own certificate read-modify-write operations; shared stores
+must also coordinate writers across instances. Older stored sessions without
+these fields use the configured handshake policy.

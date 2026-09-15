@@ -19,10 +19,11 @@
 # MESSAGE_BOX_SERVER_PRIVATE_KEY, WAB_SERVER_PRIVATE_KEY, and
 # UHRP_SERVER_PRIVATE_KEY values plus an OVERLAY_ADMIN_TOKEN before startup.
 # No private key or administrative token is checked in. Point telemetry at
-# your collector with OTEL_EXPORTER_OTLP_ENDPOINT (unset => console exporters).
+# your collector with OTEL_EXPORTER_OTLP_ENDPOINT (unset => telemetry off).
 
 x-otel-env: &otel-env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_CONSOLE_EXPORTERS: ${OTEL_CONSOLE_EXPORTERS:-false}
   OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
   OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
   DEPLOY_ENV: ${DEPLOY_ENV:-development}

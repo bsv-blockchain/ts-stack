@@ -1,21 +1,10 @@
 /**
- * Auth dispatcher — Wave 1.
- *
- * Categories:
- *   brc31-handshake
- *
- * Implementation notes:
- * --------------------
- * BRC-31 is a server-side mutual-authentication protocol implemented in
- * `packages/middleware/auth-express-middleware`.  The conformance vectors
- * describe HTTP request/response pairs that require a running Express server.
- *
- * Vectors that are purely structural (AuthMessage shape, pubkey format, nonce
- * encoding, requestId encoding) are exercised here against the SDK's `Peer` /
- * `AuthMessage` types and helper utilities.  Vectors that require server-side
- * behaviour (middleware error responses, certificate timeouts, replay detection,
- * response signing) are demoted to `best-effort` in the vector file with an
- * explanation, so the runner skips them without failing the CI gate.
+ * BRC-103 authentication and BRC-104 HTTP conformance shapes.
+ * The historical brc31-handshake category remains stable for corpus consumers;
+ * protocol selection must use the corrected BRC metadata. BRC-31 Authrite is
+ * a separate protocol. HTTP scenario rows check documented response shapes;
+ * auth-wire.test.ts exercises the real SDK handshake emission with an injected
+ * fetch implementation and makes no external network requests.
  */
 
 import { expect } from '@jest/globals'
@@ -33,7 +22,7 @@ function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
-// Regex patterns from the OpenAPI spec (brc31-handshake.yaml components/schemas)
+// Patterns shared with specs/auth/brc103-mutual-auth.yaml.
 const PUBKEY_HEX_PATTERN = /^0[23][0-9a-fA-F]{64}$/
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
@@ -43,7 +32,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
  *
  * The AuthMessage for `initialRequest` must have:
  *   messageType, version, identityKey (as required fields)
- * Optional: nonce, initialNonce, payload (array), signature (array)
+ * Also emitted: initialNonce and requestedCertificates. No nonce, payload or signature.
  */
 function dispatchInitialRequest(
   input: Record<string, unknown>,
@@ -59,74 +48,41 @@ function dispatchInitialRequest(
   for (const [k, v] of Object.entries(headers)) {
     lowerHeaders[k.toLowerCase()] = `${v}`
   }
-  expect(lowerHeaders['x-bsv-auth-version']).toBeDefined()
-  expect(lowerHeaders['x-bsv-auth-identity-key']).toBeDefined()
-  expect(lowerHeaders['x-bsv-auth-nonce']).toBeDefined()
-
-  // Validate the identity key is a valid compressed pubkey
-  const identityKey = lowerHeaders['x-bsv-auth-identity-key'] ?? ''
-  expect(identityKey).toMatch(PUBKEY_HEX_PATTERN)
-
-  // Validate the nonce is base64
-  const nonce = lowerHeaders['x-bsv-auth-nonce'] ?? ''
-  expect(BASE64_PATTERN.test(nonce)).toBe(true)
+  expect(lowerHeaders).toEqual({ 'content-type': 'application/json' })
 
   // Validate body AuthMessage shape
   const body = (input['body'] ?? {}) as Record<string, unknown>
   expect(getString(body, 'messageType')).toBe('initialRequest')
   expect(typeof body['version']).toBe('string')
   expect(getString(body, 'identityKey')).toMatch(PUBKEY_HEX_PATTERN)
-  expect(Array.isArray(body['payload'])).toBe(true)
-  expect(Array.isArray(body['signature'])).toBe(true)
+  expect(Object.keys(body).sort()).toEqual([
+    'identityKey',
+    'initialNonce',
+    'messageType',
+    'requestedCertificates',
+    'version'
+  ])
+  expect(getString(body, 'initialNonce')).toMatch(BASE64_PATTERN)
+  expect(Buffer.from(getString(body, 'initialNonce'), 'base64')).toHaveLength(48)
+  expect(body['requestedCertificates']).toEqual({ certifiers: [], types: {} })
 
   // Validate expected response body shape
   const bodyShape = (expected['body_shape'] ?? {}) as Record<string, unknown>
   expect(getString(bodyShape, 'messageType')).toBe('initialResponse')
   expect(getString(bodyShape, 'version')).toBe('0.1')
   expect(getString(bodyShape, 'identityKey')).toBe('string')
-  expect(getString(bodyShape, 'nonce')).toBe('string')
+  expect(getString(bodyShape, 'initialNonce')).toBe('string')
   expect(getString(bodyShape, 'yourNonce')).toBe('string')
   expect(getString(bodyShape, 'signature')).toBe('array')
 }
 
 /**
- * auth.brc31-handshake.2
- * Phase 1 step 2: server initialResponse — required headers list check.
- * This is a structural check of the *expected* header list from the spec.
- */
-function dispatchInitialResponseHeaders(
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  // The input describes what the client sends (same shape as vector 1)
-  expect(getString(input, 'method')).toBe('POST')
-  expect(getString(input, 'path')).toBe('/.well-known/auth')
-
-  // Verify the spec-mandated response headers are all listed in the vector
-  const requiredHeaders = expected['response_headers_required'] as string[]
-  expect(Array.isArray(requiredHeaders)).toBe(true)
-
-  const SPEC_REQUIRED = [
-    'x-bsv-auth-version',
-    'x-bsv-auth-message-type',
-    'x-bsv-auth-identity-key',
-    'x-bsv-auth-nonce',
-    'x-bsv-auth-your-nonce',
-    'x-bsv-auth-signature'
-  ]
-
-  for (const h of SPEC_REQUIRED) {
-    expect(requiredHeaders.map(s => s.toLowerCase())).toContain(h)
-  }
-}
-
-/**
  * auth.brc31-handshake.3, .4
- * Error case: missing required header → expected 401.
+ * Error case: missing required body field → expected 401.
  * Server-only behaviour, demoted to best-effort.
  * This function is called only if the vector was NOT demoted (shouldn't happen).
  */
-function dispatchMissingHeaderError(
+function dispatchMissingFieldError(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -206,14 +162,14 @@ function dispatchCertificateTimeout(
 
 /**
  * auth.brc31-handshake.11
- * requestedCertificates header present.  Server-only, demoted to best-effort.
+ * requestedCertificates body field present.  Server-only, demoted to best-effort.
  */
-function dispatchRequestedCertificatesHeader(
+function dispatchRequestedCertificatesBody(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  const includes = (expected['response_headers_includes'] ?? {}) as Record<string, unknown>
-  expect(includes['x-bsv-auth-requested-certificates']).toBe('present')
+  const includes = (expected['response_body_includes'] ?? {}) as Record<string, unknown>
+  expect(includes['requestedCertificates']).toBe('present')
 }
 
 /**
@@ -232,7 +188,7 @@ function dispatchAuthMessageSchema(
   expect(getString(input, 'identityKey')).toMatch(PUBKEY_HEX_PATTERN)
 
   // The nonce must be base64 when present
-  const nonce = getString(input, 'nonce')
+  const nonce = getString(input, 'initialNonce')
   if (nonce !== '') {
     expect(BASE64_PATTERN.test(nonce)).toBe(true)
   }
@@ -259,14 +215,6 @@ function dispatchAuthMessageSchema(
  * requestId is 32 bytes, base64-encoded (44 chars with padding).
  * Pure math / encoding check — fully exercisable client-side.
  *
- * NOTE (human review): The vector's `requestId_example` field
- * ("cmVxdWVzdElkMzJCeXRlc1JhbmRvbVZhbHVlQQ==") decodes to 28 bytes,
- * not the 32 bytes required by the spec (`requestId_length_bytes: 32`).
- * The correct 32-byte example would be 44 base64 chars with padding.
- * The expected.requestId_base64_length of 44 is correct for 32 bytes.
- * The example in the vector is inconsistent with the stated length spec.
- * Do NOT change expected.requestId_base64_length — it is correct.
- * The example string should be updated to encode exactly 32 bytes.
  */
 function dispatchRequestIdFormat(
   input: Record<string, unknown>,
@@ -284,15 +232,10 @@ function dispatchRequestIdFormat(
   const computedBase64Length = Math.ceil(lengthBytes / 3) * 4
   expect(computedBase64Length).toBe(expectedBase64Length)
 
-  // Verify the example is valid base64 (even if the decoded length mismatches
-  // the spec — see NOTE above; we do not change expected values)
   const example = getString(input, 'requestId_example')
-  if (example !== '') {
-    expect(BASE64_PATTERN.test(example)).toBe(true)
-    // NOTE: The example decodes to 28 bytes instead of the spec-required 32.
-    // We assert the encoding math separately above rather than checking
-    // the example length to avoid a spurious failure until the vector is corrected.
-  }
+  expect(BASE64_PATTERN.test(example)).toBe(true)
+  expect(Buffer.from(example, 'base64')).toHaveLength(lengthBytes)
+  expect(example).toHaveLength(expectedBase64Length)
 }
 
 /**
@@ -360,22 +303,18 @@ function dispatchWellKnownAuth(
   const expectedStatus = expected['status'] as number | undefined
 
   if (expectedStatus === 401 && messageType === 'initialRequest') {
-    dispatchMissingHeaderError(input, expected)
+    dispatchMissingFieldError(input, expected)
     return true
   }
   if (expectedStatus === 408) {
     dispatchCertificateTimeout(input, expected)
     return true
   }
-  if ('response_headers_includes' in expected) {
-    dispatchRequestedCertificatesHeader(input, expected)
+  if ('response_body_includes' in expected) {
+    dispatchRequestedCertificatesBody(input, expected)
     return true
   }
-  if ('response_headers_required' in expected && messageType === 'initialRequest') {
-    if ('body_shape' in expected) dispatchInitialRequest(input, expected)
-    else dispatchInitialResponseHeaders(input, expected)
-    return true
-  }
+
   if ('body_shape' in expected && messageType === 'initialRequest') {
     dispatchInitialRequest(input, expected)
     return true
