@@ -82,7 +82,7 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
 
   it('rejects a verified admin output carrying more than 1 satoshi', async () => {
     const { tx, priorOutpoint } = fundedTx()
-    const details: MandalaActionDetails = { kind: 'register', assetId, priorOutpoint }
+    const details: MandalaActionDetails = { kind: 'register', priorOutpoint }
     const adminScript = await MandalaAdmin.lock({ wallet: issuer as any, data: details })
     tx.addOutput({ satoshis: 2, lockingScript: adminScript })
     const payload: MandalaLinkagePayload = {

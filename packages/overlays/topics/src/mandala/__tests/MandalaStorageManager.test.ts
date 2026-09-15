@@ -71,6 +71,18 @@ describe('MandalaStorageManager admin state + history', () => {
     expect(await mgr.getAssetState('x.0')).toEqual(next)
   })
 
+  it('confirms only the exact asset and admin-history outpoint', async () => {
+    const mgr = new MandalaStorageManager(db)
+    await mgr.appendAdminHistory({ assetId: 'a.0', txid: 'admin', outputIndex: 1,
+      actionDetails: { kind: 'pause', assetId: 'a.0' }, height: 1, offset: 0, admitSeq: 1, createdAt: new Date() })
+    expect(await mgr.isAdminOutpoint('a.0', 'admin', 1)).toBe(true)
+    expect(await mgr.isAdminOutpoint('b.0', 'admin', 1)).toBe(false)
+    expect(await mgr.isAdminOutpoint('a.0', 'other', 1)).toBe(false)
+    expect(await mgr.isAdminOutpoint('a.0', 'admin', 0)).toBe(false)
+    await mgr.storeToken({ txid: 'token', outputIndex: 0, assetId: 'a.0', amount: 1, identityKey: 'owner', createdAt: new Date() })
+    expect(await mgr.isAdminOutpoint('a.0', 'token', 0)).toBe(false)
+  })
+
   it('nextAdmitSeq is monotonic', async () => {
     const mgr = new MandalaStorageManager(db)
     const a = await mgr.nextAdmitSeq()

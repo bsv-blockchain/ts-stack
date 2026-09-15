@@ -1,5 +1,5 @@
 import { MandalaTopicManager, unlinkedTokenReason } from '../MandalaTopicManager.js'
-import { InMemoryScreeningProvider, encodeLinkagePayload, MandalaLinkagePayload } from '../types.js'
+import { InMemoryScreeningProvider, encodeLinkagePayload, MandalaLinkagePayload, MandalaTokenRecord } from '../types.js'
 import { defaultAssetState } from '../AssetStateReducer.js'
 import { MandalaToken } from '@bsv/templates'
 import { ProtoWallet, PrivateKey, Hash, Utils, WalletProtocol, Transaction, P2PKH, UnlockingScript } from '@bsv/sdk'
@@ -17,6 +17,9 @@ const receiver = new ProtoWallet(PrivateKey.fromRandom())
 const other = new ProtoWallet(PrivateKey.fromRandom())
 const overlay = new ProtoWallet(PrivateKey.fromRandom())
 
+const tokens = new Map<string, MandalaTokenRecord>()
+beforeEach(() => tokens.clear())
+
 const manager = new MandalaTopicManager({
   verifierWallet: overlay as any,
   screeningProvider: new InMemoryScreeningProvider([]),
@@ -24,7 +27,7 @@ const manager = new MandalaTopicManager({
   adminProtocolID: [2, 'mandala admin'],
   stateStore: {
     getAssetState: async () => defaultAssetState(assetId),
-    getTokenRow: async () => null,
+    getTokenRow: async (txid, outputIndex) => tokens.get(`${txid}.${outputIndex}`) ?? null,
     isAdminOutpoint: async () => true
   }
 })
@@ -38,6 +41,8 @@ async function transfer (amounts: number[]): Promise<{ tx: Transaction, linkageF
   const pkh = Hash.hash160(Utils.toArray(derived, 'hex'))
   const source = new Transaction()
   source.addOutput({ lockingScript: new MandalaToken().lock(assetId, 100, pkh), satoshis: 1 })
+  const txid = source.id('hex')
+  tokens.set(`${txid}.0`, { txid, outputIndex: 0, assetId, amount: 100, identityKey: receiverKey, createdAt: new Date() })
   const tx = new Transaction()
   tx.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
   for (const amount of amounts) tx.addOutput({ lockingScript: new MandalaToken().lock(assetId, amount, pkh), satoshis: 1 })

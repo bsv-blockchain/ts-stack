@@ -12,6 +12,16 @@ import { MongoClient } from 'mongodb'
 const protocolID: WalletProtocol = [2, 'mandala token']
 const keyID = 'tkn'
 
+// Authoritative rows for the existing, owned source coins built by each fixture.
+const fixtureTokens = new Map<string, MandalaTokenRecord>()
+beforeEach(() => fixtureTokens.clear())
+function rememberToken (source: Transaction, identityKey: string): void {
+  const txid = source.id('hex')
+  const decoded = MandalaToken.decode(source.outputs[0].lockingScript)
+  fixtureTokens.set(`${txid}.0`, { txid, outputIndex: 0, assetId: decoded.assetId,
+    amount: decoded.amount, identityKey, createdAt: new Date() })
+}
+
 // Stub stateStore: getAssetState returns a fixed state; getTokenRow looks up an
 // optional fixture map keyed by `${txid}.${outputIndex}`.
 const stubStore = (
@@ -19,7 +29,7 @@ const stubStore = (
   rows: Record<string, MandalaTokenRecord> = {}
 ): { getAssetState: (assetId: string) => Promise<AssetAdminState>, getTokenRow: (txid: string, outputIndex: number) => Promise<MandalaTokenRecord | null>, isAdminOutpoint: (assetId: string, txid: string, outputIndex: number) => Promise<boolean> } => ({
   getAssetState: async () => state,
-  getTokenRow: async (t: string, i: number) => rows[`${t}.${i}`] ?? null,
+  getTokenRow: async (t: string, i: number) => rows[`${t}.${i}`] ?? fixtureTokens.get(`${t}.${i}`) ?? null,
   // These fixtures model legitimate issuer actions, so the prior each one
   // spends is a recorded admin-auth output of that asset.
   isAdminOutpoint: async () => true
@@ -45,6 +55,7 @@ async function buildTransfer (opts: { sanctioned?: boolean } = {}) {
   // Prior coin: an existing MandalaToken of the same assetId + amount that this tx spends.
   const sourceTx = new Transaction()
   sourceTx.addOutput({ lockingScript: new MandalaToken().lock(assetId, 100, pkh), satoshis: 1 })
+  rememberToken(sourceTx, receiverKey)
 
   // Transfer tx: spends the prior coin, re-creates 100 units to the receiver. Supply conserved.
   const tx = new Transaction()
@@ -102,9 +113,9 @@ describe('MandalaTopicManager admin chain', () => {
   it('admits an issuance whose boundKey re-derives from the declared action details', async () => {
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
-    const adminProto: [number, string] = [2, 'mandala admin']
+    const adminProto: WalletProtocol = [2, 'mandala admin']
 
-    const actionDetails = { kind: 'register' as const, assetId: `${'c'.repeat(64)}.0` }
+    const actionDetails = { kind: 'register' as const }
 
     const tx = new Transaction()
     tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: actionDetails }), satoshis: 1 })
@@ -121,7 +132,7 @@ describe('MandalaTopicManager admin chain', () => {
   it('rejects an admin output whose action details do not re-derive the boundKey', async () => {
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
-    const adminProto: [number, string] = [2, 'mandala admin']
+    const adminProto: WalletProtocol = [2, 'mandala admin']
     const tx = new Transaction()
     tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: { kind: 'register', assetId: `${'c'.repeat(64)}.0` } }), satoshis: 1 })
     const offChainValues = encodeLinkagePayload({
@@ -137,7 +148,7 @@ describe('MandalaTopicManager admin chain', () => {
     const receiver = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
-    const adminProto: [number, string] = [2, 'mandala admin']
+    const adminProto: WalletProtocol = [2, 'mandala admin']
 
     const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
     const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
@@ -145,9 +156,7 @@ describe('MandalaTopicManager admin chain', () => {
     const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
 
     const assetA = `${'a'.repeat(64)}.0` // minted with no inputs
-    const assetC = `${'c'.repeat(64)}.0` // the admin (register) asset
-
-    const registerDetails = { kind: 'register' as const, assetId: assetC }
+    const registerDetails = { kind: 'register' as const }
 
     const tx = new Transaction()
     tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 }) // index 0: unbacked FT
@@ -170,7 +179,7 @@ describe('MandalaTopicManager admin chain', () => {
     const receiver = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
-    const adminProto: [number, string] = [2, 'mandala admin']
+    const adminProto: WalletProtocol = [2, 'mandala admin']
 
     const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
     const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
@@ -207,7 +216,7 @@ describe('MandalaTopicManager admin chain', () => {
     const receiver = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
-    const adminProto: [number, string] = [2, 'mandala admin']
+    const adminProto: WalletProtocol = [2, 'mandala admin']
 
     const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
     const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
@@ -223,6 +232,7 @@ describe('MandalaTopicManager admin chain', () => {
     // Prior FT coin of 100 that gets partially burned.
     const ftPriorTx = new Transaction()
     ftPriorTx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 })
+    rememberToken(ftPriorTx, receiverKey)
 
     const redeemDetails = { kind: 'redeem' as const, assetId: assetA, amount: 30, priorOutpoint: `${adminPriorTx.id('hex')}.0` }
 
@@ -244,7 +254,7 @@ describe('MandalaTopicManager admin chain', () => {
 })
 
 describe('MandalaTopicManager control gate', () => {
-  const adminProto: [number, string] = [2, 'mandala admin']
+  const adminProto: WalletProtocol = [2, 'mandala admin']
 
   // Builds a peer transfer of `assetId`: a prior FT coin of `amount` to the
   // sender, re-created to `receiverKey`'s derived pkh. Returns the tx, the BEEF,
@@ -264,6 +274,7 @@ describe('MandalaTopicManager control gate', () => {
 
     const sourceTx = new Transaction()
     sourceTx.addOutput({ lockingScript: new MandalaToken().lock(assetId, amount, pkh), satoshis: 1 })
+    rememberToken(sourceTx, receiverKey)
 
     const tx = new Transaction()
     tx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: 0, sequence: 0xffffffff, unlockingScript: new Script() })
@@ -450,6 +461,7 @@ describe('MandalaTopicManager control gate', () => {
     priorTxC.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: priorDetailsC }), satoshis: 1 })
     const ftPriorTx = new Transaction()
     ftPriorTx.addOutput({ lockingScript: new MandalaToken().lock(assetId, 50, pkh), satoshis: 1 })
+    rememberToken(ftPriorTx, receiverKey)
     const reissueDetailsC = { kind: 'reissue' as const, assetId, amount: 50, outpoint: targetOutpoint, priorOutpoint: `${priorTxC.id('hex')}.0` }
     const txC = new Transaction()
     txC.addInput({ sourceTransaction: ftPriorTx, sourceOutputIndex: 0, sequence: 0xffffffff, unlockingScript: new Script() }) // FT input of the asset

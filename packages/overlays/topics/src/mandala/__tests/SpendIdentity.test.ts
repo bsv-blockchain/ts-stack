@@ -62,7 +62,8 @@ async function build (opts: {
   const inputLinkage = await spender.revealSpecificKeyLinkage({ counterparty: payerKey, verifier: verifierKey, protocolID, keyID })
   const outputLinkage = await spender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
 
-  const rows = opts.rows ?? {}
+  const sourceId = source.id('hex')
+  const rows = opts.rows ?? { [`${sourceId}.0`]: { txid: sourceId, outputIndex: 0, assetId, amount: 100, identityKey: await identity(spender), createdAt: new Date() } }
   const tm = new MandalaTopicManager({
     verifierWallet: overlay as any,
     screeningProvider: new InMemoryScreeningProvider(opts.sanctioned ?? []),
@@ -77,8 +78,8 @@ async function build (opts: {
   return { tm, beef: tx.toBEEF(), inputLinkage, outputLinkage, previousCoins: opts.extraP2pkhInput === true ? [0, 1] : [0] }
 }
 
-const ownerRow = (identityKey: string): MandalaTokenRecord =>
-  ({ txid: '', outputIndex: 0, assetId, amount: 100, identityKey } as unknown as MandalaTokenRecord)
+const ownerRow = (identityKey: string, outpoint: string): MandalaTokenRecord =>
+  ({ txid: outpoint.split('.')[0], outputIndex: 0, assetId, amount: 100, identityKey, createdAt: new Date() })
 
 const payloadWith = (b: Built, withInputLinkage: boolean): number[] =>
   encodeLinkagePayload({
@@ -87,7 +88,7 @@ const payloadWith = (b: Built, withInputLinkage: boolean): number[] =>
   })
 
 describe('MandalaTopicManager spend identity', () => {
-  it('names the spender from a linkage that controls the coin, and screens that identity', async () => {
+  it('screens the stored spender after optional linkage verification', async () => {
     const spenderKey = await identity(spender)
     const clean = await build()
     expect((await clean.tm.identifyAdmissibleOutputs(clean.beef, clean.previousCoins, payloadWith(clean, true))).outputsToAdmit).toEqual([0])
@@ -105,7 +106,7 @@ describe('MandalaTopicManager spend identity', () => {
     // source is deterministic across builds).
     const tx = Transaction.fromBEEF((await build()).beef)
     const outpoint = `${tx.inputs[0].sourceTXID ?? tx.inputs[0].sourceTransaction?.id('hex') ?? ''}.0`
-    const b2 = await build({ rows: { [outpoint]: ownerRow(spenderKey.toUpperCase()) } })
+    const b2 = await build({ rows: { [outpoint]: ownerRow(spenderKey.toUpperCase(), outpoint) } })
     expect((await b2.tm.identifyAdmissibleOutputs(b2.beef, b2.previousCoins, payloadWith(b2, true))).outputsToAdmit).toEqual([0])
   })
 
@@ -119,28 +120,51 @@ describe('MandalaTopicManager spend identity', () => {
   it('rejects a linkage that names a party other than the stored owner', async () => {
     const tx = Transaction.fromBEEF((await build()).beef)
     const outpoint = `${tx.inputs[0].sourceTXID ?? tx.inputs[0].sourceTransaction?.id('hex') ?? ''}.0`
-    const b = await build({ rows: { [outpoint]: ownerRow(await identity(stranger)) } })
+    const b = await build({ rows: { [outpoint]: ownerRow(await identity(stranger), outpoint) } })
     await expect(b.tm.identifyAdmissibleOutputs(b.beef, b.previousCoins, payloadWith(b, true)))
       .rejects.toThrow('but the coin is owned by')
   })
 
-  it('without a linkage, names the stored owner — and nobody when there is none', async () => {
+  it('without a linkage, screens the stored owner and rejects missing ownership', async () => {
     const strangerKey = await identity(stranger)
     const tx = Transaction.fromBEEF((await build()).beef)
     const outpoint = `${tx.inputs[0].sourceTXID ?? tx.inputs[0].sourceTransaction?.id('hex') ?? ''}.0`
 
     // Stored owner is sanctioned: rejected even though no linkage was supplied.
-    const owned = await build({ rows: { [outpoint]: ownerRow(strangerKey) }, sanctioned: [strangerKey] })
+    const owned = await build({ rows: { [outpoint]: ownerRow(strangerKey, outpoint) }, sanctioned: [strangerKey] })
     await expect(owned.tm.identifyAdmissibleOutputs(owned.beef, owned.previousCoins, payloadWith(owned, false)))
       .rejects.toThrow('sanctioned')
 
-    // No row, no linkage: nothing to screen, the transfer stands on its outputs.
-    const unknown = await build({ sanctioned: [strangerKey] })
-    expect((await unknown.tm.identifyAdmissibleOutputs(unknown.beef, unknown.previousCoins, payloadWith(unknown, false))).outputsToAdmit).toEqual([0])
+    const unknown = await build({ rows: {}, sanctioned: [strangerKey] })
+    for (const withLinkage of [false, true]) {
+      await expect(unknown.tm.identifyAdmissibleOutputs(unknown.beef, unknown.previousCoins, payloadWith(unknown, withLinkage)))
+        .rejects.toThrow('missing verified owner')
+    }
   })
 
   it('ignores a previous coin that is not a token output', async () => {
     const b = await build({ extraP2pkhInput: true })
     expect((await b.tm.identifyAdmissibleOutputs(b.beef, b.previousCoins, payloadWith(b, true))).outputsToAdmit).toEqual([0])
   })
+  it('rejects blank owner identities in stored rows', async () => {
+    const tx = Transaction.fromBEEF((await build()).beef)
+    const outpoint = `${tx.inputs[0].sourceTXID ?? tx.inputs[0].sourceTransaction?.id('hex') ?? ''}.0`
+    for (const identityKey of ['', '  ']) {
+      const b = await build({ rows: { [outpoint]: ownerRow(identityKey, outpoint) } })
+      await expect(b.tm.identifyAdmissibleOutputs(b.beef, b.previousCoins, payloadWith(b, false)))
+        .rejects.toThrow('missing verified owner')
+    }
+  })
+
+  it('rejects inconsistent stored token metadata', async () => {
+    const tx = Transaction.fromBEEF((await build()).beef)
+    const outpoint = `${tx.inputs[0].sourceTXID ?? tx.inputs[0].sourceTransaction?.id('hex') ?? ''}.0`
+    const row = ownerRow(await identity(spender), outpoint)
+    for (const changed of [{ txid: 'different' }, { outputIndex: 1 }, { assetId: 'different' }, { amount: 101 }]) {
+      const b = await build({ rows: { [outpoint]: { ...row, ...changed } } })
+      await expect(b.tm.identifyAdmissibleOutputs(b.beef, b.previousCoins, payloadWith(b, false)))
+        .rejects.toThrow('stored token metadata does not match')
+    }
+  })
+
 })

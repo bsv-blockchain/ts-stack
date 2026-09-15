@@ -141,6 +141,12 @@ export class MandalaStorageManager {
     await this.adminHistory.insertOne(entry)
   }
 
+  /** Match the asset and exact outpoint; the engine independently requires its spend. */
+  async isAdminOutpoint (assetId: string, txid: string, outputIndex: number): Promise<boolean> {
+    await this.ensureIndexes()
+    return await this.adminHistory.findOne({ assetId, txid, outputIndex }) !== null
+  }
+
   async findAdminHistoryByAssetId (assetId: string): Promise<AdminHistoryEntry[]> {
     await this.ensureIndexes()
     return await this.adminHistory.find({ assetId }, { projection: { _id: 0 } })
