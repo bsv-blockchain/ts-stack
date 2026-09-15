@@ -74,10 +74,10 @@ describe('MandalaTopicManager', () => {
     await expect(tm.identifyAdmissibleOutputs(beef, [0], offChainValues)).rejects.toThrow('sanctioned')
   })
 
-  it('does not admit FT outputs lacking valid linkage', async () => {
+  it('rejects the whole tx when an FT output lacks a linkage (never a silent skip)', async () => {
     const { tm, beef } = await buildTransfer()
-    const result = await tm.identifyAdmissibleOutputs(beef, [0])
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(beef, [0]))
+      .rejects.toThrow('output 0: MandalaToken-decodable output with no verified linkage')
   })
 
   it('rejects an unbacked mint: FT output with no inputs and no admin authorization', async () => {

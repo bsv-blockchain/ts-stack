@@ -227,6 +227,13 @@ Version 1.7.3 closes two admission holes in `tm_mandala`:
   against the actual spender, and spends of sender-blinded receipts are no
   longer refused.
 
+- Every token-shaped output must carry a linkage that verifies to the key it
+  is locked to. One that is missing, mismatched or unreadable rejects the whole
+  transaction with `output N: MandalaToken-decodable output with no verified
+  linkage`. Skipping it left a phantom coin: siblings were admitted, the
+  admission signed and the transaction broadcast with an unattested token
+  output inside it.
+
 Operators should supply `isAdminOutpoint` from their lookup store; without it
 the prior check still requires the spent input to be one the engine admitted.
 Topic and lookup identifiers, persisted schemas and query shapes are unchanged.

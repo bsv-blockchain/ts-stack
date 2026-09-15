@@ -38,6 +38,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- `tm_mandala`: a `MandalaToken`-shaped output with no linkage at its index, a
+  linkage that verifies to a different key than the output is locked to, or a
+  linkage the verifier cannot open now REJECTS the whole transaction with
+  `output N: MandalaToken-decodable output with no verified linkage` (wire
+  contract §6, byte-identical to the Go engine). Previously `verifyFtOutputs`
+  skipped such an output and `conservationHolds` summed only the admitted
+  subset, so a transaction could carry an extra token output of any value,
+  still have its siblings admitted, receive the admission signature and be
+  broadcast — a phantom coin mined inside an attested transaction that an
+  offline verifier stopping at "this txid was admitted" would credit.
+
 - Version 1.7.2 aligns `tm_uora_dpp` with the versioned UORA v3 format: compressed locking keys, exact drop tails, and printable UTF-8 fields. Valid anchors retain their bytes and admission result. The shared reference fixture covers key and tail validation. Coordinate reader upgrades and audit previously indexed nonconforming outputs before rebuilding the topic; this change does not claim a complete inventory of historical anchors.
 
 ### Security

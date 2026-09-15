@@ -201,6 +201,19 @@ export class MandalaTopicManager implements TopicManager {
     return { admitted: true }
   }
 
+  /**
+   * Every token-shaped output must carry a linkage that verifies to the key
+   * it is locked to; one that does not REJECTS the whole transaction.
+   *
+   * Skipping such an output instead (the previous behaviour) left a phantom
+   * coin: `conservationHolds` sums only the admitted subset, so a transaction
+   * could carry an extra `MandalaToken` output of any value, still have its
+   * siblings admitted, still receive the overlay's admission signature and
+   * still be broadcast — mined inside a transaction the overlay genuinely
+   * attested to. An offline verifier that stops its coverage walk at "this
+   * txid was admitted" then credits the phantom. The reason string is the
+   * wire contract's (§6) and is byte-identical across engines.
+   */
   private async verifyFtOutputs (
     ftOutputs: FtOutput[],
     outputLinkage: Map<number, SpecificLinkage>
@@ -208,11 +221,16 @@ export class MandalaTopicManager implements TopicManager {
     const admittedFt: AdmittedFt[] = []
     for (const ft of ftOutputs) {
       const linkage = outputLinkage.get(ft.index)
-      if (linkage == null) continue
-      const verified = await verifyKeyLinkage(linkage, this.deps.verifierWallet)
-      const matches = verified.pubKeyHash.length === ft.pubKeyHash.length &&
-        verified.pubKeyHash.every((b, i) => b === ft.pubKeyHash[i])
-      if (!matches) continue
+      if (linkage == null) throw new Error(unlinkedTokenReason(ft.index))
+      let verified: Awaited<ReturnType<typeof verifyKeyLinkage>>
+      try {
+        verified = await verifyKeyLinkage(linkage, this.deps.verifierWallet)
+      } catch {
+        // The verifier wallet is local, in-process crypto: a throw here is a
+        // malformed linkage, which proves nothing about the output.
+        throw new Error(unlinkedTokenReason(ft.index))
+      }
+      if (!sameBytes(verified.pubKeyHash, ft.pubKeyHash)) throw new Error(unlinkedTokenReason(ft.index))
       admittedFt.push({ index: ft.index, assetId: ft.assetId, amount: ft.amount, identityKey: verified.identityKey })
     }
     return admittedFt
@@ -492,6 +510,10 @@ export class MandalaTopicManager implements TopicManager {
     }
   }
 }
+
+/** Wire contract §6 — the same bytes on every engine. Do not reword. */
+export const unlinkedTokenReason = (index: number): string =>
+  `output ${index}: MandalaToken-decodable output with no verified linkage`
 
 function sameBytes (a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i])
