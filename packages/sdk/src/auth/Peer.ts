@@ -740,20 +740,18 @@ export class Peer {
     ) {
       return
     }
-    await validateCertificates(
-      this.wallet,
-      message,
-      peerSession.certificatePolicy ?? this.certificatesToRequest,
-      this.originator
-    )
-
-    peerSession.certificatesValidated = true
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
-
-    if (peerSession.sessionNonce != null) {
-      this.resolveCertificateValidation(peerSession.sessionNonce)
-    }
+    const sessionNonce = peerSession.sessionNonce as string
+    await this.updateCertificateSession(sessionNonce, async session => {
+      await validateCertificates(
+        this.wallet,
+        message,
+        session.certificatePolicy ?? this.certificatesToRequest,
+        this.originator
+      )
+      session.certificatesValidated = true
+      session.lastUpdate = Date.now()
+    })
+    this.resolveCertificateValidation(sessionNonce)
 
     for (const callback of this.onCertificatesReceivedCallbacks.values()) {
       await callback(message.identityKey, message.certificates as VerifiableCertificate[])

@@ -1,6 +1,8 @@
 /**
- * OpenTelemetry bootstrap (ESM) — preloaded before app code via
- * `node --import ./out/src/telemetry.js`.
+ * OpenTelemetry bootstrap — preloaded before application code.
+ * Canonical source: infra/overlay-server/src/telemetry.ts.
+ * Run pnpm sync:service-runtime-copies after editing; six standalone contexts
+ * receive byte-for-byte copies governed by service-runtime-copy-policy.json.
  *
  * Emits traces, metrics and logs. All wiring is driven by OTEL_* env vars; when
  * OTEL_EXPORTER_OTLP_ENDPOINT is unset telemetry stays off unless
@@ -17,7 +19,7 @@
  *
  * See docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md.
  */
-import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { NodeSDK } from '@opentelemetry/sdk-node'
@@ -50,8 +52,10 @@ import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
 
 // Resolve the component's package.json relative to the working directory (the
 // app root in every Dockerfile and local run) — robust regardless of build layout.
-const require = createRequire(import.meta.url)
-const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
+const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+  name: string
+  version: string
+}
 
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
 const useOtlp = typeof otlpEndpoint === 'string' && otlpEndpoint.trim().length > 0

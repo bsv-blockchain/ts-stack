@@ -125,3 +125,13 @@ monitor events in storage.
   `infra/DEPENDENCY_POLICY.md`.
 
 See the design spec: `docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md`.
+
+## Bootstrap source ownership
+
+`infra/overlay-server/src/telemetry.ts` is the canonical bootstrap. The other six
+standalone service build contexts receive identical copies through
+`pnpm sync:service-runtime-copies`; repository health rejects drift. The same
+source compiles as ESM or CommonJS and reads package metadata from the service
+working directory. Only the six synchronized copies are excluded from Sonar
+duplication scoring; code analysis and the shared bootstrap behavior tests remain
+active. Edit the canonical source, synchronize, and validate all service builds.

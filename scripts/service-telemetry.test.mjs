@@ -99,11 +99,13 @@ async function probe(service, environment) {
   })
   await module.link(specifier => {
     const exports =
-      specifier === 'node:module'
-        ? { createRequire: () => packageRequire }
-        : specifier === 'node:path'
-          ? { join }
-          : modules
+      specifier === 'node:fs'
+        ? { readFileSync: () => JSON.stringify(packageRequire()) }
+        : specifier === 'node:module'
+          ? { createRequire: () => packageRequire }
+          : specifier === 'node:path'
+            ? { join }
+            : modules
     assert.ok(specifier.startsWith('@opentelemetry/') || specifier.startsWith('node:'))
     return new vm.SyntheticModule(
       Object.keys(exports),

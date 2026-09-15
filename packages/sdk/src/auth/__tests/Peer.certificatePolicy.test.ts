@@ -282,3 +282,32 @@ test('an awaiting general message cannot restore stale validation state in a cop
   ).rejects.toThrow('observer cannot veto delivery')
   expect(backing.getSession('session')?.certificatesValidated).toBe(true)
 })
+
+test('initial-response validation preserves concurrent dynamic requests in an async copy store', async () => {
+  const { peer, backing, transport } = await setup(undefined, true)
+  let release!: () => void
+  let started!: () => void
+  const blocked = new Promise<void>(resolve => {
+    release = resolve
+  })
+  const validating = new Promise<void>(resolve => {
+    started = resolve
+  })
+  validate.mockImplementationOnce(async () => {
+    started()
+    await blocked
+  })
+  const initial = (peer as any).validateInitialResponseCertificates(
+    response([cert('initial', 'initial')]),
+    structuredClone(backing.getSession('session'))
+  ) as Promise<void>
+  await validating
+  const request = peer.requestCertificates(policy('dynamic', 'dynamic'), 'remote')
+  for (let turn = 0; turn < 20; turn++) await Promise.resolve()
+  expect(transport.send).not.toHaveBeenCalled()
+  release()
+  await Promise.all([initial, request])
+  const session = backing.getSession('session')!
+  expect(session.certificatesValidated).toBe(true)
+  expect(Object.values(session.pendingCertificateRequests!)).toEqual([policy('dynamic', 'dynamic')])
+})
