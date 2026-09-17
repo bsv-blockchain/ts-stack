@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Validate every newly acquired and replacement Merkle proof against the active
+  ChainTracks root before persistence, continue to later providers when an
+  earlier provider returns an orphan proof, and retain unresolved reorg heights
+  for bounded per-run retries without stopping the forward audit cursor. No
+  schema or consumer migration is required.
+
 - Integrate upstream security corrections without dropping the sync recovery contracts.
   Record combined browser/mobile artifact costs and limits in the sync transfer guide.
 

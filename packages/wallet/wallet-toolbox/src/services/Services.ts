@@ -46,6 +46,7 @@ import { doubleSha256BE, sha256Hash, wait } from '../utility/utilityHelpers'
 import { TableOutput } from '../storage/schema/tables/TableOutput'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 import { classifyOutputUtxo, requireConclusiveUtxo } from './classifyOutputUtxo'
+import { validateCanonicalMerklePathResult } from './getCanonicalMerklePath'
 
 export class Services implements WalletServices {
   static readonly getStatusForTxidsBatchLimit = 20
@@ -757,14 +758,21 @@ export class Services implements WalletServices {
         if (r.merklePath == null) {
           logger?.log(`${stc.providerName} no merklePath`)
         } else {
-          logger?.log(`${stc.providerName} has merklePath`)
-          // If we have a proof, call it done.
-          r0.merklePath = r.merklePath
-          r0.header = r.header
-          r0.name = r.name
-          r0.error = undefined
-          services.addServiceCallSuccess(stc)
-          break
+          try {
+            await validateCanonicalMerklePathResult(txid, r, await this.getChainTracker())
+            logger?.log(`${stc.providerName} has canonical merklePath`)
+            r0.merklePath = r.merklePath
+            r0.header = r.header
+            r0.name = r.name
+            r0.error = undefined
+            services.addServiceCallSuccess(stc)
+            break
+          } catch (cause) {
+            const error = WalletError.fromUnknown(cause)
+            logger?.log(`${stc.providerName} rejected non-canonical merklePath`)
+            r.error = error
+            r0.error ??= error
+          }
         }
 
         if (r.error != null) services.addServiceCallError(stc, r.error)
@@ -798,6 +806,7 @@ export class Services implements WalletServices {
         if (result.merklePath == null) {
           throw result.error ?? new WERR_INVALID_OPERATION('Proof provider returned no Merkle path')
         }
+        await validateCanonicalMerklePathResult(txid, result, await this.getChainTracker())
         await validate(result)
         services.addServiceCallSuccess(call)
         return result
