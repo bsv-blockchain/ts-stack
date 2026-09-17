@@ -62,6 +62,24 @@ describe('canonical Merkle path acquisition', () => {
     expect(canonicalProvider).toHaveBeenCalledTimes(1)
   })
 
+  test('Services records thrown and empty provider results before exhausting failover', async () => {
+    const services = new Services(Services.createDefaultOptions('main'))
+    services.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
+      .add({
+        name: 'throws',
+        service: jest.fn(async () => {
+          throw new Error('provider unavailable')
+        })
+      })
+      .add({ name: 'empty', service: jest.fn(async () => ({ name: 'empty' })) })
+    const logger = { group: jest.fn(), log: jest.fn() }
+
+    const result = await services.getMerklePath(txid, false, logger as any)
+
+    expect(result.merklePath).toBeUndefined()
+    expect(logger.log).toHaveBeenCalledWith('empty no merklePath')
+  })
+
   test('custom services without provider failover reject a non-canonical proof', async () => {
     const stale = resultFor(staleSibling, 'stale')
     const canonical = resultFor(canonicalSibling, 'canonical')
@@ -97,6 +115,37 @@ describe('canonical Merkle path acquisition', () => {
     await validateCanonicalMerklePathResult(txid, result, trackerFor(canonical.header!.merkleRoot))
 
     expect(result.merklePath).toEqual(unmarkedPath)
+  })
+
+  test('rejects a path whose marked transaction leaf belongs to another transaction', async () => {
+    const canonical = resultFor(canonicalSibling, 'canonical')
+    const result = resultFor(canonicalSibling, 'wrong-leaf')
+    ;(result.merklePath as MerklePath).path[0][0].hash = '44'.repeat(32)
+
+    await expect(
+      validateCanonicalMerklePathResult(txid, result, trackerFor(canonical.header!.merkleRoot))
+    ).rejects.toThrow('no Merkle path on the active chain')
+  })
+
+  test('returns the fallback validation error and combines provider notes', async () => {
+    const stale = resultFor(staleSibling, 'stale')
+    const fallback = resultFor(staleSibling, 'fallback')
+    stale.notes = ['stale-note']
+    fallback.notes = ['fallback-note']
+    const services = {
+      getMerklePath: jest.fn(async () => stale),
+      getValidatedMerklePath: jest.fn(async () => fallback)
+    } as unknown as WalletServices
+
+    const result = await getCanonicalMerklePath(
+      services,
+      trackerFor(resultFor(canonicalSibling, 'canonical').header!.merkleRoot),
+      txid
+    )
+
+    expect(result.merklePath).toBeUndefined()
+    expect(result.error).toBeDefined()
+    expect(result.notes).toEqual(['stale-note', 'fallback-note'])
   })
 
   test('array results remove stale paths before persistence', async () => {

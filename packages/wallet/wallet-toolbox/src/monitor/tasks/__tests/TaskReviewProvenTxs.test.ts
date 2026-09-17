@@ -7,6 +7,7 @@ function makeMonitor(options: {
   staleRootsByHeight?: Record<number, string[]>
   reproveResultsByHeightRoot?: Record<string, { updated: any[]; unchanged: any[]; unavailable: any[]; log: string }>
   monitorEvents?: Array<{ details?: string }>
+  provenTxs?: Array<{ height: number }>
   reviewResult?: {
     log: string
     reviewedHeights: number
@@ -30,7 +31,7 @@ function makeMonitor(options: {
     async ({ height }: { height: number }) => options.staleRootsByHeight?.[height] ?? []
   )
   const findMonitorEvents = jest.fn(async () => options.monitorEvents || [])
-  const findProvenTxs = jest.fn().mockResolvedValue([])
+  const findProvenTxs = jest.fn().mockResolvedValue(options.provenTxs ?? [])
   const runAsStorageProvider = jest.fn(
     async (fn: any) =>
       await fn({
@@ -329,5 +330,40 @@ describe('TaskReviewProvenTxs tests', () => {
 
     expect(checkpoint.reviewedThroughHeight).toBe(151)
     expect(checkpoint.retryHeights).toEqual([121])
+  })
+
+  test('11 getLastReviewedHeight starts immediately before the first proven transaction', async () => {
+    const m = makeMonitor({ tipHeight: 120, provenTxs: [{ height: 17 }] })
+    const task = new TaskReviewProvenTxs(m.monitor as any)
+
+    await expect(task.getLastReviewedHeight()).resolves.toBe(16)
+  })
+
+  test('12 retry work is deduplicated, sorted, bounded, and retained beyond the batch', async () => {
+    const m = makeMonitor({
+      tipHeight: 250,
+      monitorEvents: [
+        {
+          details: JSON.stringify({
+            reviewedThroughHeight: 150,
+            retryHeights: [125, 123, 124, 123, -1, 151]
+          })
+        }
+      ],
+      headersByHeight: {
+        123: { height: 123, merkleRoot: 'root-123', hash: 'hash-123' },
+        124: { height: 124, merkleRoot: 'root-124', hash: 'hash-124' }
+      }
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any, 0, 0, 100, 1, 2)
+
+    const checkpoint = JSON.parse(await task.runTask())
+
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(1, 123)
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(2, 124)
+    expect(checkpoint.reviewedThroughHeight).toBe(150)
+    expect(checkpoint.retryHeights).toEqual([125])
+    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 123,124')
+    expect(checkpoint.reviewLog).not.toContain('reviewing heights')
   })
 })
