@@ -16,11 +16,13 @@ attention to changes that materially alter behavior or extend functionality.
   Local macOS Vite compression measures 406,865 gzip and 317,787 Brotli bytes;
   those reviewed ceilings advance to 407,000 and 318,000. Local esbuild raw
   output is 1,342,911 raw / 370,427 gzip / 296,708 Brotli bytes and those
-  reviewed ceilings advance to 1,343,500 / 370,500 / 297,000. Other platform
-  measurements remain under their existing limits except the local optimized
-  Hermes artifact, which measures 3,601,480 raw / 1,465,937 gzip / 1,137,982
-  Brotli bytes and advances those reviewed ceilings to 3,602,000 / 1,466,000 /
-  1,138,500.
+  reviewed ceilings advance to 1,343,500 / 371,000 / 297,000, covering the
+  hosted Linux esbuild gzip measurement of 370,528 bytes. Other platform
+  measurements remain under their existing limits except optimized Hermes:
+  hosted Linux raw bytecode measures 3,602,790 bytes, while local macOS
+  compression measures 1,465,937 gzip / 1,137,982 Brotli bytes. The reviewed
+  cross-platform Hermes ceilings advance to 3,603,500 raw / 1,467,000 gzip /
+  1,139,000 Brotli bytes, retaining bounded Linux/macOS compression variance.
 
 - Integrate upstream security corrections without dropping the sync recovery contracts.
   Record combined browser/mobile artifact costs and limits in the sync transfer guide.
