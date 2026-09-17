@@ -10,6 +10,11 @@ attention to changes that materially alter behavior or extend functionality.
   unresolved proof repairs behind waiting heights across monitor restarts, and
   retain retries that become temporarily ineligible after the chain tip
   retreats. Existing checkpoints remain compatible; no migration is required.
+  The reviewed Hermes Brotli ceiling advances from 1,139,000 to 1,140,000 bytes:
+  Linux CI measured 1,139,020 bytes and macOS measured 1,138,239–1,138,711 for
+  the corrected candidate. Both retained the governed mobile module/runtime composition;
+  there is no dependency or public-export addition. All other bundle ceilings
+  remain unchanged.
 
 - Validate every newly acquired and replacement Merkle proof against the active
   ChainTracks root before persistence, continue to later providers when an
