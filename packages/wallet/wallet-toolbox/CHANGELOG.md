@@ -10,7 +10,17 @@ attention to changes that materially alter behavior or extend functionality.
   ChainTracks root before persistence, continue to later providers when an
   earlier provider returns an orphan proof, and retain unresolved reorg heights
   for bounded per-run retries without stopping the forward audit cursor. No
-  schema or consumer migration is required.
+  schema or consumer migration is required. Hosted Linux measures the added
+  validation path at 1,721,610 raw Vite bytes and 1,772,653 raw Metro bytes;
+  the reviewed raw ceilings advance to 1,722,000 and 1,773,000 respectively.
+  Local macOS Vite compression measures 406,865 gzip and 317,787 Brotli bytes;
+  those reviewed ceilings advance to 407,000 and 318,000. Local esbuild raw
+  output is 1,342,911 raw / 370,427 gzip / 296,708 Brotli bytes and those
+  reviewed ceilings advance to 1,343,500 / 370,500 / 297,000. Other platform
+  measurements remain under their existing limits except the local optimized
+  Hermes artifact, which measures 3,601,480 raw / 1,465,937 gzip / 1,137,982
+  Brotli bytes and advances those reviewed ceilings to 3,602,000 / 1,466,000 /
+  1,138,500.
 
 - Integrate upstream security corrections without dropping the sync recovery contracts.
   Record combined browser/mobile artifact costs and limits in the sync transfer guide.
