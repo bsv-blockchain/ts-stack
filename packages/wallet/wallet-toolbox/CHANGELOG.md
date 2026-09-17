@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Preserve valid compound proofs with multiple marked transactions. Rotate
+  unresolved proof repairs behind waiting heights across monitor restarts, and
+  retain retries that become temporarily ineligible after the chain tip
+  retreats. Existing checkpoints remain compatible; no migration is required.
+
 - Validate every newly acquired and replacement Merkle proof against the active
   ChainTracks root before persistence, continue to later providers when an
   earlier provider returns an orphan proof, and retain unresolved reorg heights

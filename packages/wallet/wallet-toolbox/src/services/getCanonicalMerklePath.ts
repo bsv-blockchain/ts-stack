@@ -22,8 +22,9 @@ export async function validateCanonicalMerklePathResult(
     : [result.merklePath]) as unknown as MerklePath[]
   const canonical = []
   for (const path of paths) {
-    const markedLeaf = path.path[0]?.find(candidate => candidate.txid === true)
-    if (markedLeaf != null && markedLeaf.hash !== txid) continue
+    // Compound proofs can mark several transactions; membership is determined
+    // by the requested hash, independently of optional txid markers.
+    if (!path.path[0]?.some(candidate => candidate.hash === txid)) continue
 
     const merkleRoot = path.computeRoot(txid)
     if (

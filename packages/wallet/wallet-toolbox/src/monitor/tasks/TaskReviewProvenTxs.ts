@@ -76,11 +76,15 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     const startHeight = lastReviewedHeight === undefined ? 0 : lastReviewedHeight + 1
     const endHeight = Math.min(startHeight + this.maxHeightsPerRun - 1, maxEligibleHeight)
     const range = new HeightRange(startHeight, endHeight)
-    const priorRetryHeights = [...new Set(checkpoint?.retryHeights ?? [])]
-      .filter(height => Number.isInteger(height) && height >= 0 && height <= maxEligibleHeight)
-      .sort((a, b) => a - b)
+    const priorRetryHeights = [...new Set(checkpoint?.retryHeights ?? [])].filter(
+      height => Number.isInteger(height) && height >= 0
+    )
+    // Retain temporarily ineligible heights if the tip retreats. Eligibility
+    // limits this attempt, not the durable queue of unresolved work.
     const retryBatch =
-      this.maxRetryHeightsPerRun > 0 ? priorRetryHeights.slice(0, this.maxRetryHeightsPerRun) : []
+      this.maxRetryHeightsPerRun > 0
+        ? priorRetryHeights.filter(height => height <= maxEligibleHeight).slice(0, this.maxRetryHeightsPerRun)
+        : []
     if (range.isEmpty && retryBatch.length === 0) return ''
 
     let log = ''
@@ -112,9 +116,11 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     log += review.log
 
     const attemptedRetries = new Set(retryBatch)
+    // Failed attempts move behind waiting heights so persistent failures cannot
+    // monopolize the next batch, including after a monitor restart.
     const retryHeights = [
       ...new Set([...priorRetryHeights.filter(height => !attemptedRetries.has(height)), ...review.unresolvedHeights])
-    ].sort((a, b) => a - b)
+    ]
     const reviewedThroughHeight = range.isEmpty ? (lastReviewedHeight ?? -1) : range.maxHeight
 
     return JSON.stringify({

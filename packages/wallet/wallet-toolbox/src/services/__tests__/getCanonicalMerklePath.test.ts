@@ -117,7 +117,28 @@ describe('canonical Merkle path acquisition', () => {
     expect(result.merklePath).toEqual(unmarkedPath)
   })
 
-  test('rejects a path whose marked transaction leaf belongs to another transaction', async () => {
+  test('Services accepts each marked transaction in a canonical compound proof', async () => {
+    const canonical = resultFor(canonicalSibling, 'compound')
+    ;(canonical.merklePath as MerklePath).path[0][1].txid = true
+    const tracker = trackerFor(canonical.header!.merkleRoot)
+    const services = new Services(Services.createDefaultOptions('main'))
+    services.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath').add({
+      name: 'compound',
+      service: jest.fn(async () => canonical)
+    })
+    jest.spyOn(services, 'getChainTracker').mockResolvedValue(tracker)
+
+    for (const requestedTxid of [txid, canonicalSibling]) {
+      const result = await services.getMerklePath(requestedTxid)
+
+      expect(result.merklePath).toEqual(canonical.merklePath)
+      expect(result.merklePath?.computeRoot(requestedTxid)).toBe(canonical.header!.merkleRoot)
+      expect(result.error).toBeUndefined()
+    }
+    expect(tracker.isValidRootForHeight).toHaveBeenCalledTimes(2)
+  })
+
+  test('rejects a path that does not contain the requested transaction', async () => {
     const canonical = resultFor(canonicalSibling, 'canonical')
     const result = resultFor(canonicalSibling, 'wrong-leaf')
     ;(result.merklePath as MerklePath).path[0][0].hash = '44'.repeat(32)

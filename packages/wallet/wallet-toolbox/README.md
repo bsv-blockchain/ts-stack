@@ -381,7 +381,10 @@ before a proof can be persisted; a stale orphan proof is rejected and the next
 provider is tried. The lagged proven-transaction review retains unresolved
 reorg heights and bounds retry work per run while its forward cursor continues,
 so temporary provider lag cannot turn one failed repair attempt into a
-permanent checkpoint skip. No consumer or database migration is required.
+permanent checkpoint skip. Failed retries rotate behind waiting heights, and
+temporarily ineligible heights remain queued when the chain tip retreats.
+Compound proofs may mark multiple transactions; validation checks membership
+of the requested transaction. No consumer or database migration is required.
 
 Invalid-change review applies the same positive-evidence rule. Only an
 explicit successful `isUtxo: false` result is considered spent; a provider
