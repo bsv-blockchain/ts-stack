@@ -49,7 +49,7 @@ export class SqlStorageBackend implements StorageBackend {
     options: SqlStorageOptions = {}
   ) {
     this.tableName = options.tableName ?? DEFAULT_TABLE_NAME
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(this.tableName)) {
+    if (!/^[A-Za-z_]\w*$/.test(this.tableName)) {
       throw new GroupMessagingError(`Unsafe table name: ${this.tableName}`)
     }
   }

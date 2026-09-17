@@ -1,3 +1,4 @@
+import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
 import type { TransportBackend } from './backend.js'
@@ -7,6 +8,25 @@ import {
   type MessageBoxClientLike,
   type MessageBoxTransportOptions
 } from './backends/message-box.js'
+
+/**
+ * Refuse anything that is not a well-formed envelope.
+ *
+ * {@link WirePayload}'s brand is erased at compile time, so a JavaScript caller
+ * — or anyone with an `as any` — can hand `send` the private half of a
+ * KeyPackage and the type system never sees it. Every outbound payload the
+ * library produces comes from `encodeEnvelope`, so demanding one costs nothing
+ * and makes spec §4.1 true at runtime rather than only under `tsc`.
+ */
+const requireEnvelope = (payload: WirePayload): void => {
+  try {
+    decodeEnvelope(payload)
+  } catch (cause) {
+    throw new GroupMessagingError('Refusing to send bytes that are not a valid envelope', {
+      cause
+    })
+  }
+}
 
 /** Anything {@link TransportService.open} knows how to turn into delivery. */
 export type TransportInput = TransportService | TransportBackend | MessageBoxClientLike
@@ -130,6 +150,7 @@ export class TransportService {
   }
 
   async send(recipient: IdentityKey, payload: WirePayload): Promise<void> {
+    requireEnvelope(payload)
     await this.backend.send(recipient, payload)
   }
 
@@ -147,6 +168,7 @@ export class TransportService {
     recipients: IdentityKey[],
     payload: WirePayload
   ): Promise<void> {
+    requireEnvelope(payload)
     if (this.backend.broadcast !== undefined) {
       await this.backend.broadcast(groupId, recipients, payload)
       return

@@ -164,7 +164,7 @@ const behavesLikeStorage = (name: string, open: () => Promise<StorageProvider>):
 
       expect((await storage.listInvites('inbound')).map(i => i.inviteId)).toEqual(['i1'])
       expect((await storage.listInvites('outbound')).map(i => i.inviteId)).toEqual(['i2'])
-      expect((await storage.listInvites()).length).toBe(2)
+      expect(await storage.listInvites()).toHaveLength(2)
       expect((await storage.inviteForRequestId('r2'))?.inviteId).toBe('i2')
       expect(await storage.inviteForRequestId('nope')).toBeUndefined()
     })

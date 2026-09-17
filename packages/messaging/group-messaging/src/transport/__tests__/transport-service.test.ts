@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { decodeEnvelope, encodeEnvelope } from '../../bootstrap/envelope.js'
 import type { IdentityKey, WirePayload } from '../../types.js'
 import type { TransportBackend } from '../backend.js'
 import { InProcessTransportHub } from '../backends/in-process.js'
@@ -7,6 +8,15 @@ import { BroadcastError, DeliveryFailed, TransportService } from '../transport-s
 const ALICE = `02${'aa'.repeat(32)}`
 const BOB = `02${'bb'.repeat(32)}`
 const CAROL = `02${'cc'.repeat(32)}`
+
+/** `TransportService` sends envelopes and nothing else, so fixtures are too. */
+const mls = (marker: number): Uint8Array =>
+  encodeEnvelope({ kind: 'mls', payload: new Uint8Array([marker]) })
+
+const markerOf = (payload: Uint8Array): number | undefined => {
+  const envelope = decodeEnvelope(payload)
+  return envelope.kind === 'mls' ? envelope.payload[0] : undefined
+}
 
 /** A backend whose inbound side the test drives directly. */
 const fakeBackend = () => {
@@ -121,12 +131,12 @@ describe('TransportService', () => {
     const seen: Record<string, number[]> = { [BOB]: [], [CAROL]: [] }
     for (const identity of [BOB, CAROL]) {
       hub.endpoint(identity).onMessage((_from, payload) => {
-        seen[identity]!.push(payload[0]!)
+        seen[identity]!.push(markerOf(payload)!)
       })
     }
 
     const alice = await TransportService.open(hub.endpoint(ALICE))
-    await alice.broadcast('g1', [BOB, CAROL], new Uint8Array([7]))
+    await alice.broadcast('g1', [BOB, CAROL], mls(7))
 
     expect(seen[BOB]).toEqual([7])
     expect(seen[CAROL]).toEqual([7])
@@ -141,7 +151,7 @@ describe('TransportService', () => {
     }
     const service = await TransportService.open(backend)
 
-    await service.broadcast('g1', [BOB, CAROL], new Uint8Array([1]))
+    await service.broadcast('g1', [BOB, CAROL], mls(1))
 
     expect(broadcast).toHaveBeenCalledTimes(1)
     expect(backend.send).not.toHaveBeenCalled()
@@ -160,7 +170,7 @@ describe('TransportService', () => {
     // one that reached none, so the error carries both halves.
     let error: unknown
     try {
-      await service.broadcast('g1', [BOB, CAROL], new Uint8Array([1]))
+      await service.broadcast('g1', [BOB, CAROL], mls(1))
     } catch (cause) {
       error = cause
     }

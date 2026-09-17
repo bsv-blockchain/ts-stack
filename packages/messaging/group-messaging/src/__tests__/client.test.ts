@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { KeyDeriver, PrivateKey } from '@bsv/sdk'
 import { describe, expect, it } from 'vitest'
-import { encodeEnvelope, EnvelopeError } from '../bootstrap/index.js'
+import { decodeEnvelope, encodeEnvelope, EnvelopeError } from '../bootstrap/index.js'
 import { GroupMessagingClient } from '../client.js'
 import { GroupMessagingError, isPermanent } from '../errors.js'
 import { nodeSqliteDriver } from '../storage/__tests__/node-sqlite-driver.js'
@@ -299,12 +299,19 @@ describe('two clients over one hub', () => {
 
     const received: Array<{ from: IdentityKey; byte: number }> = []
     bob.transport.onMessage((from, payload) => {
-      received.push({ from, byte: payload[0]! })
+      const envelope = decodeEnvelope(payload)
+      if (envelope.kind === 'mls') received.push({ from, byte: envelope.payload[0]! })
     })
 
     hub.goOffline(bobWallet.identityKey)
-    await alice.transport.send(bobWallet.identityKey, new Uint8Array([1]))
-    await alice.transport.send(bobWallet.identityKey, new Uint8Array([2]))
+    await alice.transport.send(
+      bobWallet.identityKey,
+      encodeEnvelope({ kind: 'mls', payload: new Uint8Array([1]) })
+    )
+    await alice.transport.send(
+      bobWallet.identityKey,
+      encodeEnvelope({ kind: 'mls', payload: new Uint8Array([2]) })
+    )
     expect(received).toEqual([])
 
     await hub.goOnline(bobWallet.identityKey)

@@ -1146,7 +1146,7 @@ describe('holds taken before a join are bounded across groups', () => {
       await bob.processIncoming(envelope(relabel(spoken.message, groupId)), alice.identityKey)
     }
 
-    expect((await bob.storage.listPendingGroups()).length).toBe(MAX_GROUPS_HELD_BEFORE_JOIN)
+    expect(await bob.storage.listPendingGroups()).toHaveLength(MAX_GROUPS_HELD_BEFORE_JOIN)
 
     await alice.close()
     await bob.close()
@@ -1162,7 +1162,7 @@ describe('holds taken before a join are bounded across groups', () => {
     for (const groupId of spoofed) {
       await bob.processIncoming(envelope(relabel(spoken.message, groupId)), alice.identityKey)
     }
-    expect((await bob.storage.listPendingGroups()).length).toBe(spoofed.length)
+    expect(await bob.storage.listPendingGroups()).toHaveLength(spoofed.length)
 
     await bob.storage.deleteInvite(welcome.inviteId)
     await bob.processIncoming(

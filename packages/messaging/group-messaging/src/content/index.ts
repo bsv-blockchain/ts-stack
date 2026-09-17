@@ -21,6 +21,12 @@ export const encodeContent = (content: MessageContent): Uint8Array =>
 /** The only two fields declared `| null`; everywhere else null is a wrong kind. */
 const NULLABLE: ReadonlySet<keyof MessageContent> = new Set(['replyTo', 'expires'])
 
+const matchesKind = (value: unknown, kind: 'string' | 'array' | 'object'): boolean => {
+  if (kind === 'array') return Array.isArray(value)
+  if (kind === 'object') return typeof value === 'object' && !Array.isArray(value)
+  return typeof value === kind
+}
+
 const requireKind = (
   content: Partial<MessageContent>,
   field: keyof MessageContent,
@@ -32,13 +38,9 @@ const requireKind = (
     if (NULLABLE.has(field)) return
     throw new ContentDecodeError(`Message content field ${field} is null, not a ${kind}`)
   }
-  const ok =
-    kind === 'array'
-      ? Array.isArray(value)
-      : kind === 'object'
-        ? typeof value === 'object' && !Array.isArray(value)
-        : typeof value === kind
-  if (!ok) throw new ContentDecodeError(`Message content field ${field} is not a ${kind}`)
+  if (!matchesKind(value, kind)) {
+    throw new ContentDecodeError(`Message content field ${field} is not a ${kind}`)
+  }
 }
 
 export const decodeContent = (bytes: Uint8Array): MessageContent => {

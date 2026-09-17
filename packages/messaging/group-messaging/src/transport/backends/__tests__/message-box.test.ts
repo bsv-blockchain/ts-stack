@@ -195,7 +195,7 @@ describe('MessageBoxTransport', () => {
     expect(callsWhileInFlight).toBe(1)
 
     await vi.advanceTimersByTimeAsync(5000)
-    expect(listMessages.mock.calls.length).toBe(callsWhileInFlight)
+    expect(listMessages.mock.calls).toHaveLength(callsWhileInFlight)
 
     release()
     await vi.advanceTimersByTimeAsync(0)
@@ -344,7 +344,7 @@ describe('MessageBoxTransport', () => {
     await transport.close()
     await vi.advanceTimersByTimeAsync(20000)
 
-    expect(listed.mock.calls.length).toBe(afterFirst)
+    expect(listed.mock.calls).toHaveLength(afterFirst)
   })
 
   it('reports a failed poll without stopping the timer', async () => {

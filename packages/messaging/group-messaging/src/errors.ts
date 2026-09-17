@@ -73,9 +73,6 @@ export class DeliveryFailed extends GroupMessagingError {
 export class PermanentProcessingError extends GroupMessagingError {
   override name = 'PermanentProcessingError'
   readonly permanent = true
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options)
-  }
 }
 
 /**

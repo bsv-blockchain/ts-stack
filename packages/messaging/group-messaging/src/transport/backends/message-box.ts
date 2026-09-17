@@ -384,7 +384,7 @@ export class MessageBoxTransport implements TransportBackend {
   readonly messageBox: string
   readonly #handlers = new Set<(from: IdentityKey, payload: Uint8Array) => void | Promise<void>>()
   /** Reported on `start`, so a caller that asked for live hears it went unserved. */
-  #liveRefused: LiveDeliveryUnavailable | undefined
+  readonly #liveRefused: LiveDeliveryUnavailable | undefined
   readonly #errorHandlers = new Set<(error: Error) => void>()
   readonly #liveStatusHandlers = new Set<(status: LiveStatus) => void>()
   readonly #poll: PollingSource
@@ -616,6 +616,56 @@ export class MessageBoxTransport implements TransportBackend {
     this.#poll.retune(this.#pollIntervalMs)
   }
 
+  /**
+   * Whether this message is finished with and only needs acknowledging again.
+   *
+   * A message whose acknowledgement never took is re-listed on every poll for
+   * the life of the process, so a known id is re-acknowledged rather than
+   * skipped.
+   */
+  #settled(message: InboxMessage, acknowledge: string[]): boolean {
+    if (!this.#handled.has(message.messageId) && !this.#seen.has(message.messageId)) return false
+    acknowledge.push(message.messageId)
+    return true
+  }
+
+  /** The body, or `undefined` once the failure has been recorded. */
+  #decode(message: InboxMessage, acknowledge: string[]): Uint8Array | undefined {
+    try {
+      return decodeBody(message.body)
+    } catch (cause) {
+      const error = toError(cause)
+      if (error instanceof UnparsableBodyError) {
+        this.#failed(message.messageId, error, acknowledge)
+      } else {
+        this.#report(error)
+        this.#give(message.messageId, acknowledge)
+      }
+      return undefined
+    }
+  }
+
+  /**
+   * Per handler, not per batch: `onMessage` takes any number of subscribers, so
+   * one that throws must not skip the rest. In the normal wiring
+   * TransportService is the only subscriber and has already reported its own,
+   * which is why its aggregate is not reported again here.
+   */
+  async #fanOut(message: InboxMessage, payload: Uint8Array, acknowledge: string[]): Promise<void> {
+    const failures: Error[] = []
+    for (const handler of this.#handlers) {
+      try {
+        await handler(message.sender, payload)
+      } catch (cause) {
+        const error = toError(cause)
+        if (!(error instanceof DeliveryFailed)) this.#report(error)
+        failures.push(error)
+      }
+    }
+    if (failures.length === 0) this.#give(message.messageId, acknowledge)
+    else this.#failed(message.messageId, new DeliveryFailed(message.sender, failures), acknowledge)
+  }
+
   async #deliver(messages: InboxMessage[]): Promise<number> {
     // Nobody is subscribed, so nothing can have been processed. Delivering to
     // an empty set completes without throwing, which would acknowledge the
@@ -624,52 +674,13 @@ export class MessageBoxTransport implements TransportBackend {
     const acknowledge: string[] = []
     let fresh = 0
     for (const message of [...messages].sort(byArrival)) {
-      if (this.#handled.has(message.messageId)) {
-        acknowledge.push(message.messageId)
-        continue
-      }
-      // Finished with, but the box is still handing it back: acknowledge it
-      // again rather than skip it, or a message whose acknowledgement never
-      // took is re-listed on every poll for the life of the process.
-      if (this.#seen.has(message.messageId)) {
-        acknowledge.push(message.messageId)
-        continue
-      }
+      if (this.#settled(message, acknowledge)) continue
       // Only a message seen for the first time says anything about the socket.
       // A retry is one the socket may well have delivered already.
       if (!this.#attempts.has(message.messageId)) fresh += 1
-
-      let payload: Uint8Array
-      try {
-        payload = decodeBody(message.body)
-      } catch (cause) {
-        const error = toError(cause)
-        if (error instanceof UnparsableBodyError) {
-          this.#failed(message.messageId, error, acknowledge)
-        } else {
-          this.#report(error)
-          this.#give(message.messageId, acknowledge)
-        }
-        continue
-      }
-
-      // Per handler, not per batch: `onMessage` takes any number of
-      // subscribers, so one that throws must not skip the rest. In the normal
-      // wiring TransportService is the only subscriber and has already reported
-      // its own, which is why its aggregate is not reported again here.
-      const failures: Error[] = []
-      for (const handler of this.#handlers) {
-        try {
-          await handler(message.sender, payload)
-        } catch (cause) {
-          const error = toError(cause)
-          if (!(error instanceof DeliveryFailed)) this.#report(error)
-          failures.push(error)
-        }
-      }
-      if (failures.length === 0) this.#give(message.messageId, acknowledge)
-      else
-        this.#failed(message.messageId, new DeliveryFailed(message.sender, failures), acknowledge)
+      const payload = this.#decode(message, acknowledge)
+      if (payload === undefined) continue
+      await this.#fanOut(message, payload, acknowledge)
     }
     this.#forget()
     if (acknowledge.length > 0) {

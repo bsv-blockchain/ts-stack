@@ -85,7 +85,7 @@ export const decodeBody = (body: string | Record<string, unknown>): Uint8Array =
 
 const toBase64 = (bytes: Uint8Array): string => {
   let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
+  for (const byte of bytes) binary += String.fromCodePoint(byte)
   return btoa(binary)
 }
 
@@ -97,6 +97,6 @@ const fromBase64 = (value: string): Uint8Array => {
     throw new MalformedBodyError('MessageBox payload is not base64', { cause })
   }
   const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index)
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.codePointAt(index)!
   return bytes
 }

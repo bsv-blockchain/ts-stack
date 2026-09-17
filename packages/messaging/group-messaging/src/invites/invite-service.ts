@@ -165,158 +165,181 @@ export class InviteService {
    * stranger inserting their own KeyPackage into somebody else's exchange
    * should leave a record that it fired.
    */
+  /** Every refusal path reports the same shape; only the reason differs. */
+  async #refuse(
+    peer: IdentityKey,
+    kind: BootstrapMessage['type'],
+    requestId: string,
+    reason: string
+  ): Promise<void> {
+    await this.deps.emit('bootstrapRefused', { peer, kind, requestId, reason })
+  }
+
   async handle(peer: IdentityKey, message: BootstrapMessage): Promise<void> {
     switch (message.type) {
-      case 'keyPackageRequest': {
-        // `decodeEnvelope` narrows the offer to suites this library has, so an
-        // empty list is a peer asking for something we cannot answer. Storing
-        // it would put a row in front of a user whose only move is to decline.
-        if (message.ciphersuites.length === 0) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'keyPackageRequest',
-            requestId: message.requestId,
-            reason: 'offers no ciphersuite this client supports'
-          })
-          return
-        }
-        const pending = (await this.deps.storage.listInvites('inbound')).filter(
-          invite => invite.kind === 'keyPackageRequest'
-        )
-        // A resend after a dropped ack is routine; it must reuse the row it
-        // already made rather than add one the user has to decline twice.
-        const duplicate = pending.some(
-          invite => invite.peer === peer && invite.requestId === message.requestId
-        )
-        if (duplicate) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'keyPackageRequest',
-            requestId: message.requestId,
-            reason: 'an invitation from this peer already holds this request id'
-          })
-          return
-        }
-        if (pending.length >= MAX_PENDING_INBOUND_REQUESTS) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'keyPackageRequest',
-            requestId: message.requestId,
-            reason: `${MAX_PENDING_INBOUND_REQUESTS} invitations are already pending a decision`
-          })
-          return
-        }
-        const inviteId = randomId()
-        await this.deps.storage.putInvite({
-          inviteId,
-          direction: 'inbound',
-          kind: 'keyPackageRequest',
-          peer,
-          requestId: message.requestId,
-          ciphersuites: message.ciphersuites,
-          ...(message.chatName === undefined ? {} : { chatName: message.chatName }),
-          receivedAt: new Date().toISOString()
-        })
-        await this.deps.emit('inviteReceived', {
-          inviteId,
-          peer,
-          ciphersuites: message.ciphersuites,
-          ...(message.chatName === undefined ? {} : { chatName: message.chatName })
-        })
-        return
-      }
-      case 'keyPackageResponse': {
-        const invite = await this.#answered(message.requestId, peer)
-        if (invite === undefined) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'keyPackageResponse',
-            requestId: message.requestId,
-            reason: 'no outbound invitation matches this request id and sender'
-          })
-          return
-        }
-        await this.deps.storage.deleteInvite(invite.inviteId)
-        await this.deps.emit('keyPackageReceived', {
-          inviteId: invite.inviteId,
-          peer,
-          keyPackage: message.keyPackage
-        })
-        return
-      }
-      case 'keyPackageDecline': {
-        const invite = await this.#answered(message.requestId, peer)
-        if (invite === undefined) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'keyPackageDecline',
-            requestId: message.requestId,
-            reason: 'no outbound invitation matches this request id and sender'
-          })
-          return
-        }
-        await this.deps.storage.deleteInvite(invite.inviteId)
-        await this.deps.emit('inviteDeclined', { inviteId: invite.inviteId, peer })
-        return
-      }
-      case 'welcome': {
-        // A Welcome carries no checkable correlator — `deliverWelcome` mints a
-        // fresh requestId per recipient — so a held KeyPackage is the only test.
-        let ref: KeyPackageRef | undefined
-        try {
-          ref = await this.deps.resolveWelcome(message.welcome)
-        } catch (cause) {
-          throw new PermanentProcessingError(
-            'Welcome bytes could not be read; no retry makes them readable',
-            { cause }
-          )
-        }
-        if (ref === undefined) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'welcome',
-            requestId: message.requestId,
-            reason: 'no stored KeyPackage matches this Welcome'
-          })
-          return
-        }
-        // The ref is cleartext, so naming one proves nothing. A KeyPackage is
-        // single-use, so one pending row per ref bounds forged Welcomes — and
-        // refusing a genuine resend is free, the row it duplicates still joins.
-        const held = (await this.deps.storage.listInvites()).find(
-          invite => invite.kind === 'welcome' && invite.ref === ref
-        )
-        if (held !== undefined) {
-          await this.deps.emit('bootstrapRefused', {
-            peer,
-            kind: 'welcome',
-            requestId: message.requestId,
-            reason: "a pending invite already holds this Welcome's KeyPackage"
-          })
-          return
-        }
-        const inviteId = randomId()
-        await this.deps.storage.putInvite({
-          inviteId,
-          direction: 'inbound',
-          kind: 'welcome',
-          peer,
-          requestId: message.requestId,
-          ref,
-          welcome: toHex(message.welcome),
-          ...(message.chatName === undefined ? {} : { chatName: message.chatName }),
-          receivedAt: new Date().toISOString()
-        })
-        await this.deps.emit('welcomeReceived', {
-          inviteId,
-          peer,
-          ref,
-          welcome: message.welcome,
-          ...(message.chatName === undefined ? {} : { chatName: message.chatName })
-        })
-        return
-      }
+      case 'keyPackageRequest':
+        return this.#onKeyPackageRequest(peer, message)
+      case 'keyPackageResponse':
+        return this.#onKeyPackageResponse(peer, message)
+      case 'keyPackageDecline':
+        return this.#onKeyPackageDecline(peer, message)
+      case 'welcome':
+        return this.#onWelcome(peer, message)
     }
+  }
+
+  async #onKeyPackageRequest(
+    peer: IdentityKey,
+    message: Extract<BootstrapMessage, { type: 'keyPackageRequest' }>
+  ): Promise<void> {
+    // `decodeEnvelope` narrows the offer to suites this library has, so an
+    // empty list is a peer asking for something we cannot answer. Storing it
+    // would put a row in front of a user whose only move is to decline.
+    if (message.ciphersuites.length === 0) {
+      return this.#refuse(
+        peer,
+        'keyPackageRequest',
+        message.requestId,
+        'offers no ciphersuite this client supports'
+      )
+    }
+    const pending = (await this.deps.storage.listInvites('inbound')).filter(
+      invite => invite.kind === 'keyPackageRequest'
+    )
+    // A resend after a dropped ack is routine; it must reuse the row it already
+    // made rather than add one the user has to decline twice.
+    const duplicate = pending.some(
+      invite => invite.peer === peer && invite.requestId === message.requestId
+    )
+    if (duplicate) {
+      return this.#refuse(
+        peer,
+        'keyPackageRequest',
+        message.requestId,
+        'an invitation from this peer already holds this request id'
+      )
+    }
+    if (pending.length >= MAX_PENDING_INBOUND_REQUESTS) {
+      return this.#refuse(
+        peer,
+        'keyPackageRequest',
+        message.requestId,
+        `${MAX_PENDING_INBOUND_REQUESTS} invitations are already pending a decision`
+      )
+    }
+    const inviteId = randomId()
+    await this.deps.storage.putInvite({
+      inviteId,
+      direction: 'inbound',
+      kind: 'keyPackageRequest',
+      peer,
+      requestId: message.requestId,
+      ciphersuites: message.ciphersuites,
+      ...(message.chatName === undefined ? {} : { chatName: message.chatName }),
+      receivedAt: new Date().toISOString()
+    })
+    await this.deps.emit('inviteReceived', {
+      inviteId,
+      peer,
+      ciphersuites: message.ciphersuites,
+      ...(message.chatName === undefined ? {} : { chatName: message.chatName })
+    })
+  }
+
+  async #onKeyPackageResponse(
+    peer: IdentityKey,
+    message: Extract<BootstrapMessage, { type: 'keyPackageResponse' }>
+  ): Promise<void> {
+    const invite = await this.#answered(message.requestId, peer)
+    if (invite === undefined) {
+      return this.#refuse(
+        peer,
+        'keyPackageResponse',
+        message.requestId,
+        'no outbound invitation matches this request id and sender'
+      )
+    }
+    await this.deps.storage.deleteInvite(invite.inviteId)
+    await this.deps.emit('keyPackageReceived', {
+      inviteId: invite.inviteId,
+      peer,
+      keyPackage: message.keyPackage
+    })
+  }
+
+  async #onKeyPackageDecline(
+    peer: IdentityKey,
+    message: Extract<BootstrapMessage, { type: 'keyPackageDecline' }>
+  ): Promise<void> {
+    const invite = await this.#answered(message.requestId, peer)
+    if (invite === undefined) {
+      return this.#refuse(
+        peer,
+        'keyPackageDecline',
+        message.requestId,
+        'no outbound invitation matches this request id and sender'
+      )
+    }
+    await this.deps.storage.deleteInvite(invite.inviteId)
+    await this.deps.emit('inviteDeclined', { inviteId: invite.inviteId, peer })
+  }
+
+  async #onWelcome(
+    peer: IdentityKey,
+    message: Extract<BootstrapMessage, { type: 'welcome' }>
+  ): Promise<void> {
+    // A Welcome carries no checkable correlator — `deliverWelcome` mints a
+    // fresh requestId per recipient — so a held KeyPackage is the only test.
+    let ref: KeyPackageRef | undefined
+    try {
+      ref = await this.deps.resolveWelcome(message.welcome)
+    } catch (cause) {
+      throw new PermanentProcessingError(
+        'Welcome bytes could not be read; no retry makes them readable',
+        { cause }
+      )
+    }
+    if (ref === undefined) {
+      return this.#refuse(
+        peer,
+        'welcome',
+        message.requestId,
+        'no stored KeyPackage matches this Welcome'
+      )
+    }
+    // The ref is cleartext, so naming one proves nothing. A KeyPackage is
+    // single-use, so one pending row per ref bounds forged Welcomes — and
+    // refusing a genuine resend is free, the row it duplicates still joins.
+    const held = (await this.deps.storage.listInvites()).find(
+      invite => invite.kind === 'welcome' && invite.ref === ref
+    )
+    if (held !== undefined) {
+      return this.#refuse(
+        peer,
+        'welcome',
+        message.requestId,
+        "a pending invite already holds this Welcome's KeyPackage"
+      )
+    }
+    const inviteId = randomId()
+    await this.deps.storage.putInvite({
+      inviteId,
+      direction: 'inbound',
+      kind: 'welcome',
+      peer,
+      requestId: message.requestId,
+      ref,
+      welcome: toHex(message.welcome),
+      ...(message.chatName === undefined ? {} : { chatName: message.chatName }),
+      receivedAt: new Date().toISOString()
+    })
+    await this.deps.emit('welcomeReceived', {
+      inviteId,
+      peer,
+      ref,
+      welcome: message.welcome,
+      ...(message.chatName === undefined ? {} : { chatName: message.chatName })
+    })
   }
 
   /**

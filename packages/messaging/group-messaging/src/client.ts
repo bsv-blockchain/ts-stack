@@ -786,6 +786,50 @@ export class GroupMessagingClient {
    * {@link RETAINED_EPOCHS} behind is unrecoverable and is reported as dropped
    * rather than retried on every future Commit.
    */
+  /**
+   * One queued payload against the group as it stands now.
+   *
+   * `keep` is a payload from an epoch this client has not reached yet: it waits
+   * for the Commit that gets there. Everything else is resolved here, including
+   * the reporting, so the drain loop only has to route the answer.
+   */
+  async #consumeOne(
+    chatId: ChatId,
+    mlsGroupId: MlsGroupId,
+    state: Uint8Array,
+    payload: Uint8Array
+  ): Promise<'applied' | 'keep' | 'skip'> {
+    const local = await this.engine.info(state)
+    const framing = this.engine.epochOf(payload)
+    if (framing === undefined) {
+      this.#events.emit('processingFailed', {
+        error: new PermanentProcessingError(
+          `A payload queued for ${mlsGroupId} is no longer routable MLS traffic`
+        )
+      })
+      return 'skip'
+    }
+    if (framing.epoch > local.epoch) return 'keep'
+    if (local.epoch - framing.epoch > RETAINED_EPOCHS) {
+      this.#events.emit('epochMismatch', {
+        chatId,
+        mlsGroupId,
+        expected: local.epoch,
+        received: framing.epoch,
+        disposition: 'dropped'
+      })
+      return 'skip'
+    }
+    try {
+      await this.#applyOne(chatId, mlsGroupId, state, payload, framing.epoch, local.epoch)
+      return 'applied'
+    } catch (cause) {
+      // One unreadable payload must not strand the rest of the queue.
+      this.#events.emit('processingFailed', { error: toError(cause) })
+      return 'skip'
+    }
+  }
+
   async #drainPending(chatId: ChatId, mlsGroupId: MlsGroupId): Promise<void> {
     for (;;) {
       const queued = await this.storage.takePending(mlsGroupId)
@@ -795,39 +839,11 @@ export class GroupMessagingClient {
       let applied = false
       for (const payload of queued) {
         const state = await this.storage.getGroup(mlsGroupId)
+        // The group went away underneath the drain; the queue goes with it.
         if (state === undefined) return
-        const local = await this.engine.info(state)
-        const framing = this.engine.epochOf(payload)
-        if (framing === undefined) {
-          this.#events.emit('processingFailed', {
-            error: new PermanentProcessingError(
-              `A payload queued for ${mlsGroupId} is no longer routable MLS traffic`
-            )
-          })
-          continue
-        }
-
-        if (framing.epoch > local.epoch) {
-          keep.push(payload)
-          continue
-        }
-        if (local.epoch - framing.epoch > RETAINED_EPOCHS) {
-          this.#events.emit('epochMismatch', {
-            chatId,
-            mlsGroupId,
-            expected: local.epoch,
-            received: framing.epoch,
-            disposition: 'dropped'
-          })
-          continue
-        }
-        try {
-          await this.#applyOne(chatId, mlsGroupId, state, payload, framing.epoch, local.epoch)
-          applied = true
-        } catch (cause) {
-          // One unreadable payload must not strand the rest of the queue.
-          this.#events.emit('processingFailed', { error: toError(cause) })
-        }
+        const outcome = await this.#consumeOne(chatId, mlsGroupId, state, payload)
+        if (outcome === 'keep') keep.push(payload)
+        applied ||= outcome === 'applied'
       }
       await this.storage.replacePending(mlsGroupId, keep)
       if (!applied) return
