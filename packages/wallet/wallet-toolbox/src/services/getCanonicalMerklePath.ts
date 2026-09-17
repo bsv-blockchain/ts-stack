@@ -67,9 +67,9 @@ export async function getCanonicalMerklePath(
       try {
         await validate(fallback)
         return fallback
-      } catch (fallbackCause) {
+      } catch (error_) {
         return {
-          error: WalletError.fromUnknown(fallbackCause),
+          error: WalletError.fromUnknown(error_),
           notes: [...(result.notes ?? []), ...(fallback.notes ?? [])]
         }
       }
