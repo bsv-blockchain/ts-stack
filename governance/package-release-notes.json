@@ -240,6 +240,13 @@
       "releaseType": "minor",
       "summary": "Adds TTN to the CLI, browser configurator, configuration model, and persisted project-manifest network choices. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
       "migration": "Existing mainnet and testnet scaffolds are unchanged. New TTN projects pass --network ttn or select TerraTestNet in the configurator. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+    },
+    {
+      "name": "@bsv/group-messaging",
+      "publishedVersion": "0.1.0",
+      "releaseType": "minor",
+      "summary": "Initial migration into ts-stack of end-to-end encrypted group messaging for BRC-100 wallets, with MLS (RFC 9420) group state by way of ts-mls and each member's MLS credential bound to their wallet's secp256k1 identity so a peer cannot join under a name that is not theirs. Ships storage backends for Map, SQL and IndexedDB, and transport backends for an in-process hub and @bsv/message-box-client with optional live socket delivery over a polling backstop. The library opens no database and no network connection of its own beyond the socket a caller explicitly asks for, and never stores private KeyPackage material.",
+      "migration": "No migration is required: this is the package's first appearance in ts-stack and it has not been published to npm before. Consumers supply their own wallet, storage and transport. @bsv/sdk is a required peer dependency."
     }
   ]
 }
