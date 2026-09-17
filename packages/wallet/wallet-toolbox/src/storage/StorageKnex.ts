@@ -1538,17 +1538,29 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
     const isSQLite = clientName.includes('sqlite')
 
-    // For SQLite, disable transactions during migrations and turn off foreign keys.
-    // PRAGMA foreign_keys is silently ignored inside transactions, so we must
-    // disable transactions for the migration to allow the PRAGMA to take effect.
-    // See: https://github.com/knex/knex/issues/4155
+    // For SQLite, turn foreign keys off for the duration of the migration.
+    // PRAGMA foreign_keys is silently ignored *when executed inside* a
+    // transaction (https://github.com/knex/knex/issues/4155), so it is issued
+    // here, outside migrate.latest(). SQLite's single-connection pool means
+    // knex's per-migration transaction runs on this same connection and
+    // inherits the setting, and knex's own SQLite alter-table rebuild leaves an
+    // ambient pragma alone while transacting (sqlite3/schema/ddl.js: alter()
+    // uses `enforceForeignCheck = this.client.transacting ? null : false`).
     if (isSQLite) {
       await this.knex.raw('PRAGMA foreign_keys = OFF;')
     }
 
     const config = {
       migrationSource: new KnexMigrations(this.chain, storageName, storageIdentityKey, 1024),
-      disableTransactions: isSQLite
+      // Let knex wrap each migration file in a transaction on every engine.
+      // SQLite DDL is transactional, so an interrupted migration rolls back
+      // whole and its knex_migrations insert stays atomic with its DDL. With
+      // transactions disabled, a process killed between two statements of one
+      // file — or between its last statement and the journal insert — left
+      // objects the journal never recorded, and every later migrate.latest()
+      // re-ran the file from its first statement and failed on
+      // "table ... already exists", permanently, with no recovery path.
+      disableTransactions: false
     }
     await this.knex.migrate.latest(config)
     const version = await this.knex.migrate.currentVersion(config)
