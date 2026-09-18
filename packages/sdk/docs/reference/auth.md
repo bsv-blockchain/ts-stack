@@ -67,30 +67,8 @@ export interface PeerSession {
     lastUpdate: number;
     certificatesRequired?: boolean;
     certificatesValidated?: boolean;
-    certificatePolicy?: RequestedCertificateSet;
-    pendingCertificateRequests?: Record<string, RequestedCertificateSet>;
 }
 ```
-
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
-
-#### Property certificatePolicy
-
-Local handshake policy snapshot. Session stores must retain this field; never sent on the wire.
-
-```ts
-certificatePolicy?: RequestedCertificateSet
-```
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
-
-#### Property pendingCertificateRequests
-
-Locally issued standalone requests, keyed by their nonce. Not a wire correlation field.
-
-```ts
-pendingCertificateRequests?: Record<string, RequestedCertificateSet>
-```
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -833,11 +811,7 @@ Argument Details
 
 #### Method listenForCertificatesReceived
 
-Registers an observer for certificates received from peers, not an acceptance hook.
-Local certificate validation is committed and its waiters are released before observers
-run. Throwing rejects message handling and stops subsequent observers; it does not
-roll back validation or revoke the session. Apply acceptance policy through the locally
-requested certificate set and explicit application authorization before protected work.
+Registers a callback to listen for certificates received from peers.
 
 ```ts
 listenForCertificatesReceived(callback: (senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>): number 
