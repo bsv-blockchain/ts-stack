@@ -199,8 +199,12 @@ submission. Claimed admitted-list indices are bound to the compound path wheneve
 a remote list is used as evidence, including when every remote txid is already
 local. Inclusion uses the chain tracker root/height check rather than
 `MerklePath.verify`, which also enforces coinbase 100-block spendability.
-Historical mode still applies the local TopicManager and suppresses broadcast
-and propagation. Automatic BASM sync remains disabled by default.
+Because inclusion is proven independently, admission submits in the
+`historical-tx-no-spv` mode so `Transaction.verify` does not re-apply that
+coinbase rule; the public `historical-tx` mode keeps full SPV verification.
+Admission still applies the local TopicManager, and because every admitted
+transaction carries its extracted Merkle path, neither network broadcast nor
+overlay propagation occurs. Automatic BASM sync remains disabled by default.
 
 This is bounded protocol hardening, not durable recovery. An empty local node
 whose topic genesis precedes the recent bootstrap window now refuses the
