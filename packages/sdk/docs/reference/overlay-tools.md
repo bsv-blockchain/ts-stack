@@ -996,7 +996,11 @@ authoritative empty result from an availability failure.
 
 Throws an `AbortError` when `options.signal` aborted the attempt, rather
 than returning a resolution whose empty answer would have to be
-re-qualified against `progress.terminalReason`.
+re-qualified against `progress.terminalReason`. When a client resource
+budget was exhausted during SLAP discovery, before any host could be
+admitted, it throws `LookupResourceLimitError` naming that limit; the
+historical no-competent-hosts error is reserved for a deadline or a
+settled attempt that genuinely found no host.
 
 ```ts
 async queryDetailed(question: LookupQuestion, timeout?: number, options?: LookupQueryOptions): Promise<LookupResolution> 

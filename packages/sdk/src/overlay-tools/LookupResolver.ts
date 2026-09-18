@@ -993,7 +993,11 @@ export default class LookupResolver {
    *
    * Throws an `AbortError` when `options.signal` aborted the attempt, rather
    * than returning a resolution whose empty answer would have to be
-   * re-qualified against `progress.terminalReason`.
+   * re-qualified against `progress.terminalReason`. When a client resource
+   * budget was exhausted during SLAP discovery, before any host could be
+   * admitted, it throws `LookupResourceLimitError` naming that limit; the
+   * historical no-competent-hosts error is reserved for a deadline or a
+   * settled attempt that genuinely found no host.
    */
   async queryDetailed(
     question: LookupQuestion,
@@ -1038,8 +1042,14 @@ export default class LookupResolver {
     // at any host count.
     if (progress.terminalReason === 'cancelled') throw lookupAbortError()
     // A deadline that admitted no host is a miss, not a successful empty
-    // answer from a queried host.
+    // answer from a queried host. An attempt that exhausted a client resource
+    // budget during discovery is a third outcome: the trackers were never
+    // given the chance to name a host, so it keeps its own error and limit
+    // rather than borrowing the no-competent-hosts message.
     if (progress.hostCount === 0) {
+      if (progress.terminalReason === 'resource-limit') {
+        throw new LookupResourceLimitError(progress.limitsHit?.[0] ?? 'resource-limit')
+      }
       throw new Error(
         `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
       )

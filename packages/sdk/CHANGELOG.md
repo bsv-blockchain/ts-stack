@@ -286,6 +286,10 @@ All notable changes to this project will be documented in this file. The format 
   when the caller's `options.signal` cancels the attempt, at any host count,
   instead of flattening a cancelled run into an empty output list. `query$()`
   still reports the cancellation as a `terminalReason: 'cancelled'` snapshot.
+- A lookup that exhausts a client resource budget during SLAP discovery, before
+  any host is admitted, now throws `LookupResourceLimitError` naming the limit
+  instead of the historical no-competent-hosts error. That message is reserved
+  for a deadline or a settled attempt that genuinely found no host.
 - Batch BEEF mutation bookkeeping and reuse compound Merkle intermediate hashes.
   The optional asynchronous P2PKH backend now forwards its already validated
   compressed public key directly into the unlocking script. Existing BEEF

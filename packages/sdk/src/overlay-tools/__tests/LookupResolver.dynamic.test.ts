@@ -1,6 +1,7 @@
 import LookupResolver, {
   HTTPSOverlayLookupFacilitator,
-  LookupAnswerProgress
+  LookupAnswerProgress,
+  LookupResourceLimitError
 } from '../LookupResolver'
 import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../OverlayAdminTokenTemplate'
@@ -991,6 +992,42 @@ describe('LookupResolver dynamic discovery', () => {
     await secondPending
     await first.return?.()
     await second.return?.()
+  })
+
+  it('throws a resource-limit error when discovery exhausts the byte budget before any host is admitted', async () => {
+    const tracker = 'https://discovery-limit-tracker.example'
+    const lookup = jest.fn(
+      async (
+        _url: string,
+        _question: unknown,
+        _timeout: unknown,
+        _signal?: AbortSignal,
+        options?: { consumeBytes?: (bytes: number) => void }
+      ) => {
+        options?.consumeBytes?.(4096)
+        return { type: 'output-list' as const, outputs: [] }
+      }
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      slapTrackers: [tracker]
+    })
+    const pending = resolver.queryDetailed(
+      { service: 'ls_discovery_limit', query: {} },
+      undefined,
+      { limits: { maxTotalBytes: 1024 } }
+    )
+    pending.catch(() => {
+      /* asserted below */
+    })
+
+    await jest.runAllTimersAsync()
+
+    await expect(pending).rejects.toBeInstanceOf(LookupResourceLimitError)
+    await expect(pending).rejects.toMatchObject({
+      name: 'LookupResourceLimitError',
+      limit: 'maxTotalBytes'
+    })
   })
 
   it('throws from query() when a deadline expires before any host is admitted', async () => {
