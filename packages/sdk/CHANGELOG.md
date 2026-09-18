@@ -345,6 +345,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Re-queue a `TransactionEvidenceCoordinator` candidate that was displaced by a
+  concurrency-limited attempt instead of discarding it. A same-txid alternate
+  candidate already admitted to a job could previously be lost without ever
+  being tried when every concurrency slot was in use at the moment of its
+  retry, causing an otherwise-valid candidate to fail with `limit`. No public
+  API change; internal candidate/byte accounting is unaffected.
+
 - Use asynchronous platform SHA-256 for ProtoWallet signature payloads of at
   least 64 KiB. Preserve deterministic signatures, direct digests, short input
   behavior, and portable fallback over a snapshot if native hashing is unavailable

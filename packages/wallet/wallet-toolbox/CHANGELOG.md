@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Implement `BHServiceClient.findChainTipHash()` by delegating to its existing
+  `findChainTipHeader()` call against `/api/v1/chain/tip/longest`, instead of
+  throwing `Not implemented`. `ChaintracksChainTracker.getVerificationContextToken()`
+  calls `findChainTipHash()` on every verification attempt, so any wallet
+  configured with a `BHServiceClient` as `options.chaintracks`, or as a
+  `LocalChainTracker` participating source, previously failed on every
+  attempt. No `ChaintracksClientApi` contract change; no migration required.
+
 - Preserve valid compound proofs with multiple marked transactions. Rotate
   unresolved proof repairs behind waiting heights across monitor restarts, and
   retain retries that become temporarily ineligible after the chain tip
