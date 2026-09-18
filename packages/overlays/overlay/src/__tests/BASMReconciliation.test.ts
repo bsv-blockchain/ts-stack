@@ -495,7 +495,7 @@ describe('BASM reconciliation evidence binding', () => {
     )
   })
 
-  it('still runs SPV verification for a GASP-style historical-tx submission', async () => {
+  it('still runs SPV verification for a public historical-tx submission', async () => {
     const f = fixture()
     const proven = f.transactions[1]
     // A proof whose root is not the canonical root for this height: the chain
