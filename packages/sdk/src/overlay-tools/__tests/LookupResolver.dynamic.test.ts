@@ -238,6 +238,63 @@ describe('LookupResolver dynamic discovery', () => {
     await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
   })
 
+  it('rejects query() with an AbortError instead of an empty answer when a queried host is aborted', async () => {
+    const host = 'https://abort-query.example'
+    const controller = new AbortController()
+    const lookup = jest.fn(
+      async (_url: string, _question: unknown, _timeout: unknown, signal?: AbortSignal) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      hostOverrides: { ls_abort_query: [host] }
+    })
+    const pending = resolver.query({ service: 'ls_abort_query', query: {} }, undefined, {
+      signal: controller.signal
+    })
+    pending.catch(() => {
+      /* asserted below */
+    })
+
+    await jest.advanceTimersByTimeAsync(1)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    controller.abort(new Error('caller stopped lookup'))
+    await jest.advanceTimersByTimeAsync(1)
+
+    await expect(pending).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'Lookup cancelled'
+    })
+  })
+
+  it('rejects queryDetailed() with an AbortError when the caller aborts before a host is admitted', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('caller stopped lookup'))
+    const lookup = jest.fn()
+    const resolver = new LookupResolver({
+      facilitator: { lookup } as any,
+      hostOverrides: { ls_abort_early: ['https://abort-early.example'] }
+    })
+    const pending = resolver.queryDetailed(
+      { service: 'ls_abort_early', query: {} },
+      undefined,
+      { signal: controller.signal }
+    )
+    pending.catch(() => {
+      /* asserted below */
+    })
+
+    await jest.advanceTimersByTimeAsync(1)
+
+    await expect(pending).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'Lookup cancelled'
+    })
+    expect(lookup).not.toHaveBeenCalled()
+  })
+
   it('emits a deadline terminal snapshot when no host receipt arrives', async () => {
     const host = 'https://deadline.example'
     const lookup = jest.fn(

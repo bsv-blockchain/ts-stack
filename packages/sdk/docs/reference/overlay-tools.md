@@ -371,6 +371,10 @@ See also: [UnreachableHostInfo](./overlay-tools.md#interface-unreachablehostinfo
 #### Property signal
 
 Abort this query without cancelling discovery still owned by another query.
+`query()` and `queryDetailed()` reject with an `AbortError` once this
+signal fires: a cancelled attempt never answered the question, so it is
+never reported as an empty output list. `query$()` keeps emitting its
+terminal snapshot with `terminalReason: 'cancelled'` instead.
 
 ```ts
 signal?: AbortSignal
@@ -965,6 +969,9 @@ Optional `options.graceMs` overrides the per-call grace window (default 80 ms).
 Optional `options.softTimeoutMs` resolves the query early with whatever has arrived once any host has
 answered (or with an empty result if no host has answered by `softTimeoutMs`).
 
+Throws an `AbortError` when `options.signal` aborted the attempt, so a
+cancelled lookup is never mistaken for an authoritative empty answer.
+
 ```ts
 async query(question: LookupQuestion, timeout?: number, options?: LookupQueryOptions): Promise<LookupAnswer> 
 ```
@@ -986,6 +993,10 @@ See also: [LookupAnswerProgress](./overlay-tools.md#interface-lookupanswerprogre
 Performs a lookup and returns both its answer and the host settlement
 evidence required by security-sensitive consumers to distinguish an
 authoritative empty result from an availability failure.
+
+Throws an `AbortError` when `options.signal` aborted the attempt, rather
+than returning a resolution whose empty answer would have to be
+re-qualified against `progress.terminalReason`.
 
 ```ts
 async queryDetailed(question: LookupQuestion, timeout?: number, options?: LookupQueryOptions): Promise<LookupResolution> 

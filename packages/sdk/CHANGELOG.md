@@ -282,6 +282,10 @@ All notable changes to this project will be documented in this file. The format 
 - LookupResolver host cache no longer lets a tighter-limit discovery satisfy a
   later larger query, and `query()` still throws the historical no-competent-hosts
   error when a deadline expires before any host is admitted.
+- `LookupResolver.query()` and `queryDetailed()` now reject with an `AbortError`
+  when the caller's `options.signal` cancels the attempt, at any host count,
+  instead of flattening a cancelled run into an empty output list. `query$()`
+  still reports the cancellation as a `terminalReason: 'cancelled'` snapshot.
 - Batch BEEF mutation bookkeeping and reuse compound Merkle intermediate hashes.
   The optional asynchronous P2PKH backend now forwards its already validated
   compressed public key directly into the unlocking script. Existing BEEF

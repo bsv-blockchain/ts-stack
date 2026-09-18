@@ -60,7 +60,13 @@ export type LookupFacilitatorAnswer = LookupAnswer | LookupFreeformAnswer
  * All optional; defaults preserve prior behavior.
  */
 export interface LookupQueryOptions {
-  /** Abort this query without cancelling discovery still owned by another query. */
+  /**
+   * Abort this query without cancelling discovery still owned by another query.
+   * `query()` and `queryDetailed()` reject with an `AbortError` once this
+   * signal fires: a cancelled attempt never answered the question, so it is
+   * never reported as an empty output list. `query$()` keeps emitting its
+   * terminal snapshot with `terminalReason: 'cancelled'` instead.
+   */
   signal?: AbortSignal
   /**
    * Callback intake budget, independent of legacy aggregation. Defaults to 512
@@ -968,6 +974,9 @@ export default class LookupResolver {
    * Optional `options.graceMs` overrides the per-call grace window (default 80 ms).
    * Optional `options.softTimeoutMs` resolves the query early with whatever has arrived once any host has
    * answered (or with an empty result if no host has answered by `softTimeoutMs`).
+   *
+   * Throws an `AbortError` when `options.signal` aborted the attempt, so a
+   * cancelled lookup is never mistaken for an authoritative empty answer.
    */
   async query(
     question: LookupQuestion,
@@ -981,6 +990,10 @@ export default class LookupResolver {
    * Performs a lookup and returns both its answer and the host settlement
    * evidence required by security-sensitive consumers to distinguish an
    * authoritative empty result from an availability failure.
+   *
+   * Throws an `AbortError` when `options.signal` aborted the attempt, rather
+   * than returning a resolution whose empty answer would have to be
+   * re-qualified against `progress.terminalReason`.
    */
   async queryDetailed(
     question: LookupQuestion,
@@ -1020,9 +1033,13 @@ export default class LookupResolver {
       terminalReason: 'settled',
       ...(options?.correlationId !== undefined ? { correlationId: options.correlationId } : {})
     }
-    // Promise callers cannot see terminalReason. A deadline that admitted no
-    // host is a miss, not a successful empty answer from a queried host.
-    if (progress.hostCount === 0 && progress.terminalReason !== 'cancelled') {
+    // Promise callers cannot see terminalReason. A cancelled attempt never
+    // answered the question, so it must not flatten into an empty output list
+    // at any host count.
+    if (progress.terminalReason === 'cancelled') throw lookupAbortError()
+    // A deadline that admitted no host is a miss, not a successful empty
+    // answer from a queried host.
+    if (progress.hostCount === 0) {
       throw new Error(
         `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
       )
