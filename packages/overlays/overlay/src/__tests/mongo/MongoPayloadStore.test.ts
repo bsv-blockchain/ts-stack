@@ -610,6 +610,33 @@ describe('MongoPayloadStore', () => {
     expect(BigInt((await payloads.findOne({ _id: row?._id }))?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
   })
 
+  test('recovers a too-small declared length by reclaiming the deleted row on retry with the correct length', async () => {
+    const content = Buffer.from('too-small-declared-length')
+    const hash = digest(content)
+    const payloads = fixture.db.collection('overlay_payloads')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength - 1),
+        bytes: bytes(content)
+      })
+    ).rejects.toThrow('exceeds declared length')
+    const failed = await payloads.findOne({ kind: 'outbox-data', digest: hash })
+    expect(failed?.state).toBe('deleted')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content)
+      })
+    ).resolves.toMatchObject({ digest: hash, byteLength: String(content.byteLength) })
+    const recovered = await payloads.findOne({ _id: failed?._id })
+    expect(recovered?.state).toBe('ready')
+    expect(BigInt(recovered?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
+  })
+
   test('does not reuse an existing reference after its payload was reclaimed', async () => {
     const content = Buffer.from('reclaimed-reference')
     const hash = digest(content)
