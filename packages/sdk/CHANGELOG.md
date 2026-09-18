@@ -398,6 +398,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
+- `HTTPSOverlayLookupFacilitator` now issues lookup and SLAP tracker discovery
+  requests with `redirect: 'error'`. A SLAP-advertised host can no longer
+  redirect the serialized lookup body to an origin that the advertised-host
+  scheme and credential checks never saw, such as `http:`, loopback, or
+  link-local. A redirected response is recorded as an ordinary availability
+  failure for the advertised host.
 - Treat cryptographic verification as successful only when it returns an
   affirmative result: `GlobalKVStore` rejects forged controller-signed overlay
   values, and `IdentityClient` refuses to publish signature-invalid identity

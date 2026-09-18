@@ -563,6 +563,14 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
         'X-Aggregation': 'yes'
       },
       body: stringifyBRC100({ service: question.service, query: question.query }),
+      // normalizeLookupHost and the https: guard above validate the advertised
+      // URL only. A followed 307/308 would carry the serialized query body to
+      // an origin neither check ever saw, so an untrusted SLAP host could
+      // redirect a lookup (or a tracker discovery request, which uses this
+      // same path) to http:, loopback or link-local. Fail closed instead: the
+      // rejection is recorded as an ordinary availability failure for the
+      // advertised host.
+      redirect: 'error',
       signal
     }
     const response: Response = await this.fetchClient(`${url}/lookup`, fco)
