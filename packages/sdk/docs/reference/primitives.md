@@ -6,6 +6,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
+| [AsyncCryptoBackend](#interface-asynccryptobackend) |
+| [DigestVerification](#interface-digestverification) |
 | [JacobianPointBI](#interface-jacobianpointbi) |
 | [SignatureHashCache](#interface-signaturehashcache) |
 
@@ -13,6 +15,47 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 
+### Interface: AsyncCryptoBackend
+
+Optional high-performance implementation of generic secp256k1 primitives.
+
+Implementations must treat a returned result as authoritative. The SDK only
+falls back before selecting a backend: when it is absent, cold, or does not
+advertise the requested operation.
+
+```ts
+export interface AsyncCryptoBackend {
+    preload: () => Promise<void>;
+    isReady: () => boolean;
+    supportsCrypto: (operation: AsyncCryptoOperation) => boolean;
+    signDigest: (privateKey: Uint8Array, digest: Uint8Array) => Promise<Uint8Array>;
+    verifyDigest: (publicKey: Uint8Array, digest: Uint8Array, signature: Uint8Array) => Promise<boolean>;
+    verifyDigestBatch: (items: readonly DigestVerification[]) => Promise<boolean[]>;
+    publicKeyFromPrivate: (privateKey: Uint8Array) => Promise<Uint8Array>;
+    multiplyPublicKey: (publicKey: Uint8Array, scalar: Uint8Array) => Promise<Uint8Array>;
+    tweakPublicKeyAdd: (publicKey: Uint8Array, tweak: Uint8Array) => Promise<Uint8Array>;
+    tweakPrivateKeyAdd: (privateKey: Uint8Array, tweak: Uint8Array) => Promise<Uint8Array>;
+}
+```
+
+See also: [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation), [DigestVerification](./primitives.md#interface-digestverification)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: DigestVerification
+
+```ts
+export interface DigestVerification {
+    publicKey: Uint8Array;
+    digest: Uint8Array;
+    signature: Uint8Array;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Interface: JacobianPointBI
 
 ```ts
@@ -27,6 +70,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 ### Interface: SignatureHashCache
+
+Reusable BIP143 hash components for one immutable transaction context.
+
+Callers sharing a cache across inputs must not mutate transaction prevouts,
+sequences, outputs, or other signed fields until that signing or verification
+pass is complete. Create a fresh cache for a changed transaction context.
 
 ```ts
 export interface SignatureHashCache {
@@ -101,7 +150,7 @@ export default class BigNumber {
     static readonly groupSizes: number[] 
     static readonly groupBases: number[] 
     static readonly wordSize: number = 26;
-    public red: ReductionContext | null;
+    public red: ReductionContext | null = null;
     public get negative(): number 
     public set negative(val: number) 
     public get words(): number[] 
@@ -116,27 +165,23 @@ export default class BigNumber {
     clone(): BigNumber 
     expand(size: number): this 
     strip(): this 
-    normSign(): this { if (this._magnitude === 0n)
-        this._sign = 0; return this; }
+    normSign(): this 
     inspect(): string 
     toString(base: number | "hex" = 10, padding: number = 1): string 
     toNumber(): number 
     toBigInt(): bigint 
     toJSON(): string 
     toArray(endian: "le" | "be" = "be", length?: number): number[] 
-    bitLength(): number { if (this._magnitude === 0n)
-        return 0; return this._magnitude.toString(2).length; }
+    bitLength(): number 
     static toBitArray(num: BigNumber): Array<0 | 1> 
     toBitArray(): Array<0 | 1> 
     zeroBits(): number 
-    byteLength(): number { if (this._magnitude === 0n)
-        return 0; return Math.ceil(this.bitLength() / 8); }
+    byteLength(): number 
     toTwos(width: number): BigNumber 
     fromTwos(width: number): BigNumber 
     isNeg(): boolean 
     neg(): BigNumber 
-    ineg(): this { if (this._magnitude !== 0n)
-        this._sign = this._sign === 1 ? 0 : 1; return this; }
+    ineg(): this 
     iuor(num: BigNumber): this 
     iuand(num: BigNumber): this 
     iuxor(num: BigNumber): this 
@@ -151,10 +196,7 @@ export default class BigNumber {
     uxor(num: BigNumber): BigNumber 
     inotn(width: number): this 
     notn(width: number): BigNumber 
-    setn(bit: number, val: any): this { this.assert(typeof bit === "number" && bit >= 0); const Bb = BigInt(bit); if (val === 1 || val === true)
-        this._magnitude |= (1n << Bb);
-    else
-        this._magnitude &= ~(1n << Bb); const wnb = Math.floor(bit / BigNumber.wordSize) + 1; this._nominalWordLength = Math.max(this._nominalWordLength, wnb); this._finishInitialization(); return this.strip(); }
+    setn(bit: number, val: any): this 
     iadd(num: BigNumber): this 
     add(num: BigNumber): BigNumber 
     isub(num: BigNumber): this 
@@ -204,15 +246,9 @@ export default class BigNumber {
     andln(num: number): number 
     bincn(bit: number): this 
     isZero(): boolean 
-    cmpn(num: number): 1 | 0 | -1 { this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, "Number is too big"); const tV = this._getSignedValue(); const nV = BigInt(num); if (tV < nV)
-        return -1; if (tV > nV)
-        return 1; return 0; }
-    cmp(num: BigNumber): 1 | 0 | -1 { const tV = this._getSignedValue(); const nV = num._getSignedValue(); if (tV < nV)
-        return -1; if (tV > nV)
-        return 1; return 0; }
-    ucmp(num: BigNumber): 1 | 0 | -1 { if (this._magnitude < num._magnitude)
-        return -1; if (this._magnitude > num._magnitude)
-        return 1; return 0; }
+    cmpn(num: number): CompareResult 
+    cmp(num: BigNumber): CompareResult 
+    ucmp(num: BigNumber): CompareResult 
     gtn(num: number): boolean 
     gt(num: BigNumber): boolean 
     gten(num: number): boolean 
@@ -277,7 +313,7 @@ Argument Details
 Reduction context of the big number.
 
 ```ts
-public red: ReductionContext | null
+public red: ReductionContext | null = null
 ```
 See also: [ReductionContext](./primitives.md#class-reductioncontext)
 
@@ -326,8 +362,7 @@ Argument Details
 Calculates the number of bits required to represent the BigNumber.
 
 ```ts
-bitLength(): number { if (this._magnitude === 0n)
-    return 0; return this._magnitude.toString(2).length; }
+bitLength(): number 
 ```
 
 Returns
@@ -339,8 +374,7 @@ The bit length of the BigNumber.
 Calculates the number of bytes required to represent the BigNumber.
 
 ```ts
-byteLength(): number { if (this._magnitude === 0n)
-    return 0; return Math.ceil(this.bitLength() / 8); }
+byteLength(): number 
 ```
 
 Returns
@@ -765,19 +799,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export default class Curve {
-    p: BigNumber;
-    red: ReductionContext;
-    redN: BigNumber | null;
-    zero: BigNumber;
-    one: BigNumber;
-    two: BigNumber;
-    g: Point;
-    n: BigNumber;
-    a: BigNumber;
-    b: BigNumber;
-    tinv: BigNumber;
-    zeroA: boolean;
-    threeA: boolean;
+    p!: BigNumber;
+    red!: ReductionContext;
+    redN!: BigNumber | null;
+    zero!: BigNumber;
+    one!: BigNumber;
+    two!: BigNumber;
+    g!: Point;
+    n!: BigNumber;
+    a!: BigNumber;
+    b!: BigNumber;
+    tinv!: BigNumber;
+    zeroA!: boolean;
+    threeA!: boolean;
     endo: {
         beta: BigNumber;
         lambda: BigNumber;
@@ -786,21 +820,21 @@ export default class Curve {
             b: BigNumber;
         }>;
     } | undefined;
-    _endoWnafT1: BigNumber[];
-    _endoWnafT2: BigNumber[];
-    _wnafT1: BigNumber[];
-    _wnafT2: BigNumber[];
-    _wnafT3: BigNumber[];
-    _wnafT4: BigNumber[];
-    _bitLength: number;
+    _endoWnafT1!: BigNumber[];
+    _endoWnafT2!: BigNumber[];
+    _wnafT1!: BigNumber[];
+    _wnafT2!: BigNumber[];
+    _wnafT3!: BigNumber[];
+    _wnafT4!: BigNumber[];
+    _bitLength!: number;
     static assert(expression: unknown, message: string = "Elliptic curve assertion failed"): void 
     getNAF(num: BigNumber, w: number, bits: number): number[] 
     getJSF(k1: BigNumber, k2: BigNumber): number[][] 
-    static cachedProperty(obj, name: string, computer): void 
+    static cachedProperty(obj: any, name: string, computer: (this: any) => unknown): void 
     static parseBytes(bytes: string | number[]): number[] 
     static intFromLE(bytes: number[]): BigNumber 
     constructor() 
-    _getEndomorphism(conf): {
+    _getEndomorphism(conf: EndomorphismConfig): {
         beta: BigNumber;
         lambda: BigNumber;
         basis: Array<{
@@ -957,7 +991,7 @@ export default class JacobianPoint extends BasePoint {
     y: BigNumber;
     z: BigNumber;
     zOne: boolean;
-    constructor(x: string | BigNumber | null, y: string | BigNumber | null, z: string | BigNumber | null) 
+    constructor(x: JacobianCoord, y: JacobianCoord, z: JacobianCoord) 
     toP(): Point 
     neg(): JacobianPoint 
     add(p: JacobianPoint): JacobianPoint 
@@ -978,9 +1012,8 @@ See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives
 Constructs a new `JacobianPoint` instance.
 
 ```ts
-constructor(x: string | BigNumber | null, y: string | BigNumber | null, z: string | BigNumber | null) 
+constructor(x: JacobianCoord, y: JacobianCoord, z: JacobianCoord) 
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
 
 Argument Details
 
@@ -1288,8 +1321,8 @@ const k256 = new K256();
 ```ts
 export default class K256 extends Mersenne {
     constructor() 
-    split(input: BigNumber, output: BigNumber): void 
-    imulK(num: BigNumber): BigNumber 
+    override split(input: BigNumber, output: BigNumber): void 
+    override imulK(num: BigNumber): BigNumber 
 }
 ```
 
@@ -1316,7 +1349,7 @@ Multiplies a BigNumber ('num') with the constant 'K' in-place and returns the re
 'K' is equal to 0x1000003d1 or in decimal representation: [ 64, 977 ].
 
 ```ts
-imulK(num: BigNumber): BigNumber 
+override imulK(num: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1342,7 +1375,7 @@ Splits a BigNumber into a new BigNumber based on specific computation
 rules. This method modifies the input and output big numbers.
 
 ```ts
-split(input: BigNumber, output: BigNumber): void 
+override split(input: BigNumber, output: BigNumber): void 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1555,11 +1588,11 @@ export default class MontgomoryMethod extends ReductionContext {
     rinv: BigNumber;
     minv: BigNumber;
     constructor(m: BigNumber | "k256") 
-    convertTo(num: BigNumber): BigNumber 
-    convertFrom(num: BigNumber): BigNumber 
-    imul(a: BigNumber, b: BigNumber): BigNumber 
-    mul(a: BigNumber, b: BigNumber): BigNumber 
-    invm(a: BigNumber): BigNumber 
+    override convertTo(num: BigNumber): BigNumber 
+    override convertFrom(num: BigNumber): BigNumber 
+    override imul(a: BigNumber, b: BigNumber): BigNumber 
+    override mul(a: BigNumber, b: BigNumber): BigNumber 
+    override invm(a: BigNumber): BigNumber 
 }
 ```
 
@@ -1626,7 +1659,7 @@ shift: number
 Converts a number from the Montgomery domain back to the original domain.
 
 ```ts
-convertFrom(num: BigNumber): BigNumber 
+override convertFrom(num: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1651,7 +1684,7 @@ const convertedNum = montMethod.convertFrom(num);
 Converts a number into the Montgomery domain.
 
 ```ts
-convertTo(num: BigNumber): BigNumber 
+override convertTo(num: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1676,7 +1709,7 @@ const convertedNum = montMethod.convertTo(num);
 Performs an in-place multiplication of two numbers in the Montgomery domain.
 
 ```ts
-imul(a: BigNumber, b: BigNumber): BigNumber 
+override imul(a: BigNumber, b: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1703,7 +1736,7 @@ const product = montMethod.imul(a, b);
 Calculates the modular multiplicative inverse of a number in the Montgomery domain.
 
 ```ts
-invm(a: BigNumber): BigNumber 
+override invm(a: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1728,7 +1761,7 @@ const inverse = montMethod.invm(a);
 Performs the multiplication of two numbers in the Montgomery domain.
 
 ```ts
-mul(a: BigNumber, b: BigNumber): BigNumber 
+override mul(a: BigNumber, b: BigNumber): BigNumber 
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1767,12 +1800,12 @@ export default class Point extends BasePoint {
     static _assertOnCurve(p: Point): Point 
     static fromDER(bytes: number[]): Point 
     static fromString(str: string): Point 
-    static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point 
+    static fromX(x: PointInput, odd: boolean): Point 
     static fromJSON(obj: string | any[], isRed: boolean): Point 
-    constructor(x: BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null, isRed: boolean = true) 
+    constructor(x: PointInput | null, y: PointInput | null, isRed: boolean = true) 
     validate(): boolean 
     encode(compact: boolean = true, enc?: "hex"): number[] | string 
-    toString(): string 
+    override toString(): string 
     toJSON(): [
         BigNumber | null,
         BigNumber | null,
@@ -1793,8 +1826,8 @@ export default class Point extends BasePoint {
     dbl(): Point 
     getX(): BigNumber 
     getY(): BigNumber 
-    mul(k: BigNumber | number | number[] | string): Point 
-    mulCT(k: BigNumber | number | number[] | string): Point 
+    mul(k: PointInput): Point 
+    mulCT(k: PointInput): Point 
     mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point 
     jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint 
     eq(p: Point): boolean 
@@ -1809,9 +1842,8 @@ See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives
 #### Constructor
 
 ```ts
-constructor(x: BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null, isRed: boolean = true) 
+constructor(x: PointInput | null, y: PointInput | null, isRed: boolean = true) 
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
 
 Argument Details
 
@@ -2084,9 +2116,9 @@ Generates a point from an x coordinate and a boolean indicating whether the corr
 y coordinate is odd.
 
 ```ts
-static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point 
+static fromX(x: PointInput, odd: boolean): Point 
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point)
 
 Returns
 
@@ -2216,9 +2248,9 @@ const result = p1.jmulAdd(2, p2, 3);
 Multiplies this Point by a scalar value, returning a new Point.
 
 ```ts
-mul(k: BigNumber | number | number[] | string): Point 
+mul(k: PointInput): Point 
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point)
 
 Returns
 
@@ -2344,7 +2376,7 @@ Converts the point coordinates to a hexadecimal string. A wrapper method
 for encode. Byte 0x02 or 0x03 is used as prefix based on the 'y' coordinate being even or odd respectively.
 
 ```ts
-toString(): string 
+override toString(): string 
 ```
 
 Returns
@@ -2446,8 +2478,8 @@ create a corresponding public key and derive a shared secret from a public key.
 ```ts
 export default class PrivateKey extends BigNumber {
     static fromRandom(): PrivateKey 
-    static fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
-    static fromHex(str: string): PrivateKey 
+    static override fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
+    static override fromHex(str: string): PrivateKey 
     static fromWif(wif: string, prefixLength: number = 1): PrivateKey 
     constructor(number: BigNumber | number | string | number[] = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be", modN: "apply" | "nocheck" | "error" = "apply") 
     checkInField(): {
@@ -2460,10 +2492,10 @@ export default class PrivateKey extends BigNumber {
     toPublicKey(): PublicKey 
     toWif(prefix: number[] = [128]): string 
     toAddress(prefix: number[] | string = [0]): string 
-    toHex(): string 
-    toString(base: number | "hex" = "hex", padding: number = 64): string 
+    override toHex(): string 
+    override toString(base: number | "hex" = "hex", padding: number = 64): string 
     deriveSharedSecret(key: PublicKey): Point 
-    deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PrivateKey 
+    deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PrivateKey 
     toKeyShares(threshold: number, totalShares: number): KeyShares 
     toBackupShares(threshold: number, totalShares: number): string[] 
     static fromBackupShares(shares: string[]): PrivateKey 
@@ -2546,7 +2578,7 @@ peer authentication will require a versioned, breaking change.
 Derives a child key with BRC-42.
 
 ```ts
-deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PrivateKey 
+deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PrivateKey 
 ```
 See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -2620,7 +2652,7 @@ const recoveredKey = PrivateKey.fromBackupShares([share1, share2])
 Generates a private key from a hexadecimal string.
 
 ```ts
-static fromHex(str: string): PrivateKey 
+static override fromHex(str: string): PrivateKey 
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
@@ -2681,7 +2713,7 @@ const privateKey = PrivateKey.fromRandom();
 Generates a private key from a string.
 
 ```ts
-static fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
+static override fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
@@ -2810,7 +2842,7 @@ Argument Details
 Converts this PrivateKey to a hexadecimal string.
 
 ```ts
-toHex(): string 
+override toHex(): string 
 ```
 
 Returns
@@ -2887,7 +2919,7 @@ function toString() { [native code] }
 Converts this PrivateKey to a string representation.
 
 ```ts
-toString(base: number | "hex" = "hex", padding: number = 64): string 
+override toString(base: number | "hex" = "hex", padding: number = 64): string 
 ```
 
 Returns
@@ -2974,15 +3006,15 @@ The class comes with static methods to generate PublicKey instances from private
 ```ts
 export default class PublicKey extends Point {
     static fromPrivateKey(key: PrivateKey): PublicKey 
-    static fromString(str: string): PublicKey 
-    static fromDER(bytes: number[]): PublicKey 
+    static override fromString(str: string): PublicKey 
+    static override fromDER(bytes: number[]): PublicKey 
     constructor(x: Point | BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null = null, isRed: boolean = true) 
     deriveSharedSecret(priv: PrivateKey): Point 
     verify(msg: number[] | string, sig: Signature, enc?: "hex" | "utf8"): boolean 
     toDER(enc?: "hex" | undefined): number[] | string 
     toHash(enc?: "hex"): number[] | string 
     toAddress(prefix: number[] | string = [0]): string 
-    deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PublicKey 
+    deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PublicKey 
     static fromMsgHashAndCompactSignature(msgHash: BigNumber, signature: number[] | string, enc?: "hex" | "base64"): PublicKey 
 }
 ```
@@ -3017,7 +3049,7 @@ new PublicKey('abc123', 'def456');
 Derives a child key with BRC-42.
 
 ```ts
-deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PublicKey 
+deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PublicKey 
 ```
 See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -3071,7 +3103,7 @@ const sharedSecret = myPubKey.deriveSharedSecret(myPrivKey)
 Static factory method to create a PublicKey instance from a number array.
 
 ```ts
-static fromDER(bytes: number[]): PublicKey 
+static override fromDER(bytes: number[]): PublicKey 
 ```
 See also: [PublicKey](./primitives.md#class-publickey)
 
@@ -3154,7 +3186,7 @@ const myPubKey = PublicKey.fromPrivateKey(myPrivKey)
 Static factory method to create a PublicKey instance from a string.
 
 ```ts
-static fromString(str: string): PublicKey 
+static override fromString(str: string): PublicKey 
 ```
 See also: [PublicKey](./primitives.md#class-publickey)
 
@@ -3354,6 +3386,9 @@ export class ReaderUint8Array {
     constructor(bin: Uint8Array | number[] = new Uint8Array(0), pos: number = 0) 
     public eof(): boolean 
     public read(len = this.length): Uint8Array 
+    public readView(len = this.length - this.pos): Uint8Array 
+    public skip(len: number): void 
+    public remaining(): number 
     public readReverse(len = this.length): Uint8Array 
     public readUInt8(): number 
     public readInt8(): number 
@@ -3375,6 +3410,14 @@ export class ReaderUint8Array {
 ```
 
 See also: [BigNumber](./primitives.md#class-bignumber), [Reader](./primitives.md#class-reader)
+
+#### Method skip
+
+Advances without allocating.
+
+```ts
+public skip(len: number): void 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3997,7 +4040,7 @@ export class SHA1HMAC {
     outer: SHA1;
     blockSize = 64;
     constructor(key: number[] | string) 
-    update(msg: number[] | string, enc?: "hex"): SHA1HMAC 
+    update(msg: number[] | string, enc?: "hex"): this 
     digest(): number[] 
     digestHex(): string 
 }
@@ -4024,7 +4067,7 @@ const sha256 = new SHA256();
 ```ts
 export class SHA256 {
     constructor() 
-    update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): this 
+    update(msg: HashInput, enc?: "hex" | "utf8"): this 
     digest(): number[] 
     digestHex(): string 
 }
@@ -4045,8 +4088,8 @@ This class also uses the SHA-256 cryptographic hash algorithm that produces a 25
 export class SHA256HMAC {
     blockSize = 64;
     outSize = 32;
-    constructor(key: Uint8Array | number[] | string) 
-    update(msg: Uint8Array | number[] | string, enc?: "hex"): SHA256HMAC 
+    constructor(key: HashInput) 
+    update(msg: HashInput, enc?: "hex"): this 
     digest(): number[] 
     digestHex(): string 
 }
@@ -4061,7 +4104,7 @@ If the key size is larger than the blockSize, it is digested using SHA-256.
 If the key size is less than the blockSize, it is padded with zeroes.
 
 ```ts
-constructor(key: Uint8Array | number[] | string) 
+constructor(key: HashInput) 
 ```
 
 Argument Details
@@ -4132,9 +4175,8 @@ let hashedMessage = myHMAC.digestHex();
 Updates the `SHA256HMAC` object with part of the message to be hashed.
 
 ```ts
-update(msg: Uint8Array | number[] | string, enc?: "hex"): SHA256HMAC 
+update(msg: HashInput, enc?: "hex"): this 
 ```
-See also: [SHA256HMAC](./primitives.md#class-sha256hmac)
 
 Returns
 
@@ -4172,7 +4214,7 @@ const sha512 = new SHA512();
 ```ts
 export class SHA512 {
     constructor() 
-    update(msg: number[] | string, enc?: "hex" | "utf8"): this 
+    update(msg: HashInput, enc?: "hex" | "utf8"): this 
     digest(): number[] 
     digestHex(): string 
 }
@@ -4193,8 +4235,8 @@ This class also uses the SHA-512 cryptographic hash algorithm that produces a 51
 export class SHA512HMAC {
     blockSize = 128;
     outSize = 32;
-    constructor(key: Uint8Array | number[] | string) 
-    update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): SHA512HMAC 
+    constructor(key: HashInput) 
+    update(msg: HashInput, enc?: "hex" | "utf8"): this 
     digest(): number[] 
     digestHex(): string 
 }
@@ -4209,7 +4251,7 @@ If the key size is larger than the blockSize, it is digested using SHA-512.
 If the key size is less than the blockSize, it is padded with zeroes.
 
 ```ts
-constructor(key: Uint8Array | number[] | string) 
+constructor(key: HashInput) 
 ```
 
 Argument Details
@@ -4280,9 +4322,8 @@ let hashedMessage = myHMAC.digestHex();
 Updates the `SHA512HMAC` object with part of the message to be hashed.
 
 ```ts
-update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): SHA512HMAC 
+update(msg: HashInput, enc?: "hex" | "utf8"): this 
 ```
-See also: [SHA512HMAC](./primitives.md#class-sha512hmac)
 
 Returns
 
@@ -4948,6 +4989,7 @@ export default class TransactionSignature extends Signature {
     static formatBip143(params: TransactionSignatureFormatParams): Uint8Array 
     static format(params: TransactionSignatureFormatParams): number[] 
     static formatBytes(params: TransactionSignatureFormatParams): Uint8Array 
+    static usesOtdaSingleBug(params: TransactionSignatureFormatParams): boolean 
     static fromChecksigFormat(buf: number[]): TransactionSignature 
     constructor(r: BigNumber, s: BigNumber, scope: number) 
     public hasLowS(): boolean 
@@ -5067,6 +5109,7 @@ export class WriterUint8Array {
     toUint8Array(): Uint8Array 
     toArray(): number[] 
     toUint8ArrayZeroCopy(): Uint8Array 
+    reserve(additionalBytes: number): void 
     write(bytes: WriterChunk): this 
     writeReverse(buf: WriterChunk): this 
     writeUInt8(value: number): this 
@@ -5096,6 +5139,14 @@ Returns the current length of written data
 
 ```ts
 getLength(): number 
+```
+
+#### Method reserve
+
+Ensures room for `additionalBytes` without changing the written length.
+
+```ts
+reserve(additionalBytes: number): void 
 ```
 
 #### Method reset
@@ -5141,14 +5192,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | |
 | --- | --- |
-| [AES](#function-aes) | [normalizeHex](#function-normalizehex) |
-| [AESGCM](#function-aesgcm) | [pbkdf2](#function-pbkdf2) |
-| [AESGCMDecrypt](#function-aesgcmdecrypt) | [realHtonl](#function-realhtonl) |
-| [assertValidHex](#function-assertvalidhex) | [red](#function-red) |
+| [AES](#function-aes) | [readyAsyncCryptoBackend](#function-readyasynccryptobackend) |
+| [AESGCM](#function-aesgcm) | [realHtonl](#function-realhtonl) |
+| [AESGCMDecrypt](#function-aesgcmdecrypt) | [red](#function-red) |
+| [assertValidHex](#function-assertvalidhex) | [registerAsyncCryptoBackend](#function-registerasynccryptobackend) |
 | [base64ToArray](#function-base64toarray) | [swapBytes32](#function-swapbytes32) |
 | [constantTimeEquals](#function-constanttimeequals) | [toArray](#function-toarray) |
 | [ghash](#function-ghash) | [toBase64](#function-tobase64) |
-| [htonl](#function-htonl) | [verifyNotNull](#function-verifynotnull) |
+| [htonl](#function-htonl) | [unregisterAsyncCryptoBackend](#function-unregisterasynccryptobackend) |
+| [isAsyncCryptoDigest](#function-isasynccryptodigest) | [validateAsyncCryptoBytes](#function-validateasynccryptobytes) |
+| [normalizeHex](#function-normalizehex) | [verifyNotNull](#function-verifynotnull) |
+| [pbkdf2](#function-pbkdf2) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5275,6 +5329,17 @@ export function htonl(w: number): number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: isAsyncCryptoDigest
+
+True when a caller supplied the canonical 32-byte digest representation.
+
+```ts
+export function isAsyncCryptoDigest(digest: readonly number[]): boolean 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: normalizeHex
 
 ```ts
@@ -5308,6 +5373,20 @@ Argument Details
   + The length of the key
 + **digest**
   + The digest (must be sha512 for this implementation)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: readyAsyncCryptoBackend
+
+Returns a warm backend supporting `operation`. A cold backend is prepared in
+the background while the current call retains the existing JavaScript path.
+
+```ts
+export function readyAsyncCryptoBackend(operation: AsyncCryptoOperation): AsyncCryptoBackend | undefined 
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend), [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5353,6 +5432,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export function red(x: bigint): bigint 
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: registerAsyncCryptoBackend
+
+Installs an optional process/page-wide backend for opportunistic SDK use.
+
+```ts
+export function registerAsyncCryptoBackend(backend: AsyncCryptoBackend): void 
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5422,7 +5514,7 @@ console.log(toBase64(bytes)); // Outputs: SGVsbG8=
 ```
 
 ```ts
-export function toBase64(byteArray: number[]): string 
+export function toBase64(byteArray: number[] | Uint8Array): string 
 ```
 
 Returns
@@ -5433,6 +5525,33 @@ Argument Details
 
 + **byteArray**
   + An array of numbers where each number is a byte (0-255).
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: unregisterAsyncCryptoBackend
+
+Removes `backend` if it is still the active optional implementation.
+
+```ts
+export function unregisterAsyncCryptoBackend(backend: AsyncCryptoBackend): void 
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: validateAsyncCryptoBytes
+
+Reject malformed output from an optional cryptography backend before it can
+be interpreted as key or signature material.
+
+```ts
+export function validateAsyncCryptoBytes(operation: AsyncCryptoOperation, value: Uint8Array, expectedLength?: number): Uint8Array 
+```
+
+See also: [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5471,6 +5590,27 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Types
 
+| |
+| --- |
+| [AsyncCryptoOperation](#type-asynccryptooperation) |
+| [P256Point](#type-p256point) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Type: AsyncCryptoOperation
+
+Generic operations that an optional asynchronous cryptography backend can
+accelerate without changing the SDK's synchronous primitive APIs.
+
+```ts
+export type AsyncCryptoOperation = "signDigest" | "verifyDigest" | "verifyDigestBatch" | "publicKeyFromPrivate" | "multiplyPublicKey" | "tweakPublicKeyAdd" | "tweakPrivateKeyAdd"
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Type: P256Point
 
 ```ts
@@ -5489,25 +5629,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [BI_EIGHT](#variable-bi_eight) | [biModSub](#variable-bimodsub) | [rightShift](#variable-rightshift) |
-| [BI_FOUR](#variable-bi_four) | [checkBit](#variable-checkbit) | [ripemd160](#variable-ripemd160) |
-| [BI_ONE](#variable-bi_one) | [encode](#variable-encode) | [scalarMultiplyWNAF](#variable-scalarmultiplywnaf) |
-| [BI_THREE](#variable-bi_three) | [exclusiveOR](#variable-exclusiveor) | [sha1](#variable-sha1) |
-| [BI_TWO](#variable-bi_two) | [fromBase58](#variable-frombase58) | [sha256](#variable-sha256) |
-| [BI_ZERO](#variable-bi_zero) | [fromBase58Check](#variable-frombase58check) | [sha256hmac](#variable-sha256hmac) |
-| [GX_BIGINT](#variable-gx_bigint) | [getBytes](#variable-getbytes) | [sha512](#variable-sha512) |
-| [GY_BIGINT](#variable-gy_bigint) | [getBytes64](#variable-getbytes64) | [sha512hmac](#variable-sha512hmac) |
-| [MASK_256](#variable-mask_256) | [hash160](#variable-hash160) | [sign](#variable-sign) |
-| [N_BIGINT](#variable-n_bigint) | [hash256](#variable-hash256) | [toArray](#variable-toarray) |
-| [P_BIGINT](#variable-p_bigint) | [incrementLeastSignificantThirtyTwoBits](#variable-incrementleastsignificantthirtytwobits) | [toBase58](#variable-tobase58) |
-| [P_PLUS1_DIV4](#variable-p_plus1_div4) | [jpAdd](#variable-jpadd) | [toBase58Check](#variable-tobase58check) |
-| [biMod](#variable-bimod) | [jpDouble](#variable-jpdouble) | [toHex](#variable-tohex) |
-| [biModAdd](#variable-bimodadd) | [jpNeg](#variable-jpneg) | [toUTF8](#variable-toutf8) |
-| [biModInv](#variable-bimodinv) | [minimallyEncode](#variable-minimallyencode) | [toUint8Array](#variable-touint8array) |
-| [biModMul](#variable-bimodmul) | [modInvN](#variable-modinvn) | [verify](#variable-verify) |
-| [biModPow](#variable-bimodpow) | [modMulN](#variable-modmuln) | [zero2](#variable-zero2) |
-| [biModSqr](#variable-bimodsqr) | [modN](#variable-modn) |  |
-| [biModSqrt](#variable-bimodsqrt) | [multiply](#variable-multiply) |  |
+| [BI_EIGHT](#variable-bi_eight) | [biModSub](#variable-bimodsub) | [multiply](#variable-multiply) |
+| [BI_FOUR](#variable-bi_four) | [checkBit](#variable-checkbit) | [rightShift](#variable-rightshift) |
+| [BI_ONE](#variable-bi_one) | [encode](#variable-encode) | [ripemd160](#variable-ripemd160) |
+| [BI_THREE](#variable-bi_three) | [exclusiveOR](#variable-exclusiveor) | [scalarMultiplyWNAF](#variable-scalarmultiplywnaf) |
+| [BI_TWO](#variable-bi_two) | [fromBase58](#variable-frombase58) | [sha1](#variable-sha1) |
+| [BI_ZERO](#variable-bi_zero) | [fromBase58Check](#variable-frombase58check) | [sha256](#variable-sha256) |
+| [GX_BIGINT](#variable-gx_bigint) | [getBytes](#variable-getbytes) | [sha256hmac](#variable-sha256hmac) |
+| [GY_BIGINT](#variable-gy_bigint) | [getBytes64](#variable-getbytes64) | [sha512](#variable-sha512) |
+| [MASK_256](#variable-mask_256) | [hash160](#variable-hash160) | [sha512hmac](#variable-sha512hmac) |
+| [N_BIGINT](#variable-n_bigint) | [hash256](#variable-hash256) | [sign](#variable-sign) |
+| [P_BIGINT](#variable-p_bigint) | [hexToUint8Array](#variable-hextouint8array) | [toArray](#variable-toarray) |
+| [P_PLUS1_DIV4](#variable-p_plus1_div4) | [incrementLeastSignificantThirtyTwoBits](#variable-incrementleastsignificantthirtytwobits) | [toBase58](#variable-tobase58) |
+| [biMod](#variable-bimod) | [jpAdd](#variable-jpadd) | [toBase58Check](#variable-tobase58check) |
+| [biModAdd](#variable-bimodadd) | [jpDouble](#variable-jpdouble) | [toHex](#variable-tohex) |
+| [biModInv](#variable-bimodinv) | [jpNeg](#variable-jpneg) | [toSafeString](#variable-tosafestring) |
+| [biModMul](#variable-bimodmul) | [minimallyEncode](#variable-minimallyencode) | [toUTF8](#variable-toutf8) |
+| [biModPow](#variable-bimodpow) | [modInvN](#variable-modinvn) | [toUint8Array](#variable-touint8array) |
+| [biModSqr](#variable-bimodsqr) | [modMulN](#variable-modmuln) | [verify](#variable-verify) |
+| [biModSqrt](#variable-bimodsqrt) | [modN](#variable-modn) | [zero2](#variable-zero2) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5626,7 +5766,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: biMod
 
 ```ts
-biMod = (a: bigint): bigint => red((a % P_BIGINT + P_BIGINT) % P_BIGINT)
+biMod = (a: bigint): bigint => red(((a % P_BIGINT) + P_BIGINT) % P_BIGINT)
 ```
 
 See also: [P_BIGINT](./primitives.md#variable-p_bigint), [red](./primitives.md#function-red)
@@ -5743,7 +5883,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 checkBit = function (byteArray: number[], byteIndex: number, bitIndex: number): 1 | 0 {
-    return (byteArray[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
+    return (byteArray[byteIndex] & (1 << bitIndex)) === 0 ? 0 : 1;
 }
 ```
 
@@ -5793,19 +5933,19 @@ fromBase58 = (str: string): number[] => {
     if (str === "" || typeof str !== "string") {
         throw new Error(`Expected base58 string but got “${str}”`);
     }
-    const match: string[] | null = str.match(/[IOl0]/gmu);
+    const match: string[] | null = str.match(/[^1-9A-HJ-NP-Za-km-z]/gmu);
     if (match !== null) {
         throw new Error(`Invalid base58 character “${match.join("")}”`);
     }
     const lz = str.match(/^1+/gmu);
-    const psz: number = (lz !== null) ? lz[0].length : 0;
+    const psz: number = lz === null ? 0 : lz[0].length;
     const size = ((str.length - psz) * (Math.log(58) / Math.log(256)) + 1) >>> 0;
     const uint8 = new Uint8Array([
         ...new Uint8Array(psz),
-        ...(str.match(/./gmu) ?? [])
-            .map((i) => base58chars.indexOf(i))
+        ...Array.from(str)
+            .map(i => base58chars.indexOf(i))
             .reduce((acc, i) => {
-            acc = acc.map((j) => {
+            acc = acc.map(j => {
                 const x = j * 58 + i;
                 i = x >> 8;
                 return x;
@@ -5813,7 +5953,7 @@ fromBase58 = (str: string): number[] => {
             return acc;
         }, new Uint8Array(size))
             .reverse()
-            .filter(((lastValue) => (value) => (lastValue = lastValue || value))(false))
+            .filter((lastValue => value => (lastValue = lastValue || value))(false))
     ]);
     return [...uint8];
 }
@@ -5896,13 +6036,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: hash160
 
 ```ts
-hash160 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    const first = new SHA256().update(msg, enc).digest();
+hash160 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    const first = sha256Bytes(msg, enc);
+    const native = ripemd160Bytes(first);
+    if (native != null)
+        return Array.from(native);
     return new RIPEMD160().update(first).digest();
 }
 ```
 
-See also: [RIPEMD160](./primitives.md#class-ripemd160), [SHA256](./primitives.md#class-sha256)
+See also: [RIPEMD160](./primitives.md#class-ripemd160)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5910,13 +6053,36 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: hash256
 
 ```ts
-hash256 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    const first = new SHA256().update(msg, enc).digest();
-    return new SHA256().update(first).digest();
+hash256 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha256Bytes(sha256Bytes(msg, enc)));
 }
 ```
 
-See also: [SHA256](./primitives.md#class-sha256)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: hexToUint8Array
+
+```ts
+hexToUint8Array = (msg: string): Uint8Array => {
+    assertValidHex(msg);
+    const normalized = msg.length % 2 === 0 ? msg : "0" + msg;
+    if (CAN_USE_BUFFER) {
+        const decoded = BufferCtor.from(normalized, "hex");
+        return new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+    }
+    const out = new Uint8Array(normalized.length / 2);
+    let o = 0;
+    for (let i = 0; i < normalized.length; i += 2) {
+        const hi = HEX_CHAR_TO_VALUE[normalized.codePointAt(i) as number];
+        const lo = HEX_CHAR_TO_VALUE[normalized.codePointAt(i + 1) as number];
+        out[o++] = (hi << 4) | lo;
+    }
+    return out;
+}
+```
+
+See also: [assertValidHex](./primitives.md#function-assertvalidhex)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6019,25 +6185,25 @@ minimallyEncode = (buf: number[]): number[] => {
     if (buf.length === 0) {
         return buf;
     }
-    const last = buf[buf.length - 1];
+    const last = buf.at(-1)!;
     if ((last & 127) !== 0) {
         return buf;
     }
     if (buf.length === 1) {
         return [];
     }
-    if ((buf[buf.length - 2] & 128) !== 0) {
+    if ((buf.at(-2)! & 128) !== 0) {
         return buf;
     }
     for (let i = buf.length - 1; i > 0; i--) {
         if (buf[i - 1] !== 0) {
-            if ((buf[i - 1] & 128) !== 0) {
-                buf[i] = last;
-                return buf.slice(0, i + 1);
+            if ((buf[i - 1] & 128) === 0) {
+                buf[i - 1]! |= last;
+                return buf.slice(0, i);
             }
             else {
-                buf[i - 1] |= last;
-                return buf.slice(0, i);
+                buf[i] = last;
+                return buf.slice(0, i + 1);
             }
         }
     }
@@ -6153,6 +6319,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 ripemd160 = (msg: number[] | string, enc?: "hex" | "utf8"): number[] => {
+    const native = ripemd160Bytes(msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new RIPEMD160().update(msg, enc).digest();
 }
 ```
@@ -6169,48 +6338,15 @@ scalarMultiplyWNAF = (k: bigint, P0: {
     x: bigint;
     y: bigint;
 }, window: number = 5): JacobianPointBI => {
-    const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`;
-    let tbl = WNAF_TABLE_CACHE.get(key);
-    let P: JacobianPointBI;
-    if (tbl === undefined) {
-        const tblSize = 1 << (window - 1);
-        tbl = new Array(tblSize);
-        P = { X: P0.x, Y: P0.y, Z: BI_ONE };
-        tbl[0] = P;
-        const twoP = jpDouble(P);
-        for (let i = 1; i < tblSize; i++) {
-            tbl[i] = jpAdd(tbl[i - 1], twoP);
-        }
-        WNAF_TABLE_CACHE.set(key, tbl);
-    }
-    else {
-        P = tbl[0];
-    }
-    const wnaf: number[] = [];
-    const wBig = 1n << BigInt(window);
-    const wHalf = wBig >> 1n;
-    let kTmp = k;
-    while (kTmp > 0n) {
-        if ((kTmp & BI_ONE) === BI_ZERO) {
-            wnaf.push(0);
-            kTmp >>= BI_ONE;
-        }
-        else {
-            let z = kTmp & (wBig - 1n);
-            if (z > wHalf)
-                z -= wBig;
-            wnaf.push(Number(z));
-            kTmp -= z;
-            kTmp >>= BI_ONE;
-        }
-    }
+    const table = wnafTable(window, P0);
+    const wnaf = wnafDigits(k, window);
     let Q: JacobianPointBI = { X: BI_ZERO, Y: BI_ONE, Z: BI_ZERO };
     for (let i = wnaf.length - 1; i >= 0; i--) {
         Q = jpDouble(Q);
         const di = wnaf[i];
         if (di !== 0) {
             const idx = Math.abs(di) >> 1;
-            const addend = di > 0 ? tbl[idx] : jpNeg(tbl[idx]);
+            const addend = di > 0 ? table[idx] : jpNeg(table[idx]);
             Q = jpAdd(Q, addend);
         }
     }
@@ -6239,12 +6375,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha256
 
 ```ts
-sha256 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    return new SHA256().update(msg, enc).digest();
+sha256 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha256Bytes(msg, enc));
 }
 ```
-
-See also: [SHA256](./primitives.md#class-sha256)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6252,7 +6386,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha256hmac
 
 ```ts
-sha256hmac = (key: Uint8Array | number[] | string, msg: Uint8Array | number[] | string, enc?: "hex"): number[] => {
+sha256hmac = (key: HashInput, msg: HashInput, enc?: "hex"): number[] => {
+    const native = digestWithNodeHmac("sha256", key, msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new SHA256HMAC(key).update(msg, enc).digest();
 }
 ```
@@ -6265,12 +6402,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha512
 
 ```ts
-sha512 = (msg: number[] | string, enc?: "hex" | "utf8"): number[] => {
-    return new SHA512().update(msg, enc).digest();
+sha512 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha512Bytes(msg, enc));
 }
 ```
-
-See also: [SHA512](./primitives.md#class-sha512)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6278,7 +6413,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha512hmac
 
 ```ts
-sha512hmac = (key: Uint8Array | number[] | string, msg: Uint8Array | number[] | string, enc?: "hex"): number[] => {
+sha512hmac = (key: HashInput, msg: HashInput, enc?: "hex"): number[] => {
+    const native = digestWithNodeHmac("sha512", key, msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new SHA512HMAC(key).update(msg, enc).digest();
 }
 ```
@@ -6302,59 +6440,16 @@ sign = (msg: BigNumber, key: BigNumber, forceLowS: boolean = false, customK?: Bi
     const bkey = key.toArray("be", bytes);
     const nonce = msg.toArray("be", bytes);
     const drbg = new DRBG(bkey, nonce);
+    const fixedK = BigNumber.isBN(customK);
     for (let iter = 0;; iter++) {
-        let kBN = typeof customK === "function"
-            ? customK(iter)
-            : BigNumber.isBN(customK)
-                ? customK
-                : new BigNumber(drbg.generate(bytes), 16);
-        if (kBN == null) {
-            throw new Error("k is undefined");
-        }
-        kBN = truncateToN(kBN, true);
-        if (kBN.cmpn(1) < 0 || kBN.cmp(ns1) > 0) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (must be >1 and <N-1)");
-            }
-            continue;
-        }
-        const R = curve.g.mulCT(kBN);
-        if (R.isInfinity()) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (k\u00B7G at infinity)");
-            }
-            continue;
-        }
-        const xAff = BigInt("0x" + R.getX().toString(16));
-        const rBig = modN(xAff);
-        if (rBig === 0n) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (r == 0)");
-            }
-            continue;
-        }
-        const kBig = BigInt("0x" + kBN.toString(16));
-        const kInv = modInvN(kBig);
-        const rTimesKey = modMulN(rBig, keyBig);
-        const sum = modN(msgBig + rTimesKey);
-        let sBig = modMulN(kInv, sum);
-        if (sBig === 0n) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (s == 0)");
-            }
-            continue;
-        }
-        if (forceLowS && sBig > halfN) {
-            sBig = N_BIGINT - sBig;
-        }
-        const r = new BigNumber(rBig.toString(16), 16);
-        const s = new BigNumber(sBig.toString(16), 16);
-        return new Signature(r, s);
+        const signature = signatureFromK(selectK(customK, iter, drbg), msgBig, keyBig, forceLowS, fixedK);
+        if (signature != null)
+            return signature;
     }
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [DRBG](./primitives.md#class-drbg), [N_BIGINT](./primitives.md#variable-n_bigint), [Signature](./primitives.md#class-signature), [modInvN](./primitives.md#variable-modinvn), [modMulN](./primitives.md#variable-modmuln), [modN](./primitives.md#variable-modn), [toArray](./primitives.md#variable-toarray)
+See also: [BigNumber](./primitives.md#class-bignumber), [DRBG](./primitives.md#class-drbg), [Signature](./primitives.md#class-signature), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6368,7 +6463,7 @@ toArray = (msg: any, enc?: "hex" | "utf8" | "base64"): any[] => {
     if (msg === undefined)
         return [];
     if (typeof msg !== "string") {
-        return Array.from(msg, (item: any) => item | 0);
+        return Array.from(msg, (item: any) => Math.trunc(item));
     }
     switch (enc) {
         case "hex":
@@ -6390,31 +6485,35 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 toBase58 = (bin: number[]): string => {
-    const base58Map = Array(256).fill(-1);
+    const base58Map = Array.from({ length: 256 }, () => -1);
     for (let i = 0; i < base58chars.length; ++i) {
-        base58Map[base58chars.charCodeAt(i)] = i;
+        base58Map[base58chars.codePointAt(i) as number] = i;
     }
     const result: number[] = [];
     for (const byte of bin) {
         let carry = byte;
         for (let j = 0; j < result.length; ++j) {
             const x = (base58Map[result[j]] << 8) + carry;
-            result[j] = base58chars.charCodeAt(x % 58);
-            carry = (x / 58) | 0;
+            const quotient = Math.trunc(x / 58);
+            const remainder = x - quotient * 58;
+            result[j] = base58chars.codePointAt(remainder) as number;
+            carry = quotient;
         }
         while (carry !== 0) {
-            result.push(base58chars.charCodeAt(carry % 58));
-            carry = (carry / 58) | 0;
+            const quotient = Math.trunc(carry / 58);
+            const remainder = carry - quotient * 58;
+            result.push(base58chars.codePointAt(remainder) as number);
+            carry = quotient;
         }
     }
     for (const byte of bin) {
-        if (byte !== 0)
-            break;
+        if (byte === 0)
+            result.push("1".codePointAt(0) as number);
         else
-            result.push("1".charCodeAt(0));
+            break;
     }
     result.reverse();
-    return String.fromCharCode(...result);
+    return String.fromCodePoint(...result);
 }
 ```
 
@@ -6445,11 +6544,42 @@ toHex = (msg: number[] | Uint8Array): string => {
     }
     if (msg.length === 0)
         return "";
-    const out = new Array(msg.length);
-    for (let i = 0; i < msg.length; i++) {
-        out[i] = HEX_BYTE_STRINGS[msg[i] & 255];
+    return Array.from(msg, byte => HEX_BYTE_STRINGS[byte & 255]).join("");
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: toSafeString
+
+```ts
+toSafeString = (value: unknown, fallback = "Unknown value"): string => {
+    if (value === null)
+        return "null";
+    if (value === undefined)
+        return "undefined";
+    if (typeof value === "string")
+        return value;
+    if (typeof value === "number" || typeof value === "bigint")
+        return value.toString();
+    if (typeof value === "boolean")
+        return value ? "true" : "false";
+    if (typeof value === "symbol")
+        return value.description ?? value.toString();
+    if (value instanceof Error && value.message.length > 0)
+        return value.message;
+    const message = (value as {
+        message?: unknown;
+    }).message;
+    if (typeof message === "string" && message.length > 0)
+        return message;
+    try {
+        return JSON.stringify(value) ?? fallback;
     }
-    return out.join("");
+    catch {
+        return fallback;
+    }
 }
 ```
 
@@ -6459,8 +6589,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: toUTF8
 
 ```ts
-toUTF8 = (arr: number[]): string => {
-    return new TextDecoder().decode(new Uint8Array(arr));
+toUTF8 = (arr: number[] | Uint8Array): string => {
+    return new TextDecoder().decode(arr instanceof Uint8Array ? arr : new Uint8Array(arr));
 }
 ```
 
@@ -6473,11 +6603,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 toUint8Array = (msg: any, enc?: "hex" | "utf8" | "base64"): Uint8Array => {
     if (msg instanceof Uint8Array)
         return msg;
+    if (typeof msg === "string" && enc === "hex")
+        return hexToUint8Array(msg);
     return new Uint8Array(toArray(msg, enc));
 }
 ```
 
-See also: [toArray](./primitives.md#variable-toarray)
+See also: [hexToUint8Array](./primitives.md#variable-hextouint8array), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6491,7 +6623,7 @@ verify = (msg: BigNumber, sig: Signature, key: Point): boolean => {
         return false;
     }
     const hash = bnToBigInt(msg);
-    if ((key.x == null) || (key.y == null)) {
+    if (key.x == null || key.y == null) {
         throw new Error("Invalid public key: missing coordinates.");
     }
     const publicKey = {
