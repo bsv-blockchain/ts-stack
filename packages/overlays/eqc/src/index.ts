@@ -7,3 +7,4 @@ export {
   validateQuery,
   type EconomicQuery
 } from './protocol/query.js'
+export { computePayouts, fibonacciWeights, sumOfWeights } from './protocol/fibonacci.js'
