@@ -15,6 +15,15 @@ const mockFacilitator = {
   lookup: jest.fn()
 }
 
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  })
+
+const octetResponse = (payload: Uint8Array): Response =>
+  new Response(payload, { headers: { 'content-type': 'application/octet-stream' } })
+
 // --------------------------------------------------------------------------
 // Sample BEEFs for use in tests
 // --------------------------------------------------------------------------
@@ -469,11 +478,9 @@ describe('LookupResolver – additional coverage', () => {
     })
 
     it('allows HTTP URLs when allowHTTP is true', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/json' },
-        json: async () => ({ type: 'output-list', outputs: [] })
-      })
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://localhost:8080', {
         service: 'ls_test',
@@ -483,12 +490,7 @@ describe('LookupResolver – additional coverage', () => {
     })
 
     it('handles HTTP error responses by throwing', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        headers: { get: () => 'application/json' },
-        json: async () => ({})
-      })
+      const mockFetch = jest.fn().mockResolvedValue(jsonResponse({}, 503))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       await expect(
         facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -544,12 +546,7 @@ describe('LookupResolver – additional coverage', () => {
       const beefBuf = Buffer.from(beef)
       const payload = Buffer.concat([nOutpoints, txid, outputIndex, contextLen, beefBuf])
 
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () =>
-          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-      })
+      const mockFetch = jest.fn().mockResolvedValue(octetResponse(payload))
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -581,12 +578,9 @@ describe('LookupResolver – additional coverage', () => {
         'Application/Octet-Stream',
         '  application/octet-stream  '
       ]) {
-        const mockFetch = jest.fn().mockResolvedValue({
-          ok: true,
-          headers: { get: () => header },
-          arrayBuffer: async () =>
-            payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-        })
+        const mockFetch = jest
+          .fn()
+          .mockResolvedValue(new Response(payload, { headers: { 'content-type': header } }))
         const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
         const result = await facilitator.lookup('https://host', { service: 'ls_test', query: {} })
         expect(result.type).toBe('output-list')
@@ -620,12 +614,7 @@ describe('LookupResolver – additional coverage', () => {
         beefBuf
       ])
 
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () =>
-          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-      })
+      const mockFetch = jest.fn().mockResolvedValue(octetResponse(payload))
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -688,11 +677,9 @@ describe('LookupResolver – additional coverage', () => {
     })
 
     it('sends correct request body to /lookup endpoint', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/json' },
-        json: async () => ({ type: 'output-list', outputs: [] })
-      })
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const question = { service: 'ls_test', query: { filter: 'abc' } }
       await facilitator.lookup('http://host', question)

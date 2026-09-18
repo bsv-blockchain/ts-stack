@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Validated BASM heights, hashes and txid sets while retaining numeric-string
   heights, public CORS, topic-free raw transactions, configured limits and sync
   defaults. Added explicit unsupported-capability codes and optional trusted

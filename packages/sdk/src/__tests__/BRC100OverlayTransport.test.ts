@@ -2,11 +2,13 @@ import { HTTPSOverlayLookupFacilitator } from '../overlay-tools/LookupResolver'
 
 describe('overlay lookup BRC-100 byte compatibility', () => {
   it('keeps typed query bytes portable across the JSON request boundary', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => 'application/json' },
-      json: async () => ({ type: 'output-list', outputs: [] })
-    })
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ type: 'output-list', outputs: [] }), {
+          headers: { 'content-type': 'application/json' }
+        })
+      )
     const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
 
     await facilitator.lookup('http://host', {
@@ -21,14 +23,17 @@ describe('overlay lookup BRC-100 byte compatibility', () => {
   })
 
   it('recovers historical numeric-key BEEF from a JSON response', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => 'application/json' },
-      json: async () => ({
-        type: 'output-list',
-        outputs: [{ beef: { 0: 1, 1: 2, 2: 255 }, outputIndex: 0 }]
-      })
-    })
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: 'output-list',
+            outputs: [{ beef: { 0: 1, 1: 2, 2: 255 }, outputIndex: 0 }]
+          }),
+          { headers: { 'content-type': 'application/json' } }
+        )
+      )
     const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
 
     await expect(
@@ -41,11 +46,13 @@ describe('overlay lookup BRC-100 byte compatibility', () => {
 
   it('preserves byte-like objects inside freeform lookup results', async () => {
     const result = { data: { 0: 1, 1: 2 }, tx: {}, payload: { 0: 3 } }
-    const mockFetch = jest.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => 'application/json' },
-      json: async () => ({ type: 'freeform', result })
-    })
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ type: 'freeform', result }), {
+          headers: { 'content-type': 'application/json' }
+        })
+      )
     const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
 
     await expect(

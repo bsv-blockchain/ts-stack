@@ -20,6 +20,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
+- Adds `storageHasAdmission` for the optional `Storage.admission` field.
+- Adds an opt-in MongoDB schema, payload-publication, reference-guard, and
+  payload-GC foundation behind an optional `mongodb` peer. It does not activate
+  MongoDB in Engine, select a new default adapter, or provide an admission
+  receipt path.
 - Added bounded BASM JSON peer validation, classified capability/resource errors,
   canonical header and optional full-block-count position checks, and explicit
   position assurance in sync reports. Fixed default forward pages to fit the

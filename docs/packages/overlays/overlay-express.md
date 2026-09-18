@@ -4,9 +4,9 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.7.0'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '2.6.2'
+last_updated: '2026-09-18'
+last_verified: '2026-09-18'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
