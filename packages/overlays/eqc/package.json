@@ -1,0 +1,104 @@
+{
+  "name": "@bsv/eqc",
+  "version": "0.1.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Economic Query Client (EQC) and host handlers for BRC-178 race-settled collection markets over BSV overlay lookups and message boxes",
+  "type": "commonjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./host": {
+      "import": {
+        "types": "./dist/host.d.mts",
+        "default": "./dist/host.mjs"
+      },
+      "require": {
+        "types": "./dist/host.d.cts",
+        "default": "./dist/host.cjs"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "host": [
+        "dist/host.d.cts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts src/host.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/eqc/src/**/*.ts\" \"packages/overlays/eqc/test/**/*.ts\" \"packages/overlays/eqc/*.{json,ts,md}\"",
+    "lint": "oxlint src test vitest.config.ts --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports EQC,EQCError,ECONOMIC_PATHS,DEFAULTS,computeQueryId,computePayouts,canonicalJson --entry-exports \"./host=createEconomicQueryHost|overlayLookupProvider|messageListProvider|bytesProvider\"",
+    "test": "vitest run",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:property": "vitest run src/protocol/protocol.property.test.ts",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
+  },
+  "keywords": [
+    "bsv",
+    "brc-178",
+    "overlay",
+    "message-box",
+    "micropayments",
+    "eqc"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/overlays/eqc"
+  },
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "peerDependencies": {
+    "@bsv/sdk": "^2.4.1"
+  },
+  "devDependencies": {
+    "@bsv/auth-express-middleware": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitest/coverage-v8": "4.1.11",
+    "express": "^5.2.1",
+    "fast-check": "^4.9.0",
+    "oxlint": "^1.76.0",
+    "tsdown": "0.22.14",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vitest": "^4.1.11"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc#readme",
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
+}
