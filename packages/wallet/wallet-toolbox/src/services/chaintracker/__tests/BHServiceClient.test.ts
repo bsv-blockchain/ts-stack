@@ -8,7 +8,7 @@ const queried = 'aa'.repeat(32)
 const canonical = 'bb'.repeat(32)
 const reorged = 'cc'.repeat(32)
 
-function header(merkleRoot: string): BlockHeader {
+function header(merkleRoot: string, hash: string = 'dd'.repeat(32)): BlockHeader {
   return {
     version: 1,
     previousHash: '00'.repeat(32),
@@ -17,7 +17,7 @@ function header(merkleRoot: string): BlockHeader {
     bits: 1,
     nonce: 1,
     height,
-    hash: 'dd'.repeat(32)
+    hash
   }
 }
 
@@ -87,6 +87,15 @@ describe('BHServiceClient height-root cache', () => {
 
     await expect(client.isValidRootForHeight(queried, height)).resolves.toBe(false)
     expect(client.cache[height]).toBeUndefined()
+  })
+
+  test('findChainTipHash returns the active chain tip header hash', async () => {
+    const client = bhsClient()
+    const tipHash = 'ee'.repeat(32)
+    jest.spyOn(client, 'findChainTipHeader').mockResolvedValue(header(canonical, tipHash))
+
+    await expect(client.findChainTipHash()).resolves.toBe(tipHash)
+    expect(client.findChainTipHeader).toHaveBeenCalledTimes(1)
   })
 
   test('LocalChainTracker fallback re-reads BHServiceClient roots instead of the queried-root cache', async () => {
