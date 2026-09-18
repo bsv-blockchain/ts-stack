@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "ts-stack-maintainers",
-  "lastReviewed": "2026-08-30",
+  "lastReviewed": "2026-09-14",
   "programHistory": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "contributionAuthority": "CONTRIBUTING.md",
   "activeFollowUps": {
@@ -25,6 +25,142 @@
     "releaseNoteAuthority": "governance/package-release-notes.json",
     "generatedApiMigrationLedger": "docs/reference/package-api-migrations.md",
     "rationale": "Every public package needs a current, discoverable package page; consolidated source links and generated versions prevent retired repositories or point-in-time commits from becoming current authority."
+  },
+  "freshness": {
+    "scope": "changed-pages-and-direct-sources",
+    "rationale": "Ordinary source checks report elapsed review deadlines as maintenance warnings for changed pages and directly changed sources. The separate maintenance workflow enforces every review deadline. Structural, date-consistency, and generated-content checks remain blocking; passing time alone never blocks an ordinary PR.",
+    "sourcePaths": {
+      "docs/about/contributing.md": ["CONTRIBUTING.md"],
+      "docs/about/doc-agent.md": [
+        "governance/documentation-policy.json",
+        "scripts/documentation-policy.mjs",
+        "scripts/documentation-freshness.mjs"
+      ],
+      "docs/about/versioning.md": ["scripts/check-versions.mjs", "scripts/sync-versions.mjs"],
+      "docs/architecture/beef.md": [
+        "packages/sdk/src/transaction",
+        "conformance/vectors/sdk/transactions"
+      ],
+      "docs/architecture/brc-100.md": [
+        "packages/sdk/src/wallet",
+        "packages/wallet/wallet-toolbox/src/Wallet.ts",
+        "specs/sdk/brc-100-wallet.json"
+      ],
+      "docs/architecture/conformance.md": [
+        "conformance/runner",
+        "conformance/META.json",
+        "conformance/PARITY_MATRIX.json"
+      ],
+      "docs/architecture/identity.md": [
+        "packages/sdk/src/auth",
+        "packages/middleware/auth",
+        "specs/auth"
+      ],
+      "docs/architecture/wallet-utxo-lifecycle.md": [
+        "packages/wallet/wallet-toolbox/src",
+        "packages/sdk/src/wallet/substrates"
+      ],
+      "docs/conformance/contributing-vectors.md": [
+        "conformance/VECTOR-FORMAT.md",
+        "conformance/schema"
+      ],
+      "docs/conformance/index.md": ["conformance/META.json", "conformance/runner"],
+      "docs/conformance/runner-ts.md": ["conformance/runner"],
+      "docs/conformance/vectors.md": ["conformance/vectors", "conformance/schema"],
+      "docs/guides/chirp-lch-production.md": ["packages/network/chirp", "packages/content/lch"],
+      "docs/guides/compiled-package-examples.md": ["scripts/check-documentation-examples.mjs"],
+      "docs/guides/http-402-payments.md": [
+        "packages/middleware/402-pay",
+        "packages/middleware/payment-express-middleware",
+        "specs/payments"
+      ],
+      "docs/guides/peer-to-peer-messaging.md": [
+        "packages/messaging/message-box-client",
+        "packages/messaging/authsocket-client"
+      ],
+      "docs/guides/run-overlay-node.md": [
+        "infra/overlay-server",
+        "packages/overlays/overlay-express"
+      ],
+      "docs/guides/wallet-aware-app.md": ["packages/wallet/wallet-toolbox/src/Wallet.ts"],
+      "docs/infrastructure/service-edge-security.md": [
+        "governance/service-edge-browser-policy.json",
+        "infra/wab/src/security/edgePolicy.ts",
+        "scripts/sync-service-edge-policy.mjs"
+      ],
+      "docs/infrastructure/wab-ump-account-support.md": [
+        "infra/wab/src",
+        "packages/wallet/wallet-toolbox/src/WalletAuthenticationManager.ts"
+      ],
+      "docs/reference/brc-index.md": ["specs"],
+      "docs/reference/ci-performance.md": [
+        "scripts/ci-affected-scope.mjs",
+        "scripts/ci-performance.mjs",
+        ".github/workflows/ci.yml"
+      ],
+      "docs/reference/container-supply-chain.md": [
+        "governance/container-images.json",
+        "governance/Dockerfile.container-bases",
+        ".github/workflows/infra-release.yaml"
+      ],
+      "docs/reference/dependency-policy.md": [
+        "governance/dependency-release-policy.json",
+        "scripts/dependency-release-governance.mjs"
+      ],
+      "docs/reference/duplication-governance.md": ["governance/duplication-policy.json"],
+      "docs/reference/licensing.md": [
+        "governance/license-continuity.json",
+        "governance/third-party-materials.json",
+        "scripts/package-license-policy.mjs",
+        "scripts/third-party-license-policy.mjs"
+      ],
+      "docs/reference/npm-package-supply-chain.md": [
+        "governance/npm-package-supply-chain.json",
+        "scripts/package-release-artifacts.mjs",
+        ".github/workflows/release.yaml"
+      ],
+      "docs/reference/package-api-migrations.md": [
+        "governance/package-release-notes.json",
+        "scripts/package-documentation.mjs"
+      ],
+      "docs/reference/release-operations.md": [
+        ".github/workflows/release.yaml",
+        ".github/workflows/infra-release.yaml"
+      ],
+      "docs/reference/repository-health.md": [
+        "scripts/repository-health.mjs",
+        "governance/repository-health/projects.json",
+        "governance/documentation-policy.json"
+      ],
+      "docs/reference/service-operations.md": [
+        "governance/service-operations.json",
+        "scripts/service-operations.mjs"
+      ],
+      "docs/reference/service-resource-profiles.md": [
+        "governance/service-resource-profiles.json",
+        "scripts/benchmark-service-resource-profiles.mjs"
+      ],
+      "docs/reference/stack-facts.md": [
+        "governance/repository-health/projects.json",
+        "governance/documentation-policy.json",
+        "scripts/generate-stack-facts.mjs"
+      ],
+      "docs/reference/test-quality-governance.md": [
+        "governance/test-quality",
+        "governance/mutation-testing",
+        "scripts/test-governance.mjs",
+        "scripts/mutation-testing.mjs"
+      ],
+      "docs/reference/typescript-toolchain.md": [
+        "scripts/typescript-toolchain.mjs",
+        "tsconfig.base.json"
+      ],
+      "docs/specs/air-gap-optical.md": [
+        "specs/transport/air-gap-optical.md",
+        "packages/helpers/air-gap",
+        "conformance/vectors/transport/air-gap-optical.json"
+      ]
+    }
   },
   "support": {
     "contributors": "Use the root package.json engines and packageManager fields.",

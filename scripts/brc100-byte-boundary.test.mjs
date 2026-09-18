@@ -101,23 +101,23 @@ test('the byte compatibility contract remains part of the public SDK wallet API'
   assert.match(source, /export \* from ['"]\.\/BRC100ByteEncoding\.js['"]/)
 })
 
-const dependentPackages = [
-  'packages/middleware/auth-express-middleware/package.json',
-  'packages/messaging/authsocket-client/package.json',
-  'packages/messaging/authsocket/package.json',
-  'packages/messaging/message-box-client/package.json',
-  'packages/helpers/simple/package.json',
-  'packages/wallet/btms/package.json',
-  'packages/wallet/ts-wallet-relay/package.json',
-  'packages/wallet/wallet-toolbox/package.json',
-  'packages/wallet/wallet-toolbox/client/package.json',
-  'packages/wallet/wallet-toolbox/mobile/package.json'
+const dependentPackageSdkRanges = [
+  ['packages/middleware/auth-express-middleware/package.json', '^2.7.1'],
+  ['packages/messaging/authsocket-client/package.json', '^2.4.1'],
+  ['packages/messaging/authsocket/package.json', '^2.4.1'],
+  ['packages/messaging/message-box-client/package.json', '^2.4.1'],
+  ['packages/helpers/simple/package.json', '^2.4.1'],
+  ['packages/wallet/btms/package.json', '^2.4.1'],
+  ['packages/wallet/ts-wallet-relay/package.json', '^2.4.1'],
+  ['packages/wallet/wallet-toolbox/package.json', '^2.4.1'],
+  ['packages/wallet/wallet-toolbox/client/package.json', '^2.4.1'],
+  ['packages/wallet/wallet-toolbox/mobile/package.json', '^2.4.1']
 ]
 
-for (const file of dependentPackages) {
-  test(`${file} cannot resolve an SDK without the shared byte contract`, async () => {
+for (const [file, requiredSdkRange] of dependentPackageSdkRanges) {
+  test(`${file} cannot resolve an SDK below its required compatibility floor`, async () => {
     const pkg = JSON.parse(await readFile(file, 'utf8'))
     const sdkRange = pkg.dependencies?.['@bsv/sdk'] ?? pkg.peerDependencies?.['@bsv/sdk']
-    assert.equal(sdkRange, '^2.4.1')
+    assert.equal(sdkRange, requiredSdkRange)
   })
 }

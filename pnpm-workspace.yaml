@@ -42,6 +42,10 @@ overrides:
   # exactly. Keep this parent-scoped substitution until upstream publishes a
   # release that depends on qs 6.15.2 or newer.
   'typed-rest-client@2.3.1>qs': 6.15.3
+  # Jest's istanbul reporting chain (@istanbuljs/load-nyc-config, ts-jest,
+  # jsdom, webpack-cli) still pulls js-yaml 3.15.1, affected by unbounded CPU
+  # use on empty merge sources. Select the first patched 3.x release.
+  js-yaml@<3.15.2: 3.15.2
 patchedDependencies:
   image-size@1.2.1: patches/image-size@1.2.1.patch
 auditConfig:

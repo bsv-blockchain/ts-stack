@@ -166,7 +166,7 @@ describe('Brc29RemittanceModule', () => {
   describe('settlement acceptance', () => {
     it('accepts settlements by internalizing the payment', async () => {
       const wallet = {
-        internalizeAction: jest.fn(async () => ({ ok: true }))
+        internalizeAction: jest.fn(async () => ({ accepted: true }))
       } as unknown as WalletInterface
 
       const module = new Brc29RemittanceModule()
@@ -182,7 +182,7 @@ describe('Brc29RemittanceModule', () => {
       )
       expect(result.action).toBe('accept')
       if (result.action === 'accept') {
-        expect(result.receiptData?.internalizeResult).toEqual({ ok: true })
+        expect(result.receiptData?.internalizeResult).toEqual({ accepted: true })
       }
 
       expect(wallet.internalizeAction).toHaveBeenCalledWith(
@@ -205,6 +205,32 @@ describe('Brc29RemittanceModule', () => {
         'example.com'
       )
     })
+
+    it.each([{ accepted: false }, {}])(
+      'terminates without affirmative wallet acceptance: %j',
+      async result => {
+        const wallet = {
+          internalizeAction: jest.fn(async () => result)
+        } as unknown as WalletInterface
+        const module = new Brc29RemittanceModule()
+        const accepted = await module.acceptSettlement(
+          {
+            threadId: 'thread-1',
+            sender: 'payer-key',
+            settlement: {
+              customInstructions: { derivationPrefix: 'p', derivationSuffix: 's' },
+              transaction: [9, 9, 9],
+              amountSatoshis: 1000
+            }
+          },
+          makeContext(wallet)
+        )
+        expect(accepted).toMatchObject({
+          action: 'terminate',
+          termination: { code: 'brc29.internalize_failed' }
+        })
+      }
+    )
 
     it('terminates when internalization fails', async () => {
       const wallet = {

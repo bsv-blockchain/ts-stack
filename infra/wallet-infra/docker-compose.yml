@@ -36,6 +36,7 @@ services:
       KNEX_DB_CONNECTION: '{"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage","port":3306}'
       # OpenTelemetry — point at any OTLP/HTTP collector. Unset => console exporters.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_CONSOLE_EXPORTERS: ${OTEL_CONSOLE_EXPORTERS:-false}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-wallet-infra}
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}

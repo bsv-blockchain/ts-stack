@@ -3,10 +3,10 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.3'
+version: '2.2.4'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-16'
+last_verified: '2026-09-16'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -30,6 +30,10 @@ npm install @bsv/auth-express-middleware @bsv/sdk express
 Node.js 22 or newer and Express 4.18 or newer are required. The package uses
 the application's peer-provided Express runtime and type graph and provides
 native ESM and CommonJS entry points with matching declarations.
+
+Version 2.2.4 requires `@bsv/sdk` 2.7.1 or later so the identity assigned to
+`req.auth.identityKey` is the identity bound to the verified peer session, not
+unsigned BRC-104 transport metadata.
 
 ## Quick start
 

@@ -6,10 +6,8 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
 import { quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
-import {
-  classifyArcadeRejection,
-  type ArcadeRejectionClassification
-} from '../../services/providers/arcadeStatus'
+import { classifyArcadeRejection, type ArcadeRejectionClassification } from '../../services/providers/arcadeStatus'
+import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
 
 interface ArcadeStatusNote extends ReqHistoryNote {
   when: string
@@ -292,7 +290,11 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from configured services\n`
 
     try {
-      const proof = await this.monitor.services.getMerklePath(txid)
+      const proof = await getCanonicalMerklePath(
+        this.monitor.services,
+        this.monitor.chaintracksWithEvents || this.monitor.chaintracks,
+        txid
+      )
       const ptx = await EntityProvenTx.fromReq(req, proof, false, this.monitor.options.maxRebroadcastAttempts ?? 0)
       if (ptx == null) {
         log += `    No validated merkle proof available from ${proof.name ?? 'configured services'}\n`

@@ -99,3 +99,14 @@ Pull requests and issues are welcome! Please open an issue to discuss any major 
 
 ## License
 [Open BSV License Version 6](./LICENSE.txt)
+
+## Mandala state adapter compatibility
+
+The Mandala manager and lookup share one lazily initialized storage manager.
+The admission adapter verifies admin outpoints against that store's per-asset
+history, including the asset, transaction ID and output index. This wiring uses
+the existing history API so it can compile with the currently locked package
+and consume Overlay Topics 1.8.0's stricter admission contract on upgrade.
+Before a deployed upgrade, follow the [Mandala migration guide](../../packages/overlays/topics/README.md#mandala-admission-and-the-180-upgrade)
+and audit historical admin and owner records. Source publication does not
+upgrade a running overlay or its locked dependencies automatically.
