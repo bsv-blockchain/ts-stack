@@ -84,9 +84,15 @@ decisions below.
 7. **`infra/message-box-server` is outside the pnpm workspace** and consumes
    published `@bsv/*` packages. It cannot depend on `@bsv/eqc` until the first
    npm release.
-8. **Fibonacci floors to zero at the protocol floor.** With `R = 2` and
-   `K = 5` the payouts are `[2, 0, 0, 0, 0]`. Every one of `k` ranked hosts
+8. **Fibonacci floors to zero at the BRC-178 recommended floor.** With `R = 2`
+   and `K = 5` the payouts are `[2, 0, 0, 0, 0]`. Every one of `k` ranked hosts
    receives at least one satoshi only when `R ≥ Σ weights(k)` (12 for `k = 5`).
+   The 1000-satoshi default floor chosen below removes the problem for any
+   `K` up to 14.
+9. **SLAP advertisements carry the host identity key.**
+   `OverlayAdminTokenTemplate.decode` returns the advertiser's `identityKey`
+   alongside `protocol`, `domain`, and `topicOrService`. `LookupResolver`
+   discards the identity key; the EQC keeps it.
 
 ## Package
 
@@ -135,7 +141,7 @@ src/
     transport.ts           AuthFetch transport with per-host deadline
     settlement.ts          createAction, output index re-check
     reputation.ts          ReputationStore + in-memory default
-    discovery.ts           static hosts, SLAP discovery with identity keys
+    discovery.ts           free SLAP bootstrap, identity keys, overrides, cache
   host/
     handlers.ts            params, query, collect
     pendingStore.ts        bounded TTL store
@@ -155,13 +161,7 @@ arrivals and a clock and returns a ranking; `fibonacci.ts` is arithmetic;
 ```ts
 import { EQC } from '@bsv/eqc'
 
-const eqc = new EQC(wallet, {
-  hosts: ['https://overlay-a.example', 'https://overlay-b.example'],
-  threshold: 3,
-  topK: 5,
-  raceMs: 400,
-  maxFeeSats: 20
-})
+const eqc = new EQC(wallet) // mainnet, DEFAULT_SLAP_TRACKERS
 
 const result = await eqc.query({
   type: 'overlay-lookup',
@@ -172,16 +172,66 @@ const answer = await eqc.lookup({ service: 'ls_example', query: { key: 'value' }
 const messages = await eqc.listMessages({ messageBox: 'payment_inbox' })
 ```
 
-Options: `hosts`, `discovery`, `threshold` (3), `topK` (5), `raceMs` (400),
-`floorFeeSats` (2), `maxFeeSats` (20), `feeSats`, `queryTtlMs` (30 000),
-`hostTimeoutMs` (5 000), `paramsTtlMs` (300 000), `reputation`, `transport`,
-`originator`, `clock`. `topK` must be at least `threshold` unless
-`threshold` is 1.
+The client takes no host list. Like `LookupResolver`, it bootstraps from SLAP
+trackers and its network options carry the same names and meaning as
+`LookupResolverConfig`:
+
+| Option            | Default                                 | Meaning                                                       |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `networkPreset`   | `'mainnet'`                             | `mainnet`, `testnet`, `teratestnet`, or `local`.              |
+| `slapTrackers`    | `DEFAULT_SLAP_TRACKERS` from `@bsv/sdk` | Trackers asked which hosts serve a lookup service.            |
+| `hostOverrides`   | `{}`                                    | Per market key, hosts used in place of discovery.             |
+| `additionalHosts` | `{}`                                    | Per market key, hosts used in addition to discovery.          |
+| `resolver`        | a `LookupResolver` built from the above | Injection point for the free discovery lookups, used in tests |
+
+The market key is the lookup service name for `overlay-lookup` and the query
+class name for every other class. The testnet and TeraTestNet presets select
+`DEFAULT_TESTNET_SLAP_TRACKERS` and `DEFAULT_TTN_SLAP_TRACKERS`.
+
+Market options: `threshold` (3), `topK` (5), `raceMs` (400), `floorFeeSats`
+(1 000), `maxFeeSats` (2 000), `feeSats`, `queryTtlMs` (30 000),
+`hostTimeoutMs` (5 000), `hostsTtlMs` (300 000), `paramsTtlMs` (300 000),
+`reputation`, `transport`, `originator`, `clock`. `topK` must be at least
+`threshold` unless `threshold` is 1.
 
 `query()` resolves to `queryId`, `contentHash`, `payload`, `supplement`,
 `ranking` (host, arrival offset, rank, payout), `txid`, `attestations`,
 `consistency` (BRC-136, overlay lookups only), and `rejected` (per-host
 reasons).
+
+## Host discovery
+
+Every query begins with discovery, and discovery is never paid for separately.
+
+1. For `overlay-lookup`, the client asks the SLAP trackers
+   `{ service: 'ls_slap', query: { service } }` over the existing free BRC-24
+   `/lookup` route, through `LookupResolver`. It decodes each returned output
+   with `OverlayAdminTokenTemplate.decode`, keeps tokens whose protocol is
+   `SLAP` and whose service matches, and records `{ domain, identityKey }`.
+2. For `message-list`, the client resolves the recipient's message box hosts
+   with a free `ls_messagebox` lookup, as `@bsv/message-box-client` does today.
+3. `hostOverrides[key]` replaces discovery; `additionalHosts[key]` extends it.
+   Classes without a standard discovery path (`relay-lookup`, `message-body`)
+   require one of the two.
+4. Only `https` hosts are accepted unless `networkPreset` is `local`.
+5. Results are cached for `hostsTtlMs`.
+6. The client then reads `GET /economic/params` from each host and keeps those
+   that implement the market, support the query class, and advertise a floor no
+   higher than `maxFeeSats`.
+
+**Pricing rule.** The fee committed in the target query is understood to cover
+the discovery that preceded it, because the two are almost always paired.
+Hosts that take part in the market keep answering `ls_slap` on the free
+`/lookup` route; trackers receive no separate output. When `ls_slap` is itself
+the target of an economic query, for example
+`eqc.lookup({ service: 'ls_slap', ... })`, it is raced and paid like any other
+lookup.
+
+Discovery also strengthens identity binding. When a host was found through a
+SLAP token, the advertised identity key must equal the BRC-103 session key and
+the attestation signer. A domain answering under a different key than it
+advertised on-chain is discarded as `identity-mismatch`. Discovered identity
+keys populate `hostSetHint`.
 
 ## Host API
 
@@ -191,15 +241,17 @@ import { createEconomicQueryHost, overlayLookupProvider } from '@bsv/eqc/host'
 const host = createEconomicQueryHost({
   wallet,
   providers: [overlayLookupProvider({ engine, anchorTopics: { ls_example: ['tm_example'] } })],
-  floorFeeSats: 2
+  floorFeeSats: 1000
 })
 
-router.get('/brc178/params', host.params)
-router.post('/brc178/query', host.query)
-router.post('/brc178/collect', host.collect)
+router.get('/economic/params', host.params)
+router.post('/economic/query', host.query)
+router.post('/economic/collect', host.collect)
 ```
 
-`host.mount(router)` registers the same three routes. A provider is:
+`host.mount(router)` registers the same three routes. The paths are exported
+as `ECONOMIC_PATHS` and shared by client and host. `floorFeeSats` defaults to
+1 000 and may be a function of payload size. A provider is:
 
 ```ts
 interface QueryProvider {
@@ -251,23 +303,26 @@ server.registerRouter('/', ({ engine, wallet }) => {
 })
 ```
 
-`host.mount` registers the full `/brc178/*` paths, so the router is mounted at
-`/`.
+`host.mount` registers the full `/economic/*` paths, so the router is mounted
+at `/`.
 
 ## Protocol flow
 
 ```
-client                                      hosts h1..hn
-GET /brc178/params (plain fetch, cached) -> floor, t, K, classes
-  drop hosts that lack the class or whose floor exceeds maxFeeSats
+client                                      SLAP trackers, then hosts h1..hn
+POST /lookup { ls_slap, { service } } (free, LookupResolver, cached)
+                                         <- SLAP tokens -> { domain, identityKey }
+  apply hostOverrides / additionalHosts, drop hosts in reputation cooldown
+GET /economic/params (plain fetch, cached) -> floor, t, K, classes
+  drop hosts that lack the market, the class, or whose floor exceeds maxFeeSats
 build query; queryId = SHA-256(canonical JSON)
-POST /brc178/query x n (AuthFetch, parallel)
+POST /economic/query x n (AuthFetch, parallel)
                                          -> validate, recompute queryId
                                             provider.execute -> canonical bytes
                                             contentHash, store pending, sign
                                          <- attestation (+ anchors extension)
 stamp local arrival, then verify:
-  BRC-77 signature, signer == host == BRC-103 session key, queryId
+  BRC-77 signature, signer == host == BRC-103 session key == SLAP key, queryId
 race window = raceMs after first valid attestation
   ends early when every host answered or failed, or K hosts share one hash
 winner = hash with most distinct hosts; tie -> earliest first attestation
@@ -278,7 +333,7 @@ Fibonacci payouts; zero-satoshi ranks dropped
 one createAction: output i pays host i under BRC-29
   prefix = base64(queryId), suffix = base64(u16be(rank)), randomizeOutputs false
   re-parse AtomicBEEF and confirm each output index
-POST /brc178/collect x paid hosts (payment envelope in body)
+POST /economic/collect x paid hosts (payment envelope in body)
                                          -> caller == query.client, hash matches
                                             own key at ranking[rank-1]
                                             find own output by locking script
@@ -305,13 +360,16 @@ fed back into the specification.
 | 4   | Payment transport                | `payment: { derivationPrefix, derivationSuffix, transaction }` in the collect body, avoiding the Node 16 KiB header limit. Hosts also accept the `x-bsv-payment` header. A 402 carries `x-bsv-payment-version` and `x-bsv-payment-satoshis-required`.                                                                                                                                                                                                                                                                       |
 | 5   | Broadcast timing                 | The client uses a normal `createAction`; its wallet broadcasts. BRC-178 client rule 4 asks for broadcast only after a matching payload arrives. That ordering is not enforceable: the host's `internalizeAction` broadcasts on receipt, aborting a `noSend` action after dispatch can leave the client wallet believing spent inputs are free, and a crash between `noSend` and `sendWith` strands change. Loss is bounded by `maxFeeSats` per query; hosts that take payment and fail delivery are excluded by reputation. |
 | 6   | Zero-satoshi shares              | Dropped. Because payouts are non-increasing, paid ranks are always a prefix `1..m`. A host requires `max(minPayoutSats, its Fibonacci share at its own floor)`; `minPayoutSats` defaults to 1.                                                                                                                                                                                                                                                                                                                              |
-| 7   | Effective floor                  | `floorFeeSats = max(2, client option, advertised floors of candidate hosts)`. Hosts advertising a floor above `maxFeeSats` are dropped before fan-out so one host cannot inflate the fee.                                                                                                                                                                                                                                                                                                                                   |
+| 7   | Effective floor                  | `floorFeeSats = max(client option, advertised floors of candidate hosts)`, never below 1. Hosts advertising a floor above `maxFeeSats` (default 2 000) are dropped before fan-out so one host cannot inflate the fee.                                                                                                                                                                                                                                                                                                       |
 | 8   | Early race end                   | The window ends `raceMs` after the first valid attestation, or sooner when every host has answered or failed, or when `K` hosts share one hash.                                                                                                                                                                                                                                                                                                                                                                             |
 | 9   | `message-list` ordering          | `messageId` compared by Unicode code point. Keys in the order `messageId`, `sender`, `body`; no whitespace; the empty list hashes `[]`.                                                                                                                                                                                                                                                                                                                                                                                     |
 | 10  | `overlay-lookup` canonical bytes | `varint n ‖ [txid(32) ‖ varint outputIndex ‖ varint contextLength ‖ context]*`, entries sorted by txid hex, then output index, then context bytes, with exact duplicates removed. BEEF is returned as `supplement` outside the hash. `payload ‖ supplement` is a valid BRC-24 `application/octet-stream` body. The client confirms every listed outpoint resolves inside the BEEF. Freeform answers return 422.                                                                                                             |
 | 11  | Phase 1 payload attachment       | Not implemented. Attaching the payload to an attestation releases the bytes before payment.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 12  | Replay                           | A repeated `queryId` while pending returns the stored attestation. After settlement both `query` and `collect` return 409 until expiry plus a grace period.                                                                                                                                                                                                                                                                                                                                                                 |
 | 13  | Arrival time                     | Stamped from a monotonic clock when the transport promise resolves, before signature verification, so verification cost does not reorder hosts. `attestedAt` is never read for ranking.                                                                                                                                                                                                                                                                                                                                     |
+| 14  | HTTP paths                       | `GET /economic/params`, `POST /economic/query`, `POST /economic/collect`, replacing the `/brc178/*` binding in the specification with a descriptive prefix. Signature domain tags such as `BRC-178 attestation` are unchanged.                                                                                                                                                                                                                                                                                              |
+| 15  | Default floor                    | `floorFeeSats` defaults to 1 000 satoshis on client and host, replacing the recommended 2. At `K = 5` the split is 418, 250, 166, 83, 83, and no share floors to zero for any `K` up to 14. Operators and clients may still configure any floor of at least 1.                                                                                                                                                                                                                                                              |
+| 16  | Discovery pricing                | The `ls_slap` lookup that precedes a query is answered on the free BRC-24 `/lookup` route and is covered by the target query's fee. `ls_slap` as the target of an economic query is raced and paid normally.                                                                                                                                                                                                                                                                                                                |
 
 Decision 10 departs from the BRC-178 table, which hashes the full BRC-24
 encoding. The BEEF section is self-authenticating: every listed txid is
@@ -353,8 +411,8 @@ Client errors are `EQCError` with a `code`:
 
 | Code                     | Condition                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `ERR_EQC_NO_HOSTS`       | Fewer candidate hosts than `threshold`.                                                                           |
-| `ERR_EQC_BUDGET`         | Effective floor exceeds `maxFeeSats`.                                                                             |
+| `ERR_EQC_NO_HOSTS`       | Discovery, overrides, and the params check leave fewer market-capable hosts than `threshold`.                     |
+| `ERR_EQC_BUDGET`         | The client's own `floorFeeSats` exceeds `maxFeeSats`.                                                             |
 | `ERR_EQC_NO_ATTESTATION` | No valid attestation before `hostTimeoutMs`.                                                                      |
 | `ERR_EQC_THRESHOLD`      | Winning hash has fewer than `threshold` hosts. Carries hash groups and consistency. No wallet call has been made. |
 | `ERR_EQC_PAYMENT`        | `createAction` failed. No collect was sent.                                                                       |
@@ -398,7 +456,11 @@ another party's reputation data as authoritative.
 - The client is the only judge of arrival. No host-supplied time, rank, or
   ordering claim is read.
 - `attestation.host`, the BRC-77 signer, and the BRC-103 session identity must
-  be the same key.
+  be the same key, and must equal the SLAP-advertised identity key when the
+  host was discovered through SLAP.
+- SLAP trackers are trusted only to name candidates. A tracker that returns
+  false hosts can waste a fan-out slot but cannot cause a payment, because
+  payment still requires `t` valid attestations of one hash.
 - Outputs are created only for hosts that attested the winning hash.
 - A host locates its output by deriving its own locking script rather than
   trusting a client-supplied index.
@@ -416,6 +478,12 @@ another party's reputation data as authoritative.
   canonical JSON is invariant under key order; canonical payloads are invariant
   under input order; BRC-77 signatures interoperate with `SignedMessage` in
   both directions.
+- **Discovery:** a local stub tracker serving real SLAP tokens on `/lookup`;
+  tokens for another service or protocol are ignored; `hostOverrides` replaces
+  and `additionalHosts` extends the result; non-`https` hosts are dropped
+  outside the `local` preset; hosts returning 404 for `/economic/params` are
+  dropped; a host whose session key differs from its SLAP key is discarded;
+  results are cached for `hostsTtlMs`; discovery makes no wallet call.
 - **Race logic with a fake clock:** a backdated `attestedAt` gains nothing;
   ties; minority hash excluded; below threshold makes no wallet call.
 - **Host handlers:** authentication, recipient check, replay, settlement under
@@ -423,7 +491,10 @@ another party's reputation data as authoritative.
   performs the real BRC-29 script check at a non-zero output index,
   underpayment returns 402, a suffix for the wrong rank is rejected.
 - **End to end:** several real express servers on ephemeral ports with the real
-  `createAuthMiddleware` and the real `AuthFetch`. Scenarios: five honest
+  `createAuthMiddleware` and the real `AuthFetch`, discovered through the stub
+  tracker by an injected `resolver` under the `local` preset (the SDK's `local`
+  preset pins discovery to port 8080, which ephemeral ports cannot use).
+  Scenarios: five honest
   hosts; a stale host goes unpaid; a hoarder (one of five holds the message,
   `t = 3`) results in no payment to anyone; a liar attests and serves wrong
   bytes, another host delivers, and the liar enters cooldown; a slow host
