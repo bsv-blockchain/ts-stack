@@ -8,3 +8,15 @@ export {
   type EconomicQuery
 } from './protocol/query.js'
 export { computePayouts, fibonacciWeights, sumOfWeights } from './protocol/fibonacci.js'
+export {
+  canonicalizeLookupAnswer,
+  compareCodePoints,
+  contentHash,
+  decodeMessageList,
+  decodeOutpointList,
+  encodeMessageList,
+  encodeOutpointList,
+  rebuildLookupAnswer,
+  type CanonicalMessage,
+  type LookupOutpoint
+} from './protocol/payloads.js'
