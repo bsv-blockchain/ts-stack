@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 
 import { canonicalJson } from './canonicalJson.js'
 import { computePayouts, fibonacciWeights } from './fibonacci.js'
+import { decodeOutpointList, encodeMessageList, encodeOutpointList } from './payloads.js'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -71,6 +72,30 @@ describe('BRC-178 protocol invariants', () => {
         const canonical = canonicalJson(value)
         expect(canonicalJson(shuffleKeys(value, seed))).toBe(canonical)
         expect(canonicalJson(JSON.parse(canonical))).toBe(canonical)
+      })
+    )
+  })
+
+  test('message-list bytes do not depend on input order', () => {
+    const message = fc.record({ messageId: fc.string(), sender: fc.string(), body: fc.string() })
+    fc.assert(
+      fc.property(fc.array(message, { maxLength: 8 }), messages => {
+        expect(encodeMessageList([...messages].reverse())).toEqual(encodeMessageList(messages))
+      })
+    )
+  })
+
+  test('outpoint bytes do not depend on input order and decode to a sorted unique list', () => {
+    const outpoint = fc.record({
+      txid: fc.stringMatching(/^[0-9a-f]{64}$/),
+      outputIndex: fc.nat({ max: 1000 }),
+      context: fc.array(fc.nat({ max: 255 }), { maxLength: 4 })
+    })
+    fc.assert(
+      fc.property(fc.array(outpoint, { maxLength: 8 }), entries => {
+        const payload = encodeOutpointList(entries)
+        expect(encodeOutpointList([...entries].reverse())).toEqual(payload)
+        expect(encodeOutpointList(decodeOutpointList(payload))).toEqual(payload)
       })
     )
   })
