@@ -29,8 +29,7 @@ export interface FormatPreimageParams {
     sourceTXID: string;
     sourceSatoshis: number;
     lockingScript: Script;
-    otherInputs?: Transaction["inputs"];
-    allInputs?: Transaction["inputs"];
+    otherInputs: Transaction["inputs"];
     inputSequence?: number;
 }
 ```
@@ -48,7 +47,6 @@ A representation of a chunk of a script, which includes an opcode. For push oper
 export default interface ScriptChunk {
     op: number;
     data?: number[];
-    invalidLength?: boolean;
 }
 ```
 
@@ -107,12 +105,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ### Interface: SpendVerificationContext
 
-Explicit chain context for script verification.
-
-Transaction version is script data, not a reliable signal for whether a
-caller is asking for consensus or policy validation. Backends should use
-this context when it is supplied and retain their compatibility behavior
-only when it is omitted.
+Explicit chain context for script verification. Transaction version is script
+data and is not a policy/consensus selector.
 
 ```ts
 export default interface SpendVerificationContext {
@@ -123,73 +117,23 @@ export default interface SpendVerificationContext {
 }
 ```
 
-#### Property blockHeight
-
-Height of the block against which the spend is evaluated.
-
-```ts
-blockHeight?: number
-```
-
-#### Property consensus
-
-`true` selects consensus rules; `false` permits policy validation.
-
-```ts
-consensus: boolean
-```
-
-#### Property utxoHeight
-
-Height at which the source output was mined.
-
-```ts
-utxoHeight?: number
-```
-
-#### Property verifyFlags
-
-Optional backend-specific script verification flags.
-
-```ts
-verifyFlags?: string | string[]
-```
-
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 ### Interface: SpendVerifierInterface
+
+An asynchronous backend capable of validating a single Spend-shaped input.
+The explicit context is authoritative when supplied.
 
 ```ts
 export default interface SpendVerifierInterface {
     isReady?: () => boolean;
     shouldVerifySpend?: (spend: Spend, context?: SpendVerificationContext) => boolean;
     verifySpend: (spend: Spend, context?: SpendVerificationContext) => Promise<boolean>;
-    verifySpendsBatch?: (items: ReadonlyArray<Partial<SpendVerificationContext> & {
-        spend: Spend;
-    }>) => Promise<boolean[]>;
     verifySpendSync?: (spend: Spend, context?: SpendVerificationContext) => boolean;
 }
 ```
 
-See also: [Spend](./script.md#class-spend), [SpendVerificationContext](./script.md#interface-spendverificationcontext)
-
-#### Property isReady
-
-Optional synchronous readiness signal for compatibility APIs.
-
-```ts
-isReady?: () => boolean
-```
-
-#### Property shouldVerifySpend
-
-Optionally decide whether this backend should handle the Spend now.
-Returning false preserves the existing synchronous JavaScript validator.
-
-```ts
-shouldVerifySpend?: (spend: Spend, context?: SpendVerificationContext) => boolean
-```
 See also: [Spend](./script.md#class-spend), [SpendVerificationContext](./script.md#interface-spendverificationcontext)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -222,8 +166,8 @@ Inherits all properties and methods from the Script class.
 
 ```ts
 export default class LockingScript extends Script {
-    override isLockingScript(): boolean 
-    override isUnlockingScript(): boolean 
+    isLockingScript(): boolean 
+    isUnlockingScript(): boolean 
 }
 ```
 
@@ -232,7 +176,7 @@ See also: [Script](./script.md#class-script)
 #### Method isLockingScript
 
 ```ts
-override isLockingScript(): boolean 
+isLockingScript(): boolean 
 ```
 
 Returns
@@ -242,7 +186,7 @@ Always returns true for a LockingScript instance.
 #### Method isUnlockingScript
 
 ```ts
-override isUnlockingScript(): boolean 
+isUnlockingScript(): boolean 
 ```
 
 Returns
@@ -541,8 +485,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export default class Script {
     static fromASM(asm: string): Script 
     static fromHex(hex: string): Script 
-    static fromBinary(bin: number[] | Uint8Array): Script 
-    static fromBinaryView(bin: Uint8Array): Script 
+    static fromBinary(bin: number[]): Script 
     constructor(chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true) 
     get chunks(): ScriptChunk[] 
     set chunks(value: ScriptChunk[]) 
@@ -550,14 +493,14 @@ export default class Script {
     toHex(): string 
     toBinary(): number[] 
     toUint8Array(): Uint8Array 
-    writeScript(script: Script): this 
-    writeOpCode(op: number): this 
-    setChunkOpCode(i: number, op: number): this 
-    writeBn(bn: BigNumber): this 
-    writeBin(bin: number[]): this 
-    writeNumber(num: number): this 
-    removeCodeseparators(): this 
-    findAndDelete(script: Script): this 
+    writeScript(script: Script): Script 
+    writeOpCode(op: number): Script 
+    setChunkOpCode(i: number, op: number): Script 
+    writeBn(bn: BigNumber): Script 
+    writeBin(bin: number[]): Script 
+    writeNumber(num: number): Script 
+    removeCodeseparators(): Script 
+    findAndDelete(script: Script): Script 
     isPushOnly(): boolean 
     isLockingScript(): boolean 
     isUnlockingScript(): boolean 
@@ -589,7 +532,7 @@ Argument Details
 Deletes the given item wherever it appears in the current script.
 
 ```ts
-findAndDelete(script: Script): this 
+findAndDelete(script: Script): Script 
 ```
 See also: [Script](./script.md#class-script)
 
@@ -627,7 +570,7 @@ const script = Script.fromASM("OP_DUP OP_HASH160 abcd... OP_EQUALVERIFY OP_CHECK
 #### Method fromBinary
 
 ```ts
-static fromBinary(bin: number[] | Uint8Array): Script 
+static fromBinary(bin: number[]): Script 
 ```
 See also: [Script](./script.md#class-script)
 
@@ -645,16 +588,6 @@ Example
 ```ts
 const script = Script.fromBinary([0x76, 0xa9, ...])
 ```
-
-#### Method fromBinaryView
-
-Constructs a lazily parsed script over an existing byte view without a copy.
-The caller must not mutate `bin` while the script is in use.
-
-```ts
-static fromBinaryView(bin: Uint8Array): Script 
-```
-See also: [Script](./script.md#class-script)
 
 #### Method fromHex
 
@@ -711,8 +644,9 @@ True if the script is an unlocking script, otherwise false.
 #### Method removeCodeseparators
 
 ```ts
-removeCodeseparators(): this 
+removeCodeseparators(): Script 
 ```
+See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -721,8 +655,9 @@ This script instance for chaining.
 #### Method setChunkOpCode
 
 ```ts
-setChunkOpCode(i: number, op: number): this 
+setChunkOpCode(i: number, op: number): Script 
 ```
+See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -768,8 +703,9 @@ The script in hexadecimal format.
 #### Method writeBin
 
 ```ts
-writeBin(bin: number[]): this 
+writeBin(bin: number[]): Script 
 ```
+See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -787,9 +723,9 @@ Throws an error if the data is too large to be pushed.
 #### Method writeBn
 
 ```ts
-writeBn(bn: BigNumber): this 
+writeBn(bn: BigNumber): Script 
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [Script](./script.md#class-script)
 
 Returns
 
@@ -803,8 +739,9 @@ Argument Details
 #### Method writeNumber
 
 ```ts
-writeNumber(num: number): this 
+writeNumber(num: number): Script 
 ```
+See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -818,8 +755,9 @@ Argument Details
 #### Method writeOpCode
 
 ```ts
-writeOpCode(op: number): this 
+writeOpCode(op: number): Script 
 ```
+See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -833,7 +771,7 @@ Argument Details
 #### Method writeScript
 
 ```ts
-writeScript(script: Script): this 
+writeScript(script: Script): Script 
 ```
 See also: [Script](./script.md#class-script)
 
@@ -882,18 +820,18 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ### Class: ScriptResourceLimitError
 
-Raised when an explicitly configured local interpreter budget is exhausted.
-
-This is deliberately distinct from ScriptEvaluationError: exhausting a
-caller-supplied resource budget does not prove that a script is invalid.
+Raised when a caller-supplied local interpreter budget or a host representation
+limit is exhausted. This is deliberately distinct from
+`ScriptEvaluationError`: resource exhaustion does not prove script invalidity.
 
 ```ts
 export default class ScriptResourceLimitError extends Error {
-    constructor(public readonly resource: ScriptResource, public readonly limit: number | bigint, public readonly attempted: number | bigint) 
+    readonly resource: ScriptResource;
+    readonly limit: number | bigint;
+    readonly attempted: number | bigint;
+    constructor(resource: ScriptResource, limit: number | bigint, attempted: number | bigint)
 }
 ```
-
-See also: [ScriptResource](./script.md#type-scriptresource)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -912,27 +850,22 @@ export default class Spend {
     lockingScript: LockingScript;
     transactionVersion: number;
     otherInputs: TransactionInput[];
-    allInputs?: TransactionInput[];
     outputs: TransactionOutput[];
     inputIndex: number;
     unlockingScript: UnlockingScript;
     inputSequence: number;
     lockTime: number;
-    context!: "UnlockingScript" | "LockingScript";
-    programCounter!: number;
-    lastCodeSeparator!: number | null;
+    context: "UnlockingScript" | "LockingScript";
+    programCounter: number;
+    lastCodeSeparator: number | null;
     stack: number[][];
     altStack: number[][];
     ifStack: boolean[];
-    elseStack: boolean[];
     memoryLimit: number;
     readonly hasExplicitMemoryLimit: boolean;
     stackMem: number;
     altStackMem: number;
     isRelaxedOverride: boolean;
-    verifyFlags?: Set<string>;
-    executedOpCount: number;
-    returningFromConditional: boolean;
     constructor(params: {
         sourceTXID: string;
         sourceOutputIndex: number;
@@ -940,7 +873,6 @@ export default class Spend {
         lockingScript: LockingScript;
         transactionVersion: number;
         otherInputs: TransactionInput[];
-        allInputs?: TransactionInput[];
         outputs: TransactionOutput[];
         unlockingScript: UnlockingScript;
         inputSequence: number;
@@ -948,19 +880,16 @@ export default class Spend {
         lockTime: number;
         memoryLimit?: number;
         isRelaxed?: boolean;
-        verifyFlags?: string | string[];
-        sigHashCache?: SignatureHashCache;
     }) 
     reset(): void 
     step(): boolean 
-    validate(context?: SpendVerificationContext): boolean 
-    validateJavaScript(): boolean 
-    async validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean> 
-    toTransactionUint8Array(): Uint8Array 
+    validate(context?: SpendVerificationContext): boolean
+    validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
+    toTransactionUint8Array(): Uint8Array
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
 
 #### Constructor
 
@@ -972,7 +901,6 @@ constructor(params: {
     lockingScript: LockingScript;
     transactionVersion: number;
     otherInputs: TransactionInput[];
-    allInputs?: TransactionInput[];
     outputs: TransactionOutput[];
     unlockingScript: UnlockingScript;
     inputSequence: number;
@@ -980,11 +908,9 @@ constructor(params: {
     lockTime: number;
     memoryLimit?: number;
     isRelaxed?: boolean;
-    verifyFlags?: string | string[];
-    sigHashCache?: SignatureHashCache;
 }) 
 ```
-See also: [LockingScript](./script.md#class-lockingscript), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
 
 Argument Details
 
@@ -1013,9 +939,8 @@ The outputs of the current transaction.
 + **params.lockTime**
   + The lock time of the transaction.
 + **params.memoryLimit**
-  + Optional caller-supplied local
-interpreter budget. Resource exhaustion is reported separately from
-script invalidity.
+  + Optional caller-supplied local interpreter budget. If omitted,
+post-Genesis validation has no arbitrary SDK memory cap.
 + **params.isRelaxed**
   + Optional. If true, disables all the unlocking script maleability restrictions consitent with Chronicle release. Maleability restrictions are neve appliced to locking scripts.
 
@@ -1037,70 +962,48 @@ const spend = new Spend({
 });
 ```
 
-#### Method toTransactionUint8Array
-
-Serializes the ordinary transaction represented by this Spend. The source
-output is intentionally excluded and is supplied separately to a Spend
-verifier, avoiding an EF construction and parse for one-input validation.
-
-```ts
-toTransactionUint8Array(): Uint8Array 
-```
-
 #### Method validate
 
 ```ts
-validate(context?: SpendVerificationContext): boolean 
+validate(context?: SpendVerificationContext): boolean
 ```
+
 See also: [SpendVerificationContext](./script.md#interface-spendverificationcontext)
 
 Returns
 
-Returns true when the spend is valid.
-
-Argument Details
-
-+ **context**
-  + Optional explicit consensus or
-policy context passed to a registered script backend.
-
-Throws
-
-If script validation fails.
-
-If a local interpreter resource is
-exhausted before validity can be determined.
+Returns true if the scripts are valid and the spend is legitimate, otherwise false.
 
 Example
 
 ```ts
-spend.validate()
-console.log("Spend is valid!")
-```
-
-#### Method validateJavaScript
-
-Runs the original TypeScript interpreter explicitly, bypassing any
-registered optional backend.
-
-```ts
-validateJavaScript(): boolean 
+if (spend.validate()) {
+  console.log("Spend is valid!");
+} else {
+  console.log("Invalid spend!");
+}
 ```
 
 #### Method validateWith
 
+Validates this spend with an asynchronous pluggable backend. Backend errors are
+propagated without silently falling back to the JavaScript interpreter.
+
 ```ts
-async validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean> 
+validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
 ```
+
 See also: [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface)
 
-Argument Details
+#### Method toTransactionUint8Array
 
-+ **verifier**
-  + The backend used when it accepts this Spend.
-+ **context**
-  + Optional explicit consensus or policy context. Transaction
-version is never used as a substitute for this context.
+Serializes the ordinary transaction represented by this Spend. The source
+output is supplied separately to a Spend verifier, avoiding EF construction
+for one-input validation.
+
+```ts
+toTransactionUint8Array(): Uint8Array
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1114,8 +1017,8 @@ Inherits all properties and methods from the Script class.
 
 ```ts
 export default class UnlockingScript extends Script {
-    override isLockingScript(): boolean 
-    override isUnlockingScript(): boolean 
+    isLockingScript(): boolean 
+    isUnlockingScript(): boolean 
 }
 ```
 
@@ -1124,7 +1027,7 @@ See also: [Script](./script.md#class-script)
 #### Method isLockingScript
 
 ```ts
-override isLockingScript(): boolean 
+isLockingScript(): boolean 
 ```
 
 Returns
@@ -1134,7 +1037,7 @@ Always returns false for an UnlockingScript instance.
 #### Method isUnlockingScript
 
 ```ts
-override isUnlockingScript(): boolean 
+isUnlockingScript(): boolean 
 ```
 
 Returns
@@ -1191,7 +1094,6 @@ export function resolveSourceDetails(tx: Transaction, inputIndex: number, provid
     sourceSatoshis: number;
     lockingScript: Script;
     otherInputs: typeof tx.inputs;
-    allInputs: typeof tx.inputs;
 } 
 ```
 
@@ -1208,10 +1110,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export type ScriptResource = "stack" | "alt-stack" | "element-size"
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
-
----
 ## Enums
 
 ## Variables
-
