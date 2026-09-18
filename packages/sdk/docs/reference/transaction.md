@@ -4,17 +4,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ## Interfaces
 
-| | |
-| --- | --- |
-| [ArcConfig](#interface-arcconfig) | [HttpsModuleLike](#interface-httpsmodulelike) |
-| [BroadcastFailure](#interface-broadcastfailure) | [HttpsNodejs](#interface-httpsnodejs) |
-| [BroadcastResponse](#interface-broadcastresponse) | [MerklePathLeaf](#interface-merklepathleaf) |
-| [Broadcaster](#interface-broadcaster) | [NodejsHttpClientRequest](#interface-nodejshttpclientrequest) |
-| [ChainTracker](#interface-chaintracker) | [NodejsRequestLike](#interface-nodejsrequestlike) |
-| [FeeModel](#interface-feemodel) | [TransactionInput](#interface-transactioninput) |
-| [FetchOptions](#interface-fetchoptions) | [TransactionOutput](#interface-transactionoutput) |
-| [HttpClient](#interface-httpclient) | [WhatsOnChainConfig](#interface-whatsonchainconfig) |
-| [HttpClientRequestOptions](#interface-httpclientrequestoptions) |  |
+| | | |
+| --- | --- | --- |
+| [ArcConfig](#interface-arcconfig) | [FeeModel](#interface-feemodel) | [TransactionEvidence](#interface-transactionevidence) |
+| [BdkVerifierInterface](#interface-bdkverifierinterface) | [FetchOptions](#interface-fetchoptions) | [TransactionEvidenceContext](#interface-transactionevidencecontext) |
+| [BdkVerifyScriptsParams](#interface-bdkverifyscriptsparams) | [HttpClient](#interface-httpclient) | [TransactionEvidenceCoordinatorOptions](#interface-transactionevidencecoordinatoroptions) |
+| [BroadcastFailure](#interface-broadcastfailure) | [HttpClientRequestOptions](#interface-httpclientrequestoptions) | [TransactionEvidenceLimits](#interface-transactionevidencelimits) |
+| [BroadcastResponse](#interface-broadcastresponse) | [HttpsModuleLike](#interface-httpsmodulelike) | [TransactionInput](#interface-transactioninput) |
+| [Broadcaster](#interface-broadcaster) | [HttpsNodejs](#interface-httpsnodejs) | [TransactionOutput](#interface-transactionoutput) |
+| [ChainTracker](#interface-chaintracker) | [MerklePathLeaf](#interface-merklepathleaf) | [VerifiedTransactionOutput](#interface-verifiedtransactionoutput) |
+| [EvidenceCandidate](#interface-evidencecandidate) | [NodejsHttpClientRequest](#interface-nodejshttpclientrequest) | [WhatsOnChainConfig](#interface-whatsonchainconfig) |
+| [EvidenceScriptScope](#interface-evidencescriptscope) | [NodejsRequestLike](#interface-nodejsrequestlike) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -85,6 +85,85 @@ The HTTP client used to make requests to the ARC API.
 httpClient?: HttpClient
 ```
 See also: [HttpClient](./transaction.md#interface-httpclient)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: BdkVerifierInterface
+
+A pluggable backend that verifies ALL input scripts of a single transaction.
+
+Implementations (e.g.
+
+```ts
+export default interface BdkVerifierInterface {
+    supportsMemoryLimit?: boolean;
+    shouldVerifyScripts?: (params: BdkVerifyScriptsParams) => boolean;
+    verifyScripts: (params: BdkVerifyScriptsParams) => Promise<boolean>;
+    verifyScriptsBatch?: (params: readonly BdkVerifyScriptsParams[]) => Promise<boolean[]>;
+}
+```
+
+See also: [BdkVerifyScriptsParams](./transaction.md#interface-bdkverifyscriptsparams)
+
+#### Property shouldVerifyScripts
+
+Optionally decide whether this backend should handle the transaction now.
+Returning false preserves the SDK's synchronous JavaScript interpreter path.
+Implementations can use this to avoid waiting for a cold optional backend.
+
+```ts
+shouldVerifyScripts?: (params: BdkVerifyScriptsParams) => boolean
+```
+See also: [BdkVerifyScriptsParams](./transaction.md#interface-bdkverifyscriptsparams)
+
+#### Property supportsMemoryLimit
+
+True only when this backend applies `params.memoryLimit` during script
+execution. Backends that omit this capability are bypassed for calls with
+an explicit memory limit.
+
+```ts
+supportsMemoryLimit?: boolean
+```
+
+#### Property verifyScripts
+
+Verify all input scripts of `params.tx`.
+
+```ts
+verifyScripts: (params: BdkVerifyScriptsParams) => Promise<boolean>
+```
+See also: [BdkVerifyScriptsParams](./transaction.md#interface-bdkverifyscriptsparams)
+
+#### Property verifyScriptsBatch
+
+Verify several independent transactions in one backend scheduling pass.
+Implementations may use packed native calls and worker-level parallelism.
+
+```ts
+verifyScriptsBatch?: (params: readonly BdkVerifyScriptsParams[]) => Promise<boolean[]>
+```
+See also: [BdkVerifyScriptsParams](./transaction.md#interface-bdkverifyscriptsparams)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: BdkVerifyScriptsParams
+
+Parameters shared by script-verifier routing and execution.
+
+```ts
+export interface BdkVerifyScriptsParams {
+    tx: Transaction;
+    blockHeight: number;
+    consensus: boolean;
+    verifyFlags?: string | string[];
+    memoryLimit?: number;
+}
+```
+
+See also: [Transaction](./transaction.md#class-transaction)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -163,10 +242,70 @@ const chainTracker = {
 
 ```ts
 export default interface ChainTracker {
-    isValidRootForHeight: (root: string, height: number) => Promise<boolean>;
-    currentHeight: () => Promise<number>;
+    isValidRootForHeight: (root: string, height: number, signal?: AbortSignal) => Promise<boolean>;
+    currentHeight: (signal?: AbortSignal) => Promise<number>;
+    getVerificationContext?: () => string | number;
+    getVerificationContextToken?: (signal?: AbortSignal) => Promise<string>;
 }
 ```
+
+#### Property getVerificationContext
+
+Optional trusted local provider/policy/recovery context. Change this value
+when switching sources or resetting their state. It is not a canonical
+chain snapshot: consumers must still check current canonical dependencies.
+Implementations without cancellable I/O may ignore the optional signals.
+
+```ts
+getVerificationContext?: () => string | number
+```
+
+#### Property getVerificationContextToken
+
+Optional fresh canonical context token from the trusted chain provider.
+Include canonical block/tip identity and any available monotonic reorg or
+reset epoch. Consumers compare tokens around asynchronous verification.
+Two remote tip observations are not an atomic snapshot and cannot detect
+an intervening transition back to the identical tip (ABA).
+
+```ts
+getVerificationContextToken?: (signal?: AbortSignal) => Promise<string>
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: EvidenceCandidate
+
+Internal owned candidate. Never constructed from a host's verification assertion.
+
+```ts
+export interface EvidenceCandidate {
+    tx: Transaction;
+    txid: string;
+    receipt: string;
+    byteLength: number;
+    outputIndex: number;
+    graphBinding: string;
+}
+```
+
+See also: [Transaction](./transaction.md#class-transaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: EvidenceScriptScope
+
+```ts
+export interface EvidenceScriptScope {
+    work: EvidenceScriptWork;
+    signal: AbortSignal;
+    check: () => void;
+}
+```
+
+See also: [EvidenceScriptWork](./transaction.md#class-evidencescriptwork)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -373,6 +512,95 @@ export interface NodejsRequestLike {
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Interface: TransactionEvidence
+
+Untrusted transaction evidence. The optional txid is only a consistency hint.
+
+```ts
+export interface TransactionEvidence {
+    beef: number[];
+    outputIndex: number;
+    txid?: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: TransactionEvidenceContext
+
+Caller-controlled trust configuration; never populate this from lookup metadata.
+
+```ts
+export interface TransactionEvidenceContext {
+    chainTracker: ChainTracker;
+    chainNamespace: string;
+    policyId: string;
+    verifier?: BdkVerifierInterface;
+}
+```
+
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [ChainTracker](./transaction.md#interface-chaintracker)
+
+#### Property chainNamespace
+
+Network/genesis identifier or an explicit application chain namespace.
+
+```ts
+chainNamespace: string
+```
+
+#### Property policyId
+
+Semantic verification policy/backend version; change it when policy changes.
+
+```ts
+policyId: string
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: TransactionEvidenceCoordinatorOptions
+
+```ts
+export interface TransactionEvidenceCoordinatorOptions extends TransactionEvidenceContext {
+    limits?: Partial<TransactionEvidenceLimits>;
+}
+```
+
+See also: [TransactionEvidenceContext](./transaction.md#interface-transactionevidencecontext), [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: TransactionEvidenceLimits
+
+Local admission policy, not consensus limits. Byte limits count serialized bytes.
+
+```ts
+export interface TransactionEvidenceLimits {
+    candidateBytes: number;
+    retainedBytes: number;
+    transactions: number;
+    inputs: number;
+    scriptBytes: number;
+    scriptMemoryBytes: number;
+    candidatesPerTransaction: number;
+    pendingTransactions: number;
+    concurrentTransactions: number;
+    pendingChainCalls: number;
+    consumers: number;
+    cacheEntries: number;
+    cacheAgeMs: number;
+    attemptTimeoutMs: number;
+    requestTimeoutMs: number;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Interface: TransactionInput
 
 Represents an input to a Bitcoin transaction.
@@ -445,6 +673,24 @@ See also: [LockingScript](./script.md#class-lockingscript)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Interface: VerifiedTransactionOutput
+
+Verified transaction inclusion/ancestry; no service relevance or unspentness claim.
+
+```ts
+export interface VerifiedTransactionOutput {
+    readonly txid: string;
+    readonly outputIndex: number;
+    readonly outpoint: string;
+    readonly lockingScript: LockingScript;
+}
+```
+
+See also: [LockingScript](./script.md#class-lockingscript)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Interface: WhatsOnChainConfig
 
 Configuration options for the WhatsOnChain ChainTracker.
@@ -480,19 +726,15 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Classes
 
-| |
-| --- |
-| [ARC](#class-arc) |
-| [Beef](#class-beef) |
-| [BeefParty](#class-beefparty) |
-| [BeefTx](#class-beeftx) |
-| [FetchHttpClient](#class-fetchhttpclient) |
-| [LivePolicy](#class-livepolicy) |
-| [MerklePath](#class-merklepath) |
-| [NodejsHttpClient](#class-nodejshttpclient) |
-| [SatoshisPerKilobyte](#class-satoshisperkilobyte) |
-| [Transaction](#class-transaction) |
-| [WhatsOnChain](#class-whatsonchain) |
+| | |
+| --- | --- |
+| [ARC](#class-arc) | [MerklePath](#class-merklepath) |
+| [Beef](#class-beef) | [NodejsHttpClient](#class-nodejshttpclient) |
+| [BeefParty](#class-beefparty) | [SatoshisPerKilobyte](#class-satoshisperkilobyte) |
+| [BeefTx](#class-beeftx) | [Transaction](#class-transaction) |
+| [EvidenceScriptWork](#class-evidencescriptwork) | [TransactionEvidenceCoordinator](#class-transactionevidencecoordinator) |
+| [FetchHttpClient](#class-fetchhttpclient) | [TransactionEvidenceError](#class-transactionevidenceerror) |
+| [LivePolicy](#class-livepolicy) | [WhatsOnChain](#class-whatsonchain) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -600,12 +842,18 @@ export class Beef {
     version: number = BEEF_V2;
     atomicTxid: string | undefined = undefined;
     constructor(version: number = BEEF_V2) 
+    isAtomic(txid: string = this.atomicTxid ?? ""): boolean 
     findTxid(txid: string): BeefTx | undefined 
     makeTxidOnly(txid: string): BeefTx | undefined 
     findBump(txid: string): MerklePath | undefined 
     findTransactionForSigning(txid: string): Transaction | undefined 
     findAtomicTransaction(txid: string): Transaction | undefined 
     mergeBump(bump: MerklePath): number 
+    mergeProvenTxs(entries: Array<{
+        rawTx: number[] | Uint8Array;
+        merklePath: MerklePath;
+        merkleRoot?: string;
+    }>): BeefTx[] 
     mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx 
     mergeTransaction(tx: Transaction): BeefTx 
     removeExistingTxid(txid: string): void 
@@ -626,6 +874,7 @@ export class Beef {
     toHex(): string 
     static fromReader(br: Reader | ReaderUint8Array): Beef 
     static fromBinary(bin: number[] | Uint8Array): Beef 
+    static fromBinaryView(bin: Uint8Array): Beef 
     static fromString(s: string, enc: "hex" | "utf8" | "base64" = "hex"): Beef 
     sortTxs(): {
         missingInputs: string[];
@@ -750,6 +999,16 @@ Argument Details
 + **bin**
   + The binary array or Uint8Array from which to construct BEEF
 
+#### Method fromBinaryView
+
+Parses BEEF while retaining zero-copy views over `bin`. The caller must not
+mutate the buffer for the lifetime of the returned object.
+
+```ts
+static fromBinaryView(bin: Uint8Array): Beef 
+```
+See also: [Beef](./transaction.md#class-beef)
+
 #### Method fromString
 
 Constructs an instance of the Beef class based on the provided string
@@ -779,6 +1038,16 @@ getValidTxids(): string[]
 Returns
 
 array of transaction txids that either have a proof or whose inputs chain back to a proven transaction.
+
+#### Method isAtomic
+
+Checks the BRC-95 transaction-inclusion rule without requiring header-root
+validation: the subject must exist and every included transaction must be
+in its recursive dependency graph.
+
+```ts
+isAtomic(txid: string = this.atomicTxid ?? ""): boolean 
+```
 
 #### Method isValid
 
@@ -830,6 +1099,24 @@ See also: [MerklePath](./transaction.md#class-merklepath)
 Returns
 
 index of merged bump
+
+#### Method mergeProvenTxs
+
+Merge several independently proven transactions in one mutation pass.
+
+This is equivalent to calling `mergeRawTx` followed by `mergeBump` for
+every entry, but synchronizes nested BEEF state only once. That distinction
+matters for wallets assembling a BEEF from a fragmented UTXO set because
+proof paths are otherwise re-scanned after every input.
+
+```ts
+mergeProvenTxs(entries: Array<{
+    rawTx: number[] | Uint8Array;
+    merklePath: MerklePath;
+    merkleRoot?: string;
+}>): BeefTx[] 
+```
+See also: [BeefTx](./transaction.md#class-beeftx), [MerklePath](./transaction.md#class-merklepath)
 
 #### Method mergeRawTx
 
@@ -926,7 +1213,7 @@ Serialize this Beef as AtomicBEEF.
 
 `txid` must exist
 
-after sorting, if txid is not last txid, creates a clone and removes newer txs
+includes exactly the subject transaction and its recursive dependencies
 
 ```ts
 toBinaryAtomic(txid: string): number[] 
@@ -976,7 +1263,7 @@ Serialize this Beef as AtomicBEEF.
 
 `txid` must exist
 
-after sorting, if txid is not last txid, creates a clone and removes newer txs
+includes exactly the subject transaction and its recursive dependencies
 
 ```ts
 toUint8ArrayAtomic(txid: string): Uint8Array 
@@ -1083,14 +1370,14 @@ The size and redundancy of these Beefs becomes a problem when chained transactio
 
 ```ts
 export class BeefParty extends Beef {
-    knownTo: Record<string, Record<string, boolean>> = {};
+    knownTo: Record<string, Record<string, boolean>> = Object.create(null) as Record<string, Record<string, boolean>>;
     constructor(parties?: string[]) 
     isParty(party: string): boolean 
     addParty(party: string): void 
     getKnownTxidsForParty(party: string): string[] 
     getTrimmedBeefForParty(party: string): Beef 
     addKnownTxidsForParty(party: string, knownTxids: string[]): void 
-    mergeBeefFromParty(party: string, beef: number[] | Beef): void 
+    mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void 
 }
 ```
 
@@ -1113,7 +1400,7 @@ keys are party identifiers.
 values are records of txids with truthy value for which the party already has validity proof.
 
 ```ts
-knownTo: Record<string, Record<string, boolean>> = {}
+knownTo: Record<string, Record<string, boolean>> = Object.create(null) as Record<string, Record<string, boolean>>
 ```
 
 #### Method addKnownTxidsForParty
@@ -1177,7 +1464,7 @@ corresponding to transactions for which `party`
 has raw transaction and validity proof data.
 
 ```ts
-mergeBeefFromParty(party: string, beef: number[] | Beef): void 
+mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void 
 ```
 See also: [Beef](./transaction.md#class-beef)
 
@@ -1210,7 +1497,8 @@ export default class BeefTx {
     get tx(): Transaction | undefined 
     get rawTx(): number[] | undefined 
     get rawTxUint8Array(): Uint8Array | undefined 
-    constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number) 
+    syncRawTxFromTransaction(): boolean 
+    constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[]) 
     static fromTx(tx: Transaction, bumpIndex?: number): BeefTx 
     static fromRawTx(rawTx: Uint8Array | number[], bumpIndex?: number): BeefTx 
     static fromTxid(txid: string, bumpIndex?: number): BeefTx 
@@ -1224,7 +1512,7 @@ See also: [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitive
 #### Constructor
 
 ```ts
-constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number) 
+constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[]) 
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -1244,6 +1532,34 @@ Typically set by sorting transactions by proven dependency chains.
 ```ts
 isValid?: boolean = undefined
 ```
+
+#### Method syncRawTxFromTransaction
+
+Synchronizes a nested transaction after mutation through the normal
+Transaction APIs. Returns true when its serialized identity or dependencies
+changed.
+
+```ts
+syncRawTxFromTransaction(): boolean 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Class: EvidenceScriptWork
+
+Internal cache. Only coordinator-owned transactions are bound to its scope below.
+
+```ts
+export class EvidenceScriptWork {
+    constructor(private readonly limits: Readonly<TransactionEvidenceLimits>) 
+    clear(): void 
+    inputs(scope: EvidenceScriptScope, params: BdkVerifyScriptsParams, verify: (skipScripts: boolean) => InputResult): InputResult 
+    async batch(scope: EvidenceScriptScope, params: readonly BdkVerifyScriptsParams[], backend: BdkVerifierInterface): Promise<boolean[]> 
+}
+```
+
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [BdkVerifyScriptsParams](./transaction.md#interface-bdkverifyscriptsparams), [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits), [verify](./compat.md#variable-verify)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1273,7 +1589,7 @@ Extends SatoshisPerKilobyte to reuse transaction size calculation logic.
 export default class LivePolicy extends SatoshisPerKilobyte {
     constructor(cacheValidityMs: number = 5 * 60 * 1000) 
     static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy 
-    async computeFee(tx: Transaction): Promise<number> 
+    override async computeFee(tx: Transaction): Promise<number> 
 }
 ```
 
@@ -1298,7 +1614,7 @@ Computes the fee for a given transaction using the current live rate.
 Overrides the parent method to use dynamic rate fetching.
 
 ```ts
-async computeFee(tx: Transaction): Promise<number> 
+override async computeFee(tx: Transaction): Promise<number> 
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -1356,15 +1672,15 @@ export default class MerklePath {
         duplicate?: boolean;
     }>>;
     static fromHex(hex: string): MerklePath 
-    static fromReader(reader: Reader | ReaderUint8Array, legalOffsetsOnly: boolean = true): MerklePath 
-    static fromBinary(bump: number[] | Uint8Array): MerklePath 
+    static fromReader(reader: Reader | ReaderUint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
+    static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
     static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath 
     constructor(blockHeight: number, path: Array<Array<{
         offset: number;
         hash?: string;
         txid?: boolean;
         duplicate?: boolean;
-    }>>, legalOffsetsOnly: boolean = true) 
+    }>>, legalOffsetsOnly: boolean = true, validateRoots: boolean = true) 
     toWriter(writer: Writer | WriterUint8Array): void 
     toBinary(): number[] 
     toBinaryUint8Array(): Uint8Array 
@@ -1474,7 +1790,7 @@ See also: [MerklePathLeaf](./transaction.md#interface-merklepathleaf)
 Creates a MerklePath instance from a binary array.
 
 ```ts
-static fromBinary(bump: number[] | Uint8Array): MerklePath 
+static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
 ```
 See also: [MerklePath](./transaction.md#class-merklepath)
 
@@ -1696,8 +2012,12 @@ export default class Transaction {
     lockTime: number;
     metadata: Record<string, any>;
     merklePath?: MerklePath;
+    getSignatureHashCache(): SignatureHashCache 
+    materializeSourceTXIDs(): void 
     static fromBEEF(beef: number[] | Uint8Array, txid?: string): Transaction 
+    static fromBEEFView(beef: Uint8Array, txid?: string): Transaction 
     static fromAtomicBEEF(beef: number[] | Uint8Array): Transaction 
+    static fromAtomicBEEFView(beef: Uint8Array): Transaction 
     static fromEF(ef: number[] | Uint8Array): Transaction 
     static parseScriptOffsets(bin: number[] | Uint8Array): {
         inputs: Array<{
@@ -1713,6 +2033,7 @@ export default class Transaction {
     } 
     static fromReader(br: Reader | ReaderUint8Array): Transaction 
     static fromBinary(bin: number[] | Uint8Array): Transaction 
+    static fromBinaryView(bin: Uint8Array): Transaction 
     static fromHex(hex: string): Transaction 
     static fromHexEF(hex: string): Transaction 
     static fromHexBEEF(hex: string, txid?: string): Transaction 
@@ -1723,13 +2044,15 @@ export default class Transaction {
     updateMetadata(metadata: Record<string, any>): void 
     async fee(modelOrFee: FeeModel | number = LivePolicy.getInstance(), changeDistribution: "equal" | "random" = "equal"): Promise<void> 
     getFee(): number 
-    async sign(): Promise<void> 
+    async sign(options: {
+        skipExistingSignatures?: boolean;
+    } = {}): Promise<void> 
     async broadcast(broadcaster: Broadcaster = defaultBroadcaster()): Promise<BroadcastResponse | BroadcastFailure> 
     toBinary(): number[] 
     toUint8Array(): Uint8Array 
     toEF(): number[] 
     toEFUint8Array(): Uint8Array 
-    toEFBinary(): Uint8Array
+    toEFBinary(): Uint8Array 
     toHexEF(): string 
     toHex(): string 
     toHexBEEF(): string 
@@ -1738,10 +2061,11 @@ export default class Transaction {
     id(): number[];
     id(enc: "hex"): string;
     id(enc?: "hex"): number[] | string 
-    async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number): Promise<boolean> 
+    async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean> 
     writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void 
     toBEEF(allowPartial?: boolean): number[] 
     toBEEFUint8Array(allowPartial?: boolean): Uint8Array 
+    toBEEFBytes(allowPartial?: boolean): Uint8Array 
     toAtomicBEEF(allowPartial?: boolean): number[] 
     toAtomicBEEFUint8Array(allowPartial?: boolean): Uint8Array 
     async completeWithWallet(wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void> 
@@ -1749,7 +2073,7 @@ export default class Transaction {
 }
 ```
 
-See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [ChainTracker](./transaction.md#interface-chaintracker), [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [FeeModel](./transaction.md#interface-feemodel), [LivePolicy](./transaction.md#class-livepolicy), [LockingScript](./script.md#class-lockingscript), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [defaultBroadcaster](./transaction.md#function-defaultbroadcaster), [defaultChainTracker](./transaction.md#function-defaultchaintracker), [sign](./compat.md#variable-sign), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [ChainTracker](./transaction.md#interface-chaintracker), [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [FeeModel](./transaction.md#interface-feemodel), [LivePolicy](./transaction.md#class-livepolicy), [LockingScript](./script.md#class-lockingscript), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [defaultBroadcaster](./transaction.md#function-defaultbroadcaster), [defaultChainTracker](./transaction.md#function-defaultchaintracker), [sign](./compat.md#variable-sign), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
 
 #### Method addInput
 
@@ -1918,6 +2242,16 @@ Argument Details
 + **bin**
   + The binary array representation of the transaction.
 
+#### Method fromBinaryView
+
+Parses a transaction while retaining zero-copy views over `bin` for the raw
+transaction and its scripts. The caller must not mutate `bin`.
+
+```ts
+static fromBinaryView(bin: Uint8Array): Transaction 
+```
+See also: [Transaction](./transaction.md#class-transaction)
+
 #### Method fromEF
 
 Creates a new transaction, linked to its inputs and their associated merkle paths, from a EF (BRC-30) structure.
@@ -2007,6 +2341,16 @@ Returns
 
 The current transaction fee
 
+#### Method getSignatureHashCache
+
+Returns the transaction-wide signature hash cache active during signing.
+Callers outside a signing operation receive an isolated cache.
+
+```ts
+getSignatureHashCache(): SignatureHashCache 
+```
+See also: [SignatureHashCache](./primitives.md#interface-signaturehashcache)
+
 #### Method hash
 
 Calculates the transaction's hash.
@@ -2069,6 +2413,15 @@ Argument Details
 
 + **enc**
   + The encoding to use for the ID. If 'hex', returns a hexadecimal string; otherwise returns a binary array.
+
+#### Method materializeSourceTXIDs
+
+Iteratively materializes source transaction IDs so deep spend chains do not
+recurse through `hash()` while serializing their parents.
+
+```ts
+materializeSourceTXIDs(): void 
+```
 
 #### Method parseScriptOffsets
 
@@ -2133,8 +2486,15 @@ Argument Details
 Signs a transaction, hydrating all its unlocking scripts based on the provided script templates where they are available.
 
 ```ts
-async sign(): Promise<void> 
+async sign(options: {
+    skipExistingSignatures?: boolean;
+} = {}): Promise<void> 
 ```
+
+Argument Details
+
++ **options**
+  + Signing behavior. Set `skipExistingSignatures` to preserve inputs that already have an unlocking script.
 
 #### Method toAtomicBEEF
 
@@ -2205,6 +2565,14 @@ Throws
 
 Error if there are any missing sourceTransactions unless `allowPartial` is true.
 
+#### Method toBEEFBytes
+
+Serializes BEEF to a real typed byte array.
+
+```ts
+toBEEFBytes(allowPartial?: boolean): Uint8Array 
+```
+
 #### Method toBEEFUint8Array
 
 Serializes this transaction, together with its inputs and the respective merkle proofs, into the BEEF (BRC-62) format. This enables efficient verification of its compliance with the rules of SPV.
@@ -2250,6 +2618,18 @@ Returns
 
 - The BRC-30 EF representation of the transaction.
 
+#### Method toEFBinary
+
+Converts the transaction to a memoized BRC-30 EF byte array.
+
+```ts
+toEFBinary(): Uint8Array 
+```
+
+Returns
+
+The cached BRC-30 EF representation.
+
 #### Method toEFUint8Array
 
 Converts the transaction to a BRC-30 EF format.
@@ -2261,20 +2641,6 @@ toEFUint8Array(): Uint8Array
 Returns
 
 - The BRC-30 EF representation of the transaction.
-
-#### Method toEFBinary
-
-Converts the transaction to a memoized BRC-30 EF byte array. The returned view
-is reused until transaction or referenced source-output serialization state
-changes and must be treated as immutable; call `.slice()` for a mutable copy.
-
-```ts
-toEFBinary(): Uint8Array
-```
-
-Returns
-
-The cached BRC-30 EF representation.
 
 #### Method toHex
 
@@ -2342,9 +2708,9 @@ Argument Details
 Verifies the legitimacy of the Bitcoin transaction according to the rules of SPV by ensuring all the input transactions link back to valid block headers, the chain of spends for all inputs are valid, and the sum of inputs is not less than the sum of outputs.
 
 ```ts
-async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number): Promise<boolean> 
+async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean> 
 ```
-See also: [ChainTracker](./transaction.md#interface-chaintracker), [FeeModel](./transaction.md#interface-feemodel), [defaultChainTracker](./transaction.md#function-defaultchaintracker)
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [ChainTracker](./transaction.md#interface-chaintracker), [FeeModel](./transaction.md#interface-feemodel), [defaultChainTracker](./transaction.md#function-defaultchaintracker)
 
 Returns
 
@@ -2357,8 +2723,11 @@ Argument Details
 + **feeModel**
   + An instance of FeeModel, a fee model to use for fee calculation. If not provided then the default fee model will be used.
 + **memoryLimit**
-  + Optional caller-supplied local interpreter memory budget. If omitted,
-post-Genesis validation does not impose an arbitrary SDK memory cap.
+  + Optional caller-supplied local script-interpreter
+memory budget. If omitted, post-Genesis validation does not impose an
+arbitrary SDK memory cap.
++ **verifier**
+  + An optional asynchronous script backend. Adaptive backends may decline before execution to preserve the JavaScript path.
 
 Example
 
@@ -2389,6 +2758,88 @@ Argument Details
 Throws
 
 Error if there are any missing sourceTransactions unless `allowPartial` is true.
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Class: TransactionEvidenceCoordinator
+
+Bounded, process-local transaction evidence work sharing. This is independent of
+lookup services, certificates and trust ratings. Positive reuse always checks
+canonical anchors again; ChainTracker remains the caller's trusted chain source.
+Synchronous parsing/script execution is byte/memory bounded, not preemptible.
+
+```ts
+export class TransactionEvidenceCoordinator {
+    readonly limits: Readonly<TransactionEvidenceLimits>;
+    constructor(options: TransactionEvidenceCoordinatorOptions) 
+    setContext(context: TransactionEvidenceContext): void 
+    dispose(): void 
+    async verify(evidence: TransactionEvidence, options: {
+        signal?: AbortSignal;
+    } = {}): Promise<VerifiedTransactionOutput> 
+    getStats(): {
+        pendingTransactions: number;
+        consumers: number;
+        cachedTransactions: number;
+        retainedBytes: number;
+        pendingChainCalls: number;
+        activeAttempts: number;
+    } 
+}
+```
+
+See also: [TransactionEvidence](./transaction.md#interface-transactionevidence), [TransactionEvidenceContext](./transaction.md#interface-transactionevidencecontext), [TransactionEvidenceCoordinatorOptions](./transaction.md#interface-transactionevidencecoordinatoroptions), [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits), [VerifiedTransactionOutput](./transaction.md#interface-verifiedtransactionoutput), [verify](./compat.md#variable-verify)
+
+#### Method getStats
+
+Payload-free local diagnostics; pending calls include abandoned, non-abortable I/O.
+
+```ts
+getStats(): {
+    pendingTransactions: number;
+    consumers: number;
+    cachedTransactions: number;
+    retainedBytes: number;
+    pendingChainCalls: number;
+    activeAttempts: number;
+} 
+```
+
+#### Method setContext
+
+Explicit session/network/policy change. Stale in-flight work cannot publish.
+
+```ts
+setContext(context: TransactionEvidenceContext): void 
+```
+See also: [TransactionEvidenceContext](./transaction.md#interface-transactionevidencecontext)
+
+#### Method verify
+
+Snapshot intake is synchronous up to the returned Promise's first await.
+
+```ts
+async verify(evidence: TransactionEvidence, options: {
+    signal?: AbortSignal;
+} = {}): Promise<VerifiedTransactionOutput> 
+```
+See also: [TransactionEvidence](./transaction.md#interface-transactionevidence), [VerifiedTransactionOutput](./transaction.md#interface-verifiedtransactionoutput)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Class: TransactionEvidenceError
+
+Bounded, payload-free outcome; rejected receipts never permanently reject a txid.
+
+```ts
+export class TransactionEvidenceError extends Error {
+    constructor(public readonly code: TransactionEvidenceErrorCode) 
+}
+```
+
+See also: [TransactionEvidenceErrorCode](./transaction.md#type-transactionevidenceerrorcode)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2433,19 +2884,34 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Functions
 
-| |
-| --- |
-| [defaultBroadcaster](#function-defaultbroadcaster) |
-| [defaultChainTracker](#function-defaultchaintracker) |
-| [defaultHttpClient](#function-defaulthttpclient) |
-| [executeNodejsRequest](#function-executenodejsrequest) |
-| [isBroadcastFailure](#function-isbroadcastfailure) |
-| [isBroadcastResponse](#function-isbroadcastresponse) |
+| | |
+| --- | --- |
+| [assertEvidenceUnchanged](#function-assertevidenceunchanged) | [isBroadcastResponse](#function-isbroadcastresponse) |
+| [defaultBroadcaster](#function-defaultbroadcaster) | [isChainTracker](#function-ischaintracker) |
+| [defaultChainTracker](#function-defaultchaintracker) | [parseEvidence](#function-parseevidence) |
+| [defaultHttpClient](#function-defaulthttpclient) | [registerScriptVerificationBackend](#function-registerscriptverificationbackend) |
+| [evidenceError](#function-evidenceerror) | [scopedScriptBackend](#function-scopedscriptbackend) |
+| [evidenceScriptScope](#function-evidencescriptscope) | [scriptVerificationBackend](#function-scriptverificationbackend) |
+| [executeNodejsRequest](#function-executenodejsrequest) | [unregisterScriptVerificationBackend](#function-unregisterscriptverificationbackend) |
+| [isBroadcastFailure](#function-isbroadcastfailure) | [withEvidenceScriptWork](#function-withevidencescriptwork) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 
+### Function: assertEvidenceUnchanged
+
+Fence all owned transaction/proof bytes, including backend readiness callbacks.
+
+```ts
+export function assertEvidenceUnchanged(candidate: EvidenceCandidate): void 
+```
+
+See also: [EvidenceCandidate](./transaction.md#interface-evidencecandidate)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: defaultBroadcaster
 
 ```ts
@@ -2471,14 +2937,38 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: defaultHttpClient
 
 Returns a default HttpClient implementation based on the environment that it is run on.
-This method will attempt to use `window.fetch` if available (in browser environments).
-If running in a Node environment, it falls back to using the Node `https` module
+This method will attempt to use `window.fetch` if available (in browser environments),
+then `globalThis.fetch` (service workers, Deno, Node 18+), then the Node `https` module.
 
 ```ts
 export function defaultHttpClient(): HttpClient 
 ```
 
 See also: [HttpClient](./transaction.md#interface-httpclient)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: evidenceError
+
+Keep bounded-work outcomes distinct without exposing errors containing evidence.
+
+```ts
+export function evidenceError(error: unknown): TransactionEvidenceError 
+```
+
+See also: [TransactionEvidenceError](./transaction.md#class-transactionevidenceerror)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: evidenceScriptScope
+
+```ts
+export function evidenceScriptScope(tx: Transaction): EvidenceScriptScope | undefined 
+```
+
+See also: [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [Transaction](./transaction.md#class-transaction)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2534,12 +3024,100 @@ See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [Broa
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: isChainTracker
+
+Convenience type guard for a `ChainTracker` implementation.
+Optional verification-context methods are not required.
+
+```ts
+export function isChainTracker(value: unknown): value is ChainTracker 
+```
+
+See also: [ChainTracker](./transaction.md#interface-chaintracker)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: parseEvidence
+
+```ts
+export function parseEvidence(evidence: TransactionEvidence, limits: TransactionEvidenceLimits): EvidenceCandidate 
+```
+
+See also: [EvidenceCandidate](./transaction.md#interface-evidencecandidate), [TransactionEvidence](./transaction.md#interface-transactionevidence), [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: registerScriptVerificationBackend
+
+Installs a process/page-wide optional script backend.
+
+```ts
+export function registerScriptVerificationBackend(backend: ScriptVerificationBackend): void 
+```
+
+See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: scopedScriptBackend
+
+```ts
+export function scopedScriptBackend(scope: EvidenceScriptScope, backend: BdkVerifierInterface): BdkVerifierInterface 
+```
+
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: scriptVerificationBackend
+
+Returns the currently registered optional script backend, if any.
+
+```ts
+export function scriptVerificationBackend(): ScriptVerificationBackend | undefined 
+```
+
+See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: unregisterScriptVerificationBackend
+
+Removes `backend` if it is still the active optional implementation.
+
+```ts
+export function unregisterScriptVerificationBackend(backend: ScriptVerificationBackend): void 
+```
+
+See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: withEvidenceScriptWork
+
+```ts
+export async function withEvidenceScriptWork<T>(tx: Transaction, scope: EvidenceScriptScope, verify: () => Promise<T>): Promise<T> 
+```
+
+See also: [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [Transaction](./transaction.md#class-transaction), [verify](./compat.md#variable-verify)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ## Types
 
 | |
 | --- |
 | [Fetch](#type-fetch) |
 | [HttpClientResponse](#type-httpclientresponse) |
+| [ScriptVerificationBackend](#type-scriptverificationbackend) |
+| [TransactionEvidenceErrorCode](#type-transactionevidenceerrorcode) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2581,6 +3159,28 @@ export type HttpClientResponse<T = any> = {
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Type: ScriptVerificationBackend
+
+Backend shape shared by transaction-graph and individual-Spend routing.
+
+```ts
+export type ScriptVerificationBackend = BdkVerifierInterface & SpendVerifierInterface
+```
+
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [SpendVerifierInterface](./script.md#interface-spendverifierinterface)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Type: TransactionEvidenceErrorCode
+
+```ts
+export type TransactionEvidenceErrorCode = "invalid-evidence" | "limit" | "cancelled" | "timeout" | "context-changed" | "disposed"
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ## Enums
 
 ### Enum: TX_DATA_FORMAT
@@ -2603,6 +3203,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [ATOMIC_BEEF](#variable-atomic_beef) |
 | [BEEF_V1](#variable-beef_v1) |
 | [BEEF_V2](#variable-beef_v2) |
+| [defaultTransactionEvidenceLimits](#variable-defaulttransactionevidencelimits) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2631,6 +3232,33 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 BEEF_V2 = 4022206466
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: defaultTransactionEvidenceLimits
+
+```ts
+defaultTransactionEvidenceLimits: Readonly<TransactionEvidenceLimits> = Object.freeze({
+    candidateBytes: 1024 * 1024,
+    retainedBytes: 16 * 1024 * 1024,
+    transactions: 256,
+    inputs: 4096,
+    scriptBytes: 256 * 1024,
+    scriptMemoryBytes: 16 * 1024 * 1024,
+    candidatesPerTransaction: 8,
+    pendingTransactions: 32,
+    concurrentTransactions: 4,
+    pendingChainCalls: 8,
+    consumers: 128,
+    cacheEntries: 128,
+    cacheAgeMs: 60000,
+    attemptTimeoutMs: 5000,
+    requestTimeoutMs: 15000
+})
+```
+
+See also: [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

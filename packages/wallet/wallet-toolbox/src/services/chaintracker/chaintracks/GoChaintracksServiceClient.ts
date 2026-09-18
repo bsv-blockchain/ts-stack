@@ -40,6 +40,8 @@ interface SseSubscription {
  * processing without a local WhatsOnChain polling ingestor.
  */
 export class GoChaintracksServiceClient implements ChaintracksClientApi {
+  /** SSE client; reorg registration is a supported additive capability. */
+  readonly supportsReorgEvents = true
   private readonly baseUrl: string
   private readonly fetcher: typeof fetch
   private readonly requestTimeoutMsecs: number

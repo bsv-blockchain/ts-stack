@@ -66,11 +66,19 @@ export interface LookupQueryOptions {
    * Callback intake budget, independent of legacy aggregation. Defaults to 512
    * outputs / 16 MiB of BEEF and context bytes. Values must be positive safe
    * integers. Coordinate these with a downstream verifier's admission limits.
+   * Precedence when both this and `limits.maxEvidenceOutputs`/`maxEvidenceBytes`
+   * are supplied for the same call: `evidenceLimits` wins, then `limits`, then
+   * the resolver's configured limits, then the library defaults.
    */
   evidenceLimits?: { maxOutputs?: number; maxBytes?: number }
   /** Whole attempt budget including discovery and queued hosts. Default 10000 ms. */
   deadlineMs?: number
-  /** Per-query operational resource limits. These do not define evidence validity. */
+  /**
+   * Per-query operational resource limits (discovery, transport and queueing
+   * bounds). `limits.maxEvidenceOutputs`/`maxEvidenceBytes` also set the
+   * evidence intake budget, but the `evidenceLimits` shorthand above takes
+   * precedence over these two fields when both are supplied.
+   */
   limits?: Partial<LookupLimits>
   /**
    * Owned, UNTRUSTED receipts before legacy txid/outpoint deduplication. Enqueue
@@ -1175,10 +1183,30 @@ export default class LookupResolver {
   }
 
   private lookupQueryLimits(options: LookupQueryOptions | undefined): LookupLimits {
-    return lookupLimits(this.limits, options?.limits, {
-      ...(options?.evidenceLimits?.maxOutputs === undefined ? {} : { maxEvidenceOutputs: options.evidenceLimits.maxOutputs }),
-      ...(options?.evidenceLimits?.maxBytes === undefined ? {} : { maxEvidenceBytes: options.evidenceLimits.maxBytes })
-    })
+    return lookupLimits(this.limits, options?.limits, this.evidenceLimitOverrides(options?.evidenceLimits))
+  }
+
+  /**
+   * Maps the `evidenceLimits` shorthand onto the unified `LookupLimits`
+   * evidence fields, validating eagerly (before any host is queried) so a
+   * misconfigured call fails the same way regardless of which spelling was
+   * used. `evidenceLimits` takes precedence over `options.limits` when both
+   * set the same field; see {@link LookupQueryOptions.evidenceLimits}.
+   */
+  private evidenceLimitOverrides(
+    evidenceLimits: LookupQueryOptions['evidenceLimits']
+  ): Partial<LookupLimits> {
+    if (evidenceLimits === undefined) return {}
+    const maxEvidenceOutputs = evidenceLimits.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxEvidenceOutputs
+    const maxEvidenceBytes = evidenceLimits.maxBytes ?? DEFAULT_LOOKUP_LIMITS.maxEvidenceBytes
+    if (
+      ![maxEvidenceOutputs, maxEvidenceBytes].every(
+        value => Number.isSafeInteger(value) && value > 0
+      )
+    ) {
+      throw new Error('Evidence intake limits must be positive safe integers')
+    }
+    return { maxEvidenceOutputs, maxEvidenceBytes }
   }
 
   private assertLookupDeadline(deadlineMs: number): void {

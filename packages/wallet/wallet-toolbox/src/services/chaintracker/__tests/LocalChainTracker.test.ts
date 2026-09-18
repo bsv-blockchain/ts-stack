@@ -1,4 +1,5 @@
 import type { ChaintracksClientApi } from '../chaintracks/Api/ChaintracksClientApi'
+import { ChaintracksServiceClient } from '../chaintracks/ChaintracksServiceClient'
 import { LocalChainTracker } from '../LocalChainTracker'
 
 const localHash = '01'.repeat(32)
@@ -40,7 +41,65 @@ function client(
   } as unknown as ChaintracksClientApi
 }
 
+class PromisingEventsClient extends ChaintracksServiceClient {
+  override readonly supportsReorgEvents = true
+}
+
 describe('LocalChainTracker', () => {
+  test('uses an event-unsupported HTTP fallback in remote-only mode without subscribing', async () => {
+    const local = client()
+    const fallback = new ChaintracksServiceClient('main', 'https://chaintracks.example')
+    expect(fallback.supportsReorgEvents).toBe(false)
+    jest.spyOn(fallback, 'findChainTipHash').mockResolvedValue('aa'.repeat(32))
+    jest.spyOn(fallback, 'subscribeReorgs')
+    const tracker = new LocalChainTracker({ local, fallbacks: [fallback], mode: 'remote-only' })
+
+    await expect(tracker.getVerificationContextToken()).resolves.toContain('aa'.repeat(32))
+    expect(fallback.subscribeReorgs).not.toHaveBeenCalled()
+    expect(local.findChainTipHash).not.toHaveBeenCalled()
+  })
+
+  test('does not hide a registration failure from a fallback that promises reorg events', async () => {
+    const fallback = new PromisingEventsClient('main', 'https://chaintracks.example')
+    expect(fallback.supportsReorgEvents).toBe(true)
+    jest.spyOn(fallback, 'findChainTipHash').mockResolvedValue('aa'.repeat(32))
+    const subscribe = jest.spyOn(fallback, 'subscribeReorgs')
+    const tracker = new LocalChainTracker({ local: client(), fallbacks: [fallback], mode: 'remote-only' })
+
+    await expect(tracker.getVerificationContextToken()).rejects.toThrow('Method not implemented.')
+    expect(subscribe).toHaveBeenCalled()
+  })
+
+  test('requires participating canonical identity and ignores unused providers', async () => {
+    const unusedLocal = client({ hash: 'aa'.repeat(32) })
+    const deadFallback = client({ tipError: new Error('fallback offline') })
+    const remoteOnly = new LocalChainTracker({
+      local: unusedLocal,
+      fallbacks: [deadFallback],
+      mode: 'remote-only'
+    })
+    await expect(remoteOnly.getVerificationContextToken()).rejects.toThrow('fallback offline')
+    expect(unusedLocal.findChainTipHash).not.toHaveBeenCalled()
+
+    const hangingLocal = client({ hash: 'aa'.repeat(32) })
+    const remoteWithoutFallback = new LocalChainTracker({ local: hangingLocal, mode: 'remote-only' })
+    await expect(remoteWithoutFallback.getVerificationContextToken()).rejects.toThrow(
+      'No canonical ChainTracks source is available'
+    )
+    expect(hangingLocal.findChainTipHash).not.toHaveBeenCalled()
+
+    const liveLocal = client({ hash: 'cc'.repeat(32) })
+    const unusedFallback = client({ tipError: new Error('fallback offline') })
+    const localPrimary = new LocalChainTracker({ local: liveLocal, fallbacks: [unusedFallback] })
+    await expect(localPrimary.getVerificationContextToken()).resolves.toContain('cc'.repeat(32))
+    expect(unusedFallback.findChainTipHash).not.toHaveBeenCalled()
+
+    const deadLocal = client({ tipError: new Error('local offline') })
+    const unusedLiveFallback = client({ hash: 'dd'.repeat(32) })
+    const localMissing = new LocalChainTracker({ local: deadLocal, fallbacks: [unusedLiveFallback] })
+    await expect(localMissing.getVerificationContextToken()).rejects.toThrow('local offline')
+    expect(unusedLiveFallback.findChainTipHash).not.toHaveBeenCalled()
+  })
   test('never overrides a definitive local rejection with a remote answer', async () => {
     const local = client({ valid: false })
     const fallback = client({ valid: true })
@@ -274,6 +333,172 @@ describe('LocalChainTracker', () => {
     expect(local.listening).toHaveBeenCalledTimes(1)
   })
 
+  test('fences an in-flight root validation while local clearing is deferred or fails', async () => {
+    let releaseRoot: (() => void) | undefined
+    let releaseClear: (() => void) | undefined
+    const rootPending = new Promise<void>(resolve => {
+      releaseRoot = resolve
+    })
+    const clearPending = new Promise<ChaintracksClientApi>(resolve => {
+      releaseClear = () => resolve(client())
+    })
+    const local = client()
+    ;(local.isValidRootForHeight as jest.Mock).mockImplementation(async () => {
+      await rootPending
+      return true
+    })
+    const tracker = new LocalChainTracker({ local, clearLocal: async () => await clearPending })
+    const validation = tracker.isValidRootForHeight('root', 100)
+    const clearing = tracker.clearLocalData()
+    releaseRoot!()
+    await expect(validation).rejects.toThrow('provider changed')
+    releaseClear!()
+    await expect(clearing).resolves.toMatchObject({ consistency: 'unchecked' })
+
+    const failed = new LocalChainTracker({
+      local: client(),
+      clearLocal: async () => {
+        throw new Error('reset failed')
+      }
+    })
+    await expect(failed.clearLocalData()).rejects.toThrow('reset failed')
+    await expect(failed.isValidRootForHeight('root', 100)).rejects.toThrow('provider changed')
+  })
+
+  test('drops a pending observer registration during reset and registers a fresh replacement observer', async () => {
+    let releaseSubscription: ((value: string) => void) | undefined
+    const pendingSubscription = new Promise<string>(resolve => {
+      releaseSubscription = resolve
+    })
+    const oldLocal = client()
+    ;(oldLocal as any).subscribeReorgs = jest.fn(async () => await pendingSubscription)
+    ;(oldLocal as any).unsubscribe = jest.fn(async () => true)
+    const replacement = client()
+    ;(replacement as any).subscribeReorgs = jest.fn(async () => 'fresh')
+    ;(replacement as any).unsubscribe = jest.fn(async () => true)
+    const tracker = new LocalChainTracker({ local: oldLocal, clearLocal: async () => replacement })
+
+    const staleToken = tracker.getVerificationContextToken()
+    const reset = tracker.clearLocalData()
+    releaseSubscription!('stale')
+    await expect(staleToken).rejects.toThrow('provider changed')
+    await reset
+    await expect(tracker.getVerificationContextToken()).resolves.toContain('eventEpoch')
+    expect((oldLocal as any).unsubscribe).toHaveBeenCalledWith('stale')
+    expect((replacement as any).subscribeReorgs).toHaveBeenCalledTimes(1)
+  })
+
+  test('does not invoke a superseded recovery hook when reset is overtaken during disposal', async () => {
+    let releaseUnsubscribe: (() => void) | undefined
+    const pendingUnsubscribe = new Promise<void>(resolve => {
+      releaseUnsubscribe = resolve
+    })
+    let sawUnsubscribe: (() => void) | undefined
+    const unsubscribed = new Promise<void>(resolve => {
+      sawUnsubscribe = resolve
+    })
+    const oldLocal = client({ hash: localHash })
+    ;(oldLocal as any).subscribeReorgs = jest.fn(async () => 'sub-1')
+    ;(oldLocal as any).unsubscribe = jest.fn(async () => {
+      sawUnsubscribe!()
+      await pendingUnsubscribe
+      return true
+    })
+    const recovered = client({ hash: agreedHash })
+    const recoverLocal = jest.fn(async () => recovered)
+    const replacement = client()
+    const clearLocal = jest.fn(async () => replacement)
+    const tracker = new LocalChainTracker({
+      local: oldLocal,
+      fallbacks: [client({ hash: agreedHash }), client({ hash: agreedHash })],
+      requiredConsistencyAgreement: 2,
+      autoRecover: true,
+      recoverLocal,
+      clearLocal
+    })
+    await tracker.getVerificationContextToken()
+
+    const recovering = tracker.checkConsistency()
+    await unsubscribed
+    const clearing = tracker.clearLocalData()
+    releaseUnsubscribe!()
+    await expect(recovering).resolves.toMatchObject({
+      consistency: 'error',
+      lastError: 'Local ChainTracks reset was superseded'
+    })
+    await expect(clearing).resolves.toMatchObject({ consistency: 'unchecked' })
+    expect(recoverLocal).not.toHaveBeenCalled()
+    expect(clearLocal).toHaveBeenCalledTimes(1)
+    expect(tracker.getLocalClient()).toBe(replacement)
+  })
+
+  test('does not invoke a superseded clear hook when reset is overtaken during disposal', async () => {
+    let releaseUnsubscribe: (() => void) | undefined
+    const pendingUnsubscribe = new Promise<void>(resolve => {
+      releaseUnsubscribe = resolve
+    })
+    let sawUnsubscribe: (() => void) | undefined
+    const unsubscribed = new Promise<void>(resolve => {
+      sawUnsubscribe = resolve
+    })
+    const oldLocal = client()
+    ;(oldLocal as any).subscribeReorgs = jest.fn(async () => 'sub-1')
+    ;(oldLocal as any).unsubscribe = jest.fn(async () => {
+      sawUnsubscribe!()
+      await pendingUnsubscribe
+      return true
+    })
+    const replacement = client()
+    const clearLocal = jest.fn(async () => replacement)
+    const tracker = new LocalChainTracker({ local: oldLocal, clearLocal })
+    await tracker.getVerificationContextToken()
+
+    const first = tracker.clearLocalData()
+    await unsubscribed
+    const second = tracker.clearLocalData()
+    releaseUnsubscribe!()
+    await expect(first).rejects.toThrow('superseded')
+    await expect(second).resolves.toMatchObject({ consistency: 'unchecked' })
+    expect(clearLocal).toHaveBeenCalledTimes(1)
+    expect(tracker.getLocalClient()).toBe(replacement)
+  })
+
+  test('keeps the newest clear replacement when concurrent resets complete out of order', async () => {
+    let resolveFirst: ((value: ChaintracksClientApi) => void) | undefined
+    let resolveSecond: ((value: ChaintracksClientApi) => void) | undefined
+    const first = new Promise<ChaintracksClientApi>(resolve => {
+      resolveFirst = resolve
+    })
+    const second = new Promise<ChaintracksClientApi>(resolve => {
+      resolveSecond = resolve
+    })
+    let firstHookEntered: (() => void) | undefined
+    const firstHook = new Promise<void>(resolve => {
+      firstHookEntered = resolve
+    })
+    const older = client({ valid: false })
+    const newer = client({ valid: true })
+    const clearLocal = jest
+      .fn()
+      .mockImplementationOnce(async () => {
+        firstHookEntered!()
+        return await first
+      })
+      .mockImplementationOnce(async () => await second)
+    const tracker = new LocalChainTracker({ local: client(), clearLocal })
+
+    const oldReset = tracker.clearLocalData()
+    await firstHook
+    const newReset = tracker.clearLocalData()
+    resolveSecond!(newer)
+    await newReset
+    resolveFirst!(older)
+    await expect(oldReset).rejects.toThrow('superseded')
+
+    expect(tracker.getLocalClient()).toBe(newer)
+    await expect(tracker.isValidRootForHeight('root', 100)).resolves.toBe(true)
+  })
+
   test('requires a configured clearing hook and resets local-primary status when cleared', async () => {
     const unconfigured = new LocalChainTracker({ local: client() })
     await expect(unconfigured.clearLocalData()).rejects.toThrow('Local ChainTracks clearing is not configured.')
@@ -285,6 +510,48 @@ describe('LocalChainTracker', () => {
       activeSource: 'local',
       consistency: 'unchecked'
     })
+  })
+
+  test('rejects a local validation result when the tracker mode changes in flight', async () => {
+    let release: (() => void) | undefined
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const local = client()
+    ;(local.isValidRootForHeight as jest.Mock).mockImplementation(async () => {
+      await pending
+      return true
+    })
+    const tracker = new LocalChainTracker({ local, fallbacks: [client({ valid: true })] })
+
+    const validation = tracker.isValidRootForHeight('root', 100)
+    tracker.setMode('remote-only')
+    release!()
+
+    await expect(validation).rejects.toThrow('provider changed')
+    expect(tracker.getVerificationContext()).toContain('local-chaintracks:[1,false,"remote-only"')
+  })
+
+  test('rejects a local height result when its nested provider context changes in flight', async () => {
+    let release: (() => void) | undefined
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    let providerContext = 0
+    const local = client()
+    ;(local.getPresentHeight as jest.Mock).mockImplementation(async () => {
+      await pending
+      return 101
+    })
+    ;(local as ChaintracksClientApi & { getVerificationContext: () => number }).getVerificationContext = () =>
+      providerContext
+    const tracker = new LocalChainTracker({ local })
+
+    const height = tracker.currentHeight()
+    providerContext++
+    release!()
+
+    await expect(height).rejects.toThrow('provider changed')
   })
 
   test('reports missing, unavailable, and sub-quorum consistency references', async () => {

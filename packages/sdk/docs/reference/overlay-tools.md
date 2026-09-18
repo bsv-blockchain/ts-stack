@@ -301,6 +301,9 @@ deadlineMs?: number
 Callback intake budget, independent of legacy aggregation. Defaults to 512
 outputs / 16 MiB of BEEF and context bytes. Values must be positive safe
 integers. Coordinate these with a downstream verifier's admission limits.
+Precedence when both this and `limits.maxEvidenceOutputs`/`maxEvidenceBytes`
+are supplied for the same call: `evidenceLimits` wins, then `limits`, then
+the resolver's configured limits, then the library defaults.
 
 ```ts
 evidenceLimits?: {
@@ -330,7 +333,10 @@ holdForUnknownHosts?: boolean
 
 #### Property limits
 
-Per-query operational resource limits. These do not define evidence validity.
+Per-query operational resource limits (discovery, transport and queueing
+bounds). `limits.maxEvidenceOutputs`/`maxEvidenceBytes` also set the
+evidence intake budget, but the `evidenceLimits` shorthand above takes
+precedence over these two fields when both are supplied.
 
 ```ts
 limits?: Partial<LookupLimits>
@@ -831,7 +837,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilitator {
     httpClient: typeof fetch;
     allowHTTP: boolean;
-    constructor(httpClient = fetch, allowHTTP: boolean = false) 
+    constructor(httpClient?: typeof fetch, allowHTTP: boolean = false) 
     async send(url: string, taggedBEEF: TaggedBEEF): Promise<STEAK> 
 }
 ```

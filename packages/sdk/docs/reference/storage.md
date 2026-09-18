@@ -37,9 +37,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface DownloaderConfig {
-    networkPreset: "mainnet" | "testnet" | "teratestnet" | "local";
+    networkPreset: LookupNetworkPreset;
 }
 ```
+
+See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

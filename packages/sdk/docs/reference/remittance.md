@@ -191,16 +191,6 @@ Description applied to created actions.
 description?: string
 ```
 
-#### Property internalizeProtocol
-
-Deprecated. BRC-29 settlements must be internalized as `wallet payment` so the
-recipient can verify and manage the derived output. The module rejects
-`basket insertion`; it is reserved for application-managed custom outputs.
-
-```ts
-internalizeProtocol?: "wallet payment" | "basket insertion"
-```
-
 #### Property labels
 
 Labels applied to created actions.

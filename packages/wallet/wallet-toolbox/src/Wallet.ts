@@ -63,6 +63,8 @@ import {
   MasterCertificate,
   Certificate,
   LookupResolver,
+  LookupAnswer,
+  VerifiableCertificate,
   AtomicBEEF,
   BEEF,
   KeyDeriverApi,
@@ -79,7 +81,12 @@ import { createAction, CreateActionResultX } from './signer/methods/createAction
 import { signAction, SignActionResultX } from './signer/methods/signAction'
 import { internalizeAction } from './signer/methods/internalizeAction'
 import { WalletSettingsManager } from './WalletSettingsManager'
-import { queryOverlay, transformVerifiableCertificatesWithTrust } from './utility/identityUtils'
+import {
+  IdentityEvidenceVerifier,
+  parseResults,
+  queryOverlayEvidence,
+  transformVerifiableCertificatesWithTrust
+} from './utility/identityUtils'
 import { maxPossibleSatoshis } from './storage/methods/generateChange'
 import { hasBrc177NoSendExpiryLabel, parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
 import { createNoSendExpiryAction } from './signer/methods/createNoSendExpiryAction'
@@ -363,6 +370,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
   }
 
   async destroy(): Promise<void> {
+    this._identityEvidenceClosed = true
+    this._identityEvidenceVerifier?.dispose()
+    this._overlayEvidenceCache.clear()
+    clearTimeout(this._overlayEvidenceExpiryTimer)
     await this.actionBatch.abort()
     await this.storage.destroy()
     if (this.privilegedKeyManager != null) this.privilegedKeyManager.destroyKey()
@@ -791,8 +802,101 @@ export class Wallet implements WalletInterface, ProtoWallet {
     trustSettings: Awaited<ReturnType<WalletSettingsManager['get']>>['trustSettings']
   }
 
-  /** 2-minute cache of queryOverlay() results keyed by normalized query */
-  private readonly _overlayCache: Map<string, { expiresAt: number; value: unknown }> = new Map()
+  /** Bounded two-minute untrusted receipts. Every use rechecks canonical evidence. */
+  private readonly _overlayEvidenceCache = new Map<string, { expiresAt: number; value: LookupAnswer; bytes: number }>()
+  private _overlayEvidenceExpiryTimer?: ReturnType<typeof setTimeout>
+  private _identityEvidenceVerifier?: IdentityEvidenceVerifier
+  private _identityEvidenceClosed = false
+
+  private pruneOverlayEvidence(): void {
+    for (const [key, value] of this._overlayEvidenceCache) {
+      if (value.expiresAt <= Date.now()) this._overlayEvidenceCache.delete(key)
+    }
+  }
+
+  private scheduleOverlayEvidenceExpiry(): void {
+    clearTimeout(this._overlayEvidenceExpiryTimer)
+    const expiresAt = Math.min(...[...this._overlayEvidenceCache.values()].map(value => value.expiresAt))
+    if (!Number.isFinite(expiresAt)) return
+    this._overlayEvidenceExpiryTimer = setTimeout(
+      () => {
+        this.pruneOverlayEvidence()
+        this.scheduleOverlayEvidenceExpiry()
+      },
+      Math.max(1, expiresAt - Date.now())
+    )
+    this._overlayEvidenceExpiryTimer.unref?.()
+  }
+
+  private async requireOverlayChainTracker(forceRefresh: boolean) {
+    if (this.services == null) {
+      if (forceRefresh) {
+        throw new WERR_INVALID_PARAMETER(
+          'services',
+          'valid in constructor arguments to be retreived here.'
+        )
+      }
+      return undefined
+    }
+    return await this.services.getChainTracker()
+  }
+
+  private async discoverOverlayCertificates(
+    query: unknown,
+    cacheKey: string,
+    forceRefresh: boolean,
+    now: number
+  ): Promise<VerifiableCertificate[]> {
+    const chainTracker = await this.requireOverlayChainTracker(forceRefresh)
+    if (chainTracker == null) return []
+    if (this._identityEvidenceClosed) return []
+    const chainNamespace = `wallet:${this.chain}`
+    if (
+      this._identityEvidenceVerifier?.chainTracker !== chainTracker ||
+      this._identityEvidenceVerifier.chainNamespace !== chainNamespace
+    ) {
+      this._identityEvidenceVerifier?.dispose()
+      this._identityEvidenceVerifier = new IdentityEvidenceVerifier(chainTracker, chainNamespace)
+    }
+    const verifier = this._identityEvidenceVerifier
+    this.pruneOverlayEvidence()
+    let cached = forceRefresh ? undefined : this._overlayEvidenceCache.get(cacheKey)
+    if (cached == null || cached.expiresAt <= now) {
+      const value = await queryOverlayEvidence(query, this.lookupResolver)
+      if (this._identityEvidenceClosed) return []
+      const bytes =
+        value.type === 'output-list'
+          ? value.outputs.reduce((total, output) => total + output.beef.length + (output.context?.length ?? 0), 0)
+          : 0
+      cached = { value, bytes, expiresAt: now + 2 * 60 * 1000 }
+      this._overlayEvidenceCache.delete(cacheKey)
+      let retained = [...this._overlayEvidenceCache.values()].reduce((total, entry) => total + entry.bytes, 0)
+      while (
+        this._overlayEvidenceCache.size > 0 &&
+        (this._overlayEvidenceCache.size >= 32 || retained + bytes > 16 * 1024 * 1024)
+      ) {
+        const oldest = this._overlayEvidenceCache.keys().next().value!
+        retained -= this._overlayEvidenceCache.get(oldest)!.bytes
+        this._overlayEvidenceCache.delete(oldest)
+      }
+      this._overlayEvidenceCache.set(cacheKey, cached)
+      this.scheduleOverlayEvidenceExpiry()
+    }
+    if (cached.value.type !== 'output-list') {
+      this._overlayEvidenceCache.delete(cacheKey)
+      return []
+    }
+    let certificates: VerifiableCertificate[]
+    try {
+      certificates = await parseResults(cached.value, chainTracker, verifier)
+    } catch (error) {
+      this._overlayEvidenceCache.delete(cacheKey)
+      throw error
+    }
+    // Failed evidence must allow another fetch, including after temporary chain unavailability.
+    if (certificates.length !== cached.value.outputs.length) this._overlayEvidenceCache.delete(cacheKey)
+    return certificates
+  }
 
   async discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs & { forceRefresh?: boolean },
@@ -831,25 +935,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
-    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
+    // --- Untrusted overlay response cache; verify again before use. ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByIdentityKey',
       identityKey: args.identityKey,
       certifiers
     })
 
-    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if (cached == null || cached.expiresAt <= now) {
-      const value = await queryOverlay({ identityKey: args.identityKey, certifiers }, this.lookupResolver)
-      cached = { value, expiresAt: now + TTL_MS }
-      this._overlayCache.set(cacheKey, cached)
-    }
-
-    if (!cached.value) {
-      return { totalCertificates: 0, certificates: [] }
-    }
-
-    return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
+    const certificates = await this.discoverOverlayCertificates(
+      { identityKey: args.identityKey, certifiers },
+      cacheKey,
+      forceRefresh,
+      now
+    )
+    return transformVerifiableCertificatesWithTrust(trustSettings, certificates)
   }
 
   async discoverByAttributes(
@@ -897,25 +996,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
       attributesKey = JSON.stringify(args.attributes, keys)
     }
 
-    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
+    // --- Untrusted overlay response cache; verify again before use. ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByAttributes',
       attributes: attributesKey,
       certifiers
     })
 
-    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if (cached == null || cached.expiresAt <= now) {
-      const value = await queryOverlay({ attributes: args.attributes, certifiers }, this.lookupResolver)
-      cached = { value, expiresAt: now + TTL_MS }
-      this._overlayCache.set(cacheKey, cached)
-    }
-
-    if (!cached.value) {
-      return { totalCertificates: 0, certificates: [] }
-    }
-
-    return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
+    const certificates = await this.discoverOverlayCertificates(
+      { attributes: args.attributes, certifiers },
+      cacheKey,
+      forceRefresh,
+      now
+    )
+    return transformVerifiableCertificatesWithTrust(trustSettings, certificates)
   }
 
   verifyReturnedTxidOnly(beef: Beef, knownTxids?: string[]): Beef {
@@ -1082,10 +1176,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     if (vargs.labels.includes(specOpThrowReviewActions)) throwDummyReviewActions()
     if (hasBrc177NoSendExpiryLabel(vargs.labels)) {
-      throw new WERR_INVALID_PARAMETER(
-        'labels',
-        'BRC-177 noSend expiry labels only on outgoing createAction requests'
-      )
+      throw new WERR_INVALID_PARAMETER('labels', 'BRC-177 noSend expiry labels only on outgoing createAction requests')
     }
 
     const r = await internalizeAction(this, auth, args)
