@@ -68,6 +68,15 @@ function outcome(error: unknown): TransactionEvidenceError {
 }
 
 /**
+ * Internal-only signal: this attempt was never started because every concurrency
+ * slot is in use (including slots still reserved by non-abortable, already-finished
+ * work). It is distinct from TransactionEvidenceError('limit') so a candidate that
+ * was merely displaced can be re-queued instead of treated as a tried-and-failed
+ * candidate.
+ */
+class ConcurrencyLimitSignal extends Error {}
+
+/**
  * Bounded, process-local transaction evidence work sharing. This is independent of
  * lookup services, certificates and trust ratings. Positive reuse always checks
  * canonical anchors again; ChainTracker remains the caller's trusted chain source.
@@ -364,6 +373,14 @@ export class TransactionEvidenceCoordinator {
           this.finish(job, positive)
           return
         } catch (error_) {
+          if (error_ instanceof ConcurrencyLimitSignal) {
+            // Never attempted: put it back rather than consuming it as a failure.
+            // Re-admission is driven only by an active attempt's own settle (via
+            // pump()); we do not loop or retry here, so this cannot spin.
+            job.candidates.unshift(candidate)
+            job.running = false
+            return
+          }
           error = outcome(error_)
         }
       }
@@ -379,8 +396,10 @@ export class TransactionEvidenceCoordinator {
     settled?: () => void
   ): Promise<T> {
     if (this.activeAttempts >= this.limits.concurrentTransactions) {
-      settled?.()
-      throw new TransactionEvidenceError('limit')
+      // The operation never started, so there is nothing for `settled` to release:
+      // any candidate bytes stay reserved and, for the candidate loop, the caller
+      // re-queues the candidate instead of discarding it.
+      throw new ConcurrencyLimitSignal()
     }
     this.activeAttempts++
     const controller = new AbortController()

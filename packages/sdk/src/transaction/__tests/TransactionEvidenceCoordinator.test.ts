@@ -265,6 +265,38 @@ async function twoAnchorFixture(): Promise<{
   return { tracker, tx, evidence: tx.toBEEF(), roots }
 }
 
+async function standaloneFixture(
+  keySeed: number
+): Promise<{ tx: Transaction; root: string; evidence: number[] }> {
+  const key = new PrivateKey(keySeed)
+  const p2pkh = new P2PKH()
+  const source = new Transaction()
+  source.addInput({
+    sourceTXID: '00'.repeat(32),
+    sourceOutputIndex: 0,
+    unlockingScript: Script.fromASM('OP_TRUE')
+  })
+  source.addOutput({ satoshis: 10, lockingScript: p2pkh.lock(key.toAddress()) })
+  source.merklePath = new MerklePath(height, [
+    [
+      { offset: 0, hash: source.id('hex'), txid: true },
+      { offset: 1, duplicate: true }
+    ]
+  ])
+  const root = source.merklePath.computeRoot(source.id('hex'))
+
+  const tx = new Transaction()
+  tx.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScriptTemplate: p2pkh.unlock(key)
+  })
+  tx.addOutput({ satoshis: 4, lockingScript: p2pkh.lock(key.toAddress()) })
+  tx.addOutput({ satoshis: 4, lockingScript: p2pkh.lock(key.toAddress()) })
+  await tx.sign()
+  return { tx, root, evidence: tx.toBEEF() }
+}
+
 function verifyParamsInJavaScript(params: BdkVerifyScriptsParams): boolean {
   const sigHashCache = { hashOutputsSingle: new Map() }
   for (const [inputIndex, input] of params.tx.inputs.entries()) {
@@ -798,6 +830,93 @@ describe('TransactionEvidenceCoordinator', () => {
     release.resolve()
     await expect(pending).resolves.toMatchObject({ outputIndex: 0 })
     expect(calls).toBeGreaterThanOrEqual(2)
+  })
+
+  it('re-queues a same-txid alternate candidate displaced by a concurrency-limited attempt instead of losing it', async () => {
+    const ghost = await standaloneFixture(90_001)
+    const jobA = await standaloneFixture(90_002)
+    const jobD = await standaloneFixture(90_003)
+
+    const tracker = new LocalChainTracker()
+    tracker.roots.add(ghost.root)
+    tracker.roots.add(jobD.root)
+    // jobA's original root is deliberately left out of tracker.roots so its
+    // first candidate fails and the coordinator must fall back to the second.
+
+    const scriptGate = deferred<void>()
+    const scriptEntered = deferred<void>()
+    const verifier: BdkVerifierInterface = {
+      supportsMemoryLimit: true,
+      verifyScripts: async params => verifyParamsInJavaScript(params),
+      verifyScriptsBatch: async params => {
+        if (params.some(one => one.tx.id('hex') === ghost.tx.id('hex'))) {
+          scriptEntered.resolve()
+          await scriptGate.promise
+        }
+        return params.map(verifyParamsInJavaScript)
+      }
+    }
+
+    const subject = coordinator(tracker, { concurrentTransactions: 2 }, verifier)
+
+    // 1. Create a "ghost": a consumer cancels while GHOST's script check (a
+    // non-abortable backend call, per "does not free a non-abortable backend
+    // slot..." above) is still in flight. The concurrency slot it holds is
+    // not released until that call actually settles, well after the job
+    // itself has been finished and removed from `this.work`.
+    const ghostAbort = new AbortController()
+    const ghostPromise = subject.verify(
+      { beef: ghost.evidence, outputIndex: 0 },
+      { signal: ghostAbort.signal }
+    )
+    await scriptEntered.promise
+    ghostAbort.abort()
+    await expectCode(ghostPromise, 'cancelled')
+    expect(subject.getStats()).toMatchObject({ pendingTransactions: 0, activeAttempts: 1 })
+
+    // 2. Build an alternate (good-root) candidate for job A's txid up front.
+    const alternate = Transaction.fromBEEF(jobA.evidence)
+    const altSource = alternate.inputs[0].sourceTransaction
+    if (altSource === undefined) throw new Error('fixture source is missing')
+    altSource.merklePath = new MerklePath(height, [
+      [
+        { offset: 0, hash: altSource.id('hex'), txid: true },
+        { offset: 1, hash: '5b'.repeat(32) }
+      ]
+    ])
+    tracker.roots.add(altSource.merklePath.computeRoot(altSource.id('hex')))
+
+    // 3. Admit job A with its (invalid-root) first candidate. Together with
+    // the ghost, this uses both of the coordinator's concurrency slots.
+    const badReceipt = subject.verify({ beef: jobA.evidence, outputIndex: 0 })
+    expect(subject.getStats().activeAttempts).toBe(2)
+
+    // 4. A third, unrelated transaction arrives while the coordinator is at
+    // capacity, so it must wait for a free slot.
+    const displacer = subject.verify({ beef: jobD.evidence, outputIndex: 0 })
+
+    // 5. Job A's alternate (good) candidate is admitted onto the SAME,
+    // already-running job.
+    const goodReceipt = subject.verify({ beef: alternate.toBEEF(), outputIndex: 1 })
+
+    // Job A's first (bad-root) candidate fails and frees a slot; the waiting
+    // job D is admitted into it before job A's own retry can reclaim it. If
+    // that freed-and-immediately-reclaimed slot causes job A's own alternate
+    // candidate to be discarded instead of re-queued, both of job A's
+    // consumers are lost even though the alternate candidate is valid.
+    // (Promise.allSettled, rather than three sequential `await expect`s,
+    // ensures an early rejection here is observed as a failing assertion
+    // instead of an unhandled rejection while a sibling promise is pending.)
+    const [badOutcome, goodOutcome, displacerOutcome] = await Promise.allSettled([
+      badReceipt,
+      goodReceipt,
+      displacer
+    ])
+    expect(badOutcome).toMatchObject({ status: 'fulfilled', value: { outputIndex: 0 } })
+    expect(goodOutcome).toMatchObject({ status: 'fulfilled', value: { outputIndex: 1 } })
+    expect(displacerOutcome).toMatchObject({ status: 'fulfilled', value: { outputIndex: 0 } })
+
+    scriptGate.resolve()
   })
 
   it('preflights approved duplicate and conflicting ancestry before warmed script work can be reused', async () => {

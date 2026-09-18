@@ -1,5 +1,6 @@
 import { ChaintracksChainTracker } from '../index.all'
 import { ChaintracksServiceClient } from '../chaintracks/ChaintracksServiceClient'
+import { BHServiceClient } from '../BHServiceClient'
 import { sdk } from '../../../index.client'
 import { BlockHeader } from '../../../sdk/WalletServices.interfaces'
 
@@ -214,6 +215,19 @@ describe('ChaintracksChaintracker tests', () => {
 
     await expect(tracker.getVerificationContextToken()).resolves.toContain('aa'.repeat(32))
     expect(provider.subscribeReorgs).not.toHaveBeenCalled()
+  })
+
+  test('obtains a verification context token from a BHServiceClient chaintracks source', async () => {
+    const provider = new BHServiceClient('main', 'https://headers.example', 'test-key')
+    expect(provider.supportsReorgEvents).toBe(false)
+    const tipHash = 'aa'.repeat(32)
+    jest.spyOn(provider, 'findChainTipHeader').mockResolvedValue({ ...HEADER_877599, hash: tipHash })
+    const subscribeReorgs = jest.spyOn(provider, 'subscribeReorgs')
+    const tracker = new ChaintracksChainTracker('main', provider)
+
+    await expect(tracker.getVerificationContextToken()).resolves.toContain(tipHash)
+    expect(provider.findChainTipHeader).toHaveBeenCalledTimes(1)
+    expect(subscribeReorgs).not.toHaveBeenCalled()
   })
 
   test('does not hide a registration failure from a built-in client that promises reorg events', async () => {
