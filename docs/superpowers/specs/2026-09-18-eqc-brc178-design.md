@@ -93,6 +93,11 @@ decisions below.
    `OverlayAdminTokenTemplate.decode` returns the advertiser's `identityKey`
    alongside `protocol`, `domain`, and `topicOrService`. `LookupResolver`
    discards the identity key; the EQC keeps it.
+10. **`AuthFetch` pays any well-formed HTTP 402.** Its 402 branch calls
+    `wallet.createAction` for whatever amount the server names, with no cap and
+    no option to disable it. The EQC talks to permissionlessly advertised
+    hosts, so an unguarded transport would let one malicious host drain the
+    wallet.
 
 ## Package
 
@@ -134,22 +139,22 @@ src/
     attestation.ts         attestation + delivery preimages, sign, verify
     fibonacci.ts           weights, payouts
     payment.ts             BRC-29 prefix/suffix encoding, payout scripts, envelope
+    params.ts              HostParams shared by client and host
+    encoding.ts            canonical base64 guard
     errors.ts              error codes
   client/
     EQC.ts                 orchestration
-    race.ts                pure ranking, injected clock
-    transport.ts           AuthFetch transport with per-host deadline
-    settlement.ts          createAction, output index re-check
+    race.ts                race window timing and pure ranking
+    consistency.ts         BRC-136 anchor assessment
+    transport.ts           AuthFetch transport with per-host deadline, never pays
+    settlement.ts          createAction, output re-check
     reputation.ts          ReputationStore + in-memory default
     discovery.ts           free SLAP bootstrap, identity keys, overrides, cache
   host/
     handlers.ts            params, query, collect
     pendingStore.ts        bounded TTL store
     paymentVerifier.ts     locate own output, check amount, internalize
-    providers/
-      overlayLookup.ts
-      messageList.ts
-      bytes.ts             relay-lookup, message-body
+    providers.ts           overlay-lookup, message-list, and byte providers
 ```
 
 Each unit has one purpose and is testable alone: `race.ts` takes attestation
@@ -191,8 +196,11 @@ class name for every other class. The testnet and TeraTestNet presets select
 Market options: `threshold` (3), `topK` (5), `raceMs` (400), `floorFeeSats`
 (1 000), `maxFeeSats` (2 000), `feeSats`, `queryTtlMs` (30 000),
 `hostTimeoutMs` (5 000), `hostsTtlMs` (300 000), `paramsTtlMs` (300 000),
-`reputation`, `transport`, `originator`, `clock`. `topK` must be at least
-`threshold` unless `threshold` is 1.
+`maxHosts` (16), `reputation`, `transport`, `originator`, `clock`, `now`.
+`topK` must be at least `threshold` unless `threshold` is 1. `maxHosts` bounds
+the fan-out, best reputation first. `clock` is a monotonic millisecond source
+for arrival stamps; `now` is wall-clock time for expiry, caches, and
+reputation.
 
 `query()` resolves to `queryId`, `contentHash`, `payload`, `supplement`,
 `ranking` (host, arrival offset, rank, payout), `txid`, `attestations`,
@@ -262,7 +270,7 @@ interface QueryProvider {
   ): Promise<{
     payload: number[]
     supplement?: number[]
-    extensions?: Record<string, unknown>
+    extensions?: { anchors?: TopicAnchor[] }
   }>
 }
 ```
@@ -462,6 +470,9 @@ another party's reputation data as authoritative.
   false hosts can waste a fan-out slot but cannot cause a payment, because
   payment still requires `t` valid attestations of one hash.
 - Outputs are created only for hosts that attested the winning hash.
+- The transport never pays. `AuthFetch` receives a wallet facade whose
+  `createAction` and `signAction` throw, so an HTTP 402 challenge from a host
+  cannot spend. Only the payout settlement calls the real `createAction`.
 - A host locates its output by deriving its own locking script rather than
   trusting a client-supplied index.
 - `message-list` is served only to the authenticated recipient.
@@ -478,7 +489,7 @@ another party's reputation data as authoritative.
   canonical JSON is invariant under key order; canonical payloads are invariant
   under input order; BRC-77 signatures interoperate with `SignedMessage` in
   both directions.
-- **Discovery:** a local stub tracker serving real SLAP tokens on `/lookup`;
+- **Discovery:** a stub resolver returning real SLAP advertisement tokens;
   tokens for another service or protocol are ignored; `hostOverrides` replaces
   and `additionalHosts` extends the result; non-`https` hosts are dropped
   outside the `local` preset; hosts returning 404 for `/economic/params` are
@@ -490,15 +501,22 @@ another party's reputation data as authoritative.
   concurrent collects, payment verification against a wallet double that
   performs the real BRC-29 script check at a non-zero output index,
   underpayment returns 402, a suffix for the wrong rank is rejected.
-- **End to end:** several real express servers on ephemeral ports with the real
-  `createAuthMiddleware` and the real `AuthFetch`, discovered through the stub
-  tracker by an injected `resolver` under the `local` preset (the SDK's `local`
-  preset pins discovery to port 8080, which ephemeral ports cannot use).
-  Scenarios: five honest
-  hosts; a stale host goes unpaid; a hoarder (one of five holds the message,
-  `t = 3`) results in no payment to anyone; a liar attests and serves wrong
-  bytes, another host delivers, and the liar enters cooldown; a slow host
-  misses the window; an identity spoof is discarded.
+- **Client scenarios through real host handlers, in process:** five honest
+  hosts paid 418, 250, 166, 83, 83 by arrival order; a stale host goes unpaid;
+  a hoarder, the only one of five holding the data, is the minority and earns
+  nothing; below the threshold nobody is paid and no wallet call is made; a
+  liar attests and serves wrong bytes, another host delivers, and the liar
+  enters cooldown; a slow host misses the window; an identity spoof is
+  discarded; a greedy floor is skipped; a wallet failure sends no collect.
+- **End to end over HTTP:** real express servers on ephemeral ports with the
+  real `createAuthMiddleware` and the real `AuthFetch`, discovered through an
+  injected `resolver` under the `local` preset (the SDK's `local` preset pins
+  discovery to port 8080, which ephemeral ports cannot use). Scenarios: five
+  honest hosts; a host answering with a complete HTTP 402 challenge receives
+  nothing and the wallet is asked for exactly one action; a host whose live
+  identity differs from its SLAP advertisement is discarded; an express
+  `Router` and `Application` satisfy the structural router type at compile
+  time.
 - **`@bsv/overlay-express`:** a registered router is reachable, sees
   `req.auth`, precedes the 404 handler, and registration after `start()`
   throws.
