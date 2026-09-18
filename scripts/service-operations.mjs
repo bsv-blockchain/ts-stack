@@ -577,7 +577,7 @@ critical-journey monitoring.
 
 ${registry.policy.telemetry.implementation}
 
-Every service preloads telemetry before application imports and emits
+Every service preloads telemetry before application imports and supports
 ${registry.policy.telemetry.signals.join(', ')}. Structured logs use
 ${inlineCode(registry.policy.telemetry.logFields)} and correlate through
 ${inlineCode(registry.policy.telemetry.correlationFields)}. Every environment

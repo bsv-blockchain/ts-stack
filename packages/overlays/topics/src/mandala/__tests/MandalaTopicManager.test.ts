@@ -31,7 +31,10 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
     adminProtocolID: ADMIN_PROTOCOL,
     stateStore: {
       getAssetState: async (id: string) => defaultAssetState(id),
-      getTokenRow: async () => null
+      getTokenRow: async () => null,
+      // The funded input is this asset's recorded admin-auth output, so the
+      // issue below is a legitimately chained action.
+      isAdminOutpoint: async () => true
     }
   })
 
@@ -63,7 +66,8 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
       outputs: [{ index: 0, linkage: linkage as any }],
       admin: [{ index: 1, actionDetails: details }]
     }
-    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [], encodeLinkagePayload(payload))
+    // previousCoins names input 0: the admin-auth coin this action spends.
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0], encodeLinkagePayload(payload))
     expect(result.outputsToAdmit).toEqual([0, 1])
   })
 
@@ -78,7 +82,7 @@ describe('MandalaTopicManager 1-satoshi rule', () => {
 
   it('rejects a verified admin output carrying more than 1 satoshi', async () => {
     const { tx, priorOutpoint } = fundedTx()
-    const details: MandalaActionDetails = { kind: 'register', assetId, priorOutpoint }
+    const details: MandalaActionDetails = { kind: 'register', priorOutpoint }
     const adminScript = await MandalaAdmin.lock({ wallet: issuer as any, data: details })
     tx.addOutput({ satoshis: 2, lockingScript: adminScript })
     const payload: MandalaLinkagePayload = {

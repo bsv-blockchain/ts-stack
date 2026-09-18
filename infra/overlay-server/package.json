@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "oxlint src --deny-warnings",
-    "test": "node --import tsx --test src/lifecycle.test.ts",
+    "test": "node --import tsx --test src/lifecycle.test.ts src/mandalaStateStore.test.ts",
     "start": "node --import ./dist/telemetry.js dist/index.js",
     "dev": "tsx src/index.ts"
   },

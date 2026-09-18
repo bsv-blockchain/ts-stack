@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -8,7 +8,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "BRC-121 Simple 402 Payments — server middleware and client for BSV micropayments over HTTP",
+  "description": "BRC-121 Simple 402 Payments \u2014 server middleware and client for BSV micropayments over HTTP",
   "type": "commonjs",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -97,12 +97,12 @@
     "@bsv/sdk": "workspace:^",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "fast-check": "^4.9.0",
     "oxlint": "^1.76.0",
     "tsdown": "0.22.14",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

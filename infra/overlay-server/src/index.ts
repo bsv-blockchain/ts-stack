@@ -1,3 +1,4 @@
+import { createMandalaStateStore } from './mandalaStateStore.js'
 import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 import OverlayExpress from '@bsv/overlay-express'
 import {
@@ -440,6 +441,7 @@ const main = async () => {
     }
     return mandalaStorage
   }
+  const mandalaStateStore = createMandalaStateStore(requireMandalaStorage)
   server.configureTopicManager(
     'tm_mandala',
     new MandalaTopicManager({
@@ -447,11 +449,7 @@ const main = async () => {
       screeningProvider: new InMemoryScreeningProvider([]),
       adminWallet: mandalaWallet,
       adminProtocolID: [2, 'mandala admin'] as [2, string],
-      stateStore: {
-        getAssetState: async assetId => await requireMandalaStorage().getAssetState(assetId),
-        getTokenRow: async (txid, outputIndex) =>
-          await requireMandalaStorage().getTokenRow(txid, outputIndex)
-      }
+      stateStore: mandalaStateStore
     })
   )
   server.configureLookupServiceWithMongo('ls_mandala', db => {

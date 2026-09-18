@@ -14,7 +14,10 @@ export type {
   TopicValidator,
   TokenValidator,
   ConnectHandler,
-  DisconnectHandler
+  DisconnectHandler,
+  SocketCloseHandler,
+  SocketCloseCause,
+  SocketCloseInfo
 } from './server/WebSocketRelay.js'
 
 // ── Shared utilities (also available from ./client) ───────────────────────────

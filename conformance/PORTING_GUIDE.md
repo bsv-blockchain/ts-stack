@@ -8,16 +8,17 @@
 
 ## 1. Current Corpus Status (as of 2026-05-14)
 
-| Metric              | Value     | Notes |
-|---------------------|-----------|-------|
-| Vector files        | 72        | All load cleanly |
-| Total vectors       | 6,625     | |
-| Active (required)   | ~6,414    | Passing in TypeScript reference |
-| Intentionally skipped | 187     | See "Intended / Demoted Vectors" below |
-| Structural runner   | `conformance/runner/src/runner.js` | Validates format + writes reports |
-| TS behavior runner  | `pnpm --filter @bsv/conformance-runner-ts test` | Dispatches into `@bsv/sdk` |
+| Metric                | Value                                           | Notes                                  |
+| --------------------- | ----------------------------------------------- | -------------------------------------- |
+| Vector files          | 72                                              | All load cleanly                       |
+| Total vectors         | 6,625                                           |                                        |
+| Active (required)     | ~6,414                                          | Passing in TypeScript reference        |
+| Intentionally skipped | 187                                             | See "Intended / Demoted Vectors" below |
+| Structural runner     | `conformance/runner/src/runner.js`              | Validates format + writes reports      |
+| TS behavior runner    | `pnpm --filter @bsv/conformance-runner-ts test` | Dispatches into `@bsv/sdk`             |
 
 **Important recent changes (May 2026)**:
+
 - 3 legacy SDK vector files (`key-derivation`, `ecdsa`, `serialization`) were normalized to the modern schema-compliant format.
 - The structural runner was updated to cleanly support the special regression vector format (no more 72 noisy warnings).
 - The corpus is now in a robust, portable state.
@@ -31,6 +32,7 @@
 Other language repositories should consume the corpus in one of these ways:
 
 1. **Git submodule** (recommended for long-term conformance)
+
    ```bash
    git submodule add https://github.com/bsv-blockchain/ts-stack conformance
    git submodule update --init --recursive
@@ -53,6 +55,7 @@ This must pass with zero fatal errors before you begin writing your runner.
 ## 3. Recommended Porting Order
 
 ### Phase 1: Deterministic Core (Highest Priority)
+
 Start here. These have no external dependencies and should be 100% passable.
 
 - `sdk/crypto/` (8 files: aes, ecdsa, ecies, hash160, hmac, ripemd160, sha256, signature)
@@ -64,6 +67,7 @@ Start here. These have no external dependencies and should be 100% passable.
 These exercise the majority of the cryptographic and script primitives that every implementation must get right.
 
 ### Phase 2: Protocol Domains
+
 - `auth/` (BRC-31 handshake)
 - `broadcast/` (ARC submit + Merkle service)
 - `messaging/` (authsocket + message-box-http + BRC-31 authrite signatures)
@@ -75,9 +79,11 @@ These exercise the majority of the cryptographic and script primitives that ever
 Most of these are shape + protocol compliance tests rather than heavy state.
 
 ### Phase 3: Wallet BRC-100 (with Caveats)
+
 `wallet/brc100/` contains ~950 vectors across 27 method files.
 
 **Warning**: Many success paths are currently marked `parity_class: "intended"` because the TypeScript reference uses a minimal `ProtoWallet` + in-memory stub that cannot satisfy full stateful behavior without:
+
 - A funded UTXO set + realistic fee model (for `createAction` / `signAction`)
 - Live overlay services (for `discoverBy*`)
 - Pre-existing certificates / actions in storage (for `acquireCertificate`, `proveCertificate`, `relinquish*`, etc.)
@@ -85,10 +91,12 @@ Most of these are shape + protocol compliance tests rather than heavy state.
 See Section 6 for the full list of intentionally demoted vectors.
 
 You have two choices:
+
 - Implement a comparable funded mock harness and promote the vectors to `required`.
 - Accept the same `intended` / skipped set and document the gap (preferred for initial conformance claims).
 
 ### Phase 4: Regressions
+
 `regressions/` (12 files, 36 vectors) reproduce historical bugs found in the Go SDK or TypeScript SDK.
 
 These use a **different file format** (see `VECTOR-FORMAT.md` → "Regression Vectors").
@@ -102,6 +110,7 @@ They are extremely valuable for preventing re-introduction of past mistakes. Mos
 All standard vectors must conform to `conformance/schema/vector.schema.json`.
 
 Key requirements:
+
 - `brc` must be an **array** (e.g. `["BRC-42"]`), never a string.
 - `parity_class` must be one of: `"required"`, `"intended"`, `"best-effort"`, `"unsupported"`.
 - Use lowercase hex for all binary data.
@@ -109,6 +118,7 @@ Key requirements:
 - Never modify the `expected` values of an existing vector. If the reference implementation changes behavior, deprecate the old vector (`skip: true` + `skip_reason`) and add a new one.
 
 **Regression vectors** follow their own richer format (see `VECTOR-FORMAT.md`). Your runner must:
+
 - Recognize files under `regressions/`
 - Parse the top-level `regression` object (especially `issue`)
 - Honor per-vector `parity_class` and `skip_reason`
@@ -119,14 +129,15 @@ Key requirements:
 
 Your language runner must support the CLI contract defined in `VECTOR-FORMAT.md`:
 
-| Flag                    | Behavior |
-|-------------------------|----------|
-| `--validate-only`       | Parse + schema-validate only, no execution |
-| `--filter <glob>`       | Run subset (e.g. `sdk.crypto.*` or `wallet/brc100/getpublickey`) |
-| `--report <path>`       | Write JSON + JUnit XML reports |
-| `--verbose`             | Per-vector pass/fail output |
+| Flag              | Behavior                                                         |
+| ----------------- | ---------------------------------------------------------------- |
+| `--validate-only` | Parse + schema-validate only, no execution                       |
+| `--filter <glob>` | Run subset (e.g. `sdk.crypto.*` or `wallet/brc100/getpublickey`) |
+| `--report <path>` | Write JSON + JUnit XML reports                                   |
+| `--verbose`       | Per-vector pass/fail output                                      |
 
 Exit codes:
+
 - `0` = all executed vectors passed (or validate-only succeeded)
 - `1` = one or more failures
 - `2` = schema / parse error
@@ -140,6 +151,7 @@ You should produce a `report.json` compatible with the one emitted by the Node r
 As of the latest run, **187 vectors** are not executed as `required`:
 
 ### A. Wallet State-Dependent Vectors (~139)
+
 These require infrastructure the current ProtoWallet harness does not provide:
 
 - `createAction` (90 vectors) + `signAction` (8)
@@ -149,9 +161,11 @@ These require infrastructure the current ProtoWallet harness does not provide:
 **Recommendation for other languages**: Start by implementing the same demotion logic (or build an equivalent funded mock harness). Document the gap clearly.
 
 ### B. Regressions Marked `intended` (6)
+
 Mostly Go-SDK-specific historical issues or known behavioral differences (e.g. MINIMALDATA / OP_VER handling in script evaluation, certain BIP276 edge cases).
 
 ### C. Vacuous Paths (7 documented cases)
+
 A few wallet lifecycle methods (`isAuthenticated`, `waitForAuthentication`, `getHeight`, `getHeaderForHeight`, `getNetwork`, `getVersion`) have vectors that hit stub paths in the TS reference without performing a real assertion. These are explicitly called out in `COVERAGE.md` under "Vacuous Paths".
 
 ---
@@ -160,12 +174,12 @@ A few wallet lifecycle methods (`isAuthenticated`, `waitForAuthentication`, `get
 
 Because not every vector can be `required` without heavy infrastructure, we recommend the following tiers for other language implementations:
 
-| Tier              | Requirement | What You Must Pass |
-|-------------------|-------------|--------------------|
-| **Crypto Core**   | All deterministic SDK vectors | `sdk/crypto/*`, `sdk/keys/*`, `sdk/transactions/*`, `sdk/scripts/*`, `sdk/compat/*` |
-| **Protocol Core** | Crypto Core + all protocol domains | + `auth/`, `broadcast/`, `messaging/`, `overlay/`, `payments/`, `storage/`, `sync/` |
-| **Full Conformance** | Protocol Core + all `required` wallet vectors | + the non-demoted `wallet/brc100/*` vectors |
-| **Wallet Complete** | Full Conformance + funded harness | All 995 wallet vectors (including the currently `intended` ones) |
+| Tier                 | Requirement                                   | What You Must Pass                                                                  |
+| -------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Crypto Core**      | All deterministic SDK vectors                 | `sdk/crypto/*`, `sdk/keys/*`, `sdk/transactions/*`, `sdk/scripts/*`, `sdk/compat/*` |
+| **Protocol Core**    | Crypto Core + all protocol domains            | + `auth/`, `broadcast/`, `messaging/`, `overlay/`, `payments/`, `storage/`, `sync/` |
+| **Full Conformance** | Protocol Core + all `required` wallet vectors | + the non-demoted `wallet/brc100/*` vectors                                         |
+| **Wallet Complete**  | Full Conformance + funded harness             | All 995 wallet vectors (including the currently `intended` ones)                    |
 
 Publish your achieved tier + any justified deviations.
 
@@ -212,6 +226,7 @@ pnpm --filter @bsv/conformance-runner-ts test
 ```
 
 Key files for port authors:
+
 - `conformance/META.json` — authoritative index
 - `conformance/PARITY_MATRIX.json` — **machine-readable** parity status (recommended for Go/Rust/Python teams)
 - `conformance/COVERAGE.md` — detailed human-readable status, intended vectors, vacuous paths
@@ -245,3 +260,23 @@ Key files for port authors:
 Last updated: 2026-05-14 (after legacy file normalization and runner regression improvements).
 
 If you are actively aligning a Go, Rust, or Python implementation and find gaps in this guide, please open an issue with the title prefix `[Porting Guide]`. We want this document to be the single best resource for cross-language conformance.
+
+## Authentication identifiers and emitted handshake
+
+`auth/brc31-handshake.json` and its vector IDs retain their historical spelling
+for consumers that store corpus IDs. Their protocol metadata is BRC-103/BRC-104;
+`messaging/authsocket.json` is BRC-103. BRC-31 remains the separate Authrite
+protocol in `messaging/brc31/authrite-signature.json`. Select by corrected `brc`
+metadata, not by the historical filename.
+
+The recorded initialRequest was captured from the real SDK Peer through
+SimplifiedFetchTransport. Its fields are `version`, `messageType`, `identityKey`,
+`initialNonce` and `requestedCertificates`; the HTTP request adds only JSON
+content type. There is no initialRequest nonce, payload or signature member.
+General application messages use the separate BRC-104 auth-header path. The
+executable wire test rechecks the emitted shape and normalizes only the random
+nonce value. HTTP error/scenario rows remain structural scenario documentation.
+
+Certificate responses retain the v0.1 wire shape. Requesters enforce their own
+recorded certificate sets, including dynamic requests, and certificate listeners
+observe completed validation rather than vetoing it.

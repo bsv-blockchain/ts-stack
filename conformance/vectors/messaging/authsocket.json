@@ -2,8 +2,8 @@
   "$schema": "../../../schema/vector.schema.json",
   "id": "messaging.authsocket",
   "name": "AuthSocket WebSocket Protocol",
-  "brc": ["BRC-31"],
-  "version": "1.0.0",
+  "brc": ["BRC-103"],
+  "version": "1.1.0",
   "reference_impl": "packages/messaging/authsocket",
   "parity_class": "required",
   "vectors": [
@@ -13,13 +13,14 @@
       "input": {
         "socketio_event": "authMessage",
         "payload": {
-          "messageType": "initialRequest",
           "version": "0.1",
-          "identityKey": "028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1",
-          "nonce": "dGVzdE5vbmNlMTIzNA==",
-          "initialNonce": "dGVzdE5vbmNlMTIzNA==",
-          "payload": [],
-          "signature": []
+          "messageType": "initialRequest",
+          "identityKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+          "initialNonce": "Z9+3SZ9qiJvtpQN1RNmmGue247vPuQLeqfIV2eFIMtvRRqFb0FpYckzLbawd0bdR",
+          "requestedCertificates": {
+            "certifiers": [],
+            "types": {}
+          }
         }
       },
       "expected": {
@@ -28,9 +29,10 @@
           "messageType": "initialResponse",
           "version": "0.1",
           "identityKey": "string",
-          "nonce": "string",
           "yourNonce": "string",
-          "signature": "array"
+          "signature": "array",
+          "initialNonce": "string",
+          "requestedCertificates": "object"
         }
       },
       "tags": ["authsocket", "brc-103", "handshake", "initial-request"]
@@ -42,7 +44,9 @@
         "_schema_check": true,
         "envelope": {
           "eventName": "message",
-          "data": { "body": "hello world" }
+          "data": {
+            "body": "hello world"
+          }
         }
       },
       "expected": {
@@ -93,7 +97,10 @@
           "identityKey": "028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1",
           "nonce": "bmV3Tm9uY2U=",
           "yourNonce": "c2VydmVyTm9uY2U=",
-          "payload": [123, 34, 101, 118, 101, 110, 116, 78, 97, 109, 101, 34, 58, 34, 116, 101, 115, 116, 34, 125],
+          "payload": [
+            123, 34, 101, 118, 101, 110, 116, 78, 97, 109, 101, 34, 58, 34, 116, 101, 115, 116, 34,
+            125
+          ],
           "signature": [48, 69, 2, 33, 0]
         }
       },
@@ -172,7 +179,10 @@
         "_note": "SocketServerTransport decodes the BRC-103 general message payload to extract the EventEnvelope"
       },
       "expected": {
-        "application_sees": { "eventName": "string", "data": "any" },
+        "application_sees": {
+          "eventName": "string",
+          "data": "any"
+        },
         "transport_handles": "BRC-103 signing/verification"
       },
       "tags": ["authsocket", "schema", "transport-abstraction"]

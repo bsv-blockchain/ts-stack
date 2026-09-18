@@ -682,7 +682,7 @@ export function validateProjectRegistry(registry, discovered) {
   return errors
 }
 
-function validateExceptionReviewDate(registry, today) {
+function validateExceptionReviewDate(registry, today, enforceDeadlines) {
   if (!isValidDate(registry?.lastReviewed)) {
     return ['exceptions.json lastReviewed must be a real YYYY-MM-DD date']
   }
@@ -692,13 +692,13 @@ function validateExceptionReviewDate(registry, today) {
   if (ageDays < 0) {
     return [`exceptions.json lastReviewed is in the future: ${registry.lastReviewed}`]
   }
-  if (ageDays > 31) {
+  if (enforceDeadlines && ageDays > 31) {
     return [`exceptions.json monthly review is overdue: last reviewed ${registry.lastReviewed}`]
   }
   return []
 }
 
-function validateExceptionDates(exception, prefix, today) {
+function validateExceptionDates(exception, prefix, today, enforceDeadlines) {
   const errors = []
   for (const field of ['created', 'reviewBy']) {
     if (!isValidDate(exception?.[field])) {
@@ -712,13 +712,13 @@ function validateExceptionDates(exception, prefix, today) {
   ) {
     errors.push(`${prefix} reviewBy cannot precede created`)
   }
-  if (isValidDate(exception?.reviewBy) && exception.reviewBy < today) {
+  if (enforceDeadlines && isValidDate(exception?.reviewBy) && exception.reviewBy < today) {
     errors.push(`${prefix} expired on ${exception.reviewBy}`)
   }
   return errors
 }
 
-function validateException(exception, today, ownerDefinitions) {
+function validateException(exception, today, ownerDefinitions, enforceDeadlines) {
   const errors = []
   const prefix = `exception ${exception?.id ?? '<missing id>'}`
   if (!isNonEmptyString(exception?.id) || !/^[a-z0-9][a-z0-9-]+$/.test(exception.id)) {
@@ -747,7 +747,7 @@ function validateException(exception, today, ownerDefinitions) {
   ) {
     errors.push(`${prefix} must have one or more evidence references`)
   }
-  errors.push(...validateExceptionDates(exception, prefix, today))
+  errors.push(...validateExceptionDates(exception, prefix, today, enforceDeadlines))
   if (!isNonEmptyString(exception?.removeWhen) || exception.removeWhen.trim().length < 10) {
     errors.push(`${prefix} removeWhen must be at least 10 characters`)
   }
@@ -757,11 +757,12 @@ function validateException(exception, today, ownerDefinitions) {
 export function validateExceptionRegistry(
   registry,
   today = new Date().toISOString().slice(0, 10),
-  ownerDefinitions = undefined
+  ownerDefinitions = undefined,
+  enforceDeadlines = true
 ) {
   const errors = []
   if (registry?.schemaVersion !== 1) errors.push('exceptions.json schemaVersion must be 1')
-  errors.push(...validateExceptionReviewDate(registry, today))
+  errors.push(...validateExceptionReviewDate(registry, today, enforceDeadlines))
   if (!Array.isArray(registry?.exceptions)) {
     return [...errors, 'exceptions.json exceptions must be an array']
   }
@@ -772,7 +773,7 @@ export function validateExceptionRegistry(
     )
   )
   for (const exception of registry.exceptions) {
-    errors.push(...validateException(exception, today, ownerDefinitions))
+    errors.push(...validateException(exception, today, ownerDefinitions, enforceDeadlines))
   }
 
   return errors
@@ -1298,12 +1299,15 @@ export function renderMarkdown(result) {
     for (const error of result.errors) lines.push(`- ${error}`)
     lines.push('')
   }
+  if (result.warnings?.length > 0) {
+    lines.push('## Maintenance reminders', '', ...result.warnings.map(item => `- ${item}`), '')
+  }
   lines.push(
     ...renderFindingSummary('## Findings by rule', result.findings, 'rule'),
     ...renderFindingSummary('## Findings by project', result.findings, 'path'),
     ...renderDetailedFindings(result.findings),
     'Known findings are ratcheted in `governance/repository-health/contract-baseline.json`.',
-    'New drift, stale resolved entries, invalid inventory, or expired exceptions fail this check.',
+    'New drift, stale resolved entries, and invalid inventory fail this check. Review deadlines are warnings unless --maintenance is requested.',
     'Use `pnpm health:baseline` only in the PR that fixes or deliberately reclassifies findings.',
     ''
   )
@@ -1317,6 +1321,7 @@ export function renderText(result) {
       `${result.exceptions.length} active exceptions, ${result.errors.length} control errors.`
   ]
   for (const error of result.errors) lines.push(`ERROR ${error}`)
+  for (const warning of result.warnings ?? []) lines.push(`MAINTENANCE ${warning}`)
   for (const [rule, count] of summarizeFindings(result.findings, 'rule')) {
     lines.push(`FINDINGS ${String(count).padStart(3)} ${rule}`)
   }
@@ -1326,7 +1331,8 @@ export function renderText(result) {
 export function evaluateRepositoryHealth({
   root = REPOSITORY_ROOT,
   today = process.env.REPOSITORY_HEALTH_TODAY ?? new Date().toISOString().slice(0, 10),
-  skipContractBaseline = false
+  skipContractBaseline = false,
+  enforceDeadlines = false
 } = {}) {
   const projectsPath = path.join(root, 'governance/repository-health/projects.json')
   const exceptionsPath = path.join(root, 'governance/repository-health/exceptions.json')
@@ -1343,7 +1349,7 @@ export function evaluateRepositoryHealth({
   const findings = collectContractFindings(registry, discovered, root)
   const errors = [
     ...validateProjectRegistry(registry, discovered),
-    ...validateExceptionRegistry(exceptions, today, registry.ownerDefinitions),
+    ...validateExceptionRegistry(exceptions, today, registry.ownerDefinitions, enforceDeadlines),
     ...validateBaselines(baselines, registry, discovered),
     ...validatePackageAuthorIdentity(packageManifests)
   ]
@@ -1358,8 +1364,15 @@ export function evaluateRepositoryHealth({
     }
   }
 
+  const warnings = enforceDeadlines
+    ? []
+    : validateExceptionRegistry(exceptions, today, registry.ownerDefinitions).filter(
+        finding => !errors.includes(finding)
+      )
+
   return {
     errors,
+    warnings,
     exceptions: exceptions.exceptions ?? [],
     findings,
     projects: discovered,
@@ -1372,12 +1385,15 @@ function parseArguments(args) {
   const options = {
     format: 'text',
     strict: false,
+    enforceDeadlines: false,
     summaryFile: undefined,
     updateContractBaseline: false
   }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
-    if (argument === '--strict') {
+    if (argument === '--maintenance') {
+      options.enforceDeadlines = true
+    } else if (argument === '--strict') {
       options.strict = true
     } else if (argument === '--update-contract-baseline') {
       options.updateContractBaseline = true
@@ -1403,6 +1419,7 @@ function renderJson(result) {
   return `${JSON.stringify(
     {
       errors: result.errors,
+      warnings: result.warnings,
       exceptions: result.exceptions,
       findingCount: result.findings.length,
       findings: result.findings,
@@ -1429,6 +1446,7 @@ function usage() {
     '  --format <text|markdown|json>   Select stdout format (default: text)',
     '  --summary-file <path>           Append Markdown report to a CI summary file',
     '  --strict                        Fail while any package-contract finding exists',
+    '  --maintenance                   Also enforce elapsed exception review deadlines',
     '  --update-contract-baseline      Record the current known findings',
     '  --help                          Show this help',
     ''
@@ -1452,7 +1470,8 @@ export function runCli(args = process.argv.slice(2)) {
   let result
   try {
     result = evaluateRepositoryHealth({
-      skipContractBaseline: options.updateContractBaseline
+      skipContractBaseline: options.updateContractBaseline,
+      enforceDeadlines: options.enforceDeadlines
     })
   } catch (error) {
     console.error(error.message)
