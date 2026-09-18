@@ -1,9 +1,9 @@
 # Independent BRC-136 fixture
 
 brc136-independent.json is copied byte-for-byte from the Go BASM
-foundation fixture:
+foundation fixture in the `go-overlay-services` repository:
 
-/Users/personal/git/go/worktrees/go-overlay-services-basm/pkg/core/basm/testdata/vectors.json
+pkg/core/basm/testdata/vectors.json
 
 Source commit: d99216814a4b9dca5f9f4d04a602ef2d48bdc4a7
 Go worktree revision used for inventory: faaf69d372fd5e9974eaadbae9b8e26d761f0c86
@@ -24,6 +24,12 @@ values as authoritative without that independent check.
 `basm-go-read-server.go` is a local B01 interop host compiled into a temporary
 module. It replaces onto the Go overlay-services worktree and must not modify
 that tree's uncommitted S04 files.
+
+The Go interop suite (`BASMGoInterop.test.ts`) does not run by default: it is
+skipped unless `BASM_GO_OVERLAY_SERVICES` points at a `go-overlay-services`
+checkout, and no workstation path is assumed. When the variable is set but does
+not resolve to such a checkout the suite fails rather than skips, so a job that
+claims Go interop cannot pass without running it.
 
 The temporary interop server binds and advertises only `127.0.0.1`; its HTTP
 transport never exposes the fixture on an external network interface.

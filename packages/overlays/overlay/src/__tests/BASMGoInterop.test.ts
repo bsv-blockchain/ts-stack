@@ -29,21 +29,28 @@ function independentTac(previous: string, blockHash: string, root: string): stri
   return Buffer.from(createHash('sha256').update(first).digest()).reverse().toString('hex')
 }
 
+const GO_CHECKOUT_MARKERS = [
+  'pkg/server/server_http_basm_interop_test.go',
+  'pkg/core/engine/basm-read-service.go'
+]
+
+/**
+ * Resolves the go-overlay-services checkout to run interop against. The only
+ * source is BASM_GO_OVERLAY_SERVICES: no workstation path is assumed, so this
+ * suite never silently depends on one machine's layout. When the variable is
+ * set but does not point at a usable checkout we fail rather than skip, so a
+ * job that claims Go interop cannot pass without running it.
+ */
 function resolveGoWorktree(): string | undefined {
-  const candidates = [
-    process.env.BASM_GO_OVERLAY_SERVICES,
-    '/Users/personal/git/go/worktrees/go-overlay-services-basm'
-  ]
-  for (const candidate of candidates) {
-    if (
-      candidate !== undefined &&
-      existsSync(join(candidate, 'pkg/server/server_http_basm_interop_test.go')) &&
-      existsSync(join(candidate, 'pkg/core/engine/basm-read-service.go'))
-    ) {
-      return candidate
-    }
+  const candidate = process.env.BASM_GO_OVERLAY_SERVICES
+  if (candidate === undefined || candidate === '') return undefined
+  const missing = GO_CHECKOUT_MARKERS.filter(marker => !existsSync(join(candidate, marker)))
+  if (missing.length > 0) {
+    throw new Error(
+      `BASM_GO_OVERLAY_SERVICES is set to "${candidate}" but that is not a go-overlay-services checkout (missing: ${missing.join(', ')})`
+    )
   }
-  return undefined
+  return candidate
 }
 
 async function waitForUrls(
@@ -140,8 +147,12 @@ function startGoHost(goRoot: string): ChildProcessWithoutNullStreams {
 
 const goRoot = resolveGoWorktree()
 const describeInterop = goRoot === undefined ? describe.skip : describe
+const suiteName =
+  goRoot === undefined
+    ? 'BASMRemote localhost interop against Go read/serving (skipped: set BASM_GO_OVERLAY_SERVICES to a go-overlay-services checkout to run it)'
+    : 'BASMRemote localhost interop against Go read/serving'
 
-describeInterop('BASMRemote localhost interop against Go read/serving', () => {
+describeInterop(suiteName, () => {
   let child: ChildProcessWithoutNullStreams
   let readyURL = ''
   let unsupportedURL = ''
