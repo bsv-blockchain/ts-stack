@@ -314,6 +314,134 @@ describe('MongoPayloadStore', () => {
     await session.endSession()
   })
 
+  test('re-adding a pin slot extends its expiry but never shortens it silently', async () => {
+    const content = Buffer.from('pin-extend')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const basePin = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'pin' as const,
+      ownerId: 'pin-extend',
+      slot: '0'
+    }
+    const firstExpiry = new Date(Date.now() + 60_000)
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      await store.addReference(session, { ...basePin, expiresAt: firstExpiry })
+    })
+    const laterExpiry = new Date(Date.now() + 120_000)
+    await session.withTransaction(async () => {
+      await store.addReference(session, { ...basePin, expiresAt: laterExpiry })
+    })
+    expect(
+      (
+        await fixture.db
+          .collection('overlay_payload_references')
+          .findOne({ ownerId: 'pin-extend' })
+      )?.expiresAt
+    ).toEqual(laterExpiry)
+    const earlierExpiry = new Date(Date.now() + 90_000)
+    await expect(
+      session.withTransaction(async () => {
+        await store.addReference(session, { ...basePin, expiresAt: earlierExpiry })
+      })
+    ).rejects.toThrow('must not shorten')
+    expect(
+      (
+        await fixture.db
+          .collection('overlay_payload_references')
+          .findOne({ ownerId: 'pin-extend' })
+      )?.expiresAt
+    ).toEqual(laterExpiry)
+    await session.endSession()
+  })
+
+  test('re-adding an expired pin slot reactivates it and makes the payload live again', async () => {
+    const content = Buffer.from('pin-reactivate')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const pin = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'pin' as const,
+      ownerId: 'pin-reactivate',
+      slot: '0',
+      expiresAt: new Date(Date.now() + 60_000)
+    }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      await store.addReference(session, pin)
+    })
+    await fixture.db.collection('overlay_payload_references').updateOne({ ownerId: 'pin-reactivate' }, [
+      {
+        $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
+      }
+    ])
+    const revived = { ...pin, expiresAt: new Date(Date.now() + 60_000) }
+    await session.withTransaction(async () => {
+      await store.addReference(session, revived)
+    })
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, payload)).toBe(false)
+    })
+    expect(
+      (
+        await fixture.db
+          .collection('overlay_payload_references')
+          .findOne({ ownerId: 'pin-reactivate' })
+      )?.expiresAt
+    ).toEqual(revived.expiresAt)
+    await session.endSession()
+  })
+
+  test('claimGarbage deletes the expired pin reference row inside the same transaction as its claim', async () => {
+    const content = Buffer.from('pin-gc-cleanup')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const pin = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'pin' as const,
+      ownerId: 'pin-gc-cleanup',
+      slot: '0',
+      expiresAt: new Date(Date.now() + 60_000)
+    }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      await store.addReference(session, pin)
+    })
+    await fixture.db.collection('overlay_payload_references').updateOne({ ownerId: 'pin-gc-cleanup' }, [
+      {
+        $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
+      }
+    ])
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, payload)).toBe(true)
+    })
+    expect(
+      await fixture.db
+        .collection('overlay_payload_references')
+        .countDocuments({ ownerId: 'pin-gc-cleanup' })
+    ).toBe(0)
+    await session.endSession()
+  })
+
   test('uses majority journaled writes even when the caller client defaults to w:1', async () => {
     const weak = await fixture.connect({ monitorCommands: true, writeConcern: { w: 1 } })
     const concerns: unknown[] = []
@@ -480,6 +608,33 @@ describe('MongoPayloadStore', () => {
     await payloads.updateOne({ _id: row?._id }, { $set: { state: 'deleted', byteLength: '00000000000000000999' } })
     await expect(store.publish({ kind: 'outbox-data', digest: hash, byteLength: String(content.byteLength), bytes: bytes(content) })).resolves.toMatchObject({ digest: hash })
     expect(BigInt((await payloads.findOne({ _id: row?._id }))?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
+  })
+
+  test('recovers a too-small declared length by reclaiming the deleted row on retry with the correct length', async () => {
+    const content = Buffer.from('too-small-declared-length')
+    const hash = digest(content)
+    const payloads = fixture.db.collection('overlay_payloads')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength - 1),
+        bytes: bytes(content)
+      })
+    ).rejects.toThrow('exceeds declared length')
+    const failed = await payloads.findOne({ kind: 'outbox-data', digest: hash })
+    expect(failed?.state).toBe('deleted')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content)
+      })
+    ).resolves.toMatchObject({ digest: hash, byteLength: String(content.byteLength) })
+    const recovered = await payloads.findOne({ _id: failed?._id })
+    expect(recovered?.state).toBe('ready')
+    expect(BigInt(recovered?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
   })
 
   test('does not reuse an existing reference after its payload was reclaimed', async () => {

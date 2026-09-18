@@ -250,13 +250,16 @@ export class MongoPayloadStore {
       if (existing.payloadId !== payloadId)
         throw new Error('Mongo payload reference slot already names different content')
       // An idempotent reference still needs a live ready payload. The row may
-      // have been reclaimed since the reference was written.
+      // have been reclaimed since the reference was written. This CAS also
+      // serializes the pin refresh below against a concurrent GC claim.
       const guarded = await payloads.updateOne(
         { _id: payloadId, state: 'ready' },
         { $set: { updatedAt: this.now() } },
         { session, timeoutMS: operation.timeoutMS }
       )
       if (guarded.matchedCount !== 1) throw new Error('Mongo payload is not ready for reference')
+      if (reference.ownerKind === 'pin')
+        await this.refreshPinExpiry(refs, refId, reference, existing, session, operation)
       return
     }
     // This conditional write is the guard; a snapshot read followed by an insert is unsafe.
@@ -283,6 +286,37 @@ export class MongoPayloadStore {
       },
       { session, timeoutMS: operation.timeoutMS }
     )
+  }
+
+  /**
+   * Refreshes an existing pin's expiry when the same slot is re-added: an
+   * expired pin is reactivated with the caller's new expiry, and a still-live
+   * pin may only be extended, never silently shortened. Called only after the
+   * caller's {_id: payloadId, state: 'ready'} CAS has already matched in this
+   * transaction, so this stays serialized against a concurrent GC claim.
+   */
+  private async refreshPinExpiry(
+    refs: Collection<ReferenceDocument>,
+    refId: string,
+    reference: MongoPayloadReference,
+    existing: ReferenceDocument,
+    session: ClientSession,
+    operation: MongoPayloadOperationOptions
+  ): Promise<void> {
+    const now = this.now()
+    // validateReference requires expiresAt for every pin reference.
+    const requested = reference.expiresAt as Date
+    const current = existing.expiresAt
+    const currentExpired = current === undefined || current <= now
+    if (!currentExpired && requested < current)
+      throw new Error('Mongo payload pin re-add must not shorten an unexpired expiry')
+    if (currentExpired || requested.getTime() !== current.getTime()) {
+      await refs.updateOne(
+        { _id: refId },
+        { $set: { expiresAt: requested, updatedAt: now } },
+        { session, timeoutMS: operation.timeoutMS }
+      )
+    }
   }
 
   /** Must be called in the transaction that releases the owner record's payload obligation. */
@@ -401,6 +435,14 @@ export class MongoPayloadStore {
         { session, timeoutMS: operation.timeoutMS, returnDocument: 'after' }
       )
     if (claimed === null) return false
+    // Every pin row still present here was already confirmed expired by the
+    // liveReferences count above; delete it in this same transaction so the
+    // unique slot cannot outlive the payload it named and short-circuit a
+    // future addReference on that slot.
+    await refs.deleteMany(
+      { payloadId, ownerKind: 'pin', $expr: { $lte: ['$expiresAt', '$$NOW'] } },
+      { session, timeoutMS: operation.timeoutMS }
+    )
     await this.options.hooks?.afterDeleteClaim?.()
     return true
   }

@@ -127,7 +127,7 @@ describe('BASM reconciliation evidence binding', () => {
     ).toEqual([f.ids[1], f.ids[3]])
     for (const [, callback, mode] of f.submit.mock.calls) {
       expect(callback).toBeUndefined()
-      expect(mode).toBe('historical-tx')
+      expect(mode).toBe('historical-tx-no-spv')
     }
     expect(f.tracker.isValidRootForHeight).toHaveBeenCalledTimes(1)
     expect(f.tracker.isValidRootForHeight).toHaveBeenCalledWith(f.root, blockHeight)
@@ -416,14 +416,42 @@ describe('BASM reconciliation evidence binding', () => {
       transactions: [{ txid, rawTx: coinbase.toHex() }],
       missing: []
     }
+    const manager = {
+      identifyAdmissibleOutputs: jest.fn(async () => ({ outputsToAdmit: [0], coinsToRetain: [] })),
+      getDocumentation: jest.fn(async () => ''),
+      getMetaData: jest.fn(async () => ({ name: 'test', shortDescription: 'test' }))
+    }
+    f.engine.managers[topic] = manager
+    Object.assign(f.storage, {
+      doesAppliedTransactionExist: jest.fn(async () => false),
+      findOutput: jest.fn(async () => null),
+      insertOutput: jest.fn(async () => undefined),
+      insertAppliedTransaction: jest.fn(async () => undefined),
+      upsertTransactionRecord: jest.fn(async () => undefined)
+    })
+    // Exercise the production submit path: the young coinbase must survive it.
+    f.submit.mockRestore()
+    const submit = jest.spyOn(f.engine, 'submit')
     const verify = jest.spyOn(MerklePath.prototype, 'verify')
     const [report] = await f.engine.startBASMSync()
     expect(report.status).toBe('advanced')
     expect(report.fetchedTxCount).toBe(1)
     expect(verify).not.toHaveBeenCalled()
     expect(f.tracker.isValidRootForHeight).toHaveBeenCalledWith(txid, blockHeight)
-    expect(f.submit).toHaveBeenCalledTimes(1)
-    expect(f.tracker.currentHeight).not.toHaveBeenCalled()
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0][2]).toBe('historical-tx-no-spv')
+    expect(manager.identifyAdmissibleOutputs).toHaveBeenCalledWith(
+      expect.anything(),
+      [],
+      undefined,
+      'historical-tx-no-spv'
+    )
+    expect(f.storage.insertAppliedTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ txid, topic, blockHeight, blockIndex: 0, proven: true })
+    )
+    // The only chain-height read is the firstSeen bookkeeping in
+    // buildAppliedTransactionRecord; no coinbase spendability check ran.
+    expect(f.tracker.currentHeight).toHaveBeenCalledTimes(1)
   })
 
   it('admits a BASM-proven historical coinbase through the real submit path', async () => {
@@ -451,13 +479,55 @@ describe('BASM reconciliation evidence binding', () => {
     })
     f.submit.mockRestore()
 
-    await expect(f.engine.submit({ beef, topics: [topic] }, undefined, 'historical-tx')).resolves.toEqual({
+    await expect(
+      f.engine.submit({ beef, topics: [topic] }, undefined, 'historical-tx-no-spv')
+    ).resolves.toEqual({
       [topic]: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [] }
     })
-    expect(manager.identifyAdmissibleOutputs).toHaveBeenCalledWith(beef, [], undefined, 'historical-tx')
+    expect(manager.identifyAdmissibleOutputs).toHaveBeenCalledWith(
+      beef,
+      [],
+      undefined,
+      'historical-tx-no-spv'
+    )
     expect(f.storage.insertAppliedTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ txid, topic, proven: false })
     )
+  })
+
+  it('still runs SPV verification for a GASP-style historical-tx submission', async () => {
+    const f = fixture()
+    const proven = f.transactions[1]
+    // A proof whose root is not the canonical root for this height: the chain
+    // tracker rejects it, so MerklePath.verify fails and submit must throw.
+    proven.merklePath = new MerklePath(blockHeight, [
+      [
+        { offset: 0, hash: f.ids[0], txid: true },
+        { offset: 1, hash: f.ids[1], txid: true }
+      ]
+    ])
+    const beef = proven.toBEEF()
+    const manager = {
+      identifyAdmissibleOutputs: jest.fn(async () => ({ outputsToAdmit: [0], coinsToRetain: [] })),
+      getDocumentation: jest.fn(async () => ''),
+      getMetaData: jest.fn(async () => ({ name: 'test', shortDescription: 'test' }))
+    }
+    f.engine.managers[topic] = manager
+    Object.assign(f.storage, {
+      doesAppliedTransactionExist: jest.fn(async () => false),
+      findOutput: jest.fn(async () => null),
+      insertOutput: jest.fn(async () => undefined),
+      insertAppliedTransaction: jest.fn(async () => undefined),
+      upsertTransactionRecord: jest.fn(async () => undefined)
+    })
+    f.submit.mockRestore()
+
+    await expect(
+      f.engine.submit({ beef, topics: [topic] }, undefined, 'historical-tx')
+    ).rejects.toThrow(/Invalid merkle path/)
+    expect(f.tracker.isValidRootForHeight).toHaveBeenCalled()
+    expect(manager.identifyAdmissibleOutputs).not.toHaveBeenCalled()
+    expect(f.storage.insertAppliedTransaction).not.toHaveBeenCalled()
   })
 
   it('reports a finite proof request limit for a block above 1000 admissions (B02 chunking required)', async () => {

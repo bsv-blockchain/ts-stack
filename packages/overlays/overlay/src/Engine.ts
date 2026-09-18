@@ -1149,12 +1149,11 @@ export class Engine {
     const txid = tx.id('hex')
 
     this.startTime(`submit_${txid}`)
-    // BASM reconciliation has already validated historical-tx inclusion with
-    // the compound Merkle proof and canonical header. Running Transaction.verify
-    // here would incorrectly apply coinbase maturity to an admitted historical
-    // transaction, even though BASM only proves inclusion. Current submissions
-    // still require the normal SPV/Bitcoin validity check.
-    if (mode === 'current-tx') {
+    // Every submission is SPV-verified except 'historical-tx-no-spv', which is
+    // reserved for callers that have already proven inclusion independently
+    // (GASP graph finalization and BASM reconciliation). 'historical-tx' is a
+    // public submission mode, so it keeps the full SPV check.
+    if (mode !== 'historical-tx-no-spv') {
       this.startTime(`chainTracker_${txid.substring(0, 10)}`)
       const txValid = await tx.verify(this.chainTracker)
       if (!txValid) throw new Error('Unable to verify SPV information.')
@@ -2030,11 +2029,15 @@ export class Engine {
     const commitHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
     requireBASM(commitHeader.blockTransactionCount === proofHeader.blockTransactionCount, 'BASM canonical block transaction count changed before admission')
     // Apply in the independently checked block order, regardless of raw response order.
+    // Admit with 'historical-tx-no-spv': inclusion is already proven above by
+    // isValidRootForHeight plus the canonical-header binding. Re-running
+    // Transaction.verify would apply MerklePath.verify's coinbase 100-block
+    // spendability rule and reject an admitted coinbase from a recent block.
     const transactionById = new Map(transactions.map(tx => [tx.id('hex'), tx]))
     for (const txid of txids) {
       const tx = transactionById.get(txid)
       requireBASM(tx !== undefined, 'BASM raw response omits a requested transaction')
-      await this.submit({ beef: tx.toBEEF(), topics: [topic] }, undefined, 'historical-tx')
+      await this.submit({ beef: tx.toBEEF(), topics: [topic] }, undefined, 'historical-tx-no-spv')
     }
     const finalHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
     requireBASM(finalHeader.blockTransactionCount === proofHeader.blockTransactionCount, 'BASM canonical block transaction count changed during admission')

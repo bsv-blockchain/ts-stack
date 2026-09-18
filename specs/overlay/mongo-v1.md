@@ -86,6 +86,14 @@ GridFS deletion and `deleted` finalization resume separately and are safe to
 retry after a process failure. Pins are references and are the only reference
 kind allowed to expire.
 
+Re-adding an existing pin slot is serialized under that same `ready`-row guard.
+An expired pin is reactivated with the caller's new expiry; a still-live pin
+may only be extended to a later expiry and never shortened silently — a
+shortening request is rejected. Garbage collection deletes each expired pin's
+reference row in the same transaction as its `ready` to `deleting` claim, so a
+stale pin slot cannot outlive the payload it names and keep short-circuiting
+future reference creation on that slot.
+
 Payload and reference operations accept bounded timeout and cancellation
 controls where they operate in a caller's admission body. Neither payload
 publication nor collection runs verifier logic, network activity, uploads, or
