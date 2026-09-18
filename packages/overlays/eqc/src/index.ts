@@ -20,3 +20,19 @@ export {
   type CanonicalMessage,
   type LookupOutpoint
 } from './protocol/payloads.js'
+export {
+  attestationPreimage,
+  deliveryPreimage,
+  parseAttestation,
+  parseDelivery,
+  verifyAttestation,
+  verifyDelivery,
+  type Attestation,
+  type Delivery,
+  type SignedFields,
+  type TopicAnchor,
+  type Verdict
+} from './protocol/attestation.js'
+export { signBRC77, verifyBRC77 } from './protocol/brc77.js'
+export { isCanonicalBase64 } from './protocol/encoding.js'
+export { EQCError, type EQCErrorCode } from './protocol/errors.js'
