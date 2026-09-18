@@ -15,7 +15,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The unpublished 2.5.0 candidate corrects BUMP offset arithmetic above 32 bits
+The current unpublished candidate corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
 calculation, extraction, combination and trimming use the same exact numeric
 domain; malformed non-integer and unsafe offsets fail explicitly. No consumer

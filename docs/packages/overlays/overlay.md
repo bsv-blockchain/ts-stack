@@ -4,7 +4,7 @@ title: '@bsv/overlay'
 kind: package
 domain: overlays
 npm: '@bsv/overlay'
-version: '2.4.0'
+version: '2.5.0'
 last_updated: '2026-09-18'
 last_verified: '2026-09-18'
 review_cadence_days: 30

@@ -4,7 +4,7 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.8.1'
+version: '1.8.2'
 last_updated: '2026-09-18'
 last_verified: '2026-09-18'
 review_cadence_days: 30
