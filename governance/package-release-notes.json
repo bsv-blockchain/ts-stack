@@ -168,8 +168,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.7.0",
       "releaseType": "patch",
-      "summary": "Binds authenticated general messages, certificate requests, and certificate responses to the identity stored in the nonce-selected session. Mismatched transport identity metadata is rejected, and application callbacks receive only the identity used for signature verification.",
-      "migration": "No API or wire migration is required. Upgrade to @bsv/sdk 2.7.1 or later. Valid BRC-103 v0.1 peers keep the same message fields, payload bytes, nonces, and signature derivation; authenticated messages whose transport identity differs from the established session now fail closed."
+      "summary": "Binds authenticated general messages, certificate requests, and certificate responses to the identity stored in the nonce-selected session. Mismatched transport identity metadata is rejected, and application callbacks receive only the identity used for signature verification. The current unpublished candidate also corrects Merkle-path arithmetic for the full safe-integer offset domain, including positions above 32 bits, and rejects nonrepresentable offsets.",
+      "migration": "No API or wire migration is required. Upgrade to @bsv/sdk 2.7.1 or later. Valid BRC-103 v0.1 peers keep the same message fields, payload bytes, nonces, and signature derivation; authenticated messages whose transport identity differs from the established session now fail closed. No API or valid BUMP wire migration is required for the offset correction."
     },
     {
       "name": "@bsv/simple",
