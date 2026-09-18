@@ -28,6 +28,12 @@
       ],
       "@wallet-toolbox/storage/schema/tables": [
         "../../../packages/wallet/wallet-toolbox/out/src/storage/schema/tables/index.d.ts"
+      ],
+      "@wallet-toolbox/storage/remoting/SyncTransfer": [
+        "../../../packages/wallet/wallet-toolbox/out/src/storage/remoting/SyncTransfer.d.ts"
+      ],
+      "@wallet-toolbox/storage/remoting/BinaryJson": [
+        "../../../packages/wallet/wallet-toolbox/out/src/storage/remoting/BinaryJson.d.ts"
       ]
     }
   },

@@ -51,8 +51,8 @@ const linkageEntry = fc.record({
 
 const linkagePayload = fc
   .record({
-    inputs: fc.array(linkageEntry, { maxLength: 8 }),
-    outputs: fc.array(linkageEntry, { maxLength: 8 })
+    inputs: fc.uniqueArray(linkageEntry, { maxLength: 8, selector: entry => entry.index }),
+    outputs: fc.uniqueArray(linkageEntry, { maxLength: 8, selector: entry => entry.index })
   })
   .map(value => value as MandalaLinkagePayload)
 
@@ -64,6 +64,19 @@ describe('overlay topic property tests', () => {
 
         expect(encoded).toEqual(Array.from(new TextEncoder().encode(JSON.stringify(payload))))
         expect(decodeLinkagePayload(encoded)).toEqual(payload)
+      })
+    )
+  })
+
+  test('rejects duplicate payload indices without changing valid wire bytes', () => {
+    fc.assert(
+      fc.property(linkageEntry, entry => {
+        for (const key of ['inputs', 'outputs', 'admin']) {
+          const payload = { inputs: [], outputs: [], [key]: [entry, entry] }
+          expect(() =>
+            decodeLinkagePayload(Array.from(new TextEncoder().encode(JSON.stringify(payload))))
+          ).toThrow('unique non-negative integer indices')
+        }
       })
     )
   })

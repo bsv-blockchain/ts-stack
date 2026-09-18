@@ -312,6 +312,9 @@ export class Brc29RemittanceModule implements RemittanceModule<
         origin
       )
 
+      if (internalizeResult.accepted !== true) {
+        return terminate('brc29.internalize_failed', 'Wallet did not accept the BRC-29 settlement.')
+      }
       return { action: 'accept', receiptData: { internalizeResult } }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

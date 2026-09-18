@@ -181,7 +181,10 @@ container migrations are coordinated programs, not routine bumps.
 Do not introduce a broad override or suppression. If no compatible upstream
 fix exists, register the narrowest temporary exception with an owner, evidence,
 review date, objective removal condition, and tests. Rehearse removal after
-relevant upstream releases.
+relevant upstream releases. Elapsed documentation and exception review dates
+are maintenance warnings in source CI, enforced by the separate weekly
+Maintenance review deadlines workflow. Passing time alone must not block a PR;
+structural errors, generated drift, security audits, and code checks still do.
 
 ## Versions, changelogs, and migrations
 

@@ -7,7 +7,8 @@ import { MerklePath } from '@bsv/sdk'
 import { EntityProvenTxReq } from './EntityProvenTxReq'
 import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
-import { assertSyncProofReplacementAuthorized } from '../../methods/validateSyncProof'
+import { assertSyncProofReplacementAuthorized, syncProofUpdatedAt } from '../../methods/validateSyncProof'
+import { getCanonicalMerklePath } from '../../../services/getCanonicalMerklePath'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
   private sameProof(candidate: TableProvenTx): boolean {
@@ -61,7 +62,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       r.rawTx = gr.rawTx!
     }
 
-    const gmpr = await services.getMerklePath(txid)
+    const gmpr = await getCanonicalMerklePath(services, await services.getChainTracker(), txid)
 
     if (gmpr.merklePath != null && gmpr.header != null) {
       const index = gmpr.merklePath.path[0].find(l => l.hash === txid)?.offset
@@ -252,7 +253,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     const ef = verifyOneOrNone(await storage.findProvenTxs({ partial: { txid: ei.txid }, trx }))
     return {
       found: ef != null,
-      eo: new EntityProvenTx(ef || { ...ei }),
+      eo: new EntityProvenTx(ef || { ...ei, updated_at: syncProofUpdatedAt(ei) }),
       eiId: verifyId(ei.provenTxId)
     }
   }
@@ -273,7 +274,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     if (this.sameProof(ei)) return false
     assertSyncProofReplacementAuthorized(ei)
     const update: Partial<TableProvenTx> = {
-      updated_at: ei.updated_at,
+      updated_at: syncProofUpdatedAt(ei, this.updated_at),
       height: ei.height,
       index: ei.index,
       merklePath: ei.merklePath,

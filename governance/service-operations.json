@@ -11,10 +11,11 @@
       "cspIsSeparate": true
     },
     "telemetry": {
-      "implementation": "Each standalone service retains a self-contained bootstrap because infrastructure build contexts cannot safely depend on an unpublished shared runtime package. CI enforces one behavioral and dependency contract across those bootstraps.",
+      "implementation": "Each standalone service retains a self-contained bootstrap because infrastructure build contexts cannot safely depend on an unpublished shared runtime package. CI enforces one behavioral and dependency contract across those bootstraps. Without a collector endpoint, telemetry is disabled by default; OTEL_CONSOLE_EXPORTERS=true explicitly enables local diagnostics. Application logging remains active, and console calls are bridged only in OTLP mode.",
       "environment": [
         "DEPLOY_ENV",
         "LOG_LEVEL",
+        "OTEL_CONSOLE_EXPORTERS",
         "OTEL_DIAG",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_HEADERS",

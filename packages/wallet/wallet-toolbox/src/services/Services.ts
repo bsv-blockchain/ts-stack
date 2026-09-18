@@ -46,6 +46,7 @@ import { doubleSha256BE, sha256Hash, wait } from '../utility/utilityHelpers'
 import { TableOutput } from '../storage/schema/tables/TableOutput'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 import { classifyOutputUtxo, requireConclusiveUtxo } from './classifyOutputUtxo'
+import { validateCanonicalMerklePathResult } from './getCanonicalMerklePath'
 
 export class Services implements WalletServices {
   static readonly getStatusForTxidsBatchLimit = 20
@@ -738,49 +739,86 @@ export class Services implements WalletServices {
     return header
   }
 
+  private async tryMerklePathProvider(
+    txid: string,
+    service: ServiceToCall<GetMerklePathService>,
+    aggregate: GetMerklePathResult,
+    logger?: WalletLoggerInterface
+  ): Promise<boolean> {
+    let result: GetMerklePathResult
+    try {
+      result = await service.service(txid, this)
+    } catch (error_: unknown) {
+      this.getMerklePathServices.addServiceCallError(service, WalletError.fromUnknown(error_))
+      return false
+    }
+
+    aggregate.notes?.push(...(result.notes ?? []))
+    aggregate.name ??= result.name
+    if (result.merklePath != null) {
+      try {
+        await validateCanonicalMerklePathResult(txid, result, await this.getChainTracker())
+        logger?.log(`${service.providerName} has canonical merklePath`)
+        Object.assign(aggregate, {
+          merklePath: result.merklePath,
+          header: result.header,
+          name: result.name,
+          error: undefined
+        })
+        this.getMerklePathServices.addServiceCallSuccess(service)
+        return true
+      } catch (error_: unknown) {
+        logger?.log(`${service.providerName} rejected non-canonical merklePath`)
+        result.error = WalletError.fromUnknown(error_)
+      }
+    } else {
+      logger?.log(`${service.providerName} no merklePath`)
+    }
+
+    if (result.error != null) this.getMerklePathServices.addServiceCallError(service, result.error)
+    else this.getMerklePathServices.addServiceCallFailure(service)
+    aggregate.error ??= result.error
+    return false
+  }
+
   async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> {
     const services = this.getMerklePathServices
     if (useNext === true) services.next()
 
-    const r0: GetMerklePathResult = { notes: [] }
-
+    const result: GetMerklePathResult = { notes: [] }
     logger?.group('services getMerklePath')
     for (let tries = 0; tries < services.count; tries++) {
-      const stc = services.serviceToCall
-      try {
-        const r = await stc.service(txid, this)
-        if (r.notes != null) {
-          r0.notes = r0.notes ?? []
-          r0.notes.push(...r.notes)
-        }
-        r0.name ??= r.name
-        if (r.merklePath == null) {
-          logger?.log(`${stc.providerName} no merklePath`)
-        } else {
-          logger?.log(`${stc.providerName} has merklePath`)
-          // If we have a proof, call it done.
-          r0.merklePath = r.merklePath
-          r0.header = r.header
-          r0.name = r.name
-          r0.error = undefined
-          services.addServiceCallSuccess(stc)
-          break
-        }
-
-        if (r.error != null) services.addServiceCallError(stc, r.error)
-        else services.addServiceCallFailure(stc)
-
-        if (r.error != null && r0.error == null) {
-          // If we have an error and didn't before...
-          r0.error = r.error
-        }
-      } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        services.addServiceCallError(stc, e)
-      }
+      if (await this.tryMerklePathProvider(txid, services.serviceToCall, result, logger)) break
       services.next()
     }
-    return r0
+    return result
+  }
+
+  async getValidatedMerklePath(
+    txid: string,
+    validate: (result: GetMerklePathResult) => Promise<void>
+  ): Promise<GetMerklePathResult> {
+    const services = this.getMerklePathServices
+    const calls = services.allServicesToCall
+    const start = services.index
+    let error: WalletError | undefined
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[(start + i) % calls.length]
+      try {
+        const result = await call.service(txid, this)
+        if (result.merklePath == null) {
+          throw result.error ?? new WERR_INVALID_OPERATION('Proof provider returned no Merkle path')
+        }
+        await validateCanonicalMerklePathResult(txid, result, await this.getChainTracker())
+        await validate(result)
+        services.addServiceCallSuccess(call)
+        return result
+      } catch (cause) {
+        error = WalletError.fromUnknown(cause)
+        services.addServiceCallError(call, error)
+      }
+    }
+    return { error, notes: [] }
   }
 
   async updateFiatExchangeRates(

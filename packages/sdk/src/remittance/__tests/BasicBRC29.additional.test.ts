@@ -18,7 +18,7 @@ const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface =
   ({
     getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
     createAction: jest.fn(async () => ({ tx: [1, 2, 3] })),
-    internalizeAction: jest.fn(async () => ({ ok: true })),
+    internalizeAction: jest.fn(async () => ({ accepted: true })),
     ...overrides
   }) as unknown as WalletInterface
 

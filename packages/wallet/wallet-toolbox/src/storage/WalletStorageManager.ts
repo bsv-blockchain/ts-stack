@@ -1,3 +1,5 @@
+import { SyncPageBudget } from './sync/SyncPageBudget'
+import { validateSyncCheckpoint } from './sync/syncCheckpoint'
 import {
   AbortActionArgs,
   AbortActionResult,
@@ -25,13 +27,14 @@ import {
   TableUser
 } from '../storage/schema/tables'
 import { StorageProvider } from './StorageProvider'
+import { getCanonicalMerklePath } from '../services/getCanonicalMerklePath'
 
 interface PreparedBeefInvalidationExtension {
   invalidatePreparedBeefs: (trx?: sdk.TrxToken) => Promise<number>
   suspendPreparedBeefReads: () => () => void
 }
 
-async function invalidatePreparedBeefs (storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
+async function invalidatePreparedBeefs(storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
   const extension = storage as unknown as Partial<PreparedBeefInvalidationExtension>
   if (typeof extension.invalidatePreparedBeefs === 'function') {
     await extension.invalidatePreparedBeefs.call(storage, trx)
@@ -402,9 +405,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
   invalidatePreparedBeefsForReorg(): Promise<void> {
     const active = this.getActive()
     const extension = active as unknown as Partial<PreparedBeefInvalidationExtension>
-    const release = typeof extension.suspendPreparedBeefReads === 'function'
-      ? extension.suspendPreparedBeefReads.call(active)
-      : undefined
+    const release =
+      typeof extension.suspendPreparedBeefReads === 'function'
+        ? extension.suspendPreparedBeefReads.call(active)
+        : undefined
     return this.runAsStorageProvider(async storage => {
       await storage.transaction(async trx => {
         await invalidatePreparedBeefs(storage, trx)
@@ -518,9 +522,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async prepareNoSendExpiry(
-    args: Validation.ValidCreateActionArgs
-  ): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+  async prepareNoSendExpiry(args: Validation.ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
     return await this.runAsWriter(async writer => {
       if (writer.prepareNoSendExpiry == null) {
         throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
@@ -798,7 +800,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const services = this.getServices()
     const chaintracker = await services.getChainTracker()
 
-    const mpr = await services.getMerklePath(ptx.txid)
+    const mpr = await getCanonicalMerklePath(services, chaintracker, ptx.txid)
     if (mpr.merklePath != null && mpr.header != null) {
       const mp = mpr.merklePath
       const h = mpr.header
@@ -835,6 +837,31 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return r
   }
 
+  private async loadSyncRequest(
+    auth: sdk.AuthId,
+    writer: sdk.WalletStorageSync,
+    readerSettings: TableSettings,
+    toStorageIdentityKey: string
+  ): Promise<sdk.RequestSyncChunkArgs> {
+    const compact = await writer.getSyncCheckpoint?.(
+      auth,
+      readerSettings.storageIdentityKey,
+      readerSettings.storageName
+    )
+    if (compact != null) {
+      return {
+        ...validateSyncCheckpoint(compact),
+        identityKey: auth.identityKey,
+        fromStorageIdentityKey: readerSettings.storageIdentityKey,
+        toStorageIdentityKey,
+        maxItems: 1000,
+        maxRoughSize: 10000000
+      }
+    }
+    const ss = await EntitySyncState.fromStorage(writer, auth.identityKey, readerSettings)
+    return ss.makeRequestSyncChunkArgs(auth.identityKey, toStorageIdentityKey)
+  }
+
   async syncFromReader(
     identityKey: string,
     reader: sdk.WalletStorageSyncReader,
@@ -855,21 +882,33 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
       log += `syncFromReader from ${readerSettings.storageName} to ${writerSettings.storageName}\n`
 
+      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
+        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      let args = await loadRequest()
+      const budget = new SyncPageBudget()
       let i = -1
       for (;;) {
         i++
-        const ss = await EntitySyncState.fromStorage(writer, identityKey, readerSettings)
-        const args = ss.makeRequestSyncChunkArgs(identityKey, writerSettings.storageIdentityKey)
-        const chunk = await reader.getSyncChunk(args)
+        // Keep the caller/provider ceiling independent from this session's
+        // adaptive limit so a fast page can grow the next request again.
+        const pageArgs = budget.apply(args)
+        pageArgs.includeNextCheckpoint = true
+        const startedAt = Date.now()
+        const chunk = await reader.getSyncChunk(pageArgs)
         if (chunk.user != null) {
           // Merging state from a reader cannot update activeStorage
           chunk.user.activeStorage = ((this._active as ManagedStorage).user as TableUser).activeStorage
         }
-        const r = await writer.processSyncChunk(args, chunk)
+        const r = await writer.processSyncChunk(pageArgs, chunk)
+        budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
         log += `chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`
         if (r.done) break
+        args =
+          r.nextCheckpoint == null
+            ? await loadRequest()
+            : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
       }
       log += `syncFromReader complete: ${inserts} inserts, ${updates} updates\n`
       return log
@@ -886,7 +925,6 @@ export class WalletStorageManager implements sdk.WalletStorage {
     progLog?: (s: string) => string
   ): Promise<{ inserts: number; updates: number; log: string }> {
     progLog ||= s => s
-    const identityKey = auth.identityKey
 
     const writerSettings = await writer.makeAvailable()
 
@@ -899,18 +937,30 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
 
+      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
+        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      let args = await loadRequest()
+      const budget = new SyncPageBudget()
       let i = -1
       for (;;) {
         i++
-        const ss = await EntitySyncState.fromStorage(writer, identityKey, readerSettings)
-        const args = ss.makeRequestSyncChunkArgs(identityKey, writerSettings.storageIdentityKey)
-        const chunk = await reader.getSyncChunk(args)
+        // Keep the caller/provider ceiling independent from this session's
+        // adaptive limit so a fast page can grow the next request again.
+        const pageArgs = budget.apply(args)
+        pageArgs.includeNextCheckpoint = true
+        const startedAt = Date.now()
+        const chunk = await reader.getSyncChunk(pageArgs)
         log += EntitySyncState.syncChunkSummary(chunk)
-        const r = await writer.processSyncChunk(args, chunk)
+        const r = await writer.processSyncChunk(pageArgs, chunk)
+        budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
         log += progLog(`chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`)
         if (r.done) break
+        args =
+          r.nextCheckpoint == null
+            ? await loadRequest()
+            : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
       }
       log += progLog(`syncToWriter complete: ${inserts} inserts, ${updates} updates\n`)
       return log

@@ -12,18 +12,17 @@ tags: [reference, ttn, releases, containers, operations]
 
 # TerraTestNet Rollout Gate
 
-The merged TTN source is a release-held candidate. It does not make the
-currently published packages or infrastructure images TTN-capable, and merging
-it does not authorize a package release, image build, or deployment.
+TTN source support alone does not establish that published packages or deployed
+images support TTN. Verify exact released artifacts and deployment evidence;
+merging source does not authorize a package release, image build, or deployment.
 
 ## Required release order
 
 1. Publish the reviewed TTN package candidates through the OIDC release
    workflow, beginning with `@bsv/sdk` and then its affected dependents.
-2. Reconcile every infrastructure package manifest and lockfile to the newly
-   published versions. In particular, the checked-in overlay, wallet, Message
-   Box, WAB, ChainTracks, and UHRP image manifests still resolve pre-TTN SDK or
-   wallet/overlay package versions.
+2. Reconcile every infrastructure package manifest and lockfile to verified
+   TTN-capable versions, including overlay, wallet, Message Box, WAB, ChainTracks,
+   and UHRP. A source workspace dependency does not prove image contents.
 3. Rebuild Linux/amd64 images in CI, retain their immutable digests and
    attestations, and run the container smoke and vulnerability gates.
 4. Provision a dedicated TTN Message Box endpoint. TTN clients intentionally

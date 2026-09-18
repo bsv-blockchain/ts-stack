@@ -1,3 +1,8 @@
+import { StorageKnex } from '../StorageKnex'
+import { KnexSyncTransferStore } from './KnexSyncTransferStore'
+import { decodeSyncTransfer, encodeSyncTransfer, syncTransferDigest,
+  SYNC_TRANSFER_MAX_BYTES, SYNC_TRANSFER_PART_BYTES } from './SyncTransfer'
+import { syncChunkBinary } from './syncChunkBinary'
 /**
  * StorageServer.ts
  *
@@ -56,7 +61,7 @@ import {
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
 import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
-import { validateSyncProof } from '../methods/validateSyncProof'
+import { validateSyncProofs } from './validateRpcSyncProofs'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -72,6 +77,7 @@ const storageRpcMethods = new Set([
   'extendActionBatch',
   'findCertificatesAuth',
   'findOrInsertSyncStateAuth',
+  'getSyncCheckpoint',
   'findOrInsertUser',
   'findOutputBaskets',
   'findOutputBasketsAuth',
@@ -111,6 +117,7 @@ const authIdRpcMethods = new Set([
   'extendActionBatch',
   'findCertificatesAuth',
   'findOrInsertSyncStateAuth',
+  'getSyncCheckpoint',
   'findOutputBaskets',
   'findOutputBasketsAuth',
   'findOutputsAuth',
@@ -168,6 +175,11 @@ function requiredAuthenticatedIdentityKey(req: Request): string {
     throw new WERR_UNAUTHORIZED('authenticated request identity is required')
   }
   return identityKey
+}
+
+function escapeRpcJson(serialized: string): string {
+  const escapes: Record<string, string> = { '<': String.raw`\u003c`, '>': String.raw`\u003e`, '&': String.raw`\u0026` }
+  return serialized.replace(/[<>&]/g, character => escapes[character])
 }
 
 function firstRequestHeader(req: Request, name: string): string | undefined {
@@ -232,11 +244,14 @@ export interface WalletStorageServerOptions {
   maxRpcArrayItems?: number
   /** Maximum serialized JSON-RPC response bytes. Use -1 to disable. */
   maxRpcResponseBytes?: number
+  /** Disable the additive durable transfer transport during a mixed-version rollout. Knex only. */
+  syncTransfers?: boolean
   /** Durable BRC-105 replay claims for monetized multi-replica deployments. */
   paymentReplayStore?: PaymentReplayStore
 }
 
 export class StorageServer {
+  private readonly syncTransfers?: KnexSyncTransferStore
   private readonly app = express()
   private readonly host?: string
   private readonly port: number
@@ -336,6 +351,21 @@ export class StorageServer {
       this.defaultRpcListLimit > this.maxRpcListLimit
     ) {
       throw new RangeError('defaultRpcListLimit must not exceed maxRpcListLimit')
+    }
+
+    const jsonBodyLimit = readBodyLimitBytes('WALLET_STORAGE_JSON', profileValue(profile, {
+      small: 2 * 1024 * 1024, standard: 8 * 1024 * 1024, highThroughput: 32 * 1024 * 1024
+    }))
+    // Keep legacy configurations working when their envelopes cannot fit even a minimum part.
+    if (options.syncTransfers !== false && storage instanceof StorageKnex && jsonBodyLimit >= 4096 &&
+      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= 4096)) {
+      this.syncTransfers = new KnexSyncTransferStore(storage.knex, {
+        version: 1, maxBytes: SYNC_TRANSFER_MAX_BYTES,
+        inlineBytes: Math.min(6 * 1024 * 1024, Math.floor(jsonBodyLimit / 2),
+          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_MAX_BYTES : Math.floor(this.maxRpcResponseBytes / 2)),
+        partBytes: Math.min(SYNC_TRANSFER_PART_BYTES, Math.floor(jsonBodyLimit / 4),
+          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_PART_BYTES : Math.floor(this.maxRpcResponseBytes / 4))
+      })
     }
 
     const legacyLogShortReqs = (options as unknown as Record<string, unknown>)['logShortReqs']
@@ -559,7 +589,9 @@ export class StorageServer {
     const logObj = this.createRpcLog(req, method, id, params)
     try {
       this.enforceRpcRequestBudgets(method, params)
-      const dispatch = await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      const dispatch = method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
+        ? await this.dispatchSyncTransfer(method, params, req)
+        : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
       if (!dispatch.found) {
         return this.sendRpc(
           res,
@@ -572,10 +604,30 @@ export class StorageServer {
           400
         )
       }
-      return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result: dispatch.result, id })
+      const result = useBinary && method === 'getSyncChunk'
+        ? syncChunkBinary(dispatch.result as SyncChunk)
+        : dispatch.result
+      const payload = { jsonrpc: '2.0', result, id }
+      const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
+      // Apply the response bound before consulting any client transport preference.
+      if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
+        return await this.sendOversizedSyncResponse(req, res, useBinary, method, params, payload)
+      }
+      return this.sendRpc(res, useBinary, payload, 200, serialized)
     } catch (error: unknown) {
       return this.sendRpcError(res, useBinary, id, error)
     }
+  }
+
+  private async sendOversizedSyncResponse(req: Request, res: Response, useBinary: boolean,
+    method: string, params: any[], payload: { jsonrpc: string; result: unknown; id: unknown }): Promise<Response> {
+    // Dispatch already applied normal RPC authorization. Negotiation changes only framing.
+    if (method !== 'getSyncChunk' || params[0]?.syncTransferVersion !== 1 || this.syncTransfers == null) {
+      return this.sendRpc(res, useBinary, payload)
+    }
+    const manifest = await this.syncTransfers.beginRead(requiredAuthenticatedIdentityKey(req),
+      syncTransferDigest(encodeSyncTransfer(params[0])), encodeSyncTransfer(syncChunkBinary(payload.result as SyncChunk)))
+    return this.sendRpc(res, useBinary, { ...payload, result: { syncTransfer: manifest } })
   }
 
   private traceHttpRequest(req: Request, res: Response, next: express.NextFunction): void {
@@ -611,9 +663,9 @@ export class StorageServer {
     next()
   }
 
-  private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
+  private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200,
+    serialized: string = escapeRpcJson(stringifyJsonRpc(payload, useBinary))): Response {
     res.set('X-Content-Type-Options', 'nosniff')
-    const serialized = stringifyJsonRpc(payload, useBinary)
     if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
       return res.status(413).json({
         jsonrpc: '2.0',
@@ -668,6 +720,8 @@ export class StorageServer {
       const current = pending.pop()!
       if (current.depth > 64) throw new RangeError('RPC parameter nesting exceeds 64 levels')
       if (current.value == null || typeof current.value !== 'object') continue
+      // Decoded binary values are bounded by the HTTP body limit, not item cardinality.
+      if (current.value instanceof Uint8Array) continue
       if (seen.has(current.value)) continue
       seen.add(current.value)
       if (Array.isArray(current.value) && current.value.length > this.maxRpcArrayItems) {
@@ -763,12 +817,17 @@ export class StorageServer {
 
     const logger = this.createRpcLogger(method, params)
     try {
-      const result = await this.traceRpcStep(
+      let result = await this.traceRpcStep(
         'wallet.storage.handler',
         rpcSpan,
         async () => await storageHandler.call(this.storage, ...params),
         { 'rpc.method': method }
       )
+      if ((method === 'makeAvailable' || method === 'getSettings') && typeof this.storage.getSyncCheckpoint === 'function') {
+        // Advertise on the wire without mutating the persisted settings object.
+        result = { ...result, syncCheckpointVersion: 1,
+          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities }) }
+      }
       this.finishRpcLogging(logger, result)
       return { found: true, result }
     } catch (error: unknown) {
@@ -776,6 +835,67 @@ export class StorageServer {
       logger?.flush?.()
       throw error
     }
+  }
+
+  private async dispatchSyncTransfer(method: string, params: any[], req: Request): Promise<RpcDispatchResult> {
+    const transfers = this.syncTransfers
+    if (transfers == null) return { found: false }
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    const input = params[0]
+    if (input == null || typeof input !== 'object' || input.identityKey !== identityKey) {
+      throw new WERR_UNAUTHORIZED('Sync transfer identity must match authentication')
+    }
+    let result: unknown
+    switch (method) {
+      case 'beginReadSyncTransfer': {
+        const args = input.args
+        if (args?.identityKey !== identityKey ||
+          args.fromStorageIdentityKey !== this.storage.getSettings().storageIdentityKey) {
+          throw new WERR_UNAUTHORIZED('Sync transfer source must match authenticated storage')
+        }
+        // Retain existing request validation, authorization, ordering and user scoping.
+        const context = syncTransferDigest(encodeSyncTransfer(args))
+        this.enforceRpcRequestBudgets('getSyncChunk', [args])
+        await this.authorizeRpcCall('getSyncChunk', [args], req)
+        const chunk = await this.storage.getSyncChunk(args)
+        const bytes = encodeSyncTransfer(syncChunkBinary(chunk))
+        result = await transfers.beginRead(identityKey, context, bytes)
+        break
+      }
+      case 'readSyncTransferPart':
+        result = await transfers.read(identityKey, input.transferId, input.offset)
+        break
+      case 'beginWriteSyncTransfer':
+        result = await transfers.beginWrite(identityKey, input.digest, input.totalBytes)
+        break
+      case 'writeSyncTransferPart':
+        result = await transfers.write(identityKey, input.transferId, input.offset, input.bytes)
+        break
+      case 'commitSyncTransfer': {
+        const staged = await transfers.loadWrite(identityKey, input.transferId)
+        if (staged.result !== undefined) return { found: true, result: staged.result }
+        const payload = decodeSyncTransfer(staged.bytes) as { args: AuthId & Record<string, unknown>; chunk: SyncChunk }
+        if (payload?.args?.identityKey !== identityKey || payload.chunk?.userIdentityKey !== identityKey ||
+          payload.args.toStorageIdentityKey !== this.storage.getSettings().storageIdentityKey ||
+          payload.chunk.toStorageIdentityKey !== payload.args.toStorageIdentityKey ||
+          payload.chunk.fromStorageIdentityKey !== payload.args.fromStorageIdentityKey) {
+          throw new WERR_UNAUTHORIZED('Sync transfer wallet and storage identities must match')
+        }
+        // Mark only the reconstructed request: old peers retain their existing wire contract.
+        payload.args.requireMatchingCheckpoint = true
+        this.enforceRpcRequestBudgets('processSyncChunk', [payload.args, payload.chunk])
+        const dispatch = await this.dispatchRpcCall('processSyncChunk', [payload.args, payload.chunk], req)
+        result = dispatch.result
+        await transfers.complete(identityKey, input.transferId, result)
+        break
+      }
+      case 'releaseSyncTransfer':
+        await transfers.release(identityKey, input.transferId)
+        result = true
+        break
+      default: return { found: false }
+    }
+    return { found: true, result }
   }
 
   private async traceRpcStep<T>(
@@ -820,9 +940,7 @@ export class StorageServer {
       case 'processSyncChunk':
         await this.validateParam0(params, req)
         validateSyncChunkEntities(params[1] as SyncChunk)
-        for (const proof of (params[1] as SyncChunk).provenTxs ?? []) {
-          await validateSyncProof(this.storage, proof)
-        }
+        await validateSyncProofs(this.storage, (params[1] as SyncChunk).provenTxs ?? [])
         return true
       default:
         await this.authorizeStandardRpcCall(method, params, req)

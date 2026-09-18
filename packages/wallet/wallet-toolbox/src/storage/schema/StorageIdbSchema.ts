@@ -145,6 +145,7 @@ export interface StorageIdbSchema {
     value: TableTransaction
     indexes: {
       userId: number
+      txid_userId: [string, number]
       provenTxId: number
       reference: string
       status: TransactionStatus

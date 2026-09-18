@@ -874,6 +874,48 @@ describe('MessageBoxClient hardening branches', () => {
       ).resolves.toBe(false)
     })
 
+    it('acknowledges a notification only after wallet acceptance and passes its originator', async () => {
+      const order: string[] = []
+      const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockImplementation(async () => {
+        order.push('ack')
+        return 'ok'
+      })
+      ;(client as any).originator = 'app.example'
+      const payment = { tx: [1, 2, 3], outputs: [{ outputIndex: 0, protocol: 'wallet payment' }] }
+      const message = {
+        messageId: 'payment-notice',
+        sender: recipientA,
+        body: { message: 'hello', payment }
+      } as any
+      wallet.internalizeAction.mockImplementation(async () => {
+        order.push('internalize')
+        return { accepted: true }
+      })
+      await expect(client.acknowledgeNotification(message)).resolves.toBe(true)
+      expect(order).toEqual(['internalize', 'ack'])
+      expect(wallet.internalizeAction).toHaveBeenCalledWith(expect.anything(), 'app.example')
+      acknowledge.mockClear()
+      for (const result of [{ accepted: false }, {}]) {
+        wallet.internalizeAction.mockResolvedValueOnce(result as never)
+        await expect(client.acknowledgeNotification(message)).resolves.toBe(false)
+      }
+      wallet.internalizeAction.mockRejectedValueOnce(new Error('wallet unavailable'))
+      await expect(client.acknowledgeNotification(message)).resolves.toBe(false)
+      await expect(
+        client.acknowledgeNotification({
+          ...message,
+          body: { message: 'hello', payment: { tx: [1] } }
+        })
+      ).resolves.toBe(false)
+      await expect(
+        client.acknowledgeNotification({
+          ...message,
+          body: { message: 'hello', payment: { ...payment, outputs: [] } }
+        })
+      ).resolves.toBe(false)
+      expect(acknowledge).not.toHaveBeenCalled()
+    })
+
     it.each([
       [{ fcmToken: '' }, 'fcmToken is required'],
       [{ fcmToken: 'x'.repeat(501) }, 'must not exceed 500'],

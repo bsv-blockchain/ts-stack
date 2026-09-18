@@ -8,6 +8,7 @@ export interface ReviewHeightRangeResult {
   mismatchedHeights: number
   affectedTransactions: number
   updatedTransactions: number
+  unresolvedHeights: number[]
 }
 
 interface ReviewProvenTxsCheckpoint {
@@ -20,6 +21,7 @@ interface ReviewProvenTxsCheckpoint {
   mismatchedHeights: number
   affectedTransactions: number
   updatedTransactions: number
+  retryHeights?: number[]
   reviewLog?: string
 }
 
@@ -34,23 +36,28 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
   static readonly taskName = 'ReviewProvenTxs'
 
   private static checkNowRequested = false
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
   triggerNextMsecs: number
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 10,
     public maxHeightsPerRun = 100,
     public minBlockAge = 100,
-    public triggerQuickMsecs = Monitor.oneMinute * 1
+    public triggerQuickMsecs = Monitor.oneMinute * 1,
+    public maxRetryHeightsPerRun = 25
   ) {
     super(monitor, TaskReviewProvenTxs.taskName)
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewProvenTxs.checkNow ||
@@ -58,43 +65,87 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     TaskReviewProvenTxs.checkNow = false
 
     const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
     const tipHeight = await chaintracks.currentHeight()
     const maxEligibleHeight = tipHeight - this.minBlockAge
-    const lastReviewedHeight = await this.getLastReviewedHeight()
+    const checkpoint = await this.getLastCheckpoint()
+    const lastReviewedHeight = checkpoint?.reviewedThroughHeight ?? (await this.getLastReviewedHeight())
     const startHeight = lastReviewedHeight === undefined ? 0 : lastReviewedHeight + 1
     const endHeight = Math.min(startHeight + this.maxHeightsPerRun - 1, maxEligibleHeight)
     const range = new HeightRange(startHeight, endHeight)
-    if (range.isEmpty) return ''
+    const priorRetryHeights = [...new Set(checkpoint?.retryHeights ?? [])].filter(
+      height => Number.isInteger(height) && height >= 0
+    )
+    // Retain temporarily ineligible heights if the tip retreats. Eligibility
+    // limits this attempt, not the durable queue of unresolved work.
+    const retryBatch =
+      this.maxRetryHeightsPerRun > 0
+        ? priorRetryHeights.filter(height => height <= maxEligibleHeight).slice(0, this.maxRetryHeightsPerRun)
+        : []
+    if (range.isEmpty && retryBatch.length === 0) return ''
 
-    let log = `reviewing heights ${range.minHeight}..${range.maxHeight} tip=${tipHeight} minAge=${this.minBlockAge} maxPerRun=${this.maxHeightsPerRun}\n`
-    const review = await this.reviewHeightRange(range)
+    let log = ''
+    const review: ReviewHeightRangeResult = {
+      log: '',
+      reviewedHeights: 0,
+      mismatchedHeights: 0,
+      affectedTransactions: 0,
+      updatedTransactions: 0,
+      unresolvedHeights: []
+    }
+    const mergeReview = (part: ReviewHeightRangeResult): void => {
+      review.log += part.log
+      review.reviewedHeights += part.reviewedHeights
+      review.mismatchedHeights += part.mismatchedHeights
+      review.affectedTransactions += part.affectedTransactions
+      review.updatedTransactions += part.updatedTransactions
+      review.unresolvedHeights.push(...part.unresolvedHeights)
+    }
+
+    if (retryBatch.length > 0) {
+      log += `retrying unresolved heights ${retryBatch.join(',')}\n`
+      for (const height of retryBatch) mergeReview(await this.reviewHeightRange(new HeightRange(height, height)))
+    }
+    if (!range.isEmpty) {
+      log += `reviewing heights ${range.minHeight}..${range.maxHeight} tip=${tipHeight} minAge=${this.minBlockAge} maxPerRun=${this.maxHeightsPerRun}\n`
+      mergeReview(await this.reviewHeightRange(range))
+    }
     log += review.log
+
+    const attemptedRetries = new Set(retryBatch)
+    // Failed attempts move behind waiting heights so persistent failures cannot
+    // monopolize the next batch, including after a monitor restart.
+    const retryHeights = [
+      ...new Set([...priorRetryHeights.filter(height => !attemptedRetries.has(height)), ...review.unresolvedHeights])
+    ]
+    const reviewedThroughHeight = range.isEmpty ? (lastReviewedHeight ?? -1) : range.maxHeight
 
     return JSON.stringify({
       tipHeight,
       minBlockAge: this.minBlockAge,
       maxHeightsPerRun: this.maxHeightsPerRun,
       startHeight,
-      reviewedThroughHeight: range.maxHeight,
+      reviewedThroughHeight,
       reviewedHeights: review.reviewedHeights,
       mismatchedHeights: review.mismatchedHeights,
       affectedTransactions: review.affectedTransactions,
       updatedTransactions: review.updatedTransactions,
+      retryHeights,
       reviewLog: log
     } satisfies ReviewProvenTxsCheckpoint)
   }
 
-  async reviewHeightRange (range: HeightRange): Promise<ReviewHeightRangeResult> {
+  async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> {
     const result: ReviewHeightRangeResult = {
       log: '',
       reviewedHeights: 0,
       mismatchedHeights: 0,
       affectedTransactions: 0,
-      updatedTransactions: 0
+      updatedTransactions: 0,
+      unresolvedHeights: []
     }
 
     if (range.isEmpty) {
@@ -113,6 +164,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       const header = await chaintracks.findHeaderForHeight(height)
       if (header == null) {
         result.log += `  height ${height} canonical header unavailable\n`
+        result.unresolvedHeights.push(height)
         continue
       }
 
@@ -125,19 +177,38 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
 
       result.mismatchedHeights++
       result.log += `  height ${height} canonical ${header.merkleRoot} stale ${staleRoots.join(',')}\n`
+      let unresolved = false
 
       for (const staleRoot of staleRoots) {
         const reprove = await this.storage.reproveHeightMerkleRoot(height, staleRoot)
         result.affectedTransactions += reprove.updated.length + reprove.unchanged.length + reprove.unavailable.length
         result.updatedTransactions += reprove.updated.length
+        if (reprove.unchanged.length > 0 || reprove.unavailable.length > 0) unresolved = true
         result.log += reprove.log
       }
+      if (unresolved) result.unresolvedHeights.push(height)
     }
 
     return result
   }
 
-  async getLastReviewedHeight (): Promise<number | undefined> {
+  async getLastReviewedHeight(): Promise<number | undefined> {
+    const checkpoint = await this.getLastCheckpoint()
+    if (checkpoint?.reviewedThroughHeight != null) return checkpoint.reviewedThroughHeight
+
+    let lastReviewedHeight: number | undefined
+    await this.storage.runAsStorageProvider(async sp => {
+      // Start at height of first proven tx when it appears...
+      const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })
+      if (ptxs.length > 0) {
+        lastReviewedHeight = ptxs[0].height - 1
+      }
+    })
+
+    return lastReviewedHeight
+  }
+
+  async getLastCheckpoint(): Promise<Partial<ReviewProvenTxsCheckpoint> | undefined> {
     let events: Array<{ details?: string }> = []
     await this.storage.runAsStorageProvider(async sp => {
       events = await sp.findMonitorEvents({
@@ -152,22 +223,13 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       try {
         const parsed = JSON.parse(event.details) as Partial<ReviewProvenTxsCheckpoint>
         if (typeof parsed.reviewedThroughHeight === 'number') {
-          return parsed.reviewedThroughHeight
+          return parsed
         }
       } catch {
         continue
       }
     }
 
-    let lastReviewedHeight: number | undefined
-    await this.storage.runAsStorageProvider(async sp => {
-      // Start at height of first proven tx when it appears...
-      const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })
-      if (ptxs.length > 0) {
-        lastReviewedHeight = ptxs[0].height - 1
-      }
-    })
-
-    return lastReviewedHeight
+    return undefined
   }
 }

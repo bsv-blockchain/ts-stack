@@ -13,6 +13,14 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## Large wallet records
+
+Compatible providers negotiate authenticated, integrity-checked transfers for
+records that exceed a single HTTP message. Uploads resume saved pieces after
+interruption; ordinary pages and legacy providers retain their existing protocol.
+Version 1 is bounded to 64 MiB per frame and requires an upgraded provider.
+See the [transfer and migration guide](../docs/sync-transfer.md).
+
 ## Install
 
 Install the `@bsv/sdk` peer dependency alongside this package:
@@ -157,3 +165,12 @@ This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 browser build.
+
+### Local sync database upgrade
+
+IndexedDB automatically upgrades to schema version 6, adding a non-unique
+transaction-ID/user index without replacing wallet records. Exact transaction,
+reference, reclaim, commission, and relation lookups avoid repeated full-wallet
+scans during restores. Legacy duplicate transaction IDs remain intact. Clients
+that request an older IndexedDB schema version cannot reopen this database;
+retain a compatible client when using the local backup.

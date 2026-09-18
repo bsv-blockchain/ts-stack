@@ -5,19 +5,40 @@ import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 
-interface SyncProofValidationStorage {
+export interface SyncProofValidationStorage {
   getServices: () => WalletServices
 }
 
 const replacementAuthorized = new WeakSet<TableProvenTx>()
 const insertOnly = new WeakSet<TableProvenTx>()
+const reconciled = new WeakSet<TableProvenTx>()
 
 function equalBytes(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
+/** Identifies a structurally valid proof which needs current-chain reconciliation. */
+export class StaleSyncProofError extends WERR_INVALID_PARAMETER {
+  constructor() {
+    super('provenTx', 'a server-verified proof. Merkle root is not active at the recorded height')
+  }
+}
+
 function invalidSyncProof(message: string): never {
   throw new WERR_INVALID_PARAMETER('provenTx', `a server-verified proof. ${message}`)
+}
+
+/** Mark a fully validated reconciliation without changing the source cursor timestamp. */
+export function markSyncProofReconciled(candidate: TableProvenTx): void {
+  if (!replacementAuthorized.has(candidate)) invalidSyncProof('reconciliation requires active-chain validation')
+  reconciled.add(candidate)
+}
+
+/** A local correction must be discoverable by subsequent incremental readers. */
+export function syncProofUpdatedAt(candidate: TableProvenTx, existing?: Date): Date {
+  return reconciled.has(candidate)
+    ? new Date(Math.max(Date.now(), candidate.updated_at.getTime(), (existing?.getTime() ?? -1) + 1))
+    : candidate.updated_at
 }
 
 /** Normalize text-key identifiers before lookup or persistence. */
@@ -104,7 +125,7 @@ export async function validateSyncProof(
     const services = storage.getServices()
     const chainTracker = await services.getChainTracker()
     if (!(await chainTracker.isValidRootForHeight(root, candidate.height))) {
-      invalidSyncProof('Merkle root is not active at the recorded height')
+      throw new StaleSyncProofError()
     }
 
     const header = await services.getHeaderForHeight(candidate.height)

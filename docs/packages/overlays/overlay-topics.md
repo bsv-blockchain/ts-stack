@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.7.1'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.8.0'
+last_updated: '2026-09-15'
+last_verified: '2026-09-15'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
@@ -207,3 +207,48 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-topics/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-topics)
+
+## UORA v3 reader compatibility
+
+Version 1.7.2 aligns `readUoraAnchor` and `tm_uora_dpp` with the UORA v3 format:
+a 33-byte compressed locking key, eight fields, exactly four `OP_2DROP`
+instructions, and printable UTF-8 text without C0/C1 controls or DEL. Valid
+anchors keep the same bytes, signing preimage, topic identifier and admission
+result. Unicode text remains supported; no new normalization is applied.
+
+Coordinate reader upgrades across nodes serving `tm_uora_dpp`. Audit any
+previously indexed nonconforming outputs before rebuilding that topic, because
+older readers may have admitted inputs that the format does not permit.
+Repository fixtures establish format compatibility; they do not establish an
+inventory of every deployed or historical anchor. Other topics, lookup query
+shapes and persisted schemas are unchanged.
+
+### Mandala admission and the 1.8.0 upgrade
+
+Use the same `MandalaStorageManager` for Mandala admission and lookup. The
+reference store now implements `isAdminOutpoint(assetId, txid, outputIndex)`
+against admitted admin history. Custom adapters must implement that predicate;
+a missing verifier rejects non-genesis admin actions. Its optional TypeScript
+member preserves source compatibility, not permission to bypass verification.
+Never implement it as a constant `true`.
+
+Registration must omit `assetId` or use an empty string: the registration's own
+outpoint defines its asset. Subsequent admin actions must spend a previously
+admitted admin output for that same asset. Token spends require a stored owner
+row matching the source outpoint, asset and amount. Optional input linkage
+corroborates that owner and the source locking key; it cannot replace missing
+state. Sender blinding and transfers without input linkage remain supported
+when authoritative owner state is present. Linkage arrays require unique,
+non-negative integer indices.
+
+Before upgrading an existing Mandala deployment, back up and audit its admin
+history and token-owner records. Restore missing rows from verified admission
+evidence before historical replay; do not infer authority from a submitted
+payload. The engine identifies admissible outputs before sending spend
+notifications, so normal admission can read the owner before lookup removes
+the spent row. Custom replay adapters must preserve that ordering. These checks
+do not retroactively validate old records.
+
+Coordinate the admission and lookup upgrade. Existing valid wire fields and
+encodings are unchanged, and no database collection migration is required.
+Keep the new admission checks enabled while repairing historical data.

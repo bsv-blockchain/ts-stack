@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Maintenance
+
+- Align the development-only Vitest runner and V8 coverage provider at 4.1.11.
+  Consumer APIs and payment protocol behavior are unchanged.
+
 ### Security
 
 - Bind route pricing and wallet internalization to the BRC-95 Atomic BEEF

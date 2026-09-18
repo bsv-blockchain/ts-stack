@@ -1,7 +1,7 @@
 import { TaskArcadeSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 import { EntityProvenTx } from '../../../storage/schema/entities'
-import { Utils } from '@bsv/sdk'
+import { MerklePath, Utils } from '@bsv/sdk'
 
 // ── Fake EventSource ─────────────────────────────────────────────────────────
 
@@ -115,6 +115,9 @@ function makeMonitor(
       getMerklePath: jest.fn()
     },
     chain: 'test',
+    chaintracks: {
+      isValidRootForHeight: jest.fn().mockResolvedValue(true)
+    },
     storage,
     logEvent: jest.fn().mockResolvedValue(undefined),
     callOnTransactionStatusChanged: jest.fn(),
@@ -392,9 +395,17 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('MINED uses configured proof services and stores validated proof', async () => {
-      const reqApi = makeReqApi('unmined')
+      const reqApi = makeReqApi('unmined', '44'.repeat(32))
       const storage = makeStorageWithReqs([reqApi])
-      const proof = { name: 'Arcade' } as any
+      const merklePath = new MerklePath(99, [[{ offset: 0, hash: reqApi.txid, txid: true }]])
+      const proof = {
+        name: 'Arcade',
+        merklePath,
+        header: {
+          height: 99,
+          merkleRoot: merklePath.computeRoot(reqApi.txid)
+        }
+      } as any
       const getMerklePath = jest.fn().mockResolvedValue(proof)
       const fromReq = jest.spyOn(EntityProvenTx, 'fromReq').mockResolvedValue({
         toApi: () => ({
@@ -475,9 +486,7 @@ describe('TaskArcadeSSE', () => {
     test('does not checkpoint a storage failure and retries the event', async () => {
       const saveLastSSEEventId = jest.fn().mockResolvedValue(undefined)
       const storage = makeEmptyStorage()
-      storage.findProvenTxReqs
-        .mockRejectedValueOnce(new Error('temporary database error'))
-        .mockResolvedValue([])
+      storage.findProvenTxReqs.mockRejectedValueOnce(new Error('temporary database error')).mockResolvedValue([])
       const task = new TaskArcadeSSE(makeMonitor({ storageOverride: storage, saveLastSSEEventId }))
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
@@ -496,7 +505,8 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('retries the event when cursor persistence fails', async () => {
-      const saveLastSSEEventId = jest.fn()
+      const saveLastSSEEventId = jest
+        .fn()
         .mockRejectedValueOnce(new Error('cursor store unavailable'))
         .mockResolvedValue(undefined)
       const task = new TaskArcadeSSE(makeMonitor({ saveLastSSEEventId }))

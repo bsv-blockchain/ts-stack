@@ -1347,7 +1347,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       const ss = new EntitySyncState(
         verifyOne(
           await this.findSyncStates({
-            partial: {
+            partial: args.syncStateId == null ? {
+              storageIdentityKey: args.fromStorageIdentityKey,
+              userId: user.userId
+            } : {
+              syncStateId: args.syncStateId,
               storageIdentityKey: args.fromStorageIdentityKey,
               userId: user.userId
             },
@@ -1355,7 +1359,19 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           })
         )
       )
-      return await ss.processSyncChunk(this, args, chunk, trx)
+      if (args.requireMatchingCheckpoint === true) {
+        const checkpoint = ss.makeSyncCheckpoint()
+        const sameSince = (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
+          (args.since == null ? undefined : new Date(args.since).getTime())
+        if (!sameSince || checkpoint.offsets.length !== args.offsets.length || checkpoint.offsets.some((entry, index) =>
+          entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset)) {
+          throw new WERR_INVALID_OPERATION('Wallet sync checkpoint changed; resume from its durable state before retrying')
+        }
+      }
+      const result = await ss.processSyncChunk(this, args, chunk, trx)
+      return args.includeNextCheckpoint === true
+        ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() }
+        : result
     })
   }
 

@@ -267,9 +267,14 @@ export class AuthFetch {
               await this.waitForPendingCertificateRequests(peerToUse)
             }
 
-            // Send the request, now that all listeners are set up
+            // A certificate prompt can outlive the request deadline. Never
+            // dispatch a request after its caller has already seen a timeout.
+            if (cleaned) return
             await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
           } catch (error) {
+            // Late transport/session failures must not start recovery that
+            // replays a request after its response deadline has expired.
+            if (cleaned) return
             cleanup()
             try {
               resolveRequest(

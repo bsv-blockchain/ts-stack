@@ -1,3 +1,4 @@
+import { EntitySyncState } from './schema/entities/EntitySyncState'
 import { TableCertificate } from './schema/tables/TableCertificate'
 import { TableCertificateField } from './schema/tables/TableCertificateField'
 import { TableCommission } from './schema/tables/TableCommission'
@@ -33,7 +34,7 @@ import {
   DEFAULT_MANAGED_CHANGE_TARGET_UTXOS
 } from './methods/managedChangePolicy'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
-import { WERR_NOT_IMPLEMENTED } from '../sdk/WERR_errors'
+import { WERR_NOT_IMPLEMENTED, WERR_INVALID_OPERATION } from '../sdk/WERR_errors'
 
 export abstract class StorageReaderWriter extends StorageReader {
   abstract dropAllData (): Promise<void>
@@ -366,19 +367,42 @@ export abstract class StorageReaderWriter extends StorageReader {
     }
   }
 
+  async getSyncCheckpoint(auth: AuthId, storageIdentityKey: string, storageName: string) {
+    const { user } = await this.findOrInsertUser(auth.identityKey)
+    const { syncState } = await this.findOrInsertSyncStateAuth(
+      { identityKey: auth.identityKey, userId: user.userId }, storageIdentityKey, storageName
+    )
+    return new EntitySyncState(syncState).makeSyncCheckpoint()
+  }
+
   async findOrInsertSyncStateAuth (
     auth: AuthId,
     storageIdentityKey: string,
     storageName: string
   ): Promise<{ syncState: TableSyncState, isNew: boolean }> {
-    const partial = { userId: auth.userId as number, storageIdentityKey, storageName }
+    const partial = { userId: auth.userId as number, storageIdentityKey }
     for (let retry = 0; ; retry++) {
       try {
         const now = new Date()
-        let syncState = verifyOneOrNone(await this.findSyncStates({ partial }))
+        const matches = await this.findSyncStates({ partial })
+        let syncState = matches[0]
+        if (matches.length > 1) {
+          // Older releases included storageName in the lookup and could create
+          // duplicate rows when a provider was renamed or two apps reused a
+          // provider identity. Preserve exact-name access so upgraded clients
+          // can identify and repair those rows without guessing a checkpoint.
+          const exactMatches = matches.filter(s => s.storageName === storageName)
+          if (exactMatches.length !== 1) {
+            throw new WERR_INVALID_OPERATION(
+              'Storage identity has conflicting sync states. Use a unique identity for each storage provider.'
+            )
+          }
+          syncState = exactMatches[0]
+        }
         if (syncState == null) {
           syncState = {
             ...partial,
+            storageName,
             created_at: now,
             updated_at: now,
             syncStateId: 0,
@@ -389,6 +413,11 @@ export abstract class StorageReaderWriter extends StorageReader {
           }
           await this.insertSyncState(syncState)
           return { syncState, isNew: true }
+        }
+        if (syncState.storageName !== storageName) {
+          syncState.storageName = storageName
+          syncState.updated_at = now
+          await this.updateSyncState(syncState.syncStateId, { storageName, updated_at: now })
         }
         return { syncState, isNew: false }
       } catch (error_: unknown) {

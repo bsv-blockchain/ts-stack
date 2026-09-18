@@ -5,7 +5,12 @@ import type { WireEnvelope } from '../types.js'
 import { stringifyBRC100 } from '@bsv/sdk'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
 
-const HEARTBEAT_INTERVAL_MS = 30_000
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000
+const MAX_HEARTBEAT_INTERVAL_MS = 2_147_483_647
+// A phone on a mobile network misses single pongs routinely. Terminating on the
+// first miss ended live sessions 30 to 60 s after the last pong; two consecutive
+// misses is the smallest tolerance that survives one dropped frame.
+const DEFAULT_MAX_MISSED_HEARTBEATS = 2
 const BUFFER_TTL_MS = 60_000
 const BUFFER_MAX_PER_TOPIC = 50
 
@@ -25,7 +30,44 @@ export type MessageHandler = (topic: string, envelope: WireEnvelope, role: Role)
 export type TopicValidator = (topic: string) => boolean
 export type TokenValidator = (topic: string, token: string | null) => boolean
 export type ConnectHandler = (topic: string) => void
-export type DisconnectHandler = (topic: string, role: Role) => void
+/**
+ * Invoked when a socket that held a topic slot closes. `info` is additive; existing
+ * two-argument handlers keep working.
+ */
+export type DisconnectHandler = (topic: string, role: Role, info: SocketCloseInfo) => void
+export type SocketCloseHandler = (info: SocketCloseInfo) => void
+
+/**
+ * Why a socket went away.
+ * - `client`: the peer closed it, or the transport dropped (code 1006).
+ * - `heartbeat`: this relay terminated it for missing too many pongs.
+ * - `server`: this relay closed it deliberately (auth timeout, proof failure, deleteSession).
+ */
+export type SocketCloseCause = 'client' | 'heartbeat' | 'server'
+
+/** One record per accepted socket close, for logging and diagnostics. */
+export interface SocketCloseInfo {
+  topic: string
+  role: Role
+  /** WebSocket close code: 1006 for an abnormal drop, 1005 when the peer sent none. */
+  code: number
+  /** Close reason string, empty when none was sent. */
+  reason: string
+  cause: SocketCloseCause
+  /** Milliseconds between the upgrade being accepted and the close event. */
+  connectedForMs: number
+  /** Consecutive missed pongs at the moment of close. */
+  missedPongs: number
+}
+
+/** Per-socket bookkeeping. Kept off the WebSocket object so the type stays honest. */
+interface SocketState {
+  topic: string
+  role: Role
+  connectedAt: number
+  missedPongs: number
+  closeCause: SocketCloseCause
+}
 
 export interface WebSocketRelayOptions {
   /**
@@ -48,6 +90,15 @@ export interface WebSocketRelayOptions {
    * Use when routing multiple WS services on one HTTP server.
    */
   noServer?: boolean
+  /** How often to ping every socket, in ms. Integer 1–2 147 483 647, default 30 000. */
+  heartbeatIntervalMs?: number
+  /**
+   * Consecutive missed pongs tolerated before a socket is terminated. Default 2, so a
+   * socket that goes quiet lives between two and three intervals. Set to 1 for the
+   * pre-0.5 behaviour of terminating on the first miss. Any inbound message also
+   * resets the counter: a peer that is sending us data is alive whatever its pong timing.
+   */
+  maxMissedHeartbeats?: number
 }
 
 /**
@@ -58,7 +109,9 @@ export interface WebSocketRelayOptions {
  * - Messages from mobile  → forwarded to desktop (or buffered)
  * - Messages from desktop → forwarded to mobile  (or buffered)
  * - Buffered messages are flushed when the other side connects
- * - Heartbeat pings every 30 s; non-responsive sockets are terminated
+ * - Heartbeat pings every `heartbeatIntervalMs` (30 s); a socket is terminated once it
+ *   has missed `maxMissedHeartbeats` (2) consecutive pongs without sending anything
+ * - Every accepted socket close is reported through onSocketClose with code, cause and duration
  * - Origin header validated against allowedOrigins (or legacy allowedOrigin)
  *   when present — browser clients only; native mobile clients are exempt
  * - role=desktop connections validated via onValidateDesktopToken callback when set
@@ -70,7 +123,10 @@ export class WebSocketRelay {
   private validateTopic: TopicValidator | null = null
   private validateDesktopToken: TokenValidator | null = null
   private onDisconnectCb: DisconnectHandler | null = null
+  private onSocketCloseCb: SocketCloseHandler | null = null
   private onMobileConnectCb: ConnectHandler | null = null
+  private readonly socketState = new WeakMap<WebSocket, SocketState>()
+  private readonly maxMissedHeartbeats: number
   private readonly isOriginAllowed: ((origin: string) => boolean) | null
   private readonly heartbeatTimer: ReturnType<typeof setInterval>
   private readonly server: Server
@@ -81,6 +137,17 @@ export class WebSocketRelay {
   constructor(server: Server, options?: WebSocketRelayOptions) {
     // `allowedOrigins` (new) wins over `allowedOrigin` (legacy) when both set.
     this.isOriginAllowed = compileOriginMatcher(options?.allowedOrigins ?? options?.allowedOrigin)
+    const maxMissed = options?.maxMissedHeartbeats ?? DEFAULT_MAX_MISSED_HEARTBEATS
+    if (!Number.isInteger(maxMissed) || maxMissed < 1) {
+      throw new RangeError(`maxMissedHeartbeats must be an integer >= 1, got ${maxMissed}`)
+    }
+    this.maxMissedHeartbeats = maxMissed
+    const interval = options?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS
+    if (!Number.isInteger(interval) || interval < 1 || interval > MAX_HEARTBEAT_INTERVAL_MS) {
+      throw new RangeError(
+        `heartbeatIntervalMs must be an integer between 1 and ${MAX_HEARTBEAT_INTERVAL_MS}, got ${interval}`
+      )
+    }
     this.server = server
     this.path = options?.path ?? '/ws'
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 })
@@ -97,7 +164,7 @@ export class WebSocketRelay {
       this.server.on('upgrade', this.upgradeListener)
     }
 
-    this.heartbeatTimer = setInterval(() => this.runHeartbeat(), HEARTBEAT_INTERVAL_MS)
+    this.heartbeatTimer = setInterval(() => this.runHeartbeat(), interval)
   }
 
   /**
@@ -136,6 +203,16 @@ export class WebSocketRelay {
     this.onDisconnectCb = handler
   }
 
+  /**
+   * Register a callback invoked for every accepted socket that closes, whether or not
+   * it still held its topic slot. Unlike onDisconnect this also fires for a socket that
+   * was replaced by a newer connection on the same topic and role. Intended for logging.
+   * Thrown errors and rejected promises are contained; diagnostics cannot prevent cleanup.
+   */
+  onSocketClose(handler: SocketCloseHandler): void {
+    this.onSocketCloseCb = handler
+  }
+
   /** Register a callback invoked when a mobile socket connects (before proof). */
   onMobileConnect(handler: ConnectHandler): void {
     this.onMobileConnectCb = handler
@@ -145,6 +222,8 @@ export class WebSocketRelay {
   disconnectMobile(topic: string): void {
     const entry = this.topics.get(topic)
     if (entry?.mobile) {
+      const state = this.socketState.get(entry.mobile)
+      if (state) state.closeCause = 'server'
       entry.mobile.close(1008, 'Authentication failed')
       entry.mobile = null
     }
@@ -182,6 +261,16 @@ export class WebSocketRelay {
   }
 
   // ── Private ──────────────────────────────────────────────────────────────────
+
+  private reportSocketClose(info: SocketCloseInfo): void {
+    try {
+      void Promise.resolve(this.onSocketCloseCb?.(info)).catch(() => {
+        // Diagnostic delivery is best effort; asynchronous logging must not disrupt the relay.
+      })
+    } catch {
+      // A logging callback must not prevent topic cleanup or disconnect notification.
+    }
+  }
 
   private handleConnection(ws: WebSocket, req: IncomingMessage): void {
     const url = new URL(req.url ?? '', 'http://localhost')
@@ -235,12 +324,20 @@ export class WebSocketRelay {
       ws.send(stringifyBRC100(envelope))
     }
 
-    ;(ws as WebSocket & { isAlive: boolean }).isAlive = true
+    const state: SocketState = {
+      topic,
+      role,
+      connectedAt: Date.now(),
+      missedPongs: 0,
+      closeCause: 'client'
+    }
+    this.socketState.set(ws, state)
     ws.on('pong', () => {
-      ;(ws as WebSocket & { isAlive: boolean }).isAlive = true
+      state.missedPongs = 0
     })
 
     ws.on('message', data => {
+      state.missedPongs = 0
       try {
         const envelope = JSON.parse(`${data}`) as WireEnvelope
         if (!envelope.topic || !envelope.ciphertext) return
@@ -263,10 +360,21 @@ export class WebSocketRelay {
       }
     })
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
+      const info: SocketCloseInfo = {
+        topic,
+        role,
+        code,
+        reason: reason.toString(),
+        cause: state.closeCause,
+        connectedForMs: Date.now() - state.connectedAt,
+        missedPongs: state.missedPongs
+      }
+      this.socketState.delete(ws)
+      this.reportSocketClose(info)
       if (entry[role] === ws) {
         entry[role] = null
-        this.onDisconnectCb?.(topic, role)
+        this.onDisconnectCb?.(topic, role, info)
       }
     })
   }
@@ -290,12 +398,14 @@ export class WebSocketRelay {
 
   private runHeartbeat(): void {
     for (const ws of this.wss.clients) {
-      const ext = ws as WebSocket & { isAlive: boolean }
-      if (!ext.isAlive) {
+      const state = this.socketState.get(ws)
+      if (!state) continue // rejected before acceptance; ws closes it itself
+      if (state.missedPongs >= this.maxMissedHeartbeats) {
+        state.closeCause = 'heartbeat'
         ws.terminate()
         continue
       }
-      ext.isAlive = false
+      state.missedPongs += 1
       ws.ping()
     }
   }
