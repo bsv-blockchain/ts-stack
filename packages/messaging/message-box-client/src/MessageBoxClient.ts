@@ -2148,9 +2148,11 @@ export class MessageBoxClient {
    * payment contained within it.
    *
    * This method:
-   * 1. Calls `acknowledgeMessage()` to remove the message from the server's queue.
-   * 2. Checks the message body for embedded payment data.
-   * 3. If a recipient payment exists, attempts to internalize it into the wallet.
+   * 1. Checks the original notification body for embedded recipient payment data.
+   * 2. Internalizes a present payment and requires `accepted: true` from the wallet.
+   * 3. Acknowledges after acceptance, or immediately when no payment is present.
+   * Failed, incomplete, or unsupported payments remain queued. The boolean return
+   * contract is unchanged; `false` can mean no payment or a retained failed payment.
    *
    * This is a convenience wrapper for acknowledgment and payment handling specifically for messages
    * representing notifications.
@@ -2160,8 +2162,6 @@ export class MessageBoxClient {
    * console.log(success ? 'Payment received' : 'No payment or failed')
    */
   async acknowledgeNotification(message: PeerMessage): Promise<boolean> {
-    await this.acknowledgeMessage({ messageIds: [message.messageId] })
-
     const parsedBody: unknown =
       typeof message.body === 'string' ? this.tryParse(message.body) : message.body
 
@@ -2197,23 +2197,33 @@ export class MessageBoxClient {
         if (tx == null || tx.length === 0) {
           throw new Error('Message payment transaction must be a non-empty BRC-100 byte array')
         }
-        const internalizeResult = await this.walletClient.internalizeAction({
-          tx,
-          outputs: recipientOutputs,
-          description: paymentData.description ?? 'MessageBox recipient payment'
-        })
+        const internalizeResult = await this.walletClient.internalizeAction(
+          {
+            tx,
+            outputs: recipientOutputs,
+            description: paymentData.description ?? 'MessageBox recipient payment'
+          },
+          this.originator
+        )
 
-        if (internalizeResult.accepted) {
+        if (internalizeResult.accepted === true) {
           Logger.log('[MB CLIENT] Successfully internalized recipient payment')
+          await this.acknowledgeMessage({ messageIds: [message.messageId] })
           return true
         } else {
           Logger.warn('[MB CLIENT] Recipient payment internalization was not accepted')
           return false
         }
       } catch (paymentError) {
-        Logger.error('[MB CLIENT ERROR] Failed to internalize recipient payment:', paymentError)
+        Logger.error(
+          '[MB CLIENT ERROR] Failed to process or acknowledge recipient payment:',
+          paymentError
+        )
         return false
       }
+    }
+    if (paymentData == null) {
+      await this.acknowledgeMessage({ messageIds: [message.messageId] })
     }
     return false
   }

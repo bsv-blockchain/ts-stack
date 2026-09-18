@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.5.1 candidate — payment acknowledgment ordering
+
+- Internalize notification payments with the configured originator before acknowledgment.
+- Require affirmative wallet acceptance in notification and PeerPay paths.
+- For refundable payments, internalize, send the refund, then acknowledge.
+- Keep issue #503 open for envelope/outcome handling and durable refund semantics.
+
 ### Added
 
 - Added an optional `socketOptions` client option, forwarded to

@@ -548,3 +548,37 @@ test('CI and release typecheck the built cross-package declaration graph', () =>
     }
   }
 })
+
+test('calendar expiry is advisory in source CI and enforced by the maintenance audit', () => {
+  const ordinary = evaluateRepositoryHealth({ today: '2027-01-01' })
+  assert.deepEqual(ordinary.errors, [])
+  assert.ok(ordinary.warnings.some(item => item.includes('expired on')))
+  assert.ok(ordinary.warnings.some(item => item.includes('monthly review is overdue')))
+  const maintenance = evaluateRepositoryHealth({ today: '2027-01-01', enforceDeadlines: true })
+  for (const warning of ordinary.warnings) assert.ok(maintenance.errors.includes(warning))
+  assert.deepEqual(maintenance.warnings, [])
+})
+
+test('source CI still rejects malformed exception dates and missing evidence', () => {
+  const registry = {
+    schemaVersion: 1,
+    lastReviewed: '2026-01-01',
+    exceptions: [
+      {
+        id: 'invalid-record',
+        category: 'override',
+        target: 'dependency',
+        owner: 'maintainers',
+        reason: 'A temporary compatible dependency substitution.',
+        evidence: [],
+        created: '2026-01-02',
+        reviewBy: 'not-a-date',
+        removeWhen: 'Upstream fixes the dependency.'
+      }
+    ]
+  }
+  const errors = validateExceptionRegistry(registry, '2026-09-15', undefined, false)
+  assert.ok(errors.some(item => item.includes('reviewBy must be a real')))
+  assert.ok(errors.some(item => item.includes('evidence references')))
+  assert.ok(!errors.some(item => item.includes('monthly review is overdue')))
+})

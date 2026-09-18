@@ -253,7 +253,7 @@ describe('WalletRelayService E2E', () => {
       }
     }, 10_000)
 
-    it('onSessionDisconnected fires when mobile disconnects', async () => {
+    it('onSessionDisconnected still fires when socket diagnostics fail', async () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const disconnectedIds: string[] = []
@@ -264,7 +264,10 @@ describe('WalletRelayService E2E', () => {
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        onSessionDisconnected: id => disconnectedIds.push(id)
+        onSessionDisconnected: id => disconnectedIds.push(id),
+        onSocketClosed: () => {
+          throw new Error('diagnostic unavailable')
+        }
       })
       try {
         const created = await svc.createSession()

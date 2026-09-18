@@ -1,21 +1,21 @@
 # Infra Observability (OpenTelemetry)
 
-Every infra component emits OpenTelemetry **traces, metrics and logs**. Each
+Every infra component supports OpenTelemetry **traces, metrics and logs**. Each
 component has a self-contained bootstrap (`src/telemetry.ts`) that is preloaded
 before application code so auto-instrumentation can patch modules before they
 are imported.
 
 ## Components
 
-| Component | Module | Preload |
-|---|---|---|
-| overlay-server | ESM | `node --import ./dist/telemetry.js dist/index.js` |
-| chaintracks-server | CJS | `node --require ./dist/telemetry.js dist/server.js` |
-| wab | CJS | `node --require ./dist/telemetry.js dist/server.js` |
-| uhrp-server-cloud-bucket | CJS | `node --require ./out/src/telemetry.js … out/src/index.js` |
-| uhrp-server-basic | CJS | `ts-node -r ./src/telemetry.ts src/index.ts` / `start:prod` |
-| wallet-infra | ESM | `node --import ./out/src/telemetry.js out/src/index.js` |
-| message-box-server | ESM | `node --import ./out/src/telemetry.js out/src/index.js` |
+| Component                | Module | Preload                                                     |
+| ------------------------ | ------ | ----------------------------------------------------------- |
+| overlay-server           | ESM    | `node --import ./dist/telemetry.js dist/index.js`           |
+| chaintracks-server       | CJS    | `node --require ./dist/telemetry.js dist/server.js`         |
+| wab                      | CJS    | `node --require ./dist/telemetry.js dist/server.js`         |
+| uhrp-server-cloud-bucket | CJS    | `node --require ./out/src/telemetry.js … out/src/index.js`  |
+| uhrp-server-basic        | CJS    | `ts-node -r ./src/telemetry.ts src/index.ts` / `start:prod` |
+| wallet-infra             | ESM    | `node --import ./out/src/telemetry.js out/src/index.js`     |
+| message-box-server       | ESM    | `node --import ./out/src/telemetry.js out/src/index.js`     |
 
 ESM components (overlay-server, wallet-infra, message-box-server) deliberately do
 **not** register the `import-in-the-middle` loader hook. That hook rebuilds the
@@ -30,16 +30,17 @@ by `require-in-the-middle`, so auto-instrumentation coverage is retained.
 All wiring is driven by standard `OTEL_*` environment variables. The Dockerfiles
 and `docker-compose.yml` files pass these through.
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector base URL. **Unset → console exporters** (dev-safe). | — |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated headers, e.g. auth for Coralogix. | — |
-| `OTEL_SERVICE_NAME` | Overrides `service.name` (defaults to the package name). | package name |
-| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes. | — |
-| `DEPLOY_ENV` / `NODE_ENV` | Becomes `deployment.environment`. | `development` |
-| `OTEL_METRIC_EXPORT_INTERVAL` | Metric export interval (ms). | `60000` |
-| `OTEL_DIAG` | `true` enables OTel internal diagnostic logging. | off |
-| `LOG_LEVEL` | pino log level. | `info` |
+| Variable                      | Purpose                                                                                          | Default       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector base URL. **Unset → telemetry off**, application logs stay active.           | —             |
+| `OTEL_CONSOLE_EXPORTERS`      | Set exactly `true` to explicitly enable local console telemetry when no collector is configured. | `false`       |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Comma-separated headers, e.g. auth for Coralogix.                                                | —             |
+| `OTEL_SERVICE_NAME`           | Overrides `service.name` (defaults to the package name).                                         | package name  |
+| `OTEL_RESOURCE_ATTRIBUTES`    | Extra resource attributes.                                                                       | —             |
+| `DEPLOY_ENV` / `NODE_ENV`     | Becomes `deployment.environment`.                                                                | `development` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | Metric export interval (ms).                                                                     | `60000`       |
+| `OTEL_DIAG`                   | `true` enables OTel internal diagnostic logging.                                                 | off           |
+| `LOG_LEVEL`                   | pino log level.                                                                                  | `info`        |
 
 Point the whole stack at a collector by exporting once, e.g.:
 
@@ -49,8 +50,21 @@ export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <key>"
 docker compose up
 ```
 
-With the endpoint **unset**, each service prints spans/metrics/logs to the
-console — useful for verifying instrumentation locally without a backend.
+With the endpoint **unset**, the bootstrap starts no telemetry SDK, auto-instrumentation,
+export timers, console bridge or telemetry signal handlers. Application `console.*`
+and structured pino logging continue normally. This is the quiet default in both
+containers and development; an absent collector never silently enables console exporters.
+
+For temporary local diagnostics, set `OTEL_CONSOLE_EXPORTERS=true`. An OTLP endpoint
+takes precedence when both are configured. Console mode leaves application console
+methods untouched so their messages are not duplicated through the OTel Logs API.
+Remove the flag after debugging: auto-instrumentation can produce substantial output.
+
+For production observability, configure an OTLP collector and use its filtering and
+sampling controls together with `LOG_LEVEL`. To adopt the new default, configure
+the collector explicitly if you relied on implicit console telemetry. Deploy the
+rebuilt service images through the normal release process; merging this source
+change does not change running containers.
 
 ## Signals
 
@@ -62,7 +76,7 @@ console — useful for verifying instrumentation locally without a backend.
   **memory-leak and event-loop diagnosis**.
 - **Logs** — structured JSON via **pino** (`src/logger.ts`), with `trace_id` /
   `span_id` injected by `@opentelemetry/instrumentation-pino` so logs correlate to
-  traces, shipped over OTLP. Stray `console.*` calls are also bridged to OTel logs
+  traces, shipped over OTLP. Stray `console.*` calls are bridged to OTel logs only in OTLP mode
   during the migration to structured logging.
 
 ### Structured logging conventions
@@ -81,13 +95,13 @@ log.info({ operation: 'listen', outcome: 'ok', port }, 'server listening')
 Overlay deployments should preserve these `operation` names because they map to
 operator alerts and dashboards:
 
-| Operation | Emitted by | Notes |
-|---|---|---|
-| `overlay.provider_callback` | Overlay Express `/arc-ingest` | Provider callback accepted, rejected, or classified as terminal/double-spend. Alert on repeated `outcome=error`. |
-| `overlay.unproven_proof_refresh` | `/admin/refreshUnprovenProofs` | Manual or monitor-triggered proof refresh for old unproven rows. |
-| `overlay.unproven_eviction` | `/admin/evictUnproven` | Eviction-only cleanup for stale unproven rows. |
-| `overlay.unproven_maintenance` | `/admin/maintainUnproven` | Refresh-before-evict maintenance. This is the preferred operational path. |
-| `overlay.health` / HTTP health spans | health routes | Use readiness failures and provider context to detect bad deployment wiring. |
+| Operation                            | Emitted by                     | Notes                                                                                                            |
+| ------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `overlay.provider_callback`          | Overlay Express `/arc-ingest`  | Provider callback accepted, rejected, or classified as terminal/double-spend. Alert on repeated `outcome=error`. |
+| `overlay.unproven_proof_refresh`     | `/admin/refreshUnprovenProofs` | Manual or monitor-triggered proof refresh for old unproven rows.                                                 |
+| `overlay.unproven_eviction`          | `/admin/evictUnproven`         | Eviction-only cleanup for stale unproven rows.                                                                   |
+| `overlay.unproven_maintenance`       | `/admin/maintainUnproven`      | Refresh-before-evict maintenance. This is the preferred operational path.                                        |
+| `overlay.health` / HTTP health spans | health routes                  | Use readiness failures and provider context to detect bad deployment wiring.                                     |
 
 Alerting should distinguish transient provider failures from terminal provider
 classification. Terminal double-spend or invalid callbacks are expected to evict
@@ -111,3 +125,13 @@ monitor events in storage.
   `infra/DEPENDENCY_POLICY.md`.
 
 See the design spec: `docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md`.
+
+## Bootstrap source ownership
+
+`infra/overlay-server/src/telemetry.ts` is the canonical bootstrap. The other six
+standalone service build contexts receive identical copies through
+`pnpm sync:service-runtime-copies`; repository health rejects drift. The same
+source compiles as ESM or CommonJS and reads package metadata from the service
+working directory. Only the six synchronized copies are excluded from Sonar
+duplication scoring; code analysis and the shared bootstrap behavior tests remain
+active. Edit the canonical source, synchronize, and validate all service builds.

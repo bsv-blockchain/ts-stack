@@ -194,9 +194,8 @@ function validateOverrideRegistry(policy, exceptions, errors) {
   }
 
   const byId = new Map(exceptions.exceptions.map(exception => [exception.id, exception]))
-  const today = new Date().toISOString().slice(0, 10)
   for (const registration of policy.overrideRegistry) {
-    validateOverrideException(registration, byId, policy.owner, today, errors)
+    validateOverrideException(registration, byId, policy.owner, errors)
   }
   const review = policy.overrideRemovalReview
   if (
@@ -255,7 +254,7 @@ function validateDirectInventoryPolicy(policy, errors) {
   }
 }
 
-function validateOverrideException(registration, exceptionsById, owner, today, errors) {
+function validateOverrideException(registration, exceptionsById, owner, errors) {
   const exception = exceptionsById.get(registration.exceptionId)
   if (exception?.category !== 'override') {
     errors.push(
@@ -264,7 +263,6 @@ function validateOverrideException(registration, exceptionsById, owner, today, e
     return
   }
   if (exception.owner !== owner) errors.push(`${exception.id} must be owned by ${owner}`)
-  if (exception.reviewBy < today) errors.push(`${exception.id} expired on ${exception.reviewBy}`)
   const hasExternalEvidence = (exception.evidence ?? []).some(
     item =>
       item.startsWith('https://github.com/') &&

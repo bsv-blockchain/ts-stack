@@ -247,7 +247,7 @@ describe('PeerPayClient Unit Tests', () => {
   // Test: rejectPayment
   describe('rejectPayment', () => {
     it('should refund payment minus fee', async () => {
-      jest.spyOn(peerPayClient, 'acceptPayment').mockResolvedValue(undefined)
+      mockWalletClient.internalizeAction.mockResolvedValue({ accepted: true })
       jest.spyOn(peerPayClient, 'sendPayment').mockResolvedValue(undefined)
       jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('acknowledged')
 
@@ -263,7 +263,7 @@ describe('PeerPayClient Unit Tests', () => {
 
       await peerPayClient.rejectPayment(payment)
 
-      expect(peerPayClient.acceptPayment).toHaveBeenCalledWith(payment)
+      expect(mockWalletClient.internalizeAction).toHaveBeenCalled()
       expect(peerPayClient.sendPayment).toHaveBeenCalledWith({
         recipient: 'senderKey',
         amount: 1000 // Deduct satoshi fee
@@ -323,7 +323,7 @@ describe('PeerPayClient Unit Tests', () => {
     })
 
     it('does not fail a completed refund when the final acknowledgement fails', async () => {
-      jest.spyOn(peerPayClient, 'acceptPayment').mockResolvedValue(undefined)
+      mockWalletClient.internalizeAction.mockResolvedValue({ accepted: true })
       jest.spyOn(peerPayClient, 'sendPayment').mockResolvedValue(undefined)
       jest.spyOn(peerPayClient, 'acknowledgeMessage').mockRejectedValue(new Error('offline'))
 
@@ -339,6 +339,57 @@ describe('PeerPayClient Unit Tests', () => {
         })
       ).resolves.toBeUndefined()
     })
+  })
+
+  describe('payment acknowledgment ordering', () => {
+    const payment = {
+      messageId: 'ordered',
+      sender: 'senderKey',
+      token: {
+        customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+        transaction: [1, 2, 3],
+        amount: 3000
+      }
+    }
+
+    it('orders internalization, refund, and acknowledgment and retains the message on a failed refund', async () => {
+      const order: string[] = []
+      mockWalletClient.internalizeAction.mockImplementation(async () => {
+        order.push('internalize')
+        return { accepted: true }
+      })
+      const send = jest.spyOn(peerPayClient, 'sendPayment').mockImplementation(async () => {
+        order.push('refund')
+        return undefined
+      })
+      const acknowledge = jest
+        .spyOn(peerPayClient, 'acknowledgeMessage')
+        .mockImplementation(async () => {
+          order.push('ack')
+          return 'ok'
+        })
+      await peerPayClient.rejectPayment(payment)
+      expect(order).toEqual(['internalize', 'refund', 'ack'])
+      acknowledge.mockClear()
+      send.mockRejectedValueOnce(new Error('refund unavailable'))
+      await expect(peerPayClient.rejectPayment(payment)).rejects.toThrow('refund unavailable')
+      expect(acknowledge).not.toHaveBeenCalled()
+    })
+
+    it.each([{ accepted: false }, {}])(
+      'does not acknowledge or refund an unaccepted payment: %j',
+      async result => {
+        mockWalletClient.internalizeAction.mockResolvedValue(result)
+        const send = jest.spyOn(peerPayClient, 'sendPayment').mockResolvedValue(undefined)
+        const acknowledge = jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('ok')
+        await expect(peerPayClient.acceptPayment(payment)).resolves.toBe(
+          'Unable to receive payment!'
+        )
+        await expect(peerPayClient.rejectPayment(payment)).rejects.toThrow()
+        expect(send).not.toHaveBeenCalled()
+        expect(acknowledge).not.toHaveBeenCalled()
+      }
+    )
   })
 
   // Test: listIncomingPayments

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { changedLinesFromDiff, evaluatePatchCoverage, mergeLcov } from './patch-coverage.mjs'
+import {
+  changedLinesFromDiff,
+  evaluatePatchCoverage,
+  hasRuntimeChange,
+  mergeLcov
+} from './patch-coverage.mjs'
 
 test('patch coverage intersects changed production lines with merged LCOV line and branch data', () => {
   const changed =
@@ -174,4 +179,33 @@ diff --git a/packages/helpers/create-bsv-app/src/index.ts b/packages/helpers/cre
   // the name `index.ts` rather than by path would drop real code out of this
   // gate without anybody noticing.
   assert.deepEqual([...changed.keys()], ['packages/helpers/create-bsv-app/src/index.ts'])
+})
+
+test('patch coverage compares emitted code for type-only edits without hiding runtime changes', () => {
+  assert.equal(
+    hasRuntimeChange(
+      "export { Relay } from './Relay.js'; export type { First } from './types.js'",
+      "export { Relay } from './Relay.js'; export type { First, Second } from './types.js'"
+    ),
+    false
+  )
+  assert.equal(
+    hasRuntimeChange(
+      'interface Options { first: string }; export {}',
+      'interface Options { first: string; second?: number }; export {}'
+    ),
+    false
+  )
+  assert.equal(hasRuntimeChange("export const value = 'a b'", "export const value = 'ab'"), true)
+  assert.equal(
+    hasRuntimeChange('export const value = `a\n\nb`', 'export const value = `a\nb`'),
+    true
+  )
+  assert.equal(
+    hasRuntimeChange("export { First } from './value.js'", "export { Second } from './value.js'"),
+    true
+  )
+  assert.equal(hasRuntimeChange('export {}', 'startService(); export {}'), true)
+  assert.equal(hasRuntimeChange('enum State { Ready }', 'enum State { Ready = 2 }'), true)
+  assert.equal(hasRuntimeChange('export {}', 'invalid TypeScript {'), true)
 })

@@ -3,7 +3,7 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.5.0'
+version: '2.5.1'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-08'
 last_verified: '2026-09-08'
@@ -98,3 +98,26 @@ Vite and esbuild, and bundle budgets. Source and tests are not published.
 - [Peer-to-peer messaging guide](../../guides/peer-to-peer-messaging.md)
 - [Message Box Server](../../infrastructure/message-box-server.md)
 - [npm](https://www.npmjs.com/package/@bsv/message-box-client)
+
+## Payment acceptance and acknowledgment ordering
+
+`acknowledgeNotification` checks the original notification envelope, internalizes
+a present recipient payment with the configured originator, and acknowledges
+only after the wallet returns `accepted: true`. A notification without a
+payment can be acknowledged immediately. Failures, incomplete envelopes and payments with no wallet-payment outputs
+remain queued. Its boolean return contract is unchanged: `false` can
+mean no payment or a retained failed payment.
+
+`acceptPayment` also requires affirmative wallet acceptance before acknowledgment.
+For refundable amounts, `rejectPayment` internalizes first, sends the refund,
+and then acknowledges. A failed internalization prevents both refund and
+acknowledgment; a failed refund send leaves the message queued. The existing
+small-payment policy is unchanged.
+
+This is the initial ordering remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
+It does not provide a durable refund journal or exactly-once delivery. Reconcile
+uncertain refund-send outcomes before retrying, since a send may have completed
+before its response was lost. Payment-envelope retention and outcome reporting
+through `listMessages`/`listMessagesLite`, basket-insertion policy, and resumable
+refund semantics remain open. Use the original envelope for notification payment
+processing; a plain acknowledgment is not evidence that a payment was accepted.

@@ -8,6 +8,7 @@ import { EntityProvenTxReq } from './EntityProvenTxReq'
 import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
 import { assertSyncProofReplacementAuthorized, syncProofUpdatedAt } from '../../methods/validateSyncProof'
+import { getCanonicalMerklePath } from '../../../services/getCanonicalMerklePath'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
   private sameProof(candidate: TableProvenTx): boolean {
@@ -61,7 +62,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       r.rawTx = gr.rawTx!
     }
 
-    const gmpr = await services.getMerklePath(txid)
+    const gmpr = await getCanonicalMerklePath(services, await services.getChainTracker(), txid)
 
     if (gmpr.merklePath != null && gmpr.header != null) {
       const index = gmpr.merklePath.path[0].find(l => l.hash === txid)?.offset

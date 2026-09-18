@@ -41,13 +41,32 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
-- (Document bugs that were fixed since the last release.)
+- `tm_mandala`: a `MandalaToken`-shaped output with no linkage at its index, a
+  linkage that verifies to a different key than the output is locked to, or a
+  linkage the verifier cannot open now REJECTS the whole transaction with
+  `output N: MandalaToken-decodable output with no verified linkage` (wire
+  contract §6, byte-identical to the Go engine). Previously `verifyFtOutputs`
+  skipped such an output and `conservationHolds` summed only the admitted
+  subset, so a transaction could carry an extra token output of any value,
+  still have its siblings admitted, receive the admission signature and be
+  broadcast — a phantom coin mined inside an attested transaction that an
+  offline verifier stopping at "this txid was admitted" would credit.
+
+- Version 1.7.2 aligns `tm_uora_dpp` with the versioned UORA v3 format: compressed locking keys, exact drop tails, and printable UTF-8 fields. Valid anchors retain their bytes and admission result. The shared reference fixture covers key and tail validation. Coordinate reader upgrades and audit previously indexed nonconforming outputs before rebuilding the topic; this change does not claim a complete inventory of historical anchors.
 
 ### Security
 
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- Version 1.8.0 requires admitted per-asset admin history for every non-genesis
+  Mandala action. The reference storage manager provides the verifier; custom
+  adapters must implement it. Registration uses its own genesis outpoint.
+- Token spends require authoritative stored ownership matching the source
+  outpoint, asset and amount. Optional linkage corroborates the stored owner
+  and source key. Sender blinding remains supported.
+- Reject duplicate or invalid linkage indices and normalize sanctions key
+  casing. Valid wire fields and encodings are unchanged.
+- Back up and audit historical admin and ownership records before replay, and
+  coordinate admission and lookup upgrades. See the README migration guide.
 
----
 
 ## [1.6.0] - 2026-07-10
 

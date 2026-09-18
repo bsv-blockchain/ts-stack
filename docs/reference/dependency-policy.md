@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.1'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+last_updated: '2026-09-15'
+last_verified: '2026-09-15'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -145,7 +145,9 @@ temporary `gaxios` substitutions, and Message Box plus UHRP cloud storage need
 `uuid`; the Wave 37 review removed every substitution from a service where the
 frozen graph stayed clean without it. The machine-readable registry now maps
 every remaining selector and exact value to its exception. CI rejects a new,
-changed, stale, expired, unowned, or upstream-unlinked override.
+changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
+produce maintenance reminders in source CI and fail the separate weekly
+maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
 Wave 40 rechecked the prior 20 selectors against the frozen graphs, current
 upstream manifests, and the advisory audit. The 2026-09-04 security review

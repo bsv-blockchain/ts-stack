@@ -102,7 +102,9 @@ export class MandalaLookupService implements LookupService {
     const entry = (parsed.admin ?? []).find((a) => a.index === outputIndex)
     if (entry == null) return
     const details = entry.actionDetails
-    const assetId = typeof details.assetId === 'string' && details.assetId !== '' ? details.assetId : `${txid}.${outputIndex}`
+    const assetId = details.kind !== 'register' && typeof details.assetId === 'string' && details.assetId !== ''
+      ? details.assetId
+      : `${txid}.${outputIndex}`
     const { height, offset } = txOrdering(tx)
     const admitSeq = await this.deps.storage.nextAdmitSeq()
     await this.deps.storage.appendAdminHistory({

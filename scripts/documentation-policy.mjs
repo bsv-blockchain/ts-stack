@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  documentationChangedFiles,
+  documentationDateReport,
+  documentationIsAffected,
+  documentationSources
+} from './documentation-freshness.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const INVENTORY = join(ROOT, 'governance/repository-health/projects.json')
@@ -31,12 +37,18 @@ async function walkMarkdown(directory) {
 
 const inventory = JSON.parse(await readFile(INVENTORY, 'utf8'))
 const policy = JSON.parse(await readFile(POLICY, 'utf8'))
+const { services } = JSON.parse(
+  await readFile(join(ROOT, 'governance/service-operations.json'), 'utf8')
+)
+const changedFiles = documentationChangedFiles(ROOT, process.argv.slice(2))
 const publicPackages = inventory.projects.filter(project => project.release === 'npm-oidc')
 const projectsByName = new Map(inventory.projects.map(project => [project.name, project]))
 const failures = []
+const warnings = []
 const documentedProjects = new Set()
 let packageDocCount = 0
 let freshnessDocCount = 0
+let affectedDocCount = 0
 
 for (const project of publicPackages) {
   const packageJsonPath = join(ROOT, project.path, 'package.json')
@@ -129,24 +141,32 @@ for (const docPath of await walkMarkdown(join(ROOT, 'docs'))) {
   const updated = frontmatter.match(/^last_updated:\s*["']?(\d{4}-\d{2}-\d{2})/m)?.[1]
   const verified = frontmatter.match(/^last_verified:\s*["']?(\d{4}-\d{2}-\d{2})/m)?.[1]
   const cadence = Number(frontmatter.match(/^review_cadence_days:\s*(\d+)/m)?.[1])
-  const relativePath = docPath.slice(ROOT.length + 1)
+  const relativePath = relative(ROOT, docPath).replaceAll('\\', '/')
 
   if (!updated || !verified || !Number.isInteger(cadence)) continue
   freshnessDocCount += 1
-  if (updated > verified) {
-    failures.push(`${relativePath}: last_verified predates last_updated`)
-  }
-
-  const verifiedDate = new Date(`${verified}T00:00:00Z`)
-  const staleAfter = new Date(verifiedDate)
-  staleAfter.setUTCDate(staleAfter.getUTCDate() + cadence)
-  if (staleAfter < today) {
-    failures.push(`${relativePath}: verification expired ${staleAfter.toISOString().slice(0, 10)}`)
-  }
-  if (verifiedDate > today) {
-    failures.push(`${relativePath}: last_verified cannot be in the future`)
-  }
+  const sources = documentationSources(
+    relativePath,
+    frontmatterValue(frontmatter, 'title'),
+    inventory.projects,
+    services,
+    policy.freshness.sourcePaths
+  )
+  const affected = documentationIsAffected(relativePath, sources, changedFiles)
+  if (affected) affectedDocCount += 1
+  const report = documentationDateReport(
+    updated,
+    verified,
+    cadence,
+    today,
+    affected,
+    changedFiles === null
+  )
+  failures.push(...report.errors.map(finding => `${relativePath}: ${finding}`))
+  warnings.push(...report.warnings.map(finding => `${relativePath}: ${finding}`))
 }
+
+for (const warning of warnings) console.warn(`MAINTENANCE ${warning}`)
 
 if (failures.length > 0) {
   console.error(`Documentation policy failed (${failures.length} finding(s)):`)
@@ -156,5 +176,6 @@ if (failures.length > 0) {
 
 console.log(
   `Documentation policy passed: ${publicPackages.length} public package READMEs, ` +
-    `${packageDocCount} package docs, ${freshnessDocCount} freshness records, 0 findings`
+    `${packageDocCount} package docs, ${freshnessDocCount} date records, ` +
+    `${affectedDocCount} affected pages checked for review expiry, 0 findings`
 )

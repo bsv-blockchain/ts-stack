@@ -155,7 +155,7 @@ function dispatchInitialRequestShape(expected: Record<string, unknown>): void {
     expect(responseShape).toHaveProperty('messageType')
     expect(responseShape.messageType).toBe('initialResponse')
     expect(responseShape).toHaveProperty('identityKey')
-    expect(responseShape).toHaveProperty('nonce')
+    expect(responseShape).toHaveProperty('initialNonce')
     expect(responseShape).toHaveProperty('signature')
   }
   if ('response_shape_includes' in expected) {

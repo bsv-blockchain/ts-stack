@@ -405,53 +405,65 @@ export class PeerPayClient extends MessageBoxClient {
    */
   async acceptPayment(payment: IncomingPayment): Promise<any> {
     try {
-      Logger.log(`[PP CLIENT] Processing payment: ${stringifyBRC100(payment, 2)}`)
-
-      const transaction = toBRC100PortableByteArray(payment.token.transaction)
-      if (transaction == null || transaction.length === 0) {
-        throw new Error('Payment transaction must be a non-empty BRC-100 byte array')
-      }
-
-      const acceptResult = await this.settlementModule.acceptSettlement(
-        {
-          threadId: 'peerpay',
-          sender: payment.sender,
-          settlement: {
-            customInstructions: {
-              derivationPrefix: payment.token.customInstructions.derivationPrefix,
-              derivationSuffix: payment.token.customInstructions.derivationSuffix
-            },
-            transaction,
-            amountSatoshis: payment.token.amount,
-            outputIndex: payment.token.outputIndex ?? STANDARD_PAYMENT_OUTPUT_INDEX
-          }
-        },
-        {
-          wallet: this.peerPayWalletClient,
-          originator: this.originator,
-          now: () => Date.now(),
-          logger: Logger
-        }
-      )
-
-      if (acceptResult.action === 'terminate') {
-        throw new Error(acceptResult.termination.message)
-      }
-
-      const paymentResult = acceptResult.receiptData?.internalizeResult
-
-      Logger.log(
-        `[PP CLIENT] Payment internalized successfully: ${stringifyBRC100(paymentResult, 2)}`
-      )
-      Logger.log(`[PP CLIENT] Acknowledging payment with messageId: ${payment.messageId}`)
-
+      const result = await this.internalizePayment(payment)
       await this.acknowledgeMessage({ messageIds: [payment.messageId] })
-
-      return { payment, paymentResult }
+      return result
     } catch (error) {
       Logger.error(`[PP CLIENT] Error accepting payment: ${String(error)}`)
       return 'Unable to receive payment!'
     }
+  }
+
+  private async internalizePayment(
+    payment: IncomingPayment
+  ): Promise<{ payment: IncomingPayment; paymentResult: unknown }> {
+    Logger.log(`[PP CLIENT] Processing payment: ${stringifyBRC100(payment, 2)}`)
+
+    const transaction = toBRC100PortableByteArray(payment.token.transaction)
+    if (transaction == null || transaction.length === 0) {
+      throw new Error('Payment transaction must be a non-empty BRC-100 byte array')
+    }
+
+    const acceptResult = await this.settlementModule.acceptSettlement(
+      {
+        threadId: 'peerpay',
+        sender: payment.sender,
+        settlement: {
+          customInstructions: {
+            derivationPrefix: payment.token.customInstructions.derivationPrefix,
+            derivationSuffix: payment.token.customInstructions.derivationSuffix
+          },
+          transaction,
+          amountSatoshis: payment.token.amount,
+          outputIndex: payment.token.outputIndex ?? STANDARD_PAYMENT_OUTPUT_INDEX
+        }
+      },
+      {
+        wallet: this.peerPayWalletClient,
+        originator: this.originator,
+        now: () => Date.now(),
+        logger: Logger
+      }
+    )
+
+    if (acceptResult.action === 'terminate') {
+      throw new Error(acceptResult.termination.message)
+    }
+
+    const paymentResult = acceptResult.receiptData?.internalizeResult
+    if (
+      paymentResult == null ||
+      typeof paymentResult !== 'object' ||
+      !('accepted' in paymentResult) ||
+      paymentResult.accepted !== true
+    ) {
+      throw new Error('Wallet did not accept the payment.')
+    }
+
+    Logger.log(
+      `[PP CLIENT] Payment internalized successfully: ${stringifyBRC100(paymentResult, 2)}`
+    )
+    return { payment, paymentResult }
   }
 
   /**
@@ -459,7 +471,10 @@ export class PeerPayClient extends MessageBoxClient {
    *
    * If the payment amount is too small (less than 1000 satoshis after deducting the fee),
    * the payment is simply acknowledged and ignored. Otherwise, the function first accepts
-   * the payment, then sends a new transaction refunding the sender.
+   * the payment, then sends a new transaction refunding the sender, and acknowledges
+   * only after the refund send succeeds. Internalization failure prevents the refund.
+   * This ordering is not a durable refund journal; reconcile uncertain send outcomes
+   * before retrying, because the current protocol provides no exactly-once refund guarantee.
    *
    * @param {IncomingPayment} payment - The payment object containing transaction details.
    * @returns {Promise<void>} Resolves when the payment is either acknowledged or refunded.
@@ -503,7 +518,7 @@ export class PeerPayClient extends MessageBoxClient {
     }
 
     Logger.log('[PP CLIENT] Accepting payment before refunding...')
-    await this.acceptPayment(payment)
+    await this.internalizePayment(payment)
 
     Logger.log(
       `[PP CLIENT] Sending refund of ${payment.token.amount - 1000} to ${payment.sender}...`

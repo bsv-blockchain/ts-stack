@@ -27,13 +27,14 @@ import {
   TableUser
 } from '../storage/schema/tables'
 import { StorageProvider } from './StorageProvider'
+import { getCanonicalMerklePath } from '../services/getCanonicalMerklePath'
 
 interface PreparedBeefInvalidationExtension {
   invalidatePreparedBeefs: (trx?: sdk.TrxToken) => Promise<number>
   suspendPreparedBeefReads: () => () => void
 }
 
-async function invalidatePreparedBeefs (storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
+async function invalidatePreparedBeefs(storage: StorageProvider, trx: sdk.TrxToken): Promise<void> {
   const extension = storage as unknown as Partial<PreparedBeefInvalidationExtension>
   if (typeof extension.invalidatePreparedBeefs === 'function') {
     await extension.invalidatePreparedBeefs.call(storage, trx)
@@ -404,9 +405,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
   invalidatePreparedBeefsForReorg(): Promise<void> {
     const active = this.getActive()
     const extension = active as unknown as Partial<PreparedBeefInvalidationExtension>
-    const release = typeof extension.suspendPreparedBeefReads === 'function'
-      ? extension.suspendPreparedBeefReads.call(active)
-      : undefined
+    const release =
+      typeof extension.suspendPreparedBeefReads === 'function'
+        ? extension.suspendPreparedBeefReads.call(active)
+        : undefined
     return this.runAsStorageProvider(async storage => {
       await storage.transaction(async trx => {
         await invalidatePreparedBeefs(storage, trx)
@@ -520,9 +522,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async prepareNoSendExpiry(
-    args: Validation.ValidCreateActionArgs
-  ): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+  async prepareNoSendExpiry(args: Validation.ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
     return await this.runAsWriter(async writer => {
       if (writer.prepareNoSendExpiry == null) {
         throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
@@ -800,7 +800,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const services = this.getServices()
     const chaintracker = await services.getChainTracker()
 
-    const mpr = await services.getMerklePath(ptx.txid)
+    const mpr = await getCanonicalMerklePath(services, chaintracker, ptx.txid)
     if (mpr.merklePath != null && mpr.header != null) {
       const mp = mpr.merklePath
       const h = mpr.header
@@ -843,12 +843,19 @@ export class WalletStorageManager implements sdk.WalletStorage {
     readerSettings: TableSettings,
     toStorageIdentityKey: string
   ): Promise<sdk.RequestSyncChunkArgs> {
-    const compact = await writer.getSyncCheckpoint?.(auth, readerSettings.storageIdentityKey, readerSettings.storageName)
+    const compact = await writer.getSyncCheckpoint?.(
+      auth,
+      readerSettings.storageIdentityKey,
+      readerSettings.storageName
+    )
     if (compact != null) {
       return {
-        ...validateSyncCheckpoint(compact), identityKey: auth.identityKey,
-        fromStorageIdentityKey: readerSettings.storageIdentityKey, toStorageIdentityKey,
-        maxItems: 1000, maxRoughSize: 10000000
+        ...validateSyncCheckpoint(compact),
+        identityKey: auth.identityKey,
+        fromStorageIdentityKey: readerSettings.storageIdentityKey,
+        toStorageIdentityKey,
+        maxItems: 1000,
+        maxRoughSize: 10000000
       }
     }
     const ss = await EntitySyncState.fromStorage(writer, auth.identityKey, readerSettings)
@@ -898,9 +905,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
         updates += r.updates
         log += `chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`
         if (r.done) break
-        args = r.nextCheckpoint == null
-          ? await loadRequest()
-          : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
+        args =
+          r.nextCheckpoint == null
+            ? await loadRequest()
+            : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
       }
       log += `syncFromReader complete: ${inserts} inserts, ${updates} updates\n`
       return log
@@ -949,9 +957,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
         updates += r.updates
         log += progLog(`chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`)
         if (r.done) break
-        args = r.nextCheckpoint == null
-          ? await loadRequest()
-          : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
+        args =
+          r.nextCheckpoint == null
+            ? await loadRequest()
+            : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
       }
       log += progLog(`syncToWriter complete: ${inserts} inserts, ${updates} updates\n`)
       return log

@@ -375,6 +375,17 @@ Merkle proof validated by the configured chain tracker. Arcade SSE events are
 acknowledged in order only after their storage update and cursor persistence
 succeed, so a transient storage failure is retried instead of skipped.
 
+Every configured proof provider is treated as untrusted. Wallet Toolbox checks
+transaction membership, header/root agreement, and the active ChainTracks root
+before a proof can be persisted; a stale orphan proof is rejected and the next
+provider is tried. The lagged proven-transaction review retains unresolved
+reorg heights and bounds retry work per run while its forward cursor continues,
+so temporary provider lag cannot turn one failed repair attempt into a
+permanent checkpoint skip. Failed retries rotate behind waiting heights, and
+temporarily ineligible heights remain queued when the chain tip retreats.
+Compound proofs may mark multiple transactions; validation checks membership
+of the requested transaction. No consumer or database migration is required.
+
 Invalid-change review applies the same positive-evidence rule. Only an
 explicit successful `isUtxo: false` result is considered spent; a provider
 error, rate limit, timeout, missing provider, missing script, or malformed

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-24",
+  "lastReviewed": "2026-09-15",
   "owner": "ts-stack-maintainers",
   "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
   "copies": [
@@ -97,6 +97,17 @@
     {
       "canonicalSource": "packages/wallet/wallet-toolbox/src/storage/remoting/KnexPaymentReplayStore.ts",
       "synchronizedSources": ["infra/wallet-infra/src/KnexPaymentReplayStore.ts"]
+    },
+    {
+      "canonicalSource": "infra/overlay-server/src/telemetry.ts",
+      "synchronizedSources": [
+        "infra/chaintracks-server/src/telemetry.ts",
+        "infra/wab/src/telemetry.ts",
+        "infra/uhrp-server-basic/src/telemetry.ts",
+        "infra/uhrp-server-cloud-bucket/src/telemetry.ts",
+        "infra/wallet-infra/src/telemetry.ts",
+        "infra/message-box-server/src/telemetry.ts"
+      ]
     }
   ]
 }
