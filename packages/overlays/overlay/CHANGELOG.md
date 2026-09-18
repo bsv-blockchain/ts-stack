@@ -68,6 +68,18 @@ All notable changes to this project will be documented in this file. The format 
   was already applied under a different admission operation — breaking
   historical-then-live resubmits and multi-topic retries with
   `Overlay admission rejected: invalid-plan` or `digest-mismatch`.
+- `MongoOverlayStorage` no longer maps an evicted output document to a live
+  `Output`. `toOutput` now returns `null` for a `state: 'evicted'` document
+  (evictions persist their row for audit/history, they do not delete it),
+  and every read path (`findOutput`, `findOutputsForTransaction`,
+  `findUTXOsForTopic`) drops a `null` mapping the same way it already
+  excludes `evicted` at the query level, so a future read path that forgets
+  that query-level filter cannot resurface an evicted UTXO as unspent.
+  `findOutput`/`findOutputsForTransaction` also hydrate `outputsConsumed`
+  and `consumedBy` from the `consumptionEdges` persisted by the admission
+  commit (or by `updateConsumedBy` on the classic path) instead of always
+  returning them empty, so Engine history/delete paths can see consumption
+  edges written during admission.
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)

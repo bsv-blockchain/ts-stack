@@ -208,9 +208,7 @@ export class MongoOverlayStorage implements Storage {
         state: { $ne: 'evicted' }
       })
       .toArray()
-    return await Promise.all(
-      documents.map(async document => await this.toOutput(document, includeBEEF))
-    )
+    return await this.toOutputs(documents, includeBEEF)
   }
 
   async findUTXOsForTopic(
@@ -232,9 +230,23 @@ export class MongoOverlayStorage implements Storage {
       .find(filter)
       .sort({ score: 1, _id: 1 })
     if (limit !== undefined && limit > 0) query = query.limit(limit)
-    return await Promise.all(
-      (await query.toArray()).map(async document => await this.toOutput(document, includeBEEF))
+    return await this.toOutputs(await query.toArray(), includeBEEF)
+  }
+
+  /**
+   * Maps a batch of raw output documents to `Output`s, dropping any that
+   * `toOutput` treats as non-serving (see its docstring). Every current
+   * caller's query already excludes `state: 'evicted'`, so this filter is
+   * defense in depth rather than the primary guard.
+   */
+  private async toOutputs(
+    documents: Array<Record<string, unknown>>,
+    includeBEEF: boolean
+  ): Promise<Output[]> {
+    const mapped = await Promise.all(
+      documents.map(async document => await this.toOutput(document, includeBEEF))
     )
+    return mapped.filter((output): output is Output => output !== null)
   }
 
   async deleteOutput(txid: string, outputIndex: number, topic: string): Promise<void> {
@@ -397,16 +409,35 @@ export class MongoOverlayStorage implements Storage {
     return Number(parsed)
   }
 
-  private async toOutput(document: Record<string, unknown>, includeBEEF: boolean): Promise<Output> {
+  /**
+   * Maps a raw output document to an `Output`, or `null` when the document
+   * is not currently serving as overlay state. An admission eviction leaves
+   * its row in place (state: 'evicted') for audit/history, and it must never
+   * be reported as a live, unspent output — every caller that reaches here
+   * must treat a `null` result the same as "not found", regardless of
+   * whether its own query already excluded `evicted` rows.
+   */
+  private async toOutput(
+    document: Record<string, unknown>,
+    includeBEEF: boolean
+  ): Promise<Output | null> {
+    if (document.state === 'evicted') return null
+    const topic = document.topic as string
+    const txid = document.txid as string
+    const outputIndex = String(document.outputIndex)
+    const [outputsConsumed, consumedBy] = await Promise.all([
+      this.readConsumptionEdges(topic, { consumerTxid: txid, consumerOutputIndex: outputIndex }, 'source'),
+      this.readConsumptionEdges(topic, { sourceTxid: txid, sourceOutputIndex: outputIndex }, 'consumer')
+    ])
     const output: Output = {
-      txid: document.txid as string,
-      outputIndex: parseStorageOutputIndex(String(document.outputIndex)),
+      txid,
+      outputIndex: parseStorageOutputIndex(outputIndex),
       outputScript: await this.readScript(document),
       satoshis: this.toSafeNumber(decodeMongoUint64(document.satoshis as string), 'satoshis'),
-      topic: document.topic as string,
+      topic,
       spent: document.state === 'spent',
-      outputsConsumed: [],
-      consumedBy: [],
+      outputsConsumed,
+      consumedBy,
       score: this.toSafeNumber(decodeMongoUint64(document.score as string), 'score')
     }
     if (includeBEEF) {
@@ -414,6 +445,38 @@ export class MongoOverlayStorage implements Storage {
       if (beef !== undefined) output.beef = beef
     }
     return output
+  }
+
+  /**
+   * Reads consumption edges persisted for this output (by either
+   * MongoAdmissionStorage.insertEdge during a commit, or
+   * MongoOverlayStorage.updateConsumedBy on the classic storage path) and
+   * returns the opposite endpoint of each matching edge: querying by the
+   * consumer side returns `outputsConsumed` (what this output's transaction
+   * spent), and querying by the source side returns `consumedBy` (what has
+   * since spent this output).
+   */
+  private async readConsumptionEdges(
+    topic: string,
+    match: { sourceTxid: string; sourceOutputIndex: string } | { consumerTxid: string; consumerOutputIndex: string },
+    side: 'source' | 'consumer'
+  ): Promise<Array<{ txid: string; outputIndex: number }>> {
+    const edges = await this.db
+      .collection<IdDocument>(MongoCollectionNames.consumptionEdges)
+      .find({
+        network: this.admissionScope.network,
+        genesisHash: this.admissionScope.genesisHash,
+        nodeId: this.admissionScope.nodeId,
+        topic,
+        ...match
+      })
+      .toArray()
+    return edges.map(edge => ({
+      txid: (side === 'source' ? edge.sourceTxid : edge.consumerTxid) as string,
+      outputIndex: parseStorageOutputIndex(
+        String(side === 'source' ? edge.sourceOutputIndex : edge.consumerOutputIndex)
+      )
+    }))
   }
 
   private async readScript(document: Record<string, unknown>): Promise<number[]> {
