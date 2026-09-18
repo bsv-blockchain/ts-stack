@@ -1,18 +1,20 @@
 import { TaskReviewProvenTxs } from '../TaskReviewProvenTxs'
 import { HeightRange } from '../../../services/chaintracker/chaintracks/util/HeightRange'
 
-function makeMonitor (options: {
+function makeMonitor(options: {
   tipHeight: number
-  headersByHeight?: Record<number, { height: number, merkleRoot: string, hash: string } | undefined>
+  headersByHeight?: Record<number, { height: number; merkleRoot: string; hash: string } | undefined>
   staleRootsByHeight?: Record<number, string[]>
-  reproveResultsByHeightRoot?: Record<string, { updated: any[], unchanged: any[], unavailable: any[], log: string }>
+  reproveResultsByHeightRoot?: Record<string, { updated: any[]; unchanged: any[]; unavailable: any[]; log: string }>
   monitorEvents?: Array<{ details?: string }>
+  provenTxs?: Array<{ height: number }>
   reviewResult?: {
     log: string
     reviewedHeights: number
     mismatchedHeights: number
     affectedTransactions: number
     updatedTransactions: number
+    unresolvedHeights: number[]
   }
 }) {
   const reviewHeightRange = jest.fn().mockResolvedValue(
@@ -21,17 +23,26 @@ function makeMonitor (options: {
       reviewedHeights: 0,
       mismatchedHeights: 0,
       affectedTransactions: 0,
-      updatedTransactions: 0
+      updatedTransactions: 0,
+      unresolvedHeights: []
     }
   )
   const findStaleMerkleRoots = jest.fn(
     async ({ height }: { height: number }) => options.staleRootsByHeight?.[height] ?? []
   )
   const findMonitorEvents = jest.fn(async () => options.monitorEvents || [])
-  const runAsStorageProvider = jest.fn(async (fn: any) => await fn({ findStaleMerkleRoots }))
+  const findProvenTxs = jest.fn().mockResolvedValue(options.provenTxs ?? [])
+  const runAsStorageProvider = jest.fn(
+    async (fn: any) =>
+      await fn({
+        findStaleMerkleRoots,
+        findMonitorEvents,
+        findProvenTxs
+      })
+  )
   const reproveHeightMerkleRoot = jest.fn(async (height: number, staleRoot: string) => {
     return (
-      (options.reproveResultsByHeightRoot?.[`${height}:${staleRoot}`]) || {
+      options.reproveResultsByHeightRoot?.[`${height}:${staleRoot}`] || {
         log: `  reproved ${height}:${staleRoot}\n`,
         updated: [],
         unchanged: [],
@@ -148,7 +159,8 @@ describe('TaskReviewProvenTxs tests', () => {
         reviewedHeights: 100,
         mismatchedHeights: 0,
         affectedTransactions: 0,
-        updatedTransactions: 0
+        updatedTransactions: 0,
+        unresolvedHeights: []
       }
     })
     const task = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100)
@@ -172,7 +184,8 @@ describe('TaskReviewProvenTxs tests', () => {
         reviewedHeights: 21,
         mismatchedHeights: 1,
         affectedTransactions: 1,
-        updatedTransactions: 0
+        updatedTransactions: 0,
+        unresolvedHeights: []
       }
     })
     const task = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100)
@@ -198,7 +211,8 @@ describe('TaskReviewProvenTxs tests', () => {
         reviewedHeights: 50,
         mismatchedHeights: 0,
         affectedTransactions: 0,
-        updatedTransactions: 0
+        updatedTransactions: 0,
+        unresolvedHeights: []
       }
     })
     const task = new TaskReviewProvenTxs(m.monitor as any, 0, 50, 100)
@@ -255,5 +269,170 @@ describe('TaskReviewProvenTxs tests', () => {
     expect(m.reviewHeightRange).not.toHaveBeenCalled()
     expect(log).toBe('')
     expect(m.logEvent).not.toHaveBeenCalled()
+  })
+
+  test('9 unresolved mismatches are retained and retried after the forward cursor advances', async () => {
+    const m = makeMonitor({
+      tipHeight: 260,
+      monitorEvents: [{ details: JSON.stringify({ reviewedThroughHeight: 150, retryHeights: [121] }) }],
+      headersByHeight: {
+        121: { height: 121, merkleRoot: 'root-121-new', hash: 'hash-121' },
+        151: { height: 151, merkleRoot: 'root-151', hash: 'hash-151' },
+        152: { height: 152, merkleRoot: 'root-152', hash: 'hash-152' }
+      },
+      staleRootsByHeight: {
+        121: ['root-121-old']
+      },
+      reproveResultsByHeightRoot: {
+        '121:root-121-old': {
+          log: '  repaired retry\n',
+          updated: [{}],
+          unchanged: [],
+          unavailable: []
+        }
+      }
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any, 0, 2, 100)
+
+    const log = await task.runTask()
+    const checkpoint = JSON.parse(log)
+
+    expect(m.reproveHeightMerkleRoot).toHaveBeenCalledWith(121, 'root-121-old')
+    expect(checkpoint.reviewedThroughHeight).toBe(152)
+    expect(checkpoint.retryHeights).toEqual([])
+    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 121')
+    expect(checkpoint.reviewLog).toContain('reviewing heights 151..152')
+  })
+
+  test('10 unresolved replacement failures remain in the retry checkpoint', async () => {
+    const m = makeMonitor({
+      tipHeight: 260,
+      monitorEvents: [{ details: JSON.stringify({ reviewedThroughHeight: 150, retryHeights: [121] }) }],
+      headersByHeight: {
+        121: { height: 121, merkleRoot: 'root-121-new', hash: 'hash-121' },
+        151: { height: 151, merkleRoot: 'root-151', hash: 'hash-151' }
+      },
+      staleRootsByHeight: {
+        121: ['root-121-old']
+      },
+      reproveResultsByHeightRoot: {
+        '121:root-121-old': {
+          log: '  replacement unavailable\n',
+          updated: [],
+          unchanged: [],
+          unavailable: [{}]
+        }
+      }
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any, 0, 1, 100)
+
+    const checkpoint = JSON.parse(await task.runTask())
+
+    expect(checkpoint.reviewedThroughHeight).toBe(151)
+    expect(checkpoint.retryHeights).toEqual([121])
+  })
+
+  test('11 getLastReviewedHeight starts immediately before the first proven transaction', async () => {
+    const m = makeMonitor({ tipHeight: 120, provenTxs: [{ height: 17 }] })
+    const task = new TaskReviewProvenTxs(m.monitor as any)
+
+    await expect(task.getLastReviewedHeight()).resolves.toBe(16)
+  })
+
+  test('12 retry work is deduplicated, bounded, and retained in checkpoint order', async () => {
+    const m = makeMonitor({
+      tipHeight: 250,
+      monitorEvents: [
+        {
+          details: JSON.stringify({
+            reviewedThroughHeight: 150,
+            retryHeights: [125, 123, 124, 123, -1, 151]
+          })
+        }
+      ],
+      headersByHeight: {
+        123: { height: 123, merkleRoot: 'root-123', hash: 'hash-123' },
+        125: { height: 125, merkleRoot: 'root-125', hash: 'hash-125' }
+      }
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any, 0, 0, 100, 1, 2)
+
+    const checkpoint = JSON.parse(await task.runTask())
+
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(1, 125)
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(2, 123)
+    expect(checkpoint.reviewedThroughHeight).toBe(150)
+    expect(checkpoint.retryHeights).toEqual([124, 151])
+    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 125,123')
+    expect(checkpoint.reviewLog).not.toContain('reviewing heights')
+  })
+
+  test('13 pending retries get a turn across restarts while earlier repairs remain unavailable', async () => {
+    const monitorEvents = [{ details: JSON.stringify({ reviewedThroughHeight: 150, retryHeights: [121, 122, 123] }) }]
+    const unavailable = { log: '', updated: [], unchanged: [], unavailable: [{}] }
+    const m = makeMonitor({
+      tipHeight: 250,
+      monitorEvents,
+      headersByHeight: {
+        121: { height: 121, merkleRoot: 'new-121', hash: 'hash-121' },
+        122: { height: 122, merkleRoot: 'new-122', hash: 'hash-122' },
+        123: { height: 123, merkleRoot: 'new-123', hash: 'hash-123' }
+      },
+      staleRootsByHeight: { 121: ['old'], 122: ['old'], 123: ['old'] },
+      reproveResultsByHeightRoot: {
+        '121:old': unavailable,
+        '122:old': unavailable,
+        '123:old': { log: '', updated: [{}], unchanged: [], unavailable: [] }
+      }
+    })
+    const firstTask = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100, 1, 2)
+    const firstCheckpoint = await firstTask.runTask()
+    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([123, 121, 122])
+    monitorEvents.unshift({ details: firstCheckpoint })
+
+    const restartedTask = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100, 1, 2)
+    const nextCheckpoint = JSON.parse(await restartedTask.runTask())
+
+    expect(m.reproveHeightMerkleRoot.mock.calls).toEqual([
+      [121, 'old'],
+      [122, 'old'],
+      [123, 'old'],
+      [121, 'old']
+    ])
+    expect(nextCheckpoint.retryHeights).toEqual([122, 121])
+    expect(nextCheckpoint.updatedTransactions).toBe(1)
+    expect(nextCheckpoint.reviewedThroughHeight).toBe(150)
+  })
+
+  test('14 temporarily ineligible retries survive a saved checkpoint and run when the tip recovers', async () => {
+    const monitorEvents = [{ details: JSON.stringify({ reviewedThroughHeight: 150, retryHeights: [150, 121] }) }]
+    const m = makeMonitor({
+      tipHeight: 249,
+      monitorEvents,
+      headersByHeight: {
+        121: { height: 121, merkleRoot: 'new-121', hash: 'hash-121' },
+        150: { height: 150, merkleRoot: 'new-150', hash: 'hash-150' }
+      },
+      staleRootsByHeight: { 121: ['old'], 150: ['old'] },
+      reproveResultsByHeightRoot: {
+        '121:old': { log: '', updated: [], unchanged: [], unavailable: [{}] },
+        '150:old': { log: '', updated: [{}], unchanged: [], unavailable: [] }
+      }
+    })
+    const firstTask = new TaskReviewProvenTxs(m.monitor as any)
+    const firstCheckpoint = await firstTask.runTask()
+    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([150, 121])
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenCalledTimes(1)
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenCalledWith(121)
+    monitorEvents.unshift({ details: firstCheckpoint })
+    m.chaintracks.currentHeight.mockResolvedValue(250)
+
+    const restartedTask = new TaskReviewProvenTxs(m.monitor as any)
+    const nextCheckpoint = JSON.parse(await restartedTask.runTask())
+
+    expect(m.reproveHeightMerkleRoot).toHaveBeenCalledWith(150, 'old')
+    expect(nextCheckpoint.retryHeights).toEqual([121])
+    expect(nextCheckpoint.updatedTransactions).toBe(1)
+    expect(nextCheckpoint.reviewedThroughHeight).toBe(150)
   })
 })

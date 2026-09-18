@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.4.0'
+version: '0.5.0'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -261,3 +261,17 @@ await session.connect()
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/wallet-relay/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack)
 - [npm](https://www.npmjs.com/package/@bsv/wallet-relay)
+
+## Heartbeat tolerance and close diagnostics
+
+Version 0.5 pings every 30 seconds and tolerates two consecutive missed pongs.
+Any inbound message resets the missed-pong counter. Set `maxMissedHeartbeats: 1`
+on `WalletRelayService` or `WebSocketRelay` to retain the previous one-miss behavior.
+`heartbeatIntervalMs` accepts integers from 1 to 2147483647 milliseconds.
+No relay envelope or wallet RPC encoding changes are required.
+
+Use `onSocketClosed` on the service (or `onSocketClose` on the relay) to record
+close code, cause, connection duration, and missed pongs. The diagnostic callback
+runs before disconnect bookkeeping; thrown errors and rejected promises are
+contained, and asynchronous logging is not awaited. Keep callbacks short and
+handle exporter failures inside your logging integration.

@@ -13,11 +13,7 @@ export interface RequestedCertificateSet {
 export interface AuthMessage {
   version: string
   messageType:
-  | 'initialRequest'
-  | 'initialResponse'
-  | 'certificateRequest'
-  | 'certificateResponse'
-  | 'general'
+    'initialRequest' | 'initialResponse' | 'certificateRequest' | 'certificateResponse' | 'general'
   identityKey: string // Sender's public key (used for identity verification)
   nonce?: string // Sender's nonce (256-bit random value)
   initialNonce?: string
@@ -41,4 +37,8 @@ export interface PeerSession {
   lastUpdate: number
   certificatesRequired?: boolean
   certificatesValidated?: boolean
+  /** Local handshake policy snapshot. Session stores must retain this field; never sent on the wire. */
+  certificatePolicy?: RequestedCertificateSet
+  /** Locally issued standalone requests, keyed by their nonce. Not a wire correlation field. */
+  pendingCertificateRequests?: Record<string, RequestedCertificateSet>
 }

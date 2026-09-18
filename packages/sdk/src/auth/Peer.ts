@@ -39,6 +39,7 @@ export class Peer {
   private readonly transport: Transport
   private readonly wallet: WalletInterface
   certificatesToRequest: RequestedCertificateSet
+  private readonly certificateSessionUpdates = new Map<string, Promise<void>>()
   private readonly onGeneralMessageReceivedCallbacks: Map<
   number,
   (senderPublicKey: string, payload: number[]) => void | Promise<void>
@@ -187,13 +188,67 @@ export class Peer {
       signature
     }
 
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
+    await this.touchSession(peerSession.sessionNonce as string)
 
     try {
       await this.transport.send(generalMessage)
     } catch (error: unknown) {
       this.propagateTransportError(peerSession.peerIdentityKey, error)
+    }
+  }
+
+  private async touchSession(sessionNonce: string): Promise<void> {
+    await this.updateCertificateSession(sessionNonce, async session => {
+      session.lastUpdate = Date.now()
+    })
+  }
+
+  private snapshotCertificatePolicy(policy: RequestedCertificateSet): RequestedCertificateSet {
+    return {
+      certifiers: [...policy.certifiers],
+      types: Object.fromEntries(
+        Object.entries(policy.types).map(([type, fields]) => [type, [...fields]])
+      )
+    }
+  }
+
+  private matchesCertificatePolicy(
+    certificates: VerifiableCertificate[],
+    policy: RequestedCertificateSet
+  ): boolean {
+    return certificates.every(
+      certificate =>
+        policy.certifiers.includes(certificate.certifier) &&
+        Object.hasOwn(policy.types, certificate.type)
+    )
+  }
+
+  // Serialize local read-modify-write operations even when a session store returns copies.
+  // Transport sends and observer callbacks run outside this section to allow loopback delivery.
+  private async updateCertificateSession<T>(
+    sessionNonce: string,
+    update: (session: PeerSession) => Promise<T>
+  ): Promise<T> {
+    const manager = this.sessionManager as SessionManager | AsyncSessionManager
+    const previous = this.certificateSessionUpdates.get(sessionNonce) ?? Promise.resolve()
+    const pending = previous.then(async () => {
+      const session = await manager.getSession(sessionNonce)
+      if (session == null) throw new Error(`Session not found for nonce: ${sessionNonce}`)
+      const result = await update(session)
+      await manager.updateSession(session)
+      return result
+    })
+    const settled = pending.then(
+      () => {},
+      () => {}
+    )
+    this.certificateSessionUpdates.set(sessionNonce, settled)
+    try {
+      return await pending
+    } finally {
+      if (this.certificateSessionUpdates.get(sessionNonce) === settled) {
+        this.certificateSessionUpdates.delete(sessionNonce)
+      }
     }
   }
 
@@ -221,10 +276,13 @@ export class Peer {
 
     const peerSession = await this.getAuthenticatedSession(identityKey)
 
+    const policy = this.snapshotCertificatePolicy(certificatesToRequest)
+    const sessionNonce = peerSession.sessionNonce as string
+
     // Prepare the message
     const requestNonce = Utils.toBase64(Random(32))
     const { signature } = await this.wallet.createSignature({
-      data: Peer.utf8ToBytes(JSON.stringify(certificatesToRequest)),
+      data: Peer.utf8ToBytes(JSON.stringify(policy)),
       protocolID: [2, 'auth message signature'],
       keyID: `${requestNonce} ${peerSession.peerNonce ?? ''}`,
       counterparty: peerSession.peerIdentityKey
@@ -237,17 +295,23 @@ export class Peer {
       nonce: requestNonce,
       initialNonce: peerSession.sessionNonce,
       yourNonce: peerSession.peerNonce,
-      requestedCertificates: certificatesToRequest,
+      requestedCertificates: policy,
       signature
     }
 
-    // Update last-used timestamp
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
+    // Store our policy before send: an in-memory transport may respond synchronously.
+    await this.updateCertificateSession(sessionNonce, async session => {
+      session.pendingCertificateRequests ??= {}
+      session.pendingCertificateRequests[requestNonce] = this.snapshotCertificatePolicy(policy)
+      session.lastUpdate = Date.now()
+    })
 
     try {
       await this.transport.send(certRequestMessage)
     } catch (error: unknown) {
+      await this.updateCertificateSession(sessionNonce, async session => {
+        delete session.pendingCertificateRequests?.[requestNonce]
+      })
       this.propagateTransportError(peerSession.peerIdentityKey, error)
     }
   }
@@ -313,7 +377,11 @@ export class Peer {
   }
 
   /**
-   * Registers a callback to listen for certificates received from peers.
+   * Registers an observer for certificates received from peers, not an acceptance hook.
+   * Local certificate validation is committed and its waiters are released before observers
+   * run. Throwing rejects message handling and stops subsequent observers; it does not
+   * roll back validation or revoke the session. Apply acceptance policy through the locally
+   * requested certificate set and explicit application authorization before protected work.
    *
    * @param {(senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>} callback - The function to call when certificates are received.
    * @returns {number} The ID of the callback listener.
@@ -373,15 +441,16 @@ export class Peer {
   ): Promise<string> {
     const sessionNonce = await createNonce(this.wallet, undefined, this.originator)
 
+    const certificatePolicy = this.snapshotCertificatePolicy(this.certificatesToRequest)
     const now = Date.now()
-    const certificatesRequired =
-      this.certificatesToRequest.certifiers.length > 0
+    const certificatesRequired = certificatePolicy.certifiers.length > 0
 
     await this.sessionManager.addSession({
       isAuthenticated: false,
       sessionNonce,
       peerIdentityKey: identityKey,
       lastUpdate: now,
+      certificatePolicy,
       certificatesRequired,
       certificatesValidated: !certificatesRequired
     })
@@ -391,7 +460,7 @@ export class Peer {
       messageType: 'initialRequest',
       identityKey: await this.getIdentityPublicKey(),
       initialNonce: sessionNonce,
-      requestedCertificates: this.certificatesToRequest
+      requestedCertificates: this.snapshotCertificatePolicy(certificatePolicy)
     }
 
     // Register before sending: an in-memory or otherwise synchronous transport
@@ -478,6 +547,21 @@ export class Peer {
     throw new Error(message)
   }
 
+  private requireMatchingSessionIdentity (
+    peerSession: PeerSession,
+    claimedIdentityKey: string,
+    messageType: AuthMessage['messageType']
+  ): string {
+    const verifiedIdentityKey = peerSession.peerIdentityKey
+    if (typeof verifiedIdentityKey !== 'string' || verifiedIdentityKey.length === 0) {
+      throw new Error(`Peer identity is not established for ${messageType} message.`)
+    }
+    if (claimedIdentityKey !== verifiedIdentityKey) {
+      throw new Error(`${messageType} identity does not match the authenticated session.`)
+    }
+    return verifiedIdentityKey
+  }
+
   /**
    * Handles incoming messages from the transport.
    *
@@ -534,11 +618,11 @@ export class Peer {
     }
 
     const sessionNonce = await createNonce(this.wallet, undefined, this.originator)
+    const certificatePolicy = this.snapshotCertificatePolicy(this.certificatesToRequest)
     const now = Date.now()
 
     const certificatesRequired =
-      Array.isArray(this.certificatesToRequest?.certifiers) &&
-      this.certificatesToRequest.certifiers.length > 0
+      Array.isArray(certificatePolicy.certifiers) && certificatePolicy.certifiers.length > 0
 
     await this.sessionManager.addSession({
       isAuthenticated: true,
@@ -546,6 +630,7 @@ export class Peer {
       peerNonce: message.initialNonce,
       peerIdentityKey: message.identityKey,
       lastUpdate: now,
+      certificatePolicy,
       certificatesRequired,
       certificatesValidated: !certificatesRequired
     })
@@ -591,7 +676,7 @@ export class Peer {
       initialNonce: sessionNonce,
       yourNonce: message.initialNonce,
       certificates: certificatesToInclude,
-      requestedCertificates: this.certificatesToRequest,
+      requestedCertificates: this.snapshotCertificatePolicy(certificatePolicy),
       signature
     }
 
@@ -648,9 +733,8 @@ export class Peer {
     peerSession.peerIdentityKey = message.identityKey
     peerSession.isAuthenticated = true
 
-    peerSession.certificatesRequired =
-      Array.isArray(this.certificatesToRequest?.certifiers) &&
-      this.certificatesToRequest.certifiers.length > 0
+    peerSession.certificatePolicy ??= this.snapshotCertificatePolicy(this.certificatesToRequest)
+    peerSession.certificatesRequired = peerSession.certificatePolicy.certifiers.length > 0
 
     // IMPORTANT: validation defaults to false if certs are required
     peerSession.certificatesValidated = !peerSession.certificatesRequired
@@ -671,15 +755,18 @@ export class Peer {
     ) {
       return
     }
-    await validateCertificates(this.wallet, message, this.certificatesToRequest, this.originator)
-
-    peerSession.certificatesValidated = true
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
-
-    if (peerSession.sessionNonce != null) {
-      this.resolveCertificateValidation(peerSession.sessionNonce)
-    }
+    const sessionNonce = peerSession.sessionNonce as string
+    await this.updateCertificateSession(sessionNonce, async session => {
+      await validateCertificates(
+        this.wallet,
+        message,
+        session.certificatePolicy ?? this.certificatesToRequest,
+        this.originator
+      )
+      session.certificatesValidated = true
+      session.lastUpdate = Date.now()
+    })
+    this.resolveCertificateValidation(sessionNonce)
 
     for (const callback of this.onCertificatesReceivedCallbacks.values()) {
       await callback(message.identityKey, message.certificates as VerifiableCertificate[])
@@ -750,26 +837,30 @@ export class Peer {
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
+    const verifiedIdentityKey = this.requireMatchingSessionIdentity(
+      peerSession,
+      message.identityKey,
+      message.messageType
+    )
 
     const { valid } = await this.wallet.verifySignature({
       data: Peer.utf8ToBytes(JSON.stringify(message.requestedCertificates)),
       signature: message.signature as number[],
       protocolID: [2, 'auth message signature'],
       keyID: `${message.nonce ?? ''} ${peerSession.sessionNonce ?? ''}`,
-      counterparty: peerSession.peerIdentityKey
+      counterparty: verifiedIdentityKey
     }, this.originator)
     if (!valid) {
       throw new Error(
-        `Invalid signature in certificate request message from ${peerSession.peerIdentityKey as string}`
+        `Invalid signature in certificate request message from ${verifiedIdentityKey}`
       )
     }
 
     // Update usage
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
+    await this.touchSession(peerSession.sessionNonce as string)
 
     if (
-      (message.requestedCertificates != null) &&
+      message.requestedCertificates != null &&
       Array.isArray(message.requestedCertificates.certifiers) &&
       message.requestedCertificates.certifiers.length > 0
     ) {
@@ -777,7 +868,7 @@ export class Peer {
         // Let the application handle it
         for (const callback of this.onCertificateRequestReceivedCallbacks.values()) {
           await callback(
-            message.identityKey,
+            verifiedIdentityKey,
             message.requestedCertificates as RequestedCertificateSet
           )
         }
@@ -786,10 +877,10 @@ export class Peer {
         const verifiableCertificates = await getVerifiableCertificates(
           this.wallet,
           message.requestedCertificates,
-          message.identityKey,
+          verifiedIdentityKey,
           this.originator
         )
-        await this.sendCertificateResponse(message.identityKey, verifiableCertificates)
+        await this.sendCertificateResponse(verifiedIdentityKey, verifiableCertificates)
       }
     }
   }
@@ -826,8 +917,7 @@ export class Peer {
     }
 
     // Update usage
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
+    await this.touchSession(peerSession.sessionNonce as string)
 
     try {
       await this.transport.send(certificateResponse)
@@ -855,6 +945,11 @@ export class Peer {
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
+    const verifiedIdentityKey = this.requireMatchingSessionIdentity(
+      peerSession,
+      message.identityKey,
+      message.messageType
+    )
 
     // Validate message signature
     const { valid } = await this.wallet.verifySignature({
@@ -862,7 +957,7 @@ export class Peer {
       signature: message.signature as number[],
       protocolID: [2, 'auth message signature'],
       keyID: `${message.nonce ?? ''} ${peerSession.sessionNonce ?? ''}`,
-      counterparty: message.identityKey
+      counterparty: verifiedIdentityKey
     }, this.originator)
     if (!valid) {
       throw new Error(
@@ -870,28 +965,34 @@ export class Peer {
       )
     }
 
-    // Validate certificates only if they were actually provided
     if (Array.isArray(message.certificates) && message.certificates.length > 0) {
-      await validateCertificates(
-        this.wallet,
-        message,
-        message.requestedCertificates,
-        this.originator
-      )
-
-      peerSession.certificatesValidated = true
-      peerSession.lastUpdate = Date.now()
-      await this.sessionManager.updateSession(peerSession)
-
-      // Resolve any promises waiting for certificate validation
-      if (peerSession.sessionNonce != null) {
-        this.resolveCertificateValidation(peerSession.sessionNonce)
-      }
+      const sessionNonce = peerSession.sessionNonce as string
+      const validated = await this.updateCertificateSession(sessionNonce, async session => {
+        const certificates = message.certificates as VerifiableCertificate[]
+        const handshakePolicy = session.certificatePolicy ?? this.certificatesToRequest
+        // v0.1 responses do not echo the request nonce. Match one complete locally
+        // recorded policy; never combine certifier/type permissions from separate requests.
+        const requested = Object.entries(session.pendingCertificateRequests ?? {}).find(
+          ([, policy]) => this.matchesCertificatePolicy(certificates, policy)
+        )
+        const matchesHandshake = this.matchesCertificatePolicy(certificates, handshakePolicy)
+        const policy = requested?.[1] ?? (matchesHandshake ? handshakePolicy : undefined)
+        if (policy == null) {
+          throw new Error('Certificates do not match a locally requested set for this session.')
+        }
+        await validateCertificates(this.wallet, message, policy, this.originator)
+        if (requested != null) delete session.pendingCertificateRequests?.[requested[0]]
+        // A separate dynamic request cannot satisfy a different handshake requirement.
+        if (matchesHandshake) session.certificatesValidated = true
+        session.lastUpdate = Date.now()
+        return session.certificatesValidated === true
+      })
+      if (validated) this.resolveCertificateValidation(sessionNonce)
     }
 
     // Notify any listeners
     for (const callback of this.onCertificatesReceivedCallbacks.values()) {
-      await callback(message.identityKey, message.certificates ?? [])
+      await callback(verifiedIdentityKey, message.certificates ?? [])
     }
   }
 
@@ -920,6 +1021,11 @@ export class Peer {
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
+    const verifiedIdentityKey = this.requireMatchingSessionIdentity(
+      peerSession,
+      message.identityKey,
+      message.messageType
+    )
 
     const certificatesRequired = peerSession.certificatesRequired === true
     const certificatesValidated = peerSession.certificatesValidated === true
@@ -969,25 +1075,24 @@ export class Peer {
       signature: message.signature as number[],
       protocolID: [2, 'auth message signature'],
       keyID: `${message.nonce ?? ''} ${peerSession.sessionNonce ?? ''}`,
-      counterparty: peerSession.peerIdentityKey
+      counterparty: verifiedIdentityKey
     }, this.originator)
 
     if (!valid) {
       throw new Error(
-        `Invalid signature in generalMessage from ${peerSession.peerIdentityKey as string}`
+        `Invalid signature in generalMessage from ${verifiedIdentityKey}`
       )
     }
 
     // Mark last usage
-    peerSession.lastUpdate = Date.now()
-    await this.sessionManager.updateSession(peerSession)
+    await this.touchSession(peerSession.sessionNonce as string)
 
     // Update lastInteractedWithPeer
-    this.lastInteractedWithPeer = message.identityKey
+    this.lastInteractedWithPeer = verifiedIdentityKey
 
     // Dispatch callbacks
     for (const callback of this.onGeneralMessageReceivedCallbacks.values()) {
-      await callback(message.identityKey, message.payload ?? [])
+      await callback(verifiedIdentityKey, message.payload ?? [])
     }
   }
 

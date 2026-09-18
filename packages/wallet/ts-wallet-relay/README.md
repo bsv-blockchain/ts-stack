@@ -576,3 +576,17 @@ See [API.md](./API.md) for full parameter and method documentation.
 ## License
 
 Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+
+## Heartbeat tolerance and close diagnostics
+
+Version 0.5 pings every 30 seconds and tolerates two consecutive missed pongs.
+Any inbound message resets the missed-pong counter. Set `maxMissedHeartbeats: 1`
+on `WalletRelayService` or `WebSocketRelay` to retain the previous one-miss behavior.
+`heartbeatIntervalMs` accepts integers from 1 to 2147483647 milliseconds.
+No relay envelope or wallet RPC encoding changes are required.
+
+Use `onSocketClosed` on the service (or `onSocketClose` on the relay) to record
+close code, cause, connection duration, and missed pongs. The diagnostic callback
+runs before disconnect bookkeeping; thrown errors and rejected promises are
+contained, and asynchronous logging is not awaited. Keep callbacks short and
+handle exporter failures inside your logging integration.

@@ -2,6 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import { stripTypeScriptTypes } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -115,6 +116,47 @@ export function changedLinesFromDiff(diff) {
   return changed
 }
 
+// Transforming both revisions compares emitted JavaScript without erasing spaces
+// inside strings or template literals. Unsupported syntax fails closed.
+export function hasRuntimeChange(before, after) {
+  try {
+    return (
+      stripTypeScriptTypes(before, { mode: 'transform' }) !==
+      stripTypeScriptTypes(after, { mode: 'transform' })
+    )
+  } catch {
+    return true
+  }
+}
+
+function omitTypeOnlyChanges(changed, base) {
+  const mergeBase = execFileSync('/usr/bin/git', ['merge-base', base, 'HEAD'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8'
+  }).trim()
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    let before
+    try {
+      before = execFileSync('/usr/bin/git', ['show', `${mergeBase}:${file}`], {
+        cwd: REPOSITORY_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        maxBuffer: 20 * 1024 * 1024
+      })
+    } catch {
+      // New or unreadable files remain governed.
+      continue
+    }
+    const after = execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024
+    })
+    if (!hasRuntimeChange(before, after)) changed.delete(file)
+  }
+}
+
 function coverageFile(coverage, source) {
   const normalized = normalizedPath(source)
   if (!coverage.has(normalized)) {
@@ -218,6 +260,7 @@ async function main(arguments_) {
     { cwd: REPOSITORY_ROOT, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }
   )
   const changed = changedLinesFromDiff(diff)
+  omitTypeOnlyChanges(changed, base)
   const directoryPath = path.resolve(directory)
   const files = fs.existsSync(directoryPath) ? lcovFiles(directoryPath) : []
   if (changed.size > 0 && files.length === 0) {

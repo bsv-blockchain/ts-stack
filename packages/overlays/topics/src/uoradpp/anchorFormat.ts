@@ -1,4 +1,4 @@
-import { CachedKeyDeriver, LockingScript, ProtoWallet, PublicKey, PushDrop, Utils } from '@bsv/sdk'
+import { CachedKeyDeriver, LockingScript, ProtoWallet, PublicKey, Utils } from '@bsv/sdk'
 import type { WalletProtocol } from '@bsv/sdk'
 
 /**
@@ -51,6 +51,12 @@ const MAX_TYPE = 64
 
 const HEX_64 = /^[0-9a-f]{64}$/
 const COMPRESSED_KEY = /^0[23][0-9a-f]{64}$/
+/**
+ * Printable text, as the format defines it: the C0 controls, 0x7F and the C1
+ * range are refused. The same expression as the reference reader's, so both
+ * give one answer about what an index may carry as a subject or a type.
+ */
+const PRINTABLE = /^[\x20-\x7e\u00a0-\uffff]+$/
 
 /** Multicodec prefix for a compressed secp256k1 public key: varint 0xe7. */
 const SECP256K1_PUB_MULTICODEC = [0xe7, 0x01]
@@ -131,6 +137,69 @@ function text(bytes: number[]): string | undefined {
   return Utils.toHex(Utils.toArray(decoded, 'utf8')) === Utils.toHex(bytes) ? decoded : undefined
 }
 
+const OP_CHECKSIG = 0xac
+const OP_DROP = 0x75
+const OP_2DROP = 0x6d
+
+/**
+ * Read the locking script into its key and its fields, exactly.
+ *
+ * Not `PushDrop.decode`, which is a discovery tool for this shape and not a
+ * conforming reader of it. The decoder accepts a 65-byte uncompressed key push,
+ * and because the decoded key re-compresses before the attribution comparison
+ * an anchor in a spelling no conforming writer emits was admitted with nothing
+ * failing. It also stops reading at the first drop opcode, so a short tail, the
+ * wrong mix of drops or a trailing chunk all parsed. A conforming writer emits
+ * the 33-byte compressed push and exactly floor(n/2) `OP_2DROP`s plus one
+ * `OP_DROP` when n is odd, with nothing after them, and a conforming reader
+ * refuses anything else. Admission rules are version-sensitive across index
+ * deployments, so this reader has to give the format's reference reader's
+ * answer, and the fixture's `uncompressedKey` and `malformedTail` vectors are
+ * what hold the two to it.
+ *
+ * `OP_0` and the small-integer opcodes are read as the bytes they push, so an
+ * empty field reaches `text` as the empty string and is refused there for the
+ * right reason, rather than as the single zero byte the generic decoder renders
+ * it as.
+ */
+function readExactPushDrop(lockingScript: LockingScript): {
+  fields: number[][]
+  lockingPublicKey: PublicKey
+} {
+  const chunks = lockingScript.chunks
+  const keyData = chunks[0]?.data
+  if (keyData === undefined || keyData.length !== 33) {
+    throw new Error('the locking key push is not 33 bytes')
+  }
+  if (chunks[1]?.op !== OP_CHECKSIG) throw new Error('no OP_CHECKSIG after the locking key')
+  let lockingPublicKey: PublicKey
+  try {
+    lockingPublicKey = PublicKey.fromString(Utils.toHex(keyData))
+  } catch {
+    throw new Error('the locking key is not a valid public key')
+  }
+
+  const fields: number[][] = []
+  for (const chunk of chunks.slice(2)) {
+    if (chunk.op === OP_DROP || chunk.op === OP_2DROP) break
+    if (chunk.data !== undefined && chunk.data.length > 0) fields.push(chunk.data)
+    else if (chunk.op === 0) fields.push([])
+    else if (chunk.op >= 0x51 && chunk.op <= 0x60) fields.push([chunk.op - 0x50])
+    else throw new Error(`opcode 0x${chunk.op.toString(16)} where a field should be`)
+  }
+
+  const tail = chunks.slice(2 + fields.length)
+  const twoDrops = Math.floor(fields.length / 2)
+  const oneDrop = fields.length % 2
+  const exact =
+    tail.length === twoDrops + oneDrop &&
+    tail.slice(0, twoDrops).every(chunk => chunk.op === OP_2DROP) &&
+    (oneDrop === 0 || tail[twoDrops]?.op === OP_DROP)
+  if (!exact) throw new Error('the drop tail is not exactly the drops the fields need')
+
+  return { fields, lockingPublicKey }
+}
+
 /**
  * Read and validate one output, or throw.
  *
@@ -139,18 +208,13 @@ function text(bytes: number[]): string | undefined {
  * rejected each output. Every message names what was wrong, because an operator
  * reading a log wants to know whether a submission was malformed or simply not
  * this format.
- *
- * `PushDrop.decode` is safe here specifically because no field may be empty:
- * the decoder renders an empty push as a single zero byte, which would make the
- * signature preimage one byte too long, and this format rejects empty fields
- * before that can matter.
  */
 export function readUoraAnchor(lockingScript: LockingScript): {
   anchor: UoraAnchor
   fields: number[][]
   lockingPublicKey: PublicKey
 } {
-  const { fields, lockingPublicKey } = PushDrop.decode(lockingScript)
+  const { fields, lockingPublicKey } = readExactPushDrop(lockingScript)
   if (fields.length !== UORA_ANCHOR_FIELD_COUNT + 1) {
     throw new Error(
       `expected ${UORA_ANCHOR_FIELD_COUNT} fields and a signature, found ${fields.length}`
@@ -159,6 +223,9 @@ export function readUoraAnchor(lockingScript: LockingScript): {
 
   const parts = fields.slice(0, UORA_ANCHOR_FIELD_COUNT).map(field => text(field))
   if (parts.includes(undefined)) throw new Error('a field is empty or not UTF-8')
+  if (parts.some(part => !PRINTABLE.test(part as string))) {
+    throw new Error('a field carries a control character')
+  }
   const [prefix, digest, attestationId, issuer, subject, uoraType, anchoredBy] = parts as string[]
 
   if (prefix !== UORA_ANCHOR_PREFIX) throw new Error(`not an anchor output (prefix "${prefix}")`)

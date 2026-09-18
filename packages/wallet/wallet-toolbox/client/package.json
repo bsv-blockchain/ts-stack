@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.13.0",
+  "version": "2.13.1",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -83,12 +83,12 @@
     "@bsv/sdk": "workspace:^",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "esbuild": "0.28.1",
     "oxlint": "^1.76.0",
     "tsdown": "0.22.14",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.1.5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

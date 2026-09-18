@@ -107,8 +107,9 @@ last-pusher-independent approval is not an unconditional requirement.
 Do not dismiss a finding or add an override merely to make CI green. A genuine
 false positive or unavoidable temporary compatibility substitution must be
 registered in `governance/repository-health/exceptions.json` with an owner,
-rationale, evidence, review deadline, and objective removal condition. Expired
-exceptions fail CI.
+rationale, evidence, review deadline, and objective removal condition. Elapsed review deadlines are maintenance reminders in ordinary source CI.
+The separate weekly Maintenance review deadlines workflow enforces them;
+malformed, unowned, or unregistered exceptions still fail ordinary CI.
 
 Public services such as Overlay, Wallet Storage, WAB, Message Box, and Wallet
 Relay may need to accept clients from previously unknown domains. Their public

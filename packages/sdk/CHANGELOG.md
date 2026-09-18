@@ -214,6 +214,22 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.7.1 candidate — authenticated peer identity binding
+
+- Bind authenticated general messages, certificate requests, and certificate
+  responses to the identity stored in the nonce-selected session. Reject
+  mismatched transport identity metadata and dispatch only the identity used
+  for signature verification. The BRC-103 v0.1 wire envelope, nonce derivation,
+  payload bytes, and signature format are unchanged.
+
+### 2.7.0 candidate — authentication policy and settlement acceptance
+
+- Bind standalone certificate validation to local handshake and dynamic request
+  snapshots while retaining the BRC-103 v0.1 wire shape. Shared session adapters
+  must retain the new optional local policy fields and coordinate writers.
+- Clarify that certificate callbacks observe committed validation and cannot veto it.
+- Require `accepted: true` from the wallet before accepting BRC-29 settlement.
+
 - Stop late certificate work and session recovery from dispatching requests after
   an AuthFetch authentication timeout. Preserve the original gateway error and
   do not automatically replay failed writes.

@@ -201,7 +201,7 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
       propertyTest: 'packages/overlays/topics/src/mandala/__tests/types.property.test.ts',
-      mutate: ['src/mandala/types.ts:72-78', 'src/admission/issuerPolicy.ts:36-39'],
+      mutate: ['src/mandala/types.ts:72-97', 'src/admission/issuerPolicy.ts:36-39'],
       ...jestTarget('jest.config.js', ['<rootDir>/src/mandala/__tests/types*.test.ts'], {
         esm: true
       })

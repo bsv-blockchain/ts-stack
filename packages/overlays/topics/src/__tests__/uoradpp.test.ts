@@ -529,6 +529,48 @@ describe('the boundary between the subject and the type', () => {
   })
 })
 
+describe('UORA v3 key and drop-tail validation', () => {
+  const F = ANCHOR_V3_FIXTURE
+  const manager = new UoraDppTopicManager()
+
+  it('refuses the 65-byte uncompressed locking push', async () => {
+    const script = LockingScript.fromHex(F.uncompressedKey)
+    expect(() => readUoraAnchor(script)).toThrow(/locking key push is not 33 bytes/)
+    const admitted = await manager.identifyAdmissibleOutputs(txWith(script).toBEEF(), [])
+    expect(admitted.outputsToAdmit).toEqual([])
+  })
+
+  it('refuses a short, mixed or trailing drop tail', async () => {
+    expect(F.malformedTail).toHaveLength(3)
+    for (const hex of F.malformedTail) {
+      const script = LockingScript.fromHex(hex)
+      expect(() => readUoraAnchor(script)).toThrow(/drop tail/)
+      const admitted = await manager.identifyAdmissibleOutputs(txWith(script).toBEEF(), [])
+      expect(admitted.outputsToAdmit).toEqual([])
+    }
+  })
+
+  it('names what is wrong with a script that is not this shape at all', () => {
+    const key = { op: 33, data: Utils.toArray(SERVICE_KEY, 'hex') }
+    const checksig = { op: 0xac }
+    expect(() => readUoraAnchor(new LockingScript([]))).toThrow(/locking key push is not 33 bytes/)
+    expect(() => readUoraAnchor(new LockingScript([key, { op: 0x6a }]))).toThrow(/no OP_CHECKSIG/)
+    expect(() => readUoraAnchor(new LockingScript([key, checksig, { op: 0x6a }]))).toThrow(
+      /opcode 0x6a where a field should be/
+    )
+    // 33 bytes in the compressed shape that are not a point on the curve.
+    const notAPoint = { op: 33, data: Utils.toArray(`02${'00'.repeat(32)}`, 'hex') }
+    expect(() => readUoraAnchor(new LockingScript([notAPoint, checksig]))).toThrow(
+      /not a valid public key/
+    )
+    // OP_0 and a small-integer opcode read as the bytes they push, and the tail
+    // is exact for two fields, so this fails on the count and nothing earlier.
+    expect(() =>
+      readUoraAnchor(new LockingScript([key, checksig, { op: 0 }, { op: 0x51 }, { op: 0x6d }]))
+    ).toThrow(/expected 7 fields and a signature, found 2/)
+  })
+})
+
 describe('what readUoraAnchor refuses', () => {
   const manager = new UoraDppTopicManager()
 
@@ -550,6 +592,25 @@ describe('what readUoraAnchor refuses', () => {
       false
     )
   }
+
+  it('preserves printable Unicode and exact field length boundaries', async () => {
+    const unicode = claim({ subject: '产品/café/🌱', uoraType: 'Origine é' })
+    const bounded = claim({
+      attestationId: 'i'.repeat(256),
+      subject: 's'.repeat(512),
+      uoraType: 't'.repeat(64)
+    })
+    for (const expected of [unicode, bounded]) {
+      const script = await anchorScript(expected)
+      const { anchor, fields } = readUoraAnchor(script)
+      expect(anchor).toMatchObject(expected)
+      await expect(
+        assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+      ).resolves.toBeUndefined()
+      const result = await manager.identifyAdmissibleOutputs(txWith(script).toBEEF(), [])
+      expect(result.outputsToAdmit).toEqual([0])
+    }
+  })
 
   it('refuses an output that is not this many fields', async () => {
     // Two fields and no signature. The count is checked before anything is
@@ -601,6 +662,25 @@ describe('what readUoraAnchor refuses', () => {
     ] as const) {
       const script = await anchorScript(claim({ [field]: value }))
       expect(() => readUoraAnchor(script)).toThrow(pattern)
+    }
+  })
+
+  it('refuses a field carrying a control character', async () => {
+    // Well-formed UTF-8 that round-trips, and still not text the format admits:
+    // a C0 control, 0x7F and a C1 control are refused, as the reference reader
+    // refuses them, so an index never carries a subject or a type it cannot show.
+    for (const code of [0x07, 0x7f, 0x85]) {
+      const one = claim()
+      const script = await scriptWithFields([
+        UORA_ANCHOR_PREFIX,
+        one.digest,
+        one.attestationId,
+        one.issuer,
+        one.subject,
+        `${one.uoraType}${String.fromCharCode(code)}`,
+        one.anchoredBy
+      ])
+      expect(() => readUoraAnchor(script)).toThrow(/control character/)
     }
   })
 
@@ -702,9 +782,9 @@ describe('UoraDppLookupService, at its edges', () => {
       /valid query is required/
     )
     // `query` omitted is treated as `{}`, not as a missing question object.
-    await expect(
-      service.lookup({ service: 'ls_uora_dpp' } as LookupQuestion)
-    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+    await expect(service.lookup({ service: 'ls_uora_dpp' } as LookupQuestion)).rejects.toThrow(
+      /issuer, issuerKey, subject, attestationId or digest/
+    )
     await expect(
       service.lookup({ service: 'ls_uora_dpp', query: { issuer: '' } } as LookupQuestion)
     ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
