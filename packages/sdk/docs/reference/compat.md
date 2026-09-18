@@ -470,7 +470,6 @@ export default class Mnemonic {
     public toString(): string 
     public toSeed(passphrase?: string): number[] 
     public entropy2Mnemonic(buf: number[]): this 
-    public toEntropy(): number[] 
     public check(): boolean 
     public mnemonic2Seed(passphrase = ""): this 
     public isValid(passphrase = ""): boolean 
@@ -652,11 +651,6 @@ Argument Details
 + **mnemonic**
   + The mnemonic phrase as a string.
 
-Throws
-
-If the mnemonic does not pass BIP-39 validation
-(unknown words, invalid length, or bad checksum).
-
 #### Method fromString
 
 Static method to create a Mnemonic instance from a mnemonic string.
@@ -747,22 +741,6 @@ public toBinary(): number[]
 Returns
 
 The binary representation of the mnemonic and seed.
-
-#### Method toEntropy
-
-Recovers the original entropy bytes from the instance's mnemonic phrase.
-
-```ts
-public toEntropy(): number[] 
-```
-
-Returns
-
-The entropy buffer that was originally used to generate the mnemonic.
-
-Throws
-
-If the mnemonic is invalid or contains unknown words.
 
 #### Method toSeed
 
@@ -859,8 +837,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: magicHash
 
 ```ts
-magicHash = (messageBuf: number[]): number[] => computeMagicHash(messageBuf)
+magicHash = (messageBuf: number[]): number[] => {
+    const bw = new Writer();
+    bw.writeVarIntNum(prefix.length);
+    bw.write(toArray(prefix, "utf8"));
+    bw.writeVarIntNum(messageBuf.length);
+    bw.write(messageBuf);
+    const buf = bw.toArray();
+    const hashBuf = Hash.hash256(buf);
+    return hashBuf;
+}
 ```
+
+See also: [Writer](./primitives.md#class-writer), [hash256](./primitives.md#variable-hash256), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -869,7 +858,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 sign = (message: number[], privateKey: PrivateKey, mode: "raw" | "base64" = "base64"): Signature | string => {
-    const hashBuf = computeMagicHash(message);
+    const hashBuf = magicHash(message);
     const sig = ECDSA.sign(new BigNumber(hashBuf), privateKey, true);
     if (mode === "raw") {
         return sig;
@@ -880,7 +869,7 @@ sign = (message: number[], privateKey: PrivateKey, mode: "raw" | "base64" = "bas
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature)
+See also: [BigNumber](./primitives.md#class-bignumber), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature), [magicHash](./compat.md#variable-magichash)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -889,12 +878,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 verify = (message: number[], sig: Signature, pubKey: PublicKey): boolean => {
-    const hashBuf = computeMagicHash(message);
+    const hashBuf = magicHash(message);
     return ECDSA.verify(new BigNumber(hashBuf), sig, pubKey);
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature)
+See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature), [magicHash](./compat.md#variable-magichash)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

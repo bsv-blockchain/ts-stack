@@ -48,10 +48,7 @@ export interface KVStoreConfig {
     topics?: string[];
     originator?: string;
     wallet?: WalletInterface;
-    networkPreset?: LookupNetworkPreset;
-    lookupResolver?: LookupResolver;
-    hostOverrides?: Record<string, string[]>;
-    slapTrackers?: string[];
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
     acceptDelayedBroadcast?: boolean;
     overlayBroadcast?: boolean;
     tokenSetDescription?: string;
@@ -60,7 +57,7 @@ export interface KVStoreConfig {
 }
 ```
 
-See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset), [LookupResolver](./overlay-tools.md#class-lookupresolver), [WalletInterface](./wallet.md#interface-walletinterface), [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [WalletInterface](./wallet.md#interface-walletinterface), [WalletProtocol](./wallet.md#type-walletprotocol)
 
 #### Property acceptDelayedBroadcast
 
@@ -70,44 +67,13 @@ Whether to accept delayed broadcast
 acceptDelayedBroadcast?: boolean
 ```
 
-#### Property hostOverrides
-
-Per-service overlay host overrides (`serviceName -> hosts`), applied when
-the store builds its default lookup resolver. This pins which hosts answer
-*lookup* queries for a given service (e.g. read lookups via `ls_kvstore`),
-instead of discovering them via SLAP.
-
-Note this does not by itself pin the *broadcast* target: writes are
-submitted to the hosts that the `ls_ship` SHIP lookup returns, so an
-`ls_ship` override only changes which tracker answers — the broadcast host
-is whatever advertisements that lookup names. To force writes to a specific
-backend, use a resolver / SHIP setup whose `ls_ship` results return the
-desired host. Ignored when `lookupResolver` is supplied.
-
-```ts
-hostOverrides?: Record<string, string[]>
-```
-
-#### Property lookupResolver
-
-A pre-built lookup resolver to use for all overlay queries — both reads and
-write-host (SHIP) discovery. When provided, it takes precedence and
-`hostOverrides` / `slapTrackers` are ignored for resolver construction.
-Use this to fully control overlay host resolution.
-
-```ts
-lookupResolver?: LookupResolver
-```
-See also: [LookupResolver](./overlay-tools.md#class-lookupresolver)
-
 #### Property networkPreset
 
 Network preset for overlay services
 
 ```ts
-networkPreset?: LookupNetworkPreset
+networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local"
 ```
-See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset)
 
 #### Property originator
 
@@ -148,15 +114,6 @@ Service name for overlay submission
 
 ```ts
 serviceName?: string
-```
-
-#### Property slapTrackers
-
-Override the SLAP trackers used by the default lookup resolver. Ignored when
-`lookupResolver` is supplied.
-
-```ts
-slapTrackers?: string[]
 ```
 
 #### Property tokenAmount
@@ -292,8 +249,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Interface: KVStoreQuery
 
 Query parameters for KVStore lookups from overlay services.
-Must include at least one selector: key, controller, protocolID, or non-empty tags.
-Pagination and ordering fields only refine selector-based lookups.
+Used when searching for existing key-value pairs in the network.
 
 ```ts
 export interface KVStoreQuery {
@@ -658,9 +614,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 kvStoreInterpreter: InterpreterFunction<string, KVContext> = async (transaction: Transaction, outputIndex: number, ctx?: KVContext): Promise<string | undefined> => {
     try {
         const output = transaction.outputs[outputIndex];
-        if (output?.lockingScript == null)
+        if (output == null || output.lockingScript == null)
             return undefined;
-        if (ctx?.key == null)
+        if (ctx == null || ctx.key == null)
             return undefined;
         const decoded = PushDrop.decode(output.lockingScript);
         const expectedFieldCount = Object.keys(kvProtocol).length;

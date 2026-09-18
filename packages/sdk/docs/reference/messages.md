@@ -134,7 +134,7 @@ verify = (message: number[], sig: number[], recipient?: PrivateKey): boolean => 
         const verifierRest = reader.read(32);
         const verifierDER = toHex([verifierFirst, ...verifierRest]);
         if (typeof recipient !== "object") {
-            throw new TypeError(`This signature can only be verified with knowledge of a specific private key. The associated public key is: ${verifierDER}`);
+            throw new Error(`This signature can only be verified with knowledge of a specific private key. The associated public key is: ${verifierDER}`);
         }
         const recipientDER = recipient.toPublicKey().encode(true, "hex") as string;
         if (verifierDER !== recipientDER) {

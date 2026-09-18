@@ -8,8 +8,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | --- |
 | [DisplayableIdentity](#interface-displayableidentity) |
 | [IdentityClientOptions](#interface-identityclientoptions) |
-| [ResolveByAttributesOptions](#interface-resolvebyattributesoptions) |
-| [ResolveByIdentityKeyOptions](#interface-resolvebyidentitykeyoptions) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -40,59 +38,11 @@ export interface IdentityClientOptions {
     keyID: string;
     tokenAmount: number;
     outputIndex: number;
-    networkPreset?: LookupNetworkPreset;
+    networkPreset?: "mainnet" | "testnet" | "teratestnet" | "local";
 }
 ```
 
-See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset), [WalletProtocol](./wallet.md#type-walletprotocol)
-
-#### Property networkPreset
-
-Override wallet-reported testnet routing for overlays such as TerraTestNet.
-
-```ts
-networkPreset?: LookupNetworkPreset
-```
-See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset)
-
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
-
----
-### Interface: ResolveByAttributesOptions
-
-```ts
-export interface ResolveByAttributesOptions {
-    useContacts?: boolean;
-    overrideWithContacts?: boolean;
-    parallel?: boolean;
-}
-```
-
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
-
----
-### Interface: ResolveByIdentityKeyOptions
-
-```ts
-export interface ResolveByIdentityKeyOptions {
-    useContacts?: boolean;
-    overrideWithContacts?: boolean;
-    parallel?: boolean;
-}
-```
-
-#### Property useContacts
-
-Opt-in to consulting personal contacts before/alongside the overlay. Default `false`.
-
-Most callers (including any client without a populated contacts basket) pay no benefit
-from the contacts path and incur its setup cost. Set `true` only in UI contexts where
-the user has likely saved contacts and a local cache hit is preferable to a fresh overlay
-answer.
-
-```ts
-useContacts?: boolean
-```
+See also: [WalletProtocol](./wallet.md#type-walletprotocol)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -123,17 +73,16 @@ See also: [Contact](./identity.md#type-contact), [DisplayableIdentity](./identit
 
 #### Method getContacts
 
-Load all records from the contacts basket.
-
-Concurrent calls share a single in-flight load (no thundering herd). After
-the basket has been observed empty once, subsequent calls return `[]`
-synchronously without hitting the wallet — until `forceRefresh` is passed
-or a contact is saved/removed.
+Load all records from the contacts basket
 
 ```ts
 async getContacts(identityKey?: PubKeyHex, forceRefresh = false, limit = 1000): Promise<Contact[]> 
 ```
 See also: [Contact](./identity.md#type-contact), [PubKeyHex](./wallet.md#type-pubkeyhex)
+
+Returns
+
+A promise that resolves with an array of contacts
 
 Argument Details
 
@@ -182,21 +131,19 @@ IdentityClient lets you discover who others are, and let the world know who you 
 
 ```ts
 export class IdentityClient {
-    constructor(wallet?: WalletInterface, options: Partial<IdentityClientOptions> = {}, private readonly originator?: OriginatorDomainNameStringUnder250Bytes) 
+    constructor(wallet?: WalletInterface, options?: Partial<IdentityClientOptions>, private readonly originator?: OriginatorDomainNameStringUnder250Bytes)
     async publiclyRevealAttributes(certificate: WalletCertificate, fieldsToReveal: CertificateFieldNameUnder50Bytes[]): Promise<BroadcastResponse | BroadcastFailure> 
-    async resolveByIdentityKey(args: DiscoverByIdentityKeyArgs, opts: boolean | ResolveByIdentityKeyOptions = false): Promise<DisplayableIdentity[]> 
-    async resolveByAttributes(args: DiscoverByAttributesArgs, opts: boolean | ResolveByAttributesOptions = false): Promise<DisplayableIdentity[]> 
+    async resolveByIdentityKey(args: DiscoverByIdentityKeyArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 
+    async resolveByAttributes(args: DiscoverByAttributesArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 
     async revokeCertificateRevelation(serialNumber: Base64String): Promise<void> 
     public async getContacts(identityKey?: PubKeyHex, forceRefresh = false, limit = 1000): Promise<Contact[]> 
     public async saveContact(contact: DisplayableIdentity, metadata?: Record<string, any>): Promise<void> 
     public async removeContact(identityKey: PubKeyHex): Promise<void> 
-    static async parseIdentities(certs: IdentityCertificate[]): Promise<DisplayableIdentity[]> 
-    static async parseIdentitiesWithOverrides(certs: IdentityCertificate[], contactByKey: Map<PubKeyHex, Contact>): Promise<DisplayableIdentity[]> 
     static parseIdentity(identityToParse: IdentityCertificate): DisplayableIdentity 
 }
 ```
 
-See also: [Base64String](./wallet.md#type-base64string), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [Contact](./identity.md#type-contact), [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [DisplayableIdentity](./identity.md#interface-displayableidentity), [IdentityCertificate](./wallet.md#interface-identitycertificate), [IdentityClientOptions](./identity.md#interface-identityclientoptions), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [PubKeyHex](./wallet.md#type-pubkeyhex), [ResolveByAttributesOptions](./identity.md#interface-resolvebyattributesoptions), [ResolveByIdentityKeyOptions](./identity.md#interface-resolvebyidentitykeyoptions), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [Base64String](./wallet.md#type-base64string), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [Contact](./identity.md#type-contact), [DEFAULT_IDENTITY_CLIENT_OPTIONS](./identity.md#variable-default_identity_client_options), [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [DisplayableIdentity](./identity.md#interface-displayableidentity), [IdentityCertificate](./wallet.md#interface-identitycertificate), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface)
 
 #### Method getContacts
 
@@ -279,42 +226,43 @@ Argument Details
 
 #### Method resolveByAttributes
 
+Resolves displayable identity certificates by specific identity attributes, issued by a trusted entity.
+
 ```ts
-async resolveByAttributes(args: DiscoverByAttributesArgs, opts: boolean | ResolveByAttributesOptions = false): Promise<DisplayableIdentity[]> 
+async resolveByAttributes(args: DiscoverByAttributesArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 
 ```
-See also: [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [DisplayableIdentity](./identity.md#interface-displayableidentity), [ResolveByAttributesOptions](./identity.md#interface-resolvebyattributesoptions)
+See also: [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [DisplayableIdentity](./identity.md#interface-displayableidentity)
+
+Returns
+
+The promise resolves to displayable identities.
 
 Argument Details
 
 + **args**
   + Attributes and optional parameters used to discover certificates.
-+ **opts**
-  + Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
++ **overrideWithContacts**
+  + Whether to override the results with personal contacts if available.
 
 #### Method resolveByIdentityKey
 
-Resolves displayable identity certificates issued to a given identity key.
-
-**Default behavior (changed): contacts are NOT consulted.** Most clients have no
-contacts saved locally, so the previous "contacts-first" default paid setup cost for no
-gain. Pass `{ useContacts: true }` to opt in — appropriate when you know the user has
-saved contacts and prefers a local hit over a fresh overlay answer.
-
-When `useContacts: true`:
- - Default short-circuits: if a contact matches, the overlay is skipped entirely.
- - `{ parallel: true }` fires contacts and overlay in parallel; contact wins on hit.
+Resolves displayable identity certificates, issued to a given identity key by a trusted certifier.
 
 ```ts
-async resolveByIdentityKey(args: DiscoverByIdentityKeyArgs, opts: boolean | ResolveByIdentityKeyOptions = false): Promise<DisplayableIdentity[]> 
+async resolveByIdentityKey(args: DiscoverByIdentityKeyArgs, overrideWithContacts = true): Promise<DisplayableIdentity[]> 
 ```
-See also: [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [DisplayableIdentity](./identity.md#interface-displayableidentity), [ResolveByIdentityKeyOptions](./identity.md#interface-resolvebyidentitykeyoptions)
+See also: [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [DisplayableIdentity](./identity.md#interface-displayableidentity)
+
+Returns
+
+The promise resolves to displayable identities.
 
 Argument Details
 
 + **args**
   + Arguments for requesting the discovery based on the identity key.
-+ **opts**
-  + Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
++ **overrideWithContacts**
+  + Whether to override the results with personal contacts if available.
 
 #### Method revokeCertificateRevelation
 
