@@ -292,6 +292,9 @@ export class TransactionEvidenceCoordinator {
       const cached = this.positives.get(job.txid)
       if (cached !== undefined) {
         try {
+          // run() is entered only from pump(), which has just confirmed a free
+          // attempt slot, and nothing awaits before this call. This first attempt
+          // therefore always starts; only later candidate attempts can be displaced.
           await this.attempt(job, async signal => await this.recheck(job, cached, signal))
           this.check(job, job.controller.signal)
           this.finish(job, cached)
