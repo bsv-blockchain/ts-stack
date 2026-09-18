@@ -112,6 +112,30 @@ async function localPayload(
   }
 }
 
+/**
+ * Selects the topics that require a new admission decision: topics that did
+ * not fail validation, are not already-applied dupes, and actually admit or
+ * retain something (or consume a previously-admitted coin). Already-applied
+ * (dupe) topics are excluded so that a retry — including a historical GASP
+ * replay after a live admit, or a multi-topic resubmit where only some
+ * topics were previously applied — never re-submits an admission decision
+ * for a topic that MongoAdmissionStorage.assertAppliedAvailable would reject
+ * as belonging to a different operation.
+ */
+export function selectNewAdmissionTopics<T extends TopicValidationLike>(
+  validations: readonly T[],
+  failedTopics: Set<string>
+): T[] {
+  return validations.filter(
+    validation =>
+      !failedTopics.has(validation.topic) &&
+      !validation.isDupe &&
+      (validation.admissibleOutputs.outputsToAdmit.length > 0 ||
+        validation.admissibleOutputs.coinsToRetain.length > 0 ||
+        validation.previousCoins.length > 0)
+  )
+}
+
 export async function buildOverlayAdmissionPlan(input: {
   host: OverlayAdmissionHost
   tx: Transaction
@@ -132,14 +156,14 @@ export async function buildOverlayAdmissionPlan(input: {
     merkleRoot?: string
   }
 }): Promise<AdmissionCommit> {
-  const accepted = input.validations.filter(
-    validation =>
-      !input.failedTopics.has(validation.topic) &&
-      (validation.isDupe ||
-        validation.admissibleOutputs.outputsToAdmit.length > 0 ||
-        validation.admissibleOutputs.coinsToRetain.length > 0 ||
-        validation.previousCoins.length > 0)
-  )
+  // Only topics with a genuinely new admission get an identity/decision entry
+  // and take part in the commit. Dupe topics are still reflected in `steak`
+  // below (with their empty admissibleOutputs), matching what the classic
+  // storage path already returns for a dupe, but they must never be
+  // resubmitted to commitAdmission: MongoAdmissionStorage.assertAppliedAvailable
+  // rejects an applied row whose admissionId belongs to a different
+  // operation, which a dupe re-included here would trigger on retry.
+  const accepted = selectNewAdmissionTopics(input.validations, input.failedTopics)
   const identityTopics = accepted.map(validation => ({
     topic: validation.topic,
     policyId: OVERLAY_ENGINE_POLICY_ID

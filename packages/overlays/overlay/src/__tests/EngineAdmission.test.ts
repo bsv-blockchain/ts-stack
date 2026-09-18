@@ -237,7 +237,7 @@ describe('Engine overlay admission helpers', () => {
       beef: proven.toBEEF(),
       topics: ['Hello'],
       mode: 'historical',
-      validations: [validation({ isDupe: true, outputsToAdmit: [] })],
+      validations: [validation()],
       failedTopics: new Set(),
       lookupServices,
       includePropagation: true
@@ -246,6 +246,49 @@ describe('Engine overlay admission helpers', () => {
     expect(plan.outbox.some(intent => intent.kind === 'propagation')).toBe(false)
     expect(plan.decisions[0].applied.proof?.kind).toBe('merkle-path')
     expect(plan.decisions[0].applied.firstSeenHeight).toBeDefined()
+  })
+
+  test('excludes a dupe topic from identity and decisions but keeps it, empty, in steak', async () => {
+    const plan = await buildOverlayAdmissionPlan({
+      host: host(),
+      tx: exampleTX,
+      txid: exampleTxid,
+      beef: exampleBeef,
+      topics: ['Hello', 'World'],
+      mode: 'live',
+      validations: [
+        validation({ isDupe: true, outputsToAdmit: [] }),
+        validation({ topic: 'World' })
+      ],
+      failedTopics: new Set(),
+      lookupServices,
+      includePropagation: false
+    })
+    expect(plan.identity.topics.map(entry => entry.topic)).toEqual(['World'])
+    expect(plan.decisions.map(decision => decision.topic)).toEqual(['World'])
+    expect(JSON.parse(plan.steak).Hello).toEqual({
+      outputsToAdmit: [],
+      coinsToRetain: [],
+      coinsRemoved: []
+    })
+    expect(JSON.parse(plan.steak).World.outputsToAdmit).toEqual([0])
+  })
+
+  test('throws when every topic is a dupe or failed, since callers must not commit an empty plan', async () => {
+    await expect(
+      buildOverlayAdmissionPlan({
+        host: host(),
+        tx: exampleTX,
+        txid: exampleTxid,
+        beef: exampleBeef,
+        topics: ['Hello'],
+        mode: 'live',
+        validations: [validation({ isDupe: true, outputsToAdmit: [] })],
+        failedTopics: new Set(),
+        lookupServices,
+        includePropagation: false
+      })
+    ).rejects.toThrow('Overlay admission plan has no topics')
   })
 
   test('marks unmatched previous coins stale and retains consumed coins', async () => {

@@ -49,6 +49,7 @@ import {
   buildOverlayAdmissionPlan,
   getOverlayAdmissionHost,
   overlayAdmissionMode,
+  selectNewAdmissionTopics,
   waitForAdmissionReceipt
 } from './EngineAdmission.js'
 
@@ -1101,6 +1102,19 @@ export class Engine {
       onSteakReady
     } = context
     if (!anyTopicAccepted) {
+      if (onSteakReady !== undefined) onSteakReady(steak)
+      return steak
+    }
+    // A topic counts toward `anyTopicAccepted` when it is a dupe (so the
+    // caller still gets broadcast/propagation for a retried submission), but
+    // a dupe must never be resubmitted for admission: it was already
+    // committed under a (possibly different) operation, and re-including it
+    // here would make commitAdmission reject the whole plan. When nothing
+    // left over is a genuinely new admission, skip the plan/commit entirely
+    // and hand back the STEAK already computed from validation — it reports
+    // each dupe topic as accepted-with-nothing-new, same as the classic
+    // (non-admission) storage path does.
+    if (selectNewAdmissionTopics(validations, failedTopics).length === 0) {
       if (onSteakReady !== undefined) onSteakReady(steak)
       return steak
     }

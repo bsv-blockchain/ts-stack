@@ -56,6 +56,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 - (Document bugs that were fixed since the last release.)
+- Exclude already-applied (dupe) topics from the Mongo admission plan's
+  identity, decisions and commit, instead of resubmitting them for admission.
+  A dupe topic no longer reaches `commitAdmission`; when every remaining
+  topic is a dupe or a failure, `Engine.submit` returns the in-memory STEAK
+  without building or committing a plan at all, and on a mixed submission
+  only the genuinely new topics are committed while the STEAK still reports
+  the dupe as accepted-with-nothing-new. Previously a resubmitted dupe was
+  still treated as accepted and given a decision, which
+  `MongoAdmissionStorage.assertAppliedAvailable` rejects whenever that topic
+  was already applied under a different admission operation — breaking
+  historical-then-live resubmits and multi-topic retries with
+  `Overlay admission rejected: invalid-plan` or `digest-mismatch`.
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)

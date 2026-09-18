@@ -257,6 +257,68 @@ describe('Engine admission submit', () => {
     expect(onReady).toHaveBeenCalledWith(steak)
   })
 
+  test('does not call commitAdmission and returns the in-memory STEAK when every topic is a dupe', async () => {
+    mockStorage.doesAppliedTransactionExist = jest.fn(async () => true)
+    const onReady = jest.fn()
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    const steak = await engine.submit({ beef: exampleBeef, topics: ['Hello'] }, onReady)
+    expect(steak).toEqual({ Hello: { outputsToAdmit: [], coinsToRetain: [] } })
+    expect(commitAdmission).not.toHaveBeenCalled()
+    expect(onReady).toHaveBeenCalledWith(steak)
+    expect(mockTopicManager.identifyAdmissibleOutputs).not.toHaveBeenCalled()
+  })
+
+  test('commits only the new topic on a mixed dupe/new-admission submission, while STEAK still reports the dupe', async () => {
+    mockStorage.doesAppliedTransactionExist = jest.fn(
+      async (params: { topic: string }) => params.topic === 'Dupe'
+    )
+    const engine = new Engine(
+      { Hello: mockTopicManager, Dupe: mockTopicManager },
+      { Hello: mockLookupService, Dupe: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    const steak = await engine.submit({ beef: exampleBeef, topics: ['Hello', 'Dupe'] })
+    expect(commitAdmission).toHaveBeenCalledTimes(1)
+    const plan = commitAdmission.mock.calls[0][0] as AdmissionCommit
+    expect(plan.decisions.map(decision => decision.topic)).toEqual(['Hello'])
+    expect(plan.identity.topics.map(entry => entry.topic)).toEqual(['Hello'])
+    const planSteak = JSON.parse(plan.steak) as Record<string, unknown>
+    expect(planSteak.Dupe).toEqual({ outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] })
+    expect(steak.Hello.outputsToAdmit).toEqual([0])
+    expect(steak.Dupe).toEqual({ outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] })
+  })
+
+  test('resubmit after historical admission (same tx, same topic) does not re-commit and does not throw', async () => {
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    const first = await engine.submit(
+      { beef: exampleBeef, topics: ['Hello'] },
+      undefined,
+      'historical-tx-no-spv'
+    )
+    expect(first.Hello.outputsToAdmit).toEqual([0])
+    expect(commitAdmission).toHaveBeenCalledTimes(1)
+
+    mockStorage.doesAppliedTransactionExist = jest.fn(async () => true)
+    const second = await engine.submit(
+      { beef: exampleBeef, topics: ['Hello'] },
+      undefined,
+      'current-tx'
+    )
+    expect(commitAdmission).toHaveBeenCalledTimes(1)
+    expect(second).toEqual({ Hello: { outputsToAdmit: [], coinsToRetain: [] } })
+  })
+
   test('uses host payload, fence, and enlisted index hooks', async () => {
     const publishAdmissionPayload = jest.fn(
       async (input: { kind: string; bytes: Uint8Array; txid?: string }) => ({
