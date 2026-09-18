@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
+- Advances the packed overlay dependency candidate for BASM validation hardening.
+  Package runtime behavior is unchanged; no consumer migration is required.
 
 ### Added
 

@@ -29,6 +29,15 @@ All notable changes to this project will be documented in this file. The format 
   uses `commitAdmission` when `overlay-admission-v1` is advertised, with
   enlisted same-session indexes or a durable projection outbox, majority ACK,
   and SQL/Knex compatibility retained.
+- Added bounded BASM JSON peer validation, classified capability/resource errors,
+  canonical header and optional full-block-count position checks, and explicit
+  position assurance in sync reports. Fixed default forward pages to fit the
+  public server's 1,000-anchor limit. Claimed admitted-list indices are bound to
+  the compound path even when every remote txid is already local. Inclusion uses
+  chain-tracker root/height rather than coinbase maturity. Historical sync
+  refuses an untrusted TAC prefix; durable bootstrap, chunked recovery and topic
+  status remain pending. No storage migration or automatic sync activation is
+  included.
 
 ### Added
 - (Include new features or significant user-visible enhancements here.)

@@ -23,6 +23,34 @@
  * };
  */
 export default interface ChainTracker {
-  isValidRootForHeight: (root: string, height: number) => Promise<boolean>
-  currentHeight: () => Promise<number>
+  isValidRootForHeight: (root: string, height: number, signal?: AbortSignal) => Promise<boolean>
+  currentHeight: (signal?: AbortSignal) => Promise<number>
+  /**
+   * Optional trusted local provider/policy/recovery context. Change this value
+   * when switching sources or resetting their state. It is not a canonical
+   * chain snapshot: consumers must still check current canonical dependencies.
+   * Implementations without cancellable I/O may ignore the optional signals.
+   */
+  getVerificationContext?: () => string | number
+  /**
+   * Optional fresh canonical context token from the trusted chain provider.
+   * Include canonical block/tip identity and any available monotonic reorg or
+   * reset epoch. Consumers compare tokens around asynchronous verification.
+   * Two remote tip observations are not an atomic snapshot and cannot detect
+   * an intervening transition back to the identical tip (ABA).
+   */
+  getVerificationContextToken?: (signal?: AbortSignal) => Promise<string>
+}
+
+/**
+ * Convenience type guard for a `ChainTracker` implementation.
+ * Optional verification-context methods are not required.
+ */
+export function isChainTracker(value: unknown): value is ChainTracker {
+  if (value == null || typeof value !== 'object') return false
+  const tracker = value as Partial<ChainTracker>
+  return (
+    typeof tracker.isValidRootForHeight === 'function' &&
+    typeof tracker.currentHeight === 'function'
+  )
 }

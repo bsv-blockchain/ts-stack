@@ -1,0 +1,185 @@
+{
+  "specRevision": {
+    "brc136": "2733cd2950a739b3c977b95d652ff63e3773c40b",
+    "repoHead": "39a643ff148a8dcd23ec08986a8ddeb7d5713743"
+  },
+  "hashEncoding": "lowercase display-order hex",
+  "byteOrder": [
+    {
+      "name": "asymmetric-display-to-internal",
+      "display": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "internal": "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"
+    }
+  ],
+  "merkle": [
+    {
+      "name": "empty",
+      "txids": [],
+      "root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "admissionListValid": true
+    },
+    {
+      "name": "singleton-genesis-bitcoin-txid",
+      "txids": [
+        "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"
+      ],
+      "root": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+      "admissionListValid": true
+    },
+    {
+      "name": "singleton-asymmetric-byte-order",
+      "txids": [
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      ],
+      "root": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "admissionListValid": true
+    },
+    {
+      "name": "even-two-asymmetric",
+      "txids": [
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef"
+      ],
+      "root": "668066643818b3695ed31c7cfd09dcc8aaeba2f6eb46e6360b041fb3254ccffc",
+      "admissionListValid": true
+    },
+    {
+      "name": "even-four",
+      "txids": [
+        "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321"
+      ],
+      "root": "4c59e81df05211158cb925226168b4536aef5b6c7a7575197e09a77234a63114",
+      "admissionListValid": true
+    },
+    {
+      "name": "odd-three",
+      "txids": [
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321"
+      ],
+      "root": "82853ce87598bf885ef5fb2e288d92581a1addc09bc651ea5e3bc2834867f7a0",
+      "admissionListValid": true
+    },
+    {
+      "name": "tac-three-asymmetric",
+      "txids": [
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      ],
+      "root": "bd162ecb4feb15a6489b8e7a6112dadfb1a699e691077b53dabf4cf79462173c",
+      "admissionListValid": true
+    },
+    {
+      "name": "odd-five",
+      "txids": [
+        "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      ],
+      "root": "a6ff6556e3c63ba45b8872ec460ac1e8c322574512d94f061e1639e669b74b7e",
+      "admissionListValid": true
+    },
+    {
+      "name": "unsorted-asymmetric-byte-values",
+      "txids": [
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      ],
+      "root": "e1c6afbb7257b4a4de469c22d715825b983cbb80b175fa6837244d3b575fbdaa",
+      "admissionListValid": true
+    },
+    {
+      "name": "duplicate-looking-three-illustrative",
+      "txids": [
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321"
+      ],
+      "root": "82853ce87598bf885ef5fb2e288d92581a1addc09bc651ea5e3bc2834867f7a0",
+      "admissionListValid": true,
+      "illustrativeOnly": true
+    },
+    {
+      "name": "repeated-last-four-illustrative-invalid",
+      "txids": [
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ffeeddccbbaa99887766554433221100deadbeefcafebabe0123456789abcdef",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321",
+        "112233445566778899aabbccddeeff00123456789abcdef00fedcba987654321"
+      ],
+      "root": "82853ce87598bf885ef5fb2e288d92581a1addc09bc651ea5e3bc2834867f7a0",
+      "admissionListValid": false,
+      "illustrativeOnly": true
+    }
+  ],
+  "tac": [
+    {
+      "name": "genesis-height-zero-includes-empty-heights",
+      "genesisHeight": 0,
+      "anchors": [
+        {
+          "blockHeight": 0,
+          "blockHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "basmRoot": "0000000000000000000000000000000000000000000000000000000000000000",
+          "admittedCount": 0,
+          "rootSource": "empty",
+          "expectedTac": "3a464e1e43410c7add1dd81c3f10486f41eb473bb43e8d64feca3c7f0c8028d3"
+        },
+        {
+          "blockHeight": 1,
+          "blockHash": "1111111111111111111111111111111111111111111111111111111111111111",
+          "basmRoot": "668066643818b3695ed31c7cfd09dcc8aaeba2f6eb46e6360b041fb3254ccffc",
+          "admittedCount": 2,
+          "rootSource": "even-two-asymmetric",
+          "expectedTac": "3771c04594ce4cf996178d68c3e4d640647b85d008d86a7613ead721c7c64875"
+        },
+        {
+          "blockHeight": 2,
+          "blockHash": "2222222222222222222222222222222222222222222222222222222222222222",
+          "basmRoot": "0000000000000000000000000000000000000000000000000000000000000000",
+          "admittedCount": 0,
+          "rootSource": "empty",
+          "expectedTac": "f5652a4a6f978eac1278b61b7873740ee7109a5f6f05df27032b453eb2687232"
+        }
+      ]
+    },
+    {
+      "name": "nonzero-genesis-mixed-anchors",
+      "genesisHeight": 100,
+      "anchors": [
+        {
+          "blockHeight": 100,
+          "blockHash": "13579bdf2468ace00112233445566778899aabbccddeeff00fedcba987654321",
+          "basmRoot": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+          "admittedCount": 1,
+          "rootSource": "singleton-genesis-bitcoin-txid",
+          "expectedTac": "f5f755f70e8aea69a4f7f5c2d49b782e29de844e2aff24f0089d43d6697655ba"
+        },
+        {
+          "blockHeight": 101,
+          "blockHash": "89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
+          "basmRoot": "bd162ecb4feb15a6489b8e7a6112dadfb1a699e691077b53dabf4cf79462173c",
+          "admittedCount": 3,
+          "rootSource": "tac-three-asymmetric",
+          "expectedTac": "da1d66659e44f5eb7abb280cf7a323d05ba72b96f78d74de03694bebf3d7af66"
+        },
+        {
+          "blockHeight": 102,
+          "blockHash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+          "basmRoot": "0000000000000000000000000000000000000000000000000000000000000000",
+          "admittedCount": 0,
+          "rootSource": "empty",
+          "expectedTac": "89f4bd216e66f821ba9cf8da487109efb595f0461a1788dc878040c58a5f2688"
+        }
+      ]
+    }
+  ]
+}

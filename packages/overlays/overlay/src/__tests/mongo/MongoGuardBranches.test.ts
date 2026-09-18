@@ -154,6 +154,14 @@ describe('Mongo payload store input and operation guards', () => {
       store.publish({
         kind: 'outbox-data',
         digest,
+        byteLength: '18446744073709551616',
+        bytes: bytes()
+      })
+    ).rejects.toThrow('Invalid Mongo payload byte length')
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest,
         byteLength: '2',
         bytes: bytes(),
         txid: 'bb'.repeat(32)
@@ -349,7 +357,7 @@ describe('Mongo payload store input and operation guards', () => {
       findOne: jest.fn()
     }
     const payloads = {
-      updateOne: jest.fn(async () => ({ matchedCount: 0 }))
+      updateOne: jest.fn(async () => ({ matchedCount: 1 }))
     }
     const db = {
       collection: (name: string) => (name.includes('reference') ? refs : payloads)
@@ -370,6 +378,7 @@ describe('Mongo payload store input and operation guards', () => {
       'already names different content'
     )
     refs.findOne.mockResolvedValueOnce(null)
+    payloads.updateOne.mockResolvedValueOnce({ matchedCount: 0 })
     await expect(store.addReference(session, reference)).rejects.toThrow('not ready for reference')
   })
 

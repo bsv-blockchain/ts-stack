@@ -471,6 +471,32 @@ describe('MongoPayloadStore', () => {
     expect((await payloads.findOne({ _id: row?._id }))?.state).toBe('ready')
   })
 
+  test('refreshes the declared length when reclaiming a deleted upload', async () => {
+    const content = Buffer.from('reclaimed-upload')
+    const hash = digest(content)
+    await store.publish({ kind: 'outbox-data', digest: hash, byteLength: String(content.byteLength), bytes: bytes(content) })
+    const payloads = fixture.db.collection('overlay_payloads')
+    const row = await payloads.findOne({ kind: 'outbox-data', digest: hash })
+    await payloads.updateOne({ _id: row?._id }, { $set: { state: 'deleted', byteLength: '00000000000000000999' } })
+    await expect(store.publish({ kind: 'outbox-data', digest: hash, byteLength: String(content.byteLength), bytes: bytes(content) })).resolves.toMatchObject({ digest: hash })
+    expect(BigInt((await payloads.findOne({ _id: row?._id }))?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
+  })
+
+  test('does not reuse an existing reference after its payload was reclaimed', async () => {
+    const content = Buffer.from('reclaimed-reference')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
+    const reference = { scope: fixture.scope, payload, ownerKind: 'output' as const, ownerId: 'reclaimed-reference', slot: '0' }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => { await store.addReference(session, reference) })
+    await fixture.db.collection('overlay_payloads').updateOne({ digest: hash, kind: payload.kind }, { $set: { state: 'deleted' } })
+    await session.withTransaction(async () => {
+      await expect(store.addReference(session, reference)).rejects.toThrow('not ready for reference')
+    })
+    await session.endSession()
+  })
+
   test('overlapping uncommitted GC and reference creation conflict on the payload row', async () => {
     const content = Buffer.from('gc-overlap')
     const hash = digest(content)

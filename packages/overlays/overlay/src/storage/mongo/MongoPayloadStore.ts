@@ -249,6 +249,14 @@ export class MongoPayloadStore {
     if (existing !== null) {
       if (existing.payloadId !== payloadId)
         throw new Error('Mongo payload reference slot already names different content')
+      // An idempotent reference still needs a live ready payload. The row may
+      // have been reclaimed since the reference was written.
+      const guarded = await payloads.updateOne(
+        { _id: payloadId, state: 'ready' },
+        { $set: { updatedAt: this.now() } },
+        { session, timeoutMS: operation.timeoutMS }
+      )
+      if (guarded.matchedCount !== 1) throw new Error('Mongo payload is not ready for reference')
       return
     }
     // This conditional write is the guard; a snapshot read followed by an insert is unsafe.
@@ -676,7 +684,13 @@ export class MongoPayloadStore {
               genesisHash: { $ifNull: ['$genesisHash', this.scope.genesisHash] },
               kind: { $ifNull: ['$kind', input.kind] },
               digest: { $ifNull: ['$digest', input.digest] },
-              byteLength: { $ifNull: ['$byteLength', encodeMongoUint64(input.byteLength)] },
+              byteLength: {
+                $cond: [
+                  { $eq: ['$state', 'deleted'] },
+                  encodeMongoUint64(input.byteLength),
+                  { $ifNull: ['$byteLength', encodeMongoUint64(input.byteLength)] }
+                ]
+              },
               createdAt: { $ifNull: ['$createdAt', '$$NOW'] },
               state: 'uploading',
               guard: ownerId,
