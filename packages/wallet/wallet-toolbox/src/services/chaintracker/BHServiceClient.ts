@@ -195,7 +195,7 @@ export class BHServiceClient implements ChaintracksServiceClient {
   }
 
   async findChainTipHash(): Promise<string> {
-    throw new Error('Not implemented')
+    return (await this.findChainTipHeader()).hash
   }
 
   async subscribeHeaders(_listener: HeaderListener): Promise<string> {
