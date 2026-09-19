@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { LockingScript, MerklePath, Transaction } from '@bsv/sdk'
 import { Engine } from '../Engine'
 import { BASM_ZERO_HASH, computeBasmRoot, computeTac } from '../BASM'
-import type { TopicBlockAnchor } from '../BASM'
+import type { AdmittedTxRef, TopicAnchorTip, TopicBlockAnchor } from '../BASM'
 import type { Storage } from '../storage/Storage'
 
 export const topic = 'tm_basm_test'
@@ -59,9 +59,9 @@ export function fixture() {
     }
   }
   const storage = {
-    findTopicAnchorTip: jest.fn(async () => undefined),
-    findTopicBlockAnchor: jest.fn(async () => undefined),
-    findAdmittedTransactionsForBlock: jest.fn(async () => [])
+    findTopicAnchorTip: jest.fn(async (): Promise<TopicAnchorTip | undefined> => undefined),
+    findTopicBlockAnchor: jest.fn(async (): Promise<TopicBlockAnchor | undefined> => undefined),
+    findAdmittedTransactionsForBlock: jest.fn(async (): Promise<AdmittedTxRef[]> => [])
   }
   const tracker = {
     currentHeight: jest.fn(async () => 250),
