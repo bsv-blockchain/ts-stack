@@ -1,3 +1,10 @@
 export { ECONOMIC_PATHS } from './protocol/query.js'
 export { signAttestation, signDelivery } from './protocol/attestation.js'
 export { HostError, type HostErrorCode } from './protocol/errors.js'
+export {
+  InMemoryPendingStore,
+  type PendingQuery,
+  type PendingState,
+  type PendingStore,
+  type PendingStoreLimits
+} from './host/pendingStore.js'
