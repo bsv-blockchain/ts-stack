@@ -8,3 +8,4 @@ export {
   type PendingStore,
   type PendingStoreLimits
 } from './host/pendingStore.js'
+export { verifyAndInternalizePayment, type PaymentVerification } from './host/paymentVerifier.js'
