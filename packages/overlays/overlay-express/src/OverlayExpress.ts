@@ -121,6 +121,18 @@ export type SyncConfigurationEntry = string[] | 'SHIP' | false
 export type SyncConfigurationMap = Record<string, SyncConfigurationEntry>
 export type OverlayNetwork = 'main' | 'test' | 'ttn'
 
+/** What a factory registered with {@link OverlayExpress.registerRouter} receives. */
+export interface RegisteredRouterContext {
+  engine: Engine
+  /** The server wallet behind BRC-103 authentication, or undefined when it failed to start. */
+  wallet: WalletInterface | undefined
+}
+
+/** Builds a router once the engine and server wallet exist. */
+export type RegisteredRouterFactory = (
+  context: RegisteredRouterContext
+) => express.RequestHandler | Promise<express.RequestHandler>
+
 export interface EngineConfig {
   chainTracker?: ChainTracker | 'scripts only'
   shipTrackers?: string[]
@@ -475,6 +487,12 @@ export default class OverlayExpress {
     }
   }
 
+  // Application routers mounted by start(), in registration order
+  private readonly registeredRouters: Array<{ path: string; factory: RegisteredRouterFactory }> = []
+
+  // Set once start() begins wiring routes; later registrations could never be reached
+  private startInvoked = false
+
   /**
    * Constructs an instance of OverlayExpress.
    * @param name - The name of the service
@@ -595,6 +613,25 @@ export default class OverlayExpress {
       ...definition
     })
     this.logger.log(chalk.blue(`Registered health check ${definition.name}`))
+  }
+
+  /**
+   * Registers an application router. Its factory runs during `start()`, after the BRC-103
+   * authentication middleware is mounted and before the admin routes and the 404 handler, so
+   * the router inherits CORS, body parsing, response limits, and `req.auth`.
+   *
+   * @param path - Mount path, beginning with "/"
+   * @param factory - Receives the engine and server wallet and returns the router
+   */
+  registerRouter(path: string, factory: RegisteredRouterFactory): this {
+    if (this.startInvoked) throw new Error('registerRouter must be called before start()')
+    if (typeof path !== 'string' || !path.startsWith('/')) {
+      throw new TypeError('Router path must begin with "/"')
+    }
+    if (typeof factory !== 'function') throw new TypeError('Router factory must be a function')
+    this.registeredRouters.push({ path, factory })
+    this.logger.log(chalk.blue(`Registered router at ${path}`))
+    return this
   }
 
   /**
@@ -1747,6 +1784,7 @@ export default class OverlayExpress {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
     this.startTime = new Date()
+    this.startInvoked = true
 
     const edgePolicy = this.edgePolicyConfig
     const resourceProfile = readResourceProfile(edgePolicy.environmentPrefix)
@@ -2400,6 +2438,11 @@ export default class OverlayExpress {
       })
       this.app.use(bsvAuth as any)
       this.logger.log(chalk.blue('BSV mutual authentication middleware enabled.'))
+    }
+
+    for (const { path, factory } of this.registeredRouters) {
+      this.app.use(path, await factory({ engine, wallet: this.serverWallet }))
+      this.logger.log(chalk.blue(`Mounted registered router at ${path}`))
     }
 
     /**

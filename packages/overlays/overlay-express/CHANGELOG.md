@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Added `registerRouter(path, factory)`. Registered routers mount during `start()` after the BRC-103 authentication middleware and before the admin routes and 404 handler, inheriting CORS, body parsing, response limits, and `req.auth`. Additive; no consumer migration is required.
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Validated BASM heights, hashes and txid sets while retaining numeric-string
   heights, public CORS, topic-free raw transactions, configured limits and sync

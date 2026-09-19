@@ -4,7 +4,7 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.7.1'
+version: '2.8.0'
 last_updated: '2026-09-18'
 last_verified: '2026-09-18'
 review_cadence_days: 30
@@ -230,6 +230,23 @@ monitor.start()
 - [@bsv/overlay-topics](./overlay-topics.md) — Pre-built topic managers and lookup services
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — SHIP/SLAP implementation
 - [@bsv/gasp](./gasp.md) — Graph Aware Sync Protocol
+
+## Registering additional routers
+
+`registerRouter(path, factory)` mounts an application router inside the server. The factory runs
+during `start()`, after the BRC-103 authentication middleware and before the admin routes and the
+404 handler, so the router inherits CORS, body parsing, response size limits, and
+`req.auth.identityKey`. Unauthenticated requests arrive with `req.auth.identityKey` equal to
+`'unknown'`. Call it before `start()`.
+
+```ts
+server.registerRouter('/', ({ engine, wallet }) => {
+  if (wallet === undefined) throw new Error('A server wallet is required')
+  const router = express.Router()
+  router.get('/status', (_req, res) => res.json({ ok: true }))
+  return router
+})
+```
 
 ## Reference
 

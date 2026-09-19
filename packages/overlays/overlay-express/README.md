@@ -252,6 +252,24 @@ for transactions that remain unproven past the threshold. Only transactions that
 still cannot be proven are evicted. Operators can also run this manually through
 the admin endpoints documented below.
 
+### Registering Additional Routers
+
+`registerRouter(path, factory)` mounts your own router inside the server. The factory runs
+during `start()`, after the BRC-103 authentication middleware and before the admin routes and
+the 404 handler, so the router inherits CORS, body parsing, response size limits, and
+`req.auth.identityKey`. Requests without BRC-103 headers arrive with `req.auth.identityKey`
+equal to `'unknown'`; routes that need authentication must reject them. Call it before
+`start()`.
+
+```ts
+server.registerRouter('/', ({ engine, wallet }) => {
+  if (wallet === undefined) throw new Error('A server wallet is required')
+  const router = express.Router()
+  router.get('/status', (_req, res) => res.json({ ok: true }))
+  return router
+})
+```
+
 ### Admin-Protected Endpoints
 
 We also provide admin-protected endpoints for advanced operations like manually
