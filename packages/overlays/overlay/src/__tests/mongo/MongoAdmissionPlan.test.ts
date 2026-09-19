@@ -7,6 +7,7 @@ import {
   AdmissionRejectedError,
   admissionPlanPayloads,
   admissionReceiptFor,
+  isBoundSteak,
   lookupOutboxIntents,
   propagationOutboxIntents,
   rejectAdmission,
@@ -166,6 +167,16 @@ describe('Mongo admission plan validation', () => {
     expect(validateAdmissionPlan(kind)).toBe('invalid-plan')
   })
 
+  test('rejects a decision whose expected history fence is not canonical uint64', () => {
+    const badEpoch = clone(admissionPlan('history-epoch-format'))
+    badEpoch.decisions[0].expectedHistory.chainEpoch = 'not-a-number'
+    expect(validateAdmissionPlan(badEpoch)).toBe('invalid-plan')
+
+    const badGeneration = clone(admissionPlan('history-generation-format'))
+    badGeneration.decisions[0].expectedHistory.topicHistoryGeneration = '01'
+    expect(validateAdmissionPlan(badGeneration)).toBe('invalid-plan')
+  })
+
   test('rejects malformed spends, edges, outputs, and applied history', () => {
     const outputIndex = clone(admissionPlan('output-index'))
     outputIndex.decisions[0].spends[0].outpoint.outputIndex = '4294967296'
@@ -265,5 +276,47 @@ describe('Mongo admission plan validation', () => {
   test('rejectAdmission throws a coded admission error', () => {
     expect(() => rejectAdmission('digest-mismatch')).toThrow(AdmissionRejectedError)
     expect(() => rejectAdmission('spend-conflict')).toThrow('spend-conflict')
+  })
+
+  test('isBoundSteak rejects a non-object entry and a topic missing from the STEAK record', () => {
+    const plan = admissionPlan('steak-entry-shape')
+
+    // A STEAK record whose value for a real topic key is not an
+    // outputsToAdmit-shaped object at all (here a bare number) must fail
+    // isSteakEntry's own `typeof`/array guard rather than being coerced.
+    const scalarEntry = clone(plan)
+    scalarEntry.steak = JSON.stringify({ tm_contract: 5 })
+    expect(isBoundSteak(scalarEntry)).toBe(false)
+    expect(validateAdmissionPlan(scalarEntry)).toBe('invalid-plan')
+
+    // An object entry that is missing outputsToAdmit entirely (as opposed to
+    // having the wrong type for coinsToRetain/coinsRemoved) must also fail.
+    const missingOutputsToAdmit = clone(plan)
+    missingOutputsToAdmit.steak = JSON.stringify({ tm_contract: {} })
+    expect(isBoundSteak(missingOutputsToAdmit)).toBe(false)
+    expect(validateAdmissionPlan(missingOutputsToAdmit)).toBe('invalid-plan')
+
+    // A STEAK record that never mentions the plan's own decision topic must
+    // fail the per-decision binding check even though every key it does have
+    // is individually well-shaped.
+    const missingTopic = clone(plan)
+    missingTopic.steak = JSON.stringify({ some_other_topic: { outputsToAdmit: [] } })
+    expect(isBoundSteak(missingTopic)).toBe(false)
+    expect(validateAdmissionPlan(missingTopic)).toBe('invalid-plan')
+  })
+
+  test('isBoundSteak rejects an output index that cannot be parsed while binding STEAK', () => {
+    const overflow = clone(admissionPlan('steak-output-overflow'))
+    // The STEAK entry itself stays well-shaped and in range so isSteakEntry
+    // accepts it; the decision's own output carries the out-of-range index,
+    // so isBoundSteak's decisions.every must reach the parseStorageOutputIndex
+    // call for the *decision's* outputs and fail closed via its try/catch
+    // rather than throwing out of validateAdmissionPlan.
+    overflow.decisions[0].outputs[0].outputIndex = '4294967296'
+    overflow.steak = JSON.stringify({
+      tm_contract: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [] }
+    })
+    expect(isBoundSteak(overflow)).toBe(false)
+    expect(validateAdmissionPlan(overflow)).toBe('invalid-plan')
   })
 })
