@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/eqc",
+  "entry": ".",
+  "requiredExports": ["EQC", "computeQueryId"],
+  "prohibitedExports": ["createEconomicQueryHost", "overlayLookupProvider"],
+  "maximumBytes": {
+    "vite": { "raw": 558000, "gzip": 145000, "brotli": 121000 },
+    "esbuild": { "raw": 432000, "gzip": 133000, "brotli": 114000 }
+  }
+}
