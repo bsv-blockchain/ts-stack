@@ -3,6 +3,7 @@ export { signAttestation, signDelivery } from './protocol/attestation.js'
 export { HostError, type HostErrorCode } from './protocol/errors.js'
 export {
   InMemoryPendingStore,
+  type PendingPutResult,
   type PendingQuery,
   type PendingState,
   type PendingStore,

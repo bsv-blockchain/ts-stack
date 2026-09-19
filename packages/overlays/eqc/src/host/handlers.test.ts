@@ -250,6 +250,20 @@ describe('query', () => {
     expect(second.body.code).toBe('ERR_TOO_MANY_PENDING')
   })
 
+  it('answers two concurrent identical queries from a single stored record', async () => {
+    // The cap of one proves the second query stored nothing: a second record would answer 429.
+    const store = new InMemoryPendingStore({ maxPendingPerClient: 1 }, () => NOW)
+    const { host } = makeHost({ store })
+    const payer = new PayerWallet()
+    const query = makeQuery(payer.identityKey)
+    const [first, second] = await Promise.all([attest(host, query), attest(host, query)])
+    expect([first.statusCode, second.statusCode]).toEqual([200, 200])
+    expect(second.body.signature).toBe(first.body.signature)
+    const stored = await store.get(computeQueryId(query))
+    expect(stored?.state).toBe('pending')
+    expect(stored?.attestation.signature).toBe(first.body.signature)
+  })
+
   it('passes provider HostErrors through and hides every other failure', async () => {
     const payer = new PayerWallet()
     const forbidden = makeHost({

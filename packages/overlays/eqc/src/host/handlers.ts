@@ -18,7 +18,7 @@ import {
   type EconomicQuery
 } from '../protocol/query.js'
 import { verifyAndInternalizePayment } from './paymentVerifier.js'
-import { InMemoryPendingStore, type PendingStore } from './pendingStore.js'
+import { InMemoryPendingStore, type PendingQuery, type PendingStore } from './pendingStore.js'
 import type { QueryProvider } from './providers.js'
 
 /** The slice of an express `Request` the handlers read. `auth` is set by BRC-103 middleware. */
@@ -92,6 +92,17 @@ function authenticate(req: HostRequest): string {
     throw new HostError(401, 'ERR_AUTH_REQUIRED', 'BRC-103 mutual authentication is required')
   }
   return identityKey
+}
+
+/**
+ * Answers a query this host already holds, whether `get` found it or `put` reported a duplicate.
+ * Only the client that asked may read a still-pending answer; anything else is settled.
+ */
+function answerStored(existing: PendingQuery | undefined, client: string, res: HostResponse): void {
+  if (existing?.state !== 'pending' || existing.clientIdentityKey !== client) {
+    throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
+  }
+  res.status(200).json(existing.attestation)
 }
 
 function parseCollect(req: HostRequest): CollectRequest {
@@ -241,10 +252,7 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     const queryId = computeQueryId(request)
     const existing = await store.get(queryId)
     if (existing !== undefined) {
-      if (existing.state !== 'pending' || existing.clientIdentityKey !== client) {
-        throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
-      }
-      res.status(200).json(existing.attestation)
+      answerStored(existing, client, res)
       return
     }
     const result = await provider.execute(request, { clientIdentityKey: client })
@@ -281,6 +289,11 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     }
     if (stored === 'too-many-pending') {
       throw new HostError(429, 'ERR_TOO_MANY_PENDING', 'Too many unsettled queries')
+    }
+    if (stored === 'duplicate') {
+      // A concurrent identical query won the race; both callers must get the one stored answer.
+      answerStored(await store.get(queryId), client, res)
+      return
     }
     res.status(200).json(attestation)
   })

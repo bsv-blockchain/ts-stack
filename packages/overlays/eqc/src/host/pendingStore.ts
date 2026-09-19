@@ -14,10 +14,14 @@ export interface PendingQuery {
   state: PendingState
 }
 
+/** The outcome of a `put`. `duplicate` means the store already holds that queryId, untouched. */
+export type PendingPutResult = 'stored' | 'duplicate' | 'too-many-pending' | 'too-large'
+
 /** Asynchronous so a shared store can back several host instances. */
 export interface PendingStore {
   get: (queryId: string) => Promise<PendingQuery | undefined>
-  put: (record: PendingQuery) => Promise<'stored' | 'too-many-pending' | 'too-large'>
+  /** Never overwrites: a queryId the store already holds answers `duplicate`. */
+  put: (record: PendingQuery) => Promise<PendingPutResult>
   /** Atomically claims a pending query for settlement. False when it is not claimable. */
   beginSettle: (queryId: string) => Promise<boolean>
   abortSettle: (queryId: string) => Promise<void>
@@ -26,6 +30,11 @@ export interface PendingStore {
 
 export interface PendingStoreLimits {
   maxEntries: number
+  /**
+   * Estimated heap bytes held by cached payloads, not payload length. A `number[]` element costs
+   * about {@link HEAP_BYTES_PER_ELEMENT} bytes, so the 256 MiB default holds roughly 32 MiB of
+   * payload.
+   */
   maxBytes: number
   maxPendingPerClient: number
   settledGraceMs: number
@@ -38,8 +47,11 @@ const DEFAULT_LIMITS: PendingStoreLimits = {
   settledGraceMs: 60_000
 }
 
+/** A cached byte lives in a `number[]`, which V8 stores as a 64-bit slot rather than one byte. */
+const HEAP_BYTES_PER_ELEMENT = 8
+
 function sizeOf(record: PendingQuery): number {
-  return record.payload.length + record.supplement.length
+  return (record.payload.length + record.supplement.length) * HEAP_BYTES_PER_ELEMENT
 }
 
 /**
@@ -67,10 +79,12 @@ export class InMemoryPendingStore implements PendingStore {
     return record
   }
 
-  async put(record: PendingQuery): Promise<'stored' | 'too-many-pending' | 'too-large'> {
+  async put(record: PendingQuery): Promise<PendingPutResult> {
     const size = sizeOf(record)
     if (size > this.limits.maxBytes) return 'too-large'
     this.purge()
+    // Overwriting would leak the old record's bytes and reset a settle claim taken on it.
+    if (this.records.has(record.queryId)) return 'duplicate'
     let pendingForClient = 0
     for (const existing of this.records.values()) {
       if (existing.clientIdentityKey === record.clientIdentityKey && existing.state !== 'settled') {
