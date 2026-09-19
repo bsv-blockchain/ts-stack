@@ -20,7 +20,7 @@ tags:
 
 **Date:** 2026-09-18
 
-**Status:** Approved design, not yet implemented
+**Status:** Implemented in phase 1 (package and overlay-express hook); phases 2 and 3 pending
 
 **Scope:** A new published package `@bsv/eqc` (client, protocol core, host
 handlers) and one additive hook in `@bsv/overlay-express`. Infrastructure

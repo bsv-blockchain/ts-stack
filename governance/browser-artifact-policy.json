@@ -83,6 +83,13 @@
       "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry. The reviewed security candidate remains one chunk: Vite 637391/167063/134692 raw/gzip/Brotli bytes across 112 modules and two packages, and esbuild 490458/151405/125328 across 114 modules. The rounded limits retain roughly 14-17% headroom for maintenance of the approved trust-boundary graph without immediately reopening the growth decision."
     },
     {
+      "name": "@bsv/eqc",
+      "path": "packages/overlays/eqc",
+      "budget": "packages/overlays/eqc/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The root entry holds the client and protocol core; host handlers ship only from the ./host subpath."
+    },
+    {
       "name": "@bsv/lch",
       "path": "packages/content/lch",
       "budget": "packages/content/lch/browser-budget.json",
