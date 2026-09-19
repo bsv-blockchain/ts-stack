@@ -43,7 +43,8 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/network/chirp/package.json",
-      "packages/content/lch/package.json"
+      "packages/content/lch/package.json",
+      "packages/overlays/eqc/package.json"
     ],
     "suites": [
       {
@@ -458,6 +459,18 @@
         "invariants": [
           "Every supported value round-trips to the identical deterministic byte sequence.",
           "Text and map keys remain normalized and canonical across independent encode and decode passes."
+        ]
+      },
+      {
+        "path": "packages/overlays/eqc/src/protocol/protocol.property.test.ts",
+        "manifest": "packages/overlays/eqc/package.json",
+        "risk": "critical",
+        "boundary": "BRC-178 payout arithmetic and the canonical encodings hashed into query identifiers and content hashes",
+        "target": "Fee conservation and rank monotonicity of the Fibonacci split, and order independence of canonical JSON, message-list, and outpoint-list bytes",
+        "invariants": [
+          "Payouts sum exactly to the fee, never increase with rank, and give every rank but the first its floored Fibonacci share.",
+          "Canonical JSON is independent of object key order and survives a parse and re-encode.",
+          "Canonical message-list and outpoint-list bytes are independent of input order."
         ]
       }
     ],

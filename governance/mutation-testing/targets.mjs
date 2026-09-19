@@ -579,6 +579,13 @@ export function buildMutationTargets(repositoryRoot) {
         ['<rootDir>/test/cbor.property.test.ts', '<rootDir>/test/cbor.test.ts'],
         { esm: true }
       )
+    },
+    'eqc-protocol': {
+      packageDirectory: 'packages/overlays/eqc',
+      manifest: 'packages/overlays/eqc/package.json',
+      propertyTest: 'packages/overlays/eqc/src/protocol/protocol.property.test.ts',
+      mutate: ['src/protocol/fibonacci.ts', 'src/protocol/canonicalJson.ts'],
+      ...vitestTarget('vitest.config.ts')
     }
   }
 }

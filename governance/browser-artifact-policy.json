@@ -83,6 +83,13 @@
       "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry."
     },
     {
+      "name": "@bsv/eqc",
+      "path": "packages/overlays/eqc",
+      "budget": "packages/overlays/eqc/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The root entry holds the client and protocol core; host handlers ship only from the ./host subpath."
+    },
+    {
       "name": "@bsv/lch",
       "path": "packages/content/lch",
       "budget": "packages/content/lch/browser-budget.json",

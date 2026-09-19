@@ -252,6 +252,34 @@ for transactions that remain unproven past the threshold. Only transactions that
 still cannot be proven are evicted. Operators can also run this manually through
 the admin endpoints documented below.
 
+### Registering Additional Routers
+
+`registerRouter(path, factory)` mounts your own router inside the server. The factory runs
+during `start()`, after the BRC-103 authentication middleware and before the admin routes and
+the 404 handler, so the router inherits CORS, body parsing, response size limits, and
+`req.auth.identityKey`. Requests without BRC-103 headers arrive with `req.auth.identityKey`
+equal to `'unknown'`; routes that need authentication must reject them. Call it before
+`start()`.
+
+```ts
+server.registerRouter('/', ({ engine, wallet }) => {
+  if (wallet === undefined) throw new Error('A server wallet is required')
+  const router = express.Router()
+  router.get('/status', (_req, res) => res.json({ ok: true }))
+  return router
+})
+```
+
+The `wallet` in the context is the BRC-103 authentication wallet. It is built without a storage
+provider, so it signs and verifies but cannot create or internalize actions: `createAction` and
+`internalizeAction` throw. A router that takes payment, such as a BRC-178 host from `@bsv/eqc`,
+must build its own storage-backed wallet from the same root key as the server, so that its
+identity equals the BRC-103 session key and the SLAP-advertised key.
+
+Registered routers inherit the response size limit (`MAX_RESPONSE_BYTES`: 4 MiB on the `small`
+profile, 8 MiB on `standard`). A larger JSON body is replaced by a 413 after the handler ran, so a
+router that is paid before it answers must bound its own responses below that limit.
+
 ### Admin-Protected Endpoints
 
 We also provide admin-protected endpoints for advanced operations like manually

@@ -346,6 +346,16 @@
       "minimumScore": 80,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "eqc-protocol",
+      "manifest": "packages/overlays/eqc/package.json",
+      "propertyTest": "packages/overlays/eqc/src/protocol/protocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-178 payout arithmetic and the canonical encodings hashed into query identifiers and content hashes",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

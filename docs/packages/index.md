@@ -55,6 +55,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/overlay-express](./overlays/overlay-express.md) — HTTP server for the Overlay spec
 - [@bsv/overlay-topics](./overlays/overlay-topics.md) — Topic managers (UHRP, BTMS, custom)
 - [@bsv/overlay-discovery-services](./overlays/overlay-discovery-services.md) — Discover overlays by service type
+- [@bsv/eqc](./overlays/eqc.md) — Pay the fastest agreeing overlay and message box hosts (BRC-178)
 - [@bsv/gasp](./overlays/gasp.md) — Graph Aware Sync Protocol (GASP) for incremental ancestry/descendancy graph sync
 - [@bsv/btms-backend](./overlays/btms-backend.md) — Backend for running a token overlay
 

@@ -1026,6 +1026,74 @@ describe('OverlayExpress', () => {
       return res
     }
 
+    describe('registerRouter', () => {
+      const startAndCaptureUse = async (): Promise<any[][]> => {
+        const useSpy = jest.spyOn(instance.app, 'use')
+        jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+          callback()
+          return {} as any
+        })
+        await instance.start()
+        return useSpy.mock.calls as any[][]
+      }
+
+      it('mounts a registered router after BRC-103 auth and before the 404 handler', async () => {
+        instance.serverWallet = {} as any
+        const handler = jest.fn()
+        const factory = jest.fn<any>().mockResolvedValue(handler)
+        expect(instance.registerRouter('/extra', factory)).toBe(instance)
+
+        const calls = await startAndCaptureUse()
+        expect(factory).toHaveBeenCalledTimes(1)
+        expect(factory).toHaveBeenCalledWith({ engine: mockEngine, wallet: instance.serverWallet })
+        const authMiddleware = jest.mocked(createAuthMiddleware).mock.results[0].value
+        const authIndex = calls.findIndex(call => call[0] === authMiddleware)
+        const routerIndex = calls.findIndex(call => call[0] === '/extra' && call[1] === handler)
+        expect(authIndex).toBeGreaterThanOrEqual(0)
+        expect(routerIndex).toBeGreaterThan(authIndex)
+        expect(routerIndex).toBeLessThan(calls.length - 1)
+      })
+
+      it('hands the factory an undefined wallet when no server wallet exists', async () => {
+        const factory = jest.fn<any>().mockReturnValue(jest.fn())
+        instance.registerRouter('/extra', factory)
+        await startAndCaptureUse()
+        expect(factory).toHaveBeenCalledWith({ engine: mockEngine, wallet: undefined })
+      })
+
+      it('mounts several routers in registration order', async () => {
+        const first = jest.fn()
+        const second = jest.fn()
+        instance.registerRouter('/first', () => first as any)
+        instance.registerRouter('/second', () => second as any)
+        const calls = await startAndCaptureUse()
+        const firstIndex = calls.findIndex(call => call[1] === first)
+        const secondIndex = calls.findIndex(call => call[1] === second)
+        expect(firstIndex).toBeGreaterThanOrEqual(0)
+        expect(secondIndex).toBeGreaterThan(firstIndex)
+      })
+
+      it('rejects invalid arguments and registration after start()', async () => {
+        expect(() => instance.registerRouter('extra', () => jest.fn() as any)).toThrow(TypeError)
+        expect(() => instance.registerRouter('/extra', undefined as any)).toThrow(TypeError)
+        await startAndCaptureUse()
+        expect(() => instance.registerRouter('/late', () => jest.fn() as any)).toThrow(
+          'registerRouter must be called before start()'
+        )
+      })
+
+      it('fails start() when a factory throws', async () => {
+        instance.registerRouter('/broken', () => {
+          throw new Error('factory failed')
+        })
+        jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+          callback()
+          return {} as any
+        })
+        await expect(instance.start()).rejects.toThrow('factory failed')
+      })
+    })
+
     it('should throw if engine not configured', async () => {
       const freshInstance = new OverlayExpress('Test', 'key', 'example.com')
       const mockKnex = {
