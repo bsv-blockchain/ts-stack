@@ -1,8 +1,13 @@
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+
 import { Transaction, type LookupAnswer } from '@bsv/sdk'
 import express from 'express'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { EQC } from '../../src/client/EQC.js'
+import { InMemoryReputationStore } from '../../src/client/reputation.js'
+import { AuthFetchTransport, TransportTimeoutError } from '../../src/client/transport.js'
 import { createEconomicQueryHost } from '../../src/host/handlers.js'
 import { overlayLookupProvider, type QueryProvider } from '../../src/host/providers.js'
 import { sampleBeef } from '../support/transactions.js'
@@ -122,8 +127,10 @@ describe('economic query market over HTTP', () => {
     )
     const hijacked = await start({ providers: [provider(false)] })
     const payer = new PayerWallet()
+    const reputation = new InMemoryReputationStore()
     const eqc = new EQC(payer, {
       networkPreset: 'local',
+      reputation,
       resolver: slapResolver(SERVICE, [
         ...honest.map(host => ({ url: host.url, advertiser: host.wallet })),
         { url: hijacked.url, advertiser: new HostWallet() }
@@ -141,5 +148,56 @@ describe('economic query market over HTTP', () => {
       expect.objectContaining({ url: hijacked.url, reason: 'identity-mismatch' })
     )
     expect(hijacked.wallet.internalized).toEqual([])
+    // The advertisement is third-party data: the host is skipped for this query, not cooled down.
+    expect(reputation.score(hijacked.url)).toBe(-1)
+    expect(reputation.isExcluded(hijacked.url, Date.now())).toBe(false)
+  }, 30_000)
+
+  it('keeps a host whose URL a third party also advertised under its own key', async () => {
+    const hosts = await Promise.all(
+      [0, 1, 2].map(async () => await start({ providers: [provider(false)] }))
+    )
+    const payer = new PayerWallet()
+    const eqc = new EQC(payer, {
+      networkPreset: 'local',
+      resolver: slapResolver(SERVICE, [
+        { url: hosts[0].url, advertiser: new HostWallet() },
+        ...hosts.map(host => ({ url: host.url, advertiser: host.wallet }))
+      ])
+    })
+    const result = await eqc.query({
+      type: 'overlay-lookup',
+      params: { service: SERVICE, query: {} }
+    })
+    await result.completion
+    expect(result.rejected).toEqual([])
+    expect(result.ranking.map(entry => entry.url).sort()).toEqual(
+      hosts.map(host => host.url).sort()
+    )
+  }, 30_000)
+
+  it('bounds an authenticated call to a host that accepts the connection and never answers', async () => {
+    const silent: Server = await new Promise((resolve, reject) => {
+      const listening = createServer(() => undefined).listen(0, '127.0.0.1', () =>
+        resolve(listening)
+      )
+      listening.once('error', reject)
+    })
+    try {
+      const { port } = silent.address() as AddressInfo
+      const url = `http://127.0.0.1:${port}`
+      const transport = new AuthFetchTransport(new PayerWallet())
+      const started = performance.now()
+      const outcome = await transport.post(url, '/economic/collect', { type: 'collect' }, 250).then(
+        () => undefined,
+        (error: unknown) => error
+      )
+      expect(outcome).toBeInstanceOf(TransportTimeoutError)
+      expect((outcome as Error).message).toBe(`${url} did not answer within 250 ms`)
+      expect(performance.now() - started).toBeLessThan(2000)
+    } finally {
+      silent.closeAllConnections()
+      await new Promise<void>(resolve => silent.close(() => resolve()))
+    }
   }, 30_000)
 })

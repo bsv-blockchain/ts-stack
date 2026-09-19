@@ -39,22 +39,37 @@ export class TransportStatusError extends Error {
 
 const MAX_PARAMS_BYTES = 65_536
 const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
-const BLOCKED_METHODS = new Set<string | symbol>(['createAction', 'signAction'])
+/** Everything BRC-103 mutual authentication asks of a wallet, and nothing else. */
+const FORWARDED_METHODS = new Set<string | symbol>([
+  'getPublicKey',
+  'createSignature',
+  'verifySignature',
+  'createHmac',
+  'verifyHmac'
+])
 
 /**
- * `AuthFetch` pays any well-formed HTTP 402 with no cap. Hosts here are untrusted, so the wallet
- * it sees can authenticate but cannot spend. The EQC spends only through `settle`.
+ * The wallet `AuthFetch` sees. Hosts here are advertised permissionlessly, so they are untrusted,
+ * and `AuthFetch` would otherwise pay any well-formed HTTP 402 with no cap and answer a host's
+ * BRC-103 certificate request with the user's identity certificates. This facade is an allowlist:
+ * only the five calls authentication needs reach the real wallet. `listCertificates` answers an
+ * empty list, so a certificate request is answered with nothing instead of failing the session,
+ * and every other method rejects. The EQC spends only through `settle`.
  */
 export function nonPayingWallet(wallet: WalletInterface): WalletInterface {
   return new Proxy(wallet, {
     get(target, property, receiver) {
-      if (BLOCKED_METHODS.has(property)) {
-        return async () => {
-          throw new Error('The EQC transport never pays an HTTP 402 challenge')
-        }
+      if (property === 'listCertificates') {
+        return async () => ({ totalCertificates: 0, certificates: [] })
       }
       const value: unknown = Reflect.get(target, property, receiver)
-      return typeof value === 'function' ? value.bind(target) : value
+      if (typeof value !== 'function' || typeof property === 'symbol') return value
+      if (FORWARDED_METHODS.has(property)) return value.bind(target)
+      return async () => {
+        throw new Error(
+          `The EQC transport never pays an HTTP 402 challenge or reveals wallet data: ${property} is blocked`
+        )
+      }
     }
   })
 }
