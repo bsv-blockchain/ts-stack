@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { PayerWallet } from '../../test/support/wallets.js'
-import { AuthFetchTransport, TransportTimeoutError, nonPayingWallet } from './transport.js'
+import {
+  AuthFetchTransport,
+  TransportStatusError,
+  TransportTimeoutError,
+  nonPayingWallet
+} from './transport.js'
 
 const params = {
   version: 1,
@@ -49,6 +54,19 @@ describe('AuthFetchTransport.getParams', () => {
     await expect(
       respond(new Response('x'.repeat(70_000))).getParams('https://h.example', 1000)
     ).rejects.toThrow('too large')
+  })
+
+  it('reports a non-200 answer as a TransportStatusError carrying the status', async () => {
+    const transport = new AuthFetchTransport(new PayerWallet(), {
+      fetch: vi.fn(async () => new Response('gone', { status: 410 }))
+    })
+    await expect(transport.getParams('https://h.example', 1000)).rejects.toBeInstanceOf(
+      TransportStatusError
+    )
+    await expect(transport.getParams('https://h.example', 1000)).rejects.toMatchObject({
+      status: 410,
+      message: 'https://h.example answered params with status 410'
+    })
   })
 
   it('rejects a streamed params body once the byte cap is crossed, without draining the rest', async () => {

@@ -78,6 +78,7 @@ export {
 } from './client/discovery.js'
 export {
   AuthFetchTransport,
+  TransportStatusError,
   TransportTimeoutError,
   nonPayingWallet,
   type HostTransport,

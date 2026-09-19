@@ -8,6 +8,7 @@ import { bytesProvider, messageListProvider, overlayLookupProvider } from '../ho
 import { EQCError } from '../protocol/errors.js'
 import { EQC, type EQCOptions } from './EQC.js'
 import { InMemoryReputationStore } from './reputation.js'
+import { TransportStatusError } from './transport.js'
 
 const ANSWER = [1, 2, 3, 4]
 const urls = [1, 2, 3, 4, 5].map(n => `https://h${n}.example`)
@@ -26,8 +27,10 @@ function setup(options: EQCOptions = {}): {
   const eqc = new EQC(payer, {
     transport: network,
     hostOverrides: { 'relay-lookup': urls, ls_x: urls, 'message-list': urls },
-    raceMs: 60,
-    hostTimeoutMs: 400,
+    // Real timers: every gap an assertion depends on is at least 25 ms, and the race window is
+    // wide enough that all five honest hosts land inside it even on a loaded runner.
+    raceMs: 200,
+    hostTimeoutMs: 1500,
     ...options
   })
   return { payer, network, eqc }
@@ -43,13 +46,22 @@ async function failure(promise: Promise<unknown>): Promise<EQCError> {
   throw new Error('Expected an EQCError')
 }
 
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  throw new Error('Expected a rejection')
+}
+
 const request = { type: 'relay-lookup', params: { key: 'k' } }
 
 describe('EQC.query', () => {
   it('pays the five fastest agreeing hosts by arrival order from one transaction', async () => {
     const { payer, network, eqc } = setup()
     const hosts = urls.map((url, index) =>
-      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: (5 - index) * 8 })
+      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: (5 - index) * 25 })
     )
     const result = await eqc.query(request)
     await result.completion
@@ -134,7 +146,7 @@ describe('EQC.query', () => {
     const liar = network.add(urls[0], { providers: [relay(ANSWER)] })
     liar.tamperDelivery = body => ({ ...body, payload: Utils.toBase64([6, 6, 6, 6]) })
     for (const url of urls.slice(1)) {
-      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: 15 })
+      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: 30 })
     }
     const result = await eqc.query(request)
     await result.completion
@@ -164,9 +176,9 @@ describe('EQC.query', () => {
   })
 
   it('counts a slow host as late and does not pay it', async () => {
-    const { network, eqc } = setup({ raceMs: 30 })
+    const { network, eqc } = setup({ raceMs: 100 })
     for (const url of urls.slice(0, 3)) network.add(url, { providers: [relay(ANSWER)] })
-    const slow = network.add(urls[3], { providers: [relay(ANSWER)] }, { delayMs: 200 })
+    const slow = network.add(urls[3], { providers: [relay(ANSWER)] }, { delayMs: 500 })
     network.add(urls[4], { providers: [relay(ANSWER)] }, { withoutMarket: true })
     const result = await eqc.query(request)
     await result.completion
@@ -242,6 +254,53 @@ describe('EQC.query', () => {
     expect(() => new EQC(payer, { threshold: 3, topK: 2 })).toThrow(RangeError)
     expect(() => new EQC(payer, { threshold: 1, topK: 1 })).not.toThrow()
     expect(() => new EQC(payer, { raceMs: -1 })).toThrow(RangeError)
+  })
+})
+
+describe('EQC.params', () => {
+  it('retries a host whose params read failed transiently and uses it on the next query', async () => {
+    const { network, eqc } = setup()
+    const flaky = network.add(
+      urls[0],
+      { providers: [relay(ANSWER)] },
+      { transientParamsFailures: 1 }
+    )
+    for (const url of urls.slice(1)) network.add(url, { providers: [relay(ANSWER)] })
+
+    const first = await eqc.query(request)
+    await first.completion
+    expect(first.ranking.map(entry => entry.url)).not.toContain(urls[0])
+    expect(first.rejected).toContainEqual(expect.objectContaining({ url: urls[0], reason: 'http' }))
+
+    const again = await eqc.query(request)
+    await again.completion
+    expect(again.ranking.map(entry => entry.url)).toContain(urls[0])
+    expect(again.rejected).toEqual([])
+    expect(flaky.paramsReads).toBe(2)
+  })
+
+  it('probes a host with no market once across two queries inside the params TTL', async () => {
+    const { network, eqc } = setup()
+    for (const url of urls.slice(0, 4)) network.add(url, { providers: [relay(ANSWER)] })
+    const marketless = network.add(urls[4], { providers: [relay(ANSWER)] }, { withoutMarket: true })
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await eqc.query(request)
+      await result.completion
+      expect(result.ranking).toHaveLength(4)
+    }
+    expect(marketless.paramsReads).toBe(1)
+  })
+
+  it('surfaces the transport status error for a 404 host, cached and uncached alike', async () => {
+    const { network, eqc } = setup()
+    const marketless = network.add(urls[0], { providers: [relay(ANSWER)] }, { withoutMarket: true })
+
+    const thrown = await rejection(eqc.params(urls[0]))
+    expect(thrown).toBeInstanceOf(TransportStatusError)
+    expect((thrown as TransportStatusError).status).toBe(404)
+    expect(await rejection(eqc.params(urls[0]))).toBe(thrown)
+    expect(marketless.paramsReads).toBe(1)
   })
 })
 
