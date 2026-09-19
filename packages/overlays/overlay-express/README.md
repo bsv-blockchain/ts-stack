@@ -36,6 +36,20 @@ import OverlayExpress, { OverlayMonitor } from '@bsv/overlay-express'
 const { default: OverlayExpress, OverlayMonitor } = require('@bsv/overlay-express')
 ```
 
+The five public BASM JSON POST routes validate nonnegative safe-integer heights
+(including existing numeric strings), 32-byte hexadecimal hashes/txids, and
+request count limits. Empty raw-transaction requests remain valid; compound
+proof requests require txids. The raw-transaction route does not require
+`x-bsv-topic`. Missing engine/storage BASM capabilities retain HTTP 400 with
+`{ status: 'error', message, code: 'BASM_UNSUPPORTED' }`. CORS, access rules,
+configured limits, and automatic synchronization defaults are unchanged.
+
+An injected topic-anchor header resolver may additionally return
+`blockTransactionCount` obtained independently for the same canonical block
+hash. Existing Chaintracks/provider adapters remain header-only; they do not
+claim this stronger position evidence. See the core engine's
+[BASM validation and recovery limits](../overlay/README.md#basm-peer-validation-and-current-recovery-limits).
+
 ## Example Usage
 
 Here's a quick example:

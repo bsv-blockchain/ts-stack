@@ -3,6 +3,7 @@ import { EntityProvenTx, EntityProvenTxReq } from '../../storage/schema/entities
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
@@ -26,8 +27,12 @@ export class TaskCheckForProofs extends WalletMonitorTask {
    * listener can set this true to cause
    */
   private static checkNowRequested = false
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
   constructor(
     monitor: Monitor,
@@ -82,27 +87,17 @@ interface ProofRequestResult {
   invalid?: TableProvenTxReq
 }
 
-const PROVABLE_STATUSES = new Set([
-  'callback',
-  'unmined',
-  'unknown',
-  'unconfirmed',
-  'nosend',
-  'sending'
-])
+const PROVABLE_STATUSES = new Set(['callback', 'unmined', 'unknown', 'unconfirmed', 'nosend', 'sending'])
 
-function requestIsReadyForProof (
-  req: TableProvenTxReq,
-  ignoreStatus: boolean
-): boolean {
+function requestIsReadyForProof(req: TableProvenTxReq, ignoreStatus: boolean): boolean {
   return ignoreStatus || PROVABLE_STATUSES.has(req.status)
 }
 
-function rawTransactionMatchesTxid (req: EntityProvenTxReq): boolean {
+function rawTransactionMatchesTxid(req: EntityProvenTxReq): boolean {
   return req.rawTx != null && asString(doubleSha256BE(req.rawTx)) === req.txid
 }
 
-async function completeLinkedRequest (
+async function completeLinkedRequest(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
@@ -115,7 +110,7 @@ async function completeLinkedRequest (
   return { log, proven: reqApi }
 }
 
-async function invalidateMalformedRequest (
+async function invalidateMalformedRequest(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
@@ -128,16 +123,17 @@ async function invalidateMalformedRequest (
   return { log, invalid: reqApi }
 }
 
-async function applyProofTimeout (
+async function applyProofTimeout(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
   ignoreStatus: boolean,
   log: string
 ): Promise<ProofRequestResult | undefined> {
-  const limit = task.monitor.chain === 'main'
-    ? task.monitor.options.unprovenAttemptsLimitMain
-    : task.monitor.options.unprovenAttemptsLimitTest
+  const limit =
+    task.monitor.chain === 'main'
+      ? task.monitor.options.unprovenAttemptsLimitMain
+      : task.monitor.options.unprovenAttemptsLimitTest
   if (ignoreStatus || req.attempts <= limit) return undefined
 
   const maxRebroadcast = task.monitor.options.maxRebroadcastAttempts ?? 0
@@ -157,7 +153,7 @@ async function applyProofTimeout (
   return { log, invalid: reqApi }
 }
 
-async function applyProvenTransaction (
+async function applyProvenTransaction(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   provenTx: EntityProvenTx
@@ -196,7 +192,7 @@ async function applyProvenTransaction (
   })
 }
 
-async function processProofRequest (
+async function processProofRequest(
   task: WalletMonitorTask,
   reqApi: TableProvenTxReq,
   maxAcceptableHeight: number,
@@ -223,12 +219,12 @@ async function processProofRequest (
   if (timedOut != null) return timedOut
 
   const since = new Date()
-  const merklePathResult: GetMerklePathResult =
-    await task.monitor.services.getMerklePath(req.txid)
-  if (
-    merklePathResult.header != null &&
-    merklePathResult.header.height > maxAcceptableHeight
-  ) {
+  const merklePathResult: GetMerklePathResult = await getCanonicalMerklePath(
+    task.monitor.services,
+    task.monitor.chaintracksWithEvents || task.monitor.chaintracks,
+    req.txid
+  )
+  if (merklePathResult.header != null && merklePathResult.header.height > maxAcceptableHeight) {
     log += ` ignoring possible proof from very new block at height ${merklePathResult.header.height} ${merklePathResult.header.hash}\n`
     return { log }
   }
@@ -286,14 +282,7 @@ export async function getProofs(
 
   let log = ''
   for (const reqApi of reqs) {
-    const result = await processProofRequest(
-      task,
-      reqApi,
-      maxAcceptableHeight,
-      indent,
-      countsAsAttempt,
-      ignoreStatus
-    )
+    const result = await processProofRequest(task, reqApi, maxAcceptableHeight, indent, countsAsAttempt, ignoreStatus)
     log += result.log
     if (result.proven != null) proven.push(result.proven)
     if (result.invalid != null) invalid.push(result.invalid)

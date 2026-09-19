@@ -104,6 +104,13 @@ export interface ChaintracksAvailabilitySnapshotApi {
  */
 export interface ChaintracksClientApi extends ChainTracker {
   /**
+   * Additive reorg-event capability. Method presence is not capability:
+   * `false` means subscribe/unsubscribe are unsupported stubs and must not be
+   * called; `true` promises working registration whose failures must propagate.
+   * Omit to infer from a callable `subscribeReorgs` implementation.
+   */
+  readonly supportsReorgEvents?: boolean
+  /**
    * Confirms the chain
    */
   getChain(): Promise<Chain>

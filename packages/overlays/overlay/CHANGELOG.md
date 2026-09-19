@@ -20,6 +20,30 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
+- Adds `storageHasAdmission` for the optional `Storage.admission` field.
+- Adds an opt-in MongoDB schema, payload-publication, reference-guard, and
+  payload-GC foundation behind an optional `mongodb` peer. It does not activate
+  MongoDB as the overlay default or select a new SQL adapter.
+- Adds an opt-in Mongo `AdmissionStorage` adapter and Engine submit path that
+  uses `commitAdmission` when `overlay-admission-v1` is advertised, with
+  enlisted same-session indexes or a durable projection outbox, majority ACK,
+  and SQL/Knex compatibility retained.
+- Added bounded BASM JSON peer validation, classified capability/resource errors,
+  canonical header and optional full-block-count position checks, and explicit
+  position assurance in sync reports. Fixed default forward pages to fit the
+  public server's 1,000-anchor limit. Claimed admitted-list indices are bound to
+  the compound path even when every remote txid is already local. Inclusion uses
+  chain-tracker root/height rather than coinbase maturity, so BASM admission
+  submits in the `historical-tx-no-spv` mode and topic managers that branch on
+  the submission mode observe it for BASM-admitted transactions; the public
+  `historical-tx` mode keeps full SPV verification. Heights where the topic
+  admitted nothing (BRC-136 `k = 0`, zero BASM root) are checked without a proof
+  request instead of aborting the sync. Historical sync
+  refuses an untrusted TAC prefix; durable bootstrap, chunked recovery and topic
+  status remain pending. No storage migration or automatic sync activation is
+  included.
+
 ### Added
 - (Include new features or significant user-visible enhancements here.)
 
@@ -34,6 +58,30 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 - (Document bugs that were fixed since the last release.)
+- Exclude already-applied (dupe) topics from the Mongo admission plan's
+  identity, decisions and commit, instead of resubmitting them for admission.
+  A dupe topic no longer reaches `commitAdmission`; when every remaining
+  topic is a dupe or a failure, `Engine.submit` returns the in-memory STEAK
+  without building or committing a plan at all, and on a mixed submission
+  only the genuinely new topics are committed while the STEAK still reports
+  the dupe as accepted-with-nothing-new. Previously a resubmitted dupe was
+  still treated as accepted and given a decision, which
+  `MongoAdmissionStorage.assertAppliedAvailable` rejects whenever that topic
+  was already applied under a different admission operation — breaking
+  historical-then-live resubmits and multi-topic retries with
+  `Overlay admission rejected: invalid-plan` or `digest-mismatch`.
+- `MongoOverlayStorage` no longer maps an evicted output document to a live
+  `Output`. `toOutput` now returns `null` for a `state: 'evicted'` document
+  (evictions persist their row for audit/history, they do not delete it),
+  and every read path (`findOutput`, `findOutputsForTransaction`,
+  `findUTXOsForTopic`) drops a `null` mapping the same way it already
+  excludes `evicted` at the query level, so a future read path that forgets
+  that query-level filter cannot resurface an evicted UTXO as unspent.
+  `findOutput`/`findOutputsForTransaction` also hydrate `outputsConsumed`
+  and `consumedBy` from the `consumptionEdges` persisted by the admission
+  commit (or by `updateConsumedBy` on the classic path) instead of always
+  returning them empty, so Engine history/delete paths can see consumption
+  edges written during admission.
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)

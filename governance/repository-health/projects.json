@@ -9,61 +9,42 @@
   "consumerProfileDefinitions": {
     "browser-bundler": {
       "description": "Installed package bundled for production by supported browser bundlers",
-      "requiredRuntimeTargets": [
-        "browser"
-      ],
+      "requiredRuntimeTargets": ["browser"],
       "verification": "test:browser packs and installs the exact package graph, then exercises production bundling and source maps"
     },
     "browser-esm": {
       "description": "Installed package consumed through its browser ESM export",
-      "requiredRuntimeTargets": [
-        "browser"
-      ],
+      "requiredRuntimeTargets": ["browser"],
       "verification": "test:browser resolves the exact installed browser import condition and validates its public surface"
     },
     "cli": {
       "description": "Installed package executable invoked through its published bin mapping",
-      "requiredRuntimeTargets": [
-        "node"
-      ],
+      "requiredRuntimeTargets": ["node"],
       "verification": "pack:check installs the exact tarball and executes the declared binary"
     },
     "node-cjs": {
       "description": "Installed package consumed with CommonJS require",
-      "requiredRuntimeTargets": [
-        "node"
-      ],
+      "requiredRuntimeTargets": ["node"],
       "verification": "pack:check installs the exact tarball and exercises its CommonJS entry point"
     },
     "node-esm": {
       "description": "Installed package consumed with Node.js ESM import",
-      "requiredRuntimeTargets": [
-        "node"
-      ],
+      "requiredRuntimeTargets": ["node"],
       "verification": "pack:check installs the exact tarball and exercises its ESM entry point"
     },
     "react-native-metro": {
       "description": "Installed package consumed by React Native through Metro-compatible resolution",
-      "requiredRuntimeTargets": [
-        "react-native"
-      ],
+      "requiredRuntimeTargets": ["react-native"],
       "verification": "test:mobile packs the exact package graph and validates the React Native export and Metro bundle"
     },
     "umd-global": {
       "description": "Installed classic-browser bundle consumed through its documented global",
-      "requiredRuntimeTargets": [
-        "browser",
-        "umd"
-      ],
+      "requiredRuntimeTargets": ["browser", "umd"],
       "verification": "test:browser measures and validates the exact packed UMD bundle and global contract"
     },
     "wasm-worker": {
       "description": "Installed browser package loading WebAssembly and dedicated workers",
-      "requiredRuntimeTargets": [
-        "browser",
-        "wasm",
-        "worker"
-      ],
+      "requiredRuntimeTargets": ["browser", "wasm", "worker"],
       "verification": "test:consumers exercises the exact package's real WebAssembly and worker boundaries"
     }
   },
@@ -114,9 +95,7 @@
     {
       "path": "packages/verifast/src/wasm/bdk-core.*",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "packages/verifast/README.md#reproducible-wasm-build"
-      ],
+      "sourceInputs": ["packages/verifast/README.md#reproducible-wasm-build"],
       "generator": "module/typesbdk/wasm/build.sh from the pinned BDK source described by @bsv/verifast",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Verify pinned inputs, hashes, ABI tests, browser and Node consumer tests, and package size; do not hand-edit generated glue or binaries."
@@ -124,9 +103,7 @@
     {
       "path": "infra/uhrp-server-basic/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -134,9 +111,7 @@
     {
       "path": "infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -144,9 +119,7 @@
     {
       "path": "infra/message-box-server/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -154,9 +127,7 @@
     {
       "path": "infra/chaintracks-server/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -164,9 +135,7 @@
     {
       "path": "packages/overlays/overlay-express/src/security/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -174,9 +143,7 @@
     {
       "path": "packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/wab/src/security/edgePolicy.ts"
-      ],
+      "sourceInputs": ["infra/wab/src/security/edgePolicy.ts"],
       "generator": "scripts/sync-service-edge-policy.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -184,9 +151,7 @@
     {
       "path": "infra/uhrp-server-cloud-bucket/src/resourceLimits.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/uhrp-server-basic/src/resourceLimits.ts"
-      ],
+      "sourceInputs": ["infra/uhrp-server-basic/src/resourceLimits.ts"],
       "generator": "scripts/sync-service-runtime-copies.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical UHRP resource limits, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -194,9 +159,7 @@
     {
       "path": "infra/uhrp-server-cloud-bucket/src/utils/network.ts",
       "owner": "ts-stack-maintainers",
-      "sourceInputs": [
-        "infra/uhrp-server-basic/src/utils/network.ts"
-      ],
+      "sourceInputs": ["infra/uhrp-server-basic/src/utils/network.ts"],
       "generator": "scripts/sync-service-runtime-copies.mjs",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review and analyze the canonical UHRP network mapping, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
@@ -231,35 +194,17 @@
     },
     "conformance-runner": {
       "description": "Private conformance runner",
-      "requiredScripts": [
-        "build",
-        "format:check",
-        "lint",
-        "test",
-        "validate"
-      ],
+      "requiredScripts": ["build", "format:check", "lint", "test", "validate"],
       "requiresReadme": true
     },
     "conformance-runner-ts": {
       "description": "Private TypeScript conformance implementation",
-      "requiredScripts": [
-        "format:check",
-        "lint",
-        "test",
-        "typecheck"
-      ],
+      "requiredScripts": ["format:check", "lint", "test", "typecheck"],
       "requiresReadme": false
     },
     "documentation-site": {
       "description": "Private browser documentation application",
-      "requiredScripts": [
-        "build",
-        "format:check",
-        "lint",
-        "test",
-        "typecheck",
-        "validate"
-      ],
+      "requiredScripts": ["build", "format:check", "lint", "test", "typecheck", "validate"],
       "requiresReadme": true
     },
     "node-library": {
@@ -380,25 +325,12 @@
     },
     "private-library": {
       "description": "Private package used within the workspace",
-      "requiredScripts": [
-        "build",
-        "format:check",
-        "lint",
-        "test",
-        "test:coverage",
-        "typecheck"
-      ],
+      "requiredScripts": ["build", "format:check", "lint", "test", "test:coverage", "typecheck"],
       "requiresReadme": true
     },
     "examples": {
       "description": "Private examples or test applications",
-      "requiredScripts": [
-        "build",
-        "format:check",
-        "lint",
-        "test",
-        "typecheck"
-      ],
+      "requiredScripts": ["build", "format:check", "lint", "test", "typecheck"],
       "requiresReadme": true
     }
   },
@@ -410,9 +342,7 @@
       "area": "repository",
       "profile": "monorepo",
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "none"
     },
     {
@@ -422,10 +352,7 @@
       "area": "examples",
       "profile": "examples",
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "none"
     },
     {
@@ -435,9 +362,7 @@
       "area": "conformance",
       "profile": "conformance-runner",
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "none"
     },
     {
@@ -447,9 +372,7 @@
       "area": "conformance",
       "profile": "conformance-runner-ts",
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "none"
     },
     {
@@ -459,10 +382,7 @@
       "area": "documentation",
       "profile": "documentation-site",
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "none"
     },
     {
@@ -471,17 +391,9 @@
       "owner": "ts-stack-maintainers",
       "area": "content",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "cli",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -490,17 +402,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -509,14 +413,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -525,14 +424,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -541,13 +435,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "cli",
-      "consumerProfiles": [
-        "cli"
-      ],
+      "consumerProfiles": ["cli"],
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -556,17 +446,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -575,19 +457,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm",
-        "umd-global"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm", "umd-global"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node",
-        "umd"
-      ],
+      "runtimeTargets": ["browser", "node", "umd"],
       "release": "npm-oidc"
     },
     {
@@ -596,13 +468,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "cli",
-      "consumerProfiles": [
-        "cli"
-      ],
+      "consumerProfiles": ["cli"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -611,17 +479,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -630,17 +490,9 @@
       "owner": "ts-stack-maintainers",
       "area": "helpers",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -649,14 +501,9 @@
       "owner": "ts-stack-maintainers",
       "area": "messaging",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -665,19 +512,9 @@
       "owner": "ts-stack-maintainers",
       "area": "messaging",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm",
-        "umd-global"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm", "umd-global"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node",
-        "umd"
-      ],
+      "runtimeTargets": ["browser", "node", "umd"],
       "release": "npm-oidc"
     },
     {
@@ -686,14 +523,9 @@
       "owner": "ts-stack-maintainers",
       "area": "messaging",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-2",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -702,19 +534,9 @@
       "owner": "ts-stack-maintainers",
       "area": "messaging",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm",
-        "umd-global"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm", "umd-global"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node",
-        "umd"
-      ],
+      "runtimeTargets": ["browser", "node", "umd"],
       "release": "npm-oidc"
     },
     {
@@ -723,23 +545,11 @@
       "owner": "ts-stack-maintainers",
       "area": "messaging",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
-      "hostPeerDependencies": [
-        "express"
-      ],
+      "runtimeTargets": ["browser", "node"],
+      "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -749,10 +559,7 @@
       "area": "messaging",
       "profile": "examples",
       "criticality": "tier-3",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "none"
     },
     {
@@ -761,17 +568,9 @@
       "owner": "ts-stack-maintainers",
       "area": "middleware",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -780,14 +579,9 @@
       "owner": "ts-stack-maintainers",
       "area": "middleware",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -796,20 +590,11 @@
       "owner": "ts-stack-maintainers",
       "area": "middleware",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
-      "hostPeerDependencies": [
-        "express"
-      ],
+      "runtimeTargets": ["node"],
+      "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -818,20 +603,11 @@
       "owner": "ts-stack-maintainers",
       "area": "middleware",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
-      "hostPeerDependencies": [
-        "express"
-      ],
+      "runtimeTargets": ["node"],
+      "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -840,17 +616,9 @@
       "owner": "ts-stack-maintainers",
       "area": "network",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "cli",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -859,13 +627,9 @@
       "owner": "ts-stack-maintainers",
       "area": "network",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -875,9 +639,7 @@
       "area": "overlays",
       "profile": "private-library",
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "none"
     },
     {
@@ -886,17 +648,9 @@
       "owner": "ts-stack-maintainers",
       "area": "overlays",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -905,14 +659,9 @@
       "owner": "ts-stack-maintainers",
       "area": "overlays",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -921,14 +670,9 @@
       "owner": "ts-stack-maintainers",
       "area": "overlays",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -937,17 +681,10 @@
       "owner": "ts-stack-maintainers",
       "area": "overlays",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
+      "runtimeTargets": ["node"],
+      "declarationDependencies": ["@types/express"],
       "release": "npm-oidc"
     },
     {
@@ -956,13 +693,9 @@
       "owner": "ts-stack-maintainers",
       "area": "overlays",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -971,19 +704,9 @@
       "owner": "ts-stack-maintainers",
       "area": "sdk",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm",
-        "umd-global"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm", "umd-global"],
       "criticality": "tier-0",
-      "runtimeTargets": [
-        "browser",
-        "node",
-        "umd"
-      ],
+      "runtimeTargets": ["browser", "node", "umd"],
       "release": "npm-oidc"
     },
     {
@@ -1001,13 +724,7 @@
         "wasm-worker"
       ],
       "criticality": "tier-0",
-      "runtimeTargets": [
-        "browser",
-        "node",
-        "umd",
-        "wasm",
-        "worker"
-      ],
+      "runtimeTargets": ["browser", "node", "umd", "wasm", "worker"],
       "release": "npm-oidc"
     },
     {
@@ -1016,14 +733,9 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -1032,13 +744,9 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-esm"
-      ],
+      "consumerProfiles": ["node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "node"
-      ],
+      "runtimeTargets": ["node"],
       "release": "npm-oidc"
     },
     {
@@ -1047,16 +755,9 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
@@ -1065,24 +766,11 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "cli-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "cli",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
-      "hostPeerDependencies": [
-        "express"
-      ],
+      "runtimeTargets": ["browser", "node"],
+      "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -1091,16 +779,10 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "node-library",
-      "consumerProfiles": [
-        "node-cjs"
-      ],
+      "consumerProfiles": ["node-cjs"],
       "criticality": "tier-0",
-      "runtimeTargets": [
-        "node"
-      ],
-      "declarationDependencies": [
-        "@types/express"
-      ],
+      "runtimeTargets": ["node"],
+      "declarationDependencies": ["@types/express"],
       "release": "npm-oidc"
     },
     {
@@ -1110,50 +792,31 @@
       "area": "wallet",
       "profile": "examples",
       "criticality": "tier-3",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "none"
     },
     {
       "path": "packages/wallet/wallet-toolbox/client",
       "name": "@bsv/wallet-toolbox-client",
-      "sourceRoots": [
-        "packages/wallet/wallet-toolbox/src"
-      ],
+      "sourceRoots": ["packages/wallet/wallet-toolbox/src"],
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "browser-library",
-      "consumerProfiles": [
-        "browser-bundler",
-        "browser-esm",
-        "node-cjs",
-        "node-esm"
-      ],
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "browser",
-        "node"
-      ],
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {
       "path": "packages/wallet/wallet-toolbox/mobile",
       "name": "@bsv/wallet-toolbox-mobile",
-      "sourceRoots": [
-        "packages/wallet/wallet-toolbox/src"
-      ],
+      "sourceRoots": ["packages/wallet/wallet-toolbox/src"],
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "react-native-library",
-      "consumerProfiles": [
-        "react-native-metro"
-      ],
+      "consumerProfiles": ["react-native-metro"],
       "criticality": "tier-1",
-      "runtimeTargets": [
-        "react-native"
-      ],
+      "runtimeTargets": ["react-native"],
       "release": "npm-oidc"
     }
   ]

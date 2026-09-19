@@ -27,11 +27,13 @@ import { OverlayGASPRemote } from './GASP/OverlayGASPRemote.js'
 import { OverlayGASPStorage } from './GASP/OverlayGASPStorage.js'
 import {
   BASM_ZERO_HASH,
+  type AdmittedTxRef,
   type AdmittedListResponse,
   type BASMPeerSyncReport,
   type CompoundMerklePathResponse,
   type RawTransactionResponse,
   type ReorgReport,
+  type TopicAnchorHeader,
   type TopicAnchorHeaderResolver,
   type TopicAnchorRangeResponse,
   type TopicAnchorTip,
@@ -41,10 +43,20 @@ import {
   extractMerkleProofMetadata
 } from './BASM.js'
 import { BASMRemote } from './BASMRemote.js'
+import { basmHash, basmInteger, requireBASM } from './BASMValidation.js'
 import { serializeErrorForLog, serializeLogValue } from './SafeLog.js'
+import {
+  buildOverlayAdmissionPlan,
+  getOverlayAdmissionHost,
+  overlayAdmissionMode,
+  selectNewAdmissionTopics,
+  waitForAdmissionReceipt
+} from './EngineAdmission.js'
 
 const DEFAULT_GASP_SYNC_LIMIT = 10000
 const DEFAULT_BASM_RANGE_LIMIT = 1024
+// The public Overlay Express transport defaults to 1,000 anchors per request.
+const DEFAULT_BASM_SYNC_PAGE_SIZE = 1000
 
 type UTXOHistoryHydrationContext = {
   outputCache: Map<string, Promise<Output | null>>
@@ -104,11 +116,30 @@ type StorageMutationContext = {
   offChainValues: number[] | undefined
 }
 
+type OverlayAdmissionSubmitContext = {
+  taggedBEEF: TaggedBEEF
+  steak: STEAK
+  tx: Transaction
+  txid: string
+  mode: SubmissionMode
+  offChainValues: number[] | undefined
+  validations: TopicValidation[]
+  failedTopics: Set<string>
+  anyTopicAccepted: boolean
+  onSteakReady?: (steak: STEAK) => void
+}
+
 function findSpendingInputIndex(tx: Transaction, output: Output): number {
   return tx.inputs.findIndex(input => {
     const realSource = input.sourceTXID || input.sourceTransaction?.id('hex')
     return realSource === output.txid && input.sourceOutputIndex === output.outputIndex
   })
+}
+
+function requireBASMDefined<T>(value: T | undefined, aligned: boolean, message: string): T {
+  requireBASM(aligned, message)
+  requireBASM(value !== undefined, message)
+  return value
 }
 
 /**
@@ -1037,6 +1068,82 @@ export class Engine {
     this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
   }
 
+  private assertSupportedTopics(topics: string[]): void {
+    for (const topic of topics) {
+      if (this.managers[topic] === undefined || this.managers[topic] === null) {
+        throw new Error(`This server does not support this topic: ${topic}`)
+      }
+    }
+  }
+
+  private shouldSkipPropagation(mode: SubmissionMode): boolean {
+    return (
+      this.advertiser === undefined ||
+      mode === 'historical-tx' ||
+      mode === 'historical-tx-no-spv'
+    )
+  }
+
+  private async acknowledgeOverlayAdmission(
+    context: OverlayAdmissionSubmitContext
+  ): Promise<STEAK | undefined> {
+    const admissionHost = getOverlayAdmissionHost(this.storage)
+    if (admissionHost === undefined) return undefined
+    const {
+      taggedBEEF,
+      steak,
+      tx,
+      txid,
+      mode,
+      offChainValues,
+      validations,
+      failedTopics,
+      anyTopicAccepted,
+      onSteakReady
+    } = context
+    if (!anyTopicAccepted) {
+      if (onSteakReady !== undefined) onSteakReady(steak)
+      return steak
+    }
+    // A topic counts toward `anyTopicAccepted` when it is a dupe (so the
+    // caller still gets broadcast/propagation for a retried submission), but
+    // a dupe must never be resubmitted for admission: it was already
+    // committed under a (possibly different) operation, and re-including it
+    // here would make commitAdmission reject the whole plan. When nothing
+    // left over is a genuinely new admission, skip the plan/commit entirely
+    // and hand back the STEAK already computed from validation — it reports
+    // each dupe topic as accepted-with-nothing-new, same as the classic
+    // (non-admission) storage path does.
+    if (selectNewAdmissionTopics(validations, failedTopics).length === 0) {
+      if (onSteakReady !== undefined) onSteakReady(steak)
+      return steak
+    }
+    const applied = await this.buildAppliedTransactionRecord(tx)
+    const buildPlan = async () =>
+      await buildOverlayAdmissionPlan({
+        host: admissionHost,
+        tx,
+        txid,
+        beef: taggedBEEF.beef,
+        topics: taggedBEEF.topics,
+        mode: overlayAdmissionMode(mode),
+        offChainValues,
+        validations,
+        failedTopics,
+        lookupServices: this.lookupServices,
+        includePropagation: !this.shouldSkipPropagation(mode),
+        applied
+      })
+    const committed = await waitForAdmissionReceipt(
+      admissionHost.admission,
+      await buildPlan(),
+      buildPlan
+    )
+    const acknowledged = JSON.parse(committed.receipt.steak) as STEAK
+    if (onSteakReady !== undefined) onSteakReady(acknowledged)
+    return acknowledged
+  }
+
   /**
    * Submits a transaction for processing by Overlay Services.
    * @param {TaggedBEEF} taggedBEEF - The transaction to process
@@ -1049,17 +1156,17 @@ export class Engine {
    * @returns {Promise<STEAK>} The submitted transaction execution acknowledgement
    */
   async submit(taggedBEEF: TaggedBEEF, onSteakReady?: (steak: STEAK) => void, mode: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv' = 'current-tx', offChainValues?: number[]): Promise<STEAK> {
-    for (const t of taggedBEEF.topics) {
-      if (this.managers[t] === undefined || this.managers[t] === null) {
-        throw new Error(`This server does not support this topic: ${t}`)
-      }
-    }
+    this.assertSupportedTopics(taggedBEEF.topics)
 
     // Validate the transaction SPV information
     const tx = Transaction.fromBEEF(taggedBEEF.beef)
     const txid = tx.id('hex')
 
     this.startTime(`submit_${txid}`)
+    // Every submission is SPV-verified except 'historical-tx-no-spv', which is
+    // reserved for callers that have already proven inclusion independently
+    // (GASP graph finalization and BASM reconciliation). 'historical-tx' is a
+    // public submission mode, so it keeps the full SPV check.
     if (mode !== 'historical-tx-no-spv') {
       this.startTime(`chainTracker_${txid.substring(0, 10)}`)
       const txValid = await tx.verify(this.chainTracker)
@@ -1116,6 +1223,20 @@ export class Engine {
       throw error
     }
 
+    const admissionSteak = await this.acknowledgeOverlayAdmission({
+      taggedBEEF,
+      steak,
+      tx,
+      txid,
+      mode,
+      offChainValues,
+      validations,
+      failedTopics,
+      anyTopicAccepted,
+      onSteakReady
+    })
+    if (admissionSteak !== undefined) return admissionSteak
+
     // Call the callback function with STEAK if it is provided (before storage mutations)
     if (onSteakReady !== undefined) {
       onSteakReady(steak)
@@ -1144,7 +1265,7 @@ export class Engine {
     })
 
     // If we don't have an advertiser or we are dealing with historical transactions, just return the steak
-    if (this.advertiser === undefined || mode === 'historical-tx' || mode === 'historical-tx-no-spv') {
+    if (this.shouldSkipPropagation(mode)) {
       return steak
     }
 
@@ -1541,6 +1662,9 @@ export class Engine {
   }
 
   async provideTopicAnchorTip(topic: string): Promise<TopicAnchorTip> {
+    if (typeof this.storage.findTopicAnchorTip !== 'function') {
+      throw Object.assign(new TypeError('Storage does not support BASM topic anchor tips'), { code: 'BASM_UNSUPPORTED' })
+    }
     const tip = await this.storage.findTopicAnchorTip?.(topic)
     return tip ?? {
       topic,
@@ -1551,7 +1675,7 @@ export class Engine {
 
   async provideTopicAnchorRange(topic: string, fromHeight: number, toHeight: number): Promise<TopicAnchorRangeResponse> {
     if (typeof this.storage.findTopicBlockAnchors !== 'function') {
-      throw new TypeError('Storage does not support BASM topic anchor ranges')
+      throw Object.assign(new TypeError('Storage does not support BASM topic anchor ranges'), { code: 'BASM_UNSUPPORTED' })
     }
     if (!Number.isInteger(fromHeight) || !Number.isInteger(toHeight) || fromHeight < 0 || toHeight < fromHeight) {
       throw new Error('Invalid topic anchor range')
@@ -1568,7 +1692,7 @@ export class Engine {
 
   async provideAdmittedList(topic: string, blockHeight: number, blockHash?: string): Promise<AdmittedListResponse> {
     if (typeof this.storage.findAdmittedTransactionsForBlock !== 'function') {
-      throw new TypeError('Storage does not support BASM admitted lists')
+      throw Object.assign(new TypeError('Storage does not support BASM admitted lists'), { code: 'BASM_UNSUPPORTED' })
     }
 
     return {
@@ -1581,7 +1705,7 @@ export class Engine {
 
   async provideCompoundMerklePath(topic: string, blockHeight: number, txids: string[]): Promise<CompoundMerklePathResponse> {
     if (typeof this.storage.findTransactionMerklePaths !== 'function') {
-      throw new TypeError('Storage does not support direct Merkle path lookup')
+      throw Object.assign(new TypeError('Storage does not support direct Merkle path lookup'), { code: 'BASM_UNSUPPORTED' })
     }
     if (txids.length === 0) {
       throw new Error('At least one txid is required')
@@ -1632,7 +1756,7 @@ export class Engine {
 
   async provideRawTransactions(txids: string[]): Promise<RawTransactionResponse> {
     if (typeof this.storage.findRawTransactions !== 'function') {
-      throw new TypeError('Storage does not support raw transaction lookup')
+      throw Object.assign(new TypeError('Storage does not support raw transaction lookup'), { code: 'BASM_UNSUPPORTED' })
     }
 
     const transactions = await this.storage.findRawTransactions(txids)
@@ -1677,30 +1801,143 @@ export class Engine {
       ])
       report.localTip = localTip
       report.remoteTip = remoteTip
-
+      await this.requireMatchingRemoteBASMTip(remote, remoteTip)
       if (localTip.blockHeight >= remoteTip.blockHeight) {
-        report.status = localTip.tac === remoteTip.tac && localTip.blockHeight === remoteTip.blockHeight ? 'matched' : 'diverged'
-        report.message = report.status === 'matched'
-          ? 'Topic anchor tips match'
-          : 'Remote tip is not ahead; historical divergence needs manual or binary-search reconciliation'
-        return report
+        return await this.finishBASMWhenRemoteIsNotAhead(topic, localTip, remoteTip, report)
       }
-
-      const fromHeight = Math.max(localTip.blockHeight + 1, remoteTip.blockHeight - DEFAULT_BASM_RANGE_LIMIT + 1, 0)
-      const range = await remote.requestTopicAnchorRange(fromHeight, remoteTip.blockHeight)
-      for (const remoteAnchor of range.anchors) {
-        await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
-      }
-
-      const refreshedTip = await this.provideTopicAnchorTip(topic)
-      report.localTip = refreshedTip
-      report.status = refreshedTip.blockHeight >= remoteTip.blockHeight && refreshedTip.tac === remoteTip.tac ? 'matched' : 'advanced'
-      return report
+      return await this.advanceBASMWithRemoteAnchors(topic, remote, localTip, remoteTip, report)
     } catch (error) {
-      report.status = 'error'
-      report.message = error instanceof Error ? error.message : String(error)
-      this.logger.error(`[BASM SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`, error)
-      return report
+      return this.markBASMPeerSyncError(report, topic, endpoint, error)
+    }
+  }
+
+  private async requireMatchingRemoteBASMTip(remote: BASMRemote, remoteTip: TopicAnchorTip): Promise<void> {
+    if (remoteTip.blockHeight < 0) {
+      return
+    }
+    const tipRange = await remote.requestTopicAnchorRange(remoteTip.blockHeight, remoteTip.blockHeight)
+    const remoteTipAnchor = tipRange.anchors[0]
+    const tipAnchor = requireBASMDefined(
+      remoteTipAnchor,
+      remoteTipAnchor?.tac === remoteTip.tac,
+      'BASM tip does not match its anchor'
+    )
+    for (const field of ['blockHash', 'basmRoot', 'admittedCount'] as const) {
+      requireBASM(remoteTip[field] === undefined || remoteTip[field] === tipAnchor[field], 'BASM tip metadata does not match its anchor')
+    }
+    await this.requireCanonicalBASMAnchor(tipAnchor)
+  }
+
+  private async finishBASMWhenRemoteIsNotAhead(
+    topic: string,
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    report: BASMPeerSyncReport
+  ): Promise<BASMPeerSyncReport> {
+    const tipsMatch = localTip.tac === remoteTip.tac && localTip.blockHeight === remoteTip.blockHeight
+    if (localTip.blockHeight >= 0 && tipsMatch) {
+      const localAnchor = await this.storage.findTopicBlockAnchor?.(topic, localTip.blockHeight)
+      await this.requireCanonicalBASMAnchor(
+        requireBASMDefined(localAnchor, localAnchor?.tac === localTip.tac, 'Local BASM tip lacks its anchor')
+      )
+    }
+    report.status = tipsMatch ? 'matched' : 'diverged'
+    report.message = tipsMatch
+      ? 'Topic anchor tips match'
+      : 'Remote tip is not ahead; historical divergence needs manual or binary-search reconciliation'
+    return report
+  }
+
+  private requireBASMRangePrefix(
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    fromHeight: number,
+    toHeight: number,
+    anchors: TopicBlockAnchor[]
+  ): void {
+    requireBASM(anchors.length > 0 && anchors.at(-1)?.blockHeight === toHeight, 'BASM range omits its requested target')
+    requireBASM(localTip.blockHeight < 0 || anchors[0].blockHeight === fromHeight, 'BASM range omits its next height')
+    let previousTac = localTip.tac
+    for (const anchor of anchors) {
+      requireBASM(anchor.tac === computeTac(previousTac, anchor.blockHash, anchor.basmRoot), 'BASM range TAC is inconsistent with its prefix')
+      previousTac = anchor.tac
+    }
+    if (toHeight === remoteTip.blockHeight) requireBASM(previousTac === remoteTip.tac, 'BASM range differs from its tip')
+  }
+
+  private async advanceBASMWithRemoteAnchors(
+    topic: string,
+    remote: BASMRemote,
+    localTip: TopicAnchorTip,
+    remoteTip: TopicAnchorTip,
+    report: BASMPeerSyncReport
+  ): Promise<BASMPeerSyncReport> {
+    const fromHeight = localTip.blockHeight < 0
+      ? Math.max(remoteTip.blockHeight - DEFAULT_BASM_SYNC_PAGE_SIZE + 1, 0)
+      : localTip.blockHeight + 1
+    const toHeight = Math.min(fromHeight + DEFAULT_BASM_SYNC_PAGE_SIZE - 1, remoteTip.blockHeight)
+    const range = await remote.requestTopicAnchorRange(fromHeight, toHeight)
+    this.requireBASMRangePrefix(localTip, remoteTip, fromHeight, toHeight, range.anchors)
+    for (const remoteAnchor of range.anchors) {
+      await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
+      if (report.status === 'diverged') return report
+    }
+
+    const finalRemoteTip = await remote.requestTopicAnchorTip()
+    requireBASM(finalRemoteTip.blockHeight === remoteTip.blockHeight && finalRemoteTip.tac === remoteTip.tac, 'BASM peer history changed during reconciliation')
+
+    const refreshedTip = await this.provideTopicAnchorTip(topic)
+    report.localTip = refreshedTip
+    report.status = refreshedTip.blockHeight === remoteTip.blockHeight && refreshedTip.tac === remoteTip.tac ? 'matched' : 'advanced'
+    return report
+  }
+
+  private markBASMPeerSyncError(
+    report: BASMPeerSyncReport,
+    topic: string,
+    endpoint: string,
+    error: unknown
+  ): BASMPeerSyncReport {
+    report.status = 'error'
+    if (error instanceof Error && 'code' in error && typeof error.code === 'string') report.errorCode = error.code
+    report.message = error instanceof Error ? error.message : String(error)
+    this.logger.error(`[BASM SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`, error)
+    return report
+  }
+
+  private async requireCanonicalBASMAnchor(anchor: TopicBlockAnchor, proofRoot?: string): Promise<TopicAnchorHeader> {
+    if (this.chainTracker === 'scripts only' || this.topicAnchorHeaderResolver === undefined) {
+      throw new Error('BASM reconciliation requires a ChainTracker and canonical header resolver')
+    }
+    const resolvedHeader = await this.topicAnchorHeaderResolver(anchor.blockHeight)
+    const header = requireBASMDefined(
+      resolvedHeader,
+      resolvedHeader?.blockHeight === anchor.blockHeight,
+      'BASM canonical header is unavailable or has the wrong height'
+    )
+    requireBASM(basmHash(header.blockHash.toLowerCase(), 'canonical block hash') === anchor.blockHash, 'BASM anchor block hash is not canonical')
+    if (proofRoot !== undefined && header.merkleRoot !== undefined) {
+      requireBASM(header.merkleRoot.toLowerCase() === proofRoot, 'BASM proof root differs from its canonical header')
+    }
+    if (header.blockTransactionCount !== undefined) {
+      basmInteger(header.blockTransactionCount, 'canonical block transaction count', 1)
+      requireBASM(anchor.admittedCount <= header.blockTransactionCount, 'BASM admitted count exceeds canonical block transaction count')
+    }
+    return header
+  }
+
+  private validateBASMProofPositions(path: MerklePath, admitted: AdmittedTxRef[], count: number): void {
+    requireBASM(admitted.every(item => item.blockIndex < count), 'BASM admitted index exceeds canonical block transaction count')
+    let width = count
+    for (let height = 0; height < path.path.length; height++) {
+      requireBASM(height === 0 || width > 1, 'BASM proof exceeds canonical tree depth')
+      for (const node of path.path[height]) {
+        requireBASM(
+          node.duplicate === true ? width % 2 === 1 && node.offset === width : node.offset < width,
+          'BASM proof node is outside canonical block positions'
+        )
+      }
+      width = Math.ceil(width / 2)
     }
   }
 
@@ -1710,6 +1947,7 @@ export class Engine {
     remoteAnchor: TopicBlockAnchor,
     report: BASMPeerSyncReport
   ): Promise<void> {
+    await this.requireCanonicalBASMAnchor(remoteAnchor)
     report.checkedHeights.push(remoteAnchor.blockHeight)
     const localAnchor = await this.storage.findTopicBlockAnchor?.(topic, remoteAnchor.blockHeight, remoteAnchor.blockHash)
     if (localAnchor?.tac === remoteAnchor.tac) {
@@ -1726,18 +1964,28 @@ export class Engine {
     }
 
     const localAdmitted = await this.storage.findAdmittedTransactionsForBlock?.(topic, remoteAnchor.blockHeight, remoteAnchor.blockHash) ?? []
+    // BRC-136: an empty topic at a height has k = 0 and R = 32 zero bytes, which
+    // the root/count check above has already enforced. There is no transaction
+    // to bind to a proof or to fetch, so the height is checked without a proof
+    // round trip; it only diverges when this node admitted something there.
+    if (admittedResponse.admitted.length === 0) {
+      if (localAdmitted.length > 0) report.status = 'diverged'
+      return
+    }
     const localTxids = new Set(localAdmitted.map(item => item.txid))
     const missingTxids = admittedResponse.admitted
       .map(item => item.txid)
       .filter(txid => !localTxids.has(txid))
 
     report.missingTxids.push(...missingTxids)
+    // The BASM root only commits to txid order. Bind claimed original indices to
+    // the compound path even when every remote txid is already local.
+    const assurance = await this.fetchBASMMissingTransactions(remote, topic, remoteAnchor, admittedResponse.admitted, missingTxids)
+    if (report.positionValidation !== 'encoded-offset-only') report.positionValidation = assurance
     if (missingTxids.length === 0) {
       report.status = 'diverged'
       return
     }
-
-    await this.fetchBASMMissingTransactions(remote, topic, remoteAnchor, missingTxids)
     report.fetchedTxCount += missingTxids.length
   }
 
@@ -1745,19 +1993,38 @@ export class Engine {
     remote: BASMRemote,
     topic: string,
     anchor: TopicBlockAnchor,
+    admitted: AdmittedTxRef[],
     txids: string[]
-  ): Promise<void> {
+  ): Promise<'canonical-count' | 'encoded-offset-only'> {
     if (this.chainTracker === 'scripts only') {
       throw new Error('BASM reconciliation requires a ChainTracker capable of validating BUMP proofs')
     }
 
-    const proofResponse = await remote.requestCompoundMerklePath(anchor.blockHeight, txids)
+    // Validate the whole claimed ordered subset, including entries already local:
+    // the BASM root alone does not bind the peer's claimed original positions.
+    const proofResponse = await remote.requestCompoundMerklePath(anchor.blockHeight, admitted.map(item => item.txid))
     const compoundPath = MerklePath.fromHex(proofResponse.merklePath)
-    for (const txid of txids) {
-      const valid = await compoundPath.verify(txid, this.chainTracker)
-      if (!valid) {
-        throw new Error(`Peer supplied invalid compound Merkle path for ${txid} at height ${anchor.blockHeight}`)
-      }
+    requireBASM(compoundPath.blockHeight === anchor.blockHeight, 'BASM proof height does not match its anchor')
+    requireBASM(compoundPath.toHex() === proofResponse.merklePath.toLowerCase(), 'BASM proof is not canonically encoded')
+    const proofRoot = compoundPath.computeRoot()
+    const proofHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
+    if (proofHeader.blockTransactionCount !== undefined) {
+      this.validateBASMProofPositions(compoundPath, admitted, proofHeader.blockTransactionCount)
+    }
+    for (const { txid, blockIndex } of admitted) {
+      const leaf = compoundPath.path[0]?.find(item => item.hash === txid)
+      requireBASM(leaf?.offset === blockIndex, 'BASM proof does not bind the admitted block index')
+      requireBASM(compoundPath.path[0].length !== 1 || compoundPath.path.length !== 1 || blockIndex === 0, 'BASM singleton proof has a nonzero block index')
+      requireBASM(compoundPath.computeRoot(txid) === proofRoot, 'BASM proof root does not match the admitted transaction')
+    }
+    // Inclusion is root/height, not coinbase maturity. MerklePath.verify also
+    // applies the 100-block spendability rule at offset 0.
+    const valid = await this.chainTracker.isValidRootForHeight(proofRoot, compoundPath.blockHeight)
+    if (!valid) {
+      throw new Error(`Peer supplied invalid compound Merkle path at height ${anchor.blockHeight}`)
+    }
+    if (txids.length === 0) {
+      return proofHeader.blockTransactionCount === undefined ? 'encoded-offset-only' : 'canonical-count'
     }
 
     const rawResponse = await remote.requestRawTransactions(txids)
@@ -1765,18 +2032,38 @@ export class Engine {
       throw new Error(`Peer did not return raw transactions for txids: ${rawResponse.missing.join(',')}`)
     }
 
-    for (const record of rawResponse.transactions) {
+    const transactions = rawResponse.transactions.map(record => {
       const tx = Transaction.fromHex(record.rawTx)
-      if (tx.id('hex') !== record.txid) {
+      if (tx.id('hex') !== record.txid || tx.toHex() !== record.rawTx.toLowerCase()) {
         throw new Error(`Raw transaction txid mismatch: expected ${record.txid}, got ${tx.id('hex')}`)
       }
-      try {
-        tx.merklePath = compoundPath.extract([record.txid])
-      } catch {
-        tx.merklePath = compoundPath
-      }
-      await this.submit({ beef: tx.toBEEF(), topics: [topic] }, undefined, 'historical-tx')
+      tx.merklePath = compoundPath.extract([record.txid])
+      return tx
+    })
+    const refreshedAnchor = (await remote.requestTopicAnchorRange(anchor.blockHeight, anchor.blockHeight)).anchors[0]
+    requireBASM(
+      refreshedAnchor?.blockHash === anchor.blockHash &&
+      refreshedAnchor?.basmRoot === anchor.basmRoot &&
+      refreshedAnchor?.admittedCount === anchor.admittedCount &&
+      refreshedAnchor?.tac === anchor.tac,
+      'BASM peer anchor changed before admission'
+    )
+    const commitHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
+    requireBASM(commitHeader.blockTransactionCount === proofHeader.blockTransactionCount, 'BASM canonical block transaction count changed before admission')
+    // Apply in the independently checked block order, regardless of raw response order.
+    // Admit with 'historical-tx-no-spv': inclusion is already proven above by
+    // isValidRootForHeight plus the canonical-header binding. Re-running
+    // Transaction.verify would apply MerklePath.verify's coinbase 100-block
+    // spendability rule and reject an admitted coinbase from a recent block.
+    const transactionById = new Map(transactions.map(tx => [tx.id('hex'), tx]))
+    for (const txid of txids) {
+      const tx = transactionById.get(txid)
+      requireBASM(tx !== undefined, 'BASM raw response omits a requested transaction')
+      await this.submit({ beef: tx.toBEEF(), topics: [topic] }, undefined, 'historical-tx-no-spv')
     }
+    const finalHeader = await this.requireCanonicalBASMAnchor(anchor, proofRoot)
+    requireBASM(finalHeader.blockTransactionCount === proofHeader.blockTransactionCount, 'BASM canonical block transaction count changed during admission')
+    return proofHeader.blockTransactionCount === undefined ? 'encoded-offset-only' : 'canonical-count'
   }
 
   async evictUnprovenTransactions(options: {

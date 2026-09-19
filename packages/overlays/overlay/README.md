@@ -79,6 +79,52 @@ The root entry point exports:
 imports remain available through the documented package export map, but new
 applications should prefer the root entry point wherever possible.
 
+## Optional persistence capability
+
+`AdmissionStorage` defines an additive v1 atomic admission contract for future
+adapters. `storageHasAdmission(storage)` reports whether the optional
+`admission` field is present. `getAdmissionStorage(storage)` detects an explicit provider with both
+commit and reconciliation methods. Existing Knex and injected legacy adapters
+remain supported; their individual methods do not imply atomic submission.
+When `getAdmissionStorage(storage)` observes a complete `overlay-admission-v1`
+provider, `Engine.submit` builds an admission plan and returns the saved STEAK
+only after majority commit. The SQL/Knex path and its early STEAK callback are
+unchanged; that callback is not a durable commit receipt.
+
+The contract separates local commit, index visibility and propagation. It binds
+operation identity to verified transaction, topic/policy and off-chain context;
+uses ready payload references and outbox intents; and fences recovery by both
+chain epoch and topic history generation. Helper functions and shared fixtures
+pin exact integers, deterministic identity, leases and cursor eligibility.
+See the [persistence specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md).
+No consumer migration, storage-default change or database migration is included
+in this release candidate.
+
+## Optional Mongo foundation
+
+The package also contains an opt-in MongoDB foundation for schema bootstrap,
+content-addressed payload publication, reference guards, payload collection,
+and an explicit `AdmissionStorage` adapter. Mongo is not the default Engine
+storage selection; importing `@bsv/overlay` alone does not load MongoDB.
+
+Applications using a Mongo deep entry point install the optional peer first:
+
+```sh
+npm install @bsv/overlay mongodb@^7.5.0
+```
+
+The initial entry points are
+`@bsv/overlay/storage/mongo/MongoSchema`,
+`@bsv/overlay/storage/mongo/MongoPayloadStore`,
+`@bsv/overlay/storage/mongo/MongoAdmissionStorage`, and
+`@bsv/overlay/storage/mongo/MongoOverlayStorage`. They require an explicitly
+operated unsharded replica set; the supported deployment profile is three
+members. Payload publication makes GridFS bytes physically `published` before
+the guarded payload row becomes `ready`; caller-session reference and GC
+operations share that row guard. See the [Mongo v1
+foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md)
+for operational bounds, recovery rules, and the opt-in admission path.
+
 ## Runtime and package formats
 
 The package supports both module systems:
@@ -119,6 +165,59 @@ For production deployments:
 
 `@bsv/overlay-express` supplies these standard HTTP controls while preserving
 public protocol access by default.
+
+### BASM peer validation and current recovery limits
+
+BASM uses the current BRC-136 ordered admitted subset and block-anchored TAC.
+The five existing JSON POST routes remain compatible; empty tips remain
+`{ topic, blockHeight: -1, tac: <zero hash> }`. Unsupported storage capabilities
+are errors, not empty histories. The remote client validates response shape,
+topic/height/hash binding, ordered unique admitted positions, contiguous
+returned ranges, and complete proof/raw response ID sets before use.
+
+`BASMRemote` retains its injectable third `fetch` argument and accepts optional
+limits as a fourth argument. Defaults are 64 MiB per decoded response, 8 MiB
+per proof, 32 MiB per raw transaction, 100,000 admitted entries, 1,000 requested
+txids, 1,024 requested anchor heights, and 30 seconds per request including its
+body. Aggregate response limits also apply to hex-encoded transactions. These
+are configurable local acceptance limits, not consensus rules. Standard fetch
+bodies are bounded while streaming; legacy injected `text()` implementations
+are checked after buffering. Classified errors expose `code`, including
+`BASM_UNSUPPORTED`, `BASM_RESOURCE_LIMIT`, and `BASM_TIMEOUT`.
+
+Reconciliation requires a canonical header resolver as well as a ChainTracker.
+An optional `TopicAnchorHeader.blockTransactionCount` must come independently
+from the trusted canonical provider and refer to that exact `blockHash`.
+It enables full-block count/index bounds and odd-duplication checks. The sync
+report's `positionValidation` is `canonical-count` only when that evidence was
+available for every checked proof; legacy providers yield `encoded-offset-only`.
+A Merkle root plus an encoded offset alone cannot disambiguate Bitcoin's
+duplicate-last-leaf position ambiguity. No provider is required to add the
+field, and the engine does not download full blocks to infer it.
+
+Forward sync pages now contain at most 1,000 anchors to fit the standard HTTP
+server. Proof height, requested original index, canonical hash/root, raw byte
+identity, TAC continuity, and repeated peer anchors are checked before historical
+submission. Claimed admitted-list indices are bound to the compound path whenever
+a remote list is used as evidence, including when every remote txid is already
+local. Inclusion uses the chain tracker root/height check rather than
+`MerklePath.verify`, which also enforces coinbase 100-block spendability.
+Because inclusion is proven independently, admission submits in the
+`historical-tx-no-spv` mode so `Transaction.verify` does not re-apply that
+coinbase rule; the public `historical-tx` mode keeps full SPV verification.
+Admission still applies the local TopicManager, and because every admitted
+transaction carries its extracted Merkle path, neither network broadcast nor
+overlay propagation occurs. Automatic BASM sync remains disabled by default.
+
+This is bounded protocol hardening, not durable recovery. An empty local node
+whose topic genesis precedes the recent bootstrap window now refuses the
+untrusted TAC prefix; this intentionally replaces the old unchecked tail
+behavior. A block above 1,000 admitted entries reaches a request-limit error
+until proof/raw chunking is implemented. Equal-height/local-ahead divergence,
+whole-target bootstrap, durable cursors/leases, atomic revision fencing, and
+truthful per-topic agreement status remain required follow-up work. A successful
+legacy report does not establish global completeness, current unspentness, or
+durable recovery completion. See [BASM details](./docs/BRC-136-BASM.md).
 
 ## Development
 

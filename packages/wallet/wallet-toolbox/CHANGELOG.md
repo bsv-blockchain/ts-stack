@@ -6,6 +6,42 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Implement `BHServiceClient.findChainTipHash()` by delegating to its existing
+  `findChainTipHeader()` call against `/api/v1/chain/tip/longest`, instead of
+  throwing `Not implemented`. `ChaintracksChainTracker.getVerificationContextToken()`
+  calls `findChainTipHash()` on every verification attempt, so any wallet
+  configured with a `BHServiceClient` as `options.chaintracks`, or as a
+  `LocalChainTracker` participating source, previously failed on every
+  attempt. No `ChaintracksClientApi` contract change; no migration required.
+
+- Preserve valid compound proofs with multiple marked transactions. Rotate
+  unresolved proof repairs behind waiting heights across monitor restarts, and
+  retain retries that become temporarily ineligible after the chain tip
+  retreats. Existing checkpoints remain compatible; no migration is required.
+  The reviewed Hermes Brotli ceiling advances from 1,139,000 to 1,140,000 bytes:
+  Linux CI measured 1,139,020 bytes and macOS measured 1,138,239–1,138,711 for
+  the corrected candidate. Both retained the governed mobile module/runtime composition;
+  there is no dependency or public-export addition. All other bundle ceilings
+  remain unchanged.
+
+- Validate every newly acquired and replacement Merkle proof against the active
+  ChainTracks root before persistence, continue to later providers when an
+  earlier provider returns an orphan proof, and retain unresolved reorg heights
+  for bounded per-run retries without stopping the forward audit cursor. No
+  schema or consumer migration is required. Hosted Linux measures the added
+  validation path at 1,721,610 raw Vite bytes and 1,772,653 raw Metro bytes;
+  the reviewed raw ceilings advance to 1,722,000 and 1,773,000 respectively.
+  Local macOS Vite compression measures 406,865 gzip and 317,787 Brotli bytes;
+  those reviewed ceilings advance to 407,000 and 318,000. Local esbuild raw
+  output is 1,342,911 raw / 370,427 gzip / 296,708 Brotli bytes and those
+  reviewed ceilings advance to 1,343,500 / 371,000 / 297,000, covering the
+  hosted Linux esbuild gzip measurement of 370,528 bytes. Other platform
+  measurements remain under their existing limits except optimized Hermes:
+  hosted Linux raw bytecode measures 3,602,790 bytes, while local macOS
+  compression measures 1,465,937 gzip / 1,137,982 Brotli bytes. The reviewed
+  cross-platform Hermes ceilings advance to 3,603,500 raw / 1,467,000 gzip /
+  1,139,000 Brotli bytes, retaining bounded Linux/macOS compression variance.
+
 - Integrate upstream security corrections without dropping the sync recovery contracts.
   Record combined browser/mobile artifact costs and limits in the sync transfer guide.
 

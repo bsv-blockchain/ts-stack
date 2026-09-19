@@ -270,9 +270,26 @@ All notable changes to this project will be documented in this file. The format 
 - Add `LookupResolver.queryDetailed()` and per-outcome host-settlement counts
   so security-sensitive callers can distinguish authoritative empty answers
   from partial availability.
+- Add bounded LookupResolver discovery: later SLAP tracker advertisements can
+  join an active query, hosts are scheduled fairly under concurrency and byte
+  limits, and HTTP bodies are read incrementally. Raw `query$` output remains
+  unverified; `onEvidence` is the C02 intake seam. Existing 2s host / 5s
+  tracker delays, reputation/backoff, freeform answers, and CORS/public
+  lookup request headers are unchanged.
 
 ### Changed
 
+- LookupResolver host cache no longer lets a tighter-limit discovery satisfy a
+  later larger query, and `query()` still throws the historical no-competent-hosts
+  error when a deadline expires before any host is admitted.
+- `LookupResolver.query()` and `queryDetailed()` now reject with an `AbortError`
+  when the caller's `options.signal` cancels the attempt, at any host count,
+  instead of flattening a cancelled run into an empty output list. `query$()`
+  still reports the cancellation as a `terminalReason: 'cancelled'` snapshot.
+- A lookup that exhausts a client resource budget during SLAP discovery, before
+  any host is admitted, now throws `LookupResourceLimitError` naming the limit
+  instead of the historical no-competent-hosts error. That message is reserved
+  for a deadline or a settled attempt that genuinely found no host.
 - Batch BEEF mutation bookkeeping and reuse compound Merkle intermediate hashes.
   The optional asynchronous P2PKH backend now forwards its already validated
   compressed public key directly into the unlocking script. Existing BEEF
@@ -328,6 +345,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Re-queue a `TransactionEvidenceCoordinator` candidate that was displaced by a
+  concurrency-limited attempt instead of discarding it. A same-txid alternate
+  candidate already admitted to a job could previously be lost without ever
+  being tried when every concurrency slot was in use at the moment of its
+  retry, causing an otherwise-valid candidate to fail with `limit`. No public
+  API change; internal candidate/byte accounting is unaffected.
+
 - Use asynchronous platform SHA-256 for ProtoWallet signature payloads of at
   least 64 KiB. Preserve deterministic signatures, direct digests, short input
   behavior, and portable fallback over a snapshot if native hashing is unavailable
@@ -381,6 +405,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
+- `HTTPSOverlayLookupFacilitator` now issues lookup and SLAP tracker discovery
+  requests with `redirect: 'error'`. A SLAP-advertised host can no longer
+  redirect the serialized lookup body to an origin that the advertised-host
+  scheme and credential checks never saw, such as `http:`, loopback, or
+  link-local. A redirected response is recorded as an ordinary availability
+  failure for the advertised host.
 - Treat cryptographic verification as successful only when it returns an
   affirmative result: `GlobalKVStore` rejects forged controller-signed overlay
   values, and `IdentityClient` refuses to publish signature-invalid identity

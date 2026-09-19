@@ -15,6 +15,15 @@ const mockFacilitator = {
   lookup: jest.fn()
 }
 
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  })
+
+const octetResponse = (payload: Uint8Array): Response =>
+  new Response(payload, { headers: { 'content-type': 'application/octet-stream' } })
+
 // --------------------------------------------------------------------------
 // Sample BEEFs for use in tests
 // --------------------------------------------------------------------------
@@ -469,11 +478,9 @@ describe('LookupResolver – additional coverage', () => {
     })
 
     it('allows HTTP URLs when allowHTTP is true', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/json' },
-        json: async () => ({ type: 'output-list', outputs: [] })
-      })
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://localhost:8080', {
         service: 'ls_test',
@@ -482,13 +489,63 @@ describe('LookupResolver – additional coverage', () => {
       expect(result).toEqual({ type: 'output-list', outputs: [] })
     })
 
-    it('handles HTTP error responses by throwing', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        headers: { get: () => 'application/json' },
-        json: async () => ({})
+    it('refuses to follow a redirect away from the advertised lookup host', async () => {
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, false)
+      await facilitator.lookup('https://advertised.example', { service: 'ls_test', query: {} })
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://advertised.example/lookup',
+        expect.objectContaining({ redirect: 'error' })
+      )
+    })
+
+    it('treats a rejected redirect as a host failure rather than a crash', async () => {
+      // fetch rejects with a TypeError when redirect: 'error' meets a 307/308.
+      const mockFetch = jest.fn().mockRejectedValue(new TypeError('unexpected redirect'))
+      const resolver = new LookupResolver({
+        facilitator: new HTTPSOverlayLookupFacilitator(mockFetch, false),
+        hostOverrides: { ls_redirect: ['https://redirecting.example'] }
       })
+
+      const result = await resolver.queryDetailed({ service: 'ls_redirect', query: {} })
+
+      expect(result.answer).toEqual({ type: 'output-list', outputs: [] })
+      expect(result.progress).toMatchObject({
+        hostCount: 1,
+        failedHosts: 1,
+        successfulHosts: 0,
+        rejectedHosts: 0,
+        terminalReason: 'settled'
+      })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://redirecting.example/lookup',
+        expect.objectContaining({ redirect: 'error' })
+      )
+    })
+
+    it('refuses to follow a redirect on SLAP tracker discovery requests', async () => {
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
+      const resolver = new LookupResolver({
+        facilitator: new HTTPSOverlayLookupFacilitator(mockFetch, false),
+        slapTrackers: ['https://tracker.example']
+      })
+
+      await expect(resolver.query({ service: 'ls_redirect_tracker', query: {} })).rejects.toThrow(
+        'No competent mainnet hosts found'
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://tracker.example/lookup',
+        expect.objectContaining({ redirect: 'error' })
+      )
+    })
+
+    it('handles HTTP error responses by throwing', async () => {
+      const mockFetch = jest.fn().mockResolvedValue(jsonResponse({}, 503))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       await expect(
         facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -544,12 +601,7 @@ describe('LookupResolver – additional coverage', () => {
       const beefBuf = Buffer.from(beef)
       const payload = Buffer.concat([nOutpoints, txid, outputIndex, contextLen, beefBuf])
 
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () =>
-          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-      })
+      const mockFetch = jest.fn().mockResolvedValue(octetResponse(payload))
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -581,12 +633,9 @@ describe('LookupResolver – additional coverage', () => {
         'Application/Octet-Stream',
         '  application/octet-stream  '
       ]) {
-        const mockFetch = jest.fn().mockResolvedValue({
-          ok: true,
-          headers: { get: () => header },
-          arrayBuffer: async () =>
-            payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-        })
+        const mockFetch = jest
+          .fn()
+          .mockResolvedValue(new Response(payload, { headers: { 'content-type': header } }))
         const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
         const result = await facilitator.lookup('https://host', { service: 'ls_test', query: {} })
         expect(result.type).toBe('output-list')
@@ -620,12 +669,7 @@ describe('LookupResolver – additional coverage', () => {
         beefBuf
       ])
 
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () =>
-          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
-      })
+      const mockFetch = jest.fn().mockResolvedValue(octetResponse(payload))
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
@@ -688,11 +732,9 @@ describe('LookupResolver – additional coverage', () => {
     })
 
     it('sends correct request body to /lookup endpoint', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: { get: () => 'application/json' },
-        json: async () => ({ type: 'output-list', outputs: [] })
-      })
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValue(jsonResponse({ type: 'output-list', outputs: [] }))
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
       const question = { service: 'ls_test', query: { filter: 'abc' } }
       await facilitator.lookup('http://host', question)
