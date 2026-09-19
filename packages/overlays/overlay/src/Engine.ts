@@ -1858,6 +1858,14 @@ export class Engine {
     }
 
     const localAdmitted = await this.storage.findAdmittedTransactionsForBlock?.(topic, remoteAnchor.blockHeight, remoteAnchor.blockHash) ?? []
+    // BRC-136: an empty topic at a height has k = 0 and R = 32 zero bytes, which
+    // the root/count check above has already enforced. There is no transaction
+    // to bind to a proof or to fetch, so the height is checked without a proof
+    // round trip; it only diverges when this node admitted something there.
+    if (admittedResponse.admitted.length === 0) {
+      if (localAdmitted.length > 0) report.status = 'diverged'
+      return
+    }
     const localTxids = new Set(localAdmitted.map(item => item.txid))
     const missingTxids = admittedResponse.admitted
       .map(item => item.txid)

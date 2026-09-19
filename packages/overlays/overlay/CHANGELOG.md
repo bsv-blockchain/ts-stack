@@ -34,7 +34,9 @@ All notable changes to this project will be documented in this file. The format 
   chain-tracker root/height rather than coinbase maturity, so BASM admission
   submits in the `historical-tx-no-spv` mode and topic managers that branch on
   the submission mode observe it for BASM-admitted transactions; the public
-  `historical-tx` mode keeps full SPV verification. Historical sync
+  `historical-tx` mode keeps full SPV verification. Heights where the topic
+  admitted nothing (BRC-136 `k = 0`, zero BASM root) are checked without a proof
+  request instead of aborting the sync. Historical sync
   refuses an untrusted TAC prefix; durable bootstrap, chunked recovery and topic
   status remain pending. No storage migration or automatic sync activation is
   included.
