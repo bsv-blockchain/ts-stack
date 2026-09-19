@@ -1,3 +1,15 @@
+---
+id: eqc-economic-query-client-plan
+title: Economic Query Client (EQC) — Implementation Plan
+kind: spec
+domain: overlays
+version: "n/a"
+last_updated: "2026-09-19"
+last_verified: "2026-09-19"
+status: experimental
+tags: [brc-178, eqc, overlay, message-box, payments, plan]
+---
+
 # Economic Query Client (EQC) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -8013,16 +8025,16 @@ A host that withholds data from its peers ends up alone with its hash and earns 
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc#readme)
 ````
 
-2. `docs/packages/overlays/index.md`: add a table row after the `@bsv/overlay-discovery-services` row, keeping the column alignment Prettier produces:
+2. `docs/packages/overlays/index.md`: add a table row after the `@bsv/overlay-discovery-services` row, keeping the column alignment Prettier produces. The first cell is a Markdown link with the label `@bsv/eqc` and the target `./eqc.md` (written apart here because the docs link checker also reads fenced snippets, and that target does not resolve from this directory):
 
 ```markdown
-| [@bsv/eqc](./eqc.md) | Economic Query Client and host handlers for BRC-178 race-settled collection markets |
+| <link: @bsv/eqc> | Economic Query Client and host handlers for BRC-178 race-settled collection markets |
 ```
 
-3. `docs/packages/index.md`: add after the `@bsv/overlay-discovery-services` bullet:
+3. `docs/packages/index.md`: add after the `@bsv/overlay-discovery-services` bullet, where the link has the label `@bsv/eqc` and the target `./overlays/eqc.md`:
 
 ```markdown
-- [@bsv/eqc](./overlays/eqc.md) — Pay the fastest agreeing overlay and message box hosts (BRC-178)
+- <link: @bsv/eqc> — Pay the fastest agreeing overlay and message box hosts (BRC-178)
 ```
 
 4. `docs-site/src/lib/nav.ts`: add after the `@bsv/overlay-discovery-services` item in the overlays group:
