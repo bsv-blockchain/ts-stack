@@ -76,3 +76,10 @@ export {
   type DiscoveryTarget,
   type LookupResolverLike
 } from './client/discovery.js'
+export {
+  AuthFetchTransport,
+  TransportTimeoutError,
+  nonPayingWallet,
+  type HostTransport,
+  type TransportResponse
+} from './client/transport.js'
