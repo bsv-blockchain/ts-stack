@@ -124,7 +124,12 @@ export type OverlayNetwork = 'main' | 'test' | 'ttn'
 /** What a factory registered with {@link OverlayExpress.registerRouter} receives. */
 export interface RegisteredRouterContext {
   engine: Engine
-  /** The server wallet behind BRC-103 authentication, or undefined when it failed to start. */
+  /**
+   * The server wallet behind BRC-103 authentication, or undefined when it failed to start. It has
+   * no storage provider: it signs and verifies, but it cannot create or internalize actions, so
+   * `createAction` and `internalizeAction` throw. A router that takes payment must build its own
+   * storage-backed wallet from the same root key, so its identity matches the BRC-103 session key.
+   */
   wallet: WalletInterface | undefined
 }
 

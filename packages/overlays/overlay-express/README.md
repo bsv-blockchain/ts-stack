@@ -270,6 +270,16 @@ server.registerRouter('/', ({ engine, wallet }) => {
 })
 ```
 
+The `wallet` in the context is the BRC-103 authentication wallet. It is built without a storage
+provider, so it signs and verifies but cannot create or internalize actions: `createAction` and
+`internalizeAction` throw. A router that takes payment, such as a BRC-178 host from `@bsv/eqc`,
+must build its own storage-backed wallet from the same root key as the server, so that its
+identity equals the BRC-103 session key and the SLAP-advertised key.
+
+Registered routers inherit the response size limit (`MAX_RESPONSE_BYTES`: 4 MiB on the `small`
+profile, 8 MiB on `standard`). A larger JSON body is replaced by a 413 after the handler ran, so a
+router that is paid before it answers must bound its own responses below that limit.
+
 ### Admin-Protected Endpoints
 
 We also provide admin-protected endpoints for advanced operations like manually
