@@ -46,3 +46,20 @@ export {
   type PaymentEnvelope
 } from './protocol/payment.js'
 export { parseHostParams, type HostParams } from './protocol/params.js'
+export {
+  assessConsistency,
+  classifyMinority,
+  type ConsistencyStatus,
+  type TopicConsistency
+} from './client/consistency.js'
+export {
+  decideRace,
+  runRace,
+  type Arrival,
+  type HashGroup,
+  type RaceOutcome,
+  type RaceResult,
+  type RaceTask,
+  type Rejection,
+  type RejectionReason
+} from './client/race.js'
