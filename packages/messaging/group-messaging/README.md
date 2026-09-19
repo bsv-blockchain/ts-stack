@@ -298,4 +298,4 @@ npm run doc
 
 ## License
 
-Open BSV License.
+Licensed under the Open BSV License Version 6; see [LICENSE.txt](./LICENSE.txt).
