@@ -23,6 +23,20 @@ export class TransportTimeoutError extends Error {
   }
 }
 
+/**
+ * A host answered, but with a status other than 200. `status` is what makes the answer worth
+ * caching: a 4xx is the host stating it runs no market, while a 5xx is a passing failure.
+ */
+export class TransportStatusError extends Error {
+  readonly status: number
+
+  constructor(url: string, status: number) {
+    super(`${url} answered params with status ${status}`)
+    this.name = 'TransportStatusError'
+    this.status = status
+  }
+}
+
 const MAX_PARAMS_BYTES = 65_536
 const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 const BLOCKED_METHODS = new Set<string | symbol>(['createAction', 'signAction'])
@@ -125,7 +139,7 @@ export class AuthFetchTransport implements HostTransport {
         headers: { accept: 'application/json' }
       })
       if (response.status !== 200) {
-        throw new Error(`${url} answered params with status ${response.status}`)
+        throw new TransportStatusError(url, response.status)
       }
       const tooLargeMessage = `${url} params response is too large`
       const contentLength = response.headers.get('content-length')

@@ -41,6 +41,7 @@ import { InMemoryReputationStore, type ReputationStore } from './reputation.js'
 import { planPayouts, settle, type PayoutPlan, type Settlement } from './settlement.js'
 import {
   AuthFetchTransport,
+  TransportStatusError,
   TransportTimeoutError,
   type HostTransport,
   type TransportResponse
@@ -114,6 +115,13 @@ interface Candidate {
   params: HostParams
 }
 
+/** Exactly one of `params` and `error` is set: the host's market, or its refusal to have one. */
+interface ParamsCacheEntry {
+  expiresAt: number
+  params?: HostParams
+  error?: TransportStatusError
+}
+
 function boundedInteger(value: number, name: string, min: number, max: number): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw new RangeError(`${name} must be an integer from ${min} to ${max}`)
@@ -134,7 +142,7 @@ export class EQC {
   private readonly reputation: ReputationStore
   private readonly clock: () => number
   private readonly now: () => number
-  private readonly paramsCache = new Map<string, { params?: HostParams; expiresAt: number }>()
+  private readonly paramsCache = new Map<string, ParamsCacheEntry>()
   private identity: Promise<string> | undefined
 
   constructor(wallet: WalletInterface, options: EQCOptions = {}) {
@@ -171,12 +179,18 @@ export class EQC {
     return decodeMessageList(result.payload)
   }
 
-  /** Reads and caches a host's unauthenticated `/economic/params`. */
+  /**
+   * Reads and caches a host's unauthenticated `/economic/params`. Only a 4xx answer is remembered
+   * as a refusal, because that is the host saying it runs no market; a timeout, a network or parse
+   * failure, and a 5xx answer are all passing conditions, so they are re-thrown uncached and the
+   * host is probed again on the next query. The cause is never replaced: the error a caller sees
+   * from a cache hit is the very error the transport raised.
+   */
   async params(url: string): Promise<HostParams> {
     const cached = this.paramsCache.get(url)
     if (cached !== undefined && this.now() < cached.expiresAt) {
-      if (cached.params === undefined) throw new Error(`${url} has no economic params`)
-      return cached.params
+      if (cached.error !== undefined) throw cached.error
+      if (cached.params !== undefined) return cached.params
     }
     const expiresAt = this.now() + (this.options.paramsTtlMs ?? DEFAULTS.paramsTtlMs)
     try {
@@ -184,7 +198,9 @@ export class EQC {
       this.paramsCache.set(url, { params, expiresAt })
       return params
     } catch (error) {
-      this.paramsCache.set(url, { expiresAt })
+      if (error instanceof TransportStatusError && error.status >= 400 && error.status < 500) {
+        this.paramsCache.set(url, { error, expiresAt })
+      }
       throw error
     }
   }

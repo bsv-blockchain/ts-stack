@@ -1,4 +1,8 @@
-import type { HostTransport, TransportResponse } from '../../src/client/transport.js'
+import {
+  TransportStatusError,
+  type HostTransport,
+  type TransportResponse
+} from '../../src/client/transport.js'
 import {
   createEconomicQueryHost,
   type EconomicQueryHost,
@@ -16,6 +20,10 @@ export interface LoopbackHost {
   delayMs: number
   down: boolean
   withoutMarket: boolean
+  /** Params reads that fail with a plain error before the host answers normally again. */
+  transientParamsFailures: number
+  /** Params reads that reached this host, cache misses only. */
+  paramsReads: number
   /** Identity key the transport reports for the session, to simulate a spoof. */
   sessionIdentity?: string
   /** Rewrites a successful collect body, to simulate a host that serves wrong bytes. */
@@ -61,7 +69,9 @@ export class LoopbackNetwork implements HostTransport {
   add(
     url: string,
     options: Omit<EconomicQueryHostOptions, 'wallet'>,
-    behaviour: Partial<Pick<LoopbackHost, 'delayMs' | 'down' | 'withoutMarket'>> = {}
+    behaviour: Partial<
+      Pick<LoopbackHost, 'delayMs' | 'down' | 'withoutMarket' | 'transientParamsFailures'>
+    > = {}
   ): LoopbackHost {
     const wallet = new HostWallet()
     const entry: LoopbackHost = {
@@ -71,6 +81,8 @@ export class LoopbackNetwork implements HostTransport {
       delayMs: 0,
       down: false,
       withoutMarket: false,
+      transientParamsFailures: 0,
+      paramsReads: 0,
       posts: [],
       ...behaviour
     }
@@ -80,8 +92,13 @@ export class LoopbackNetwork implements HostTransport {
 
   async getParams(url: string): Promise<HostParams> {
     const entry = this.hosts.get(url)
+    if (entry !== undefined) entry.paramsReads += 1
     if (entry === undefined || entry.down || entry.withoutMarket) {
-      throw new Error(`${url} answered params with status 404`)
+      throw new TransportStatusError(url, 404)
+    }
+    if (entry.transientParamsFailures > 0) {
+      entry.transientParamsFailures -= 1
+      throw new Error(`${url} dropped the params connection`)
     }
     const captured = capture()
     await entry.host.params({ headers: {} }, captured.response as never)
