@@ -64,9 +64,11 @@ export function getOverlayAdmissionHost(storage: unknown): OverlayAdmissionHost 
   return {
     admission,
     admissionScope: { ...scope },
-    publishAdmissionPayload: host.publishAdmissionPayload,
-    enlistedIndexTargets: host.enlistedIndexTargets,
-    getHistoryFence: host.getHistoryFence
+    // Adapters are class instances whose methods read instance state, so each
+    // optional method stays bound to the storage it came from.
+    publishAdmissionPayload: host.publishAdmissionPayload?.bind(host),
+    enlistedIndexTargets: host.enlistedIndexTargets?.bind(host),
+    getHistoryFence: host.getHistoryFence?.bind(host)
   }
 }
 

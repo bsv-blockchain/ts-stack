@@ -109,19 +109,27 @@ describe('Engine overlay admission helpers', () => {
     const publishAdmissionPayload = jest.fn()
     const enlistedIndexTargets = jest.fn(() => ['Hello'])
     const getHistoryFence = jest.fn()
-    const found = getOverlayAdmissionHost({
+    const storage = {
       admission,
       admissionScope,
       publishAdmissionPayload,
       enlistedIndexTargets,
       getHistoryFence
-    })
+    }
+    const found = getOverlayAdmissionHost(storage)
     expect(found?.admission).toBe(admission)
     expect(found?.admissionScope).toEqual(admissionScope)
     expect(found?.admissionScope).not.toBe(admissionScope)
-    expect(found?.publishAdmissionPayload).toBe(publishAdmissionPayload)
-    expect(found?.enlistedIndexTargets).toBe(enlistedIndexTargets)
-    expect(found?.getHistoryFence).toBe(getHistoryFence)
+    // Host methods are forwarded to the storage and keep it as their receiver.
+    const payload = { kind: 'raw-tx' as const, bytes: Uint8Array.of(1) }
+    void found?.publishAdmissionPayload?.(payload)
+    expect(publishAdmissionPayload).toHaveBeenCalledWith(payload)
+    expect(publishAdmissionPayload.mock.contexts[0]).toBe(storage)
+    expect(found?.enlistedIndexTargets?.()).toEqual(['Hello'])
+    expect(enlistedIndexTargets.mock.contexts[0]).toBe(storage)
+    void found?.getHistoryFence?.('Hello')
+    expect(getHistoryFence).toHaveBeenCalledWith('Hello')
+    expect(getHistoryFence.mock.contexts[0]).toBe(storage)
   })
 
   test('operation ids stay raw when short and hash when oversized or ill-formed', () => {
