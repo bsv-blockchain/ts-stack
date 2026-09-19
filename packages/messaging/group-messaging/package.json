@@ -29,9 +29,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
     "THIRD_PARTY_NOTICES.md",
-    "LICENSES"
+    "LICENSES",
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
