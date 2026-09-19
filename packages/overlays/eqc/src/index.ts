@@ -63,3 +63,8 @@ export {
   type Rejection,
   type RejectionReason
 } from './client/race.js'
+export {
+  InMemoryReputationStore,
+  type ReputationEvent,
+  type ReputationStore
+} from './client/reputation.js'
