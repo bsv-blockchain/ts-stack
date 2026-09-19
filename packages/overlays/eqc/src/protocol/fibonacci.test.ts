@@ -76,5 +76,7 @@ describe('requiredShare', () => {
     expect(() => requiredShare(1000, 3, 0)).toThrow(RangeError)
     expect(() => requiredShare(1000, 3, 4)).toThrow(RangeError)
     expect(() => requiredShare(1000, 3, 1.5)).toThrow(RangeError)
+    expect(() => requiredShare(0, 3, 1)).toThrow('feeSats must be a positive safe integer')
+    expect(() => requiredShare(1000, 3, 4)).toThrow('rank must be an integer from 1 to 3')
   })
 })
