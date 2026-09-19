@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { HostWallet, PayerWallet } from '../../test/support/wallets.js'
-import { paymentEnvelope, payoutLockingScript } from '../protocol/payment.js'
+import {
+  derivationPrefix,
+  derivationSuffix,
+  paymentEnvelope,
+  payoutLockingScript
+} from '../protocol/payment.js'
 import { verifyAndInternalizePayment } from './paymentVerifier.js'
 
 const queryId = 'a4'.repeat(32)
@@ -109,6 +114,24 @@ describe('verifyAndInternalizePayment', () => {
       requiredSats: 1
     })
     expect(result).toEqual({ ok: false, reason: 'malformed' })
+  })
+
+  it('rejects a transaction field that is not base64', async () => {
+    const host = new HostWallet()
+    const result = await verifyAndInternalizePayment({
+      wallet: host,
+      envelope: {
+        derivationPrefix: derivationPrefix(queryId),
+        derivationSuffix: derivationSuffix(1),
+        transaction: 'not base64!'
+      },
+      queryId,
+      rank: 1,
+      clientIdentityKey: new PayerWallet().identityKey,
+      requiredSats: 1
+    })
+    expect(result).toEqual({ ok: false, reason: 'malformed' })
+    expect(host.internalized).toEqual([])
   })
 
   it('reports a wallet refusal as rejected', async () => {

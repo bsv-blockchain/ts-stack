@@ -37,9 +37,10 @@ export async function verifyAndInternalizePayment(args: {
   ) {
     return { ok: false, reason: 'malformed' }
   }
-  const atomicBeef = Utils.toArray(envelope.transaction, 'base64')
+  let atomicBeef: number[]
   let transaction: Transaction
   try {
+    atomicBeef = Utils.toArray(envelope.transaction, 'base64')
     transaction = Transaction.fromAtomicBEEF(atomicBeef)
   } catch {
     return { ok: false, reason: 'malformed' }
