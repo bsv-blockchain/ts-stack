@@ -314,6 +314,40 @@ describe('Mongo admission storage', () => {
     expect(snapshot.historyUpdates).toEqual([{ topic: 'tm_contract', affectedFromHeight: '100' }])
   })
 
+  test('replaceHistoryPin tolerates a previous pin whose payload document is already gone', async () => {
+    await harness.reset()
+    const first = admissionPlan('history-pin-gc-first')
+    first.decisions[0].historyUpdate = { nextTopicHistoryGeneration: '4', affectedFromHeight: '99' }
+    await seedPlan(first)
+    expect((await harness.adapter.commitAdmission(first)).state).toBe('committed')
+
+    // Simulate the previous history-update payload having since been
+    // garbage collected while its pin reference row is still in place:
+    // replaceHistoryPin must skip the release rather than crash on it.
+    const reference = await fixture.db.collection(MongoCollectionNames.payloadReferences).findOne({
+      network: first.identity.scope.network,
+      genesisHash: first.identity.scope.genesisHash,
+      nodeId: first.identity.scope.nodeId,
+      ownerKind: 'basm-job',
+      ownerId: 'tm_contract',
+      slot: 'history-update:4'
+    })
+    expect(typeof reference?.payloadId).toBe('string')
+    await fixture.db
+      .collection(MongoCollectionNames.payloads)
+      .deleteOne({ _id: reference?.payloadId as string })
+
+    const second = admissionPlan('history-pin-gc-second', '6'.repeat(64))
+    second.decisions[0].spends = []
+    second.decisions[0].expectedHistory = { chainEpoch: '7', topicHistoryGeneration: '4' }
+    second.decisions[0].historyUpdate = {
+      nextTopicHistoryGeneration: '5',
+      affectedFromHeight: '100'
+    }
+    await seedPlan(second)
+    expect((await harness.adapter.commitAdmission(second)).state).toBe('committed')
+  })
+
   test('hydrates output scripts and BEEF from payload bytes', async () => {
     await harness.reset()
     const storage = new MongoOverlayStorage(fixture.db, fixture.scope)
@@ -768,6 +802,12 @@ describe('Mongo admission storage', () => {
     await harness.reset()
     const plan = clone(admissionPlan('weird-payload-kind'))
     const weirdRef = { kind: 'weird-kind', digest: 'cd'.repeat(32), byteLength: '2' }
+    // The script's own offset/byteLength must stay consistent with the
+    // (weird-kind) payload's declared byteLength, or isInvalidOutput's
+    // range check rejects the plan for a different reason before applyPlan
+    // -- and pin() -- is ever reached.
+    plan.decisions[0].outputs[0].script.offset = '0'
+    plan.decisions[0].outputs[0].script.byteLength = weirdRef.byteLength
     ;(
       plan.decisions[0].outputs[0].script as unknown as {
         payload: { kind: string; digest: string; byteLength: string }
