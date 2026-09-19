@@ -68,3 +68,11 @@ export {
   type ReputationEvent,
   type ReputationStore
 } from './client/reputation.js'
+export {
+  HostDiscovery,
+  discoveryTarget,
+  type DiscoveredHost,
+  type DiscoveryOptions,
+  type DiscoveryTarget,
+  type LookupResolverLike
+} from './client/discovery.js'
