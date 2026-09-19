@@ -371,4 +371,74 @@ describe('Mongo schema bootstrap', () => {
       `Incompatible Mongo Overlay index for ${MongoCollectionNames.payloadReferences}:pin_expiry`
     )
   })
+
+  test('concurrent bootstraps of a fresh database converge without duplicate-namespace or duplicate-ledger errors', async () => {
+    const database = fixture.client.db(`overlay_s02_concurrent_${Date.now()}`)
+    const results = await Promise.all(
+      Array.from({ length: 6 }, async () => await bootstrapMongoOverlay(database, fixture.scope))
+    )
+    for (const result of results) {
+      expect(result.topology).toBe('replica-set')
+      expect(result.schemaVersion).toBe(1)
+    }
+    expect(
+      await database.listCollections({ name: `${MongoGridFsBucketName}.files` }).hasNext()
+    ).toBe(true)
+    expect(
+      await database.collection(MongoCollectionNames.schema).countDocuments({ _id: mongoNodeKey(fixture.scope) })
+    ).toBe(1)
+  }, 30000)
+
+  test('concurrent re-bootstraps race the GridFS bucket namespace once its collections are dropped', async () => {
+    const database = fixture.client.db(`overlay_s02_gridfs_race_${Date.now()}`)
+    await bootstrapMongoOverlay(database, fixture.scope)
+    await database.collection(`${MongoGridFsBucketName}.files`).drop()
+    await database.collection(`${MongoGridFsBucketName}.chunks`).drop()
+    const results = await Promise.all(
+      Array.from({ length: 8 }, async () => await bootstrapMongoOverlay(database, fixture.scope))
+    )
+    for (const result of results) expect(result.topology).toBe('replica-set')
+    expect(
+      await database.listCollections({ name: `${MongoGridFsBucketName}.files` }).hasNext()
+    ).toBe(true)
+    expect(
+      await database.listCollections({ name: `${MongoGridFsBucketName}.chunks` }).hasNext()
+    ).toBe(true)
+  }, 30000)
+
+  test('accepts an existing collection whose validator matches but omits an explicit collation', async () => {
+    const definition = MongoCollectionDefinitions.find(
+      item => item.name === MongoCollectionNames.outputs
+    )
+    if (definition === undefined) throw new Error('Missing outputs schema definition')
+    const database = fixture.client.db(`overlay_s02_no_collation_${Date.now()}`)
+    await database.createCollection(MongoCollectionNames.outputs, {
+      validator: definition.validator,
+      validationLevel: 'strict',
+      validationAction: 'error'
+    })
+    await expect(bootstrapMongoOverlay(database, fixture.scope)).resolves.toMatchObject({
+      topology: 'replica-set'
+    })
+  }, 30000)
+
+  test('propagates an index-creation failure whose error code is not a benign conflict', async () => {
+    const database = fixture.client.db(`overlay_s02_index_failure_${Date.now()}`)
+    await fixture.failCommands({ failCommands: ['createIndexes'], errorCode: 50 })
+    try {
+      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({ code: 50 })
+    } finally {
+      await fixture.disableFailPoint()
+    }
+  }, 30000)
+
+  test('propagates a ledger insert failure whose error code is not a duplicate key', async () => {
+    const database = fixture.client.db(`overlay_s02_ledger_insert_failure_${Date.now()}`)
+    await fixture.failCommands({ failCommands: ['insert'], errorCode: 50 })
+    try {
+      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({ code: 50 })
+    } finally {
+      await fixture.disableFailPoint()
+    }
+  }, 30000)
 })
