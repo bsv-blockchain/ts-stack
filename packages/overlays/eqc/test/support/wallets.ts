@@ -58,6 +58,10 @@ export class HostWallet extends CompletedProtoWallet {
     sender: string
   }> = []
   rejectPayments = false
+  /** Answers `accepted: false` without throwing, as a wallet that declines a payment does. */
+  declinePayments = false
+  /** Thrown by `internalizeAction`, to simulate a wallet that cannot internalize at all. */
+  internalizeError?: Error
 
   constructor(key: PrivateKey = PrivateKey.fromRandom()) {
     super(key)
@@ -65,7 +69,9 @@ export class HostWallet extends CompletedProtoWallet {
   }
 
   override async internalizeAction(args?: InternalizeActionArgs): Promise<InternalizeActionResult> {
+    if (this.internalizeError !== undefined) throw this.internalizeError
     if (this.rejectPayments) throw new Error('Payment rejected')
+    if (this.declinePayments) return { accepted: false } as unknown as InternalizeActionResult
     if (args === undefined) throw new Error('internalizeAction requires args')
     const transaction = Transaction.fromAtomicBEEF(args.tx)
     for (const entry of args.outputs) {

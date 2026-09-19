@@ -7,7 +7,12 @@ export {
   validateQuery,
   type EconomicQuery
 } from './protocol/query.js'
-export { computePayouts, fibonacciWeights, sumOfWeights } from './protocol/fibonacci.js'
+export {
+  computePayouts,
+  fibonacciWeights,
+  requiredShare,
+  sumOfWeights
+} from './protocol/fibonacci.js'
 export {
   canonicalizeLookupAnswer,
   compareCodePoints,

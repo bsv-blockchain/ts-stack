@@ -2,7 +2,7 @@ import type { WalletInterface } from '@bsv/sdk'
 
 import { signAttestation, signDelivery } from '../protocol/attestation.js'
 import { HostError } from '../protocol/errors.js'
-import { computePayouts } from '../protocol/fibonacci.js'
+import { requiredShare } from '../protocol/fibonacci.js'
 import type { HostParams } from '../protocol/params.js'
 import { parsePaymentEnvelope, type PaymentEnvelope } from '../protocol/payment.js'
 import { contentHash } from '../protocol/payloads.js'
@@ -44,16 +44,33 @@ export interface RouterLike {
 }
 
 export interface EconomicQueryHostOptions {
+  /**
+   * Signs attestations and deliveries and internalizes payouts, so it needs a storage provider.
+   * An authentication-only wallet, such as the one `@bsv/overlay-express` hands a registered
+   * router, signs but cannot internalize: every collect then fails with a logged 500. Build a
+   * storage-backed wallet from the same root key instead.
+   */
   wallet: WalletInterface
   providers: QueryProvider[]
-  /** Advertised defaults; the client chooses the values it actually uses. */
+  /** Advertised default; the client chooses the threshold it actually uses. */
   threshold?: number
+  /**
+   * Advertised, and enforced: the largest `topK` this host accepts. A query asking for more is
+   * answered 400 `ERR_INVALID_QUERY`, because a longer ranking dilutes every share. The smallest
+   * share this host can be held to is `max(minPayoutSats, requiredShare(quote, topK, topK))`.
+   */
   topK?: number
   /** Minimum total fee for a query, optionally scaled by canonical payload size. */
   floorFeeSats?: number | ((payloadSize: number) => number)
   /** Smallest output this host serves a collect for, even when its Fibonacci share is smaller. */
   minPayoutSats?: number
   maxQueryTtlMs?: number
+  /**
+   * Largest delivery this host attests, as the estimated size of the collect response: base64 of
+   * the payload and of the supplement, plus 1024 bytes for the JSON envelope. Default 2 MiB. Keep
+   * it under the response limit of the server the routes are mounted on, or the host takes a
+   * payment for an answer the server then replaces with a 413.
+   */
   maxPayloadBytes?: number
   store?: PendingStore
   now?: () => number
@@ -77,7 +94,20 @@ interface CollectRequest {
 
 const PAYMENT_VERSION = '1.0'
 const DEFAULT_MAX_QUERY_TTL_MS = 60_000
-const DEFAULT_MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
+const DEFAULT_MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
+/** Room for the delivery's JSON keys, identifiers, and BRC-77 signature around the two blobs. */
+const DELIVERY_ENVELOPE_BYTES = 1024
+
+function base64Length(byteLength: number): number {
+  return 4 * Math.ceil(byteLength / 3)
+}
+
+/** Estimated size of the collect response that would carry this answer. */
+function encodedDeliveryBytes(payload: number[], supplement: number[] | undefined): number {
+  return (
+    base64Length(payload.length) + base64Length(supplement?.length ?? 0) + DELIVERY_ENVELOPE_BYTES
+  )
+}
 
 function paymentRequired(satoshis: number): HostError {
   return new HostError(402, 'ERR_PAYMENT_REQUIRED', `Payment of ${satoshis} satoshis is required`, {
@@ -221,6 +251,9 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
         `expires may be at most ${maxQueryTtlMs} ms away`
       )
     }
+    if (query.topK > topK) {
+      throw new HostError(400, 'ERR_INVALID_QUERY', `topK may be at most ${topK} on this host`)
+    }
     return query
   }
 
@@ -256,7 +289,7 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
       return
     }
     const result = await provider.execute(request, { clientIdentityKey: client })
-    if (result.payload.length + (result.supplement?.length ?? 0) > maxPayloadBytes) {
+    if (encodedDeliveryBytes(result.payload, result.supplement) > maxPayloadBytes) {
       throw new HostError(413, 'ERR_PAYLOAD_TOO_LARGE', 'The answer exceeds this host limit')
     }
     const floor = floorFor(result.payload.length)
@@ -321,9 +354,13 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     const rank = request.ranking.indexOf(host) + 1
     if (rank === 0) throw new HostError(409, 'ERR_NOT_RANKED', 'This host is not in the ranking')
 
-    const share = computePayouts(floorFor(record.payload.length), request.ranking.length)[rank - 1]
+    // The quote this host signed is the floor. Re-evaluating `floorFeeSats` here could refuse a
+    // payment that is already on the network, and the full rank 1 payout is not monotone in the fee.
+    const share = requiredShare(record.attestation.quotedFeeSats, request.ranking.length, rank)
     const required = Math.max(minPayoutSats, share)
     if (request.payment === undefined) throw paymentRequired(required)
+    // Held here because the store may empty an expired record while the payment is settling.
+    const { payload, supplement } = record
     if (!(await store.beginSettle(request.queryId))) {
       throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
     }
@@ -345,11 +382,23 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
             'Payment is not bound to this query and rank'
           )
         }
+        if (payment.reason === 'wallet-error') {
+          // The payout may be valid and is already broadcast. This is the host's failure: tell the
+          // operator everything needed to claim the output later, and never ask the client for more.
+          logger.error('Economic query payout could not be internalized', {
+            queryId: request.queryId,
+            rank,
+            client,
+            txid: payment.txid,
+            error: payment.message
+          })
+          throw new HostError(500, 'ERR_INTERNAL', 'Internal error')
+        }
         throw paymentRequired(required)
       }
       const delivery = await signDelivery(
         wallet,
-        { queryId: request.queryId, host, payload: record.payload, supplement: record.supplement },
+        { queryId: request.queryId, host, payload, supplement },
         originator
       )
       await store.completeSettle(request.queryId)

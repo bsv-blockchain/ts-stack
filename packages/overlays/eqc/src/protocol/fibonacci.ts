@@ -36,3 +36,21 @@ export function computePayouts(totalSats: number, k: number): number[] {
   payouts[0] += totalSats - distributed
   return payouts
 }
+
+/**
+ * The share a host may insist on at `rank` of `k` for a fee it quoted: `floor(feeSats * weight / S)`
+ * with no rounding remainder. `computePayouts` hands rank 1 the remainder, and that remainder does
+ * not grow with the fee, so only this remainder-free share is covered by every payment of at least
+ * `feeSats`, at every rank.
+ */
+export function requiredShare(feeSats: number, k: number, rank: number): number {
+  if (!Number.isSafeInteger(feeSats) || feeSats < 1) {
+    throw new RangeError('feeSats must be a positive safe integer')
+  }
+  const weights = fibonacciWeights(k)
+  if (!Number.isSafeInteger(rank) || rank < 1 || rank > k) {
+    throw new RangeError(`rank must be an integer from 1 to ${k}`)
+  }
+  const sum = BigInt(weights.reduce((accumulator, weight) => accumulator + weight, 0))
+  return Number((BigInt(feeSats) * BigInt(weights[rank - 1])) / sum)
+}

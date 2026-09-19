@@ -11,9 +11,18 @@ export type PaymentVerification =
   | { ok: true; txid: string; outputIndex: number; satoshis: number }
   | {
       ok: false
-      reason: 'malformed' | 'no-output' | 'underpaid' | 'rejected'
+      /**
+       * `rejected` is the wallet declining the payment (`accepted !== true`). `wallet-error` is the
+       * wallet throwing: the payout may well be valid and already on the network, so it is the
+       * host's fault, never grounds for asking the client to pay again.
+       */
+      reason: 'malformed' | 'no-output' | 'underpaid' | 'rejected' | 'wallet-error'
       required?: number
       paid?: number
+      /** Only with `wallet-error`: what the wallet threw. For the operator log, never the client. */
+      message?: string
+      /** Only with `wallet-error`: the payout transaction the wallet failed to internalize. */
+      txid?: string
     }
 
 /**
@@ -82,8 +91,13 @@ export async function verifyAndInternalizePayment(args: {
       originator
     )
     if (result.accepted !== true) return { ok: false, reason: 'rejected' }
-  } catch {
-    return { ok: false, reason: 'rejected' }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'wallet-error',
+      message: error instanceof Error ? error.message : String(error),
+      txid: transaction.id('hex')
+    }
   }
   return { ok: true, txid: transaction.id('hex'), outputIndex, satoshis }
 }

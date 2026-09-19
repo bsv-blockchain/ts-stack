@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, test } from 'vitest'
 
 import { canonicalJson } from './canonicalJson.js'
-import { computePayouts, fibonacciWeights } from './fibonacci.js'
+import { computePayouts, fibonacciWeights, requiredShare } from './fibonacci.js'
 import { decodeOutpointList, encodeMessageList, encodeOutpointList } from './payloads.js'
 
 const MIN_PROPERTY_RUNS = 300
@@ -60,6 +60,39 @@ describe('BRC-178 protocol invariants', () => {
             expect(payouts[rank]).toBe(
               Number((BigInt(total) * BigInt(weights[rank])) / BigInt(sum))
             )
+          }
+        }
+      )
+    )
+  })
+
+  test('every payout at a fee R covers the required share at any floor F <= R', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 64 }),
+        fc.integer({ min: 1, max: 2_100_000_000_000_000 }),
+        fc.integer({ min: 0, max: 2_100_000_000_000_000 }),
+        (k, floor, extra) => {
+          const paid = Math.min(2_100_000_000_000_000, floor + extra)
+          const payouts = computePayouts(paid, k)
+          for (let rank = 1; rank <= k; rank++) {
+            expect(payouts[rank - 1]).toBeGreaterThanOrEqual(requiredShare(floor, k, rank))
+          }
+        }
+      )
+    )
+  })
+
+  test('a fee only a few satoshis above the floor still covers every required share', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 64 }),
+        fc.integer({ min: 1, max: 1_000_000 }),
+        fc.integer({ min: 0, max: 12 }),
+        (k, floor, gap) => {
+          const payouts = computePayouts(floor + gap, k)
+          for (let rank = 1; rank <= k; rank++) {
+            expect(payouts[rank - 1]).toBeGreaterThanOrEqual(requiredShare(floor, k, rank))
           }
         }
       )
