@@ -132,9 +132,9 @@
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.7.3",
-      "releaseType": "patch",
-      "summary": "Pages built-in discovery overflow probes within the discovery service 1000-row query bound, retaining the configured engine ceiling and explicit overflow failure. Adds an SDK3 peer alternative while preserving the existing SDK2 lower bound; clean packed SDK2.8.11 and SDK3 candidate consumers are documented in the identity/DID/VC migration guide.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds. SDK consumers may retain ^2.4.0 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative."
+      "releaseType": "minor",
+      "summary": "Pages built-in discovery overflow probes within the discovery service 1000-row query bound, retaining the configured engine ceiling and explicit overflow failure. Adds an SDK3 peer alternative while preserving the existing SDK2 lower bound; clean packed SDK2.8.11 and SDK3 candidate consumers are documented in the identity/DID/VC migration guide. Adds registerRouter so applications can mount routers after BRC-103 authentication and before the 404 handler.",
+      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds. SDK consumers may retain ^2.4.0 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative. No migration is required for registerRouter; it is additive."
     },
     {
       "name": "@bsv/overlay-topics",
