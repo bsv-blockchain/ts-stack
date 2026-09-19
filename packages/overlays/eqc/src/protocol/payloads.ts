@@ -131,9 +131,23 @@ export function encodeOutpointList(entries: LookupOutpoint[]): number[] {
   return writer.toArray()
 }
 
+/**
+ * Reads a varint, converting any reader failure (including the SDK's plain `Error` for a
+ * 64-bit varint too large to retain precision) into a `TypeError`, so every malformed-input
+ * path out of `decodeOutpointList` honours the module's untrusted-input contract.
+ */
+function readOutpointVarInt(reader: Utils.Reader, message: string): number {
+  try {
+    return reader.readVarIntNum()
+  } catch (error) {
+    if (error instanceof TypeError) throw error
+    throw new TypeError(message)
+  }
+}
+
 export function decodeOutpointList(payload: number[]): LookupOutpoint[] {
   const reader = new Utils.Reader(payload)
-  const count = reader.readVarIntNum()
+  const count = readOutpointVarInt(reader, 'Outpoint count is out of range')
   if (!Number.isSafeInteger(count) || count < 0 || count > MAX_OUTPOINTS) {
     throw new TypeError('Outpoint count is out of range')
   }
@@ -141,8 +155,8 @@ export function decodeOutpointList(payload: number[]): LookupOutpoint[] {
   for (let index = 0; index < count; index++) {
     const txidBytes = reader.read(32)
     if (txidBytes.length !== 32) throw new TypeError('Outpoint list is truncated')
-    const outputIndex = reader.readVarIntNum()
-    const contextLength = reader.readVarIntNum()
+    const outputIndex = readOutpointVarInt(reader, 'Outpoint list is malformed')
+    const contextLength = readOutpointVarInt(reader, 'Outpoint list is malformed')
     if (
       !Number.isSafeInteger(outputIndex) ||
       outputIndex < 0 ||
