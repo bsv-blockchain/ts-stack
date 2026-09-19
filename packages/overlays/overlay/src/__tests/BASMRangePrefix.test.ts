@@ -1,12 +1,7 @@
 import { LockingScript, MerklePath, Transaction } from '@bsv/sdk'
 import { Engine } from '../Engine'
 import { BASM_ZERO_HASH, computeBasmRoot, computeTac } from '../BASM'
-import type {
-  AdmittedTxRef,
-  TopicAnchorHeader,
-  TopicAnchorTip,
-  TopicBlockAnchor
-} from '../BASM'
+import type { AdmittedTxRef, TopicAnchorHeader, TopicAnchorTip, TopicBlockAnchor } from '../BASM'
 import type { Storage } from '../storage/Storage'
 
 const topic = 'tm_basm_range'
@@ -36,9 +31,8 @@ function harness(options: {
     (options.localAnchors ?? []).map(anchor => [anchor.blockHeight, anchor])
   )
   const storage = {
-    findTopicAnchorTip: jest.fn(
-      async (topicName: string): Promise<TopicAnchorTip | undefined> =>
-        topicName === topic ? options.localTip : undefined
+    findTopicAnchorTip: jest.fn(async (topicName: string): Promise<TopicAnchorTip | undefined> =>
+      topicName === topic ? options.localTip : undefined
     ),
     findTopicBlockAnchor: jest.fn(
       async (topicName: string, height: number): Promise<TopicBlockAnchor | undefined> =>
@@ -89,7 +83,10 @@ function chain(fromHeight: number, count: number, startTac: string): TopicBlockA
   return anchors
 }
 
-const inRange = (anchors: TopicBlockAnchor[], body: Record<string, unknown>): TopicBlockAnchor[] => {
+const inRange = (
+  anchors: TopicBlockAnchor[],
+  body: Record<string, unknown>
+): TopicBlockAnchor[] => {
   const { fromHeight, toHeight } = body as unknown as RangeBody
   return anchors.filter(
     anchor => anchor.blockHeight >= fromHeight && anchor.blockHeight <= toHeight

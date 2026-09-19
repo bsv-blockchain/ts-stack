@@ -8,10 +8,7 @@ const txid = 'ab'.repeat(32)
 const engineWithout = (methods: Record<string, unknown> = {}): Engine =>
   new Engine({}, {}, methods as unknown as Storage, 'scripts only')
 
-const expectUnsupported = async (
-  operation: Promise<unknown>,
-  message: string
-): Promise<void> => {
+const expectUnsupported = async (operation: Promise<unknown>, message: string): Promise<void> => {
   await expect(operation).rejects.toThrow(TypeError)
   await expect(operation).rejects.toThrow(message)
   await expect(operation).rejects.toMatchObject({ code: 'BASM_UNSUPPORTED' })
