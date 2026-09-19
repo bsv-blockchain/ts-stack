@@ -337,4 +337,74 @@ describe('Mongo transaction boundary on three data-bearing WiredTiger members', 
     expect(await restarted.reconcile(input.key, undefined, { timeoutMS: 15000 })).toEqual({ state: 'committed', receipt: input.receipt })
     expect(await fixture.db.collection('test_effects').countDocuments({ operationId: input.key.operationId })).toBe(1)
   }, 60000)
+
+  test('many concurrent fresh claims on the same key converge without corrupting the operation row', async () => {
+    const racer = new MongoTransactionRunner(fixture.db, fixture.scope, { maxBodyAttempts: 3, maxCommitAttempts: 2 })
+    runners.push(racer)
+    const input = request()
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: 10 }, async () => await racer.run(input, async () => { throw new Error('always fails') }))
+    )
+    expect(outcomes).toHaveLength(10)
+    // Every racer either loses the claim outright (observed as still pending,
+    // an ordinary fulfilled result) or wins a claim and then rejects, since
+    // the body always throws; a body never legitimately reaches 'committed'.
+    let rejected = 0
+    for (const outcome of outcomes) {
+      if (outcome.status === 'rejected') {
+        rejected += 1
+        expect((outcome.reason as Error).message).toMatch(/always fails|attempt limit reached/)
+      } else {
+        expect(outcome.value.state).toBe('pending')
+      }
+    }
+    expect(rejected).toBeGreaterThan(0)
+    expect(await racer.reconcile(input.key)).toEqual({ state: 'aborted' })
+  }, 30000)
+
+  test('propagates a claim-row insert failure whose error code is not a duplicate key', async () => {
+    const input = request()
+    await fixture.failCommands({ failCommands: ['insert'], errorCode: 8 }, 1)
+    try {
+      await expect(runner.run(input, async () => {})).rejects.toMatchObject({ code: 8 })
+    } finally {
+      await fixture.disableFailPoint()
+    }
+  })
+
+  test('reconcile with no attemptId falls back to "unlocated" for a never-created operation', async () => {
+    const input = request()
+    expect(await runner.reconcile(input.key)).toEqual({ state: 'pending', attemptId: 'unlocated' })
+  })
+
+  test('reconcile with a mismatched attemptId returns pending without touching the retained attempt', async () => {
+    const input = request()
+    let resume!: () => void
+    const barrier = new Promise<void>(resolve => { resume = resolve })
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const pending = runner.run(input, async () => { entered(); await barrier })
+    await started
+    await expect(runner.reconcile(input.key, 'not-the-real-attempt-id')).resolves.toEqual({
+      state: 'pending',
+      attemptId: 'not-the-real-attempt-id'
+    })
+    resume()
+    expect((await pending).state).toBe('committed')
+  })
+
+  test('commit failures across an elapsing deadline break out of the retry loop and report pending', async () => {
+    const shortDeadline = new MongoTransactionRunner(fixture.db, fixture.scope, { maxCommitAttempts: 5 })
+    runners.push(shortDeadline)
+    const input = request()
+    await fixture.failCommands(
+      { failCommands: ['commitTransaction'], errorCode: 91, blockConnection: true, blockTimeMS: 80 },
+      5
+    )
+    const result = await shortDeadline.run(input, async () => {}, { timeoutMS: 120 })
+    expect(result.state).toBe('pending')
+    await fixture.disableFailPoint()
+    const attemptId = result.state === 'pending' ? result.attemptId : undefined
+    expect((await shortDeadline.reconcile(input.key, attemptId)).state).toBe('committed')
+  }, 15000)
 })
