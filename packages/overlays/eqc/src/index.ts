@@ -36,3 +36,12 @@ export {
 export { signBRC77, verifyBRC77 } from './protocol/brc77.js'
 export { isCanonicalBase64 } from './protocol/encoding.js'
 export { EQCError, type EQCErrorCode } from './protocol/errors.js'
+export {
+  BRC29_PROTOCOL_ID,
+  derivationPrefix,
+  derivationSuffix,
+  parsePaymentEnvelope,
+  paymentEnvelope,
+  payoutLockingScript,
+  type PaymentEnvelope
+} from './protocol/payment.js'
