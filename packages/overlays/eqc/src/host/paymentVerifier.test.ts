@@ -1,3 +1,4 @@
+import { Transaction } from '@bsv/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { HostWallet, PayerWallet } from '../../test/support/wallets.js'
@@ -10,6 +11,9 @@ import {
 import { verifyAndInternalizePayment } from './paymentVerifier.js'
 
 const queryId = 'a4'.repeat(32)
+/** What a wallet-toolbox wallet built without a storage provider throws from `internalizeAction`. */
+const STORAGE_LESS =
+  'WERR_INVALID_PARAMETER: The active parameter must be valid. Must add active storage provider to wallet.'
 
 async function payout(
   payer: PayerWallet,
@@ -134,10 +138,10 @@ describe('verifyAndInternalizePayment', () => {
     expect(host.internalized).toEqual([])
   })
 
-  it('reports a wallet refusal as rejected', async () => {
+  it('reports a wallet that declines the payment as rejected', async () => {
     const payer = new PayerWallet()
     const host = new HostWallet()
-    host.rejectPayments = true
+    host.declinePayments = true
     const transaction = await payout(payer, [host], [500])
     const result = await verifyAndInternalizePayment({
       wallet: host,
@@ -148,5 +152,48 @@ describe('verifyAndInternalizePayment', () => {
       requiredSats: 1
     })
     expect(result).toEqual({ ok: false, reason: 'rejected' })
+  })
+
+  it('reports a wallet that throws as a wallet error carrying the message, not as rejected', async () => {
+    const payer = new PayerWallet()
+    const host = new HostWallet()
+    host.internalizeError = new Error(STORAGE_LESS)
+    const transaction = await payout(payer, [host], [500])
+    const result = await verifyAndInternalizePayment({
+      wallet: host,
+      envelope: paymentEnvelope(queryId, 1, transaction),
+      queryId,
+      rank: 1,
+      clientIdentityKey: payer.identityKey,
+      requiredSats: 1
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'wallet-error',
+      message: STORAGE_LESS,
+      txid: Transaction.fromAtomicBEEF(transaction).id('hex')
+    })
+  })
+
+  it('reports a non-Error throw from the wallet as a wallet error too', async () => {
+    const payer = new PayerWallet()
+    const host = new HostWallet()
+    host.internalizeAction = async () => {
+      throw 'chain tracker unreachable'
+    }
+    const transaction = await payout(payer, [host], [500])
+    const result = await verifyAndInternalizePayment({
+      wallet: host,
+      envelope: paymentEnvelope(queryId, 1, transaction),
+      queryId,
+      rank: 1,
+      clientIdentityKey: payer.identityKey,
+      requiredSats: 1
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'wallet-error',
+      message: 'chain tracker unreachable'
+    })
   })
 })

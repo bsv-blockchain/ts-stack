@@ -5,8 +5,10 @@ export interface HostParams {
   version: 1
   host: string
   threshold: number
+  /** The largest `topK` the host accepts; it refuses a query that asks for more. */
   topK: number
   floorFeeSats: number
+  /** The smallest output the host serves a collect for. A smaller share is not worth sending. */
   minPayoutSats: number
   maxQueryTtlMs: number
   classes: string[]

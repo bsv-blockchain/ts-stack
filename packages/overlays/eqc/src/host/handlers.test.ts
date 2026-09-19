@@ -8,6 +8,7 @@ import {
   verifyDelivery
 } from '../protocol/attestation.js'
 import { HostError } from '../protocol/errors.js'
+import { computePayouts } from '../protocol/fibonacci.js'
 import { paymentEnvelope, payoutLockingScript, type PaymentEnvelope } from '../protocol/payment.js'
 import { computeQueryId, type EconomicQuery } from '../protocol/query.js'
 import {
@@ -250,6 +251,55 @@ describe('query', () => {
     expect(second.body.code).toBe('ERR_TOO_MANY_PENDING')
   })
 
+  it('refuses a query whose topK exceeds the topK this host advertises', async () => {
+    const payer = new PayerWallet()
+    const { host } = makeHost()
+    const diluted = await attest(host, makeQuery(payer.identityKey, { topK: 6 }))
+    expect([diluted.statusCode, diluted.body.code]).toEqual([400, 'ERR_INVALID_QUERY'])
+    expect(diluted.body.description).toBe('topK may be at most 5 on this host')
+    expect((await attest(host, makeQuery(payer.identityKey, { topK: 5 }))).statusCode).toBe(200)
+
+    const wide = makeHost({ topK: 8 })
+    expect((await attest(wide.host, makeQuery(payer.identityKey, { topK: 8 }))).statusCode).toBe(
+      200
+    )
+    const beyond = await attest(wide.host, makeQuery(payer.identityKey, { topK: 9 }))
+    expect([beyond.statusCode, beyond.body.code]).toEqual([400, 'ERR_INVALID_QUERY'])
+  })
+
+  it('compares the estimated encoded delivery, not raw bytes, against maxPayloadBytes', async () => {
+    const payer = new PayerWallet()
+    const answer = (
+      payload: number[],
+      supplement: number[]
+    ): EconomicQueryHostOptions['providers'] => [
+      {
+        type: 'relay-lookup',
+        execute: async () => ({ payload, supplement })
+      }
+    ]
+    // Four payload bytes and four supplement bytes encode to 8 + 8 base64 characters, and the
+    // delivery envelope is allowed 1024 bytes.
+    const fits = makeHost({ providers: answer(PAYLOAD, PAYLOAD), maxPayloadBytes: 1024 + 16 })
+    expect((await attest(fits.host, makeQuery(payer.identityKey))).statusCode).toBe(200)
+    const over = makeHost({ providers: answer(PAYLOAD, PAYLOAD), maxPayloadBytes: 1024 + 15 })
+    const refused = await attest(over.host, makeQuery(payer.identityKey))
+    expect([refused.statusCode, refused.body.code]).toEqual([413, 'ERR_PAYLOAD_TOO_LARGE'])
+  })
+
+  it('defaults to a 2 MiB encoded delivery, which the smallest overlay-express profile can send', async () => {
+    const payer = new PayerWallet()
+    const sized = (length: number): EconomicQueryHostOptions['providers'] => [
+      bytesProvider('relay-lookup', async () => Array.from({ length }, () => 7))
+    ]
+    // 4 * ceil(1_572_000 / 3) + 1024 = 2_097_024, inside 2 MiB = 2_097_152.
+    const inside = makeHost({ providers: sized(1_572_000) })
+    expect((await attest(inside.host, makeQuery(payer.identityKey))).statusCode).toBe(200)
+    // 4 * ceil(1_572_100 / 3) + 1024 = 2_097_160: raw bytes are under 2 MiB, the delivery is not.
+    const outside = makeHost({ providers: sized(1_572_100) })
+    expect((await attest(outside.host, makeQuery(payer.identityKey))).statusCode).toBe(413)
+  })
+
   it('answers two concurrent identical queries from a single stored record', async () => {
     // The cap of one proves the second query stored nothing: a second record would answer 429.
     const store = new InMemoryPendingStore({ maxPendingPerClient: 1 }, () => NOW)
@@ -475,5 +525,195 @@ describe('collect', () => {
     )
     expect(responses.map(r => r.statusCode).sort()).toEqual([200, 409, 409])
     expect(wallet.internalized).toHaveLength(1)
+  })
+
+  it('serves rank 1 a fee one satoshi above its floor, where the rank 1 payout shrinks', async () => {
+    // computePayouts(1007, 5)[0] is 423 but computePayouts(1008, 5)[0] is 420: rank 1 takes the
+    // rounding remainder, which is not monotone in the fee.
+    const { host, wallet } = makeHost({ floorFeeSats: 1007 })
+    const payer = new PayerWallet()
+    const query = makeQuery(payer.identityKey, { floorFeeSats: 1008 })
+    const attestation = parseAttestation((await attest(host, query)).body)
+    expect(attestation.quotedFeeSats).toBe(1007)
+    const ranking = [wallet.identityKey, ...[1, 2, 3, 4].map(() => new HostWallet().identityKey)]
+    const base = {
+      type: 'collect',
+      queryId: attestation.queryId,
+      contentHash: attestation.contentHash,
+      ranking
+    }
+
+    const unpaid = recorder()
+    await host.collect(request(payer.identityKey, base), unpaid)
+    expect(unpaid.statusCode).toBe(402)
+    expect(unpaid.headers['x-bsv-payment-satoshis-required']).toBe('419')
+
+    const shares = computePayouts(1008, 5)
+    expect(shares[0]).toBe(420)
+    const payment = await pay(payer, attestation.queryId, ranking, shares, 1)
+    const response = recorder()
+    await host.collect(request(payer.identityKey, { ...base, payment }), response)
+    expect(response.statusCode).toBe(200)
+    expect(wallet.internalized).toEqual([expect.objectContaining({ satoshis: 420 })])
+  })
+
+  it('holds the client to the fee it quoted, not to a floor re-evaluated at collect', async () => {
+    let surge = 1000
+    const floorCalls: number[] = []
+    const { host, wallet } = makeHost({
+      floorFeeSats: size => {
+        floorCalls.push(size)
+        return surge
+      }
+    })
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
+    const callsAtAttestation = floorCalls.length
+    surge = 1_000_000
+    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const response = recorder()
+    await host.collect(
+      request(payer.identityKey, {
+        type: 'collect',
+        queryId: attestation.queryId,
+        contentHash: attestation.contentHash,
+        ranking,
+        payment
+      }),
+      response
+    )
+    expect(response.statusCode).toBe(200)
+    expect(floorCalls).toHaveLength(callsAtAttestation)
+  })
+
+  it('never serves below minPayoutSats, however small the share', async () => {
+    const { host, wallet } = makeHost({ minPayoutSats: 100 })
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [...[1, 2, 3, 4].map(() => new HostWallet().identityKey), wallet.identityKey]
+    const payment = await pay(payer, attestation.queryId, ranking, computePayouts(1000, 5), 5)
+    const response = recorder()
+    await host.collect(
+      request(payer.identityKey, {
+        type: 'collect',
+        queryId: attestation.queryId,
+        contentHash: attestation.contentHash,
+        ranking,
+        payment
+      }),
+      response
+    )
+    expect(response.statusCode).toBe(402)
+    expect(response.headers['x-bsv-payment-satoshis-required']).toBe('100')
+  })
+
+  it('answers 500 and logs when the wallet cannot internalize, and never asks for more money', async () => {
+    const errors: unknown[][] = []
+    const { host, wallet } = makeHost({ logger: { error: (...args) => errors.push(args) } })
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
+    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const body = {
+      type: 'collect',
+      queryId: attestation.queryId,
+      contentHash: attestation.contentHash,
+      ranking,
+      payment
+    }
+    // What a wallet-toolbox wallet with no storage provider throws, as the overlay-express
+    // authentication wallet does.
+    const storageLess =
+      'WERR_INVALID_PARAMETER: The active parameter must be valid. Must add active storage provider to wallet.'
+    wallet.internalizeError = new Error(storageLess)
+
+    const response = recorder()
+    await host.collect(request(payer.identityKey, body), response)
+    expect(response.statusCode).toBe(500)
+    expect(response.body).toEqual({
+      status: 'error',
+      code: 'ERR_INTERNAL',
+      description: 'Internal error'
+    })
+    expect(response.headers).toEqual({})
+    expect(errors).toHaveLength(1)
+    expect(errors[0][1]).toEqual({
+      queryId: attestation.queryId,
+      rank: 2,
+      client: payer.identityKey,
+      txid: expect.stringMatching(/^[0-9a-f]{64}$/),
+      error: storageLess
+    })
+
+    // The settle claim was released: once the wallet works, the same payment is served.
+    wallet.internalizeError = undefined
+    const retried = recorder()
+    await host.collect(request(payer.identityKey, body), retried)
+    expect(retried.statusCode).toBe(200)
+  })
+
+  it('still answers 402 when the wallet declines the payment without throwing', async () => {
+    const errors: unknown[][] = []
+    const { host, wallet } = makeHost({ logger: { error: (...args) => errors.push(args) } })
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
+    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    wallet.declinePayments = true
+    const response = recorder()
+    await host.collect(
+      request(payer.identityKey, {
+        type: 'collect',
+        queryId: attestation.queryId,
+        contentHash: attestation.contentHash,
+        ranking,
+        payment
+      }),
+      response
+    )
+    expect(response.statusCode).toBe(402)
+    expect(errors).toEqual([])
+  })
+
+  it('delivers the attested bytes even if the record expires while the payment settles', async () => {
+    let now = NOW
+    const store = new InMemoryPendingStore({}, () => now)
+    const { host, wallet } = makeHost({ now: () => now, store })
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
+    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const internalize = wallet.internalizeAction.bind(wallet)
+    wallet.internalizeAction = async args => {
+      const result = await internalize(args)
+      // The query expires mid-settlement and another client's query makes the store release it.
+      now = NOW + 31_000
+      const other = new PayerWallet()
+      await attest(
+        host,
+        makeQuery(other.identityKey, { expires: new Date(now + 30_000).toISOString() })
+      )
+      return result
+    }
+    const response = recorder()
+    await host.collect(
+      request(payer.identityKey, {
+        type: 'collect',
+        queryId: attestation.queryId,
+        contentHash: attestation.contentHash,
+        ranking,
+        payment
+      }),
+      response
+    )
+    expect(response.statusCode).toBe(200)
+    expect(
+      verifyDelivery(parseDelivery(response.body), {
+        queryId: attestation.queryId,
+        host: wallet.identityKey,
+        contentHash: attestation.contentHash
+      })
+    ).toEqual({ verdict: 'ok', payload: PAYLOAD, supplement: [] })
   })
 })
