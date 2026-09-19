@@ -9,3 +9,13 @@ export {
   type PendingStoreLimits
 } from './host/pendingStore.js'
 export { verifyAndInternalizePayment, type PaymentVerification } from './host/paymentVerifier.js'
+export {
+  bytesProvider,
+  messageListProvider,
+  overlayLookupProvider,
+  type LookupEngineLike,
+  type MessageListSource,
+  type ProviderContext,
+  type ProviderResult,
+  type QueryProvider
+} from './host/providers.js'
