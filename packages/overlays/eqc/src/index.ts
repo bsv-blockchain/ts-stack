@@ -84,3 +84,11 @@ export {
   type TransportResponse
 } from './client/transport.js'
 export { planPayouts, settle, type PayoutPlan, type Settlement } from './client/settlement.js'
+export {
+  EQC,
+  type EQCOptions,
+  type QueryOverrides,
+  type QueryRequest,
+  type QueryResult,
+  type RankedHost
+} from './client/EQC.js'
