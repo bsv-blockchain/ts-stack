@@ -19,3 +19,13 @@ export {
   type ProviderResult,
   type QueryProvider
 } from './host/providers.js'
+export {
+  createEconomicQueryHost,
+  type EconomicQueryHost,
+  type EconomicQueryHostOptions,
+  type HostHandler,
+  type HostRequest,
+  type HostResponse,
+  type RouterLike
+} from './host/handlers.js'
+export { parseHostParams, type HostParams } from './protocol/params.js'

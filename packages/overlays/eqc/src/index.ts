@@ -45,3 +45,4 @@ export {
   payoutLockingScript,
   type PaymentEnvelope
 } from './protocol/payment.js'
+export { parseHostParams, type HostParams } from './protocol/params.js'
