@@ -4,17 +4,26 @@ import { getAdmissionStorage } from '../../storage/AdmissionStorage.js'
 import { MongoAdmissionStorage } from '../../storage/mongo/MongoAdmissionStorage.js'
 import { MongoOverlayStorage } from '../../storage/mongo/MongoOverlayStorage.js'
 import {
+  MongoPayloadStore,
+  type MongoPayloadReference
+} from '../../storage/mongo/MongoPayloadStore.js'
+import type { ClientSession } from 'mongodb'
+import {
   bootstrapMongoOverlay,
   encodeMongoOutputIndex,
   encodeMongoUint64,
   MongoCollectionNames,
+  mongoChainKey,
   mongoNodeKey,
   mongoRecordKey
 } from '../../storage/mongo/MongoSchema.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
 import { MongoAdmissionHarness } from './MongoAdmissionHarness.js'
 import type { MongoEnlistedLookupIndex } from '../../storage/mongo/MongoAdmissionStorage.js'
-import type { AdmissionCommit } from '../../storage/AdmissionStorage.js'
+import type { AdmissionCommit, StorageScope } from '../../storage/AdmissionStorage.js'
+import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
+
+const clone = <T>(value: T): T => structuredClone(value)
 
 describe('Mongo admission storage', () => {
   let fixture: MongoReplicaFixture
@@ -29,6 +38,37 @@ describe('Mongo admission storage', () => {
   afterAll(async () => {
     await fixture.close()
   }, 60000)
+
+  /** Seeds everything a plan's decisions and payloads need to be admissible, mirroring the shared contract helper. */
+  async function seedPlan(
+    plan: AdmissionCommit,
+    options: { skipHistory?: boolean } = {}
+  ): Promise<void> {
+    for (const decision of plan.decisions) {
+      if (!options.skipHistory) {
+        await harness.seed.history(plan.identity.scope, decision.topic, decision.expectedHistory)
+      }
+      for (const read of decision.reads) {
+        if (read.expectedVersion !== null) {
+          await harness.seed.read(
+            plan.identity.scope,
+            decision.topic,
+            read.key,
+            read.expectedVersion
+          )
+        }
+      }
+      for (const spend of decision.spends) {
+        await harness.seed.spendable(
+          plan.identity.scope,
+          decision.topic,
+          spend.outpoint,
+          spend.expectedVersion
+        )
+      }
+    }
+    for (const payload of plan.payloads) await harness.seed.readyPayload(payload)
+  }
 
   admissionStorageContract(() => harness)
 
@@ -550,6 +590,422 @@ describe('Mongo admission storage', () => {
     }
     for (const payload of fromZero.payloads) await harness.seed.readyPayload(payload)
     expect((await harness.adapter.commitAdmission(fromZero)).state).toBe('committed')
+  })
+
+  test('a decision whose expected history fence no longer matches the topic is rejected as a read conflict', async () => {
+    await harness.reset()
+    const plan = admissionPlan('fence-conflict')
+    // Leave the topic's generation row unseeded so checkHistory sees the
+    // default zero fence against the plan's own nonzero expectation.
+    await seedPlan(plan, { skipHistory: true })
+    expect(await harness.adapter.commitAdmission(plan)).toEqual({
+      state: 'rejected',
+      code: 'read-conflict'
+    })
+  })
+
+  test('re-admitting the same tx and topic under a different operation id is fenced off as invalid', async () => {
+    await harness.reset()
+    const txid = 'fe'.repeat(32)
+    const first = admissionPlan('reapply-a', txid)
+    await seedPlan(first)
+    expect((await harness.adapter.commitAdmission(first)).state).toBe('committed')
+
+    const second = admissionPlan('reapply-b', txid)
+    const result = await harness.adapter.commitAdmission(second)
+    expect(result).toEqual({ state: 'rejected', code: 'invalid-plan' })
+  })
+
+  test('applyEviction transitions a real, currently-unspent output to evicted', async () => {
+    await harness.reset()
+    const plan = admissionPlan('real-eviction')
+    plan.decisions[0].spends = []
+    const eviction = { txid: 'ab'.repeat(32), outputIndex: '0' }
+    plan.decisions[0].evictions = [eviction]
+    await seedPlan(plan)
+    await harness.seed.spendable(plan.identity.scope, plan.decisions[0].topic, eviction, '1')
+    const result = await harness.adapter.commitAdmission(plan)
+    expect(result.state).toBe('committed')
+    const raw = await fixture.db
+      .collection(MongoCollectionNames.outputs)
+      .findOne({ _id: harness.adapter.outputId(plan.decisions[0].topic, eviction) })
+    expect(raw?.state).toBe('evicted')
+  })
+
+  test('an output insert that collides with an existing row is rejected as invalid-plan', async () => {
+    await harness.reset()
+    const plan = admissionPlan('duplicate-output')
+    await seedPlan(plan)
+    const output = plan.decisions[0].outputs[0]
+    const now = new Date()
+    // Pre-existing row at the exact _id the plan's own output insert will
+    // target. Nothing else in applyPlan checks for output existence ahead
+    // of the insert itself, so this exercises Mongo's own uniqueness guard.
+    await fixture.db.collection(MongoCollectionNames.outputs).insertOne({
+      _id: harness.adapter.outputId(plan.decisions[0].topic, output),
+      schemaVersion: 1,
+      network: fixture.scope.network,
+      genesisHash: fixture.scope.genesisHash,
+      nodeId: fixture.scope.nodeId,
+      topic: plan.decisions[0].topic,
+      txid: output.txid,
+      outputIndex: encodeMongoOutputIndex(output.outputIndex),
+      satoshis: encodeMongoUint64(output.satoshis),
+      score: encodeMongoUint64(output.score),
+      scriptPayloadId: 'unrelated-payload',
+      scriptOffset: encodeMongoUint64('0'),
+      scriptByteLength: encodeMongoUint64('1'),
+      state: 'unspent',
+      version: 'pre-existing',
+      createdAt: now,
+      updatedAt: now
+    })
+    const result = await harness.adapter.commitAdmission(plan)
+    expect(result).toEqual({ state: 'rejected', code: 'invalid-plan' })
+  })
+
+  test('a non-duplicate-key failure inserting an output is rethrown unchanged rather than swallowed', async () => {
+    await harness.reset()
+    const plan = admissionPlan('output-insert-failure')
+    await seedPlan(plan)
+    // Scope the injected failure to the outputs namespace specifically, so
+    // it lands on insertOutput's own insertOne rather than the transaction
+    // runner's unrelated claim-row insert: duplicateKey(error) must be
+    // false here, so the original error propagates as-is unclassified.
+    await fixture.failCommands({
+      failCommands: ['insert'],
+      errorCode: 1,
+      namespace: `${fixture.db.databaseName}.${MongoCollectionNames.outputs}`
+    })
+    await expect(harness.adapter.commitAdmission(plan)).rejects.toMatchObject({ code: 1 })
+    await fixture.disableFailPoint()
+  })
+
+  test('an applied-history insert that collides under the same admission id is rejected as invalid-plan', async () => {
+    await harness.reset()
+    const plan = admissionPlan('duplicate-applied')
+    await seedPlan(plan)
+    const appliedId = mongoRecordKey(
+      mongoNodeKey(plan.identity.scope),
+      'applied',
+      plan.decisions[0].topic,
+      plan.decisions[0].applied.txid
+    )
+    const now = new Date()
+    // The admissionId matches this plan's own operationId, so
+    // assertAppliedAvailable's mismatch guard does not reject it ahead of
+    // time; only Mongo's own uniqueness guard on the insert itself can.
+    await fixture.db.collection(MongoCollectionNames.appliedTransactions).insertOne({
+      _id: appliedId,
+      schemaVersion: 1,
+      network: plan.identity.scope.network,
+      genesisHash: plan.identity.scope.genesisHash,
+      nodeId: plan.identity.scope.nodeId,
+      topic: plan.decisions[0].topic,
+      txid: plan.decisions[0].applied.txid,
+      state: 'unproven',
+      admissionId: plan.key.operationId,
+      createdAt: now,
+      updatedAt: now
+    })
+    const result = await harness.adapter.commitAdmission(plan)
+    expect(result).toEqual({ state: 'rejected', code: 'invalid-plan' })
+  })
+
+  test('a non-duplicate-key failure inserting an applied-history row is rethrown unchanged rather than swallowed', async () => {
+    await harness.reset()
+    const plan = admissionPlan('applied-insert-failure')
+    await seedPlan(plan)
+    // Scope the injected failure to the appliedTransactions namespace so it
+    // lands on insertApplied's own insertOne (which runs after the output
+    // has already been inserted successfully), not an earlier, unrelated
+    // insert -- and duplicateKey(error) must be false here, so the original
+    // error propagates as-is instead of being reclassified.
+    await fixture.failCommands({
+      failCommands: ['insert'],
+      errorCode: 1,
+      namespace: `${fixture.db.databaseName}.${MongoCollectionNames.appliedTransactions}`
+    })
+    await expect(harness.adapter.commitAdmission(plan)).rejects.toMatchObject({ code: 1 })
+    await fixture.disableFailPoint()
+  })
+
+  test('omits firstSeenHeight from the applied-history row when the plan does not supply one', async () => {
+    await harness.reset()
+    const plan = clone(admissionPlan('no-first-seen'))
+    delete (plan.decisions[0].applied as { firstSeenHeight?: string }).firstSeenHeight
+    await seedPlan(plan)
+    expect((await harness.adapter.commitAdmission(plan)).state).toBe('committed')
+    const appliedId = mongoRecordKey(
+      mongoNodeKey(plan.identity.scope),
+      'applied',
+      plan.decisions[0].topic,
+      plan.decisions[0].applied.txid
+    )
+    const raw = await fixture.db
+      .collection(MongoCollectionNames.appliedTransactions)
+      .findOne({ _id: appliedId })
+    expect(raw?.firstSeenHeight).toBeUndefined()
+  })
+
+  test('upsertTransaction omits rawPayloadId and records manifestPayloadId when the plan carries no raw payload', async () => {
+    await harness.reset()
+    const plan = clone(admissionPlan('no-raw-with-manifest'))
+    plan.outbox = []
+    plan.payloads = plan.payloads.filter(ref => ref.kind !== 'raw-transaction')
+    plan.payloads.push({ kind: 'beef-manifest', digest: 'ef'.repeat(32), byteLength: '12' })
+    await seedPlan(plan)
+    expect((await harness.adapter.commitAdmission(plan)).state).toBe('committed')
+    const id = mongoRecordKey(mongoChainKey(plan.identity.scope), 'transaction', plan.identity.txid)
+    const raw = await fixture.db.collection(MongoCollectionNames.transactions).findOne({ _id: id })
+    expect(raw?.rawPayloadId).toBeUndefined()
+    expect(raw?.manifestPayloadId).toBe(
+      harness.adapter.payloadId({ kind: 'beef-manifest', digest: 'ef'.repeat(32) })
+    )
+  })
+
+  test('an output payload ref with an unrecognized kind is rejected even though it is otherwise well-formed', async () => {
+    await harness.reset()
+    const plan = clone(admissionPlan('weird-payload-kind'))
+    const weirdRef = { kind: 'weird-kind', digest: 'cd'.repeat(32), byteLength: '2' }
+    ;(
+      plan.decisions[0].outputs[0].script as unknown as {
+        payload: { kind: string; digest: string; byteLength: string }
+      }
+    ).payload = weirdRef
+    await seedPlan(plan)
+    await harness.seed.readyPayload(
+      weirdRef as unknown as Parameters<typeof harness.seed.readyPayload>[0]
+    )
+    const result = await harness.adapter.commitAdmission(plan)
+    expect(result).toEqual({ state: 'rejected', code: 'invalid-plan' })
+  })
+
+  test('a payload store failure while pinning an output script surfaces as payload-not-ready', async () => {
+    await harness.reset()
+    // admissionPlan() binds its identity/key to referenceScope, not the
+    // fixture's own randomly-named scope, so the adapter under test must be
+    // constructed with the same scope -- otherwise commitAdmission's own
+    // cross-scope guard would silently delegate to an unwrapped peer.
+    const realPayloads = new MongoPayloadStore(fixture.db, referenceScope)
+    const payloads = {
+      publish: realPayloads.publish.bind(realPayloads),
+      addReference: async (
+        session: ClientSession,
+        reference: MongoPayloadReference,
+        operation?: { timeoutMS?: number; signal?: AbortSignal }
+      ) => {
+        if (reference.ownerKind === 'output' && reference.slot === 'script') {
+          throw new Error('Mongo payload is not ready for reference')
+        }
+        await realPayloads.addReference(session, reference, operation)
+      },
+      releaseReference: realPayloads.releaseReference.bind(realPayloads)
+    } as unknown as MongoPayloadStore
+    const adapter = new MongoAdmissionStorage(fixture.db, referenceScope, { payloads })
+    const plan = admissionPlan('pin-store-failure')
+    await seedPlan(plan)
+    const result = await adapter.commitAdmission(plan)
+    expect(result).toEqual({ state: 'rejected', code: 'payload-not-ready' })
+    await adapter.close()
+  })
+
+  test('an unrelated payload store failure while pinning propagates unchanged rather than being reclassified', async () => {
+    await harness.reset()
+    const realPayloads = new MongoPayloadStore(fixture.db, referenceScope)
+    const payloads = {
+      publish: realPayloads.publish.bind(realPayloads),
+      addReference: async (
+        session: ClientSession,
+        reference: MongoPayloadReference,
+        operation?: { timeoutMS?: number; signal?: AbortSignal }
+      ) => {
+        if (reference.ownerKind === 'output' && reference.slot === 'script') {
+          throw new Error('Mongo payload store is temporarily unavailable')
+        }
+        await realPayloads.addReference(session, reference, operation)
+      },
+      releaseReference: realPayloads.releaseReference.bind(realPayloads)
+    } as unknown as MongoPayloadStore
+    const adapter = new MongoAdmissionStorage(fixture.db, referenceScope, { payloads })
+    const plan = admissionPlan('pin-unrelated-failure')
+    await seedPlan(plan)
+    await expect(adapter.commitAdmission(plan)).rejects.toThrow(
+      'Mongo payload store is temporarily unavailable'
+    )
+    await adapter.close()
+  })
+
+  test('claimOutbox omits a pinned payload whose underlying document has since been removed', async () => {
+    await harness.reset()
+    const plan = admissionPlan('outbox-missing-payload')
+    await seedPlan(plan)
+    expect((await harness.adapter.commitAdmission(plan)).state).toBe('committed')
+    const outboxDataRef = plan.payloads.find(ref => ref.kind === 'outbox-data')
+    if (outboxDataRef === undefined) throw new Error('expected an outbox-data payload in the plan')
+    await fixture.db
+      .collection(MongoCollectionNames.payloads)
+      .deleteOne({ _id: harness.adapter.payloadId(outboxDataRef) })
+    const claimed = await harness.adapter.claimOutbox('lookup')
+    expect(claimed?.eventId).toBe(`${plan.key.operationId}:lookup`)
+    expect(claimed?.payloads).toEqual([])
+  })
+
+  test('reconcileAdmission for a different scope delegates to, and reuses, a scoped peer instance', async () => {
+    await harness.reset()
+    const otherScope: StorageScope = { ...fixture.scope, nodeId: `${fixture.scope.nodeId}-peer` }
+    const key = {
+      scope: otherScope,
+      operationId: 'never-committed-on-peer-scope',
+      semanticDigest: 'ab'.repeat(32)
+    }
+    // A never-committed operation reconciles to a fresh "pending/unlocated"
+    // result from the peer's own MongoTransactionRunner; a second call for
+    // the same foreign scope must reuse the cached peer rather than
+    // constructing (and reconnecting) a fresh one every time.
+    const first = await harness.adapter.reconcileAdmission(key)
+    const second = await harness.adapter.reconcileAdmission(key)
+    expect(first).toEqual({ state: 'pending', attemptId: 'unlocated' })
+    expect(second).toEqual(first)
+  })
+
+  test('applyHandoff advances a matching, unexpired lease and records its checkpoint', async () => {
+    await harness.reset()
+    const plan = admissionPlan('handoff-happy')
+    plan.decisions[0].historyUpdate = {
+      nextTopicHistoryGeneration: '4',
+      affectedFromHeight: '99',
+      handoff: {
+        expected: {
+          scope: plan.identity.scope,
+          topic: plan.decisions[0].topic,
+          peerId: 'peer-a',
+          jobId: 'job-a',
+          leaseToken: '9',
+          expiresAtMs: '1',
+          chainEpoch: '7',
+          topicHistoryGeneration: '3'
+        },
+        checkpoint: 'checkpoint-a'
+      }
+    }
+    await seedPlan(plan)
+    await harness.seed.lease(plan.decisions[0].historyUpdate.handoff.expected)
+    expect((await harness.adapter.commitAdmission(plan)).state).toBe('committed')
+    const jobId = mongoRecordKey(
+      mongoNodeKey(plan.identity.scope),
+      'job',
+      plan.decisions[0].topic,
+      'peer-a',
+      'job-a'
+    )
+    const raw = await fixture.db
+      .collection(MongoCollectionNames.basmRecoveryJobs)
+      .findOne({ _id: jobId })
+    expect(raw?.checkpoint).toBe('checkpoint-a')
+    expect(raw?.topicHistoryGeneration).toBe(encodeMongoUint64('4'))
+  })
+
+  test('applyHandoff rejects a handoff whose expected fence does not match the decision', async () => {
+    await harness.reset()
+    const plan = admissionPlan('handoff-mismatch')
+    plan.decisions[0].historyUpdate = {
+      nextTopicHistoryGeneration: '4',
+      affectedFromHeight: '99',
+      handoff: {
+        expected: {
+          scope: plan.identity.scope,
+          topic: plan.decisions[0].topic,
+          peerId: 'peer-b',
+          jobId: 'job-b',
+          leaseToken: '9',
+          expiresAtMs: '1',
+          chainEpoch: '1',
+          topicHistoryGeneration: '3'
+        },
+        checkpoint: 'checkpoint-b'
+      }
+    }
+    await seedPlan(plan)
+    await harness.seed.lease(plan.decisions[0].historyUpdate.handoff.expected)
+    expect(await harness.adapter.commitAdmission(plan)).toEqual({
+      state: 'rejected',
+      code: 'read-conflict'
+    })
+  })
+
+  test('applyHandoff rejects when no matching, unexpired lease exists for the topic revision handoff', async () => {
+    await harness.reset()
+    const plan = admissionPlan('handoff-missing-job')
+    plan.decisions[0].historyUpdate = {
+      nextTopicHistoryGeneration: '4',
+      affectedFromHeight: '99',
+      handoff: {
+        expected: {
+          scope: plan.identity.scope,
+          topic: plan.decisions[0].topic,
+          peerId: 'peer-c',
+          jobId: 'job-c',
+          leaseToken: '9',
+          expiresAtMs: '1',
+          chainEpoch: '7',
+          topicHistoryGeneration: '3'
+        },
+        checkpoint: 'checkpoint-c'
+      }
+    }
+    await seedPlan(plan)
+    // No lease is seeded for job-c: applyHandoff's own findOneAndUpdate must
+    // fail closed rather than silently skipping the checkpoint update.
+    expect(await harness.adapter.commitAdmission(plan)).toEqual({
+      state: 'rejected',
+      code: 'read-conflict'
+    })
+  })
+
+  test('two admissions racing to bootstrap the same topic generation resolve to exactly one winner', async () => {
+    await harness.reset()
+    const bootstrapPlan = (operationId: string, txid: string): AdmissionCommit => {
+      const value = admissionPlan(operationId, txid)
+      value.decisions[0].expectedHistory = { chainEpoch: '0', topicHistoryGeneration: '0' }
+      value.decisions[0].historyUpdate = {
+        nextTopicHistoryGeneration: '1',
+        affectedFromHeight: '0'
+      }
+      value.decisions[0].spends = []
+      return value
+    }
+    const a = bootstrapPlan('bootstrap-race-a', 'aa'.repeat(32))
+    const b = bootstrapPlan('bootstrap-race-b', 'bb'.repeat(32))
+    for (const value of [a, b]) await seedPlan(value)
+    const results = await Promise.all([
+      harness.adapter.commitAdmission(a),
+      harness.adapter.commitAdmission(b)
+    ])
+    expect(results.filter(result => result.state === 'committed')).toHaveLength(1)
+    expect(
+      results.filter(result => result.state === 'rejected' && result.code === 'read-conflict')
+    ).toHaveLength(1)
+  })
+
+  test('two admissions racing on the same outbox event id resolve to exactly one winner', async () => {
+    await harness.reset()
+    const sharedEventId = 'shared-outbox-event'
+    const racePlan = (operationId: string, txid: string): AdmissionCommit => {
+      const value = admissionPlan(operationId, txid)
+      value.decisions[0].spends = []
+      value.outbox = [{ ...value.outbox[0], eventId: sharedEventId }]
+      return value
+    }
+    const a = racePlan('outbox-race-a', 'cc'.repeat(32))
+    const b = racePlan('outbox-race-b', 'dd'.repeat(32))
+    for (const value of [a, b]) await seedPlan(value)
+    const results = await Promise.all([
+      harness.adapter.commitAdmission(a),
+      harness.adapter.commitAdmission(b)
+    ])
+    expect(results.filter(result => result.state === 'committed')).toHaveLength(1)
+    expect(results.filter(result => result.state === 'rejected')).toHaveLength(1)
   })
 })
 
