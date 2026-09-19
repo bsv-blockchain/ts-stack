@@ -64,9 +64,17 @@ export function discoveryTarget(
   return { kind: 'static', key: type }
 }
 
+/** The key `hostOverrides`/`additionalHosts` are looked up under: the service name for
+ * `overlay-lookup`, else the class name (per the brief, shared across every recipient). */
 function marketKey(target: DiscoveryTarget): string {
   if (target.kind === 'overlay-lookup') return target.service
   return target.kind === 'message-list' ? 'message-list' : target.key
+}
+
+/** The key the TTL cache is stored under. Unlike `marketKey`, `message-list` targets are keyed
+ * per recipient so that resolving message boxes for two identities never mixes their hosts. */
+function cacheKey(target: DiscoveryTarget): string {
+  return target.kind === 'message-list' ? `message-list:${target.recipient}` : marketKey(target)
 }
 
 function defaultTrackers(preset: LookupNetworkPreset): string[] {
@@ -103,28 +111,40 @@ export class HostDiscovery {
   }
 
   async hostsFor(target: DiscoveryTarget): Promise<DiscoveredHost[]> {
-    const key = marketKey(target)
+    const key = cacheKey(target)
     const cached = this.cache.get(key)
     if (cached !== undefined && this.now() < cached.expiresAt) return cached.hosts
+    const overrideKey = marketKey(target)
     const found = new Map<string, DiscoveredHost>()
     const add = (candidate: string, identityKey?: string): void => {
       const url = this.normalize(candidate)
       if (url === undefined || found.has(url)) return
       found.set(url, isPublicKeyHex(identityKey) ? { url, identityKey } : { url })
     }
-    const override = this.overrides[key]
+    const override = this.overrides[overrideKey]
+    let failed = false
     if (override !== undefined) {
       for (const host of override) add(host)
     } else {
-      for (const host of await this.discover(target)) add(host.url, host.identityKey)
-      for (const host of this.additional[key] ?? []) add(host)
+      const discovered = await this.discover(target)
+      if (discovered === undefined) {
+        failed = true
+      } else {
+        for (const host of discovered) add(host.url, host.identityKey)
+      }
+      for (const host of this.additional[overrideKey] ?? []) add(host)
     }
     const hosts = [...found.values()]
-    this.cache.set(key, { hosts, expiresAt: this.now() + this.ttlMs })
+    // A resolver failure must not be cached: it would pin the client to this call's
+    // (empty, or additionalHosts-only) result for the full TTL. A successful call, even one
+    // whose answer names no hosts, is still cached.
+    if (!failed) this.cache.set(key, { hosts, expiresAt: this.now() + this.ttlMs })
     return hosts
   }
 
-  private async discover(target: DiscoveryTarget): Promise<DiscoveredHost[]> {
+  /** Returns `undefined` when the resolver itself failed (never cached), distinct from an
+   * empty array, which is a successful answer that named no hosts (cached as usual). */
+  private async discover(target: DiscoveryTarget): Promise<DiscoveredHost[] | undefined> {
     if (target.kind === 'static') return []
     if (target.kind === 'overlay-lookup' && target.service === 'ls_slap') {
       return this.trackers.map(url => ({ url }))
@@ -137,7 +157,7 @@ export class HostDiscovery {
     try {
       answer = await this.resolver.query(question)
     } catch {
-      return []
+      return undefined
     }
     if (answer.type !== 'output-list') return []
     const hosts: DiscoveredHost[] = []

@@ -141,10 +141,12 @@ describe('HostDiscovery', () => {
     expect(await discovery.hostsFor({ kind: 'static', key: 'message-body' })).toEqual([])
   })
 
-  it('survives a failing resolver', async () => {
+  it('survives a failing resolver, and never caches the failure', async () => {
+    let calls = 0
     const discovery = new HostDiscovery({
       resolver: {
         async query() {
+          calls++
           throw new Error('trackers unreachable')
         }
       },
@@ -152,6 +154,57 @@ describe('HostDiscovery', () => {
     })
     expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
       { url: 'https://extra.example' }
+    ])
+    expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
+      { url: 'https://extra.example' }
+    ])
+    expect(calls).toBe(2)
+  })
+
+  it('replaces a cached failure once the resolver succeeds', async () => {
+    let fail = true
+    const resolver: LookupResolverLike = {
+      async query(): Promise<LookupAnswer> {
+        if (fail) throw new Error('trackers unreachable')
+        return {
+          type: 'output-list',
+          outputs: [await slapTokenOutput(hostWallet, 'https://a.example', 'ls_x')]
+        }
+      }
+    }
+    const discovery = new HostDiscovery({ resolver })
+    expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([])
+    fail = false
+    expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
+      { url: 'https://a.example', identityKey: hostIdentity }
+    ])
+  })
+
+  it('keys the cache by recipient, so two message-list targets never mix hosts', async () => {
+    const recipientA = `02${'aa'.repeat(32)}`
+    const recipientB = `02${'bb'.repeat(32)}`
+    const questions: LookupQuestion[] = []
+    const resolver: LookupResolverLike = {
+      async query(question): Promise<LookupAnswer> {
+        questions.push(question)
+        const { identityKey } = question.query as { identityKey: string }
+        const host = identityKey === recipientA ? 'https://a-box.example' : 'https://b-box.example'
+        return {
+          type: 'output-list',
+          outputs: [await messageBoxTokenOutput(hostWallet, identityKey, host)]
+        }
+      }
+    }
+    const discovery = new HostDiscovery({ resolver })
+    expect(await discovery.hostsFor({ kind: 'message-list', recipient: recipientA })).toEqual([
+      { url: 'https://a-box.example' }
+    ])
+    expect(await discovery.hostsFor({ kind: 'message-list', recipient: recipientB })).toEqual([
+      { url: 'https://b-box.example' }
+    ])
+    expect(questions).toEqual([
+      { service: 'ls_messagebox', query: { identityKey: recipientA } },
+      { service: 'ls_messagebox', query: { identityKey: recipientB } }
     ])
   })
 })
