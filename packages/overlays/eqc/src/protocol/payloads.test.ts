@@ -86,6 +86,24 @@ describe('overlay-lookup', () => {
     expect(() => decodeOutpointList([...payload, 0])).toThrow(TypeError)
   })
 
+  it('rejects an oversized 64-bit varint as TypeError, not the readers plain Error', () => {
+    // 0xff prefix + 8 LE bytes = 0x7fffffffffffffff, which exceeds 2^53 and makes
+    // Utils.Reader.readVarIntNum() throw a plain Error rather than a TypeError.
+    const oversizedVarint = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
+    const txidBytes = Array.from({ length: 32 }, () => 0xaa)
+
+    // Position 1: the outpoint count itself.
+    expect(() => decodeOutpointList(oversizedVarint)).toThrow(TypeError)
+
+    // Position 2: outputIndex, after a valid count and txid.
+    expect(() => decodeOutpointList([0x01, ...txidBytes, ...oversizedVarint])).toThrow(TypeError)
+
+    // Position 3: contextLength, after a valid count, txid, and outputIndex.
+    expect(() => decodeOutpointList([0x01, ...txidBytes, 0x00, ...oversizedVarint])).toThrow(
+      TypeError
+    )
+  })
+
   it('hashes the same for any output order and rebuilds a usable answer', () => {
     const first = sampleBeef(1)
     const second = sampleBeef(2)
@@ -117,5 +135,22 @@ describe('overlay-lookup', () => {
     const first = sampleBeef(1)
     const payload = encodeOutpointList([{ txid: first.txid, outputIndex: 5 }])
     expect(() => rebuildLookupAnswer(payload, first.beef)).toThrow(TypeError)
+  })
+
+  it('re-canonicalizes a rebuilt answer (Atomic BEEF per output) to the identical payload', () => {
+    const first = sampleBeef(1)
+    const second = sampleBeef(2)
+    const answer: LookupAnswer = {
+      type: 'output-list',
+      outputs: [
+        { beef: first.beef, outputIndex: 0 },
+        { beef: second.beef, outputIndex: 0, context: [7] }
+      ]
+    }
+    const canonical = canonicalizeLookupAnswer(answer)
+    const rebuilt = rebuildLookupAnswer(canonical.payload, canonical.supplement)
+    const recanonicalized = canonicalizeLookupAnswer(rebuilt)
+    expect(recanonicalized.payload).toEqual(canonical.payload)
+    expect(contentHash(recanonicalized.payload)).toBe(contentHash(canonical.payload))
   })
 })
