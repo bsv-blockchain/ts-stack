@@ -51,6 +51,58 @@ describe('AuthFetchTransport.getParams', () => {
     ).rejects.toThrow('too large')
   })
 
+  it('rejects a streamed params body once the byte cap is crossed, without draining the rest', async () => {
+    let pulls = 0
+    let cancelled = false
+    const chunk = new Uint8Array(20_000).fill(97)
+    const totalChunksAvailable = 10
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1
+        if (pulls > totalChunksAvailable) {
+          controller.close()
+          return
+        }
+        controller.enqueue(chunk)
+      },
+      cancel() {
+        cancelled = true
+      }
+    })
+    const fetchMock = vi.fn(async () => new Response(stream))
+    const transport = new AuthFetchTransport(new PayerWallet(), { fetch: fetchMock })
+    await expect(transport.getParams('https://h.example', 1000)).rejects.toThrow('too large')
+    expect(cancelled).toBe(true)
+    expect(pulls).toBeLessThan(totalChunksAvailable)
+  })
+
+  it('rejects an oversized content-length header without reading the body', async () => {
+    // A `ReadableStream` fills its own internal queue up to its high-water mark as soon as it is
+    // constructed, independent of any consumer, so `pull` firing once proves nothing here. Whether
+    // the transport itself ever consumed the body is `body.locked` (set only by `getReader()`) and
+    // `bodyUsed` (set only once that reader is actually read from).
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(10))
+        controller.close()
+      }
+    })
+    const response = new Response(stream, { headers: { 'content-length': '100000' } })
+    const fetchMock = vi.fn(async () => response)
+    const transport = new AuthFetchTransport(new PayerWallet(), { fetch: fetchMock })
+    await expect(transport.getParams('https://h.example', 1000)).rejects.toThrow('too large')
+    expect(response.body?.locked).toBe(false)
+    expect(response.bodyUsed).toBe(false)
+  })
+
+  it('rejects a body whose UTF-8 byte length exceeds the cap while its character count does not', async () => {
+    const body = '€'.repeat(30_000)
+    expect(body.length).toBeLessThan(65_536)
+    const fetchMock = vi.fn(async () => new Response(body))
+    const transport = new AuthFetchTransport(new PayerWallet(), { fetch: fetchMock })
+    await expect(transport.getParams('https://h.example', 1000)).rejects.toThrow('too large')
+  })
+
   it('times out', async () => {
     vi.useFakeTimers()
     try {

@@ -57,6 +57,46 @@ async function withDeadline<T>(url: string, timeoutMs: number, work: Promise<T>)
   }
 }
 
+/**
+ * Reads `response.body` one chunk at a time, counting bytes, and rejects as soon as `maxBytes` is
+ * crossed instead of buffering the whole body first. On the cap being crossed the reader is
+ * cancelled and `controller` is aborted so the underlying request stops. Falls back to
+ * `response.arrayBuffer()` only when the runtime gives no readable stream for the body.
+ */
+async function readBoundedBody(
+  response: Response,
+  maxBytes: number,
+  tooLargeMessage: string,
+  controller: AbortController
+): Promise<Uint8Array> {
+  if (response.body === null) {
+    const buffer = new Uint8Array(await response.arrayBuffer())
+    if (buffer.byteLength > maxBytes) throw new Error(tooLargeMessage)
+    return buffer
+  }
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      controller.abort()
+      throw new Error(tooLargeMessage)
+    }
+    chunks.push(value)
+  }
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return merged
+}
+
 export class AuthFetchTransport implements HostTransport {
   private readonly authFetch: AuthFetch
   private readonly fetchImpl: typeof fetch
@@ -87,8 +127,13 @@ export class AuthFetchTransport implements HostTransport {
       if (response.status !== 200) {
         throw new Error(`${url} answered params with status ${response.status}`)
       }
-      const text = await response.text()
-      if (text.length > MAX_PARAMS_BYTES) throw new Error(`${url} params response is too large`)
+      const tooLargeMessage = `${url} params response is too large`
+      const contentLength = response.headers.get('content-length')
+      if (contentLength !== null && Number(contentLength) > MAX_PARAMS_BYTES) {
+        throw new Error(tooLargeMessage)
+      }
+      const bytes = await readBoundedBody(response, MAX_PARAMS_BYTES, tooLargeMessage, controller)
+      const text = new TextDecoder().decode(bytes)
       let parsed: unknown
       try {
         parsed = JSON.parse(text)
@@ -116,8 +161,12 @@ export class AuthFetchTransport implements HostTransport {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body)
       })
-      const text = await response.text()
-      if (text.length > this.maxResponseBytes) throw new Error(`${url} response is too large`)
+      // Residual limit: AuthFetch buffers the whole BRC-104 response itself and exposes no
+      // AbortSignal on this call, so the allocation below the SDK boundary cannot be bounded or
+      // cancelled from here. This only rejects the result after AuthFetch already read it fully.
+      const buffer = await response.arrayBuffer()
+      if (buffer.byteLength > this.maxResponseBytes) throw new Error(`${url} response is too large`)
+      const text = new TextDecoder().decode(buffer)
       let parsed: unknown
       try {
         parsed = JSON.parse(text)
