@@ -83,3 +83,4 @@ export {
   type HostTransport,
   type TransportResponse
 } from './client/transport.js'
+export { planPayouts, settle, type PayoutPlan, type Settlement } from './client/settlement.js'
