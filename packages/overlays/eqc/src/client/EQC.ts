@@ -37,7 +37,12 @@ import {
   type DiscoveryOptions
 } from './discovery.js'
 import { decideRace, runRace, type Arrival, type Rejection } from './race.js'
-import { InMemoryReputationStore, type ReputationStore } from './reputation.js'
+import {
+  InMemoryReputationStore,
+  orderByScore,
+  type ReputationEvent,
+  type ReputationStore
+} from './reputation.js'
 import { planPayouts, settle, type PayoutPlan, type Settlement } from './settlement.js'
 import {
   AuthFetchTransport,
@@ -57,6 +62,11 @@ export interface EQCOptions extends DiscoveryOptions {
   feeSats?: number
   queryTtlMs?: number
   hostTimeoutMs?: number
+  /**
+   * Deadline for one `/economic/params` probe. Shorter than `hostTimeoutMs` because every query
+   * waits for every probe, and any advertised host can stall its own.
+   */
+  paramsTimeoutMs?: number
   paramsTtlMs?: number
   /** Most hosts contacted per query, best reputation first. */
   maxHosts?: number
@@ -115,11 +125,21 @@ interface Candidate {
   params: HostParams
 }
 
-/** Exactly one of `params` and `error` is set: the host's market, or its refusal to have one. */
+/** Exactly one of `params` and `error` is set: the host's market, or why it could not be read. */
 interface ParamsCacheEntry {
   expiresAt: number
   params?: HostParams
-  error?: TransportStatusError
+  error?: unknown
+}
+
+/** How long a passing params failure is remembered, unless `paramsTtlMs` is shorter. */
+const TRANSIENT_PARAMS_FAILURE_MS = 15_000
+const UNADVERTISED_IDENTITY = 'session key is not advertised for this URL'
+const SHARE_BELOW_MINIMUM = 'share below host minPayoutSats'
+
+/** A 4xx is the host stating it runs no market. Anything else is a failure that may pass. */
+function isMarketRefusal(error: unknown): boolean {
+  return error instanceof TransportStatusError && error.status >= 400 && error.status < 500
 }
 
 function boundedInteger(value: number, name: string, min: number, max: number): number {
@@ -180,27 +200,32 @@ export class EQC {
   }
 
   /**
-   * Reads and caches a host's unauthenticated `/economic/params`. Only a 4xx answer is remembered
-   * as a refusal, because that is the host saying it runs no market; a timeout, a network or parse
-   * failure, and a 5xx answer are all passing conditions, so they are re-thrown uncached and the
-   * host is probed again on the next query. The cause is never replaced: the error a caller sees
-   * from a cache hit is the very error the transport raised.
+   * Reads and caches a host's unauthenticated `/economic/params`, bounded by `paramsTimeoutMs`.
+   * A 4xx answer is the host saying it runs no market and is remembered for `paramsTtlMs`. A
+   * timeout, a network or parse failure, and a 5xx answer may pass, so they are remembered only
+   * for `min(paramsTtlMs, 15 s)`: long enough that a host which stalls its probe costs one wait
+   * per interval instead of one per query, short enough that a blip is forgotten. The cause is
+   * never replaced: the error a caller sees from a cache hit is the very error the transport raised.
    */
   async params(url: string): Promise<HostParams> {
-    const cached = this.paramsCache.get(url)
-    if (cached !== undefined && this.now() < cached.expiresAt) {
-      if (cached.error !== undefined) throw cached.error
+    const cached = this.cachedParams(url)
+    if (cached !== undefined) {
       if (cached.params !== undefined) return cached.params
+      throw cached.error
     }
-    const expiresAt = this.now() + (this.options.paramsTtlMs ?? DEFAULTS.paramsTtlMs)
+    const paramsTtlMs = this.options.paramsTtlMs ?? DEFAULTS.paramsTtlMs
     try {
-      const params = await this.transport.getParams(url, this.hostTimeoutMs())
-      this.paramsCache.set(url, { params, expiresAt })
+      const params = await this.transport.getParams(
+        url,
+        this.options.paramsTimeoutMs ?? DEFAULTS.paramsTimeoutMs
+      )
+      this.paramsCache.set(url, { params, expiresAt: this.now() + paramsTtlMs })
       return params
     } catch (error) {
-      if (error instanceof TransportStatusError && error.status >= 400 && error.status < 500) {
-        this.paramsCache.set(url, { error, expiresAt })
-      }
+      const ttlMs = isMarketRefusal(error)
+        ? paramsTtlMs
+        : Math.min(paramsTtlMs, TRANSIENT_PARAMS_FAILURE_MS)
+      this.paramsCache.set(url, { error, expiresAt: this.now() + ttlMs })
       throw error
     }
   }
@@ -263,13 +288,29 @@ export class EQC {
       market.maxFeeSats,
       Math.max(query.floorFeeSats, market.feeSats, sumOfWeights(outcome.ranked.length), ...quotes)
     )
-    const plans = planPayouts(outcome.ranked, feeSats)
+    // A host is never sent an output it advertised it would refuse: that output could only be
+    // stranded. The host did nothing wrong, so this is reported but is no reputation event, and
+    // the ranking the other hosts see, and with it every other share, is unchanged.
+    const minPayoutSats = new Map(
+      candidates.map(candidate => [candidate.host.url, candidate.params.minPayoutSats])
+    )
+    const plans = planPayouts(outcome.ranked, feeSats).filter(plan => {
+      if (plan.satoshis >= (minPayoutSats.get(plan.url) ?? 1)) return true
+      rejected.push({
+        url: plan.url,
+        host: plan.host,
+        reason: 'collect-failed',
+        detail: SHARE_BELOW_MINIMUM
+      })
+      return false
+    })
     let settlement: Settlement
     try {
       settlement = await settle(this.wallet, queryId, plans, this.options.originator)
     } catch (error) {
       throw new EQCError('ERR_EQC_PAYMENT', 'The wallet could not create the payout transaction', {
-        cause: error instanceof Error ? error.message : String(error)
+        cause: error instanceof Error ? error.message : String(error),
+        rejected
       })
     }
 
@@ -307,7 +348,7 @@ export class EQC {
         payoutSats: plans.find(plan => plan.rank === index + 1)?.satoshis ?? 0
       })),
       txid: settlement.txid,
-      feeSats,
+      feeSats: plans.reduce((sum, plan) => sum + plan.satoshis, 0),
       attestations: race.arrivals.map(arrival => arrival.attestation),
       consistency: assessConsistency(outcome.ranked),
       rejected,
@@ -366,9 +407,18 @@ export class EQC {
     return await this.identity
   }
 
+  private cachedParams(url: string): ParamsCacheEntry | undefined {
+    const cached = this.paramsCache.get(url)
+    return cached !== undefined && this.now() < cached.expiresAt ? cached : undefined
+  }
+
   private reject(rejected: Rejection[], rejection: Rejection): void {
     rejected.push(rejection)
-    this.reputation.record(rejection.url, rejection.reason, this.now())
+    const event: ReputationEvent =
+      rejection.reason === 'identity-mismatch' && rejection.detail === UNADVERTISED_IDENTITY
+        ? 'unadvertised-identity'
+        : rejection.reason
+    this.reputation.record(rejection.url, event, this.now())
   }
 
   /** Discovery is free; hosts are then filtered by reputation, market support, and budget. */
@@ -382,16 +432,27 @@ export class EQC {
       discoveryTarget(request.type, request.params, client)
     )
     const now = this.now()
-    const usable = discovered
-      .filter(host => !this.reputation.isExcluded(host.url, now))
-      .sort((left, right) => this.reputation.score(right.url) - this.reputation.score(left.url))
-      .slice(0, this.options.maxHosts ?? DEFAULTS.maxHosts)
+    // Ties are shuffled: kept in discovery order, whoever a tracker lists first would be the only
+    // hosts a `maxHosts` cut ever contacts.
+    const usable = orderByScore(
+      discovered.filter(host => !this.reputation.isExcluded(host.url, now)),
+      host => this.reputation.score(host.url)
+    ).slice(0, this.options.maxHosts ?? DEFAULTS.maxHosts)
     const checked = await Promise.all(
       usable.map(async host => {
+        const probed = this.cachedParams(host.url) === undefined
         try {
           return { host, params: await this.params(host.url) }
-        } catch {
-          rejected.push({ url: host.url, reason: 'http', detail: 'no economic params' })
+        } catch (error) {
+          const rejection: Rejection = {
+            url: host.url,
+            reason: error instanceof TransportTimeoutError ? 'timeout' : 'http',
+            detail: 'no economic params'
+          }
+          // A refusal is the host having no market, and a cache hit was already counted: only a
+          // fresh passing failure is a (soft) reputation event, so a tarpit sorts last.
+          if (probed && !isMarketRefusal(error)) this.reject(rejected, rejection)
+          else rejected.push(rejection)
           return undefined
         }
       })
@@ -400,7 +461,9 @@ export class EQC {
       (candidate): candidate is Candidate =>
         candidate !== undefined &&
         candidate.params.classes.includes(request.type) &&
-        candidate.params.floorFeeSats <= market.maxFeeSats
+        candidate.params.floorFeeSats <= market.maxFeeSats &&
+        // The advertised topK is the most the host accepts; it would answer 400 to a larger one.
+        candidate.params.topK >= market.topK
     )
   }
 
@@ -411,7 +474,9 @@ export class EQC {
     candidates: Candidate[]
   ): EconomicQuery {
     const hint = [
-      ...new Set(candidates.map(candidate => candidate.host.identityKey ?? candidate.params.host))
+      ...new Set(
+        candidates.flatMap(candidate => candidate.host.identityKeys ?? [candidate.params.host])
+      )
     ]
       .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
       .slice(0, 64)
@@ -459,11 +524,18 @@ export class EQC {
         return { url, reason: 'malformed', detail: error instanceof Error ? error.message : '' }
       }
       const sessionKey = response.identityKey
-      if (
-        sessionKey === undefined ||
-        (host.identityKey !== undefined && host.identityKey !== sessionKey)
-      ) {
+      if (sessionKey === undefined) {
         return { url, host: attestation.host, reason: 'identity-mismatch' }
+      }
+      if (host.identityKeys !== undefined && !host.identityKeys.includes(sessionKey)) {
+        // Rejected for this query only. The advertisements are third-party data, so they are no
+        // ground for a cooldown: `reject` records this detail as a soft event.
+        return {
+          url,
+          host: attestation.host,
+          reason: 'identity-mismatch',
+          detail: UNADVERTISED_IDENTITY
+        }
       }
       const verdict = verifyAttestation(attestation, { queryId, host: sessionKey })
       if (verdict === 'ok') return { url, host: sessionKey, attestation, arrivedAt }

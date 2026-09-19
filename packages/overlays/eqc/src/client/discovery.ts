@@ -16,7 +16,17 @@ import { DEFAULTS, isPublicKeyHex } from '../protocol/query.js'
 
 export interface DiscoveredHost {
   url: string
-  /** The key the host advertised on-chain. It must match the BRC-103 session key. */
+  /**
+   * Every identity key a SLAP token advertised for this URL, without duplicates. SLAP is
+   * permissionless, so anyone may advertise anyone's URL: when the list is present, the BRC-103
+   * session key must be one of its entries, and no single token can bind the URL to a wrong key.
+   */
+  identityKeys?: string[]
+}
+
+/** One advertisement, before advertisements for the same URL are merged. */
+interface Advertisement {
+  url: string
   identityKey?: string
 }
 
@@ -118,8 +128,15 @@ export class HostDiscovery {
     const found = new Map<string, DiscoveredHost>()
     const add = (candidate: string, identityKey?: string): void => {
       const url = this.normalize(candidate)
-      if (url === undefined || found.has(url)) return
-      found.set(url, isPublicKeyHex(identityKey) ? { url, identityKey } : { url })
+      if (url === undefined) return
+      let host = found.get(url)
+      if (host === undefined) {
+        host = { url }
+        found.set(url, host)
+      }
+      if (isPublicKeyHex(identityKey) && host.identityKeys?.includes(identityKey) !== true) {
+        host.identityKeys = [...(host.identityKeys ?? []), identityKey]
+      }
     }
     const override = this.overrides[overrideKey]
     let failed = false
@@ -144,7 +161,7 @@ export class HostDiscovery {
 
   /** Returns `undefined` when the resolver itself failed (never cached), distinct from an
    * empty array, which is a successful answer that named no hosts (cached as usual). */
-  private async discover(target: DiscoveryTarget): Promise<DiscoveredHost[] | undefined> {
+  private async discover(target: DiscoveryTarget): Promise<Advertisement[] | undefined> {
     if (target.kind === 'static') return []
     if (target.kind === 'overlay-lookup' && target.service === 'ls_slap') {
       return this.trackers.map(url => ({ url }))
@@ -160,7 +177,7 @@ export class HostDiscovery {
       return undefined
     }
     if (answer.type !== 'output-list') return []
-    const hosts: DiscoveredHost[] = []
+    const hosts: Advertisement[] = []
     for (const output of answer.outputs) {
       try {
         const transaction = Transaction.fromBEEF(output.beef)

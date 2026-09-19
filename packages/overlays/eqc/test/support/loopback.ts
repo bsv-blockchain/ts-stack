@@ -1,5 +1,6 @@
 import {
   TransportStatusError,
+  TransportTimeoutError,
   type HostTransport,
   type TransportResponse
 } from '../../src/client/transport.js'
@@ -24,6 +25,12 @@ export interface LoopbackHost {
   transientParamsFailures: number
   /** Params reads that reached this host, cache misses only. */
   paramsReads: number
+  /** The deadline the client gave each params read that reached this host. */
+  paramsTimeouts: number[]
+  /** A tarpit: the params read is accepted and never answered. */
+  paramsHang: boolean
+  /** An authenticated path this host accepts and never answers. */
+  hangOn?: string
   /** Identity key the transport reports for the session, to simulate a spoof. */
   sessionIdentity?: string
   /** Rewrites a successful collect body, to simulate a host that serves wrong bytes. */
@@ -60,6 +67,21 @@ function capture(): Captured & {
   return Object.assign(captured, { response })
 }
 
+/** Like the real transport, gives up on `work` after `timeoutMs` without cancelling it. */
+async function withDeadline<T>(url: string, timeoutMs: number, work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new TransportTimeoutError(url, timeoutMs)), timeoutMs)
+  })
+  try {
+    return await Promise.race([work, deadline])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const never = new Promise<never>(() => undefined)
+
 /** Routes transport calls straight into real host handlers, without HTTP or BRC-103. */
 export class LoopbackNetwork implements HostTransport {
   readonly hosts = new Map<string, LoopbackHost>()
@@ -70,7 +92,10 @@ export class LoopbackNetwork implements HostTransport {
     url: string,
     options: Omit<EconomicQueryHostOptions, 'wallet'>,
     behaviour: Partial<
-      Pick<LoopbackHost, 'delayMs' | 'down' | 'withoutMarket' | 'transientParamsFailures'>
+      Pick<
+        LoopbackHost,
+        'delayMs' | 'down' | 'withoutMarket' | 'transientParamsFailures' | 'paramsHang' | 'hangOn'
+      >
     > = {}
   ): LoopbackHost {
     const wallet = new HostWallet()
@@ -83,6 +108,8 @@ export class LoopbackNetwork implements HostTransport {
       withoutMarket: false,
       transientParamsFailures: 0,
       paramsReads: 0,
+      paramsTimeouts: [],
+      paramsHang: false,
       posts: [],
       ...behaviour
     }
@@ -90,9 +117,13 @@ export class LoopbackNetwork implements HostTransport {
     return entry
   }
 
-  async getParams(url: string): Promise<HostParams> {
+  async getParams(url: string, timeoutMs: number): Promise<HostParams> {
     const entry = this.hosts.get(url)
-    if (entry !== undefined) entry.paramsReads += 1
+    if (entry !== undefined) {
+      entry.paramsReads += 1
+      entry.paramsTimeouts.push(timeoutMs)
+      if (entry.paramsHang) return await withDeadline(url, timeoutMs, never)
+    }
     if (entry === undefined || entry.down || entry.withoutMarket) {
       throw new TransportStatusError(url, 404)
     }
@@ -105,10 +136,24 @@ export class LoopbackNetwork implements HostTransport {
     return parseHostParams(captured.body)
   }
 
-  async post(url: string, path: string, body: unknown): Promise<TransportResponse> {
+  async post(
+    url: string,
+    path: string,
+    body: unknown,
+    timeoutMs: number
+  ): Promise<TransportResponse> {
     const entry = this.hosts.get(url)
     if (entry === undefined || entry.down) throw new Error(`${url} is unreachable`)
     entry.posts.push({ path, body })
+    return await withDeadline(url, timeoutMs, this.answer(entry, path, body))
+  }
+
+  private async answer(
+    entry: LoopbackHost,
+    path: string,
+    body: unknown
+  ): Promise<TransportResponse> {
+    if (entry.hangOn === path) return await never
     if (entry.delayMs > 0) await new Promise(resolve => setTimeout(resolve, entry.delayMs))
     const captured = capture()
     const request = {

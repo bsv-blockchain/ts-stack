@@ -54,9 +54,37 @@ describe('HostDiscovery', () => {
     ])
     const discovery = new HostDiscovery({ resolver })
     expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
-      { url: 'https://a.example', identityKey: hostIdentity }
+      { url: 'https://a.example', identityKeys: [hostIdentity] }
     ])
     expect(resolver.questions).toEqual([{ service: 'ls_slap', query: { service: 'ls_x' } }])
+  })
+
+  it('keeps every identity key advertised for one URL, in either tracker order', async () => {
+    const squatterKey = PrivateKey.fromRandom()
+    const squatter = new CompletedProtoWallet(squatterKey)
+    const squatterIdentity = squatterKey.toPublicKey().toString()
+    const honest = await slapTokenOutput(hostWallet, 'https://honest.example', 'ls_x')
+    const hostile = await slapTokenOutput(squatter, 'https://honest.example/', 'ls_x')
+    for (const outputs of [
+      [honest, hostile],
+      [hostile, honest]
+    ]) {
+      const discovery = new HostDiscovery({ resolver: resolverFor(outputs) })
+      const hosts = await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })
+      expect(hosts).toHaveLength(1)
+      expect(hosts[0].url).toBe('https://honest.example')
+      expect([...(hosts[0].identityKeys ?? [])].sort()).toEqual(
+        [hostIdentity, squatterIdentity].sort()
+      )
+    }
+  })
+
+  it('lists an identity key once however many tokens advertise it', async () => {
+    const token = await slapTokenOutput(hostWallet, 'https://a.example', 'ls_x')
+    const discovery = new HostDiscovery({ resolver: resolverFor([token, token, token]) })
+    expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
+      { url: 'https://a.example', identityKeys: [hostIdentity] }
+    ])
   })
 
   it('caches discovery for hostsTtlMs', async () => {
@@ -88,7 +116,7 @@ describe('HostDiscovery', () => {
       additionalHosts: { ls_x: ['https://extra.example', 'https://a.example'] }
     })
     expect(await extended.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
-      { url: 'https://a.example', identityKey: hostIdentity },
+      { url: 'https://a.example', identityKeys: [hostIdentity] },
       { url: 'https://extra.example' }
     ])
   })
@@ -103,7 +131,7 @@ describe('HostDiscovery', () => {
     expect(await mainnet.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([])
     const local = new HostDiscovery({ resolver: resolverFor(outputs), networkPreset: 'local' })
     expect(await local.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
-      { url: 'http://127.0.0.1:4001', identityKey: hostIdentity }
+      { url: 'http://127.0.0.1:4001', identityKeys: [hostIdentity] }
     ])
   })
 
@@ -176,7 +204,7 @@ describe('HostDiscovery', () => {
     expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([])
     fail = false
     expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
-      { url: 'https://a.example', identityKey: hostIdentity }
+      { url: 'https://a.example', identityKeys: [hostIdentity] }
     ])
   })
 

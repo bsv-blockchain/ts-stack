@@ -20,7 +20,7 @@ const params = {
 }
 
 describe('nonPayingWallet', () => {
-  it('refuses to create or sign actions and forwards everything else', async () => {
+  it('refuses to create or sign actions and forwards what authentication needs', async () => {
     const wallet = new PayerWallet()
     const facade = nonPayingWallet(wallet)
     await expect(facade.createAction({ description: 'HTTP 402 payment' })).rejects.toThrow(
@@ -29,6 +29,81 @@ describe('nonPayingWallet', () => {
     await expect(facade.signAction({ reference: 'cmVm', spends: {} })).rejects.toThrow('never pays')
     expect(wallet.actions).toEqual([])
     expect((await facade.getPublicKey({ identityKey: true })).publicKey).toBe(wallet.identityKey)
+  })
+
+  it('forwards exactly the five calls BRC-103 authentication makes', async () => {
+    const wallet = new PayerWallet()
+    const facade = nonPayingWallet(wallet)
+    const protocol = { protocolID: [2, 'auth message signature'] as [2, string], keyID: '1' }
+    const data = [1, 2, 3]
+    const { signature } = await facade.createSignature({ ...protocol, data, counterparty: 'self' })
+    expect(signature).toEqual(
+      (await wallet.createSignature({ ...protocol, data, counterparty: 'self' })).signature
+    )
+    expect(
+      (await facade.verifySignature({ ...protocol, data, signature, counterparty: 'self' })).valid
+    ).toBe(true)
+    const { hmac } = await facade.createHmac({ ...protocol, data, counterparty: 'self' })
+    expect((await facade.verifyHmac({ ...protocol, data, hmac, counterparty: 'self' })).valid).toBe(
+      true
+    )
+  })
+
+  it('shows a host no identity certificates and proves none', async () => {
+    const wallet = new PayerWallet()
+    const listCertificates = vi.spyOn(wallet, 'listCertificates')
+    const proveCertificate = vi.spyOn(wallet, 'proveCertificate')
+    const facade = nonPayingWallet(wallet)
+    expect(await facade.listCertificates({ certifiers: [], types: [] })).toEqual({
+      totalCertificates: 0,
+      certificates: []
+    })
+    await expect(
+      facade.proveCertificate({
+        certificate: {},
+        fieldsToReveal: ['email'],
+        verifier: `02${'ab'.repeat(32)}`
+      })
+    ).rejects.toThrow('never pays an HTTP 402 challenge or reveals wallet data: proveCertificate')
+    expect(listCertificates).not.toHaveBeenCalled()
+    expect(proveCertificate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'abortAction',
+    'listActions',
+    'internalizeAction',
+    'listOutputs',
+    'relinquishOutput',
+    'revealCounterpartyKeyLinkage',
+    'revealSpecificKeyLinkage',
+    'encrypt',
+    'decrypt',
+    'acquireCertificate',
+    'relinquishCertificate',
+    'discoverByIdentityKey',
+    'discoverByAttributes',
+    'isAuthenticated',
+    'waitForAuthentication',
+    'getHeight',
+    'getHeaderForHeight',
+    'getNetwork',
+    'getVersion'
+  ] as const)('blocks %s, naming it, without reaching the wallet', async method => {
+    const wallet = new PayerWallet()
+    const real = vi.spyOn(wallet, method)
+    const facade = nonPayingWallet(wallet) as unknown as Record<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >
+    await expect(facade[method]({})).rejects.toThrow(`never pays`)
+    await expect(facade[method]({})).rejects.toThrow(method)
+    expect(real).not.toHaveBeenCalled()
+  })
+
+  it('is not mistaken for a promise when awaited', async () => {
+    const facade = nonPayingWallet(new PayerWallet())
+    expect(await facade).toBe(facade)
   })
 })
 

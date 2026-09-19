@@ -17,6 +17,7 @@ export const DEFAULTS = {
   maxFeeSats: 2000,
   queryTtlMs: 30_000,
   hostTimeoutMs: 5000,
+  paramsTimeoutMs: 2000,
   hostsTtlMs: 300_000,
   paramsTtlMs: 300_000,
   maxHosts: 16
