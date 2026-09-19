@@ -319,6 +319,68 @@ describe('Engine overlay admission helpers', () => {
     expect(JSON.parse(stale.steak).Hello.coinsRemoved).toEqual([0])
   })
 
+  test('carries an explicit coinsRemoved through to a topic STEAK entry that is not re-derived', async () => {
+    // The top-level STEAK pass (covering every validation, including dupes
+    // and topics with no new admission) must reflect a caller-supplied
+    // coinsRemoved rather than always defaulting it to [] -- only the
+    // *accepted* loop re-derives coinsRemoved from outputsToMarkStale.
+    const plan = await buildOverlayAdmissionPlan({
+      host: host(),
+      tx: exampleTX,
+      txid: exampleTxid,
+      beef: exampleBeef,
+      topics: ['Hello', 'World'],
+      mode: 'live',
+      validations: [
+        validation({ isDupe: true, outputsToAdmit: [], coinsRemoved: [3] }),
+        validation({ topic: 'World' })
+      ],
+      failedTopics: new Set(),
+      lookupServices,
+      includePropagation: false
+    })
+    expect(JSON.parse(plan.steak).Hello).toEqual({
+      outputsToAdmit: [],
+      coinsToRetain: [],
+      coinsRemoved: [3]
+    })
+  })
+
+  test('recovers a previous txid from sourceTransaction when sourceTXID is absent', async () => {
+    const provenSource = exampleTX.inputs[0].sourceTransaction
+    if (provenSource === undefined) throw new Error('expected a proven ancestor')
+    const tx = {
+      toBinary: () => exampleTX.toBinary(),
+      merklePath: undefined,
+      outputs: exampleTX.outputs,
+      inputs: [
+        {
+          sourceTXID: undefined,
+          sourceTransaction: provenSource,
+          sourceOutputIndex: exampleTX.inputs[0].sourceOutputIndex
+        }
+      ]
+    } as unknown as Transaction
+    const plan = await buildOverlayAdmissionPlan({
+      host: host(),
+      tx,
+      txid: exampleTxid,
+      beef: exampleBeef,
+      topics: ['Hello'],
+      mode: 'live',
+      validations: [validation({ previousCoins: [0], previousOutputs: [previousOutput] })],
+      failedTopics: new Set(),
+      lookupServices,
+      includePropagation: false
+    })
+    expect(plan.decisions[0].evictions).toEqual([
+      {
+        txid: provenSource.id('hex'),
+        outputIndex: asStorageUint64(String(exampleTX.inputs[0].sourceOutputIndex))
+      }
+    ])
+  })
+
   test('skips previous coins whose source txid cannot be recovered', async () => {
     const tx = {
       toBinary: () => exampleTX.toBinary(),

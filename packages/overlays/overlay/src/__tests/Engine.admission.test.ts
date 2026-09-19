@@ -257,6 +257,22 @@ describe('Engine admission submit', () => {
     expect(onReady).toHaveBeenCalledWith(steak)
   })
 
+  test('does not throw when no topic is accepted and no onSteakReady callback is supplied', async () => {
+    mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+      outputsToAdmit: [],
+      coinsToRetain: []
+    }))
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorage,
+      mockChainTracker
+    )
+    const steak = await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+    expect(steak).toEqual({ Hello: { outputsToAdmit: [], coinsToRetain: [] } })
+    expect(commitAdmission).not.toHaveBeenCalled()
+  })
+
   test('does not call commitAdmission and returns the in-memory STEAK when every topic is a dupe', async () => {
     mockStorage.doesAppliedTransactionExist = jest.fn(async () => true)
     const onReady = jest.fn()
