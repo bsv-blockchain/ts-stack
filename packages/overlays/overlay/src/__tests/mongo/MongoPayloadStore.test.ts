@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { Binary } from 'mongodb'
+import type { Binary, GridFSBucket } from 'mongodb'
 import { getAdmissionStorage } from '../../storage/AdmissionStorage.js'
 import {
   bootstrapMongoOverlay,
@@ -1053,6 +1053,40 @@ describe('MongoPayloadStore', () => {
     expect(
       await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
     ).toBe(1)
+  })
+
+  test('finishGarbage tolerates a concurrent retry that already deleted the GridFS file', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x12)
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content, 64 * 1024)
+    })
+    const payloads = fixture.db.collection('overlay_payloads')
+    const row = await payloads.findOne({ digest: hash, kind: 'outbox-data' })
+    expect(row?.fileId).toBeDefined()
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, payload)).toBe(true)
+    })
+    await session.endSession()
+    // A competing finisher removes the file after this one's ownership read, so
+    // the real driver raises its own "File not found for id" error here.
+    const bucket = (store as unknown as { bucket: GridFSBucket }).bucket
+    const realDelete = bucket.delete.bind(bucket)
+    const deleteSpy = jest.spyOn(bucket, 'delete').mockImplementationOnce(async id => {
+      await realDelete(id)
+      await realDelete(id)
+    })
+    expect(await store.finishGarbage(payload)).toBe(true)
+    expect(deleteSpy).toHaveBeenCalledTimes(1)
+    expect((await payloads.findOne({ _id: row?._id }))?.state).toBe('deleted')
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
+    ).toBe(0)
+    deleteSpy.mockRestore()
   })
 
   test('rejects publication when the upload lease is stolen just before the ready CAS', async () => {
