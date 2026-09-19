@@ -461,7 +461,9 @@ export class MongoPayloadStore {
       })
       if (owned !== null) {
         await this.bucket.delete(record.fileId).catch(error => {
-          if (!(error instanceof Error) || !/FileNotFound/.test(error.message)) throw error
+          // The driver reports an already-removed file as MongoRuntimeError
+          // "File not found for id <id>"; a concurrent finisher got there first.
+          if (!(error instanceof Error) || !/File not found/i.test(error.message)) throw error
         })
       }
     }

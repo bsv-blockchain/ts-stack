@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
+import type { Binary, GridFSBucket } from 'mongodb'
 import { getAdmissionStorage } from '../../storage/AdmissionStorage.js'
-import { bootstrapMongoOverlay } from '../../storage/mongo/MongoSchema.js'
+import {
+  bootstrapMongoOverlay,
+  encodeMongoUint64,
+  mongoChainKey,
+  mongoRecordKey
+} from '../../storage/mongo/MongoSchema.js'
 import { MongoPayloadStore } from '../../storage/mongo/MongoPayloadStore.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
 
@@ -14,6 +20,37 @@ const bytes = async function* (
 }
 
 const digest = (value: Uint8Array): string => createHash('sha256').update(value).digest('hex')
+
+/**
+ * A minimal AbortSignal-shaped test double whose `aborted` flag can be
+ * flipped after construction (a real AbortSignal cannot). It implements the
+ * only members MongoPayloadStore reads from a signal: the synchronous
+ * `aborted`/`reason` properties, plus the two EventTarget methods raceAbort
+ * registers, so it is safe to pass anywhere `AbortSignal` is accepted.
+ */
+function fakeAbortSignal(): AbortSignal & {
+  setAborted: (aborted: boolean) => void
+  setReason: (reason: unknown) => void
+} {
+  let abortedFlag = false
+  let reasonValue: unknown
+  return {
+    get aborted() {
+      return abortedFlag
+    },
+    get reason() {
+      return reasonValue
+    },
+    setAborted(aborted: boolean) {
+      abortedFlag = aborted
+    },
+    setReason(reason: unknown) {
+      reasonValue = reason
+    },
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined
+  } as unknown as AbortSignal & { setAborted: (aborted: boolean) => void; setReason: (reason: unknown) => void }
+}
 
 describe('MongoPayloadStore', () => {
   let fixture: MongoReplicaFixture
@@ -566,6 +603,28 @@ describe('MongoPayloadStore', () => {
     expect(await fixture.db.collection('overlay_payloads').countDocuments({ digest: hash })).toBe(2)
   })
 
+  test('many concurrent first-time publishers of the same digest still converge on one ready payload', async () => {
+    const weak = await fixture.connect({ retryWrites: false })
+    const racer = new MongoPayloadStore(weak.db(fixture.db.databaseName), fixture.scope)
+    const content = Buffer.from('many-way-overlap-same-digest')
+    const hash = digest(content)
+    const publish = async (): Promise<unknown> =>
+      racer.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content)
+      })
+    const results = await Promise.all(Array.from({ length: 12 }, publish))
+    for (const result of results) expect(result).toEqual(results[0])
+    expect(
+      await fixture.db
+        .collection('overlay_payloads')
+        .countDocuments({ kind: 'outbox-data', digest: hash, state: 'ready' })
+    ).toBe(1)
+    await weak.close()
+  })
+
   test('recovers an upload that crashed after GridFS publication and before ready', async () => {
     const content = Buffer.alloc(300 * 1024, 0x71)
     const hash = digest(content)
@@ -904,4 +963,570 @@ describe('MongoPayloadStore', () => {
       })
     ).rejects.toThrow('inline BSON document exceeds safety ceiling')
   }, 30000)
+
+  test('re-adding a pin slot with the identical unexpired expiry performs no write', async () => {
+    const fixedNow = new Date('2030-01-01T00:00:00.000Z')
+    const stable = new MongoPayloadStore(fixture.db, fixture.scope, { now: () => fixedNow })
+    const content = Buffer.from('pin-identical-expiry')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await stable.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
+    const expiresAt = new Date(fixedNow.getTime() + 60_000)
+    const pin = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'pin' as const,
+      ownerId: 'pin-identical-expiry',
+      slot: '0',
+      expiresAt
+    }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      await stable.addReference(session, pin)
+    })
+    const first = await fixture.db
+      .collection('overlay_payload_references')
+      .findOne({ ownerId: 'pin-identical-expiry' })
+    await session.withTransaction(async () => {
+      await stable.addReference(session, pin)
+    })
+    const second = await fixture.db
+      .collection('overlay_payload_references')
+      .findOne({ ownerId: 'pin-identical-expiry' })
+    expect(second?.updatedAt).toEqual(first?.updatedAt)
+    expect(second?.expiresAt).toEqual(expiresAt)
+    await session.endSession()
+  })
+
+  test('claimGarbage on a payload that was never published returns false without side effects', async () => {
+    const missing = { kind: 'outbox-data' as const, digest: digest(Buffer.from('never-published')) }
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, missing)).toBe(false)
+    })
+    await session.endSession()
+  })
+
+  test('invokes the afterDeleteClaim hook exactly when a GC claim succeeds', async () => {
+    let calls = 0
+    const hooked = new MongoPayloadStore(fixture.db, fixture.scope, {
+      hooks: {
+        afterDeleteClaim: () => {
+          calls += 1
+        }
+      }
+    })
+    const content = Buffer.from('hook-delete-claim')
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await hooked.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      expect(await hooked.claimGarbage(session, payload)).toBe(true)
+    })
+    await session.endSession()
+    expect(calls).toBe(1)
+  })
+
+  test('finishGarbage preserves a GridFS file whose ownership metadata has since changed', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x11)
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content, 64 * 1024)
+    })
+    const payloads = fixture.db.collection('overlay_payloads')
+    const row = await payloads.findOne({ digest: hash, kind: 'outbox-data' })
+    expect(row?.fileId).toBeDefined()
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, payload)).toBe(true)
+    })
+    await session.endSession()
+    await fixture.db
+      .collection('overlayPayloads.files')
+      .updateOne({ _id: row?.fileId }, { $set: { 'metadata.ownerId': 'someone-else' } })
+    expect(await store.finishGarbage(payload)).toBe(true)
+    expect((await payloads.findOne({ _id: row?._id }))?.state).toBe('deleted')
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
+    ).toBe(1)
+  })
+
+  test('finishGarbage tolerates a concurrent retry that already deleted the GridFS file', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x12)
+    const hash = digest(content)
+    const payload = { kind: 'outbox-data' as const, digest: hash }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content, 64 * 1024)
+    })
+    const payloads = fixture.db.collection('overlay_payloads')
+    const row = await payloads.findOne({ digest: hash, kind: 'outbox-data' })
+    expect(row?.fileId).toBeDefined()
+    const session = fixture.client.startSession()
+    await session.withTransaction(async () => {
+      expect(await store.claimGarbage(session, payload)).toBe(true)
+    })
+    await session.endSession()
+    // A competing finisher removes the file after this one's ownership read, so
+    // the real driver raises its own "File not found for id" error here.
+    const bucket = (store as unknown as { bucket: GridFSBucket }).bucket
+    const realDelete = bucket.delete.bind(bucket)
+    const deleteSpy = jest.spyOn(bucket, 'delete').mockImplementationOnce(async id => {
+      await realDelete(id)
+      await realDelete(id)
+    })
+    expect(await store.finishGarbage(payload)).toBe(true)
+    expect(deleteSpy).toHaveBeenCalledTimes(1)
+    expect((await payloads.findOne({ _id: row?._id }))?.state).toBe('deleted')
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
+    ).toBe(0)
+    deleteSpy.mockRestore()
+  })
+
+  test('rejects publication when the upload lease is stolen just before the ready CAS', async () => {
+    const content = Buffer.from('stolen-before-ready')
+    const hash = digest(content)
+    const fencing = new MongoPayloadStore(fixture.db, fixture.scope, {
+      hooks: {
+        beforeReadyCas: async () => {
+          await fixture.db
+            .collection('overlay_payloads')
+            .updateOne(
+              { kind: 'outbox-data', digest: hash },
+              { $set: { guard: 'stolen-guard', ownerId: 'stolen-owner' } }
+            )
+        }
+      }
+    })
+    await expect(
+      fencing.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content)
+      })
+    ).rejects.toThrow('fenced before publication')
+  })
+
+  test('rejects a wrong explicit txid on an otherwise-correct raw-transaction upload', async () => {
+    const content = Buffer.from('02000000000000000001', 'hex')
+    const hash = digest(content)
+    await expect(
+      store.publish({
+        kind: 'raw-transaction',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        txid: 'ab'.repeat(32),
+        bytes: bytes(content)
+      })
+    ).rejects.toThrow('does not match bytes')
+  })
+
+  test('rejects a wrong explicit txid when the referenced content is already ready', async () => {
+    const content = Buffer.from('03000000000000000002', 'hex')
+    const hash = digest(content)
+    await store.publish({
+      kind: 'raw-transaction',
+      digest: hash,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    await expect(
+      store.publish({
+        kind: 'raw-transaction',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        txid: 'cd'.repeat(32),
+        bytes: bytes(content)
+      })
+    ).rejects.toThrow('does not match bytes')
+  })
+
+  test('rejects with a generic message when an aborted signal carries no explicit reason', async () => {
+    const signal = fakeAbortSignal()
+    const content = Buffer.from('fake-signal-no-reason')
+    const chunked: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]() {
+        let sent = false
+        return {
+          next: async () => {
+            if (sent) return { done: true as const, value: undefined }
+            sent = true
+            signal.setAborted(true)
+            return { done: false as const, value: content }
+          }
+        }
+      }
+    }
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: digest(content),
+        byteLength: String(content.byteLength),
+        bytes: chunked,
+        signal
+      })
+    ).rejects.toThrow('Mongo payload upload aborted')
+  })
+
+  test('rejects with the signal reason when a chunk observes an already-aborted signal that carries one', async () => {
+    const signal = fakeAbortSignal()
+    const reason = new Error('fake-signal-explicit-reason')
+    const content = Buffer.from('fake-signal-with-reason')
+    const chunked: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]() {
+        let sent = false
+        return {
+          next: async () => {
+            if (sent) return { done: true as const, value: undefined }
+            sent = true
+            signal.setReason(reason)
+            signal.setAborted(true)
+            return { done: false as const, value: content }
+          }
+        }
+      }
+    }
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: digest(content),
+        byteLength: String(content.byteLength),
+        bytes: chunked,
+        signal
+      })
+    ).rejects.toBe(reason)
+  })
+
+  test('claimGarbage falls back to a generic message when the operation signal reason is unset', async () => {
+    const signal = fakeAbortSignal()
+    signal.setAborted(true)
+    const session = fixture.client.startSession()
+    await expect(
+      store.claimGarbage(
+        session,
+        { kind: 'outbox-data', digest: digest(Buffer.from('fake-signal-claim')) },
+        { signal }
+      )
+    ).rejects.toThrow('Mongo payload operation aborted')
+    await session.endSession()
+  })
+
+  test('rejects staging when the upload lease is stolen mid-stream', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x22)
+    const hash = digest(content)
+    let stolen = false
+    const chunked = async function* (): AsyncIterable<Uint8Array> {
+      const chunkSize = 64 * 1024
+      for (let offset = 0; offset < content.byteLength; offset += chunkSize) {
+        yield content.subarray(offset, offset + chunkSize)
+        if (!stolen && offset > 0) {
+          stolen = true
+          await fixture.db
+            .collection('overlay_payloads')
+            .updateOne(
+              { kind: 'outbox-data', digest: hash },
+              { $set: { guard: 'mid-stream-steal', ownerId: 'mid-stream-steal' } }
+            )
+        }
+      }
+    }
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: chunked()
+      })
+    ).rejects.toThrow('fenced before staging')
+  })
+
+  test('invokes GridFS crash-boundary hooks and rejects when the staged file state changes before publication', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x33)
+    const hash = digest(content)
+    const hookCalls: string[] = []
+    const hooked = new MongoPayloadStore(fixture.db, fixture.scope, {
+      hooks: {
+        afterGridFsUploaded: async () => {
+          hookCalls.push('afterGridFsUploaded')
+          await fixture.db
+            .collection('overlayPayloads.files')
+            .updateOne({ 'metadata.digest': hash }, { $set: { 'metadata.state': 'corrupted' } })
+        },
+        afterGridFsPublished: () => {
+          hookCalls.push('afterGridFsPublished')
+        },
+        beforeReadyCas: () => {
+          hookCalls.push('beforeReadyCas')
+        }
+      }
+    })
+    await expect(
+      hooked.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024)
+      })
+    ).rejects.toThrow('staged file was lost')
+    expect(hookCalls).toEqual(['afterGridFsUploaded'])
+  })
+
+  test('invokes every GridFS crash-boundary hook in order on a successful large upload', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x44)
+    const hash = digest(content)
+    const hookCalls: string[] = []
+    const hooked = new MongoPayloadStore(fixture.db, fixture.scope, {
+      hooks: {
+        afterGridFsUploaded: () => {
+          hookCalls.push('afterGridFsUploaded')
+        },
+        afterGridFsPublished: () => {
+          hookCalls.push('afterGridFsPublished')
+        },
+        beforeReadyCas: () => {
+          hookCalls.push('beforeReadyCas')
+        }
+      }
+    })
+    await expect(
+      hooked.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024)
+      })
+    ).resolves.toMatchObject({ digest: hash })
+    expect(hookCalls).toEqual(['afterGridFsUploaded', 'afterGridFsPublished', 'beforeReadyCas'])
+  })
+
+  test('abandonUpload does not delete a file a fenced winner already published', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x55)
+    const hash = digest(content)
+    const crashing = new MongoPayloadStore(fixture.db, fixture.scope, {
+      hooks: {
+        beforeReadyCas: async () => {
+          const row = await fixture.db
+            .collection('overlay_payloads')
+            .findOne({ kind: 'outbox-data', digest: hash })
+          await fixture.db
+            .collection('overlayPayloads.files')
+            .updateOne({ _id: row?.fileId }, { $set: { 'metadata.state': 'published' } })
+          throw new Error('simulated crash after independent publish')
+        }
+      }
+    })
+    await expect(
+      crashing.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024)
+      })
+    ).rejects.toThrow('simulated crash after independent publish')
+    const payloadRow = await fixture.db
+      .collection('overlay_payloads')
+      .findOne({ kind: 'outbox-data', digest: hash })
+    expect(payloadRow?.state).toBe('uploading')
+    expect(payloadRow?.fileId).toBeDefined()
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: payloadRow?.fileId })
+    ).toBe(1)
+  })
+
+  test('a digest mismatch detected after spilling to GridFS retires the orphaned file', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x66)
+    const wrongDigest = digest(Buffer.from('wrong-declared-digest'))
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: wrongDigest,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024)
+      })
+    ).rejects.toThrow('digest or declared length mismatch')
+    const row = await fixture.db
+      .collection('overlay_payloads')
+      .findOne({ kind: 'outbox-data', digest: wrongDigest })
+    expect(row?.state).toBe('deleted')
+    expect(row?.retiredFileId).toBeDefined()
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.retiredFileId })
+    ).toBe(0)
+  })
+
+  test('recovers a stale inline upload that has no GridFS file by marking it deleted', async () => {
+    const now = new Date()
+    const hash = digest(Buffer.from('stale-inline-upload'))
+    const payloadId = `stale-inline-${hash}`
+    await fixture.db.collection('overlay_payloads').insertOne({
+      _id: payloadId,
+      schemaVersion: 1,
+      network: fixture.scope.network,
+      genesisHash: fixture.scope.genesisHash,
+      kind: 'outbox-data',
+      digest: hash,
+      byteLength: encodeMongoUint64('5'),
+      state: 'uploading',
+      guard: 'stale-owner',
+      ownerNodeId: fixture.scope.nodeId,
+      ownerId: 'stale-owner',
+      fencingToken: encodeMongoUint64('0'),
+      leaseUntil: new Date(Date.now() - 1000),
+      createdAt: now,
+      updatedAt: now
+    })
+    await store.recoverUploads()
+    const row = await fixture.db.collection('overlay_payloads').findOne({ _id: payloadId })
+    expect(row?.state).toBe('deleted')
+    expect(row?.fileId).toBeUndefined()
+    expect(row?.retiredFileId).toBeUndefined()
+  })
+
+  test('retires an orphaned GridFS file when a fresh publish reclaims an expired crashed reservation', async () => {
+    const donorContent = Buffer.alloc(300 * 1024, 0xdd)
+    const donorHash = digest(donorContent)
+    await store.publish({
+      kind: 'outbox-data',
+      digest: donorHash,
+      byteLength: String(donorContent.byteLength),
+      bytes: bytes(donorContent, 64 * 1024)
+    })
+    const donorRow = await fixture.db
+      .collection('overlay_payloads')
+      .findOne({ kind: 'outbox-data', digest: donorHash })
+    const donorFile = await fixture.db
+      .collection('overlayPayloads.files')
+      .findOne({ _id: donorRow?.fileId })
+    expect(donorFile).not.toBeNull()
+
+    const crashedContent = Buffer.from('crashed-reservation')
+    const crashedHash = digest(crashedContent)
+    const crashedOwner = (donorFile as { metadata: { ownerId: string } }).metadata.ownerId
+    const crashedFence = (donorFile as { metadata: { fencingToken: string } }).metadata.fencingToken
+    await fixture.db.collection('overlay_payloads').insertOne({
+      _id: mongoRecordKey(mongoChainKey(fixture.scope), 'outbox-data', crashedHash),
+      schemaVersion: 1,
+      network: fixture.scope.network,
+      genesisHash: fixture.scope.genesisHash,
+      kind: 'outbox-data',
+      digest: crashedHash,
+      byteLength: encodeMongoUint64(String(crashedContent.byteLength)),
+      state: 'uploading',
+      guard: crashedOwner,
+      ownerNodeId: fixture.scope.nodeId,
+      ownerId: crashedOwner,
+      fencingToken: crashedFence,
+      fileId: donorFile?._id,
+      leaseUntil: new Date(Date.now() - 1000),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: crashedHash,
+        byteLength: String(crashedContent.byteLength),
+        bytes: bytes(crashedContent)
+      })
+    ).resolves.toMatchObject({ digest: crashedHash })
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: donorFile?._id })
+    ).toBe(0)
+  })
+
+  test('claimGarbage rejects immediately with the operation signal reason when already aborted', async () => {
+    const controller = new AbortController()
+    const reason = new Error('operation cancelled up front')
+    controller.abort(reason)
+    const session = fixture.client.startSession()
+    await expect(
+      store.claimGarbage(
+        session,
+        { kind: 'outbox-data', digest: digest(Buffer.from('pre-aborted')) },
+        { signal: controller.signal }
+      )
+    ).rejects.toBe(reason)
+    await session.endSession()
+  })
+
+  test('publishes normally with a live but never-aborted signal attached to a GridFS upload', async () => {
+    const content = Buffer.alloc(300 * 1024, 0x77)
+    const hash = digest(content)
+    const controller = new AbortController()
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content, 64 * 1024),
+        signal: controller.signal
+      })
+    ).resolves.toMatchObject({ digest: hash })
+  })
+
+  test('propagates a genuine iterator failure through raceAbort when a live signal is attached', async () => {
+    const controller = new AbortController()
+    const failing: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: async () => {
+            throw new Error('genuine-iterator-failure')
+          }
+        }
+      }
+    }
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: digest(Buffer.from('genuine-iterator-failure-payload')),
+        byteLength: '1',
+        bytes: failing,
+        signal: controller.signal
+      })
+    ).rejects.toThrow('genuine-iterator-failure')
+    expect(controller.signal.aborted).toBe(false)
+  })
+
+  test('rejects a staged GridFS upload whose content was corrupted without changing its declared length', async () => {
+    const content = Buffer.alloc(300 * 1024, 0xaa)
+    const hash = digest(content)
+    await store.publish({
+      kind: 'outbox-data',
+      digest: hash,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content, 64 * 1024)
+    })
+    const payloads = fixture.db.collection('overlay_payloads')
+    const row = await payloads.findOne({ kind: 'outbox-data', digest: hash })
+    expect(row?.fileId).toBeDefined()
+    const chunk = await fixture.db
+      .collection('overlayPayloads.chunks')
+      .findOne({ files_id: row?.fileId, n: 0 })
+    const originalData = chunk?.data as Buffer | Binary
+    const originalLength = Buffer.isBuffer(originalData) ? originalData.length : originalData.length()
+    await fixture.db
+      .collection('overlayPayloads.chunks')
+      .updateOne({ _id: chunk?._id }, { $set: { data: Buffer.alloc(originalLength, 0xcc) } })
+    await payloads.updateOne({ _id: row?._id }, [
+      {
+        $set: {
+          state: 'uploading',
+          leaseUntil: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } }
+        }
+      }
+    ])
+    await store.recoverUploads()
+    const recovered = await payloads.findOne({ _id: row?._id })
+    expect(recovered?.state).toBe('deleted')
+    expect(
+      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
+    ).toBe(0)
+  })
 })
