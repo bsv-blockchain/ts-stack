@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.6
 
+- Remove unused `WERR_NETWORK_CHAIN` and unused `ProcessSyncChunkResult.error`.
+  The error class was defined and deserialized but never thrown, and no producer
+  or consumer of `processSyncChunk` set or read `error`. Cross-chain live sync
+  is still unguarded; portable BRC-38 import continues to throw a generic
+  `Error`. Historical JSON with name `WERR_NETWORK_CHAIN` still deserializes as
+  a generic `WalletError`. No runtime, wire, or database migration is required
+  unless an application imported the unused class or read the unused field.
+
 - UMP support pins anchor verified update lineage. Password and token updates
   supersede the pinned predecessor, including multi-hop updates and recovery-hash
   continuity. Unrelated historical continuations cannot override the anchor.
@@ -116,6 +124,14 @@ was not issued by this permissions manager.`
   may already exist.
 
 ## wallet-toolbox (unreleased)
+
+- Remove unused `WERR_NETWORK_CHAIN` and unused `ProcessSyncChunkResult.error`.
+  The error class was defined and deserialized but never thrown, and no producer
+  or consumer of `processSyncChunk` set or read `error`. Cross-chain live sync
+  is still unguarded; portable BRC-38 import continues to throw a generic
+  `Error`. Historical JSON with name `WERR_NETWORK_CHAIN` still deserializes as
+  a generic `WalletError`. No runtime, wire, or database migration is required
+  unless an application imported the unused class or read the unused field.
 
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,
   `@bsv/wallet-toolbox-client`, and `@bsv/wallet-toolbox-mobile`. Value imports

@@ -37,7 +37,6 @@ import {
 } from '../storage/schema/tables'
 import { WalletServices } from './WalletServices.interfaces'
 import { Chain, Paged, ProvenTxReqStatus, TransactionStatus } from './types'
-import { WalletError } from './WalletError'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -715,7 +714,6 @@ export interface ProcessSyncChunkResult {
   maxUpdated_at: Date | undefined
   updates: number
   inserts: number
-  error?: WalletError
 }
 
 /**

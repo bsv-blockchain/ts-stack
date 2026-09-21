@@ -4960,11 +4960,10 @@ export interface ProcessSyncChunkResult {
     maxUpdated_at: Date | undefined;
     updates: number;
     inserts: number;
-    error?: WalletError;
 }
 ```
 
-See also: [SyncCheckpoint](./client.md#interface-synccheckpoint), [WalletError](./client.md#class-walleterror)
+See also: [SyncCheckpoint](./client.md#interface-synccheckpoint)
 
 ###### Property nextCheckpoint
 
@@ -8723,20 +8722,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [ChaintracksFetch](#class-chaintracksfetch) | [ServiceCollection](#class-servicecollection) | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
 | [ChaintracksFetchError](#class-chaintracksfetcherror) | [Services](#class-services) | [WERR_INVALID_PUBLIC_KEY](#class-werr_invalid_public_key) |
 | [ChaintracksServiceClient](#class-chaintracksserviceclient) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) | [WERR_MISSING_PARAMETER](#class-werr_missing_parameter) |
-| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [StaleSyncProofError](#class-stalesyncprooferror) | [WERR_NETWORK_CHAIN](#class-werr_network_chain) |
-| [EntityBase](#class-entitybase) | [StorageProvider](#class-storageprovider) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
-| [EntityCertificate](#class-entitycertificate) | [StorageReader](#class-storagereader) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
-| [EntityCertificateField](#class-entitycertificatefield) | [StorageReaderWriter](#class-storagereaderwriter) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
-| [EntityCommission](#class-entitycommission) | [SyncPageBudget](#class-syncpagebudget) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
-| [EntityOutput](#class-entityoutput) | [TaskArcadeSSE](#class-taskarcadesse) | [WERR_UTXO_REVIEW_INCONCLUSIVE](#class-werr_utxo_review_inconclusive) |
-| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckForProofs](#class-taskcheckforproofs) | [Wallet](#class-wallet) |
-| [EntityOutputTag](#class-entityoutputtag) | [TaskCheckNoSends](#class-taskchecknosends) | [WalletError](#class-walleterror) |
-| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskCleanupActionBatches](#class-taskcleanupactionbatches) | [WalletMonitorTask](#class-walletmonitortask) |
-| [EntityProvenTx](#class-entityproventx) | [TaskClock](#class-taskclock) | [WalletSettingsManager](#class-walletsettingsmanager) |
-| [EntityProvenTxReq](#class-entityproventxreq) | [TaskFailAbandoned](#class-taskfailabandoned) | [WalletSigner](#class-walletsigner) |
-| [EntitySyncState](#class-entitysyncstate) | [TaskMineBlock](#class-taskmineblock) | [WalletStorageManager](#class-walletstoragemanager) |
-| [EntityTransaction](#class-entitytransaction) | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [WhatsOnChain](#class-whatsonchain) |
-| [EntityTxLabel](#class-entitytxlabel) | [TaskNewHeader](#class-tasknewheader) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
+| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [StaleSyncProofError](#class-stalesyncprooferror) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
+| [EntityBase](#class-entitybase) | [StorageProvider](#class-storageprovider) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
+| [EntityCertificate](#class-entitycertificate) | [StorageReader](#class-storagereader) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
+| [EntityCertificateField](#class-entitycertificatefield) | [StorageReaderWriter](#class-storagereaderwriter) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
+| [EntityCommission](#class-entitycommission) | [SyncPageBudget](#class-syncpagebudget) | [WERR_UTXO_REVIEW_INCONCLUSIVE](#class-werr_utxo_review_inconclusive) |
+| [EntityOutput](#class-entityoutput) | [TaskArcadeSSE](#class-taskarcadesse) | [Wallet](#class-wallet) |
+| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletError](#class-walleterror) |
+| [EntityOutputTag](#class-entityoutputtag) | [TaskCheckNoSends](#class-taskchecknosends) | [WalletMonitorTask](#class-walletmonitortask) |
+| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskCleanupActionBatches](#class-taskcleanupactionbatches) | [WalletSettingsManager](#class-walletsettingsmanager) |
+| [EntityProvenTx](#class-entityproventx) | [TaskClock](#class-taskclock) | [WalletSigner](#class-walletsigner) |
+| [EntityProvenTxReq](#class-entityproventxreq) | [TaskFailAbandoned](#class-taskfailabandoned) | [WalletStorageManager](#class-walletstoragemanager) |
+| [EntitySyncState](#class-entitysyncstate) | [TaskMineBlock](#class-taskmineblock) | [WhatsOnChain](#class-whatsonchain) |
+| [EntityTransaction](#class-entitytransaction) | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
+| [EntityTxLabel](#class-entitytxlabel) | [TaskNewHeader](#class-tasknewheader) |  |
 | [EntityTxLabelMap](#class-entitytxlabelmap) | [TaskNoSendExpiry](#class-tasknosendexpiry) |  |
 | [EntityUser](#class-entityuser) | [TaskPurge](#class-taskpurge) |  |
 
@@ -12792,21 +12791,6 @@ This is an example of an error object with a custom property `parameter`
 export class WERR_MISSING_PARAMETER extends WalletError {
     constructor(public parameter: string)
     override toJson(): string
-}
-```
-
-See also: [WalletError](./client.md#class-walleterror)
-
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
-
----
-##### Class: WERR_NETWORK_CHAIN
-
-Configured network chain is invalid or does not match across services.
-
-```ts
-export class WERR_NETWORK_CHAIN extends WalletError {
-    constructor(message?: string)
 }
 ```
 

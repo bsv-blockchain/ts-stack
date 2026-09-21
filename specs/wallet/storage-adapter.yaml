@@ -1317,8 +1317,6 @@ components:
         done:
           type: boolean
           description: true if no more chunks are needed.
-        error:
-          type: string
 
     FindOrInsertSyncStateRequest:
       type: object
