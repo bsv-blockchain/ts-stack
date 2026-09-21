@@ -518,6 +518,17 @@
       "release": "npm-oidc"
     },
     {
+      "path": "packages/messaging/group-messaging",
+      "name": "@bsv/group-messaging",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "node-library",
+      "consumerProfiles": ["node-cjs", "node-esm"],
+      "criticality": "tier-2",
+      "runtimeTargets": ["node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/messaging/message-box-client",
       "name": "@bsv/message-box-client",
       "owner": "ts-stack-maintainers",

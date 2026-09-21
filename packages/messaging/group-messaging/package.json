@@ -1,0 +1,95 @@
+{
+  "name": "@bsv/group-messaging",
+  "version": "0.1.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "End-to-end encrypted group messaging for BRC-100 wallets — MLS group state over wallet-to-wallet transport",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "doc": "ts2md --inputFilename=src/index.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/group-messaging/src/**/*.ts\" \"packages/messaging/group-messaging/*.{json,ts}\"",
+    "lint": "oxlint src vitest.config.ts --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports GroupMessagingClient,Group,IdentityService,StorageProvider,TransportService,MlsEngine,InviteService,MessageBoxTransport,InProcessTransportHub",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
+  },
+  "keywords": [
+    "bsv",
+    "blockchain",
+    "bitcoin",
+    "sv",
+    "messaging",
+    "mls",
+    "rfc9420",
+    "group-messaging",
+    "brc-100"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/messaging/group-messaging"
+  },
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@noble/ciphers": "2.1.1",
+    "@noble/curves": "2.0.1",
+    "ts-mls": "1.6.4"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^2.4.1"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@bsv/message-box-client": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "fake-indexeddb": "^6.2.5",
+    "oxlint": "^1.76.0",
+    "ts2md": "^0.2.8",
+    "tsdown": "0.22.14",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/group-messaging#readme"
+}
