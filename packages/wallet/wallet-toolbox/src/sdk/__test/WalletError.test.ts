@@ -8,7 +8,6 @@ import {
   WERR_REVIEW_ACTIONS,
   WERR_INSUFFICIENT_FUNDS,
   WERR_BROADCAST_UNAVAILABLE,
-  WERR_NETWORK_CHAIN,
   WERR_INVALID_OPERATION,
   WERR_MISSING_PARAMETER,
   WERR_BAD_REQUEST,
@@ -166,13 +165,14 @@ describe('WalletError tests', () => {
     expect(werr2.message).toBe('Unable to broadcast transaction at this time.')
   })
 
-  test('6 - WERR_NETWORK_CHAIN test', async () => {
-    const werr = new WERR_NETWORK_CHAIN('Chain mismatch')
+  test('6 - retired WERR_NETWORK_CHAIN name still deserializes as WalletError', async () => {
+    const werr = new WalletError('WERR_NETWORK_CHAIN', 'Chain mismatch')
     expect(werr.name).toBe('WERR_NETWORK_CHAIN')
     expect(werr.message).toBe('Chain mismatch')
 
     const json = WalletError.unknownToJson(werr)
     const werr2 = WalletErrorFromJson(JSON.parse(json))
+    expect(werr2).toBeInstanceOf(WalletError)
     expect(werr2.name).toBe('WERR_NETWORK_CHAIN')
     expect(werr2.message).toBe('Chain mismatch')
   })

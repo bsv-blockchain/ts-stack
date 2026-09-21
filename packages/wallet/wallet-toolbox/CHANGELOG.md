@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Remove unused `WERR_NETWORK_CHAIN` and unused `ProcessSyncChunkResult.error`.
+  The error class was defined and deserialized but never thrown, and no producer
+  or consumer of `processSyncChunk` set or read `error`. Cross-chain live sync
+  is still unguarded; portable BRC-38 import continues to throw a generic
+  `Error`. Historical JSON with name `WERR_NETWORK_CHAIN` still deserializes as
+  a generic `WalletError`. No runtime, wire, or database migration is required
+  unless an application imported the unused class or read the unused field.
+
 - Implement `BHServiceClient.findChainTipHash()` by delegating to its existing
   `findChainTipHeader()` call against `/api/v1/chain/tip/longest`, instead of
   throwing `Not implemented`. `ChaintracksChainTracker.getVerificationContextToken()`
