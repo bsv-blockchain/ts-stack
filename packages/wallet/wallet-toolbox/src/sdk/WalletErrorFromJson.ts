@@ -9,7 +9,6 @@ import {
   WERR_INVALID_PARAMETER,
   WERR_INVALID_PUBLIC_KEY,
   WERR_MISSING_PARAMETER,
-  WERR_NETWORK_CHAIN,
   WERR_NOT_ACTIVE,
   WERR_NOT_IMPLEMENTED,
   WERR_REVIEW_ACTIONS,
@@ -60,9 +59,6 @@ export function WalletErrorFromJson(json: object): WalletError {
       break
     case 'WERR_BAD_REQUEST':
       e = new WERR_BAD_REQUEST(obj.message)
-      break
-    case 'WERR_NETWORK_CHAIN':
-      e = new WERR_NETWORK_CHAIN(obj.message)
       break
     case 'WERR_UNAUTHORIZED':
       e = new WERR_UNAUTHORIZED(obj.message)
