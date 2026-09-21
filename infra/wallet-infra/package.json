@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.40",
+  "version": "2.0.41",
   "overrides": {
     "gaxios": "7.3.0"
   },
