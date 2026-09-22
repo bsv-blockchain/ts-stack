@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ServiceCollection } from '../ServiceCollection'
 import { Services } from '../Services'
 import { validateUtxoStatusResult } from '../validateUtxoStatusResult'
@@ -34,10 +36,7 @@ describe('UTXO-status provider trust boundary', () => {
     const unconfirmed = { ...detail(), height: undefined }
 
     expect(
-      validateUtxoStatusResult(
-        { name: 'remote', status: 'success', isUtxo: true, details: [unconfirmed] },
-        OUTPOINT
-      )
+      validateUtxoStatusResult({ name: 'remote', status: 'success', isUtxo: true, details: [unconfirmed] }, OUTPOINT)
     ).toEqual({
       name: 'remote',
       status: 'success',
@@ -61,6 +60,35 @@ describe('UTXO-status provider trust boundary', () => {
         OUTPOINT
       )
     ).toThrow('consistent')
+  })
+
+  test('copies each detail with its own index and the same field values', () => {
+    const source = readFileSync(join(__dirname, '../validateUtxoStatusResult.ts'), 'utf8')
+    expect(source).not.toContain('.map(copyDetail)')
+    expect(source).toContain('copyDetail(detail, index)')
+
+    const result = validateUtxoStatusResult(
+      {
+        name: 'remote',
+        status: 'success',
+        isUtxo: true,
+        details: [detail(), { ...detail(), index: 3, satoshis: 7 }]
+      },
+      undefined,
+      'configured-name'
+    )
+    expect(result.details).toEqual([detail(), { ...detail(), index: 3, satoshis: 7 }])
+    expect(() =>
+      validateUtxoStatusResult(
+        {
+          name: 'remote',
+          status: 'success',
+          isUtxo: true,
+          details: [detail(), { ...detail(), satoshis: -1 }]
+        },
+        OUTPOINT
+      )
+    ).toThrow('details[1]')
   })
 
   test('rejects malformed and accessor-backed detail fields without invoking them', () => {

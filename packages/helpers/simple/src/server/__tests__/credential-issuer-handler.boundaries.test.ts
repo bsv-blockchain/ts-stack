@@ -77,6 +77,32 @@ describe('credential issuer key lifecycle and revocation wiring', () => {
     expect(JSON.parse(readFileSync(keyFile, 'utf8'))).toEqual({ privateKey, publicKey })
   })
 
+  it('loads a persisted issuer key whose properties sort as privateKey, publicKey', async () => {
+    const privateKey = PrivateKey.fromRandom().toHex()
+    const publicKey = PrivateKey.fromHex(privateKey).toPublicKey().toString()
+    const stored: Record<string, string> = {}
+    stored.publicKey = publicKey
+    stored.privateKey = privateKey
+    writeFileSync(keyFile, JSON.stringify(stored), { mode: 0o600 })
+    const create = jest.spyOn(CredentialIssuer, 'create').mockResolvedValue(issuer(publicKey))
+    const originalSort = Array.prototype.sort
+    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+      if (typeof compareFn !== 'function') {
+        throw new Error('Array.prototype.sort was called without a comparator')
+      }
+      return originalSort.call(this, compareFn)
+    }
+    try {
+      const response = await createCredentialIssuerHandler({ schemas: SCHEMAS, keyFile }).GET?.({
+        url: 'https://issuer.example/api?action=info'
+      })
+      expect(response?.status).toBe(200)
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ privateKey }))
+    } finally {
+      Array.prototype.sort = originalSort
+    }
+  })
+
   it('loads a strictly bound persisted key and caches the issuer', async () => {
     const privateKey = PrivateKey.fromRandom().toHex()
     const publicKey = PrivateKey.fromHex(privateKey).toPublicKey().toString()

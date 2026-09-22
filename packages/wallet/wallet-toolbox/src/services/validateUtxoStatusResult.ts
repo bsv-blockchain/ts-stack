@@ -122,7 +122,9 @@ export function validateUtxoStatusResult(
 
   const isUtxo = read(descriptors, 'isUtxo')
   if (typeof isUtxo !== 'boolean') invalid('getUtxoStatus result.isUtxo', 'a boolean for a successful result')
-  const details = denseArray(read(descriptors, 'details'), 'getUtxoStatus result.details').map(copyDetail)
+  const details = denseArray(read(descriptors, 'details'), 'getUtxoStatus result.details').map((detail, index) =>
+    copyDetail(detail, index)
+  )
   const outpoints = details.map(detail => `${detail.txid!}.${detail.index!}`)
   if (new Set(outpoints).size !== outpoints.length) invalid('getUtxoStatus result.details', 'unique outpoints')
   const expectedVerdict = outpoint === undefined ? details.length > 0 : outpoints.includes(outpoint)

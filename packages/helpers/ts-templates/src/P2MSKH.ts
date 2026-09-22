@@ -200,7 +200,12 @@ function requireInstructions(value: unknown): {
   const keyID = requireKeyID(descriptors.keyID.value)
   const counterparty = requireCounterparty(descriptors.counterparty.value)
   const pubkeys = requirePublicKeyStrings(descriptors.pubkeys.value)
-  return { keyID, counterparty, pubkeys, parsedPubkeys: pubkeys.map(PublicKey.fromString) }
+  return {
+    keyID,
+    counterparty,
+    pubkeys,
+    parsedPubkeys: pubkeys.map(pubkey => PublicKey.fromString(pubkey))
+  }
 }
 
 function byteArraysEqual(left: number[], right: number[]): boolean {

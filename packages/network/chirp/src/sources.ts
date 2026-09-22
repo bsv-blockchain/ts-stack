@@ -56,6 +56,12 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<Uint8Array> {
   return typeof value === 'object' && value !== null && Symbol.asyncIterator in value
 }
 
+function iteratorReturnValue(iterator: AsyncIterator<Uint8Array>): unknown {
+  const finish = iterator.return
+  if (typeof finish !== 'function') return undefined
+  return finish.call(iterator)
+}
+
 async function* asyncIterableBytes(
   source: AsyncIterable<Uint8Array>,
   signal?: AbortSignal
@@ -79,11 +85,14 @@ async function* asyncIterableBytes(
     }
   } finally {
     if (!completed && typeof iterator.return === 'function') {
+      let returned: unknown
       try {
-        void Promise.resolve(iterator.return()).catch(() => {})
+        returned = iteratorReturnValue(iterator)
       } catch {
         // A hostile or broken iterator cannot block local cancellation cleanup.
+        returned = undefined
       }
+      void Promise.resolve(returned).catch(() => {})
     }
   }
 }

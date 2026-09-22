@@ -32,12 +32,19 @@ function ownBytes(value: unknown): number[] {
   return output
 }
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function ownRecord(value: unknown): RevocationRecord {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Stored revocation record is invalid')
   }
   const descriptors = Object.getOwnPropertyDescriptors(value)
-  const keys = Object.keys(descriptors).sort()
+  const keys = Object.keys(descriptors).sort(compareCodeUnits)
   if (
     keys.length !== 3 ||
     keys[0] !== 'beef' ||

@@ -910,6 +910,36 @@ describe('Historian', () => {
       expect(cache.size).toBe(9)
     })
 
+    it('encodes object cache keys in UTF-16 code-unit order', async () => {
+      const context: Record<string, number> = {}
+      context['ä'] = 2
+      context.z = 1
+      context.A = 3
+      const orderedKeys = Object.keys(context).sort()
+      const encodedFields = orderedKeys
+        .map(key => `s${key.length}:${key}=d${context[key]}`)
+        .join(',')
+      const cache = new Map<string, readonly TestValue[]>()
+      const originalSort = Array.prototype.sort
+      Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+        if (typeof compareFn !== 'function') {
+          throw new Error('Array.prototype.sort was called without a comparator')
+        }
+        return originalSort.call(this, compareFn)
+      }
+      try {
+        await makeCachingHistorian({ historyCache: cache }).buildHistory(
+          cacheableTransaction(),
+          context
+        )
+      } finally {
+        Array.prototype.sort = originalSort
+      }
+      expect([...cache.keys()].join('\n')).toContain(encodedFields)
+      expect(encodedFields.indexOf('s1:A=')).toBeLessThan(encodedFields.indexOf('s1:z='))
+      expect(encodedFields.indexOf('s1:z=')).toBeLessThan(encodedFields.indexOf('s1:ä='))
+    })
+
     it.each([
       ['a missing interpreter', undefined, {}, 'interpreter is required'],
       [

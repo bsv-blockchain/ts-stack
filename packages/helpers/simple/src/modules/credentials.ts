@@ -252,11 +252,18 @@ function canonicalIsoDate(value: unknown): string | undefined {
   return value
 }
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function credentialSubjectMatches(value: unknown, certificate: CertificateData): boolean {
   const record = snapshotPlainDataRecord(value)
   if (record == null || record.id !== `did:bsv:${certificate.subject}`) return false
-  const expectedKeys = ['id', ...Object.keys(certificate.fields)].sort()
-  const actualKeys = Object.keys(record).sort()
+  const expectedKeys = ['id', ...Object.keys(certificate.fields)].sort(compareCodeUnits)
+  const actualKeys = Object.keys(record).sort(compareCodeUnits)
   return (
     expectedKeys.length === actualKeys.length &&
     expectedKeys.every((key, index) => key === actualKeys[index]) &&

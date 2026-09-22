@@ -4,12 +4,19 @@ import fs from 'node:fs/promises'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 export function comparePerformanceReports(baseline, candidate) {
   if (baseline.benchmark !== candidate.benchmark) throw new Error('benchmark identities differ')
   if (baseline.payloadBytes !== candidate.payloadBytes) throw new Error('benchmark payloads differ')
 
-  const baselineNames = Object.keys(baseline.measurements ?? {}).sort()
-  const candidateNames = Object.keys(candidate.measurements ?? {}).sort()
+  const baselineNames = Object.keys(baseline.measurements ?? {}).sort(compareCodeUnits)
+  const candidateNames = Object.keys(candidate.measurements ?? {}).sort(compareCodeUnits)
   if (JSON.stringify(baselineNames) !== JSON.stringify(candidateNames)) {
     throw new Error('benchmark measurement sets differ')
   }

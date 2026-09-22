@@ -653,12 +653,16 @@ export class Monitor {
     return item
   }
 
+  private preparedBeefInvalidation(): unknown {
+    return this.storage.invalidatePreparedBeefsForReorg()
+  }
+
   private requestPreparedBeefInvalidation(): void {
     if (this.reorgInvalidationPending) return
     this.reorgInvalidationPending = true
     let invalidation: Promise<void>
     try {
-      invalidation = this.storage.invalidatePreparedBeefsForReorg()
+      invalidation = this.preparedBeefInvalidation() as Promise<void>
     } catch (error) {
       invalidation = Promise.reject(error)
     }

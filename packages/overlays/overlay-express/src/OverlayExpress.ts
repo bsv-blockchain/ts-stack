@@ -1068,10 +1068,13 @@ export default class OverlayExpress {
     if (config.chaintracksApiPrefix !== undefined) {
       assertSingleLineString(config.chaintracksApiPrefix, 'Arcade Chaintracks API prefix', 2048)
       // Reuse the provider's URL-path parser even when Chaintracks is configured later.
-      new ChaintracksProvider(url, {
+      const chaintracksStreamUrl = new ChaintracksProvider(url, {
         apiPrefix: config.chaintracksApiPrefix,
         allowPrivateHosts
-      })
+      }).reorgStreamUrl()
+      if (!chaintracksStreamUrl.endsWith('/reorg/stream')) {
+        throw new TypeError('Chaintracks API prefix must be a URL path')
+      }
     }
     this.arcadeUrl = url
     this.arcadeApiKey = config.apiKey

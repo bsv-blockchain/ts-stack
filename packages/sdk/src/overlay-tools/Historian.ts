@@ -50,6 +50,13 @@ function ownDataValue(record: Record<string, unknown>, key: string): unknown {
   return descriptor.value
 }
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 /**
  * Produces a deterministic, type-preserving key for JSON-like context. Unlike
  * JSON.stringify, this does not collapse missing/undefined values or silently
@@ -114,7 +121,7 @@ function stableContextKey(value: unknown): string {
       if (keys.some(key => typeof key !== 'string')) {
         throw new TypeError('Historian cache context must not contain symbol properties.')
       }
-      const stringKeys = (keys as string[]).sort()
+      const stringKeys = (keys as string[]).sort(compareCodeUnits)
       const fields = stringKeys.map(key => {
         const encodedKey = `s${key.length}:${key}`
         return `${encodedKey}=${encode(

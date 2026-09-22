@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, jest } from '@jest/globals'
 import OverlayExpress from '../OverlayExpress.js'
 import { OverlayMonitor } from '../OverlayMonitor.js'
@@ -86,6 +88,17 @@ describe('OverlayExpress public configuration boundaries', () => {
     expect(() =>
       overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: 'bad\nprefix' })
     ).toThrow('control characters')
+
+    const configureArcade = readFileSync(join(process.cwd(), 'src/OverlayExpress.ts'), 'utf8')
+    const arcadeMethod = configureArcade.slice(configureArcade.indexOf('configureArcade('))
+    expect(arcadeMethod).toContain('const chaintracksStreamUrl = new ChaintracksProvider')
+    expect(arcadeMethod).toContain('.reorgStreamUrl()')
+    expect(() =>
+      overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: '//evil.example' })
+    ).toThrow('protocol-relative')
+    expect(() =>
+      overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: 'foo?x=1' })
+    ).toThrow('URL path')
 
     overlay.configureArcade('https://arcade.example', {
       apiKey: 'api-key',

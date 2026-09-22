@@ -146,4 +146,44 @@ describe('certificate validation trust boundaries', () => {
       })
     ).toThrow('Invalid certificate type')
   })
+
+  it('pairs certificate fields with subject keys in code-unit order', async () => {
+    const fields = { z: 'QQ==', ä: 'QQ==', A: 'QQ==' }
+    const keyringForSubject = { A: 'QQ==', ä: 'QQ==', z: 'QQ==' }
+    const originalSort = Array.prototype.sort
+    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+      if (typeof compareFn !== 'function') {
+        throw new Error('Array.prototype.sort was called without a comparator')
+      }
+      return originalSort.call(this, compareFn)
+    }
+    try {
+      await expect(
+        validateCertificateData({
+          type: CERTIFICATE_TYPE,
+          serialNumber: CERTIFICATE_SERIAL,
+          subject: SUBJECT_KEY,
+          certifier: CERTIFIER_KEY,
+          revocationOutpoint: ZERO_OUTPOINT,
+          fields,
+          signature: '00',
+          keyringForSubject
+        })
+      ).rejects.not.toThrow('Invalid certificate subject keyring')
+      await expect(
+        validateCertificateData({
+          type: CERTIFICATE_TYPE,
+          serialNumber: CERTIFICATE_SERIAL,
+          subject: SUBJECT_KEY,
+          certifier: CERTIFIER_KEY,
+          revocationOutpoint: ZERO_OUTPOINT,
+          fields,
+          signature: '00',
+          keyringForSubject: { z: 'QQ==' }
+        })
+      ).rejects.toThrow('Invalid certificate subject keyring')
+    } finally {
+      Array.prototype.sort = originalSort
+    }
+  })
 })

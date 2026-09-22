@@ -196,6 +196,13 @@ function snapshotLegacyCertificateTypes(value: unknown): string[] {
   return [...new Set(types)]
 }
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function historicalCertificatePreimage(certificate: CertificateData): number[] {
   const writer = new Writer()
   writer.write(toArray(certificate.type, 'base64'))
@@ -255,8 +262,8 @@ export async function validateCertificateData(
   const legacyCertificateTypes = snapshotLegacyCertificateTypes(optionRecord.legacyCertificateTypes)
   const fields = stringMap(record.fields, 'certificate fields', true)
   const keyringForSubject = stringMap(record.keyringForSubject, 'certificate subject keyring', true)
-  const fieldNames = Object.keys(fields).sort()
-  const keyNames = Object.keys(keyringForSubject).sort()
+  const fieldNames = Object.keys(fields).sort(compareCodeUnits)
+  const keyNames = Object.keys(keyringForSubject).sort(compareCodeUnits)
   if (
     fieldNames.length !== keyNames.length ||
     fieldNames.some((field, index) => field !== keyNames[index])

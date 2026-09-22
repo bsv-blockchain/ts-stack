@@ -403,6 +403,32 @@ describe('P2MSKH', () => {
     expect(getPublicKey).not.toHaveBeenCalled()
   })
 
+  it('parses instruction public keys by passing only each key string', async () => {
+    const wallet = await makeWallet()
+    const first = PrivateKey.fromRandom().toPublicKey()
+    const second = PrivateKey.fromRandom().toPublicKey()
+    const calls: unknown[][] = []
+    const original = PublicKey.fromString
+    const fromString = jest.spyOn(PublicKey, 'fromString').mockImplementation((...args) => {
+      calls.push(args)
+      return original.call(PublicKey, args[0])
+    })
+    try {
+      new P2MSKH().unlock(wallet, {
+        keyID: 'key',
+        counterparty: first.toString(),
+        pubkeys: [first.toString(), second.toString()]
+      })
+    } finally {
+      fromString.mockRestore()
+    }
+    expect(calls.every(args => args.length === 1)).toBe(true)
+    expect(calls.slice(-2)).toEqual([
+      [first.toString().toLowerCase()],
+      [second.toString().toLowerCase()]
+    ])
+  })
+
   it('rejects malformed signing instructions before accessing the wallet', async () => {
     const wallet = await makeWallet()
     const first = PrivateKey.fromRandom().toPublicKey().toString()

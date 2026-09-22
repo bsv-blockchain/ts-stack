@@ -37,11 +37,18 @@ function canonicalBase64Identifier(value: unknown, name: string): string {
   return value
 }
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function sameRecord(left: Record<string, string>, right: unknown): boolean {
   const record = snapshotPlainDataRecord(right)
   if (record == null) return false
-  const leftKeys = Object.keys(left).sort()
-  const rightKeys = Object.keys(record).sort()
+  const leftKeys = Object.keys(left).sort(compareCodeUnits)
+  const rightKeys = Object.keys(record).sort(compareCodeUnits)
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every((key, index) => key === rightKeys[index] && record[key] === left[key])

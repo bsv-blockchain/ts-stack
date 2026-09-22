@@ -32,6 +32,30 @@ describe('FileRevocationStore security boundaries', () => {
     await expect(store.load(SERIAL)).resolves.toMatchObject({ beef: [1, 2, 3] })
   })
 
+  it('accepts a revocation record whose keys sort as beef, outpoint, secret', async () => {
+    const stored: Record<string, unknown> = {}
+    stored.secret = SECRET
+    stored.beef = [9, 8]
+    stored.outpoint = OUTPOINT
+    writeFileSync(path, JSON.stringify({ [SERIAL]: stored }), { mode: 0o600 })
+    const originalSort = Array.prototype.sort
+    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+      if (typeof compareFn !== 'function') {
+        throw new Error('Array.prototype.sort was called without a comparator')
+      }
+      return originalSort.call(this, compareFn)
+    }
+    try {
+      await expect(new FileRevocationStore(path).load(SERIAL)).resolves.toEqual({
+        secret: SECRET,
+        outpoint: OUTPOINT,
+        beef: [9, 8]
+      })
+    } finally {
+      Array.prototype.sort = originalSort
+    }
+  })
+
   it('fails closed on malformed persisted secrets and transaction bytes', async () => {
     writeFileSync(
       path,

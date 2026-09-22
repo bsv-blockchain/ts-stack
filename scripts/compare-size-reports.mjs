@@ -7,6 +7,13 @@ import { pathToFileURL } from 'node:url'
 
 const dimensions = ['raw', 'gzip', 'brotli']
 
+/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
+function compareCodeUnits(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function flatten(report) {
   const values = new Map()
   for (const [tool, measurement] of Object.entries(report.measurements ?? {})) {
@@ -39,8 +46,8 @@ async function readReports(directory) {
 export function compareSizeReports(baseline, candidate) {
   const violations = []
   const rows = []
-  const baselinePackages = [...baseline.keys()].sort()
-  const candidatePackages = [...candidate.keys()].sort()
+  const baselinePackages = [...baseline.keys()].sort(compareCodeUnits)
+  const candidatePackages = [...candidate.keys()].sort(compareCodeUnits)
   if (JSON.stringify(candidatePackages) !== JSON.stringify(baselinePackages)) {
     throw new Error('baseline and candidate package sets differ')
   }
@@ -50,8 +57,10 @@ export function compareSizeReports(baseline, candidate) {
   for (const packageName of baselinePackages) {
     const before = baseline.get(packageName).values
     const after = candidate.get(packageName).values
-    const baselineMetrics = [...before.keys()].sort()
-    if (JSON.stringify([...after.keys()].sort()) !== JSON.stringify(baselineMetrics)) {
+    const baselineMetrics = [...before.keys()].sort(compareCodeUnits)
+    if (
+      JSON.stringify([...after.keys()].sort(compareCodeUnits)) !== JSON.stringify(baselineMetrics)
+    ) {
       throw new Error(`${packageName} baseline and candidate metric sets differ`)
     }
     for (const metric of baselineMetrics) {

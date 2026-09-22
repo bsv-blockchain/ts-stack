@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from '../tasks/WalletMonitorTask'
 import { genesisHeader } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
@@ -178,6 +180,72 @@ describe('Monitor.runOnce compatibility', () => {
 
     expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(1)
     expect(monitor.deactivatedHeaders).toHaveLength(1)
+    releaseInvalidation()
+    await monitor.reorgInvalidationPromise
+  })
+
+  it('starts reorg invalidation without waiting and records sync and async failures', async () => {
+    const source = readFileSync(join(__dirname, '../Monitor.ts'), 'utf8')
+    const method = source.slice(source.indexOf('private requestPreparedBeefInvalidation'))
+    expect(method).not.toContain('invalidatePreparedBeefsForReorg()')
+    expect(method).toContain('preparedBeefInvalidation()')
+
+    const events: Array<{ event: string; details?: string }> = []
+    const invalidatePreparedBeefsForReorg = jest.fn(() => {
+      throw new Error('sync-invalidation')
+    })
+    const monitor = new Monitor({
+      chain: 'main',
+      services: { chain: 'main' },
+      storage: {
+        invalidatePreparedBeefsForReorg,
+        runAsStorageProvider: async (
+          callback: (storageProvider: {
+            insertMonitorEvent: (event: { event: string; details?: string }) => Promise<void>
+          }) => Promise<void>
+        ) => {
+          await callback({
+            insertMonitorEvent: async event => {
+              events.push({ event: event.event, details: event.details })
+            }
+          })
+        }
+      },
+      chaintracks: {},
+      msecsWaitPerMerkleProofServiceReq: 0,
+      taskRunWaitMsecs: 0,
+      abandonedMsecs: 0,
+      unprovenAttemptsLimitTest: 0,
+      unprovenAttemptsLimitMain: 0,
+      maxRebroadcastAttempts: 0
+    } as any)
+    const oldTip = { ...genesisHeader('main'), height: 10 }
+    const newTip = { ...genesisHeader('main'), height: 11 }
+    const deactivated = [{ ...oldTip }]
+
+    expect(() => monitor.processReorg(1, oldTip, newTip, deactivated)).not.toThrow()
+    await monitor.reorgInvalidationPromise
+    expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(1)
+    expect(events.map(event => event.event)).toContain('error1')
+
+    invalidatePreparedBeefsForReorg.mockImplementation(() => Promise.reject(new Error('async-invalidation')))
+    monitor.processReorg(1, oldTip, newTip, deactivated)
+    await monitor.reorgInvalidationPromise
+    expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(2)
+    expect(events.filter(event => event.event === 'error1').length).toBeGreaterThanOrEqual(2)
+
+    let released = false
+    let releaseInvalidation!: () => void
+    const pending = new Promise<void>(resolve => {
+      releaseInvalidation = () => {
+        released = true
+        resolve()
+      }
+    })
+    invalidatePreparedBeefsForReorg.mockImplementation(() => pending)
+    monitor.processReorg(1, oldTip, newTip, deactivated)
+    expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(3)
+    expect(released).toBe(false)
     releaseInvalidation()
     await monitor.reorgInvalidationPromise
   })

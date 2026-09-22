@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, jest, test } from '@jest/globals'
 import {
   CHIRPBuilder,
@@ -273,6 +275,63 @@ describe('byte sources and bounded cache', () => {
         })()
       )
     ).toEqual([7])
+  })
+
+  test('does not wait on a hostile iterator return and swallows its throw and rejection', async () => {
+    const sourceText = readFileSync(join(process.cwd(), 'src/sources.ts'), 'utf8')
+    const generator = sourceText.slice(sourceText.indexOf('async function* asyncIterableBytes'))
+    expect(generator).not.toContain('iterator.return()')
+    expect(generator).toContain('iteratorReturnValue(iterator)')
+
+    const rejections: unknown[] = []
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason)
+    }
+    process.on('unhandledRejection', onRejection)
+    try {
+      const cancelled = async (finish: () => unknown): Promise<void> => {
+        const controller = new AbortController()
+        const source = {
+          [Symbol.asyncIterator]() {
+            return {
+              next: () => new Promise<IteratorResult<Uint8Array>>(() => {}),
+              return: finish
+            }
+          }
+        }
+        const pending = collect(source as CHIRPByteSource, controller.signal)
+        controller.abort()
+        const outcome = await Promise.race([
+          pending.then(
+            () => 'resolved',
+            (error: unknown) => error
+          ),
+          new Promise(resolve => setTimeout(() => resolve('waited'), 50))
+        ])
+        expect(outcome).not.toBe('waited')
+        const error = outcome as { name?: string; message?: string }
+        expect(error.name === 'AbortError' || /abort/i.test(error.message ?? '')).toBe(true)
+        expect(error.message ?? '').not.toMatch(/hostile/)
+      }
+
+      let syncCalled = false
+      await cancelled(() => {
+        syncCalled = true
+        throw new Error('hostile-sync')
+      })
+      expect(syncCalled).toBe(true)
+
+      let asyncCalled = false
+      await cancelled(() => {
+        asyncCalled = true
+        return Promise.reject(new Error('hostile-async'))
+      })
+      expect(asyncCalled).toBe(true)
+      await new Promise(resolve => setImmediate(resolve))
+      expect(rejections).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onRejection)
+    }
   })
 
   test('rejects unsupported and non-byte source chunks', async () => {

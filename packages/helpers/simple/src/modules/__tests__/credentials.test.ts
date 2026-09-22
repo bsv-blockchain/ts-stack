@@ -818,6 +818,28 @@ describe('CredentialIssuer', () => {
       valid: false,
       errors: ['Credential structure or signature is invalid']
     })
+
+    const reorderedSubject: typeof vc.credentialSubject = { id: vc.credentialSubject.id }
+    for (const key of Object.keys(vc.credentialSubject).reverse()) {
+      reorderedSubject[key] = vc.credentialSubject[key]
+    }
+    const originalSort = Array.prototype.sort
+    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+      if (typeof compareFn !== 'function') {
+        throw new Error('Array.prototype.sort was called without a comparator')
+      }
+      return originalSort.call(this, compareFn)
+    }
+    try {
+      await expect(
+        issuer.verify({ ...vc, credentialSubject: reorderedSubject })
+      ).resolves.toMatchObject({
+        valid: true,
+        errors: []
+      })
+    } finally {
+      Array.prototype.sort = originalSort
+    }
   })
 
   it('detects revoked credentials when revocation records are missing', async () => {
@@ -989,6 +1011,52 @@ describe('createCredentialMethods', () => {
       certifier: CERTIFIER_KEY
     })
     expect(vc.issuer).toBe(`did:bsv:${CERTIFIER_KEY}`)
+  })
+
+  it('accepts acquired certificate fields when only their key insertion order differs', async () => {
+    const reversedFields: Record<string, string> = {}
+    for (const key of Object.keys(remoteCertificate.fields).reverse()) {
+      reversedFields[key] = remoteCertificate.fields[key]
+    }
+    client.acquireCertificate.mockImplementation(async () => ({
+      type: remoteCertificate.type,
+      serialNumber: remoteCertificate.serialNumber,
+      subject: remoteCertificate.subject,
+      certifier: remoteCertificate.certifier,
+      revocationOutpoint: remoteCertificate.revocationOutpoint,
+      fields: reversedFields,
+      signature: remoteCertificate.signature
+    }))
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            certifierPublicKey: CERTIFIER_KEY,
+            certificateType: remoteCertificate.type
+          })
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(remoteCertificate)))
+    const originalSort = Array.prototype.sort
+    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+      if (typeof compareFn !== 'function') {
+        throw new Error('Array.prototype.sort was called without a comparator')
+      }
+      return originalSort.call(this, compareFn)
+    }
+    try {
+      const methods = createCredentialMethods(core)
+      await expect(
+        methods.acquireCredential({
+          serverUrl: 'https://issuer.example',
+          schemaId: 'employee',
+          fields: { name: 'Alice' },
+          fetch: fetchMock as typeof fetch
+        })
+      ).resolves.toMatchObject({ issuer: `did:bsv:${CERTIFIER_KEY}` })
+    } finally {
+      Array.prototype.sort = originalSort
+    }
   })
 
   it('does not revoke existing credentials when replaceExisting is false', async () => {
