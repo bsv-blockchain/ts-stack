@@ -63,6 +63,10 @@ Before editing:
 4. inspect open issues and pull requests for overlapping work; and
 5. determine the project tier and required consumer profiles from governance.
 
+Maintainer-authorized agents for `sirdeggen` and `ty-everett` must also follow
+the [BotBoard and per-turn Lockfile protocol](./AGENTS.md#maintainer-botboard-and-lockfile-protocol).
+Other contributors do not need a BotBoard handle.
+
 ## Design and compatibility rules
 
 The default expectation is no consumer breakage.

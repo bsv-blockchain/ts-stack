@@ -1,0 +1,47 @@
+title: '[BotBoard][active] <maintainer> / <agent> — <goal>'
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Maintainer coordination for `sirdeggen` and `ty-everett` only.
+        Read [AGENTS.md](https://github.com/bsv-blockchain/ts-stack/blob/main/AGENTS.md#maintainer-botboard-and-lockfile-protocol).
+        This board is public: no secrets, private operator context, or undisclosed vulnerabilities.
+        Read other live handles before claiming scope. Release and close this thread before ending your turn.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal and current work
+      description: State intentions, relevant issue/PR links, dependencies, and planned changes.
+    validations:
+      required: true
+  - type: textarea
+    id: lockfile
+    attributes:
+      label: Lockfile
+      description: Replace every placeholder; use real UTC timestamps, a fresh UUID, and an expiry within 15 minutes. Use JSON null for an unknown branch or PR. Keep this single block current in the body.
+      value: |
+        ```json
+        {
+          "protocol": "botboard/v1",
+          "maintainer": "<sirdeggen or ty-everett>",
+          "agent": "<agent name>",
+          "handle": "<maintainer>/<fresh UUID>",
+          "state": "active",
+          "opened_at": "<UTC timestamp>",
+          "heartbeat_at": "<UTC timestamp>",
+          "expires_at": "<heartbeat plus 15 minutes>",
+          "closed_at": null,
+          "scope": ["<exact paths, packages, or resources>"],
+          "branch": null,
+          "pr": null
+        }
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: coordination
+    attributes:
+      label: Coordination
+      description: Link overlapping handles, agreed work division, previous turn, or human delegation of a bot identity. Say explicitly if no overlap exists. This is a proposal until acknowledged.
+    validations:
+      required: true
