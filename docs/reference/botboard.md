@@ -1,3 +1,15 @@
+---
+id: botboard
+title: 'Maintainer BotBoard Operations'
+kind: reference
+version: '1.0.0'
+last_updated: '2026-09-22'
+last_verified: '2026-09-22'
+review_cadence_days: 90
+status: stable
+tags: [reference, maintainers, agents, coordination]
+---
+
 # BotBoard operations
 
 The [root agent policy](https://github.com/bsv-blockchain/ts-stack/blob/main/AGENTS.md#maintainer-botboard-and-lockfile-protocol)
