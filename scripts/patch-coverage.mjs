@@ -2,13 +2,29 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { transformSync } from 'esbuild'
-
 export const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
+
+const require = createRequire(import.meta.url)
+let esbuildTransform
+function loadEsbuildTransform() {
+  if (esbuildTransform === undefined) {
+    try {
+      esbuildTransform = require('esbuild').transformSync
+    } catch {
+      esbuildTransform = null
+    }
+  }
+  return esbuildTransform
+}
+
+export function runtimeComparisonAvailable() {
+  return loadEsbuildTransform() !== null
+}
 
 const EXCLUDED_SOURCE_PATTERNS = [
   /(?:^|\/)__tests(?:__)?(?:\/|$)/,
@@ -114,8 +130,12 @@ export function changedLinesFromDiff(diff) {
 // Compare actual emitted JavaScript so type-only imports, declarations, and
 // documentation do not create an impossible LCOV obligation. The same
 // deterministic transform is applied to both revisions; unsupported syntax
-// fails closed and therefore remains governed.
+// fails closed and therefore remains governed. When esbuild is not installed
+// (for example in the pre-install repository health job) the comparison also
+// fails closed.
 export function hasRuntimeChange(before, after) {
+  const transformSync = loadEsbuildTransform()
+  if (transformSync === null) return true
   try {
     const options = { loader: 'ts', format: 'esm', target: 'esnext', legalComments: 'none' }
     return transformSync(before, options).code !== transformSync(after, options).code

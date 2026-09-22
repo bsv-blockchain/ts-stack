@@ -7,7 +7,8 @@ import {
   hasRuntimeChange,
   isStaticMarkdownModule,
   omitStaticMarkdownModules,
-  mergeLcov
+  mergeLcov,
+  runtimeComparisonAvailable
 } from './patch-coverage.mjs'
 
 test('patch coverage intersects changed production lines with merged LCOV line and branch data', () => {
@@ -215,33 +216,37 @@ test('static Markdown detection fails closed on imports, interpolation, and extr
 })
 
 test('patch coverage compares emitted code for type-only edits without hiding runtime changes', () => {
+  // The pre-install repository health job has no esbuild installed, so the
+  // comparison fails closed there and these type-only edits report as
+  // runtime changes (true) instead of being recognized as type-only (false).
+  const typeOnlyEdit = !runtimeComparisonAvailable()
   assert.equal(
     hasRuntimeChange(
       "export { Relay } from './Relay.js'; export type { First } from './types.js'",
       "export { Relay } from './Relay.js'; export type { First, Second } from './types.js'"
     ),
-    false
+    typeOnlyEdit
   )
   assert.equal(
     hasRuntimeChange(
       'interface Options { first: string }; export {}',
       'interface Options { first: string; second?: number }; export {}'
     ),
-    false
+    typeOnlyEdit
   )
   assert.equal(
     hasRuntimeChange(
       "import { Value } from './types.js'; interface Options { value: Value }; export {}",
       "import type { Value } from './types.js'; interface Options { value: Value }; export {}"
     ),
-    false
+    typeOnlyEdit
   )
   assert.equal(
     hasRuntimeChange(
       '/** Before. */ interface Options { first: string }; export {}',
       '/** After. */ interface Options { first: string }; export {}'
     ),
-    false
+    typeOnlyEdit
   )
   assert.equal(hasRuntimeChange("export const value = 'a b'", "export const value = 'ab'"), true)
   assert.equal(
