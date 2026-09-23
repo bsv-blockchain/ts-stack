@@ -3,10 +3,10 @@ id: pkg-did
 title: '@bsv/did'
 kind: package
 domain: helpers
-version: '0.2.6'
+version: '0.2.7'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/did'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did'
@@ -17,6 +17,8 @@ tags: [did, sd-jwt, credentials, identity, helpers]
 # @bsv/did
 
 > SD-JWT VC and optional `did:key` helpers for BSV SDK identity keys.
+
+The 0.2.7 source candidate fixes the CommonJS build of the key, signature and multibase helpers, which failed with `.default is not a constructor` under `require()`. No API migration is required.
 
 ## Install
 

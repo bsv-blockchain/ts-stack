@@ -3,10 +3,10 @@ id: pkg-paymail
 title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: '2.4.9'
+version: '2.4.10'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/paymail'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail'
@@ -17,6 +17,8 @@ tags: [paymail, messaging, brc-29, identity]
 # @bsv/paymail
 
 > TypeScript SDK for BSV Paymail (BRC-121 capability discovery and routing). Provides both client-side capability discovery and server-side router with built-in support for PKI, P2P destinations, and public profiles.
+
+The 2.4.10 source candidate fixes the CommonJS build of the P2P signature and `PaymailClient` key helpers, which failed with `.default is not a constructor` under `require()`. No API migration is required.
 
 ## Install
 

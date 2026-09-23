@@ -10,6 +10,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 1.10.3 candidate — CommonJS SDK interop
+
+### Fixed
+
+- The CommonJS build no longer wraps `@bsv/sdk` default imports as whole
+  modules, so `require('@bsv/templates')` consumers can construct scripts again
+  instead of failing with `LockingScript.default is not a constructor`
+  ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). SDK classes
+  are now imported by name from the SDK barrels; the ESM build and browser
+  bundle size are unchanged.
+
 ### 1.10.2 candidate — signing-context and template hardening
 
 ### Added

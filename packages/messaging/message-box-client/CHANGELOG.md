@@ -13,6 +13,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.5.3 candidate — CommonJS SDK interop and send failure codes
+
+- Fix the CommonJS build so `new MessageBoxClient()` no longer fails with
+  `LookupResolver.default is not a constructor`; SDK classes are imported by
+  name from the SDK barrels.
+- `sendMessage()` HTTP failures now include the server's well-formed failure
+  code, for example `Message Box send failed with HTTP 400
+  (ERR_DUPLICATE_MESSAGE).`, so callers can recognise an already-delivered
+  message. Free-text server descriptions are still never copied into errors.
+
 ### 2.5.2 candidate — authenticated transport and payment hardening
 
 - Internalize notification payments with the configured originator before acknowledgment.

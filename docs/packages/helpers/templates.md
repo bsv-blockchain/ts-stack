@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '1.10.2'
+version: '1.10.3'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -17,6 +17,8 @@ tags: [templates, scripts, locking, unlocking]
 # @bsv/templates
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
+
+The 1.10.3 source candidate fixes the CommonJS build: `require('@bsv/templates')` consumers can construct scripts again instead of failing with `LockingScript.default is not a constructor` ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). The ESM build and browser bundle size are unchanged; no API migration is required.
 
 ## Install
 

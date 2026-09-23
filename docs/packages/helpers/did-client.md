@@ -3,10 +3,10 @@ id: pkg-did-client
 title: '@bsv/did-client'
 kind: package
 domain: helpers
-version: '1.3.2'
+version: '1.3.3'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/did-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client'
@@ -18,6 +18,8 @@ tags: [did, identity, helpers]
 
 > Client for the legacy BSV DID PushDrop overlay, including bounded creation,
 > revocation, and lookup flows.
+
+The 1.3.3 source candidate fixes the CommonJS build: `require()` consumers no longer fail with `.default is not a constructor` when `DIDClient` constructs SDK objects. No API migration is required.
 
 ## Trust model and wire limitation
 

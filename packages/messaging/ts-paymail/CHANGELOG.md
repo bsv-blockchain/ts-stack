@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
+- Fix the CommonJS build's `@bsv/sdk` default-import interop so P2P
+  signature helpers construct SDK keys and signatures instead of failing with
+  `.default is not a constructor`.
 - Ship the Express declaration dependency needed by strict TypeScript
   consumers of the Paymail router API.
 
