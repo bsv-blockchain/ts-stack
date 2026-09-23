@@ -895,6 +895,35 @@ export class GroupMessagingClient {
   }
 
   /**
+   * One pass over the queue as it stands.
+   *
+   * `undefined` where the group went away underneath the drain. Nothing has
+   * been taken off the queue, so whatever is left stays for whoever holds it
+   * next.
+   */
+  async #drainPass(
+    chatId: ChatId,
+    mlsGroupId: MlsGroupId,
+    queued: readonly Uint8Array[]
+  ): Promise<{ kept: Uint8Array[]; applied: boolean } | undefined> {
+    const kept: Uint8Array[] = []
+    let applied = false
+    for (const payload of queued) {
+      const state = await this.storage.getGroup(mlsGroupId)
+      if (state === undefined) return undefined
+      const consumed = await this.#consumeOne(chatId, mlsGroupId, state, payload)
+      if (consumed.verdict === 'keep') {
+        kept.push(payload)
+        continue
+      }
+      if (consumed.verdict !== 'applied') continue
+      await this.#storeApplied(mlsGroupId, consumed)
+      applied = true
+    }
+    return { kept, applied }
+  }
+
+  /**
    * Apply what the queue is now ready for.
    *
    * Nothing leaves the queue until its state is stored, and the queue is
@@ -913,27 +942,12 @@ export class GroupMessagingClient {
     for (;;) {
       const queued = await this.storage.peekPending(mlsGroupId)
       if (queued.length === 0) return
-
-      const kept: Uint8Array[] = []
-      let applied = false
-      for (const payload of queued) {
-        const state = await this.storage.getGroup(mlsGroupId)
-        // The group went away underneath the drain. Nothing has been taken off
-        // the queue, so whatever is left stays for whoever holds it next.
-        if (state === undefined) return
-        const consumed = await this.#consumeOne(chatId, mlsGroupId, state, payload)
-        if (consumed.verdict === 'keep') {
-          kept.push(payload)
-          continue
-        }
-        if (consumed.verdict !== 'applied') continue
-        await this.#storeApplied(mlsGroupId, consumed)
-        applied = true
+      const pass = await this.#drainPass(chatId, mlsGroupId, queued)
+      if (pass === undefined) return
+      if (pass.kept.length !== queued.length) {
+        await this.storage.replacePending(mlsGroupId, pass.kept)
       }
-      if (kept.length !== queued.length) {
-        await this.storage.replacePending(mlsGroupId, kept)
-      }
-      if (!applied) return
+      if (!pass.applied) return
     }
   }
 
