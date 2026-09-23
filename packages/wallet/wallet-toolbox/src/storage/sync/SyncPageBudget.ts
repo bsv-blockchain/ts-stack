@@ -12,18 +12,26 @@ function marginalCost(
   phase: 'readMs' | 'commitMs',
   previousFixedMs: number
 ): { perRecordMs: number; fixedMs: number } {
-  const averageRecords = samples.reduce((sum, sample) => sum + sample.records, 0) / samples.length
-  const averageMs = samples.reduce((sum, sample) => sum + sample[phase], 0) / samples.length
-  const variance = samples.reduce((sum, sample) => sum + (sample.records - averageRecords) ** 2, 0)
+  let totalRecords = 0
+  let totalMs = 0
+  for (const sample of samples) {
+    totalRecords += sample.records
+    totalMs += sample[phase]
+  }
+  const averageRecords = totalRecords / samples.length
+  const averageMs = totalMs / samples.length
+  let variance = 0
+  let covariance = 0
+  for (const sample of samples) {
+    const delta = sample.records - averageRecords
+    variance += delta ** 2
+    covariance += delta * (sample[phase] - averageMs)
+  }
   // Until page sizes differ there is no evidence that any cost is fixed.
   if (variance === 0) {
     const fixedMs = Math.min(previousFixedMs, averageMs)
     return { perRecordMs: (averageMs - fixedMs) / averageRecords, fixedMs }
   }
-  const covariance = samples.reduce(
-    (sum, sample) => sum + (sample.records - averageRecords) * (sample[phase] - averageMs),
-    0
-  )
   const slope = Math.max(0, covariance / variance)
   const fixedMs = Math.max(0, averageMs - slope * averageRecords)
   const latest = samples.at(-1)!

@@ -8,7 +8,7 @@ function recordCopy<T extends object>(record: T): T {
     const value = result[key]
     let copy: unknown = value
     if (Array.isArray(value)) copy = value.slice()
-    else if (value instanceof Uint8Array) copy = value.slice()
+    else if (value instanceof Uint8Array) copy = new Uint8Array(value)
     else if (value != null && typeof value === 'object') {
       // Date's internal-slot check also accepts dates returned by an IndexedDB
       // implementation in another realm; arbitrary nested objects are invalid.
