@@ -161,3 +161,20 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   assert.match(gate, /CI_NEEDS: \$\{\{ toJSON\(needs\) \}\}/)
   assert.match(gate, /run: node scripts\/ci-result-gate\.mjs/)
 })
+
+test('fork PRs can produce the required Codecov status without a privileged workflow', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  for (const step of [
+    'Upload coverage to Codecov',
+    'Wait for Codecov to merge the uploaded report',
+    'Publish finalized Codecov notifications'
+  ]) {
+    assert.ok(
+      workflow.includes(
+        `      - name: ${step}\n        if: steps.cov.outputs.has-coverage == 'true'\n`
+      )
+    )
+  }
+  assert.doesNotMatch(workflow, /pull_request_target|id-token:\s*write/)
+  assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
+})

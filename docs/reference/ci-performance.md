@@ -88,3 +88,14 @@ gate independently checks scope outputs against each job result: selected jobs
 must succeed; missing, cancelled or skipped selected jobs fail the merge gate.
 Only genuinely unselected lanes and main's PR-only checks may be skipped.
 Do not infer full release acceptance from a green documentation-only push.
+
+## Contributor-fork coverage
+
+Public fork PRs upload the merged LCOV evidence through the pinned Codecov action's
+[tokenless fork mode](https://github.com/codecov/codecov-action#v4-release).
+GitHub withholds repository secrets from these ordinary `pull_request` jobs;
+no privileged trigger or additional write/OIDC permission is granted. The uploader,
+processing check and final notifications run for every nonempty report, so the
+required `codecov/patch` status is available for contributors as well as maintainers.
+The repository-owned 90% patch-coverage check remains the first blocking check
+on the exact diff.

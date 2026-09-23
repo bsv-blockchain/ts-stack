@@ -1111,8 +1111,12 @@ jobs:
           --lcov-directory .coverage-artifacts
           --target 90
 
+      # Public fork PRs use the pinned action's tokenless mode. GitHub does not
+      # expose repository secrets to these pull_request runs; no privileged
+      # trigger or OIDC/write permission is needed. Their required codecov/patch
+      # status must be produced just like same-repository PRs.
       - name: Upload coverage to Codecov
-        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cov.outputs.has-coverage == 'true'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -1129,7 +1133,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Wait for Codecov to merge the uploaded report
-        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cov.outputs.has-coverage == 'true'
         env:
           CODECOV_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           CODECOV_BUILD_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -1155,7 +1159,7 @@ jobs:
           done
 
       - name: Publish finalized Codecov notifications
-        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cov.outputs.has-coverage == 'true'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
