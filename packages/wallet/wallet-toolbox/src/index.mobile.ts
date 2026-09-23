@@ -24,3 +24,16 @@ export * from './WalletLogger'
 export * from './WalletAuthenticationManager'
 export * from './WalletPermissionsManager'
 export * from './WalletSettingsManager'
+
+// Additive: hosts need these to implement custom Monitor.addTask tasks, post
+// signed requests to the network directly, exchange the storage remoting
+// wire format, and verify unlocking scripts — none of which were reachable
+// from this single-bundle mobile entry point before. Named exports only
+// (not `export *`); each source module also exports internals that are not
+// part of the mobile host surface.
+export { WalletMonitorTask } from './monitor/tasks/WalletMonitorTask'
+export { attemptToPostReqsToNetwork } from './storage/methods/attemptToPostReqsToNetwork'
+export type { PostReqsToNetworkResult } from './storage/methods/attemptToPostReqsToNetwork'
+export { parseJsonRpc, stringifyJsonRpc } from './storage/remoting/BinaryJson'
+export { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
+export type { UnlockScriptVerificationResult } from './signer/methods/verifyUnlockScripts'
