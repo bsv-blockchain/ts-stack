@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -11,6 +12,34 @@ import { createCommandRunner } from './lib/command-runner.mjs'
 
 const run = createCommandRunner({ timeoutMs: 180_000, maxBufferBytes: 20 * 1024 * 1024 })
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+async function publishedSdkTarball(destination) {
+  const supplied = process.env.TEMPLATES_PUBLISHED_SDK_TARBALL
+  const filename = supplied
+    ? path.resolve(supplied)
+    : path.join(destination, 'published-sdk-2.8.0.tgz')
+  let bytes
+  if (supplied) bytes = await fs.readFile(filename)
+  else {
+    // First-party packages already have an explicit workspace age exemption.
+    // npm's inherited global "before" cutoff cannot express that exception:
+    // install the reviewed, immutable artifact without changing resolver policy.
+    const response = await fetch('https://registry.npmjs.org/@bsv/sdk/-/sdk-2.8.0.tgz', {
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000)
+    })
+    if (!response.ok) throw new Error(`Published SDK artifact returned HTTP ${response.status}`)
+    bytes = Buffer.from(await response.arrayBuffer())
+  }
+  assert.equal(bytes.length, 4_052_784, 'Published SDK artifact size changed')
+  assert.equal(
+    createHash('sha512').update(bytes).digest('base64'),
+    'pXavnJa8F5ozKSOwVIphLZrTEJgEADlfj8Yu9CIOsdVC/X+CuGfHFwK9I5egr/EC1D2KCxmAbGls9erpc637Yw==',
+    'Published SDK artifact must match its reviewed registry integrity'
+  )
+  if (!supplied) await fs.writeFile(filename, bytes)
+  return filename
+}
 
 // Executed in isolated consumers, so every class comes from the installed tarballs.
 async function exercise(sdk, templates, check) {
@@ -136,7 +165,7 @@ try {
     { label: 'candidate', sdk: candidate, version: sdkManifest.version },
     {
       label: 'published',
-      sdk: process.env.TEMPLATES_PUBLISHED_SDK_TARBALL ?? '@bsv/sdk@2.8.0',
+      sdk: await publishedSdkTarball(temporary),
       version: '2.8.0'
     }
   ]

@@ -35,8 +35,10 @@ No API or script-encoding migration is required.
 
 `pnpm pack:check` runs synthetic signed spends from exact packed artifacts in
 clean CJS and ESM consumers with published SDK 2.8.0 and the candidate SDK.
-For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a locally
-verified SDK 2.8.0 tarball; the check verifies its installed version.
+For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a local
+SDK 2.8.0 tarball. The check verifies the reviewed registry SHA-512 digest and
+installed version for either the downloaded or supplied artifact; resolver age
+policy and lifecycle-script restrictions stay unchanged.
 
 ## Current Templates
 
