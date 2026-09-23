@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Release acceptance must be able to exercise the complete current tree.
+  workflow_dispatch:
 
 permissions: {}
 
@@ -434,7 +436,7 @@ jobs:
 
   mutation-tests:
     name: Mutation / ${{ matrix.target }}
-    if: needs.prepare.outputs.mutation-targets != '[]'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     # The governed air-gap codec target currently instruments 352 mutants and
@@ -443,7 +445,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 6
       matrix:
         target: ${{ fromJSON(needs.prepare.outputs.mutation-targets) }}
@@ -496,7 +498,7 @@ jobs:
 
   standard-tests:
     name: Tests / non-coverage packages
-    if: needs.prepare.outputs.standard-packages != '[]'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -539,14 +541,14 @@ jobs:
 
   dependent-tests:
     name: Tests / affected dependents (${{ matrix.shard }}/${{ matrix.total }})
-    if: needs.prepare.outputs.dependent-test-packages != '[]'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.dependent-test-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -596,21 +598,21 @@ jobs:
             filters+=(--filter "$package")
           done
           if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --no-sort "${filters[@]}" exec node \
+            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
               "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
               --script test
           fi
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: needs.prepare.outputs.browser-packages != '[]'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.browser-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -667,7 +669,7 @@ jobs:
 
   wallet-browser-platform:
     name: Platform / wallet browser
-    if: needs.prepare.outputs.wallet_client == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_client == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -701,7 +703,7 @@ jobs:
 
   wallet-mobile-platform:
     name: Platform / wallet mobile
-    if: needs.prepare.outputs.wallet_mobile == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_mobile == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -740,7 +742,7 @@ jobs:
 
   coverage-sdk:
     name: Coverage / SDK
-    if: needs.prepare.outputs.sdk == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -791,7 +793,7 @@ jobs:
 
   coverage-did:
     name: Coverage / DID
-    if: needs.prepare.outputs.did == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.did == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -826,14 +828,14 @@ jobs:
 
   coverage-wallet:
     name: Coverage / wallet-toolbox (${{ matrix.shard }}/4)
-    if: needs.prepare.outputs.wallet == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
     steps:
@@ -875,7 +877,7 @@ jobs:
 
   coverage-wallet-monitor:
     name: Coverage / wallet-toolbox monitor
-    if: needs.prepare.outputs.wallet == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -920,7 +922,7 @@ jobs:
 
   coverage-verifast:
     name: Coverage / VeriFast
-    if: needs.prepare.outputs.verifast == 'true'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.verifast == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -972,14 +974,14 @@ jobs:
 
   coverage-other:
     name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: needs.prepare.outputs.coverage-other-packages != '[]'
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.coverage-other-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1025,7 +1027,7 @@ jobs:
               "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
           fi
           if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --no-sort "${filters[@]}" exec node \
+            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
               "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
               --script test:coverage
           else
@@ -1229,14 +1231,14 @@ jobs:
 
   infra:
     name: Infra / ${{ matrix.display }}
-    if: needs.infra-scope.outputs.has-infra == 'true'
+    if: always() && needs.infra-scope.result == 'success' && needs.infra-scope.outputs.has-infra == 'true'
     needs: infra-scope
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJson(needs.infra-scope.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1434,6 +1436,22 @@ jobs:
     name: merge-gate
     if: always()
     needs:
+      - scope
+      - prepare
+      - infra-scope
+      - standard-tests
+      - dependent-tests
+      - browser-packages
+      - wallet-browser-platform
+      - wallet-mobile-platform
+      - coverage-sdk
+      - coverage-did
+      - coverage-wallet
+      - coverage-wallet-monitor
+      - coverage-verifast
+      - coverage-other
+      - coverage-upload
+      - mutation-tests
       - repository-health
       - sonar-zero-findings
       - build-and-test
@@ -1444,8 +1462,20 @@ jobs:
       - dependency-review
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Reject missing or skipped selected work
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT: ${{ github.event_name }}
+        run: node scripts/ci-result-gate.mjs
       - name: Verify every required CI result
         env:
           HEALTH_RESULT: ${{ needs.repository-health.result }}

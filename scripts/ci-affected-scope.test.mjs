@@ -79,8 +79,7 @@ test('documentation and QA policy changes do not fan out package tests', () => {
   assert.deepEqual(
     selectWorkspaceScope(projects, [
       'packages/direct/README.md',
-      'governance/mutation-testing/policy.json',
-      '.github/workflows/ci.yml'
+      'governance/mutation-testing/policy.json'
     ]),
     { direct: [], affected: [], build: [] }
   )
@@ -106,7 +105,7 @@ test('root toolchain changes deliberately retain full workspace coverage', () =>
 })
 
 test('infrastructure scope never rebuilds unrelated images for workflow-only changes', () => {
-  assert.deepEqual(selectInfraComponents(['.github/workflows/ci.yml']), [])
+  assert.deepEqual(selectInfraComponents(['.github/workflows/docs-deploy.yml']), [])
   assert.deepEqual(
     selectInfraComponents(['infra/message-box-server/src/index.ts']).map(entry => entry.component),
     ['message-box-server']
@@ -144,4 +143,11 @@ test('docs and conformance work are selected from their actual inputs', () => {
   assert.equal(docsAreAffected(['packages/direct/src/index.ts']), false)
   assert.equal(conformanceIsAffected(['conformance/vectors/example.json']), true)
   assert.equal(conformanceIsAffected(['packages/direct/src/index.ts']), false)
+})
+
+test('shared CI execution and result gates select the complete governed workspace', () => {
+  for (const file of ['.github/workflows/ci.yml', 'scripts/ci-result-gate.mjs']) {
+    assert.equal(selectWorkspaceScope(projects, [file]).direct.length, 4)
+  }
+  assert.equal(selectInfraComponents(['.github/workflows/ci.yml']).length, 8)
 })

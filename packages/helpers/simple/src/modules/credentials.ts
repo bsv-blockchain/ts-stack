@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../core/code-unit-order'
 import {
   ProtoWallet,
   PrivateKey,
@@ -250,13 +251,6 @@ function canonicalIsoDate(value: unknown): string | undefined {
   if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value)
     return undefined
   return value
-}
-
-/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
-function compareCodeUnits(left: string, right: string): number {
-  if (left < right) return -1
-  if (left > right) return 1
-  return 0
 }
 
 function credentialSubjectMatches(value: unknown, certificate: CertificateData): boolean {

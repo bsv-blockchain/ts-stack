@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../core/code-unit-order'
 import { RevocationRecord, RevocationStore } from '../core/types'
 import * as nodePath from 'node:path'
 import { JsonFileStore } from '../server/json-file-store'
@@ -30,13 +31,6 @@ function ownBytes(value: unknown): number[] {
     output.push(descriptor.value)
   }
   return output
-}
-
-/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
-function compareCodeUnits(left: string, right: string): number {
-  if (left < right) return -1
-  if (left > right) return 1
-  return 0
 }
 
 function ownRecord(value: unknown): RevocationRecord {
