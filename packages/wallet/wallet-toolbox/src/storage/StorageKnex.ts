@@ -1,3 +1,4 @@
+import { recoveredProofUpdate } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
@@ -161,6 +162,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   protected override supportsActionBatchPersistence(): boolean {
+    return true
+  }
+
+  protected override supportsStorageAccessScheduling(): boolean {
     return true
   }
   protected override supportsNoSendExpiryPersistence(): boolean {
@@ -1050,6 +1055,27 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update))
   }
 
+  override async compareAndSetProvenTxProof(
+    expected: TableProvenTx,
+    replacement: TableProvenTx,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    await this.verifyReadyForDatabaseAccess(trx)
+    const update = recoveredProofUpdate(expected, replacement)
+    const where = {
+      provenTxId: expected.provenTxId,
+      txid: expected.txid,
+      height: expected.height,
+      index: expected.index,
+      merkleRoot: expected.merkleRoot,
+      blockHash: expected.blockHash,
+      rawTx: Buffer.from(expected.rawTx),
+      merklePath: Buffer.from(expected.merklePath)
+    }
+    const count = await this.toDb(trx)('proven_txs').where(where).update(this.validatePartialForUpdate(update))
+    return count === 1
+  }
+
   override async updateSyncState(id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableSyncState>('sync_states')
@@ -1448,6 +1474,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const q = this.findProvenTxsQuery(args)
+    // A transactional exact-proof lookup is a read/modify/write authority
+    // check. Lock that row until commit so monitor and sync repairs cannot race.
+    if (args.trx != null && this.dbtype === 'MySQL' && (args.partial.txid != null || args.partial.provenTxId != null))
+      q.forUpdate()
     const r = await q
     return this.validateEntities(r)
   }

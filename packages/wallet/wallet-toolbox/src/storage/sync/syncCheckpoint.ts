@@ -42,5 +42,12 @@ export function validateSyncCheckpoint(value: SyncCheckpoint, previous?: Partial
     if (!Number.isFinite(since.getTime())) invalid()
   }
   if (previous?.since != null && (since == null || since < previous.since)) invalid()
+  if (
+    previous != null &&
+    since?.getTime() === previous.since?.getTime() &&
+    previous.offsets != null &&
+    offsets.some((entry, index) => entry.offset < (previous.offsets?.[index]?.offset ?? 0))
+  )
+    invalid()
   return { syncStateId: value.syncStateId, since, offsets }
 }

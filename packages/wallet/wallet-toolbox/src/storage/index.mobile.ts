@@ -1,6 +1,7 @@
 export * from './WalletStorageManager'
 export * from './StorageProvider'
 export * from './StorageSyncReader'
+export type { SyncSessionOptions, SyncSessionProgress, SyncSessionResult } from './sync/syncSession'
 export * from './schema/tables/index'
 export * from './schema/entities/index'
 export * from './remoting/StorageMobile'

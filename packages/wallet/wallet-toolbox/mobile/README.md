@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Resumable synchronization (2.14 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Remote destinations retain exclusive execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+This is an eventual replica merge; it does not create a coherent source snapshot
+or change the existing archive format.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for

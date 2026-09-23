@@ -3,8 +3,34 @@ import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageProvider } from '../StorageProvider'
 import { StorageReaderWriter } from '../StorageReaderWriter'
+import { TableProvenTx } from '../schema/tables'
+import { toBinaryBaseBlockHeader } from '../../services/Services'
+import { doubleSha256BE } from '../../utility/utilityHelpers'
+import { asString } from '../../utility/utilityHelpers.noBuffer'
 
 import * as dotenv from 'dotenv'
+
+function canonicalReproof(ctx: TestWalletNoSetup, ptx: TableProvenTx) {
+  const merklePath = new bsv.MerklePath(ptx.height + 1, [[{ offset: 0, hash: ptx.txid, txid: true }]])
+  const header = toBinaryBaseBlockHeader({
+    version: 1,
+    previousHash: '0'.repeat(64),
+    merkleRoot: merklePath.computeRoot(ptx.txid),
+    time: 0,
+    bits: 0,
+    nonce: 0
+  })
+  const services = ctx.storage.getServices()
+  const isValidRootForHeight = jest.fn(async () => true)
+  jest.spyOn(services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight } as bsv.ChainTracker)
+  jest.spyOn(services, 'getHeaderForHeight').mockResolvedValue(header)
+  const lookup = jest.spyOn(services, 'getValidatedMerklePath').mockImplementation(async (_txid, validate) => {
+    const result = { name: 'canonical reproof fixture', merklePath }
+    await validate(result)
+    return result
+  })
+  return { lookup, isValidRootForHeight, height: merklePath.blockHeight, blockHash: asString(doubleSha256BE(header)) }
+}
 
 dotenv.config()
 describe('WalletStorageManager tests', () => {
@@ -477,16 +503,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: '' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
-      expect(reprove).toHaveBeenCalled()
+      expect(lookup).toHaveBeenCalled()
       expect(result.updated.length).toBeGreaterThan(0)
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
     } finally {
@@ -538,12 +559,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: undefined,
-        unchanged: false,
-        unavailable: true
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
+      lookup.mockRejectedValue(new Error('proof unavailable'))
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
@@ -561,16 +578,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: 'height reproof\n' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeightMerkleRoot(ptx.height, ptx.merkleRoot)
 
-      expect(reprove).toHaveBeenCalledWith(ptx, true)
+      expect(lookup).toHaveBeenCalledWith(ptx.txid, expect.any(Function))
       expect(result.updated).toHaveLength(1)
       expect(result.log).toContain('proof data updated')
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
@@ -591,36 +603,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const replacementHash = ptx.blockHash === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
-      const replacementHeight = ptx.height + 1
-      const merklePath = new bsv.MerklePath(replacementHeight, [
-        [
-          {
-            offset: 0,
-            hash: ptx.txid,
-            txid: true
-          }
-        ]
-      ])
-      const services = ctx.storage.getServices()
-      const isValidRootForHeight = jest.fn(async () => 'true' as unknown as boolean)
-      jest.spyOn(services, 'getChainTracker').mockResolvedValue({
-        isValidRootForHeight
-      } as bsv.ChainTracker)
-      jest.spyOn(services, 'getMerklePath').mockResolvedValue({
-        name: 'prepared BEEF reproof test',
-        merklePath,
-        header: {
-          version: 1,
-          previousHash: '0'.repeat(64),
-          merkleRoot: merklePath.computeRoot(ptx.txid),
-          time: 0,
-          bits: 0,
-          nonce: 0,
-          height: replacementHeight,
-          hash: replacementHash
-        }
-      })
+      const { height: replacementHeight, blockHash: replacementHash, isValidRootForHeight } = canonicalReproof(ctx, ptx)
+      isValidRootForHeight.mockResolvedValue('true' as unknown as boolean)
 
       const rejected = await ctx.storage.reproveProven(ptx)
       expect(rejected).toMatchObject({ unavailable: true, updated: undefined })

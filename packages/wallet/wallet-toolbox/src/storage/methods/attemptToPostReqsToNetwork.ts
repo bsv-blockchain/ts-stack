@@ -1,4 +1,5 @@
 import { Beef, Transaction, WalletLoggerInterface } from '@bsv/sdk'
+import { repairBeefProofs } from './repairBeefProofs'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
 import type * as sdk from '../../sdk'
@@ -28,6 +29,9 @@ export async function attemptToPostReqsToNetwork(
 
   const services = storage.getServices()
 
+  // Rebuilding stored input BEEF may reintroduce an orphaned ancestor even
+  // after an earlier foreground check. This is also the monitor's send path.
+  r.beef = await repairBeefProofs(storage, r.beef, trx)
   const pbrs = await services.postBeef(r.beef, txids, logger)
 
   // post beef results (pbrs) is an array by service provider

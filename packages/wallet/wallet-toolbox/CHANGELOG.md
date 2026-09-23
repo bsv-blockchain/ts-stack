@@ -4,6 +4,22 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## 2.14.0 candidate — bounded synchronization and canonical proof recovery
+
+- Add resumable local atomic pages, durable checkpoints, cancellation/progress,
+  concurrent read capability checks and fair foreground/background ownership.
+- Separate fixed source/commit latency from marginal row cost and bound upward
+  probes, page records and proof concurrency.
+- Check chains before sync writes and preserve returned, serialized and thrown
+  failures without advancing progress.
+- Repair stale selected/input/broadcast proofs against canonical evidence; fence
+  monitor updates against primary replacement and concurrent proof corrections.
+- Keep proof changes and prepared-BEEF invalidation atomic, and retain safe custom
+  provider behavior. No persisted-schema migration is required.
+- Exercise large copies, tombstones, restart/lost acknowledgements and foreground
+  latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
+  timestamp boundary traffic remains a snapshot/high-water follow-up.
+
 ## wallet-toolbox (unreleased)
 
 - Keep cold raw-transaction reads on the caller's transaction, including SQLite

@@ -3,7 +3,7 @@ import { processAction, shareReqsWithWorld } from '../../src/storage/methods/pro
 import { StorageProvider } from '../../src/storage/StorageProvider'
 import { TableProvenTxReq } from '../../src/storage/schema/tables/TableProvenTxReq'
 
-function makeReadyReq (): TableProvenTxReq {
+function makeReadyReq(): TableProvenTxReq {
   const now = new Date()
   return {
     created_at: now,
@@ -20,7 +20,7 @@ function makeReadyReq (): TableProvenTxReq {
   }
 }
 
-function makeStorageFake () {
+function makeStorageFake() {
   return {
     transaction: jest.fn(async (callback: (trx?: unknown) => Promise<unknown>) => await callback(undefined)),
     updateProvenTxReq: jest.fn(async () => 1),
@@ -42,23 +42,29 @@ describe('processAction shareReqsWithWorld', () => {
       telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
     }
 
-    const result = await processAction(storage as any, { userId: 1 }, {
-      isNewTx: false,
-      isSendWith: false,
-      isNoSend: true,
-      isDelayed: false,
-      sendWith: []
-    })
+    const result = await processAction(
+      storage as any,
+      { userId: 1 },
+      {
+        isNewTx: false,
+        isSendWith: false,
+        isNoSend: true,
+        isDelayed: false,
+        sendWith: []
+      }
+    )
 
     expect(result.sendWithResults).toEqual([])
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'wallet.storage.process_action.share', spanStatus: 'ok' }),
-      expect.objectContaining({
-        name: 'wallet.storage.process_action',
-        spanStatus: 'ok',
-        attributes: expect.objectContaining({ 'action.send_result_count': 0 })
-      })
-    ]))
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'wallet.storage.process_action.share', spanStatus: 'ok' }),
+        expect.objectContaining({
+          name: 'wallet.storage.process_action',
+          spanStatus: 'ok',
+          attributes: expect.objectContaining({ 'action.send_result_count': 0 })
+        })
+      ])
+    )
   })
 
   test('preserves the non-instrumented processAction path when telemetry is disabled', async () => {
@@ -67,13 +73,19 @@ describe('processAction shareReqsWithWorld', () => {
       telemetry: new Telemetry()
     }
 
-    await expect(processAction(storage as any, { userId: 1 }, {
-      isNewTx: false,
-      isSendWith: false,
-      isNoSend: true,
-      isDelayed: false,
-      sendWith: []
-    })).resolves.toMatchObject({ sendWithResults: [] })
+    await expect(
+      processAction(
+        storage as any,
+        { userId: 1 },
+        {
+          isNewTx: false,
+          isSendWith: false,
+          isNoSend: true,
+          isDelayed: false,
+          sendWith: []
+        }
+      )
+    ).resolves.toMatchObject({ sendWithResults: [] })
   })
 
   test('delayed sends do not build aggregate BEEF before scheduling', async () => {
@@ -90,7 +102,11 @@ describe('processAction shareReqsWithWorld', () => {
     const result = await shareReqsWithWorld(storage as any, 1, [req.txid], true)
 
     expect(storage.getReqsAndBeefToShareWithWorld).not.toHaveBeenCalled()
-    expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith(
+      [req.provenTxReqId],
+      expect.objectContaining({ status: 'unsent' }),
+      undefined
+    )
     expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
   })
@@ -110,7 +126,11 @@ describe('processAction shareReqsWithWorld', () => {
     })
 
     expect(beef.verify).not.toHaveBeenCalled()
-    expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith(
+      [req.provenTxReqId],
+      expect.objectContaining({ status: 'unsent' }),
+      undefined
+    )
     expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
   })
@@ -176,23 +196,24 @@ describe('processAction shareReqsWithWorld', () => {
 
     const result = await storage.getReqsAndBeefToShareWithWorld([req.txid], [])
 
-    expect(result.details).toEqual([
-      expect.objectContaining({ txid: req.txid, status: 'error' })
-    ])
+    expect(result.details).toEqual([expect.objectContaining({ txid: req.txid, status: 'error' })])
   })
 
   test('immediate sends still validate the aggregate BEEF before broadcasting', async () => {
     const req = makeReadyReq()
     const beef = {
+      bumps: [],
       verify: jest.fn(async () => false),
       toLogString: () => 'invalid beef'
     } as unknown as Beef
     const storage = makeStorageFake()
 
-    await expect(shareReqsWithWorld(storage as any, 1, [req.txid], false, {
-      beef,
-      details: [{ txid: req.txid, status: 'readyToSend', req }]
-    })).rejects.toThrow('merged Beef failed validation')
+    await expect(
+      shareReqsWithWorld(storage as any, 1, [req.txid], false, {
+        beef,
+        details: [{ txid: req.txid, status: 'readyToSend', req }]
+      })
+    ).rejects.toThrow('merged Beef failed validation')
 
     expect(beef.verify).toHaveBeenCalled()
     expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
