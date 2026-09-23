@@ -214,6 +214,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.2 candidate — wallet discovery timeout lifecycle
+
+- Keep React Native and XDM discovery bounded without carrying the short probe
+  timeout into later wallet operations that may wait for user approval.
+- Preserve caller-configured operation timeouts, listener cleanup, response
+  validation and origin checks. No API or wire migration is required.
+- Applications using automatic discovery must upgrade their bundled SDK; a
+  wallet-only upgrade does not change the SDK served by an application.
+- This source candidate is not published until the protected npm workflow completes.
+
 ### 2.8.1 candidate — portable authenticated empty fields
 
 - Fix portable AES-GCM decryption of valid authenticated empty plaintext. This

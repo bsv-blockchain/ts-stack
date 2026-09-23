@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.1",
-      "releaseType": "none",
-      "summary": "Fixes portable AES-GCM decryption of valid authenticated empty plaintext, including empty encrypted wallet fields. Preserves historical encryption bytes and full tag verification, and adds native/portable compatibility and negative tests for all supported AES key sizes, IV lengths, block boundaries and SymmetricKey envelopes. SDK 2.8.1 was published through the protected single-package release workflow with verified registry integrity and provenance.",
-      "migration": "None. Public APIs, ciphertext bytes and stored account data are unchanged. Upgrade browser/mobile consumers to SDK 2.8.1 to decrypt valid empty fields. Missing, truncated or altered authentication tags and wrong keys or IVs still fail closed."
+      "releaseType": "patch",
+      "summary": "Separates automatic React Native and XDM wallet discovery deadlines from subsequent wallet operations. Successful probes now create an operational substrate without the probe-only timeout, so user approval and valid slow responses can complete. Unresponsive discovery remains bounded with listener cleanup, explicitly configured operation timeouts remain enforced, and all response validation and origin checks are unchanged. Source candidate 2.8.2 is not published until the protected npm workflow completes.",
+      "migration": "No API or wire migration. Upgrade applications that use WalletClient auto-discovery to 2.8.2; earlier auto-discovered React Native/XDM connections can time out later calls at the one-second/200-millisecond discovery deadline. Explicit substrate responseTimeout values still apply. Wallet implementation upgrades alone do not update the SDK bundled by a web application."
     },
     {
       "name": "@bsv/simple",

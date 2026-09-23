@@ -45,12 +45,18 @@ in UMD; their reviewed ceilings are 742,500 and 556,000 bytes respectively.
 The combined sync and security candidate measures 560,560 raw bytes with esbuild;
 its reviewed raw ceiling is 561,000 bytes. Compression ceilings are unchanged.
 
-The 2.8.1 candidate fixes portable AES-GCM decryption of authenticated empty
-plaintext, including empty encrypted wallet fields. Browser/mobile runtimes and
-Node now accept the same valid envelopes. Encryption bytes and full 16-byte tag
-verification are unchanged; invalid tags, keys and IVs remain rejected. No API,
-wire, account-data or ciphertext migration is required. This source candidate is
-not published until the protected npm release workflow completes.
+SDK 2.8.1 fixes portable AES-GCM decryption of authenticated empty plaintext.
+Encryption bytes and full 16-byte tag verification are unchanged; invalid tags,
+keys and IVs remain rejected.
+
+The 2.8.2 candidate separates wallet discovery timeouts from normal operations.
+Automatic React Native and XDM discovery remains bounded, while subsequent
+calls can wait for user approval without inheriting the one-second/200-millisecond
+probe deadline. Explicit substrate `responseTimeout` values remain enforced.
+Applications using `WalletClient` auto-discovery must upgrade their bundled SDK;
+updating the wallet alone does not update a web application's SDK. No API, wire
+or account-data migration is required. This source candidate is not published
+until the protected npm release workflow completes.
 
 ## Table of Contents
 
