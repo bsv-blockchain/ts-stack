@@ -50,6 +50,10 @@ hash. Existing Chaintracks/provider adapters remain header-only; they do not
 claim this stronger position evidence. See the core engine's
 [BASM validation and recovery limits](../overlay/README.md#basm-peer-validation-and-current-recovery-limits).
 
+GASP route failures use the configured logger and serialize thrown values into a
+single escaped field, preserving diagnostic context without allowing request
+content to forge additional log records. HTTP error responses remain unchanged.
+
 ## Example Usage
 
 Here's a quick example:

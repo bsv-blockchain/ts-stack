@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### 2.7.2 candidate — outbound and deployment hardening
 
+- Serialize GASP route errors through the configured logger as one escaped field; HTTP error responses, public APIs and wire behavior are unchanged.
+
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Validated BASM heights, hashes and txid sets while retaining numeric-string
   heights, public CORS, topic-free raw transactions, configured limits and sync

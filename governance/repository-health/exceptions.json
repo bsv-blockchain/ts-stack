@@ -348,6 +348,20 @@
       "created": "2026-07-28",
       "reviewBy": "2026-10-26",
       "removeWhen": "Remove when the analyzer exempts exhaustive protocol dispatch or a separately reviewed generated opcode table improves auditability and passes every script vector, differential, mutation, fuzz, transaction, browser, and packed-consumer check."
+    },
+    {
+      "id": "codeql-reviewed-validation-and-test-fixtures-20260923",
+      "category": "quality-rule",
+      "target": "Existing CodeQL alerts #242, #250-258 and #261-278, individually reviewed on main 476b1351baf366cee39f39f610975f7fb1a83e4a",
+      "owner": "ts-stack-maintainers",
+      "reason": "The exact reported paths are existing primitive validation/authentication guards, contained metadata writes, exclusive file creation, exact array membership, or isolated test assertions. No security bypass is established. Rewriting safe behavior or removing meaningful tests solely to alter heuristic matches would weaken compatibility or assurance; no production control is waived. Detailed per-alert evidence and trust assumptions are retained for review.",
+      "evidence": [
+        "docs/reference/codeql-review-2026-09-23.md",
+        "https://github.com/bsv-blockchain/ts-stack/actions/runs/35813974981"
+      ],
+      "created": "2026-09-23",
+      "reviewBy": "2026-10-23",
+      "removeWhen": "Remove when improved CodeQL modeling no longer reports these paths. Reopen affected alerts immediately if their documented guards, callers, filesystem trust assumptions or test-only roles change; any genuine unsafe path requires remediation before release."
     }
   ]
 }

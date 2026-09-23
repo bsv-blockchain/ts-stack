@@ -304,7 +304,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/overlays/overlay-express.md](../packages/overlays/overlay-express.md)
 - Source: [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express)
-- Release note: Adds direct constructor configuration and hardens public overlay services with DNS-pinned public-HTTPS outbound requests, no redirects, finite deadlines and body limits, canonical reorganization checks, bounded health, search, and monitor routes, sanitized no-store administration pages, and token-gated ARC callbacks.
+- Release note: Adds direct constructor configuration and hardens public overlay services with DNS-pinned public-HTTPS outbound requests, no redirects, finite deadlines and body limits, canonical reorganization checks, bounded health, search, and monitor routes, sanitized no-store administration pages, and token-gated ARC callbacks. Serializes GASP request failures into one escaped field through the configured logger, including errors containing line separators or throwing serialization hooks.
 - Migration: Set an ARC callback token of at least 32 bytes before enabling the ARC ingestion route and update the sender to present it. Private-network or plaintext outbound destinations require the explicit allowPrivateHosts development policy; production endpoints must use public HTTPS. Detailed health data is opt-in. Existing canonical public overlay requests and default credential-free CORS remain supported, but operators must roll out callback credentials and egress policy together across every replica.
 
 | Public subpath | Runtime target(s)                              | Declaration target(s)                                |

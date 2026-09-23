@@ -2820,7 +2820,9 @@ export default class OverlayExpress {
             const response = await engine.provideForeignSyncResponse(req.body, topic)
             return res.status(200).json(response)
           } catch (error) {
-            console.error(chalk.red('Error in /requestSyncResponse:'), error)
+            this.logger.error(
+              chalk.red(`Error in /requestSyncResponse: error=${serializeErrorForLog(error)}`)
+            )
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)
@@ -2845,7 +2847,9 @@ export default class OverlayExpress {
             const response = await engine.provideForeignGASPNode(graphID, txid, outputIndex, header)
             return res.status(200).json(response)
           } catch (error) {
-            console.error(chalk.red('Error in /requestForeignGASPNode:'), error)
+            this.logger.error(
+              chalk.red(`Error in /requestForeignGASPNode: error=${serializeErrorForLog(error)}`)
+            )
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)

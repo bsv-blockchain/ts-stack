@@ -2146,6 +2146,49 @@ describe('OverlayExpress', () => {
       })
     })
 
+    it.each([
+      ['/requestSyncResponse', 'provideForeignSyncResponse'],
+      ['/requestForeignGASPNode', 'provideForeignGASPNode']
+    ])('serializes untrusted %s errors through the configured logger', async (route, method) => {
+      const safeLog = jest.requireActual<typeof import('@bsv/overlay')>('@bsv/overlay')
+      jest.mocked(serializeErrorForLog).mockImplementation(safeLog.serializeErrorForLog)
+      const logger = { ...console, log: jest.fn(), warn: jest.fn(), error: jest.fn() }
+      instance.configureLogger(logger)
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const { postSpy } = await startAndCaptureRoutes()
+        for (const thrown of [
+          new Error('untrusted\r\nforged\u0085record\u2028separator\u2029'),
+          {
+            toJSON: () => {
+              throw new Error('unserializable request error')
+            }
+          }
+        ]) {
+          logger.error.mockClear()
+          mockEngine[method].mockRejectedValueOnce(thrown)
+          const response = await invokeCapturedRoute(postSpy, route, {
+            headers: { 'x-bsv-topic': 'tm_test' },
+            body: { graphID: 'graph', txid: '01', outputIndex: 0 }
+          })
+          expect(response.status).toHaveBeenCalledWith(400)
+          expect(response.json).toHaveBeenCalledWith({
+            status: 'error',
+            message: 'Request could not be processed'
+          })
+          expect(logger.error).toHaveBeenCalledTimes(1)
+          const args = logger.error.mock.calls[0]
+          expect(args).toHaveLength(1)
+          expect(args[0]).toContain(`Error in ${route}: error=`)
+          expect(args[0]).not.toMatch(/[\r\n\u0085\u2028\u2029]/)
+          expect(args[0]).toContain(safeLog.serializeErrorForLog(thrown))
+          expect(consoleError).not.toHaveBeenCalled()
+        }
+      } finally {
+        consoleError.mockRestore()
+      }
+    })
+
     it('executes public discovery, GASP, and bounded BASM routes', async () => {
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
       const { getSpy, postSpy } = await startAndCaptureRoutes()
