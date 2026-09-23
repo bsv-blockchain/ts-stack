@@ -1,11 +1,8 @@
+import { Signature, TransactionSignature } from '@bsv/sdk/primitives'
+import { LockingScript, OP, UnlockingScript } from '@bsv/sdk/script'
 import { hash160, hash256, sha256 } from '@bsv/sdk/primitives/Hash'
-import Signature from '@bsv/sdk/primitives/Signature'
-import TransactionSignature from '@bsv/sdk/primitives/TransactionSignature'
 import { toArray, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
-import LockingScript from '@bsv/sdk/script/LockingScript'
-import OP from '@bsv/sdk/script/OP'
 import type ScriptTemplateUnlock from '@bsv/sdk/script/ScriptTemplateUnlock'
-import UnlockingScript from '@bsv/sdk/script/UnlockingScript'
 import type Transaction from '@bsv/sdk/transaction/Transaction'
 import type {
   WalletCounterparty,

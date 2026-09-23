@@ -146,9 +146,9 @@
     {
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.8.4",
-      "releaseType": "none",
-      "summary": "Hardens topic managers and lookup services with strict bounded query schemas, canonical token amounts, signatures, ownership and outpoint binding, exact screening verdicts, idempotent admission, immutable state, and mutation-safe result limits across Mandala, UMP, UORA, certificates, identity, and related topics.",
-      "migration": "Topic and lookup identifiers and valid canonical wire encodings remain unchanged. Audit historical rows for malformed amounts, noncanonical identifiers, incomplete ownership or admin evidence, and ambiguous outpoint linkage before replay or rebuild. Custom state and screening providers must return exact booleans, compare identity keys case-insensitively where documented, conserve exact safe-integer value, and honor bounded query and result contracts."
+      "releaseType": "patch",
+      "summary": "Refreshes the packed templates dependency range for its CommonJS import interoperability repair. Topic APIs, schemas and admission behavior are unchanged.",
+      "migration": "No API migration. This unpublished candidate resolves templates 1.10.3 or later after publication; current deployed consumers retain their published pins."
     },
     {
       "name": "@bsv/paymail",
@@ -181,9 +181,9 @@
     {
       "name": "@bsv/templates",
       "publishedVersion": "1.10.2",
-      "releaseType": "none",
-      "summary": "Adds the R1K1Wallet ScriptTemplate for salted P-256 hardware signing with an independent secp256k1 recovery path, including a checksummed static Runar artifact and browser-safe lazy decompression. Also consolidates MultiPushDrop script construction without changing its output, makes Mandala token amounts exact positive safe integers, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice.",
-      "migration": "No API migration is required for valid templates. MandalaToken now rejects locking or decoding amounts outside JavaScript's positive safe-integer range; audit any previously accepted non-exact amount scripts before replay. New R1K1Wallet consumers await lock(), retain each private 32-byte salt, and provide a PIV signer that signs the supplied digest directly without hashing it again. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+      "releaseType": "patch",
+      "summary": "Fixes CommonJS construction and signing by consuming the SDK named category exports instead of double-wrapped default leaf imports. Adds exact-tarball CJS/ESM script execution checks with published SDK 2.8.0 and the candidate SDK; public APIs and script encodings are unchanged.",
+      "migration": "No API migration. Upgrade templates to this patch after publication; both CommonJS and ESM consumers retain the same exports and valid script bytes. Existing wallet releases keep their currently qualified pins and compatibility patch until a separately coordinated upgrade."
     },
     {
       "name": "@bsv/teranode-listener",

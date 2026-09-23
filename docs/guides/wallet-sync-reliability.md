@@ -188,32 +188,32 @@ Foreground latency starts when its timer callback runs. Event-loop delay is
 reported separately so synchronous CPU stalls remain visible. The exclusive
 control has very few completed foreground samples because it holds the queue.
 
-| Backend / mode                 | Full copy ms | Foreground samples | Foreground p50 / p95 / p99 ms | Event-loop p95 / p99 ms | Pages |
-| ------------------------------ | -----------: | -----------------: | ----------------------------- | ----------------------- | ----: |
-| Chromium IndexedDB / exclusive |       4143.7 |                  1 | 4137.90 / 4137.90 / 4137.90   | 1.30 / 1.90             |    45 |
-| Chromium IndexedDB / paged     |       4277.2 |                393 | 1.00 / 23.60 / 138.40         | 1.20 / 1.50             |    45 |
-| sqlite / exclusive             |       2413.1 |                  1 | 2377.71 / 2377.71 / 2377.71   | 87.98 / 111.34          |    45 |
-| sqlite / paged                 |       2403.5 |                131 | 0.23 / 0.36 / 0.40            | 92.89 / 111.37          |    45 |
-| http / exclusive               |      22281.5 |                  5 | 0.24 / 22190.60 / 22190.60    | 208.04 / 230.11         |    47 |
-| http / paged                   |      22294.3 |                314 | 0.29 / 0.39 / 0.44            | 209.22 / 231.82         |    47 |
+| Backend / mode | Full copy ms | Foreground samples | Foreground p50 / p95 / p99 ms | Event-loop p95 / p99 ms | Pages |
+| --- | ---: | ---: | --- | --- | ---: |
+| Chromium IndexedDB / exclusive | 4027.1 | 1 | 4021.50 / 4021.50 / 4021.50 | 1.30 / 1.60 | 45 |
+| Chromium IndexedDB / paged | 4110.0 | 384 | 0.90 / 25.90 / 132.60 | 1.30 / 1.70 | 45 |
+| sqlite / exclusive | 2368.7 | 1 | 2342.43 / 2342.43 / 2342.43 | 85.12 / 106.86 | 45 |
+| sqlite / paged | 2373.8 | 133 | 0.17 / 0.32 / 0.40 | 84.86 / 109.29 | 45 |
+| http / exclusive | 26184.7 | 5 | 0.25 / 26092.86 / 26092.86 | 250.70 / 271.70 | 47 |
+| http / paged | 26394.8 | 319 | 0.24 / 0.35 / 0.40 | 255.93 / 271.98 | 47 |
 
-Native browser peak JS heap was 75.8 MB exclusive and 53.9 MB paged. SQLite
-full-copy CPU was 1.91/1.83 seconds and sampled RSS growth 94.9/99.6 MB.
-Authenticated HTTP CPU was 22.01/22.03 seconds, RSS growth 323.6/269.1 MB,
-and response bodies 7,173,923/7,172,956 bytes. Values are exclusive/paged;
+Native browser peak JS heap was 79.8 MB exclusive and 56.3 MB paged. SQLite
+full-copy CPU was 1.86/1.86 seconds and sampled RSS growth 127.6/60.1 MB.
+Authenticated HTTP CPU was 25.93/26.08 seconds, RSS growth 152.1/95.1 MB,
+and response bodies 7,173,777/7,172,813 bytes. Values are exclusive/paged;
 HTTP bytes exclude headers, requests and TLS framing. HTTP and SQLite include
 source and destination in the same process. Absolute RSS includes the test
 runner and previously allocated heap; sampled growth is not a total memory cap.
 
-SQLite issued 31,612/31,872 SQL queries and HTTP issued 32,315/32,919, including
+SQLite issued 31,612/31,876 SQL queries and HTTP issued 32,241/32,866, including
 foreground operations. Extra queries reflect completed foreground work; this
 change does not claim a database-query reduction. Paged maximum commit times
-were 143 ms (browser), 104 ms (SQLite) and 92 ms (HTTP). Maximum measured paged
-queue wait was 1 ms in all three fixtures.
+were 142 ms (browser), 104 ms (SQLite) and 81 ms (HTTP). Maximum measured paged
+queue wait was 1 ms in the browser and 0 ms in the local SQL/HTTP fixtures.
 
 All modes preserved the full same-timestamp boundary reread: 45 pages locally
 and 47 over HTTP; a subsequent settled unchanged copy used two pages. The
-network fixture remains CPU-heavy, with about 209 ms event-loop p95 despite
+network fixture remains CPU-heavy, with about 256 ms event-loop p95 despite
 short queue waits. Moving crypto/serialization off the main thread is future
 work; queue responsiveness must not be represented as eliminating that cost.
 These are reproducible local observations, not cross-device performance promises.

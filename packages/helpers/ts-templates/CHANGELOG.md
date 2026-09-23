@@ -10,6 +10,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 1.10.3 candidate — CommonJS interoperability
+
+- Consume named SDK category exports so CommonJS and ESM consumers construct
+  and sign scripts with the same classes. Fixes the double-wrapped default
+  imports reported in #571; public APIs and valid script bytes are unchanged.
+- Exercise packed root and wildcard exports, script construction and real
+  signature execution in clean CommonJS/ESM consumers on SDK 2.8.0 and the
+  candidate SDK. Existing browser bundle budgets remain in force.
+
 ### 1.10.2 candidate — signing-context and template hardening
 
 ### Added

@@ -25,6 +25,19 @@ tx.addOutput({
 })
 ```
 
+## Module compatibility
+
+The unpublished 1.10.3 candidate repairs CommonJS SDK import interop reported
+in [stack#571](https://github.com/bsv-blockchain/ts-stack/issues/571). Both
+`require('@bsv/templates')` and ESM imports construct and sign the same scripts;
+root and `@bsv/templates/MandalaToken.ts` exports retain their public shape.
+No API or script-encoding migration is required.
+
+`pnpm pack:check` runs synthetic signed spends from exact packed artifacts in
+clean CJS and ESM consumers with published SDK 2.8.0 and the candidate SDK.
+For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a locally
+verified SDK 2.8.0 tarball; the check verifies its installed version.
+
 ## Current Templates
 
 | Name                                    | Description                                          |

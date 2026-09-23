@@ -1,4 +1,4 @@
-import TransactionSignature from '@bsv/sdk/primitives/TransactionSignature'
+import { TransactionSignature } from '@bsv/sdk/primitives'
 import type Script from '@bsv/sdk/script/Script'
 import type Transaction from '@bsv/sdk/transaction/Transaction'
 

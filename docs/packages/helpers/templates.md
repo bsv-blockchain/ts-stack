@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '1.10.2'
+version: '1.10.3'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -37,6 +37,14 @@ console.log(lockingScript.toHex())
 const decodedData = OpReturn.decode(lockingScript)
 console.log(decodedData) // ['APP', '{"action":"vote"}']
 ```
+
+## CommonJS compatibility
+
+The 1.10.3 candidate fixes SDK default-import double wrapping in CommonJS.
+Both module formats retain the same root/wildcard exports and script encodings.
+Packed acceptance constructs and signs scripts, including Mandala, multisig,
+MultiPushDrop and R1K1 recovery, with published SDK 2.8.0 and the candidate SDK.
+This source candidate is not yet published.
 
 ## What it provides
 
