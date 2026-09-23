@@ -105,8 +105,9 @@ describe('raw authentication middleware composition', () => {
       Buffer.from('--outer\r\nopaque payload\r\n--outer--\r\n')
     ],
     ['application/octet-stream', Buffer.from([0, 255, 1])],
-    [undefined, Buffer.from([0, 255, 1])]
-  ])('retains opaque application bytes for %s', async (contentType, bytes) => {
+    [undefined, Buffer.from([0, 255, 1])],
+    [undefined, undefined]
+  ])('retains an opaque or absent body for %s (case %#)', async (contentType, bytes) => {
     jest
       .spyOn(ExpressTransport.prototype, 'handleIncomingRequest')
       .mockImplementation(async (req, _res, next) => {
@@ -127,6 +128,26 @@ describe('raw authentication middleware composition', () => {
     expect(req.body).toEqual(bytes)
     expect((req as unknown as AuthRequest).rawBody).toEqual(bytes)
     res.emit('finish')
+  })
+
+  it('applies configured raw-byte limits before authentication or application dispatch', async () => {
+    const transport = jest.spyOn(ExpressTransport.prototype, 'handleIncomingRequest')
+    const middleware = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      captureRawBody: true,
+      transportLimits: { maxRequestBytes: 3, requestTimeoutMs: 100, maxPendingRequests: 1 }
+    })
+    const req = request({ 'content-length': '4' })
+    const res = response()
+    const next = jest.fn()
+    middleware(req as unknown as AuthRequest, res as unknown as Response, next)
+    await flush()
+    expect(transport).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(413)
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'ERR_AUTH_BODY' }))
+    expect((req as unknown as AuthRequest).auth).toBeUndefined()
+    req.destroy()
   })
 
   it('rejects malformed authenticated JSON before calling the application', async () => {
