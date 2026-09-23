@@ -82,7 +82,8 @@ uses the workflow's all-scope path instead of comparing only the latest commit.
 Source merges still validate their affected scope automatically.
 
 Every execution lane uses an explicit successful-preparation condition that
-survives intentionally skipped PR-only gates on a main push. The final result
+survives intentionally skipped PR-only gates on a main push and honors explicit
+workflow cancellation so obsolete runs cannot hold the concurrency slot. The final result
 gate independently checks scope outputs against each job result: selected jobs
 must succeed; missing, cancelled or skipped selected jobs fail the merge gate.
 Only genuinely unselected lanes and main's PR-only checks may be skipped.

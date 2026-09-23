@@ -194,7 +194,7 @@ jobs:
     needs:
       - early-gates
       - scope
-    if: always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
+    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -436,7 +436,7 @@ jobs:
 
   mutation-tests:
     name: Mutation / ${{ matrix.target }}
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     # The governed air-gap codec target currently instruments 352 mutants and
@@ -498,7 +498,7 @@ jobs:
 
   standard-tests:
     name: Tests / non-coverage packages
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -541,7 +541,7 @@ jobs:
 
   dependent-tests:
     name: Tests / affected dependents (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -605,7 +605,7 @@ jobs:
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -669,7 +669,7 @@ jobs:
 
   wallet-browser-platform:
     name: Platform / wallet browser
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_client == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_client == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -703,7 +703,7 @@ jobs:
 
   wallet-mobile-platform:
     name: Platform / wallet mobile
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_mobile == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_mobile == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -742,7 +742,7 @@ jobs:
 
   coverage-sdk:
     name: Coverage / SDK
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -793,7 +793,7 @@ jobs:
 
   coverage-did:
     name: Coverage / DID
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.did == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.did == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -828,7 +828,7 @@ jobs:
 
   coverage-wallet:
     name: Coverage / wallet-toolbox (${{ matrix.shard }}/4)
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -877,7 +877,7 @@ jobs:
 
   coverage-wallet-monitor:
     name: Coverage / wallet-toolbox monitor
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -922,7 +922,7 @@ jobs:
 
   coverage-verifast:
     name: Coverage / VeriFast
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.verifast == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.verifast == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -974,7 +974,7 @@ jobs:
 
   coverage-other:
     name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -1060,7 +1060,7 @@ jobs:
   coverage-upload:
     name: Coverage / aggregate upload
     if: >-
-      always() &&
+      always() && !cancelled() &&
       needs.prepare.result == 'success' &&
       needs.prepare.outputs.coverage-required == 'true' &&
       (needs.coverage-other.result == 'success' || needs.coverage-other.result == 'skipped') &&
@@ -1215,7 +1215,7 @@ jobs:
     needs:
       - early-gates
       - scope
-    if: always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
+    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -1231,7 +1231,7 @@ jobs:
 
   infra:
     name: Infra / ${{ matrix.display }}
-    if: always() && needs.infra-scope.result == 'success' && needs.infra-scope.outputs.has-infra == 'true'
+    if: always() && !cancelled() && needs.infra-scope.result == 'success' && needs.infra-scope.outputs.has-infra == 'true'
     needs: infra-scope
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -1322,7 +1322,7 @@ jobs:
     # Run on every PR (cheap and protects the docs site) and on pushes that touch docs
     # The build step inside will fail fast on frontmatter or link problems before they reach production
     if: >-
-      always() &&
+      always() && !cancelled() &&
       needs.early-gates.result == 'success' &&
       needs.scope.result == 'success' &&
       needs.scope.outputs.docs == 'true'
@@ -1368,7 +1368,7 @@ jobs:
       - early-gates
       - scope
     if: >-
-      always() &&
+      always() && !cancelled() &&
       needs.early-gates.result == 'success' &&
       needs.scope.result == 'success' &&
       needs.scope.outputs.conformance == 'true'

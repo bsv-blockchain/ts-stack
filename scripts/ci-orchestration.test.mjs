@@ -66,15 +66,15 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
 
   assert.match(
     workflow,
-    /^    if: always\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
@@ -103,13 +103,13 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
   const directGateCondition =
-    "always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
+    "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
   assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
   for (const jobName of ['docs-validate', 'conformance']) {
     assert.match(jobs[jobName], /^    if: >-$/m)
-    assert.match(jobs[jobName], /^      always\(\) &&$/m)
+    assert.match(jobs[jobName], /^      always\(\) && !cancelled\(\) &&$/m)
     assert.match(jobs[jobName], /^      needs\.early-gates\.result == 'success' &&$/m)
     assert.match(jobs[jobName], /^      needs\.scope\.result == 'success' &&$/m)
   }
@@ -126,7 +126,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
   assert.match(
     workflow,
-    /^    if: always\(\) && needs\.infra-scope\.result == 'success' && needs\.infra-scope\.outputs\.has-infra == 'true'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.infra-scope\.result == 'success' && needs\.infra-scope\.outputs\.has-infra == 'true'$/m
   )
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
 })
@@ -150,7 +150,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   for (const job of selected) {
     assert.match(
       job.source,
-      /^    if: always\(\) && needs\.(?:prepare|infra-scope)\.result == 'success' && /m,
+      /^    if: always\(\) && !cancelled\(\) && needs\.(?:prepare|infra-scope)\.result == 'success' && /m,
       job.name
     )
   }
