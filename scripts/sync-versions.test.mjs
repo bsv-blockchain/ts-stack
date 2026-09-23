@@ -27,6 +27,18 @@ test('release sync covers the separately deployed notifier without traversing ar
     writeJson('package.json', { name: 'release-sync-fixture', private: true })
     writeFileSync(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n")
     writeJson('packages/sdk/package.json', { name: '@bsv/sdk', version: '2.8.0' })
+    // Repository-health CI intentionally runs before package-manager setup.
+    // Supply only the unchanged workspace-discovery boundary to this fixture.
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    const workspaceListing = JSON.stringify([
+      { name: '@bsv/sdk', version: '2.8.0', path: join(root, 'packages/sdk') }
+    ])
+    writeFileSync(
+      join(bin, 'pnpm'),
+      `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(workspaceListing)})\n`,
+      { mode: 0o700 }
+    )
     const oldManifest = {
       name: 'standalone-consumer',
       version: '1.0.0',
@@ -36,7 +48,8 @@ test('release sync covers the separately deployed notifier without traversing ar
     const run = (...args) =>
       execFileSync(process.execPath, [join(root, 'scripts/sync-versions.mjs'), ...args], {
         cwd: root,
-        encoding: 'utf8'
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${bin}:${dirname(process.execPath)}` }
       })
 
     assert.match(
