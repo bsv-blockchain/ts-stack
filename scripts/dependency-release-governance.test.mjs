@@ -9,6 +9,7 @@ import {
   immutableDeploymentImages,
   isAutomationPullRequest,
   parsePnpmOverrides,
+  validateDependabotExclusions,
   validateDependencyReleaseGovernance,
   validatePullRequestEvidence
 } from './dependency-release-governance.mjs'
@@ -147,4 +148,27 @@ test('scheduled dependency verification installs the workspace before docs facts
   assert.ok(install > 0)
   assert.ok(docsFacts > install)
   assert.doesNotMatch(workflow, /^\s*(NODE_AUTH_TOKEN|NPM_TOKEN|registry-url)\s*:/m)
+})
+
+test('Dependabot rejects parent paths before GitHub disables every update job', () => {
+  const invalid = `updates:
+  - package-ecosystem: npm
+    exclude-paths:
+      - '../../pnpm-lock.yaml'
+      - "../../../pnpm-workspace.yaml"
+    ignore:
+      - dependency-name: '..unrelated-name'
+`
+  assert.deepEqual(validateDependabotExclusions(invalid), [
+    "Dependabot exclude-paths line 4 must not contain '..'",
+    "Dependabot exclude-paths line 5 must not contain '..'"
+  ])
+  assert.deepEqual(
+    validateDependabotExclusions(
+      invalid
+        .replace('../../pnpm-lock.yaml', '**/pnpm-lock.yaml')
+        .replace('../../../pnpm-workspace.yaml', '**/pnpm-workspace.yaml')
+    ),
+    []
+  )
 })

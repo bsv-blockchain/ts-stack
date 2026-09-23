@@ -65,7 +65,11 @@ Standalone infrastructure uses npm `package-lock.json` files outside the pnpm
 workspace. Its Dependabot entry excludes only the unrelated ancestor
 `pnpm-lock.yaml` and `pnpm-workspace.yaml` support files, avoiding the updater's
 sub-workspace misclassification; the root entry continues to own both files.
-Every infrastructure manifest and npm lockfile remains monitored. Remove this
+Use recursive filename globs (`**/pnpm-lock.yaml` and
+`**/pnpm-workspace.yaml`): GitHub rejects `..` in exclusion patterns and disables
+all configured update jobs when the configuration is invalid. The early
+dependency policy check rejects that failure before merge. Every infrastructure
+manifest and npm lockfile remains monitored. Remove this
 workaround when Dependabot respects standalone npm boundaries beneath a pnpm root.
 
 The Python code generator accepts uv >=0.11.32 so Dependabot can resolve its
