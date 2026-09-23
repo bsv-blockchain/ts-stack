@@ -62,9 +62,10 @@ There is no unbounded prefetch queue or hidden parallel merge.
 
 ## Identity, network and persistence safety
 
-Known chain mismatches fail with the existing `WERR_NETWORK_CHAIN` before sync
-state or user writes. A legacy provider that omits chain information retains its
-legacy behavior; absence is not proof of a matching chain. Both sync directions
+Missing, unrecognized or mismatched chain declarations fail with the existing
+`WERR_NETWORK_CHAIN` before sync state or user writes. Live sync never infers a
+provider's chain. Legacy providers without access capabilities retain exclusive
+ownership; they still need matching chain declarations. Both sync directions
 honor returned `ProcessSyncChunkResult.error` values as well as thrown errors.
 Neither path advances counts or checkpoints after an error, and a nonterminal
 page that makes no checkpoint progress fails explicitly.
