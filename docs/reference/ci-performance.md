@@ -74,6 +74,28 @@ Review the 40 exact run links, classification threshold, sample summaries,
 workflow or runner changes, and the stated median/p95 budget. Never loosen a
 budget solely to make a red trend green.
 
+## Sampling and investigation
+
+The collector searches up to ten pages of successful PR runs, deduplicates source
+heads, and paginates each run's complete job list. It retains 20 full-scope and
+20 targeted runs, including job and step timings. When history cannot supply the
+required sample, it writes the partial report before failing; incomplete samples
+cannot establish a new baseline. API requests and pagination are bounded.
+
+The September review found that the July baseline predates the optical-codec
+mutation target and later QA additions. In the recovered 40-run sample, full-scope
+median/p95 was 2,007/2,254 seconds and targeted median/p95 was 566/833 seconds.
+The optical-codec mutation job dominated full runs (median 1,378 seconds), while
+wallet coverage dominated the longer targeted runs. Those observations do not by
+themselves justify raising the budget. Keep the historical baseline until a
+reviewed workload comparison and measurements justify a replacement.
+
+The duplicate-tracking codec regression now bounds its fixture's search and
+avoids constructing a successful Jest matcher for every redundant frame. It
+still sends more than the actual tracking limit, checks every acceptance result,
+repeats the final frame and verifies exact recovered bytes. Mutation and property
+coverage, payload sizes, test counts and timeout budgets remain governed.
+
 ## Complete release acceptance
 
 Dispatch `CI` manually on the reviewed main commit to select the entire governed
