@@ -8,6 +8,7 @@
  * createCredentialIssuerHandler() returns Next.js App Router compatible { GET, POST }.
  */
 
+import { compareCodeUnits } from '../core/code-unit-order'
 import { join } from 'node:path'
 import { PrivateKey } from '@bsv/sdk'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
@@ -46,13 +47,6 @@ function validatedIssuerPrivateKey(value: unknown): string {
     throw new Error('Credential issuer key is invalid')
   }
   return value
-}
-
-/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
-function compareCodeUnits(left: string, right: string): number {
-  if (left < right) return -1
-  if (left > right) return 1
-  return 0
 }
 
 function validateStoredIssuerKey(value: unknown): { privateKey: string; publicKey: string } {

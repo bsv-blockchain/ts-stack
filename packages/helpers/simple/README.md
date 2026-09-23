@@ -62,6 +62,11 @@ certifier, subject, and type before changing wallet state. The optional `fetch`
 override is an explicitly trusted escape hatch for controlled tests or local
 development; applications must provide equivalent origin and network controls.
 
+Certificate and persisted credential field names retain their historical UTF-16
+code-unit order, independent of the host locale. The shared internal comparator
+in the unpublished 0.6.0 candidate does not change signed bytes or require a
+consumer migration.
+
 `CredentialIssuer.verify()` authenticates the embedded BSV certificate and
 requires the W3C wrapper's issuer, subject, type, fields, proof, and revocation
 reference to match it. Wrapper timestamps are formatting metadata, not claims

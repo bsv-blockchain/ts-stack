@@ -935,6 +935,14 @@ describe('Historian', () => {
       } finally {
         Array.prototype.sort = originalSort
       }
+      const firstKey = [...cache.keys()][0]
+      const ascendingContext = Object.fromEntries(orderedKeys.map(key => [key, context[key]]))
+      await makeCachingHistorian({ historyCache: cache }).buildHistory(
+        cacheableTransaction(),
+        ascendingContext
+      )
+      // Both insertion orders must resolve to the identical persisted cache namespace.
+      expect([...cache.keys()]).toEqual([firstKey])
       expect([...cache.keys()].join('\n')).toContain(encodedFields)
       expect(encodedFields.indexOf('s1:A=')).toBeLessThan(encodedFields.indexOf('s1:z='))
       expect(encodedFields.indexOf('s1:z=')).toBeLessThan(encodedFields.indexOf('s1:ä='))

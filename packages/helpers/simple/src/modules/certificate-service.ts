@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../core/code-unit-order'
 import { stringifyBRC100 } from '@bsv/sdk'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import {
@@ -35,13 +36,6 @@ function canonicalBase64Identifier(value: unknown, name: string): string {
     throw new TypeError(`Invalid ${name}`)
   }
   return value
-}
-
-/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
-function compareCodeUnits(left: string, right: string): number {
-  if (left < right) return -1
-  if (left > right) return 1
-  return 0
 }
 
 function sameRecord(left: Record<string, string>, right: unknown): boolean {

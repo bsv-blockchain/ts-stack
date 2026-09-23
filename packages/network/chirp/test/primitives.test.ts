@@ -334,6 +334,26 @@ describe('byte sources and bounded cache', () => {
     }
   })
 
+  test('finishes local cancellation when an iterator withdraws its optional return hook', async () => {
+    let reads = 0
+    const finish = jest.fn(async () => ({ done: true as const, value: undefined }))
+    const source: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: async () => ({ done: false as const, value: Uint8Array.of(7) }),
+          get return() {
+            return reads++ === 0 ? finish : undefined
+          }
+        }
+      }
+    }
+    const bytes = toAsyncBytes(source)
+    await expect(bytes.next()).resolves.toEqual({ done: false, value: Uint8Array.of(7) })
+    await expect(bytes.return(undefined)).resolves.toEqual({ done: true, value: undefined })
+    expect(finish).not.toHaveBeenCalled()
+    await expect(bytes.next()).resolves.toEqual({ done: true, value: undefined })
+  })
+
   test('rejects unsupported and non-byte source chunks', async () => {
     await expect(collect({} as CHIRPByteSource)).rejects.toMatchObject({ code: 'ERR_CHIRP_SOURCE' })
     const sparse: number[] = []

@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './code-unit-order'
 import {
   createPublicHTTPSFetch,
   MasterCertificate,
@@ -194,13 +195,6 @@ function snapshotLegacyCertificateTypes(value: unknown): string[] {
     types.push(legacyCompatibleCertificateType(descriptor.value))
   }
   return [...new Set(types)]
-}
-
-/** UTF-16 code-unit order, the same order as a comparator-less `Array#sort`. */
-function compareCodeUnits(left: string, right: string): number {
-  if (left < right) return -1
-  if (left > right) return 1
-  return 0
 }
 
 function historicalCertificatePreimage(certificate: CertificateData): number[] {
