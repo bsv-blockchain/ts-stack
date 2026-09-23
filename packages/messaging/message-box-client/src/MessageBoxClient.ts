@@ -1952,9 +1952,8 @@ export class MessageBoxClient {
 
       if (!response.ok) {
         const code = messageBoxErrorCode(parsedResponse)
-        throw new Error(
-          `Message Box send failed with HTTP ${response.status}${code == null ? '' : ` (${code})`}.`
-        )
+        const reason = code == null ? '' : ` (${code})`
+        throw new Error(`Message Box send failed with HTTP ${response.status}${reason}.`)
       }
 
       const validatedResponse = validateSendResponse(parsedResponse, snapshot.recipient, messageId)

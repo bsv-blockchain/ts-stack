@@ -440,27 +440,27 @@ function quotedSpecifier(literal) {
 export function nodeModeDefaultImports(source) {
   const required = new Map()
   for (const match of source.matchAll(
-    /\b(?:let|var|const)\s+([\w$]+)\s*=\s*require\(("[^"]*"|'[^']*')\)/g
+    /\b(?:let|var|const)\s+([\w$]+)\s*=\s*require\(\s*(["'][^"']*["'])\s*\)/g
   )) {
     required.set(match[1], quotedSpecifier(match[2]))
   }
   const bindings = new Map()
   for (const match of source.matchAll(
-    /\b([\w$]+)\s*=\s*(?:[\w$]+\.)?__toESM\(\s*\1\s*,\s*1\s*\)/g
+    /\b([\w$]+)\s*=\s*(?:[\w$]+\.)?__toESM\(([^,]+),\s*1\s*\)/g
   )) {
-    if (required.has(match[1])) bindings.set(match[1], required.get(match[1]))
-  }
-  for (const match of source.matchAll(
-    /\b(?:let|var|const)\s+([\w$]+)\s*=\s*(?:[\w$]+\.)?__toESM\(\s*require\(("[^"]*"|'[^']*')\)\s*,\s*1\s*\)/g
-  )) {
-    bindings.set(match[1], quotedSpecifier(match[2]))
+    const argument = match[2].trim()
+    const inline = /^require\(\s*(["'][^"']*["'])\s*\)$/.exec(argument)
+    const specifier = inline == null ? required.get(argument) : quotedSpecifier(inline[1])
+    if (specifier !== undefined) bindings.set(match[1], specifier)
   }
   const specifiers = new Set()
   for (const [binding, specifier] of bindings) {
-    const escaped = binding.replaceAll('$', '\\$')
-    if (new RegExp(`(?<![\\w$])${escaped}\\.default\\b`).test(source)) specifiers.add(specifier)
+    const escaped = binding.replaceAll('$', String.raw`\$`)
+    if (new RegExp(String.raw`(?<![\w$])${escaped}\.default\b`).test(source)) {
+      specifiers.add(specifier)
+    }
   }
-  return [...specifiers].sort()
+  return [...specifiers].sort((left, right) => left.localeCompare(right))
 }
 
 async function nearestPackageType(directory, root, cache) {
@@ -495,7 +495,7 @@ async function installedCommonJsFiles(packageRoot) {
     }
   }
   await visit(packageRoot)
-  return files.sort()
+  return files.sort((left, right) => left.localeCompare(right))
 }
 
 async function checkCommonJsDefaultInterop(consumerDirectory, manifest) {
@@ -516,15 +516,18 @@ async function checkCommonJsDefaultInterop(consumerDirectory, manifest) {
     '  const loaded = createRequire(path.join(packageRoot, file))(specifier);',
     "  return loaded != null && loaded.__esModule === true && Object.hasOwn(loaded, 'default');",
     '});',
-    'if (broken.length > 0) {',
-    '  console.error(',
-    "    'CommonJS output binds default imports of __esModule modules to module.exports:\\n' +",
-    "      broken.map(({ file, specifier }) => '  ' + file + ': ' + specifier).join('\\n')",
-    '  );',
-    '  process.exit(1);',
-    '}'
+    'process.stdout.write(JSON.stringify(broken));'
   ].join('\n')
-  await run('node', ['--eval', probe], { cwd: consumerDirectory })
+  const { stdout } = await run('node', ['--eval', probe], { cwd: consumerDirectory })
+  const broken = JSON.parse(stdout)
+  if (broken.length > 0) {
+    throw new Error(
+      [
+        'CommonJS output binds default imports of __esModule modules to module.exports:',
+        ...broken.map(({ file, specifier }) => `  ${file}: ${specifier}`)
+      ].join('\n')
+    )
+  }
 }
 
 function declaredBin(manifest, binName) {
