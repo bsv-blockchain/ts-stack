@@ -358,15 +358,50 @@ class InternalizeActionContext {
     }
   }
 
-  private validateBasketMerges(): void {
+  /**
+   * Rejects a basket-insertion merge that would silently move an existing
+   * output between baskets. Without this, an app with insertion permission on
+   * basket X only (checked at the WalletPermissionsManager layer against the
+   * *requested* basket) could internalize an already-known transaction and
+   * reclassify another app's output from basket Y into X, then spend it.
+   *
+   * An output currently sitting in the wallet's own 'default'/change basket
+   * without being wallet-managed change is not a real, app-claimed basket
+   * assignment — it is the documented legacy-recovery state (see
+   * `internalizeActionManagedChangePolicy.test.ts`), and 'default' can never
+   * be requested as an insertion destination (see `getBasket`), so it is
+   * exempt from this check and remains sweepable into a real basket.
+   *
+   * The requested basket is resolved with a plain, non-inserting lookup
+   * (`findOutputBaskets`) so that a request which is then rejected never
+   * creates the named basket as a side effect.
+   */
+  private async validateBasketMerges(): Promise<void> {
     if (!this.isMerge) return
     for (const basket of this.basketInsertions) {
-      if (basket.eo != null && isManagedChangeOutput(basket.eo)) {
+      const eo = basket.eo
+      if (eo == null) continue
+      // Widened so the type guard's false branch does not narrow `eo` to never.
+      if (isManagedChangeOutput(eo as TableOutput | undefined)) {
         throw new WERR_INVALID_PARAMETER(
           'outputs',
           `output ${basket.vout} is wallet-managed change and cannot be reclassified as a basket insertion`
         )
       }
+      const currentBasketId = eo.basketId
+      if (currentBasketId == null || currentBasketId === this.changeBasket.basketId) continue
+      const requestedBasket = verifyOneOrNone(
+        await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: basket.basket } })
+      )
+      if (requestedBasket?.basketId !== currentBasketId) {
+        throw new WERR_INVALID_PARAMETER(
+          'outputs',
+          `output ${basket.vout} is already assigned to a different basket and cannot be reclassified as a basket insertion into ${basket.basket}`
+        )
+      }
+      // Same basket already: cache it so mergeBasketInsertionForOutput's later
+      // getBasket call reuses this lookup instead of repeating it.
+      this.baskets[basket.basket] = requestedBasket
     }
   }
 
@@ -397,7 +432,7 @@ class InternalizeActionContext {
     this.baskets = {}
     await this.loadExistingTransaction()
     await this.linkExistingOutputs()
-    this.validateBasketMerges()
+    await this.validateBasketMerges()
     this.computeWalletPaymentBalance()
   }
 
