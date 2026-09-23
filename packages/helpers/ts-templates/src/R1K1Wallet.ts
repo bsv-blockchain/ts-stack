@@ -1,13 +1,9 @@
 import { hash160, hash256, sha256 } from '@bsv/sdk/primitives/Hash'
 import type PrivateKey from '@bsv/sdk/primitives/PrivateKey'
-import Signature from '@bsv/sdk/primitives/Signature'
-import TransactionSignature from '@bsv/sdk/primitives/TransactionSignature'
+import { Signature, TransactionSignature } from '@bsv/sdk/primitives'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
-import LockingScript from '@bsv/sdk/script/LockingScript'
-import OP from '@bsv/sdk/script/OP'
-import Script from '@bsv/sdk/script/Script'
+import { LockingScript, OP, Script, UnlockingScript } from '@bsv/sdk/script'
 import type ScriptTemplate from '@bsv/sdk/script/ScriptTemplate'
-import UnlockingScript from '@bsv/sdk/script/UnlockingScript'
 import type Transaction from '@bsv/sdk/transaction/Transaction'
 import {
   R1_K1_K1_SLOT_OFFSET,

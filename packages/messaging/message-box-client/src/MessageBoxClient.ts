@@ -23,19 +23,14 @@
  */
 
 import { AuthFetch } from '@bsv/sdk/auth/clients/AuthFetch'
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
-import Random from '@bsv/sdk/primitives/Random'
+import { PublicKey, Random } from '@bsv/sdk/primitives'
 import { toArray, toBase64, toHex, toUTF8, toUTF8Strict } from '@bsv/sdk/primitives/utils'
-import LookupResolver, { type LookupNetworkPreset } from '@bsv/sdk/overlay-tools/LookupResolver'
-import TopicBroadcaster from '@bsv/sdk/overlay-tools/SHIPBroadcaster'
-import P2PKH from '@bsv/sdk/script/templates/P2PKH'
-import PushDrop from '@bsv/sdk/script/templates/PushDrop'
+import { LookupResolver, TopicBroadcaster, type LookupNetworkPreset } from '@bsv/sdk/overlay-tools'
+import { P2PKH, PushDrop } from '@bsv/sdk/script/templates'
 import { decodeCanonicalPushDrop } from '@bsv/sdk/script/templates/PushDropValidation'
-import Beef from '@bsv/sdk/transaction/Beef'
-import Transaction from '@bsv/sdk/transaction/Transaction'
+import { Beef, Transaction } from '@bsv/sdk/transaction'
 import { normalizeBRC100ByteArray, stringifyBRC100 } from '@bsv/sdk/wallet/BRC100ByteEncoding'
-import ProtoWallet from '@bsv/sdk/wallet/ProtoWallet'
-import WalletClient from '@bsv/sdk/wallet/WalletClient'
+import { ProtoWallet, WalletClient } from '@bsv/sdk/wallet'
 import type {
   CreateActionOutput,
   InternalizeOutput,

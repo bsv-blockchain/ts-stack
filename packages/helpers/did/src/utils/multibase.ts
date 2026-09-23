@@ -1,4 +1,4 @@
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import { PublicKey } from '@bsv/sdk/primitives'
 import { fromBase58, toBase58 } from '@bsv/sdk/primitives/utils'
 import type { PublicKeyInput } from '../types.js'
 import { assertBoundedString, snapshotBytes } from '../validation.js'

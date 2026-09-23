@@ -1,20 +1,20 @@
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
-import Random from '@bsv/sdk/primitives/Random'
+import { PublicKey, Random } from '@bsv/sdk/primitives'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   decodeCanonicalDIDToken,
   DID_TOKEN_PROTOCOL,
   normalizeDIDSerialNumber
 } from '@bsv/sdk/identity/DIDTokenValidation'
-import LookupResolver, {
+import {
+  LookupResolver,
+  TopicBroadcaster,
   type LookupAnswer,
   type LookupNetworkPreset
-} from '@bsv/sdk/overlay-tools/LookupResolver'
-import TopicBroadcaster from '@bsv/sdk/overlay-tools/SHIPBroadcaster'
-import PushDrop from '@bsv/sdk/script/templates/PushDrop'
+} from '@bsv/sdk/overlay-tools'
+import { PushDrop } from '@bsv/sdk/script/templates'
 import type { BroadcastFailure, BroadcastResponse } from '@bsv/sdk/transaction/Broadcaster'
-import Transaction from '@bsv/sdk/transaction/Transaction'
-import WalletClient from '@bsv/sdk/wallet/WalletClient'
+import { Transaction } from '@bsv/sdk/transaction'
+import { WalletClient } from '@bsv/sdk/wallet'
 import type {
   Base64String,
   ListOutputsResult,
