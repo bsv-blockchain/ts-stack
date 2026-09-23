@@ -178,3 +178,19 @@ test('fork PRs can produce the required Codecov status without a privileged work
   assert.doesNotMatch(workflow, /pull_request_target|id-token:\s*write/)
   assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
 })
+
+test('coverage aggregation installs its runtime-comparison compiler before enforcing patch coverage', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const aggregate = workflowJobBlocks(workflow).find(job => job.name === 'coverage-upload').source
+  const install = aggregate.indexOf(
+    'run: pnpm install --filter @bsv/ts-stack --frozen-lockfile --ignore-scripts'
+  )
+  const rebuild = aggregate.indexOf('run: pnpm --filter @bsv/ts-stack rebuild esbuild')
+  const enforce = aggregate.indexOf('node scripts/patch-coverage.mjs')
+  const pnpm = aggregate.indexOf('uses: pnpm/action-setup@')
+  const node = aggregate.indexOf('uses: actions/setup-node@')
+  assert.ok(pnpm >= 0 && node > pnpm && install > node)
+  assert.ok(rebuild > install && enforce > rebuild)
+  assert.match(aggregate, /--target 90/)
+  assert.doesNotMatch(aggregate.slice(0, enforce), /continue-on-error: true/)
+})
