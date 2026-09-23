@@ -13,6 +13,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.6.0 candidate — bounded PeerPay receive interoperability
+
+- Accept canonical standard base64 transaction strings alongside existing byte
+  arrays and numeric-key JSON objects in list, live and indexed PeerPay receipt.
+- Bound encoded/decoded sizes before conversion and retain wallet validation and
+  acknowledgement order. Sender encoding and relay limits are unchanged.
+- Keep #548 relay/preflight and #503 durable refund/outcome milestones open.
+
 ### 2.5.2 candidate — authenticated transport and payment hardening
 
 - Internalize notification payments with the configured originator before acknowledgment.
