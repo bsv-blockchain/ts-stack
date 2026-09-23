@@ -166,9 +166,9 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.1",
-      "releaseType": "patch",
-      "summary": "Separates automatic React Native and XDM wallet discovery deadlines from subsequent wallet operations. Successful probes now create an operational substrate without the probe-only timeout, so user approval and valid slow responses can complete. Unresponsive discovery remains bounded with listener cleanup, explicitly configured operation timeouts remain enforced, and all response validation and origin checks are unchanged. Source candidate 2.8.2 is not published until the protected npm workflow completes.",
+      "publishedVersion": "2.8.2",
+      "releaseType": "none",
+      "summary": "Separates automatic React Native and XDM wallet discovery deadlines from subsequent wallet operations. Successful probes now create an operational substrate without the probe-only timeout, so user approval and valid slow responses can complete. Unresponsive discovery remains bounded with listener cleanup, explicitly configured operation timeouts remain enforced, and all response validation and origin checks are unchanged. SDK 2.8.2 was published by protected release 35912232040 from reviewed main cc1256c4d81b0f64de89a0df7a5af6efbe3b3983; registry bytes and provenance match the verified candidate.",
       "migration": "No API or wire migration. Upgrade applications that use WalletClient auto-discovery to 2.8.2; earlier auto-discovered React Native/XDM connections can time out later calls at the one-second/200-millisecond discovery deadline. Explicit substrate responseTimeout values still apply. Wallet implementation upgrades alone do not update the SDK bundled by a web application."
     },
     {
