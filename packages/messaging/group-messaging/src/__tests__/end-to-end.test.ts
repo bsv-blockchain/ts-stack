@@ -182,6 +182,49 @@ describe('two wallets, end to end', () => {
     await bob.close()
   })
 
+  /**
+   * The ratchet moves whether or not the plaintext turns out to be valid
+   * content, so the advanced state has to be stored even as the message is
+   * rejected. Dropping it would strand the group: the sender has moved on and
+   * nothing that follows could be decrypted against the state left behind.
+   */
+  it('advances the stored state even when the content does not decode', async () => {
+    const queues = new Map<string, Uint8Array>()
+    const { hub, alice, bob, aliceGroup, bobGroup } = await pair(queues)
+    const before = await bob.storage.getGroup(bobGroup.mlsGroupId)
+
+    hub.goOffline(bob.identityKey)
+    await aliceGroup.send(new TextEncoder().encode('not json'))
+    await aliceGroup.sendText('after the bad one')
+
+    const queued = decodeFrames(queues.get(bob.identityKey))
+    const [, bad] = decodeFrames(queued[0]!)
+    const [, good] = decodeFrames(queued[1]!)
+
+    let caught: unknown
+    try {
+      await bob.processIncoming(bad!, alice.identityKey)
+    } catch (error) {
+      caught = error
+    }
+    expect(isPermanent(caught)).toBe(true)
+    expect((caught as { cause?: unknown }).cause).toBeInstanceOf(ContentDecodeError)
+
+    // The observable contract is the stored state, not the next message: MLS
+    // tolerates a skipped generation inside an epoch, so a later message
+    // decrypting either way proves nothing. What the advance buys is that the
+    // consumed key is consumed — a replay of these exact bytes must not find
+    // its key still sitting there.
+    expect(await bob.storage.getGroup(bobGroup.mlsGroupId)).not.toEqual(before)
+
+    const delivered = nextEvent(bob, 'message')
+    await bob.processIncoming(good!, alice.identityKey)
+    expect((await delivered).content.body).toBe('after the bad one')
+
+    await alice.close()
+    await bob.close()
+  })
+
   it('does not classify a storage failure after a successful decrypt as permanent', async () => {
     // The decrypt succeeded; only the write afterward is flaky. Retrying the
     // same ciphertext against the still-unadvanced stored state should work,
@@ -505,6 +548,131 @@ describe('two wallets, end to end', () => {
     expect((await bobGroup.info()).epoch).toBe(5n)
     expect((await delivered).content.body).toBe('just in time')
     expect((await delivered).epoch).toBe(1n)
+    expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(0)
+
+    await alice.close()
+    await bob.close()
+  })
+
+  /**
+   * The safety of the drain's two writes rests entirely on this: a payload that
+   * has already been applied must be rejected if it is offered again. That is
+   * what makes the window between the state write and the queue write harmless
+   * — the retry cannot double-apply, it can only fail and be dropped.
+   *
+   * It holds because `ts-mls` never retains a consumed generation: a message
+   * behind the ratchet is served from `unusedGenerations` or refused. Asserted
+   * here rather than assumed, because if it ever stopped holding the drain
+   * would start losing messages silently.
+   */
+  it('refuses a payload that has already been applied', async () => {
+    const queues = new Map<string, Uint8Array>()
+    const { hub, alice, bob, aliceGroup } = await pair(queues)
+
+    hub.goOffline(bob.identityKey)
+    await aliceGroup.sendText('once only')
+    const [, payload] = decodeFrames(decodeFrames(queues.get(bob.identityKey))[0]!)
+
+    const delivered = nextEvent(bob, 'message')
+    await bob.processIncoming(payload!, alice.identityKey)
+    expect((await delivered).content.body).toBe('once only')
+
+    // The same bytes again, against the state they already advanced.
+    const seen: string[] = []
+    bob.on('message', ({ content }) => seen.push(String(content.body)))
+    let caught: unknown
+    try {
+      await bob.processIncoming(payload!, alice.identityKey)
+    } catch (error) {
+      caught = error
+    }
+    expect(isPermanent(caught)).toBe(true)
+    expect(seen).toEqual([])
+
+    await alice.close()
+    await bob.close()
+  })
+
+  /**
+   * The window the ordering deliberately leaves open: the state was stored and
+   * the host was told, and then the queue write failed. The payload is still
+   * queued, so it is offered once more — and must be refused rather than
+   * delivered twice.
+   */
+  it('delivers once when the queue write fails, and refuses the replay', async () => {
+    const { alice, bob, aliceGroup, bobGroup } = await pair()
+
+    const stale = await alice.engine.encrypt({
+      state: await aliceGroup.state(),
+      plaintext: encodeContent(text('exactly once'))
+    })
+    await bob.storage.queuePending(bobGroup.mlsGroupId, stale.message)
+
+    const bodies: string[] = []
+    bob.on('message', ({ content }) => bodies.push(String(content.body)))
+    const failures: Error[] = []
+    bob.on('processingFailed', ({ error }) => failures.push(error))
+
+    const replace = vi
+      .spyOn(bob.storage, 'replacePending')
+      .mockRejectedValueOnce(new Error('queue write failed'))
+    await aliceGroup.update()
+
+    expect(bodies).toEqual(['exactly once'])
+    expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(1)
+
+    // Offered again on the next pass: refused, not re-delivered, then dropped.
+    replace.mockRestore()
+    await aliceGroup.update()
+    expect(bodies).toEqual(['exactly once'])
+    expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(0)
+    expect(failures.length).toBeGreaterThan(0)
+
+    await alice.close()
+    await bob.close()
+  })
+
+  /**
+   * The drain stores what it applied before it shortens the queue, and nothing
+   * leaves the queue until its state is stored. So a failure at the state write
+   * costs a retry, not a message — which is the whole difference from the
+   * destructive `takePending` this replaced, where the payloads were gone
+   * before anything had been applied.
+   */
+  it("keeps a queued message when the drain's state write fails", async () => {
+    const { alice, bob, aliceGroup, bobGroup } = await pair()
+
+    const stale = await alice.engine.encrypt({
+      state: await aliceGroup.state(),
+      plaintext: encodeContent(text('must not vanish'))
+    })
+    await bob.storage.queuePending(bobGroup.mlsGroupId, stale.message)
+    expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(1)
+
+    // The Commit itself is the first write and is allowed through; the drain
+    // that follows it is the second, and that is the one that fails.
+    const store = bob.storage.putGroup.bind(bob.storage)
+    let writes = 0
+    const putGroup = vi
+      .spyOn(bob.storage, 'putGroup')
+      .mockImplementation(async (groupId, state) => {
+        writes += 1
+        if (writes === 2) throw new Error('storage went away mid-drain')
+        return store(groupId, state)
+      })
+
+    const failures: Error[] = []
+    bob.on('processingFailed', ({ error }) => failures.push(error))
+    await aliceGroup.update()
+
+    expect(failures.some(error => error.message.includes('storage went away mid-drain'))).toBe(true)
+    // The point: still queued, so it replays rather than being lost.
+    expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(1)
+
+    putGroup.mockRestore()
+    const delivered = nextEvent(bob, 'message')
+    await aliceGroup.update()
+    expect((await delivered).content.body).toBe('must not vanish')
     expect(await bob.storage.countPending(bobGroup.mlsGroupId)).toBe(0)
 
     await alice.close()

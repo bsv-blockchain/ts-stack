@@ -316,6 +316,16 @@ export class StorageProvider {
     return { count: decodeFrames(stored).length, bytes: stored?.length ?? 0 }
   }
 
+  /**
+   * Read a group's queue without consuming it.
+   *
+   * The drain reads here and only removes what it has durably applied, so a
+   * failure mid-drain leaves every unapplied payload where it was.
+   */
+  async peekPending(groupId: MlsGroupId): Promise<Uint8Array[]> {
+    return decodeFrames(await this.#get('pending', groupId))
+  }
+
   /** Read and clear a group's queue. */
   async takePending(groupId: MlsGroupId): Promise<Uint8Array[]> {
     const queue = decodeFrames(await this.#get('pending', groupId))

@@ -192,6 +192,28 @@ behavesLikeStorage('IndexedDB', async () =>
   StorageProvider.indexedDb(await openDatabase(`suite-${databaseCount++}`))
 )
 
+describe('peekPending', () => {
+  it('reads a queue without consuming it, unlike takePending', async () => {
+    const storage = await StorageProvider.open(new Map<string, Uint8Array>())
+    await storage.queuePending('g1', new Uint8Array([1]))
+    await storage.queuePending('g1', new Uint8Array([2]))
+
+    expect(await storage.peekPending('g1')).toEqual([new Uint8Array([1]), new Uint8Array([2])])
+    // Again, and still there: the drain reads before it has applied anything,
+    // so a failure must leave the queue exactly as it found it.
+    expect(await storage.peekPending('g1')).toHaveLength(2)
+    expect(await storage.countPending('g1')).toBe(2)
+
+    expect(await storage.takePending('g1')).toHaveLength(2)
+    expect(await storage.peekPending('g1')).toEqual([])
+  })
+
+  it('reads an empty queue as empty rather than throwing', async () => {
+    const storage = await StorageProvider.open(new Map<string, Uint8Array>())
+    expect(await storage.peekPending('never-seen')).toEqual([])
+  })
+})
+
 describe('StorageProvider.open', () => {
   it('accepts a Map and namespaces its keys', async () => {
     const map = new Map<string, Uint8Array>()

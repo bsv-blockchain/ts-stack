@@ -45,6 +45,12 @@ export interface GroupMessagingClientOptions {
  */
 const RETAINED_EPOCHS = 4n
 
+/** What the drain decided about one queued payload. */
+type Consumed =
+  | { verdict: 'keep' }
+  | { verdict: 'skip' }
+  | { verdict: 'applied'; state: Uint8Array; announce: () => void }
+
 /**
  * How many payloads may be held for a group this device has not joined yet.
  *
@@ -582,7 +588,7 @@ export class GroupMessagingClient {
     if (framing === undefined) throw new GroupMessagingError('Unroutable MLS payload')
 
     // Taken once, around the whole read-apply-drain: the drain re-enters
-    // `#applyOne` after every Commit, and a lock per call would deadlock on it.
+    // the drain after every Commit, and a lock per call would deadlock on it.
     await this.withGroupLock(framing.mlsGroupId, async () => {
       const chatId = await this.storage.chatIdForGroup(framing.mlsGroupId)
       if (chatId === undefined)
@@ -714,29 +720,21 @@ export class GroupMessagingClient {
   }
 
   /**
-   * Process one message, persist the advanced state, and report what it was.
+   * Process one message and say what it changed, without storing anything.
    *
-   * Deliberately does not drain the pending queue: the drain calls this, and
-   * having it call back would let one Commit re-enter the queue mid-pass.
-   *
-   * Two failures are classified as {@link PermanentProcessingError}: a decrypt
-   * at or behind `localEpoch`, where the ratchet has already moved past this
-   * message, and plaintext that decrypts but is not valid content JSON. Both
-   * are settled the first time nothing changes on retry. The second happens
-   * after `storage.putGroup` has already run — deliberately: the ratchet did
-   * move, and retrying would only replay the message into a state that now
-   * sees it as a duplicate. The storage write and the emit itself stay
-   * unclassified — a transient failure there (a locked database, a full disk)
-   * can legitimately fix itself on the next attempt.
+   * Returning the state rather than writing it lets the drain decide when to
+   * store it. `announce` is deferred for the same reason: a host must not see a
+   * message the storage has not yet accepted, so every caller writes first and
+   * announces second.
    */
-  async #applyOne(
+  async #processOne(
     chatId: ChatId,
     mlsGroupId: MlsGroupId,
     state: Uint8Array,
     message: Uint8Array,
     epoch: bigint,
     localEpoch: bigint
-  ): Promise<void> {
+  ): Promise<{ state: Uint8Array; announce: () => void }> {
     let result: MlsProcessResult
     try {
       result = await this.engine.process({ state, message })
@@ -746,35 +744,74 @@ export class GroupMessagingClient {
         { cause }
       )
     }
-    await this.storage.putGroup(mlsGroupId, result.state)
 
     if (result.kind === 'application') {
-      let content: MessageContent
+      // Decoded here but reported from `announce`, which every caller runs
+      // after the write. The ratchet moved whether or not the plaintext turned
+      // out to be content, so the advanced state has to be stored even as the
+      // message is rejected: dropping it would leave the consumed key sitting
+      // unconsumed, and a replay of these bytes would open again.
+      let content: MessageContent | undefined
+      let undecodable: unknown
       try {
         content = decodeContent(result.plaintext)
       } catch (cause) {
-        throw new PermanentProcessingError(
-          `Message for epoch ${result.epoch} decrypted but its plaintext is not valid content`,
-          { cause }
-        )
+        undecodable = cause
       }
-      this.#events.emit('message', {
-        chatId,
-        mlsGroupId,
-        sender: result.sender,
-        epoch: result.epoch,
-        content
-      })
-      return
+      return {
+        state: result.state,
+        announce: () => {
+          if (content === undefined) {
+            throw new PermanentProcessingError(
+              `Message for epoch ${result.epoch} decrypted but its plaintext is not valid content`,
+              { cause: undecodable }
+            )
+          }
+          this.#events.emit('message', {
+            chatId,
+            mlsGroupId,
+            sender: result.sender,
+            epoch: result.epoch,
+            content
+          })
+        }
+      }
     }
     if (result.kind === 'commit') {
-      this.#events.emit('membership', {
-        chatId,
-        mlsGroupId,
-        added: result.added,
-        removed: result.removed
-      })
+      return {
+        state: result.state,
+        announce: () => {
+          this.#events.emit('membership', {
+            chatId,
+            mlsGroupId,
+            added: result.added,
+            removed: result.removed
+          })
+        }
+      }
     }
+    return { state: result.state, announce: () => undefined }
+  }
+
+  /** Process one message, store it, then announce it. */
+  async #applyOne(
+    chatId: ChatId,
+    mlsGroupId: MlsGroupId,
+    state: Uint8Array,
+    message: Uint8Array,
+    epoch: bigint,
+    localEpoch: bigint
+  ): Promise<void> {
+    const { state: next, announce } = await this.#processOne(
+      chatId,
+      mlsGroupId,
+      state,
+      message,
+      epoch,
+      localEpoch
+    )
+    await this.storage.putGroup(mlsGroupId, next)
+    announce()
   }
 
   /**
@@ -790,15 +827,16 @@ export class GroupMessagingClient {
    * One queued payload against the group as it stands now.
    *
    * `keep` is a payload from an epoch this client has not reached yet: it waits
-   * for the Commit that gets there. Everything else is resolved here, including
-   * the reporting, so the drain loop only has to route the answer.
+   * for the Commit that gets there. `applied` hands back the new state rather
+   * than storing it, so the caller can write it together with the shortened
+   * queue.
    */
   async #consumeOne(
     chatId: ChatId,
     mlsGroupId: MlsGroupId,
     state: Uint8Array,
     payload: Uint8Array
-  ): Promise<'applied' | 'keep' | 'skip'> {
+  ): Promise<Consumed> {
     const local = await this.engine.info(state)
     const framing = this.engine.epochOf(payload)
     if (framing === undefined) {
@@ -807,9 +845,9 @@ export class GroupMessagingClient {
           `A payload queued for ${mlsGroupId} is no longer routable MLS traffic`
         )
       })
-      return 'skip'
+      return { verdict: 'skip' }
     }
-    if (framing.epoch > local.epoch) return 'keep'
+    if (framing.epoch > local.epoch) return { verdict: 'keep' }
     if (local.epoch - framing.epoch > RETAINED_EPOCHS) {
       this.#events.emit('epochMismatch', {
         chatId,
@@ -818,34 +856,83 @@ export class GroupMessagingClient {
         received: framing.epoch,
         disposition: 'dropped'
       })
-      return 'skip'
+      return { verdict: 'skip' }
     }
     try {
-      await this.#applyOne(chatId, mlsGroupId, state, payload, framing.epoch, local.epoch)
-      return 'applied'
+      const processed = await this.#processOne(
+        chatId,
+        mlsGroupId,
+        state,
+        payload,
+        framing.epoch,
+        local.epoch
+      )
+      return { verdict: 'applied', ...processed }
     } catch (cause) {
       // One unreadable payload must not strand the rest of the queue.
       this.#events.emit('processingFailed', { error: toError(cause) })
-      return 'skip'
+      return { verdict: 'skip' }
     }
   }
 
+  /**
+   * Store what one applied payload changed.
+   *
+   * Announcing sits after the write, and before the queue is shortened: the
+   * only placement where "the state was stored" implies "the host was told".
+   */
+  async #storeApplied(
+    mlsGroupId: MlsGroupId,
+    consumed: Consumed & { verdict: 'applied' }
+  ): Promise<void> {
+    await this.storage.putGroup(mlsGroupId, consumed.state)
+    try {
+      consumed.announce()
+    } catch (cause) {
+      // The state moved and the payload is spent; only the report failed.
+      this.#events.emit('processingFailed', { error: toError(cause) })
+    }
+  }
+
+  /**
+   * Apply what the queue is now ready for.
+   *
+   * Nothing leaves the queue until its state is stored, and the queue is
+   * rewritten once per pass rather than once per payload — `replacePending`
+   * writes the whole queue, so per-payload would make a full drain quadratic in
+   * the bytes it moves, which is the cost that method's own docs exist to
+   * avoid.
+   *
+   * A crash mid-pass therefore leaves the queue whole while some of its
+   * payloads have already been applied. That is safe: the retry re-offers them
+   * to a group that has consumed them, `ts-mls` refuses them as generations in
+   * the past, and they are dropped as permanent. The cost is one spurious
+   * `processingFailed` per already-applied payload, never a message.
+   */
   async #drainPending(chatId: ChatId, mlsGroupId: MlsGroupId): Promise<void> {
     for (;;) {
-      const queued = await this.storage.takePending(mlsGroupId)
+      const queued = await this.storage.peekPending(mlsGroupId)
       if (queued.length === 0) return
 
-      const keep: Uint8Array[] = []
+      const kept: Uint8Array[] = []
       let applied = false
       for (const payload of queued) {
         const state = await this.storage.getGroup(mlsGroupId)
-        // The group went away underneath the drain; the queue goes with it.
+        // The group went away underneath the drain. Nothing has been taken off
+        // the queue, so whatever is left stays for whoever holds it next.
         if (state === undefined) return
-        const outcome = await this.#consumeOne(chatId, mlsGroupId, state, payload)
-        if (outcome === 'keep') keep.push(payload)
-        applied ||= outcome === 'applied'
+        const consumed = await this.#consumeOne(chatId, mlsGroupId, state, payload)
+        if (consumed.verdict === 'keep') {
+          kept.push(payload)
+          continue
+        }
+        if (consumed.verdict !== 'applied') continue
+        await this.#storeApplied(mlsGroupId, consumed)
+        applied = true
       }
-      await this.storage.replacePending(mlsGroupId, keep)
+      if (kept.length !== queued.length) {
+        await this.storage.replacePending(mlsGroupId, kept)
+      }
       if (!applied) return
     }
   }
