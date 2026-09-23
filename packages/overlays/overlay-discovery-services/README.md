@@ -168,3 +168,10 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

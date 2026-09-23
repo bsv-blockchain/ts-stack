@@ -58,6 +58,13 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 
 **Time:** ~45 minutes | **Level:** Advanced
 
+### 7. [BRC-118 Authenticated Multipart Payments](./brc118-payments.md)
+
+Carry larger BRC-105 payments with exact-byte authentication, bounded parsing,
+receiver-first negotiation and preparation before broadcast.
+
+**Time:** ~25 minutes | **Level:** Advanced
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions
@@ -78,3 +85,9 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+## Resumable wallet synchronization
+
+[Sync reliability and proof recovery](wallet-sync-reliability.md) describes the
+Toolbox 2.14 candidate API, cancellation, atomic checkpoints, foreground fairness,
+proof recovery, benchmark scope and the next coherent-snapshot milestone.

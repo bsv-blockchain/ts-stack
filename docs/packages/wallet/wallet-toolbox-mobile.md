@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.13.2'
-last_updated: '2026-09-10'
-last_verified: '2026-09-10'
+version: '2.14.0'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,8 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+The unpublished 2.14 candidate exports the portable resumable sync API. Remote destinations retain exclusive execution unless a future capability explicitly guarantees safe concurrency; this package does not acquire a local native database. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md).
 
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and

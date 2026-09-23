@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.0'
+version: '2.9.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-21'
-last_verified: '2026-09-21'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,7 +15,9 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The current unpublished candidate corrects BUMP offset arithmetic above 32 bits
+The unpublished 2.9 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+The released 2.8 line corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
 calculation, extraction, combination and trimming use the same exact numeric
 domain; malformed non-integer and unsafe offsets fail explicitly. No consumer

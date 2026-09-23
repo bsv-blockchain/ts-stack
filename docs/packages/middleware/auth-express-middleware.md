@@ -3,10 +3,10 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.5'
+version: '2.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -15,6 +15,8 @@ tags: [middleware, express, auth, brc-103, brc-104]
 ---
 
 # @bsv/auth-express-middleware
+
+The unpublished 2.3 candidate adds opt-in bounded raw request capture for exact BRC-118 authentication. Mount it before body parsers; multipart extraction happens only after authentication. See the [BRC-118 deployment guide](../../guides/brc118-payments.md).
 
 Express transport for BRC-103 peer-to-peer mutual authentication over
 BRC-104 HTTP. It handles the public handshake, verifies authenticated
