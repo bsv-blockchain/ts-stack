@@ -1,6 +1,7 @@
 import WalletClient from '../WalletClient'
 import ReactNativeWebView from '../substrates/ReactNativeWebView'
 import XDMSubstrate from '../substrates/XDM'
+import WindowCWISubstrate from '../substrates/window.CWI'
 
 type Request = { id: string; call: string }
 type Transport = 'react-native' | 'xdm'
@@ -59,6 +60,26 @@ describe('WalletClient discovery timeout lifecycle', () => {
     global.window = originalWindow
     jest.restoreAllMocks()
     jest.useRealTimers()
+  })
+
+  it('retains the discovered window.CWI binding for subsequent operations', async () => {
+    const getVersion = jest.fn(async () => ({ version: '1.0.0.0' }))
+    const waitForAuthentication = jest.fn(async () => ({ authenticated: true }))
+    global.window = {
+      CWI: { getVersion, waitForAuthentication }
+    } as unknown as Window & typeof globalThis
+    const client = new WalletClient()
+    await client.connectToSubstrate()
+    const connected = client.substrate
+    expect(connected).toBeInstanceOf(WindowCWISubstrate)
+
+    // Discovery has already bound this host; later window changes must not replace it.
+    Object.defineProperty(window, 'CWI', { value: undefined })
+    await expect(client.waitForAuthentication()).resolves.toEqual({ authenticated: true })
+    expect(client.substrate).toBe(connected)
+    expect(getVersion).toHaveBeenCalledTimes(1)
+    expect(waitForAuthentication).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
   })
 
   it.each<Transport>(['react-native', 'xdm'])(
