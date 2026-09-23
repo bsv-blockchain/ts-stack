@@ -71,6 +71,41 @@ function createMonitor(): {
   }
 }
 
+function createMonitorWithEvents(eventSource: unknown): {
+  monitor: Monitor
+  events: Array<{ event: string; details?: string }>
+} {
+  const events: Array<{ event: string; details?: string }> = []
+  const storage = {
+    getActive: () => ({ isStorageProvider: () => true }),
+    runAsStorageProvider: async (
+      callback: (storageProvider: {
+        insertMonitorEvent: (event: { event: string; details?: string }) => Promise<void>
+      }) => Promise<void>
+    ) => {
+      await callback({
+        insertMonitorEvent: async event => {
+          events.push({ event: event.event, details: event.details })
+        }
+      })
+    }
+  }
+  const monitor = new Monitor({
+    chain: 'main',
+    services: { chain: 'main' },
+    storage,
+    chaintracks: {},
+    chaintracksWithEvents: eventSource,
+    msecsWaitPerMerkleProofServiceReq: 0,
+    taskRunWaitMsecs: 0,
+    abandonedMsecs: 0,
+    unprovenAttemptsLimitTest: 0,
+    unprovenAttemptsLimitMain: 0,
+    maxRebroadcastAttempts: 0
+  } as any)
+  return { monitor, events }
+}
+
 describe('Monitor.runOnce compatibility', () => {
   const consoleLog = jest.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -404,6 +439,118 @@ describe('Monitor.runOnce compatibility', () => {
       details: 'sensitive history'
     })
     expect(consoleLog).not.toHaveBeenCalledWith('TaskMonitorCallHistory ...')
+  })
+
+  it('runs scheduled tasks even when chaintracksWithEvents subscriptions fail (subscriptions are optional)', async () => {
+    const eventSource = {
+      getChain: jest.fn(async () => 'main'),
+      subscribeReorgs: jest.fn(async () => {
+        throw new Error('offline')
+      }),
+      subscribeHeaders: jest.fn(async () => 'header-1'),
+      unsubscribe: jest.fn(async () => true)
+    }
+    const { monitor, events } = createMonitorWithEvents(eventSource)
+    const execute = jest.fn(async () => 'ran')
+    const task = new ControlledTask(
+      monitor,
+      'Maintenance',
+      jest.fn(async () => {}),
+      jest.fn(() => ({ run: true })),
+      execute
+    )
+    monitor.addTask(task)
+
+    await expect(monitor.runOnce()).resolves.toBeUndefined()
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(monitor.reorgSubscriptionPromise).toBeUndefined()
+    expect(monitor.headersSubscriptionPromise).toBeUndefined()
+    expect(events.some(event => event.event === 'chaintracksEventsError')).toBe(true)
+  })
+
+  it('still registers chaintracksWithEvents subscriptions through runOnce on the success path', async () => {
+    const eventSource = {
+      getChain: jest.fn(async () => 'main'),
+      subscribeReorgs: jest.fn(async () => 'reorg-1'),
+      subscribeHeaders: jest.fn(async () => 'header-1'),
+      unsubscribe: jest.fn(async () => true)
+    }
+    const { monitor, events } = createMonitorWithEvents(eventSource)
+
+    await monitor.runOnce()
+
+    expect(eventSource.subscribeReorgs).toHaveBeenCalledTimes(1)
+    expect(eventSource.subscribeHeaders).toHaveBeenCalledTimes(1)
+    await expect(monitor.reorgSubscriptionPromise).resolves.toBe('reorg-1')
+    await expect(monitor.headersSubscriptionPromise).resolves.toBe('header-1')
+    expect(events.some(event => event.event === 'chaintracksEventsError')).toBe(false)
+  })
+
+  it('fails closed on a genuine chaintracksWithEvents chain mismatch without stopping the scheduler', async () => {
+    const eventSource = {
+      getChain: jest.fn(async () => 'test'), // monitor is configured for 'main'
+      subscribeReorgs: jest.fn(async () => 'reorg-1'),
+      subscribeHeaders: jest.fn(async () => 'header-1'),
+      unsubscribe: jest.fn(async () => true)
+    }
+    const { monitor, events } = createMonitorWithEvents(eventSource)
+    const execute = jest.fn(async () => 'ran')
+    monitor.addTask(
+      new ControlledTask(
+        monitor,
+        'Maintenance',
+        jest.fn(async () => {}),
+        jest.fn(() => ({ run: true })),
+        execute
+      )
+    )
+
+    await monitor.runOnce()
+    await monitor.runOnce()
+
+    expect(execute).toHaveBeenCalledTimes(2)
+    expect(eventSource.subscribeReorgs).not.toHaveBeenCalled()
+    expect(eventSource.subscribeHeaders).not.toHaveBeenCalled()
+    expect(monitor.reorgSubscriptionPromise).toBeUndefined()
+    expect(monitor.headersSubscriptionPromise).toBeUndefined()
+    expect(events.filter(event => event.event === 'chaintracksEventsError').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('never calls getChain or subscribes when the event source declares supportsReorgEvents: false', async () => {
+    const eventSource = {
+      supportsReorgEvents: false,
+      getChain: jest.fn(async () => 'main'),
+      subscribeReorgs: jest.fn(async () => {
+        throw new Error('Method not implemented.')
+      }),
+      subscribeHeaders: jest.fn(async () => {
+        throw new Error('Method not implemented.')
+      }),
+      unsubscribe: jest.fn(async () => {
+        throw new Error('Method not implemented.')
+      })
+    }
+    const { monitor, events } = createMonitorWithEvents(eventSource)
+    const execute = jest.fn(async () => 'ran')
+    monitor.addTask(
+      new ControlledTask(
+        monitor,
+        'Maintenance',
+        jest.fn(async () => {}),
+        jest.fn(() => ({ run: true })),
+        execute
+      )
+    )
+
+    await monitor.runOnce()
+
+    expect(eventSource.getChain).not.toHaveBeenCalled()
+    expect(eventSource.subscribeReorgs).not.toHaveBeenCalled()
+    expect(eventSource.subscribeHeaders).not.toHaveBeenCalled()
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(events.some(event => event.event === 'chaintracksEventsError')).toBe(false)
+    await expect(monitor.ready).resolves.toBeUndefined()
   })
 
   it('rechecks provider status before each scheduled task', async () => {
