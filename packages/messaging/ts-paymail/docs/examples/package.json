@@ -25,9 +25,9 @@
     "jwt-simple": "^0.5.6"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "oxlint": "^1.76.0",
+    "oxlint": "^1.83.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "repository": {

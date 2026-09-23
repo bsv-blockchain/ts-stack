@@ -50,16 +50,16 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",
-    "@stryker-mutator/core": "9.6.1",
-    "@stryker-mutator/jest-runner": "9.6.1",
-    "@stryker-mutator/vitest-runner": "9.6.1",
-    "esbuild": "0.28.1",
-    "jest-environment-node": "30.4.1",
-    "oxlint": "1.76.0",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/jest-runner": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "esbuild": "0.28.2",
+    "jest-environment-node": "30.5.1",
+    "oxlint": "1.83.0",
     "prettier": "3.9.6",
-    "publint": "0.3.22",
-    "vite": "8.1.5",
-    "yaml": "^2.9.0"
+    "publint": "0.3.24",
+    "vite": "8.3.0",
+    "yaml": "^2.9.1"
   },
   "engines": {
     "node": ">=24.11",

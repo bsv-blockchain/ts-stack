@@ -63,19 +63,19 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@jest/globals": "^30.4.1",
+    "@jest/globals": "^30.5.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
-    "oxlint": "^1.76.0",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
+    "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "webpack": "^5.109.2",
-    "webpack-cli": "^7.2.2"
+    "webpack": "^5.111.0",
+    "webpack-cli": "^7.2.3"
   },
   "dependencies": {
     "@bsv/wallet-toolbox-client": "workspace:^"

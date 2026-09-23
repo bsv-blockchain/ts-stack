@@ -19,7 +19,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/sdk": "^2.1.9",
-    "@google-cloud/storage": "^7.21.0",
-    "axios": "^1.18.1"
+    "@google-cloud/storage": "^8.1.0",
+    "axios": "^1.20.0"
   }
 }

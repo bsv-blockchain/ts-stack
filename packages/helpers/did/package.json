@@ -69,14 +69,14 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@types/qrcode": "^1.5.6",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.9.0",
-    "jest": "^30.4.2",
-    "oxlint": "^1.76.0",
+    "fast-check": "^4.10.1",
+    "jest": "^30.5.1",
+    "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "repository": {
