@@ -1,3 +1,4 @@
+import { authenticatedContentType } from '@bsv/sdk/auth/utils/paymentTransport'
 import { Writer, toArray } from '@bsv/sdk/primitives/utils'
 import { Request } from 'express'
 import { stringifyBRC100 } from '@bsv/sdk'
@@ -127,7 +128,7 @@ export function writeRequestHeadersToWriter(req: Request, writer: Writer): void 
       if (typeof v !== 'string') {
         throw new TypeError('Signed request headers must have one exact string value.')
       }
-      const headerValue = k === 'content-type' ? v.split(';')[0].trim() : v
+      const headerValue = k === 'content-type' ? authenticatedContentType(v) : v
       includedHeaders.push([k, headerValue])
     }
   }

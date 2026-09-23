@@ -9,6 +9,18 @@ The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
 rejects parsed bodies that cannot be represented without losing semantics.
 
+## Exact-byte multipart authentication
+
+Set `captureRawBody: true` and install this middleware **before body parsers**
+when composing BRC-118 payments. It collects bounded raw bytes, authenticates the
+whole body and exact multipart Content-Type (including boundary), then exposes
+`req.rawBody` and the verified `req.auth.supportsMultipart` marker. Existing
+non-multipart signature preimages and the default parsed-body integration remain
+compatible. Pair with payment middleware `enableMultipart: true`; raw auth alone
+does not advertise payment support. Collection enforces request size, aggregate
+memory, pending-request and timeout limits before authentication. See the
+[BRC-118 guide](../../../docs/guides/brc118-payments.md) for limits, CORS and migration.
+
 ## Requirements
 
 - Node.js 22 or newer

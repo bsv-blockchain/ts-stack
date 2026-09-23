@@ -214,6 +214,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.9.0 candidate — prepared BRC-118 payments and recipient interoperability
+
+- Negotiate bounded multipart payments, preserving original payload bytes and exact
+  signed boundary parameters while retaining non-multipart signature preimages.
+- Prepare the real payment and request before broadcast; submit once, reuse the
+  transaction across retries, abort refused reservations where supported, and
+  retain typed context for cancellation, size refusal and uncertain outcomes.
+- Derive the recipient's own BRC-29 child key on settlement receipt.
+- Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
+  adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
 ### 2.8.0 candidate — authenticated boundaries and additive secure TOTP APIs
 
 - Correct empty authenticated HTTP response preimages to use the BRC-104 `-1`

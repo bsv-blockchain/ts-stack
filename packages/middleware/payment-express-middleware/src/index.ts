@@ -1,3 +1,6 @@
+import { isMultipartPaymentType, PaymentTransportError } from '@bsv/sdk/auth/utils/paymentTransport'
+import { decodePaymentPayload } from '@bsv/sdk/auth/utils/decodePaymentPayload'
+import { parseMultipartPayment, MissingMultipartPayment } from './multipartPayment.js'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import { Beef, createNonce, PublicKey, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
 import type { RequestHandler, Response } from 'express'
@@ -44,17 +47,16 @@ function isPositiveSafeInteger(value: number): boolean {
 }
 
 function isCanonicalBase64(value: string): boolean {
-  if (
-    value.length === 0 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
-  ) {
+  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
     return false
   }
-  try {
-    return toBase64(toArray(value, 'base64')) === value
-  } catch {
-    return false
-  }
+  // Check pad bits without decoding or using a repeated-group regex, whose
+  // engine stack can overflow on the large BEEFs multipart was designed for.
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  const last = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+    value[value.length - padding - 1]
+  )
+  return padding === 0 || (padding === 1 ? (last & 3) === 0 : (last & 15) === 0)
 }
 
 function isCompressedPublicKey(value: string): boolean {
@@ -187,7 +189,8 @@ async function issuePaymentChallenge(
   wallet: PaymentMiddlewareOptions['wallet'],
   res: Response,
   requestPrice: number,
-  logger: PaymentMiddlewareOptions['logger']
+  logger: PaymentMiddlewareOptions['logger'],
+  multipart = false
 ): Promise<void> {
   try {
     const derivationPrefix = await createNonce(wallet)
@@ -196,7 +199,8 @@ async function issuePaymentChallenge(
       .set({
         'x-bsv-payment-version': PAYMENT_VERSION,
         'x-bsv-payment-satoshis-required': String(requestPrice),
-        'x-bsv-payment-derivation-prefix': derivationPrefix
+        'x-bsv-payment-derivation-prefix': derivationPrefix,
+        'x-bsv-payment-transports': multipart ? 'header,multipart' : 'header'
       })
       .json({
         status: 'error',
@@ -223,6 +227,9 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     wallet,
     replayStore = new InMemoryPaymentReplayStore(),
     maxPaymentHeaderBytes = DEFAULT_MAX_PAYMENT_HEADER_BYTES,
+    enableMultipart = false,
+    maxPaymentBodyBytes = 7 * 1024 * 1024,
+    maxPaymentBytes = 4 * 1024 * 1024,
     logger
   } = options
 
@@ -245,6 +252,12 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
   if (!isPaymentLogger(logger)) {
     throw new TypeError('logger error and warn properties must be functions when provided.')
   }
+  if (typeof enableMultipart !== 'boolean')
+    throw new TypeError('enableMultipart must be a boolean.')
+  for (const value of [maxPaymentBodyBytes, maxPaymentBytes]) {
+    if (!Number.isSafeInteger(value) || value < 1 || value > 16 * 1024 * 1024)
+      throw new RangeError('Multipart payment limits must be integers from 1 through 16777216.')
+  }
 
   return async (req, res, next): Promise<void> => {
     const paymentRequest: PaymentRequest = req
@@ -257,6 +270,51 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
         'The payment middleware must run after successful Auth middleware.'
       )
       return
+    }
+
+    const multipart = enableMultipart && paymentRequest.auth?.supportsMultipart === true
+    const contentType = paymentRequest.headers['content-type']
+    let rawPayment = paymentHeader(paymentRequest)
+    let paymentLimit = maxPaymentHeaderBytes
+    if (enableMultipart && typeof contentType === 'string' && isMultipartPaymentType(contentType)) {
+      if (!multipart || rawPayment !== undefined || !(paymentRequest.body instanceof Uint8Array)) {
+        sendError(
+          res,
+          400,
+          'ERR_MALFORMED_PAYMENT',
+          'Multipart payments require raw authentication and exactly one payment source.'
+        )
+        return
+      }
+      try {
+        const parsed = parseMultipartPayment(
+          paymentRequest.body,
+          contentType,
+          maxPaymentBodyBytes,
+          maxPaymentBytes
+        )
+        paymentRequest.rawBody = parsed.body
+        paymentRequest.body = decodePaymentPayload(parsed.body, parsed.contentType)
+        delete paymentRequest.headers['content-type']
+        delete paymentRequest.headers['content-length']
+        delete paymentRequest.headers['transfer-encoding']
+        if (parsed.contentType !== undefined)
+          paymentRequest.headers['content-type'] = parsed.contentType
+        if (parsed.body !== undefined)
+          paymentRequest.headers['content-length'] = String(parsed.body.length)
+        rawPayment = parsed.paymentJSON
+        paymentLimit = maxPaymentBytes
+      } catch (error) {
+        if (!(error instanceof MissingMultipartPayment)) {
+          sendError(
+            res,
+            error instanceof PaymentTransportError && error.code === 'ERR_PAYMENT_SIZE' ? 413 : 400,
+            'ERR_MALFORMED_PAYMENT',
+            'The multipart payment is malformed or exceeds its limit.'
+          )
+          return
+        }
+      }
     }
 
     let requestPrice: number
@@ -284,9 +342,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const rawPayment = paymentHeader(paymentRequest)
     if (rawPayment === undefined) {
-      await issuePaymentChallenge(wallet, res, requestPrice, logger)
+      await issuePaymentChallenge(wallet, res, requestPrice, logger, multipart)
       return
     }
 
@@ -295,7 +352,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const payment = parsePaymentHeader(rawPayment, maxPaymentHeaderBytes)
+    const payment = parsePaymentHeader(rawPayment, paymentLimit)
     if (payment === undefined) {
       sendError(res, 400, 'ERR_MALFORMED_PAYMENT', 'The X-BSV-Payment header is malformed.')
       return

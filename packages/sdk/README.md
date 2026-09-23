@@ -16,7 +16,7 @@ emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
 and JSON transports preserve identical transaction bytes. The same boundary
 protects overlay lookup queries and JSON BEEF responses.
 
-The unpublished 2.8.0 candidate verifies bodyless authenticated HTTP responses
+SDK 2.8.0 verifies bodyless authenticated HTTP responses
 using the BRC-104 `-1` body-length sentinel. Conforming 204 and empty error
 responses now verify; non-empty response encoding is unchanged. Servers that
 sign a zero body length for an empty response must adopt the specified sentinel.
@@ -33,6 +33,19 @@ bytes, and derivation material. Buffered received certificates are capped at
 the most recent 1,000 entries. Simplified authenticated HTTP frames, bodies,
 headers, signatures, request IDs, and certificate-request headers have fixed
 size/count limits and redirects are rejected.
+
+The next release adds negotiated BRC-118 multipart payments. AuthFetch prepares
+with `noSend`, validates the actual final payment/request size, then submits that
+same payment with `sendWith`. The wallet must support prepare/submit and
+`abortAction`. Oversized header-only requests and multipart GET/HEAD requests
+fail before broadcast; uncertain submission or delivery requires reconciliation
+instead of another automatic spend. See the [BRC-118 guide](../../docs/guides/brc118-payments.md)
+for receiver-first rollout, limits, cancellation, raw-byte payloads and typed
+`PaymentTransportError` outcomes. Non-multipart authentication remains compatible.
+
+BRC-29 receipt derives the recipient's own child key (`forSelf: true`). Independent
+sender/recipient wallet tests protect this distinction; the payer's sibling
+output is not a valid payment to the recipient.
 
 For signature payloads of at least 64 KiB, `ProtoWallet` uses asynchronous
 platform SHA-256 when Web Crypto is available, avoiding long synchronous
@@ -161,8 +174,8 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
   `x-bsv-payment-known-txids` response header on its 402 challenge. The value is
   a comma-separated list of 64-character hexadecimal transaction IDs the
   recipient already possesses and has validated. `AuthFetch` passes at most
-  256 unique lowercase IDs to the wallet's `createAction` options, including
-  when payment requirements change and a new transaction is created. This
+  256 unique lowercase IDs to the wallet's prepared `createAction` options.
+  Changed payment requirements stop retries and require reconciliation. This
   lets compatible wallets omit known ancestors from payment BEEF. Whitespace,
   duplicates, and malformed entries are ignored; an absent or invalid-only
   header preserves existing payment behavior. Browser services must expose
