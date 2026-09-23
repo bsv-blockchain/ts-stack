@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- `foldAction`, `defaultAssetState` and the `AssetAdminState` / `FoldContext` /
+  `FrozenRef` types are exported from the package entry point, so consumers can
+  replay Mandala admin history themselves (for example to rebuild an asset's
+  state while excluding an evicted transaction) with the exact reducer the
+  lookup service uses. The `exports` map is unchanged; no consumer migration is
+  required.
 - `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation
   anchors (`uora-anchor-v3`), keyed on the `did:key` of the party that made the
   claim. Anchors name their anchoring service in the output and lock to its

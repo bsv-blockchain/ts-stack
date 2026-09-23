@@ -146,9 +146,9 @@
     {
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.8.4",
-      "releaseType": "none",
-      "summary": "Hardens topic managers and lookup services with strict bounded query schemas, canonical token amounts, signatures, ownership and outpoint binding, exact screening verdicts, idempotent admission, immutable state, and mutation-safe result limits across Mandala, UMP, UORA, certificates, identity, and related topics.",
-      "migration": "Topic and lookup identifiers and valid canonical wire encodings remain unchanged. Audit historical rows for malformed amounts, noncanonical identifiers, incomplete ownership or admin evidence, and ambiguous outpoint linkage before replay or rebuild. Custom state and screening providers must return exact booleans, compare identity keys case-insensitively where documented, conserve exact safe-integer value, and honor bounded query and result contracts."
+      "releaseType": "minor",
+      "summary": "Exports the Mandala admin-state reducer (foldAction, defaultAssetState) and its AssetAdminState, FoldContext and FrozenRef types from the package entry point so consumers can replay admin history with the exact reducer the lookup service uses, for example to rebuild an asset state while excluding an evicted transaction.",
+      "migration": "None. Existing exports, topic and lookup identifiers, wire encodings and the exports map are unchanged; the new names are additive."
     },
     {
       "name": "@bsv/paymail",
