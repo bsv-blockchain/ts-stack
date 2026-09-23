@@ -35,6 +35,10 @@ import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
 import { parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
 import { exactActionSpendSymbol, type ExactActionSpendCarrier } from './utility/exactActionSpend'
 import { WERR_UNAUTHORIZED } from './sdk/WERR_errors'
+// Imported from the leaf module directly (not generateChange.ts, which
+// transitively imports StorageProvider.ts and the full signer/create-action
+// module graph) to avoid an unrelated circular-import edge from this file.
+import { maxPossibleSatoshis } from './storage/methods/maxPossibleSatoshis'
 
 const MAX_PERMISSION_TOKEN_FIELD_BYTES = 1024 * 1024
 const MAX_PERMISSION_TOKEN_PAYLOAD_BYTES = 4 * 1024 * 1024
@@ -84,6 +88,13 @@ function brc177PreflightSatoshis(args: object): number {
     if (typeof output.satoshis !== 'number' || !Number.isSafeInteger(output.satoshis) || output.satoshis < 0) {
       throw new Error('BRC-177 outputs must contain valid satoshi amounts')
     }
+    // A sendMax output is requested with the `maxPossibleSatoshis` sentinel
+    // (see storage/methods/generateChange); its real cost is unknowable until
+    // storage funds the transaction, so it cannot contribute a meaningful
+    // amount to this pre-funding estimate. The real amount is still gated by
+    // the post-funding spend check in createAction (computeNetSpend) once it
+    // is known.
+    if (output.satoshis === maxPossibleSatoshis) continue
     total += output.satoshis
     if (!Number.isSafeInteger(total)) throw new Error('BRC-177 output amount exceeds the safely supported range')
   }
@@ -4314,12 +4325,13 @@ export class WalletPermissionsManager implements WalletInterface {
     // source; this is an independent check at the permissions layer.
     try {
       const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-      this.verifyRequestedOutputsPresent(tx, args)
+      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, args)
       let { netSpent, lineItems } = this.computeNetSpend(
         tx,
         args,
         originalInputDescriptions,
-        originalOutputDescriptions
+        originalOutputDescriptions,
+        resolvedOutputSatoshis
       )
       const exactWalletSpend = (createResult as ExactActionSpendCarrier)[exactActionSpendSymbol]
       if (exactWalletSpend !== undefined) {
@@ -4488,11 +4500,32 @@ export class WalletPermissionsManager implements WalletInterface {
    * randomized by default, and a caller may legitimately request the same
    * script+amount more than once.
    *
+   * A sendMax output is requested with the `maxPossibleSatoshis` sentinel
+   * (see storage/methods/generateChange); storage's funding step rewrites it
+   * to the actual funded amount before returning the signable transaction, so
+   * it can never be matched by amount. Fixed-amount outputs are matched first,
+   * as an exact (script, satoshis) multiset exactly as before; any
+   * sentinel-valued requested output is then matched by locking script alone
+   * against whatever the fixed-amount pass left unused. Matching the sentinel
+   * only after fixed-amount outputs are claimed keeps a fixed output that
+   * happens to share the sentinel's locking script from being mis-paired with
+   * it. `generateChange` permits at most one `maxPossibleSatoshis` output per
+   * call; more than one sentinel-valued request is simply matched
+   * independently, first-fit, in requested order.
+   *
+   * @returns the resolved actual satoshis for each requested output index
+   * (identical to the request for a fixed-amount output; the real funded
+   * amount for a sendMax sentinel), so callers can bill the real amount
+   * instead of the sentinel.
    * @throws Error if any caller-requested output is absent from the transaction.
    */
-  private verifyRequestedOutputsPresent(tx: Transaction, args: Parameters<WalletInterface['createAction']>[0]): void {
+  private verifyRequestedOutputsPresent(
+    tx: Transaction,
+    args: Parameters<WalletInterface['createAction']>[0]
+  ): Map<number, number> {
     const requested = args.outputs || []
-    if (requested.length === 0) return
+    const resolved = new Map<number, number>()
+    if (requested.length === 0) return resolved
 
     // All transaction outputs as (script hex, satoshis); each may satisfy at
     // most one requested output.
@@ -4502,9 +4535,16 @@ export class WalletPermissionsManager implements WalletInterface {
       used: false
     }))
 
+    const sentinelIndexes: number[] = []
+
+    // Pass 1: every fixed-amount request must match an exact (script, satoshis) pair.
     for (let i = 0; i < requested.length; i++) {
-      const wantScript = (requested[i].lockingScript ?? '').toLowerCase()
       const wantSats = requested[i].satoshis
+      if (wantSats === maxPossibleSatoshis) {
+        sentinelIndexes.push(i)
+        continue
+      }
+      const wantScript = (requested[i].lockingScript ?? '').toLowerCase()
       const match = available.find(a => !a.used && a.script === wantScript && a.satoshis === wantSats)
       if (match == null) {
         throw new Error(
@@ -4513,14 +4553,33 @@ export class WalletPermissionsManager implements WalletInterface {
         )
       }
       match.used = true
+      resolved.set(i, validateSatoshis(match.satoshis, `signable transaction output ${i} satoshis`))
     }
+
+    // Pass 2: match each sendMax sentinel request by locking script only,
+    // against whatever pass 1 left unused.
+    for (const i of sentinelIndexes) {
+      const wantScript = (requested[i].lockingScript ?? '').toLowerCase()
+      const match = available.find(a => !a.used && a.script === wantScript)
+      if (match == null) {
+        throw new Error(
+          `The transaction returned for signing does not contain caller-requested output ${i} ` +
+            `(locking script and amount). The recipient may have been substituted by storage.`
+        )
+      }
+      match.used = true
+      resolved.set(i, validateSatoshis(match.satoshis, `signable transaction output ${i} satoshis`))
+    }
+
+    return resolved
   }
 
   private computeNetSpend(
     tx: Transaction,
     args: Parameters<WalletInterface['createAction']>[0],
     originalInputDescriptions: Record<number, string>,
-    originalOutputDescriptions: Record<number, string>
+    originalOutputDescriptions: Record<number, string>,
+    resolvedOutputSatoshis: Map<number, number> = new Map()
   ): { netSpent: number; lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> } {
     const lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> = []
 
@@ -4545,16 +4604,25 @@ export class WalletPermissionsManager implements WalletInterface {
       }
     }
 
-    // Sum originator-requested outputs:
+    // Sum originator-requested outputs. A sendMax output's requested satoshis
+    // is the `maxPossibleSatoshis` sentinel, not its real cost; bill the
+    // actual funded amount that verifyRequestedOutputsPresent already resolved
+    // against the signable transaction instead of re-deriving it here (an
+    // independent re-lookup by script could mis-pair a fixed output that
+    // shares the sentinel's locking script).
     let totalOutputSatoshis = 0
     for (const outIndex in args.outputs || []) {
-      const out = args.outputs![outIndex]
-      const satoshis = validateSatoshis(out.satoshis, 'requested output satoshis')
+      const index = Number(outIndex)
+      const resolvedSatoshis = resolvedOutputSatoshis.get(index)
+      if (resolvedSatoshis == null) {
+        throw new Error(`Internal error: requested output ${index} was not resolved against the signable transaction.`)
+      }
+      const satoshis = validateSatoshis(resolvedSatoshis, 'requested output satoshis')
       totalOutputSatoshis = this.checkedSatoshiTotal(totalOutputSatoshis, satoshis, 'requested output total')
       lineItems.push({
         type: 'output',
         satoshis,
-        description: originalOutputDescriptions[outIndex] || 'No output description provided'
+        description: originalOutputDescriptions[index] || 'No output description provided'
       })
     }
 

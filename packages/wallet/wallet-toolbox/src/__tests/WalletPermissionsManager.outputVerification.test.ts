@@ -1,6 +1,7 @@
 import { LockingScript, Transaction, UnlockingScript } from '@bsv/sdk'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
 import { exactActionSpendSymbol } from '../utility/exactActionSpend'
+import { maxPossibleSatoshis } from '../storage/methods/generateChange'
 
 /**
  * Regression tests for GHSA-36f9-7rg5-cpf8 (permissions-layer defense-in-depth).
@@ -27,7 +28,7 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     verifyRequestedOutputsPresent: (
       tx: Transaction,
       args: { outputs?: Array<{ lockingScript: string; satoshis: number; outputDescription: string }> }
-    ) => void
+    ) => Map<number, number>
   } = new WalletPermissionsManager(underlyingWallet, 'admin') as never
 
   const txWithOutputs = (outs: Array<{ hex: string; satoshis: number }>): Transaction => {
@@ -110,6 +111,46 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).toThrow(/output 1/i)
   })
 
+  test('5a accepts a sendMax output and resolves it by locking script, not the sentinel amount', () => {
+    // Funding rewrites a sendMax request's sentinel `maxPossibleSatoshis` to
+    // the real funded amount, so it can only be matched by locking script.
+    const tx = txWithOutputs([
+      { hex: SCRIPT_A, satoshis: 4321 }, // storage funded the sendMax output to this real amount
+      { hex: CHANGE_SCRIPT, satoshis: 9000 }
+    ])
+    const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
+    const resolved = wpm.verifyRequestedOutputsPresent(tx, args)
+    expect(resolved.get(0)).toBe(4321)
+  })
+
+  test('5b does not let a sendMax sentinel steal a fixed-amount output sharing its locking script', () => {
+    // Two outputs share SCRIPT_A: one is a normal fixed-amount request, the
+    // other is the sendMax remainder. Fixed-amount matching must claim its
+    // own exact (script, satoshis) pair first so the sentinel match (script
+    // only) cannot mis-pair with it.
+    const tx = txWithOutputs([
+      { hex: SCRIPT_A, satoshis: 500 },
+      { hex: SCRIPT_A, satoshis: 7000 }, // sendMax funded amount
+      { hex: CHANGE_SCRIPT, satoshis: 2500 }
+    ])
+    const args = requested([
+      { hex: SCRIPT_A, satoshis: 500 },
+      { hex: SCRIPT_A, satoshis: maxPossibleSatoshis }
+    ])
+    const resolved = wpm.verifyRequestedOutputsPresent(tx, args)
+    expect(resolved.get(0)).toBe(500)
+    expect(resolved.get(1)).toBe(7000)
+  })
+
+  test('5c rejects a sendMax output whose locking script is not present at all (substitution still rejected)', () => {
+    const tx = txWithOutputs([
+      { hex: SCRIPT_B, satoshis: 7000 }, // wrong script entirely
+      { hex: CHANGE_SCRIPT, satoshis: 2500 }
+    ])
+    const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
+    expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).toThrow(/output 0/i)
+  })
+
   test('6 rejects a final wallet result that substitutes the authorized recipient', async () => {
     const source = txWithOutputs([{ hex: CHANGE_SCRIPT, satoshis: 1000 }])
     const partial = new Transaction()
@@ -184,5 +225,38 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
         lineItems: expect.arrayContaining([{ type: 'output', satoshis: 100, description: 'Storage service charge' }])
       })
     )
+  })
+
+  test('8 bills the real funded amount for a sendMax output, not the sentinel', async () => {
+    const source = txWithOutputs([{ hex: CHANGE_SCRIPT, satoshis: 10000 }])
+    const partial = new Transaction()
+    partial.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
+    // Storage funded the sendMax request to 9950 (10000 input - 50 fee); the
+    // caller requested it with the maxPossibleSatoshis sentinel.
+    partial.addOutput({ lockingScript: LockingScript.fromHex(SCRIPT_A), satoshis: 9950 })
+    const createResult = {
+      signableTransaction: { reference: 'sendmax-bound', tx: partial.toAtomicBEEF() }
+    }
+    const underlying = {
+      createAction: jest.fn(async () => createResult),
+      signAction: jest.fn(async () => ({ txid: partial.id('hex'), tx: partial.toAtomicBEEF() })),
+      abortAction: jest.fn(async () => ({ aborted: true }))
+    }
+    const manager = new WalletPermissionsManager(underlying as never, 'admin.example', {
+      encryptWalletMetadata: false
+    })
+    const authorize = jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+
+    await manager.createAction(
+      {
+        description: 'Send max',
+        outputs: [{ lockingScript: SCRIPT_A, satoshis: maxPossibleSatoshis, outputDescription: 'sendMax recipient' }]
+      },
+      'shop.example'
+    )
+
+    // netSpent = resolved output satoshis (9950) + fee (50) - foreign inputs (0) = 10000.
+    // Old code billed ~2,099,999,999,999,999 (the sentinel) instead.
+    expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ satoshis: 10000 }))
   })
 })
