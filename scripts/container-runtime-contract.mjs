@@ -87,6 +87,7 @@ const contracts = {
     walletDependency: true,
     environment: {
       ARC_API_KEY: 'container-contract-only-not-a-secret',
+      ARC_CALLBACK_TOKEN: 'container-contract-independent-callback-token',
       BASM_ENABLED: 'false',
       BASM_REORG_STREAM_ENABLED: 'false',
       GASP_ENABLED: 'false',

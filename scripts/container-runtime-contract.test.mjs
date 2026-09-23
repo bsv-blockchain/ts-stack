@@ -37,6 +37,13 @@ test('wallet dependency profile coexists with services on port 8080', () => {
   assert.equal(environment.WALLET_STORAGE_MONITOR_START_TASKS, 'false')
 })
 
+test('overlay runtime fixture supplies an independent callback credential', () => {
+  const environment = contractEnvironment('overlay-server')
+  assert.equal(typeof environment.ARC_CALLBACK_TOKEN, 'string')
+  assert.ok(environment.ARC_CALLBACK_TOKEN.length >= 32)
+  assert.notEqual(environment.ARC_CALLBACK_TOKEN, environment.ARC_API_KEY)
+})
+
 test('every container contract probes additive CORS request headers', () => {
   const source = readFileSync(new URL('./container-runtime-contract.mjs', import.meta.url), 'utf8')
   assert.match(source, /assertForwardCompatiblePreflight/)
