@@ -4,8 +4,8 @@ title: Wallet UTXO Lifecycle
 kind: meta
 domain: wallet
 version: 'n/a'
-last_updated: '2026-08-13'
-last_verified: '2026-08-13'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: ['architecture', 'BRC-100', 'wallet', 'utxo', 'storage']
@@ -23,6 +23,12 @@ It is written against two implementations, [`@bsv/wallet-toolbox`](../packages/w
 (Go). The BRC-100 specification is the reference; both implementations are described
 against it, and the places where either one deviates are collected in
 [Implementation differences](#implementation-differences).
+
+The TypeScript paths and lifecycle were rechecked against TS Stack main
+`57d72e24a565d090bd605cf9767785c51ea4f179` on 2026-09-23. The Go diagrams and
+comparisons below preserve the **2026-08-13 review snapshot**; they are historical
+findings, not claims about the latest Go release. Recheck the linked Go source
+before using a difference as a current cross-implementation defect.
 
 ## How to read the diagrams
 
@@ -105,14 +111,14 @@ sequenceDiagram
     end
 ```
 
-The write transaction opens at `storage/methods/createAction.ts:196` and every call from
-`insertTransaction` onward is inside it. The transaction row is born `unsigned`
-(`createAction.ts:690`). If anything downstream throws, the cleanup path drives it to
-`failed` (`:309`) and records a forensic row (`:312`) rather than deleting evidence.
+The write transaction in `storage/methods/createAction.ts` contains
+`insertTransaction` and its subsequent writes. The transaction row is born
+`unsigned`. If construction fails after recording the plan, the cleanup path
+drives it to `failed` and records a forensic row rather than deleting evidence.
 
-`markChangeInputsSpent` (`:1398`) is the moment funding becomes exclusive: it flips the
+`markChangeInputsSpent` is the moment funding becomes exclusive: it flips the
 selected change outputs to `{spendable: false, spentBy: transactionId}` under the row
-locks taken by `findFundingOutputsForUpdate` (`:1376`).
+locks taken by `findFundingOutputsForUpdate`.
 
 ### Storage call ledger
 
@@ -166,7 +172,7 @@ sequenceDiagram
 
 The `pendingSignActions` cache is process memory on the `Wallet` instance. A `reference`
 issued by one process cannot be signed by another, and cannot survive a restart —
-`Wallet.ts:1056` throws `WERR_NOT_IMPLEMENTED` rather than attempting recovery. Go stores
+`signer/methods/signAction.ts` throws `WERR_NOT_IMPLEMENTED` rather than attempting recovery. Go stores
 these in a pluggable repository instead; see [difference 6](#implementation-differences).
 
 ### processAction — commit and broadcast
@@ -429,6 +435,14 @@ custom instructions and tags.
 
 ### abortAction
 
+The diagram below describes ordinary actions. BRC-177 expiring `noSend` actions
+have a separate durable lifecycle: aborting a released signed action requests
+revocation instead of immediately freeing its inputs. `TaskNoSendExpiry` uses
+positive chain and UTXO evidence to arbitrate target-versus-reclaim races;
+reclaiming, reclaimed, broadcast, target-won and conflicted states retain their
+specific guards. See `StorageProvider.abortAction` and `TaskNoSendExpiry` before
+operating on expiring actions.
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -504,11 +518,14 @@ sequenceDiagram
     end
 ```
 
-Nineteen tasks ship in `src/monitor/tasks/`. Beyond those above, `TaskReorg` and
+The task classes in `src/monitor/tasks/` are selected by the Monitor profile;
+not every class is registered by default. Beyond those above, `TaskReorg` and
 `TaskNewHeader` handle chain reorganisation, `TaskCheckNoSends` settles `nosend`
 transactions, `TaskUnFail` retries operator-flagged failures, `TaskArcSSE` consumes
 broadcaster push events, `TaskPurge` and `TaskCleanupActionBatches` reclaim storage, and
-`TaskSyncWhenIdle` replicates to backup stores.
+`TaskSyncWhenIdle` can be registered to replicate to backup stores. The default
+and multi-user profiles include `TaskNoSendExpiry`, `TaskReviewProvenTxs` and
+`TaskReconcilePendingTransactions`; `TaskMineBlock` is mock-chain-only.
 
 ## The Go implementation
 
@@ -771,8 +788,10 @@ list-outputs special operations.
 
 ### 11. Background convergence uses different mechanisms
 
-TypeScript ships nineteen registered Monitor tasks; Go registers four. That comparison is
-misleading on its own, because Go moves much of the same work off the scheduler:
+The TypeScript default and multi-user profiles each schedule sixteen tasks plus
+two housekeeping tasks, with a mock-only miner added for mock chains. The archived
+Go review found four scheduled tasks. Counts alone do not describe convergence:
+that Go implementation moved much of the work off the scheduler:
 
 - **Event consumers.** `pkg/monitor` runs an SSE broadcast-event pipeline with a persisted
   replay cursor (`arcade_sse_last_event_id`) plus reorg and new-tip consumers. Reorg

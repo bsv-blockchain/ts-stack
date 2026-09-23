@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.1'
-last_updated: '2026-09-15'
-last_verified: '2026-09-15'
+version: '1.3.2'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -60,6 +60,19 @@ updates, so an old monthly PR cannot block immediate advisory remediation.
 Security updates are grouped only within a package-manager ecosystem and are
 never delayed into the monthly cross-ecosystem version update. First-party
 `@bsv/*` versions remain owned by the release graph.
+
+Standalone infrastructure uses npm `package-lock.json` files outside the pnpm
+workspace. Its Dependabot entry excludes only the unrelated ancestor
+`pnpm-lock.yaml` and `pnpm-workspace.yaml` support files, avoiding the updater's
+sub-workspace misclassification; the root entry continues to own both files.
+Every infrastructure manifest and npm lockfile remains monitored. Remove this
+workaround when Dependabot respects standalone npm boundaries beneath a pnpm root.
+
+The Python code generator accepts uv >=0.11.32 so Dependabot can resolve its
+locked dependency graph with the uv version supplied by GitHub. The codegen
+workflow retains an explicit uv 0.11.32 pin, Python 3.12, `uv run --locked`, and
+byte-for-byte generated-output verification. A resolver proposal does not
+silently change the CI toolchain or authorize different generated types.
 
 Major changes that alter a runtime, compiler, or persisted-data contract are
 held from the routine monthly PR until their focused migration is ready:

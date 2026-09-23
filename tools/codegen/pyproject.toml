@@ -8,5 +8,6 @@ dependencies = [
 
 [tool.uv]
 package = false
-required-version = "==0.11.32"
+# CI pins uv exactly; allow the compatible resolver provided by Dependabot.
+required-version = ">=0.11.32"
 exclude-newer = "1 week"

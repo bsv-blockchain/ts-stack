@@ -410,11 +410,23 @@ describe('AirGapDecoder', () => {
     const dec = new AirGapDecoder()
     expect(dec.accept(e.partAt(0)).have).toBe(1)
     const redundant: number[] = []
-    for (let seq = 2; redundant.length < MAX_TRACKED_SEQS + 1; seq++) {
+    // Bound fixture generation too: a broken mapping must fail this test,
+    // not make the fixture search forever during mutation testing.
+    for (
+      let seq = 2;
+      seq < MAX_TRACKED_SEQS * 16 && redundant.length < MAX_TRACKED_SEQS + 1;
+      seq++
+    ) {
       const blocks = blocksForPart(seq, 2)
       if (blocks.length === 1 && blocks[0] === 0) redundant.push(seq)
     }
-    for (const seq of redundant) expect(dec.accept(e.partAt(seq)).ok).toBe(true)
+    expect(redundant).toHaveLength(MAX_TRACKED_SEQS + 1)
+    for (const seq of redundant) {
+      const accepted = dec.accept(e.partAt(seq)).ok
+      // Avoid allocating thousands of successful Jest matchers in every mutant.
+      // Keep the same literal-true assertion, with full diagnostics on failure.
+      if (accepted !== true) expect({ seq, accepted }).toEqual({ seq, accepted: true })
+    }
     // The tracker is full; new and repeated sequence numbers are simply
     // re-processed as redundancy instead of being remembered, and the honest
     // part still completes the message.

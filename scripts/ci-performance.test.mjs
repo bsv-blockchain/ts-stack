@@ -3,6 +3,8 @@ import test from 'node:test'
 
 import {
   classifyRun,
+  collectReport,
+  sampleErrors,
   compareToBaseline,
   createBaseline,
   createReport,
@@ -118,4 +120,101 @@ test('baseline comparison permits bounded noise and rejects median or p95 regres
   const staleSummary = structuredClone(baseline)
   staleSummary.reference.fullScope.runs[0].durationSeconds += 1000
   assert.match(validateBaseline(staleSummary).join('\n'), /summary must match/)
+})
+
+function candidate(id, head = id) {
+  return {
+    id,
+    head_sha: String(head).padStart(40, '0'),
+    status: 'completed',
+    conclusion: 'success',
+    html_url: `https://github.com/bsv-blockchain/ts-stack/actions/runs/${id}`,
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:01:00Z'
+  }
+}
+
+function jobs(count) {
+  return Array.from({ length: count }, () => ({
+    name: 'Test',
+    conclusion: 'success',
+    started_at: '2026-09-01T00:00:01Z',
+    completed_at: '2026-09-01T00:00:59Z',
+    steps: []
+  }))
+}
+
+test('collector searches beyond 100 runs, deduplicates heads and paginates complete job evidence', async () => {
+  const requests = []
+  const request = async url => {
+    requests.push(url)
+    const parsed = new URL(url)
+    const page = Number(parsed.searchParams.get('page'))
+    if (parsed.pathname.endsWith('/runs')) {
+      return {
+        workflow_runs:
+          page === 1
+            ? Array.from({ length: 100 }, (_, index) =>
+                candidate(index + 1, index === 1 ? 1 : index + 1)
+              )
+            : [candidate(101), candidate(102)]
+      }
+    }
+    const id = Number(parsed.pathname.split('/').at(-2))
+    const all = jobs(id > 100 ? 125 : 3)
+    return { total_count: all.length, jobs: all.slice((page - 1) * 100, page * 100) }
+  }
+  const result = await collectReport({
+    repository: 'bsv-blockchain/ts-stack',
+    workflow: 'ci.yml',
+    sampleSize: 2,
+    request
+  })
+  assert.deepEqual(sampleErrors(result), [])
+  assert.deepEqual(
+    result.groups.targeted.runs.map(run => run.id),
+    [1, 3]
+  )
+  assert.deepEqual(
+    result.groups.fullScope.runs.map(run => run.jobCount),
+    [125, 125]
+  )
+  assert.equal(result.collection.candidatePages, 2)
+  assert.ok(requests.some(url => url.includes('/101/jobs?per_page=100&page=2')))
+  assert.equal(
+    new Set(Object.values(result.groups).flatMap(group => group.runs.map(run => run.headSha))).size,
+    4
+  )
+})
+
+test('an exhausted search retains partial diagnostics but cannot pass the sample gate', async () => {
+  const result = await collectReport({
+    repository: 'bsv-blockchain/ts-stack',
+    workflow: 'ci.yml',
+    sampleSize: 2,
+    request: async url =>
+      url.includes('/workflows/')
+        ? { workflow_runs: [candidate(1)] }
+        : { jobs: jobs(3), total_count: 3 }
+  })
+  assert.equal(result.collection.candidatePages, 1)
+  assert.equal(result.groups.targeted.runs.length, 1)
+  assert.match(sampleErrors(result).join('\n'), /Only 0 fullScope.*expected 2/)
+  assert.match(sampleErrors(result).join('\n'), /Only 1 targeted.*expected 2/)
+})
+
+test('collector bounds history scanning even if the API keeps returning pages', async () => {
+  const result = await collectReport({
+    repository: 'bsv-blockchain/ts-stack',
+    workflow: 'ci.yml',
+    sampleSize: 2,
+    maximumPages: 2,
+    request: async url =>
+      url.includes('/workflows/')
+        ? { workflow_runs: Array.from({ length: 100 }, () => candidate(1)) }
+        : { jobs: jobs(3), total_count: 3 }
+  })
+  assert.equal(result.collection.candidatePages, 2)
+  assert.equal(result.collection.examinedRuns, 1)
+  assert.equal(sampleErrors(result).length, 2)
 })

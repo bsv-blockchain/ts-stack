@@ -3,8 +3,8 @@ id: infra-chaintracks-server
 title: 'Chaintracks Server'
 kind: infra
 version: '1.2.0'
-last_updated: '2026-08-12'
-last_verified: '2026-08-12'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: [chaintracks, block-headers, spv, merkle, infrastructure]
@@ -174,6 +174,16 @@ The first upgraded boot can read the former flat files directly and serves
 them as a fallback until the first new generation is complete. Roll back the
 service image without deleting this root. Older releases continue to see their
 flat files; the new content-addressed and generation directories are additive.
+
+## Verification scope
+
+Rechecked on 2026-09-23 against TS Stack main
+`57d72e24a565d090bd605cf9767785c51ea4f179`: v1/v2 route handlers,
+`server.ts` readiness and upstream/worker limits, the edge policies, and
+`BulkHeaderSnapshotPublisher` generation retention and atomic current pointer.
+These are source contracts. Operators must separately verify the deployed image,
+ready endpoints, durable storage and public routes during each rollout; a source
+version or passing unit test does not prove a live service has been upgraded.
 
 ## When to deploy this
 

@@ -66,6 +66,14 @@ updates:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
     rebase-strategy: auto
+    # The npm updater currently fetches unrelated ancestor pnpm support files
+    # and mistakes these standalone package-lock projects for sub-workspaces.
+    # Exclude only those two ancestor files here; the root entry owns them.
+    exclude-paths:
+      - '../../pnpm-lock.yaml'
+      - '../../pnpm-workspace.yaml'
+      - '../../../pnpm-lock.yaml'
+      - '../../../pnpm-workspace.yaml'
     cooldown:
       default-days: 7
     ignore:
