@@ -51,8 +51,8 @@ try {
   page.on('console', message => process.stdout.write(`${message.text()}\n`))
   page.on('pageerror', error => process.stderr.write(`${error}\n`))
   await page.goto(`http://127.0.0.1:${server.address().port}`)
-  await page.waitForFunction('globalThis.syncBenchmark !== undefined', { timeout: 30000 })
-  const reports = await page.evaluate(async () => await globalThis.syncBenchmark)
+  await page.waitForFunction('typeof globalThis.syncBenchmark === "function"', { timeout: 30000 })
+  const reports = await page.evaluate(async () => await globalThis.syncBenchmark())
   process.stdout.write(`${JSON.stringify({ nativeSync: reports }, null, 2)}\n`)
 } finally {
   if (browser !== undefined) await browser.close()

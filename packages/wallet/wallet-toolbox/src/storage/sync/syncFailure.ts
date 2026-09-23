@@ -1,7 +1,6 @@
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { WERR_INVALID_OPERATION, WERR_NETWORK_CHAIN } from '../../sdk/WERR_errors'
-import type { RequestSyncChunkArgs } from '../../sdk/WalletStorage.interfaces'
-import type { ProcessSyncChunkResult } from '../../sdk/WalletStorage.interfaces'
+import type { RequestSyncChunkArgs, ProcessSyncChunkResult } from '../../sdk/WalletStorage.interfaces'
 import type { TableSettings } from '../schema/tables'
 
 const supportedChains = new Set(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])

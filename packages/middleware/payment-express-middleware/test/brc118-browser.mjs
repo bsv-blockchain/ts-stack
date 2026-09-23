@@ -111,13 +111,12 @@ try {
   const pageOrigin = await listen(
     createServer((req, res) => {
       res.setHeader('Content-Type', req.url?.endsWith('.js') ? 'text/javascript' : 'text/html')
-      res.end(
-        req.url === '/legacy.js'
-          ? legacyBundle?.outputFiles[0].contents
-          : req.url === '/client.js'
-            ? bundle.outputFiles[0].contents
-            : '<!doctype html><title>BRC-118 cross-origin acceptance</title><script type="module" src="/client.js"></script>'
-      )
+      if (req.url === '/legacy.js') res.end(legacyBundle?.outputFiles[0].contents)
+      else if (req.url === '/client.js') res.end(bundle.outputFiles[0].contents)
+      else
+        res.end(
+          '<!doctype html><title>BRC-118 cross-origin acceptance</title><script type="module" src="/client.js"></script>'
+        )
     })
   )
   browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox'] })

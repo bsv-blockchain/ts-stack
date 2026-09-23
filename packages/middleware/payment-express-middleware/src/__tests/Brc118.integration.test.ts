@@ -1,4 +1,5 @@
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { createServer, request as httpRequest, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import {
@@ -93,6 +94,7 @@ async function fixture(
     return { txid: tx.id('hex'), tx: tx.toAtomicBEEF() }
   })
   const app = express()
+  app.use(rateLimit({ windowMs: 60_000, limit: 100 }))
   if (options.raw === false) app.use(express.json())
   app.use(createAuthMiddleware({ wallet: serverWallet, captureRawBody: options.raw !== false }))
   app.use(
@@ -135,10 +137,9 @@ async function fixture(
     })
     req.on('end', () => {
       if (res.writableEnded) return
-      const destination = new URL(req.url!, upstream)
       const forward = httpRequest(
-        destination,
-        { method: req.method, headers: req.headers },
+        upstream,
+        { path: req.url, method: req.method, headers: req.headers },
         upstreamResponse => {
           res.writeHead(upstreamResponse.statusCode!, upstreamResponse.headers)
           upstreamResponse.pipe(res)
@@ -160,6 +161,28 @@ async function fixture(
 }
 
 describe('BRC-118 through signed HTTP and a 6 KiB-header proxy', () => {
+  it('keeps absolute request targets on the fixed test upstream', async () => {
+    let redirectedRequests = 0
+    const otherOrigin = await listen(
+      createServer((_req, res) => {
+        redirectedRequests++
+        res.writeHead(204).end()
+      })
+    )
+    const { origin, serverWallet } = await fixture()
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      const request = httpRequest(origin, { path: `${otherOrigin}/paid` }, response => {
+        response.resume()
+        response.on('end', () => resolve(response.statusCode))
+      })
+      request.on('error', reject)
+      request.end()
+    })
+    expect(status).not.toBe(204)
+    expect(redirectedRequests).toBe(0)
+    expect(serverWallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['application/json; charset=utf-8', Buffer.from('{ "snow": "雪" }\n')],
     ['application/octet-stream', Buffer.from([0, 128, 255, 13, 10, 0])],

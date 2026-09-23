@@ -184,4 +184,4 @@ async function benchmark() {
   }
 }
 
-Object.assign(globalThis, { syncBenchmark: benchmark() })
+Object.assign(globalThis, { syncBenchmark: benchmark })

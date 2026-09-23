@@ -26,7 +26,7 @@ function marginalCost(
   )
   const slope = Math.max(0, covariance / variance)
   const fixedMs = Math.max(0, averageMs - slope * averageRecords)
-  const latest = samples[samples.length - 1]
+  const latest = samples.at(-1)!
   // React to a newly expensive page immediately, even when the rolling fit
   // still contains cheap pages. Never subtract more than its observed cost.
   return { perRecordMs: Math.max(slope, (latest[phase] - fixedMs) / latest.records), fixedMs }

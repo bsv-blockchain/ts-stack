@@ -2022,6 +2022,22 @@ function buildResponsePayload(
   return writer.toArray()
 }
 
+function validateAuthMiddlewareSettings(options: AuthMiddlewareOptions): void {
+  const { allowUnauthenticated, logLevel, onCertificatesReceived } = options
+  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
+    throw new TypeError('allowUnauthenticated must be a boolean.')
+  }
+  if (options.captureRawBody !== undefined && typeof options.captureRawBody !== 'boolean') {
+    throw new TypeError('captureRawBody must be a boolean.')
+  }
+  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
+    throw new TypeError('logLevel must be debug, info, warn, or error.')
+  }
+  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
+    throw new TypeError('onCertificatesReceived must be a function.')
+  }
+}
+
 /**
  * Creates an Express middleware that handles authentication via BSV-SDK.
  *
@@ -2054,18 +2070,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     }
     throw new TypeError('You must configure the auth middleware with a wallet.')
   }
-  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
-    throw new TypeError('allowUnauthenticated must be a boolean.')
-  }
-  if (options.captureRawBody !== undefined && typeof options.captureRawBody !== 'boolean') {
-    throw new TypeError('captureRawBody must be a boolean.')
-  }
-  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
-    throw new TypeError('logLevel must be debug, info, warn, or error.')
-  }
-  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
-    throw new TypeError('onCertificatesReceived must be a function.')
-  }
+  validateAuthMiddlewareSettings(options)
 
   const transport = new ExpressTransport(
     allowUnauthenticated ?? false,

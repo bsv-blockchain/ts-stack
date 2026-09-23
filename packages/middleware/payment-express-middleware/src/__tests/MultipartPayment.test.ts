@@ -110,6 +110,27 @@ describe('authenticated BRC-118 extraction', () => {
     expect(() => parse(wire(part('x-bsv-payment', payment)), contentType)).toThrow()
   })
 
+  it.each([null, 'not raw bytes', [], { length: 0, buffer: new ArrayBuffer(0) }])(
+    'rejects a tampered raw-body type %# before reading framing',
+    value => {
+      expect(() => parse(value as unknown as Uint8Array)).toThrow('Malformed multipart payment')
+    }
+  )
+
+  it.each([
+    'Content-Type',
+    ': application/json',
+    'Content Type: application/json',
+    `Content-Type:${' '.repeat(2050)}`
+  ])('rejects malformed or oversized header lines %#', header => {
+    const bytes = Buffer.from(
+      wire(part('x-bsv-payment', payment))
+        .toString()
+        .replace('Content-Type: application/json', header)
+    )
+    expect(() => parse(bytes)).toThrow('Malformed multipart payment')
+  })
+
   it('bounds body, payment, and part headers', () => {
     const bytes = wire(part('x-bsv-payment', payment))
     expect(() => parseMultipartPayment(bytes, type, bytes.length - 1, 1000)).toThrow('limit')

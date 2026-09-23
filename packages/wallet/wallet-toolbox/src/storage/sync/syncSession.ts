@@ -67,6 +67,52 @@ function requestCheckpoint(args: RequestSyncChunkArgs): SyncCheckpoint {
   return validateSyncCheckpoint({ syncStateId: args.syncStateId ?? 0, since: args.since, offsets: args.offsets })
 }
 
+type ProgressNotifier = (state: SyncSessionProgress['state'], timing?: Partial<SyncSessionProgress>) => void
+
+async function readAndPreparePage(
+  session: PullSession,
+  pageArgs: RequestSyncChunkArgs,
+  cancelled: () => boolean,
+  notify: ProgressNotifier
+): Promise<
+  { chunk: SyncChunk; apply: () => Promise<ProcessSyncChunkResult>; readMs: number; prepareMs: number } | undefined
+> {
+  notify('reading')
+  if (cancelled()) return undefined
+  const readAt = Date.now()
+  const chunk = await session.reader.getSyncChunk(pageArgs)
+  const readMs = Date.now() - readAt
+  if (cancelled()) return undefined
+  if (
+    chunk.fromStorageIdentityKey !== pageArgs.fromStorageIdentityKey ||
+    chunk.toStorageIdentityKey !== pageArgs.toStorageIdentityKey ||
+    chunk.userIdentityKey !== pageArgs.identityKey
+  ) {
+    throw new WERR_INVALID_PARAMETER('chunk', 'bound to this sync source, destination and wallet identity')
+  }
+  if (chunk.user != null) chunk.user.activeStorage = session.activeStorage
+  notify('preparing', { readMs })
+  if (cancelled()) return undefined
+  const prepareAt = Date.now()
+  const apply =
+    session.prepare == null
+      ? async () => await session.writer.processSyncChunk(pageArgs, chunk)
+      : await session.prepare(pageArgs, chunk)
+  const prepareMs = Date.now() - prepareAt
+  if (cancelled()) return undefined
+  return { chunk, apply, readMs, prepareMs }
+}
+
+async function committedCheckpoint(
+  session: PullSession,
+  args: RequestSyncChunkArgs,
+  reply: ProcessSyncChunkResult
+): Promise<SyncCheckpoint> {
+  if (reply.nextCheckpoint == null) return requestCheckpoint(await session.loadRequest())
+  const expected = reply.done ? { syncStateId: args.syncStateId } : args
+  return validateSyncCheckpoint(reply.nextCheckpoint, expected)
+}
+
 /** One page in flight; resume always starts with the destination's durable checkpoint. */
 export async function runPullSession(session: PullSession, options: SyncSessionOptions): Promise<SyncSessionResult> {
   const maxItems = boundedOption(options.maxItems, 'maxItems', 1000)
@@ -104,29 +150,9 @@ export async function runPullSession(session: PullSession, options: SyncSessionO
       includeNextCheckpoint: true,
       requireMatchingCheckpoint: session.atomicCheckpoint
     }
-    notify('reading')
-    if (cancelled()) return result
-    const readAt = Date.now()
-    const chunk = await session.reader.getSyncChunk(pageArgs)
-    const readMs = Date.now() - readAt
-    if (cancelled()) return result
-    if (
-      chunk.fromStorageIdentityKey !== pageArgs.fromStorageIdentityKey ||
-      chunk.toStorageIdentityKey !== pageArgs.toStorageIdentityKey ||
-      chunk.userIdentityKey !== pageArgs.identityKey
-    ) {
-      throw new WERR_INVALID_PARAMETER('chunk', 'bound to this sync source, destination and wallet identity')
-    }
-    if (chunk.user != null) chunk.user.activeStorage = session.activeStorage
-    notify('preparing', { readMs })
-    if (cancelled()) return result
-    const prepareAt = Date.now()
-    const apply =
-      session.prepare == null
-        ? async () => await session.writer.processSyncChunk(pageArgs, chunk)
-        : await session.prepare(pageArgs, chunk)
-    const prepareMs = Date.now() - prepareAt
-    if (cancelled()) return result
+    const prepared = await readAndPreparePage(session, pageArgs, cancelled, notify)
+    if (prepared == null) return result
+    const { chunk, apply, readMs, prepareMs } = prepared
     notify('committing', { readMs })
     const queuedAt = Date.now()
     let commitAt = queuedAt
@@ -136,10 +162,7 @@ export async function runPullSession(session: PullSession, options: SyncSessionO
       commitAt = Date.now()
       const reply = await apply()
       throwSyncResultError(reply)
-      const checkpoint =
-        reply.nextCheckpoint == null
-          ? requestCheckpoint(await session.loadRequest())
-          : validateSyncCheckpoint(reply.nextCheckpoint, reply.done ? { syncStateId: args.syncStateId } : args)
+      const checkpoint = await committedCheckpoint(session, args, reply)
       return { reply, checkpoint }
     })
     if (committed == null) {

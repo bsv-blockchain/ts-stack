@@ -15,7 +15,9 @@ export function decodePeerPayTransaction(value: string, maximumBytes: number): n
     value.length > Math.ceil(maximumBytes / 3) * 4
   )
     invalid()
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  let padding = 0
+  if (value.endsWith('==')) padding = 2
+  else if (value.endsWith('=')) padding = 1
   const decodedLength = (value.length / 4) * 3 - padding
   if (decodedLength === 0 || decodedLength > maximumBytes) invalid()
   let last = 0

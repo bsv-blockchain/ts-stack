@@ -65,7 +65,7 @@ class ManagedStorage {
   isAvailable: boolean
   isStorageProvider: boolean
   settings?: TableSettings
-  access?: sdk.StorageCapabilities['storageAccess']
+  access: sdk.StorageCapabilities['storageAccess']
   user?: TableUser
 
   constructor(public storage: sdk.WalletStorageProvider) {

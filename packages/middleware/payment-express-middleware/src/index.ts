@@ -52,7 +52,9 @@ function isCanonicalBase64(value: string): boolean {
   }
   // Check pad bits without decoding or using a repeated-group regex, whose
   // engine stack can overflow on the large BEEFs multipart was designed for.
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  let padding = 0
+  if (value.endsWith('==')) padding = 2
+  else if (value.endsWith('=')) padding = 1
   const last = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
     value[value.length - padding - 1]
   )
@@ -214,6 +216,70 @@ async function issuePaymentChallenge(
   }
 }
 
+interface PaymentInputLimits {
+  enableMultipart: boolean
+  maxPaymentHeaderBytes: number
+  maxPaymentBodyBytes: number
+  maxPaymentBytes: number
+}
+
+function restoreApplicationPayload(
+  req: PaymentRequest,
+  parsed: ReturnType<typeof parseMultipartPayment>
+): void {
+  req.rawBody = parsed.body
+  req.body = decodePaymentPayload(parsed.body, parsed.contentType)
+  delete req.headers['content-type']
+  delete req.headers['content-length']
+  delete req.headers['transfer-encoding']
+  if (parsed.contentType !== undefined) req.headers['content-type'] = parsed.contentType
+  if (parsed.body !== undefined) req.headers['content-length'] = String(parsed.body.length)
+}
+
+function extractPaymentInput(
+  req: PaymentRequest,
+  res: Response,
+  multipart: boolean,
+  limits: PaymentInputLimits
+): { rawPayment: string | null | undefined; paymentLimit: number } | undefined {
+  const { enableMultipart, maxPaymentHeaderBytes, maxPaymentBodyBytes, maxPaymentBytes } = limits
+  const contentType = req.headers['content-type']
+  const rawPayment = paymentHeader(req)
+  const headerInput = { rawPayment, paymentLimit: maxPaymentHeaderBytes }
+  if (!enableMultipart || typeof contentType !== 'string' || !isMultipartPaymentType(contentType))
+    return headerInput
+  if (!multipart || rawPayment !== undefined || !(req.body instanceof Uint8Array)) {
+    sendError(
+      res,
+      400,
+      'ERR_MALFORMED_PAYMENT',
+      'Multipart payments require raw authentication and exactly one payment source.'
+    )
+    return undefined
+  }
+  try {
+    const parsed = parseMultipartPayment(
+      req.body,
+      contentType,
+      maxPaymentBodyBytes,
+      maxPaymentBytes
+    )
+    restoreApplicationPayload(req, parsed)
+    return { rawPayment: parsed.paymentJSON, paymentLimit: maxPaymentBytes }
+  } catch (error) {
+    if (error instanceof MissingMultipartPayment) return headerInput
+    const status =
+      error instanceof PaymentTransportError && error.code === 'ERR_PAYMENT_SIZE' ? 413 : 400
+    sendError(
+      res,
+      status,
+      'ERR_MALFORMED_PAYMENT',
+      'The multipart payment is malformed or exceeds its limit.'
+    )
+    return undefined
+  }
+}
+
 /**
  * Creates middleware that enforces a BRC-29 wallet payment after BRC-103 auth.
  */
@@ -273,49 +339,14 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     }
 
     const multipart = enableMultipart && paymentRequest.auth?.supportsMultipart === true
-    const contentType = paymentRequest.headers['content-type']
-    let rawPayment = paymentHeader(paymentRequest)
-    let paymentLimit = maxPaymentHeaderBytes
-    if (enableMultipart && typeof contentType === 'string' && isMultipartPaymentType(contentType)) {
-      if (!multipart || rawPayment !== undefined || !(paymentRequest.body instanceof Uint8Array)) {
-        sendError(
-          res,
-          400,
-          'ERR_MALFORMED_PAYMENT',
-          'Multipart payments require raw authentication and exactly one payment source.'
-        )
-        return
-      }
-      try {
-        const parsed = parseMultipartPayment(
-          paymentRequest.body,
-          contentType,
-          maxPaymentBodyBytes,
-          maxPaymentBytes
-        )
-        paymentRequest.rawBody = parsed.body
-        paymentRequest.body = decodePaymentPayload(parsed.body, parsed.contentType)
-        delete paymentRequest.headers['content-type']
-        delete paymentRequest.headers['content-length']
-        delete paymentRequest.headers['transfer-encoding']
-        if (parsed.contentType !== undefined)
-          paymentRequest.headers['content-type'] = parsed.contentType
-        if (parsed.body !== undefined)
-          paymentRequest.headers['content-length'] = String(parsed.body.length)
-        rawPayment = parsed.paymentJSON
-        paymentLimit = maxPaymentBytes
-      } catch (error) {
-        if (!(error instanceof MissingMultipartPayment)) {
-          sendError(
-            res,
-            error instanceof PaymentTransportError && error.code === 'ERR_PAYMENT_SIZE' ? 413 : 400,
-            'ERR_MALFORMED_PAYMENT',
-            'The multipart payment is malformed or exceeds its limit.'
-          )
-          return
-        }
-      }
-    }
+    const input = extractPaymentInput(paymentRequest, res, multipart, {
+      enableMultipart,
+      maxPaymentHeaderBytes,
+      maxPaymentBodyBytes,
+      maxPaymentBytes
+    })
+    if (input === undefined) return
+    const { rawPayment, paymentLimit } = input
 
     let requestPrice: number
     try {

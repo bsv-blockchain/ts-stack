@@ -30,7 +30,7 @@ export class StorageAccessQueue {
     if (background >= 0 && (this.foregroundGrants >= 8 || Date.now() - this.waiters[background].queuedAt >= 1000))
       return background
     const foreground = this.waiters.findIndex(waiter => waiter.priority === 'foreground')
-    return foreground >= 0 ? foreground : 0
+    return Math.max(foreground, 0)
   }
 
   private pump(): void {

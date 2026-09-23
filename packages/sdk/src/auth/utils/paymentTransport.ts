@@ -92,7 +92,7 @@ export function isMultipartPaymentType(value: string): boolean {
 export function paymentBoundary(contentType: string): string {
   // One unambiguous boundary parameter; quoted MIME token boundaries are accepted.
   const match =
-    /^multipart\/form-data\s*;\s*boundary=(?:([A-Za-z0-9'()+_,./:=?-]{1,70})|"([A-Za-z0-9'()+_,./:=?-]{1,70})")\s*$/i.exec(
+    /^multipart\/form-data\s*;\s*boundary=(?:([a-z0-9'()+_,./:=?-]{1,70})|"([a-z0-9'()+_,./:=?-]{1,70})")\s*$/i.exec(
       contentType
     )
   if (match == null)
@@ -105,7 +105,7 @@ export function paymentPayloadContentType(value: string): string {
     value.length === 0 ||
     value.length > 1024 ||
     /[^\x20-\x7e]/.test(value) ||
-    !/^[!#$%&'*+.^_`|~\w-]+\/[!#$%&'*+.^_`|~\w-]+(?:\s*;.*)?$/.test(value)
+    !/^[!#$%&'*+.^`|~\w-]+\/[!#$%&'*+.^`|~\w-]+(?:\s*;.*)?$/.test(value)
   ) {
     throw new PaymentTransportError(
       'ERR_PAYMENT_TRANSPORT',
@@ -138,6 +138,17 @@ export interface MultipartPaymentBody {
   body: Uint8Array
 }
 
+function paymentRequestHeaders(originalHeaders: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = Object.create(null)
+  for (const [name, value] of Object.entries(originalHeaders)) {
+    const lower = name.toLowerCase()
+    if (Object.hasOwn(headers, lower))
+      throw new PaymentTransportError('ERR_PAYMENT_TRANSPORT', 'Duplicate request header.')
+    if (lower !== 'x-bsv-payment') headers[lower] = value
+  }
+  return headers
+}
+
 export function preparePaymentTransport(
   paymentJSON: string,
   original: { method: string; headers: Record<string, string>; body?: Uint8Array },
@@ -150,13 +161,7 @@ export function preparePaymentTransport(
       'ERR_PAYMENT_SIZE',
       'Payment JSON exceeds its configured limit.'
     )
-  const headers: Record<string, string> = Object.create(null)
-  for (const [name, value] of Object.entries(original.headers)) {
-    const lower = name.toLowerCase()
-    if (Object.hasOwn(headers, lower))
-      throw new PaymentTransportError('ERR_PAYMENT_TRANSPORT', 'Duplicate request header.')
-    if (lower !== 'x-bsv-payment') headers[lower] = value
-  }
+  const headers = paymentRequestHeaders(original.headers)
   const originalType = headers['content-type']
   let body = original.body
   let transport: 'header' | 'multipart' = 'header'
