@@ -1,6 +1,8 @@
 import { KeyDeriver, PrivateKey } from '@bsv/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeEnvelope } from '../../../bootstrap/index.js'
+import type { StorageTable } from '../../../storage/index.js'
+import { DEFAULT_CIPHERSUITE } from '../../../types.js'
 import { GroupMessagingClient } from '../../../client.js'
 import { PermanentProcessingError } from '../../../errors.js'
 import { TransportService } from '../../transport-service.js'
@@ -1151,5 +1153,79 @@ describe('MessageBoxTransport isolates its own subscribers', () => {
 
     expect(seen).toEqual(['02aa'])
     expect(errors.map(error => error.message)).toContain('the first subscriber is broken')
+  })
+})
+
+/**
+ * The two halves of durability, composed.
+ *
+ * `IndexedDbStorageBackend` used to resolve a write on `IDBRequest.onsuccess`,
+ * before its transaction committed, so an abort could roll the write back after
+ * the client had already reported success — and the relay, seeing every handler
+ * return, would acknowledge and discard the only copy. The backend now waits for
+ * the commit; this is the other end of that, proving a rejected write really
+ * does keep the message in the box rather than merely being reported somewhere.
+ */
+describe('a storage write that fails', () => {
+  /** Backed by a Map, except for one namespace that refuses to be written. */
+  const backendRefusing = (refuse: StorageTable) => {
+    const rows = new Map<string, Uint8Array>()
+    return {
+      get: (table: StorageTable, key: string) => rows.get(`${table}:${key}`),
+      set: (table: StorageTable, key: string, value: Uint8Array) => {
+        if (table === refuse) {
+          throw new Error('IndexedDB transaction aborted before the write committed')
+        }
+        rows.set(`${table}:${key}`, value)
+      },
+      delete: (table: StorageTable, key: string) => {
+        rows.delete(`${table}:${key}`)
+      },
+      keys: (table: StorageTable) =>
+        [...rows.keys()]
+          .filter(row => row.startsWith(`${table}:`))
+          .map(row => row.slice(table.length + 1))
+    }
+  }
+
+  it('leaves the message in the box instead of acknowledging it', async () => {
+    const client = fakeClient()
+    const transport = new MessageBoxTransport(client)
+    const acknowledgeMessage = vi.spyOn(client, 'acknowledgeMessage')
+
+    const groupMessagingClient = await GroupMessagingClient.create({
+      wallet: new KeyDeriver(PrivateKey.fromRandom()),
+      storage: backendRefusing('invites'),
+      transport
+    })
+    const failures: Array<{ error: Error }> = []
+    groupMessagingClient.on('processingFailed', failure => failures.push(failure))
+
+    // A bootstrap request is the shortest path to a storage write: handling it
+    // means putInvite, which is the namespace being refused.
+    client.inbox.push({
+      messageId: 'm1',
+      sender: `02${'aa'.repeat(32)}`,
+      body: encodeBody(
+        encodeEnvelope({
+          kind: 'bootstrap',
+          message: {
+            type: 'keyPackageRequest',
+            requestId: 'r1',
+            ciphersuites: [DEFAULT_CIPHERSUITE]
+          }
+        })
+      )
+    })
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(client.acked).toEqual([])
+    expect(client.inbox).toHaveLength(1)
+    expect(acknowledgeMessage).not.toHaveBeenCalled()
+    expect(failures.map(failure => failure.error.message)).toContain(
+      'IndexedDB transaction aborted before the write committed'
+    )
+
+    await groupMessagingClient.close()
   })
 })

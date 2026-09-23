@@ -7,7 +7,7 @@ import {
 } from 'ts-mls'
 import { encodeKeyPackage } from 'ts-mls/keyPackage.js'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeEnvelope } from '../bootstrap/index.js'
+import { decodeEnvelope, encodeEnvelope } from '../bootstrap/index.js'
 import {
   GroupMessagingClient,
   MAX_GROUPS_HELD_BEFORE_JOIN,
@@ -250,6 +250,99 @@ describe('two wallets, end to end', () => {
     await received
     assertNoPrivateMaterial(aliceStore, aliceKp.privateKeyPackage, 'after sending')
     assertNoPrivateMaterial(bobStore, bobKp.privateKeyPackage, 'after receiving')
+
+    await alice.close()
+    await bob.close()
+  })
+
+  /**
+   * A KeyPackage is single-use, and the record of it being spent has to be the
+   * storage, not the process.
+   *
+   * Consumption is `deleteKeyPackage`, so the proof is that a restarted client
+   * built from the same store still refuses the Welcome it already joined from.
+   * If consumption lived anywhere but storage, a replay after restart would find
+   * the ref again and let the same ticket be used twice.
+   */
+  it('keeps a KeyPackage spent across a restart, refusing a replayed Welcome', async () => {
+    const hub = new InProcessTransportHub()
+    const aliceStore = new Map<string, Uint8Array>()
+    const bobStore = new Map<string, Uint8Array>()
+    const aliceWallet = new KeyDeriver(PrivateKey.fromRandom())
+    const bobWallet = new KeyDeriver(PrivateKey.fromRandom())
+
+    // Tapped before the client subscribes, so the Welcome can be replayed later
+    // exactly as it came off the wire.
+    const bobWire = hub.endpoint(bobWallet.identityKey)
+    const delivered: Uint8Array[] = []
+    bobWire.onMessage((_from, payload) => {
+      delivered.push(payload)
+    })
+
+    const alice = await GroupMessagingClient.create({
+      wallet: aliceWallet,
+      storage: aliceStore,
+      transport: hub.endpoint(aliceWallet.identityKey)
+    })
+    let bob = await GroupMessagingClient.create({
+      wallet: bobWallet,
+      storage: bobStore,
+      transport: bobWire
+    })
+
+    const bobKp = await bob.keyPackages.create()
+    const aliceKp = await alice.keyPackages.create()
+    expect(await bob.keyPackages.list()).toContain(bobKp.ref)
+
+    const consumed: string[] = []
+    bob.on('keyPackageConsumed', ({ ref }) => consumed.push(ref))
+
+    const welcomed = nextEvent(bob, 'welcomeReceived')
+    await alice.createGroup({
+      chatId: 'c',
+      members: [bobKp.keyPackage],
+      privateKeyPackage: aliceKp.privateKeyPackage
+    })
+    const welcome = await welcomed
+    await bob.joinFromWelcome({
+      inviteId: welcome.inviteId,
+      chatId: 'c',
+      privateKeyPackage: bobKp.privateKeyPackage
+    })
+
+    expect(consumed).toEqual([bobKp.ref])
+    expect(await bob.keyPackages.list()).not.toContain(bobKp.ref)
+
+    // Restart Bob from his store alone.
+    await bob.close()
+    bob = await GroupMessagingClient.create({
+      wallet: bobWallet,
+      storage: bobStore,
+      transport: hub.endpoint(bobWallet.identityKey)
+    })
+
+    // The group survived, so a refusal below is about the KeyPackage and not
+    // about a client that came back empty.
+    expect((await bob.getGroup('c'))?.mlsGroupId).toBeDefined()
+    expect(await bob.keyPackages.list()).not.toContain(bobKp.ref)
+
+    const replayed = delivered.find(payload => {
+      const envelope = decodeEnvelope(payload)
+      return envelope.kind === 'bootstrap' && envelope.message.type === 'welcome'
+    })
+    expect(replayed).toBeDefined()
+
+    const refusals: Array<{ kind: string; reason: string }> = []
+    bob.on('bootstrapRefused', ({ kind, reason }) => refusals.push({ kind, reason }))
+    let rejoined = false
+    bob.on('welcomeReceived', () => (rejoined = true))
+
+    await bob.processIncoming(replayed!, alice.identityKey)
+
+    expect(rejoined).toBe(false)
+    expect(refusals).toEqual([
+      { kind: 'welcome', reason: 'no stored KeyPackage matches this Welcome' }
+    ])
 
     await alice.close()
     await bob.close()

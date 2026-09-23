@@ -20,6 +20,13 @@ const promisify = <T>(request: IDBRequest<T>): Promise<T> =>
     }
   })
 
+const abortError = (transaction: IDBTransaction, what: string): GroupMessagingError => {
+  const message = `IndexedDB transaction ${what} before the write committed`
+  return transaction.error === null
+    ? new GroupMessagingError(message)
+    : new GroupMessagingError(message, { cause: transaction.error })
+}
+
 /**
  * Open (or create) a database with the object stores this backend expects.
  *
@@ -69,13 +76,44 @@ export class IndexedDbStorageBackend implements StorageBackend {
     this.database.close()
   }
 
+  /**
+   * Run one request, and for a write wait for its transaction to commit.
+   *
+   * `IDBRequest.onsuccess` fires while the transaction is still open, so a
+   * request can succeed and then be rolled back by an abort — on a quota
+   * failure at commit, or when the connection goes away. Resolving there would
+   * report state as persisted that never lands, and the transport acknowledges
+   * a message once its handlers return: the relay would drop the only copy of
+   * something this client never stored.
+   *
+   * Reads are held to the request alone on purpose. They claim no persistence,
+   * the value handed back is the one that was read, and `getGroup` runs on the
+   * hot path of every inbound message.
+   */
   async #run<T>(
     table: StorageTable,
     mode: IDBTransactionMode,
     operation: (store: IDBObjectStore) => IDBRequest<T>
   ): Promise<T> {
     const transaction = this.database.transaction(table, mode)
-    return promisify(operation(transaction.objectStore(table)))
+    if (mode === 'readonly') {
+      return promisify(operation(transaction.objectStore(table)))
+    }
+
+    const committed = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => {
+        resolve()
+      }
+      transaction.onabort = () => {
+        reject(abortError(transaction, 'aborted'))
+      }
+      transaction.onerror = () => {
+        reject(abortError(transaction, 'failed'))
+      }
+    })
+    const result = await promisify(operation(transaction.objectStore(table)))
+    await committed
+    return result
   }
 }
 
