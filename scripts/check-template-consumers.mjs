@@ -88,7 +88,10 @@ async function exercise(sdk, templates, check) {
   const recovery = new R1K1Wallet()
   await spend(
     'R1K1Wallet',
-    await recovery.lock(Array(20).fill(7), publicKeyHash),
+    await recovery.lock(
+      Array.from({ length: 20 }, () => 7),
+      publicKeyHash
+    ),
     recovery.unlock({ path: 'k1', privateKey })
   )
   const opReturn = new OpReturn().lock(['packed', 'consumer'])
