@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.13.2'
-last_updated: '2026-09-21'
-last_verified: '2026-09-21'
+version: '2.14.0'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -57,9 +57,23 @@ diagnostics are bounded, and monitor operational logging requires the additive
 
 Spending approvals apply to one operation per prompt and are never cached or
 coalesced. Spending-token accounting reads every action page before authorizing
-a spend. Certificate handling also fails closed: direct and issuer-mediated
-acquisition require a valid certifier signature before storage, and identity
-discovery verifies overlay certificates before decrypting or trust-scoring them.
+a spend. `WalletPermissionsManager` resolves a sendMax (`maxPossibleSatoshis`)
+output's funded amount from the signable transaction by locking script before
+billing it, so a `createAction` call funding the wallet's full balance through
+the permissions manager is authorized and verified for its real amount instead
+of the unfunded sentinel. Certificate handling also fails closed: direct and
+issuer-mediated acquisition require a valid certifier signature before
+storage, and identity discovery verifies overlay certificates before
+decrypting or trust-scoring them.
+
+`relinquishOutput` and `internalizeAction` confirm basket membership before
+mutating it. `relinquishOutput` rejects a basket argument that does not match
+the output's actual current basket, or names a basket that does not exist, so
+an application cannot free an outpoint it does not actually hold by basket
+membership. `internalizeAction`'s basket-insertion merge path rejects
+reclassifying an output that already belongs to a different real basket,
+while re-internalizing into the same basket and inserting a currently
+unbasketed (non-managed-change) output both keep working.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related
@@ -124,7 +138,14 @@ and retains at most 4,096 unique deactivated headers by default. Applications
 can lower this with `MonitorOptions.maxQueuedDeactivatedHeaders`. Prepared-proof
 invalidation is coalesced and drained during teardown, while partial event
 subscriptions and rejected host callbacks are contained as bounded monitor
-events.
+events. Optional Chaintracks header/reorg push subscriptions no longer gate
+the scheduler: an event source that declares `supportsReorgEvents: false`
+(such as the built-in HTTP-polling `ChaintracksServiceClient`) is never called,
+and a source that fails to subscribe is retried opportunistically on the next
+tick while every other scheduled task keeps running. A genuine configured-chain
+mismatch still fails closed — subscriptions are never registered against a
+`chaintracksWithEvents` source that reports the wrong chain — and is recorded
+as a `chaintracksEventsError` monitor event.
 
 The legacy `BHServiceClient` also validates current canonical headers for every
 Merkle-root verdict. Its compatibility `cache` is diagnostic state only and is
