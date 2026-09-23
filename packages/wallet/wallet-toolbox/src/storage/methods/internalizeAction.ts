@@ -393,7 +393,7 @@ class InternalizeActionContext {
       const requestedBasket = verifyOneOrNone(
         await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: basket.basket } })
       )
-      if (requestedBasket == null || requestedBasket.basketId !== currentBasketId) {
+      if (requestedBasket?.basketId !== currentBasketId) {
         throw new WERR_INVALID_PARAMETER(
           'outputs',
           `output ${basket.vout} is already assigned to a different basket and cannot be reclassified as a basket insertion into ${basket.basket}`
