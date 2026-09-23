@@ -97,7 +97,7 @@
     "decentralized-identifier"
   ],
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.0"
+    "@bsv/sdk": "^2.8.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

@@ -98,8 +98,8 @@
       "name": "@bsv/did-client",
       "publishedVersion": "1.3.2",
       "releaseType": "patch",
-      "summary": "Fixes the CommonJS build so DIDClient can construct SDK lookup, broadcast, PushDrop, transaction and wallet objects. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged.",
-      "migration": "None. ESM consumers are unaffected."
+      "summary": "Fixes the CommonJS build so DIDClient can construct SDK lookup, broadcast, PushDrop, transaction and wallet objects. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. Raises the @bsv/sdk peer floor from ^2.4.0 to ^2.8.0: the package already requires SDK modules (identity/DIDTokenValidation, wallet/completeBoundAction) that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.",
+      "migration": "Use @bsv/sdk 2.8.0 or later (earlier 2.x releases were already incompatible). No API migration is required; ESM consumers are otherwise unaffected."
     },
     {
       "name": "@bsv/fund-wallet",
@@ -119,8 +119,8 @@
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.5.2",
       "releaseType": "patch",
-      "summary": "Fixes the CommonJS build so new MessageBoxClient() and the Peer clients work under require(). The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. sendMessage() HTTP failures now append the server's well-formed ERR_* failure code, for example \"Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).\", so callers can recognise an already-delivered message; free-text server descriptions are still never copied into errors.",
-      "migration": "None. Code that matched the exact \"Message Box send failed with HTTP <status>.\" text should match the prefix, because a recognised server failure code is now appended in parentheses."
+      "summary": "Fixes the CommonJS build so new MessageBoxClient() and the Peer clients work under require(). The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. sendMessage() HTTP failures now append the server's well-formed ERR_* failure code, for example \"Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).\", so callers can recognise an already-delivered message; free-text server descriptions are still never copied into errors. Raises the @bsv/sdk peer floor from ^2.4.1 to ^2.8.0: the package already requires SDK modules and helpers (PushDropValidation, WalletResultValidation, toUTF8Strict) that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.",
+      "migration": "Use @bsv/sdk 2.8.0 or later (earlier 2.x releases were already incompatible). Code that matched the exact \"Message Box send failed with HTTP <status>.\" text should match the prefix, because a recognised server failure code is now appended in parentheses."
     },
     {
       "name": "@bsv/overlay",

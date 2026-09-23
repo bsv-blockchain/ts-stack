@@ -19,7 +19,7 @@ tags: [did, identity, helpers]
 > Client for the legacy BSV DID PushDrop overlay, including bounded creation,
 > revocation, and lookup flows.
 
-The 1.3.3 source candidate fixes the CommonJS build: `require()` consumers no longer fail with `.default is not a constructor` when `DIDClient` constructs SDK objects. No API migration is required.
+The 1.3.3 source candidate fixes the CommonJS build: `require()` consumers no longer fail with `.default is not a constructor` when `DIDClient` constructs SDK objects. The `@bsv/sdk` peer floor is now `^2.8.0`, the first SDK release providing modules this package already required. No API migration is required.
 
 ## Trust model and wire limitation
 

@@ -20,8 +20,10 @@ All notable changes to this project will be documented in this file. The format 
   name from the SDK barrels.
 - `sendMessage()` HTTP failures now include the server's well-formed failure
   code, for example `Message Box send failed with HTTP 400
-  (ERR_DUPLICATE_MESSAGE).`, so callers can recognise an already-delivered
+(ERR_DUPLICATE_MESSAGE).`, so callers can recognise an already-delivered
   message. Free-text server descriptions are still never copied into errors.
+- Raise the `@bsv/sdk` peer floor to `^2.8.0`. The package already required
+  SDK modules that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.
 
 ### 2.5.2 candidate — authenticated transport and payment hardening
 
