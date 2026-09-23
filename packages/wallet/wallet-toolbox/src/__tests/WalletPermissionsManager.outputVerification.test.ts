@@ -151,6 +151,39 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     expect(() => wpm.verifyRequestedOutputsPresent(tx, args)).toThrow(/output 0/i)
   })
 
+  test('5d rejects fixed-amount and sendMax requests that omit a locking script', () => {
+    const tx = txWithOutputs([
+      { hex: SCRIPT_A, satoshis: 1000 },
+      { hex: CHANGE_SCRIPT, satoshis: 2500 }
+    ])
+    const withoutScript = (satoshis: number): never => ({ outputs: [{ satoshis, outputDescription: 'pay' }] }) as never
+    expect(() => wpm.verifyRequestedOutputsPresent(tx, withoutScript(1000))).toThrow(/output 0/i)
+    expect(() => wpm.verifyRequestedOutputsPresent(tx, withoutScript(maxPossibleSatoshis))).toThrow(/output 0/i)
+  })
+
+  test('5e computeNetSpend bills resolved amounts and refuses an unresolved requested output', () => {
+    const netSpend = (
+      wpm as unknown as {
+        computeNetSpend: (
+          tx: Transaction,
+          args: unknown,
+          inputDescriptions: Record<number, string>,
+          outputDescriptions: Record<number, string>,
+          resolved: Map<number, number>
+        ) => { netSpent: number; lineItems: Array<{ type: string; description: string; satoshis: number }> }
+      }
+    ).computeNetSpend.bind(wpm)
+    const source = txWithOutputs([{ hex: CHANGE_SCRIPT, satoshis: 5000 }])
+    const tx = txWithOutputs([{ hex: SCRIPT_A, satoshis: 4321 }])
+    tx.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
+    const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
+
+    const { lineItems } = netSpend(tx, args, {}, {}, new Map([[0, 4321]]))
+    expect(lineItems[0]).toEqual({ type: 'output', satoshis: 4321, description: 'No output description provided' })
+
+    expect(() => netSpend(tx, args, {}, {}, new Map())).toThrow(/output 0 was not resolved/)
+  })
+
   test('6 rejects a final wallet result that substitutes the authorized recipient', async () => {
     const source = txWithOutputs([{ hex: CHANGE_SCRIPT, satoshis: 1000 }])
     const partial = new Transaction()

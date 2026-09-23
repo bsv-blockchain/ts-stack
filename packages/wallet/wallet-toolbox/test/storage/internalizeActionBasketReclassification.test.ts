@@ -162,4 +162,44 @@ describe('internalizeAction basket reclassification authorization', () => {
     expect(target).toHaveLength(1)
     expect(after[0].basketId).toBe(target[0].basketId)
   })
+  test('allows a merge insertion for an output of a known transaction that has no stored row yet', async () => {
+    const created = await ctx.wallet.createAction({
+      description: 'Stage a known transaction with an untracked output',
+      outputs: [
+        {
+          satoshis: 611,
+          lockingScript: '76a914555555555555555555555555555555555555555588ac',
+          basket: 'owned-by-app-c',
+          outputDescription: 'App C basket insertion'
+        },
+        {
+          satoshis: 612,
+          lockingScript: '76a914666666666666666666666666666666666666666688ac',
+          outputDescription: 'Untracked output'
+        }
+      ],
+      options: { noSend: true, randomizeOutputs: false }
+    })
+    const untracked = (
+      await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: created.txid!, vout: 1 } })
+    )[0]
+    // Reproduce a transaction known through partial internalization: the
+    // transaction row exists, but this output has no row yet.
+    await (ctx.activeStorage as any).knex('outputs').where({ outputId: untracked.outputId }).del()
+
+    const merged = await ctx.wallet.internalizeAction({
+      tx: created.tx!,
+      outputs: [{ outputIndex: 1, protocol: 'basket insertion', insertionRemittance: { basket: 'app-c-recovered' } }],
+      description: 'Insert a newly tracked output of a known transaction'
+    })
+    expect(merged.isMerge).toBe(true)
+
+    const inserted = (
+      await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: created.txid!, vout: 1 } })
+    )[0]
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({ partial: { userId: ctx.userId, name: 'app-c-recovered' } })
+    )[0]
+    expect(inserted.basketId).toBe(basket.basketId)
+  })
 })
