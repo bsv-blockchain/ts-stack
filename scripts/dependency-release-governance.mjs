@@ -130,20 +130,19 @@ export function validateDependabotExclusions(source) {
   const errors = []
   let blockIndent = null
   for (const [index, line] of source.split('\n').entries()) {
-    if (/^\s*(?:#.*)?$/.test(line)) continue
-    const heading = /^(\s*)exclude-paths:\s*(?:#.*)?$/.exec(line)
-    if (heading) {
-      blockIndent = heading[1].length
+    const content = line.trimStart().split('#', 1)[0].trimEnd()
+    if (content.length === 0) continue
+    const indent = line.length - line.trimStart().length
+    if (content === 'exclude-paths:') {
+      blockIndent = indent
       continue
     }
     if (blockIndent === null) continue
-    const indent = line.length - line.trimStart().length
     if (indent <= blockIndent) {
       blockIndent = null
       continue
     }
-    const item = line.trimStart().split(/\s+#/, 1)[0]
-    if (item.startsWith('- ') && item.includes('..')) {
+    if (content.startsWith('- ') && content.includes('..')) {
       errors.push(`Dependabot exclude-paths line ${index + 1} must not contain '..'`)
     }
   }
