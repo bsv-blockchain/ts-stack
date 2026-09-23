@@ -514,7 +514,33 @@ describe('Monitor.runOnce compatibility', () => {
     expect(eventSource.subscribeHeaders).not.toHaveBeenCalled()
     expect(monitor.reorgSubscriptionPromise).toBeUndefined()
     expect(monitor.headersSubscriptionPromise).toBeUndefined()
-    expect(events.filter(event => event.event === 'chaintracksEventsError').length).toBeGreaterThanOrEqual(2)
+    expect(events.filter(event => event.event === 'chaintracksEventsError')).toHaveLength(1)
+  })
+
+  it('records one chaintracksEventsError per outage, not one per scheduler tick', async () => {
+    let online = false
+    const eventSource = {
+      getChain: jest.fn(async () => {
+        if (!online) throw new Error('offline')
+        return 'main'
+      }),
+      subscribeReorgs: jest.fn(async () => 'reorg-1'),
+      subscribeHeaders: jest.fn(async () => 'header-1'),
+      unsubscribe: jest.fn(async () => true)
+    }
+    const { monitor, events } = createMonitorWithEvents(eventSource)
+    const errorCount = (): number => events.filter(event => event.event === 'chaintracksEventsError').length
+
+    await monitor.runOnce()
+    await monitor.runOnce()
+    await monitor.runOnce()
+    expect(eventSource.getChain).toHaveBeenCalledTimes(3)
+    expect(errorCount()).toBe(1)
+
+    online = true
+    await monitor.runOnce()
+    await expect(monitor.headersSubscriptionPromise).resolves.toBe('header-1')
+    expect(errorCount()).toBe(1)
   })
 
   it('never calls getChain or subscribes when the event source declares supportsReorgEvents: false', async () => {

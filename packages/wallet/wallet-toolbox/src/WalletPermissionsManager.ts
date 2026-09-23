@@ -4579,7 +4579,7 @@ export class WalletPermissionsManager implements WalletInterface {
     args: Parameters<WalletInterface['createAction']>[0],
     originalInputDescriptions: Record<number, string>,
     originalOutputDescriptions: Record<number, string>,
-    resolvedOutputSatoshis: Map<number, number> = new Map()
+    resolvedOutputSatoshis: Map<number, number>
   ): { netSpent: number; lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> } {
     const lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> = []
 

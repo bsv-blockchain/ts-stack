@@ -429,10 +429,10 @@ export class Monitor {
    * otherwise misconfigured event source must not stop the scheduler that
    * runs every other maintenance task.
    *
-   * A failure here is logged and swallowed; the `ready` getter's own
-   * `.catch` resets `_readyInit` first, so the *next* call to this method
-   * (i.e. the next scheduler tick) retries `_init()` from scratch. This
-   * method itself never throws. A genuine configured-chain mismatch (see
+   * A failure here is swallowed and logged once per outage; the `ready`
+   * getter's own `.catch` resets `_readyInit` first, so the *next* call to
+   * this method (i.e. the next scheduler tick) retries `_init()` from
+   * scratch. A genuine configured-chain mismatch (see
    * `_init`) still fails `ready` every time it is retried, so the event
    * source never transitions to a subscribed state on mismatched data —
    * only this outer scheduling loop is decoupled from that failure.
@@ -444,10 +444,17 @@ export class Monitor {
   private async ensureEventSubscriptions(): Promise<void> {
     try {
       await this.ready
+      this._chaintracksEventsErrorLogged = false
     } catch (error_: unknown) {
+      // Record the first failure of each outage only: the scheduler retries
+      // every tick, and a persistent failure must not grow monitor events.
+      if (this._chaintracksEventsErrorLogged) return
+      this._chaintracksEventsErrorLogged = true
       await this.logChaintracksEventsError(error_)
     }
   }
+
+  private _chaintracksEventsErrorLogged = false
 
   private async logChaintracksEventsError(error_: unknown): Promise<void> {
     const error = WalletError.fromUnknown(error_)

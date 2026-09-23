@@ -381,13 +381,7 @@ class InternalizeActionContext {
     for (const basket of this.basketInsertions) {
       const eo = basket.eo
       if (eo == null) continue
-      // `eo` is cast back to its own union type at this call only: since
-      // `eo` is already narrowed to non-optional `TableOutput` here,
-      // TypeScript's type-guard narrowing (`output is TableOutput`) would
-      // otherwise collapse the false branch below to `never` (the guard's
-      // positive type equals `eo`'s already-narrowed type) and break the
-      // `eo.basketId` access. The cast doesn't change runtime behavior; it
-      // only breaks the reference match CFA uses to propagate narrowing.
+      // Widened so the type guard's false branch does not narrow `eo` to never.
       if (isManagedChangeOutput(eo as TableOutput | undefined)) {
         throw new WERR_INVALID_PARAMETER(
           'outputs',
