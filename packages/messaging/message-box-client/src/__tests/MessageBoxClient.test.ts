@@ -543,6 +543,44 @@ describe('MessageBoxClient', () => {
     ).rejects.toThrow('Message Box send failed with HTTP 500.')
   })
 
+  it('reports a well-formed server failure code but never its free-text description', async () => {
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech',
+      enableLogging: false
+    })
+    await messageBoxClient.init()
+
+    ;(messageBoxClient as any).myIdentityKey =
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
+    const failWith = (body: unknown): void => {
+      jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
+        status: 400,
+        statusText: 'Bad Request',
+        ok: false,
+        json: async () => body,
+        headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY })
+      } as unknown as Response)
+    }
+    const send = async (): Promise<unknown> =>
+      await messageBoxClient.sendMessage({
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+        messageBox: 'test_inbox',
+        body: 'Test Message'
+      })
+
+    failWith({ status: 'error', code: 'ERR_DUPLICATE_MESSAGE', description: 'Duplicate message.' })
+    await expect(send()).rejects.toThrow(
+      /^Message Box send failed with HTTP 400 \(ERR_DUPLICATE_MESSAGE\)\.$/
+    )
+
+    for (const code of ['duplicate', 'ERR_', `ERR_${'A'.repeat(65)}`, 'ERR_X\n<b>', 42]) {
+      failWith({ status: 'error', code, description: '<script>untrusted</script>' })
+      await expect(send()).rejects.toThrow(/^Message Box send failed with HTTP 400\.$/)
+    }
+  })
+
   it('throws when every host fails', async () => {
     const client = new MessageBoxClient({
       walletClient: mockWalletClient,

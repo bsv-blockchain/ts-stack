@@ -268,6 +268,19 @@ function exactBoundedText(
   return value
 }
 
+/**
+ * Returns the server's machine-readable failure code (for example
+ * `ERR_DUPLICATE_MESSAGE`) when it has the documented shape. Free-text server
+ * descriptions are never copied into client errors.
+ */
+function messageBoxErrorCode(response: unknown): string | undefined {
+  if (typeof response !== 'object' || response === null || !Object.hasOwn(response, 'code')) {
+    return undefined
+  }
+  const code: unknown = (response as { code: unknown }).code
+  return typeof code === 'string' && /^ERR_[A-Z0-9_]{1,64}$/.test(code) ? code : undefined
+}
+
 function optionalMaximumPayment(value: unknown, name: string): number | undefined {
   if (value === undefined) return undefined
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
@@ -1938,7 +1951,10 @@ export class MessageBoxClient {
       const parsedResponse = await response.json()
 
       if (!response.ok) {
-        throw new Error(`Message Box send failed with HTTP ${response.status}.`)
+        const code = messageBoxErrorCode(parsedResponse)
+        throw new Error(
+          `Message Box send failed with HTTP ${response.status}${code == null ? '' : ` (${code})`}.`
+        )
       }
 
       const validatedResponse = validateSendResponse(parsedResponse, snapshot.recipient, messageId)
