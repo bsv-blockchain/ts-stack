@@ -13,6 +13,7 @@
     "@bsv/air-gap": "workspace:^",
     "@bsv/chirp": "workspace:^",
     "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
