@@ -910,7 +910,8 @@ export class AuthFetch {
   ): Promise<void> {
     // Contexts returned by the released API may already represent a spend.
     // Preserve them without another wallet mutation, but validate their real wire bytes.
-    if (paymentContext.preparedRequest === undefined) {
+    const legacy = paymentContext.preparedRequest === undefined
+    if (legacy) {
       const beef = Beef.fromBinaryStrict(UtilsToArray(paymentContext.transactionBase64, 'base64'))
       if (beef.atomicTxid == null)
         throw new PaymentTransportError(
@@ -927,6 +928,8 @@ export class AuthFetch {
             ? undefined
             : new Uint8Array(await this.normalizeBodyToNumberArray(config.body))
       }
+    } else if (transports.has(paymentContext.preparedRequest.transport)) return
+    try {
       paymentContext.preparedRequest = preparePaymentTransport(
         JSON.stringify({
           derivationPrefix: paymentContext.derivationPrefix,
@@ -937,26 +940,13 @@ export class AuthFetch {
         transports,
         resolvePaymentTransportLimits(config.paymentTransport)
       )
-    }
-    if (!transports.has(paymentContext.preparedRequest.transport)) {
-      try {
-        paymentContext.preparedRequest = preparePaymentTransport(
-          JSON.stringify({
-            derivationPrefix: paymentContext.derivationPrefix,
-            derivationSuffix: paymentContext.derivationSuffix,
-            transaction: paymentContext.transactionBase64
-          }),
-          paymentContext.originalRequest,
-          transports,
-          resolvePaymentTransportLimits(config.paymentTransport)
-        )
-      } catch {
-        throw new PaymentTransportError(
-          'ERR_PAYMENT_TRANSPORT',
-          'The authenticated server no longer supports a deliverable transport for this existing payment.',
-          { txid: paymentContext.txid, state: paymentContext.state }
-        )
-      }
+    } catch (error) {
+      if (legacy) throw error
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_TRANSPORT',
+        'The authenticated server no longer supports a deliverable transport for this existing payment.',
+        { txid: paymentContext.txid, state: paymentContext.state }
+      )
     }
   }
 
@@ -1069,6 +1059,7 @@ export class AuthFetch {
     const rawCreated = await this.wallet.createAction(createArgs, this.originator)
     let txid: string | undefined
     let reference: string | undefined
+    let preparationError: unknown
     try {
       // A malformed result can still identify a prepared reservation. Read only
       // a canonical own data field, never an accessor supplied by an adapter.
@@ -1122,13 +1113,17 @@ export class AuthFetch {
         preparedRequest
       }
     } catch (error) {
-      const aborted = await this.abortPreparedPayment(txid ?? reference)
-      throw new PaymentTransportError(
-        error instanceof PaymentTransportError ? error.code : 'ERR_PAYMENT_TRANSPORT',
-        'Payment preparation could not produce a deliverable request; no broadcast was requested.',
-        txid == null ? undefined : { txid, state: 'prepared', aborted }
-      )
+      preparationError = error
     }
+    // A failed preparation may still own a reservation. Cleanup precedes the refusal.
+    const aborted = await this.abortPreparedPayment(txid ?? reference)
+    throw new PaymentTransportError(
+      preparationError instanceof PaymentTransportError
+        ? preparationError.code
+        : 'ERR_PAYMENT_TRANSPORT',
+      'Payment preparation could not produce a deliverable request; no broadcast was requested.',
+      txid == null ? undefined : { txid, state: 'prepared', aborted }
+    )
   }
 
   private async abortPreparedPayment(reference: string | undefined): Promise<boolean> {
@@ -1430,13 +1425,10 @@ export class AuthFetch {
       return UtilsToArray(body, 'utf8')
     }
 
-    // 3. ArrayBuffer / TypedArrays
-    if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-      const typedArray =
-        body instanceof ArrayBuffer
-          ? new Uint8Array(body)
-          : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
-      return Array.from(typedArray)
+    // 3. ArrayBuffer / TypedArrays: preserve the exact view's byte offset and length.
+    if (body instanceof ArrayBuffer) body = new Uint8Array(body)
+    if (ArrayBuffer.isView(body)) {
+      return Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength))
     }
 
     // 4. Blob
@@ -1447,7 +1439,16 @@ export class AuthFetch {
 
     // 5. FormData
     if (typeof FormData !== 'undefined' && body instanceof FormData) {
-      return normalizeFormData(body)
+      const entries: [string, string][] = []
+      body.forEach((value, key) => {
+        if (typeof value !== 'string')
+          throw new PaymentTransportError(
+            'ERR_PAYMENT_TRANSPORT',
+            'Serialize file-bearing FormData to owned bytes with its Content-Type before authenticated fetch.'
+          )
+        entries.push([key, value])
+      })
+      return UtilsToArray(new URLSearchParams(entries).toString(), 'utf8')
     }
 
     // 6. URLSearchParams
@@ -1530,19 +1531,6 @@ function preparedPaymentTxid(
     )
   }
   return atomicTxid
-}
-
-function normalizeFormData(body: FormData): number[] {
-  const entries: [string, string][] = []
-  body.forEach((value, key) => {
-    if (typeof value !== 'string')
-      throw new PaymentTransportError(
-        'ERR_PAYMENT_TRANSPORT',
-        'Serialize file-bearing FormData to owned bytes with its Content-Type before authenticated fetch.'
-      )
-    entries.push([key, value])
-  })
-  return UtilsToArray(new URLSearchParams(entries).toString(), 'utf8')
 }
 
 class StrictResponseReader {

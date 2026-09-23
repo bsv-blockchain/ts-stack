@@ -116,7 +116,7 @@ export function parseMultipartPayment(
   maxPaymentBytes: number
 ): ParsedMultipartPayment {
   if (!(bytes instanceof Uint8Array)) malformed()
-  if (bytes.length > maxBodyBytes)
+  if (bytes.byteLength > maxBodyBytes)
     throw new PaymentTransportError('ERR_PAYMENT_SIZE', 'Multipart payment body exceeds its limit.')
   const boundary = paymentBoundary(contentType)
   const source = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)

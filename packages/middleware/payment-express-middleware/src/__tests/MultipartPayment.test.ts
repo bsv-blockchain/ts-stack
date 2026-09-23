@@ -131,6 +131,12 @@ describe('authenticated BRC-118 extraction', () => {
     expect(() => parse(bytes)).toThrow('Malformed multipart payment')
   })
 
+  it('measures the raw byte span independently of a shadowed array length', () => {
+    const bytes = new Uint8Array(wire(part('x-bsv-payment', payment)))
+    Object.defineProperty(bytes, 'length', { value: 0 })
+    expect(() => parseMultipartPayment(bytes, type, bytes.byteLength - 1, 1000)).toThrow('limit')
+  })
+
   it('bounds body, payment, and part headers', () => {
     const bytes = wire(part('x-bsv-payment', payment))
     expect(() => parseMultipartPayment(bytes, type, bytes.length - 1, 1000)).toThrow('limit')

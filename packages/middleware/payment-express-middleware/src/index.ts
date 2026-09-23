@@ -3,7 +3,7 @@ import { decodePaymentPayload } from '@bsv/sdk/auth/utils/decodePaymentPayload'
 import { parseMultipartPayment, MissingMultipartPayment } from './multipartPayment.js'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import { Beef, createNonce, PublicKey, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
-import type { RequestHandler, Response } from 'express'
+import type { NextFunction, RequestHandler, Response } from 'express'
 import type {
   BSVPayment,
   PaymentMiddlewareOptions,
@@ -280,6 +280,81 @@ function extractPaymentInput(
   }
 }
 
+async function settlePayment(
+  paymentRequest: PaymentRequest,
+  res: Response,
+  next: NextFunction,
+  parsed: ParsedPayment,
+  identityKey: string,
+  options: Required<Pick<PaymentMiddlewareOptions, 'wallet' | 'replayStore'>> &
+    Pick<PaymentMiddlewareOptions, 'logger'>
+): Promise<void> {
+  const { wallet, replayStore, logger } = options
+  try {
+    const result: unknown = await wallet.internalizeAction({
+      tx: parsed.transaction,
+      outputs: [
+        {
+          paymentRemittance: {
+            derivationPrefix: parsed.payment.derivationPrefix,
+            derivationSuffix: parsed.payment.derivationSuffix,
+            senderIdentityKey: identityKey
+          },
+          outputIndex: 0,
+          protocol: 'wallet payment'
+        }
+      ],
+      description: 'Payment for request'
+    })
+
+    if (!isNewlyAcceptedInternalization(result)) {
+      sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was not newly accepted.')
+      return
+    }
+
+    // The wallet is the authority that validates the remittance and records
+    // whether it was newly accepted. Claim only after that validation so an
+    // attacker cannot poison a transaction ID by pairing a public BEEF with
+    // invalid derivation material. A buggy wallet that accepts a duplicate is
+    // still contained by the independent atomic replay store.
+    let claimed: boolean
+    try {
+      const claimResult: unknown = await replayStore.claim(parsed.transactionId)
+      if (typeof claimResult !== 'boolean') {
+        throw new TypeError('The replay store returned an invalid claim result.')
+      }
+      claimed = claimResult
+    } catch (error) {
+      emitLog(logger, 'error', 'Payment replay claim failed.', safeErrorContext(error))
+      sendError(
+        res,
+        503,
+        'ERR_PAYMENT_UNAVAILABLE',
+        'Payment processing is temporarily unavailable.'
+      )
+      return
+    }
+    if (!claimed) {
+      sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
+      return
+    }
+
+    paymentRequest.payment = {
+      satoshisPaid: parsed.satoshis,
+      accepted: true,
+      tx: toBase64(parsed.transaction),
+      txid: parsed.transactionId
+    }
+    res.set({
+      'x-bsv-payment-satoshis-paid': String(parsed.satoshis)
+    })
+    next()
+  } catch (error) {
+    emitLog(logger, 'warn', 'Payment internalization failed.', safeErrorContext(error))
+    sendError(res, 400, 'ERR_PAYMENT_FAILED', 'The payment could not be accepted.')
+  }
+}
+
 /**
  * Creates middleware that enforces a BRC-29 wallet payment after BRC-103 auth.
  */
@@ -421,68 +496,10 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    try {
-      const result: unknown = await wallet.internalizeAction({
-        tx: parsed.transaction,
-        outputs: [
-          {
-            paymentRemittance: {
-              derivationPrefix: payment.derivationPrefix,
-              derivationSuffix: payment.derivationSuffix,
-              senderIdentityKey: identityKey
-            },
-            outputIndex: 0,
-            protocol: 'wallet payment'
-          }
-        ],
-        description: 'Payment for request'
-      })
-
-      if (!isNewlyAcceptedInternalization(result)) {
-        sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was not newly accepted.')
-        return
-      }
-
-      // The wallet is the authority that validates the remittance and records
-      // whether it was newly accepted. Claim only after that validation so an
-      // attacker cannot poison a transaction ID by pairing a public BEEF with
-      // invalid derivation material. A buggy wallet that accepts a duplicate is
-      // still contained by the independent atomic replay store.
-      let claimed: boolean
-      try {
-        const claimResult: unknown = await replayStore.claim(parsed.transactionId)
-        if (typeof claimResult !== 'boolean') {
-          throw new TypeError('The replay store returned an invalid claim result.')
-        }
-        claimed = claimResult
-      } catch (error) {
-        emitLog(logger, 'error', 'Payment replay claim failed.', safeErrorContext(error))
-        sendError(
-          res,
-          503,
-          'ERR_PAYMENT_UNAVAILABLE',
-          'Payment processing is temporarily unavailable.'
-        )
-        return
-      }
-      if (!claimed) {
-        sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
-        return
-      }
-
-      paymentRequest.payment = {
-        satoshisPaid: parsed.satoshis,
-        accepted: true,
-        tx: toBase64(parsed.transaction),
-        txid: parsed.transactionId
-      }
-      res.set({
-        'x-bsv-payment-satoshis-paid': String(parsed.satoshis)
-      })
-      next()
-    } catch (error) {
-      emitLog(logger, 'warn', 'Payment internalization failed.', safeErrorContext(error))
-      sendError(res, 400, 'ERR_PAYMENT_FAILED', 'The payment could not be accepted.')
-    }
+    await settlePayment(paymentRequest, res, next, parsed, identityKey, {
+      wallet,
+      replayStore,
+      logger
+    })
   }
 }
