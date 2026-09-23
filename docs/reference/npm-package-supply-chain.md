@@ -76,7 +76,10 @@ build or lifecycle code, and:
 No build, pack, code-generation, or version-rewrite step may run between
 attestation and publication. Published npm versions are immutable. A partial
 retry skips an already-published version only when its registry digest exactly
-matches the staged artifact.
+matches the staged artifact. Registry reconciliation polls for up to ten minutes
+per newly published package; the publication job has a 90-minute overall bound.
+If propagation exceeds that bound, inspect registry bytes before resuming the
+same candidate. A timeout does not prove that npm rejected publication.
 
 The machine-readable contract is
 `governance/npm-package-supply-chain.json`. Repository health tests ratchet the

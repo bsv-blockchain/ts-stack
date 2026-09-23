@@ -7,7 +7,7 @@
  * dependency reference (dependencies, devDependencies, peerDependencies)
  * so that they point at the current workspace version.
  *
- * Also walks ./infra/* package.json files (which are NOT in the pnpm
+ * Also walks ./infra/* and the nested UHRP notifier package.json files (NOT in the pnpm
  * workspace) and rewrites their @bsv/* dependency ranges to track the
  * latest workspace versions. When an infra component's deps change, its
  * own version is patch-bumped so the infra-release workflow rebuilds
@@ -124,7 +124,7 @@ console.log(
   `\n${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${totalChanges} cross-package references`
 )
 
-// --- 3. Sync ./infra/* (not part of pnpm workspace) ---
+// --- 3. Sync standalone infrastructure (not part of pnpm workspace) ---
 //
 // Infra components consume workspace packages from the npm registry, not via
 // `workspace:*`. After a publish, their `^X.Y.Z` ranges go stale relative to
@@ -180,9 +180,13 @@ if (!WORKSPACE_ONLY) {
       typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
     if (!missing) throw error
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const componentDir = join(INFRA_DIR, entry.name)
+  // Only owned service roots and the separately deployed notifier participate.
+  // Never recurse into node_modules or arbitrary nested examples.
+  const componentDirs = entries
+    .filter(entry => entry.isDirectory())
+    .map(entry => join(INFRA_DIR, entry.name))
+  componentDirs.push(join(INFRA_DIR, 'uhrp-server-cloud-bucket', 'notifier'))
+  for (const componentDir of componentDirs) {
     const jsonPath = join(componentDir, 'package.json')
     const raw = readUtf8FileIfExists(jsonPath)
     if (raw === undefined) continue

@@ -28,7 +28,9 @@ const EXPECTED_WORKFLOW = '.github/workflows/release.yaml'
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/npm-package-supply-chain.json')
 const COMMAND_TIMEOUT_MS = 10 * 60_000
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
-const REGISTRY_RETRY_ATTEMPTS = 20
+// npm can acknowledge publication before its public metadata exposes the version.
+// Keep reconciliation bounded while allowing the observed propagation delay.
+const REGISTRY_RETRY_ATTEMPTS = 41
 const REGISTRY_RETRY_DELAY_MS = 15_000
 const URL_NAMESPACE_UUID = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
 const PACKED_MANIFEST_DEPENDENCY_FIELDS = [

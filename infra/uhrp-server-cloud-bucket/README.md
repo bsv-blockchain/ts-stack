@@ -254,7 +254,12 @@ must:
 
 4.  Deploy/replace the Cloud Run service in the bucket’s region.
 
-5.  Deploy the notifier Cloud Run service.
+5.  Deploy the notifier Cloud Run function on Node.js 24, matching its package
+    runtime contract. The release sync includes its separate manifest and npm
+    lockfile, so deploy the reviewed notifier source with the synchronized SDK
+    floor. Its advertisement requests use `Authorization: Bearer <ADMIN_TOKEN>`;
+    sending the token only in a JSON body is unsupported. Validate the notifier
+    against the staging server before promoting the same source to production.
 
 Source pushes do not implicitly authorize a Cloud Run deployment. Promotion is
 an explicit operator-owned action against a verified image digest.

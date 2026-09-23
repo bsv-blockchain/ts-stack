@@ -182,7 +182,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-24.04
     environment: npm-production
-    timeout-minutes: 30
+    timeout-minutes: 90
     permissions:
       attestations: write
       contents: read
@@ -320,7 +320,7 @@ jobs:
 
           # Infra components are not pnpm workspaces. Keep their npm locks
           # peer-aware so Dockerfile npm ci remains reproducible.
-          for directory in infra/*/; do
+          for directory in infra/*/ infra/uhrp-server-cloud-bucket/notifier/; do
             [ -f "$directory/package.json" ] || continue
             [ -f "$directory/package-lock.json" ] || continue
             echo "Refreshing lockfile in $directory"

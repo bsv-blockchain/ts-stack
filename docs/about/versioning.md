@@ -47,7 +47,8 @@ Then inspect its first-party dependents:
 3. Breaking first-party changes require one coordinated migration across all
    affected dependents before publication.
 4. Infrastructure manifests and locks are reconciled after a successful
-   cascade release; they are deployed separately as immutable images.
+   cascade release, including the separately deployed UHRP notifier function.
+   Service images and the notifier function are promoted separately.
 
 Workspace runtime and development references use `workspace:^`; public peer
 dependencies use reviewed public ranges. `scripts/check-versions.mjs` rejects

@@ -9,7 +9,7 @@ echo "Bucket $GCP_BUCKET_NAME is in region: $BUCKET_REGION"
 
 gcloud functions deploy stagingNotifier \
     --gen2 \
-    --runtime=nodejs22 \
+    --runtime=nodejs24 \
     --env-vars-file=staging.functions.env.yaml \
     --entry-point=notifier \
     --timeout=540 \
