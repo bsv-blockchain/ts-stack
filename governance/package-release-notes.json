@@ -166,10 +166,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.0",
-      "releaseType": "patch",
-      "summary": "Fixes portable AES-GCM decryption of valid authenticated empty plaintext, including empty encrypted wallet fields. Preserves historical encryption bytes and full tag verification, and adds native/portable compatibility and negative tests for all supported AES key sizes, IV lengths, block boundaries and SymmetricKey envelopes. SDK 2.8.1 is a source candidate until protected npm publication.",
-      "migration": "None. Public APIs, ciphertext bytes and stored account data are unchanged. Upgrade browser/mobile consumers to SDK 2.8.1 after publication to decrypt valid empty fields. Missing, truncated or altered authentication tags and wrong keys or IVs still fail closed."
+      "publishedVersion": "2.8.1",
+      "releaseType": "none",
+      "summary": "Fixes portable AES-GCM decryption of valid authenticated empty plaintext, including empty encrypted wallet fields. Preserves historical encryption bytes and full tag verification, and adds native/portable compatibility and negative tests for all supported AES key sizes, IV lengths, block boundaries and SymmetricKey envelopes. SDK 2.8.1 was published through the protected single-package release workflow with verified registry integrity and provenance.",
+      "migration": "None. Public APIs, ciphertext bytes and stored account data are unchanged. Upgrade browser/mobile consumers to SDK 2.8.1 to decrypt valid empty fields. Missing, truncated or altered authentication tags and wrong keys or IVs still fail closed."
     },
     {
       "name": "@bsv/simple",

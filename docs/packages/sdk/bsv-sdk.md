@@ -15,11 +15,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 2.8.1 source candidate repairs portable decryption of authenticated empty
+Version 2.8.1 repairs portable decryption of authenticated empty
 AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
 for empty encrypted fields. Encryption bytes and the full authentication tag
-remain unchanged. No ciphertext, account-data or API migration is required;
-publication remains a separate protected npm workflow.
+remain unchanged. No ciphertext, account-data or API migration is required.
+The patch is published through the protected [SDK release](https://github.com/bsv-blockchain/ts-stack/actions/runs/35888747366) from commit `e09515508bf5bf22d7b56085170debc2b0803b2a`, with matching npm integrity and verified provenance.
 
 Version 2.8.0 corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
