@@ -214,6 +214,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.1 candidate — portable authenticated empty fields
+
+- Fix portable AES-GCM decryption of valid authenticated empty plaintext. This
+  restores native/browser/mobile interoperability for empty encrypted fields.
+- Preserve historical encryption bytes and full authentication-tag validation;
+  add independent native-oracle tests across AES key sizes, IV lengths and block
+  boundaries, plus tampering and forced-portable SymmetricKey coverage.
+- Migration: none. Existing accounts, ciphertexts and public APIs are unchanged.
+  Publication remains subject to the protected npm workflow.
+
 ### 2.8.0 candidate — authenticated boundaries and additive secure TOTP APIs
 
 - Correct empty authenticated HTTP response preimages to use the BRC-104 `-1`

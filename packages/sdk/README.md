@@ -16,7 +16,7 @@ emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
 and JSON transports preserve identical transaction bytes. The same boundary
 protects overlay lookup queries and JSON BEEF responses.
 
-The unpublished 2.8.0 candidate verifies bodyless authenticated HTTP responses
+Version 2.8.0 verifies bodyless authenticated HTTP responses
 using the BRC-104 `-1` body-length sentinel. Conforming 204 and empty error
 responses now verify; non-empty response encoding is unchanged. Servers that
 sign a zero body length for an empty response must adopt the specified sentinel.
@@ -44,6 +44,13 @@ path measures 742,126 raw bytes in the SDK Vite fixture and 555,548 raw bytes
 in UMD; their reviewed ceilings are 742,500 and 556,000 bytes respectively.
 The combined sync and security candidate measures 560,560 raw bytes with esbuild;
 its reviewed raw ceiling is 561,000 bytes. Compression ceilings are unchanged.
+
+The 2.8.1 candidate fixes portable AES-GCM decryption of authenticated empty
+plaintext, including empty encrypted wallet fields. Browser/mobile runtimes and
+Node now accept the same valid envelopes. Encryption bytes and full 16-byte tag
+verification are unchanged; invalid tags, keys and IVs remain rejected. No API,
+wire, account-data or ciphertext migration is required. This source candidate is
+not published until the protected npm release workflow completes.
 
 ## Table of Contents
 

@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.0'
+version: '2.8.1'
 npm: '@bsv/sdk'
-last_updated: '2026-09-21'
-last_verified: '2026-09-21'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,7 +15,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The current unpublished candidate corrects BUMP offset arithmetic above 32 bits
+The 2.8.1 source candidate repairs portable decryption of authenticated empty
+AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
+for empty encrypted fields. Encryption bytes and the full authentication tag
+remain unchanged. No ciphertext, account-data or API migration is required;
+publication remains a separate protected npm workflow.
+
+Version 2.8.0 corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
 calculation, extraction, combination and trimming use the same exact numeric
 domain; malformed non-integer and unsafe offsets fail explicitly. No consumer
