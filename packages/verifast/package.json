@@ -87,21 +87,21 @@
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@jest/globals": "^30.4.1",
-    "@rspack/cli": "^2.1.7",
-    "@rspack/core": "^2.1.7",
+    "@jest/globals": "^30.5.1",
+    "@rspack/cli": "^2.2.5",
+    "@rspack/core": "^2.2.5",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.9.0",
-    "jest": "^30.4.2",
-    "oxlint": "^1.76.0",
-    "puppeteer-core": "^25.4.0",
+    "fast-check": "^4.10.1",
+    "jest": "^30.5.1",
+    "oxlint": "^1.83.0",
+    "puppeteer-core": "^25.11.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.13",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vite": "^8.1.5"
+    "vite": "^8.3.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.8"

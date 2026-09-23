@@ -77,14 +77,14 @@
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services#readme",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@jest/globals": "^30.4.1",
+    "@jest/globals": "^30.5.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.9.0",
-    "jest": "^30.4.2",
+    "fast-check": "^4.10.1",
+    "jest": "^30.5.1",
     "mongodb-memory-server": "^11.2.0",
-    "oxlint": "^1.76.0",
+    "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
@@ -93,7 +93,7 @@
   "dependencies": {
     "@bsv/overlay": "workspace:^",
     "@bsv/wallet-toolbox-client": "workspace:^",
-    "mongodb": "^7.5.0"
+    "mongodb": "^7.6.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.4.0"
