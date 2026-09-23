@@ -60,10 +60,10 @@ export class SyncPageBudget {
   committed(chunk: SyncChunk, elapsedMs: number, readMs = 0): void {
     if (!Number.isFinite(elapsedMs) || elapsedMs < 0 || !Number.isFinite(readMs) || readMs < 0 || readMs > elapsedMs)
       return
-    const records = Object.values(chunk).reduce<number>(
-      (count, value) => count + (Array.isArray(value) ? value.length : 0),
-      0
-    )
+    let records = 0
+    for (const value of Object.values(chunk)) {
+      if (Array.isArray(value)) records += value.length
+    }
     if (records === 0) return
     const proofs = (chunk.provenTxs?.length ?? 0) > 0
     // Metadata throughput does not predict network-backed proof checks.

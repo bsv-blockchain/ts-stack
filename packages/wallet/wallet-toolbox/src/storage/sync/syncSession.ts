@@ -96,7 +96,7 @@ async function readAndPreparePage(
   const prepareAt = Date.now()
   const apply =
     session.prepare == null
-      ? async () => await session.writer.processSyncChunk(pageArgs, chunk)
+      ? () => session.writer.processSyncChunk(pageArgs, chunk)
       : await session.prepare(pageArgs, chunk)
   const prepareMs = Date.now() - prepareAt
   if (cancelled()) return undefined

@@ -72,12 +72,12 @@ export function paymentTransports(advertisement: string | null): ReadonlySet<str
       'ERR_PAYMENT_TRANSPORT',
       'Payment transport advertisement is too large.'
     )
-  return new Set(
-    advertisement
-      .split(',')
-      .map(value => value.trim())
-      .filter(value => value === 'header' || value === 'multipart')
-  )
+  const transports = new Set<string>()
+  for (const part of advertisement.split(',')) {
+    const value = part.trim()
+    if (value === 'header' || value === 'multipart') transports.add(value)
+  }
+  return transports
 }
 
 /** Keep released non-multipart preimages; bind the exact multipart boundary and parameters. */
@@ -193,11 +193,10 @@ export function preparePaymentTransport(
   } else headers['x-bsv-payment'] = paymentJSON
   if (body !== undefined && body.length > limits.maxBodyBytes)
     throw new PaymentTransportError('ERR_PAYMENT_SIZE', 'Paid request exceeds the body limit.')
-  const headerBytes = Object.entries(headers).reduce(
-    (total, [name, value]) =>
-      total + toArray(name, 'utf8').length + toArray(value, 'utf8').length + 4,
-    4096
-  )
+  let headerBytes = 4096
+  for (const [name, value] of Object.entries(headers)) {
+    headerBytes += toArray(name, 'utf8').length + toArray(value, 'utf8').length + 4
+  }
   if (headerBytes > limits.maxRequestHeaderBytes)
     throw new PaymentTransportError(
       'ERR_PAYMENT_SIZE',
@@ -242,7 +241,8 @@ export function buildMultipartPayment(
     )
   }
   pieces.push(utf8(`\r\n--${boundary}--\r\n`))
-  const length = pieces.reduce((total, piece) => total + piece.length, 0)
+  let length = 0
+  for (const piece of pieces) length += piece.length
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || length > maximumBytes) {
     throw new PaymentTransportError(
       'ERR_PAYMENT_SIZE',

@@ -710,7 +710,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     }))
     // Bound external work and leave foreground storage access available while
     // providers fetch proofs/headers. Every replacement is validated before SQL/IDB.
-    const prepared = await mapProofWork(ptxs, async ptx => await this.prepareReproof(storage, ptx))
+    const prepared = await mapProofWork(ptxs, ptx => this.prepareReproof(storage, ptx))
     const result: sdk.ReproveHeaderResult = {
       log: `  ${label} with ${ptxs.length} impacted transactions\n`,
       updated: [],
@@ -824,8 +824,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
       log += `syncFromReader from ${readerSettings.storageName} to ${writerSettings.storageName}\n`
 
-      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
-        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      const loadRequest = (): Promise<sdk.RequestSyncChunkArgs> =>
+        this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
       const budget = new SyncPageBudget()
       let i = -1
@@ -896,18 +896,17 @@ export class WalletStorageManager implements sdk.WalletStorage {
         )
       }
     }
-    const run = async (commit: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SyncSessionResult> =>
-      await runPullSession(
+    const run = (commit: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SyncSessionResult> =>
+      runPullSession(
         {
           reader,
           writer,
           activeStorage,
           atomicCheckpoint,
           mode: paged ? 'paged' : 'exclusive',
-          loadRequest: async () =>
-            await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey),
+          loadRequest: () => this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey),
           prepare: paged
-            ? async (args, chunk) => await (writer as StorageProvider).prepareSyncChunk(args, chunk)
+            ? (args, chunk) => (writer as StorageProvider).prepareSyncChunk(args, chunk)
             : undefined,
           commit
         },
@@ -915,22 +914,22 @@ export class WalletStorageManager implements sdk.WalletStorage {
       )
     if (paged) {
       return await run(
-        async operation =>
-          await this.withAccess(
-            async () => {
+        operation =>
+          this.withAccess(
+            () => {
               assertCurrent()
-              return await operation()
+              return operation()
             },
             false,
             true
           )
       )
     }
-    return await this.runAsSync(async () => {
+    return await this.runAsSync(() => {
       assertCurrent()
-      return await run(async operation => {
+      return run(operation => {
         assertCurrent()
-        return await operation()
+        return operation()
       })
     })
   }
@@ -958,8 +957,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
 
-      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
-        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      const loadRequest = (): Promise<sdk.RequestSyncChunkArgs> =>
+        this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
       const budget = new SyncPageBudget()
       let i = -1

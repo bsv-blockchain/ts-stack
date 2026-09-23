@@ -30,7 +30,7 @@ export function snapshotSyncPage(
   const snapshot = { ...chunk }
   for (const key of Object.keys(snapshot) as Array<keyof SyncChunk>) {
     const value = snapshot[key]
-    if (Array.isArray(value)) Object.assign(snapshot, { [key]: value.map(record => recordCopy(record)) })
+    if (Array.isArray(value)) Object.assign(snapshot, { [key]: value.map(recordCopy) })
   }
   if (chunk.user != null) snapshot.user = recordCopy(chunk.user)
   return {

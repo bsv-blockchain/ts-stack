@@ -54,6 +54,10 @@ The package publishes:
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
 
+The Hermes probe uses a stable relative input filename and verifies identical
+bytecode from two independent build directories. Source maps and debug data are
+retained; random temporary paths must not affect the unchanged size budgets.
+
 ### Password derivation without WebAssembly
 
 Argon2id password derivation uses `hash-wasm` when WebAssembly is available.
