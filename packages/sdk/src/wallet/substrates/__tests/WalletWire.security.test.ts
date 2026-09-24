@@ -10,6 +10,13 @@ import { MAX_WALLET_WIRE_FRAME_BYTES } from '../WalletWire.js'
 const GENERATOR_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const VALID_SIGNATURE_HEX = '3006020101020101'
 
+// Frozen field layout, independent of the processor under test: success, one
+// action, zero txid, amount, completed/outgoing, "Entry", labels/version/locktime,
+// inputs/outputs. Negative amounts use the historical signed-int64 representation.
+function historyResponse(amount: number[]): number[] {
+  return [0, 1, ...Array(32).fill(0), ...amount, 1, 1, 5, 69, 110, 116, 114, 121, 0, 1, 0, 0, 0]
+}
+
 describe('WalletWire strict binary framing', () => {
   it.each([
     [
@@ -191,27 +198,74 @@ describe('WalletWire strict binary framing', () => {
     expect(result.outputs[0].satoshis).toBe(1)
   })
 
-  it('fails closed rather than changing a negative action-history amount on legacy wire', async () => {
-    const transceiver = new WalletWireTransceiver(
-      new WalletWireProcessor({
-        listActions: async () => ({
-          totalActions: 1,
-          actions: [
-            {
-              txid: '00'.repeat(32),
-              satoshis: -1,
-              status: 'completed',
-              isOutgoing: true,
-              description: 'Outgoing history action',
-              version: 1,
-              lockTime: 0
-            }
-          ]
-        })
-      } as unknown as WalletInterface)
-    )
+  it.each([-21e14, -65536, -222, -1, 0, 253, 65536, 21e14])(
+    'preserves signed action-history amount %s on legacy wire',
+    async satoshis => {
+      const transceiver = new WalletWireTransceiver(
+        new WalletWireProcessor({
+          listActions: async () => ({
+            totalActions: 1,
+            actions: [
+              {
+                txid: '00'.repeat(32),
+                satoshis,
+                status: 'completed',
+                isOutgoing: true,
+                description: 'Outgoing history action',
+                version: 1,
+                lockTime: 0
+              }
+            ]
+          })
+        } as unknown as WalletInterface)
+      )
 
-    await expect(transceiver.listActions({ labels: [] })).rejects.toThrow('listActions satoshis')
+      await expect(transceiver.listActions({ labels: [] })).resolves.toMatchObject({
+        actions: [{ satoshis }]
+      })
+    }
+  )
+
+  it('decodes the published signed history representation without a new wire format', async () => {
+    const wire: WalletWire = {
+      transmitToWallet: async () => historyResponse([255, 34, 255, 255, 255, 255, 255, 255, 255])
+    }
+    await expect(
+      new WalletWireTransceiver(wire).listActions({ labels: [] })
+    ).resolves.toMatchObject({
+      actions: [{ satoshis: -222, isOutgoing: true, status: 'completed' }]
+    })
+  })
+
+  it.each([
+    ['negative outside supply', Utils.Writer.varIntNum(-21e14 - 1)],
+    ['positive outside supply', Utils.Writer.varIntNum(21e14 + 1)],
+    ['unsafe signed integer', [255, 0, 0, 0, 0, 0, 0, 0, 128]],
+    ['noncanonical uint16', [253, 1, 0]],
+    ['noncanonical uint32', [254, 253, 0, 0, 0]],
+    ['noncanonical uint64', [255, 1, 0, 0, 0, 0, 0, 0, 0]]
+  ])('rejects %s action-history amounts', async (_name, amount) => {
+    const wire: WalletWire = { transmitToWallet: async () => historyResponse(amount as number[]) }
+    await expect(new WalletWireTransceiver(wire).listActions({ labels: [] })).rejects.toThrow()
+  })
+
+  it('rejects truncated signed history amounts', async () => {
+    const wire: WalletWire = {
+      transmitToWallet: async () => [0, 1, ...Array(32).fill(0), 255, 255]
+    }
+    await expect(new WalletWireTransceiver(wire).listActions({ labels: [] })).rejects.toThrow(
+      'available data'
+    )
+  })
+
+  it('still rejects negative individual output values in action history', async () => {
+    const prefix = historyResponse([0]).slice(0, -1)
+    const wire: WalletWire = {
+      transmitToWallet: async () => [...prefix, 1, 0, ...Utils.Writer.varIntNum(-1)]
+    }
+    await expect(new WalletWireTransceiver(wire).listActions({ labels: [] })).rejects.toThrow(
+      'number too large'
+    )
   })
 
   it('rejects a direct binary request that bypasses transceiver argument validation', async () => {

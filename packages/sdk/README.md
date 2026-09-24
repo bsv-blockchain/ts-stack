@@ -56,6 +56,9 @@ probe deadline. Explicit substrate `responseTimeout` values remain enforced.
 
 The 2.8.3 candidate preserves the configured BRC100 originator in automatic
 HTTP WalletWire discovery and binds the browser's default JSON `fetch` receiver.
+It also restores negative `listActions` net amounts using their historical signed
+int64 wire bytes, matching existing JSON validation. Counts, lengths and individual
+output values remain unsigned and bounded.
 Applications affected by these client defects can update their bundled SDK
 without changing calls. Wallet upgrades continue to support the existing BRC100
 contract; an ecosystem-wide application migration is not required. No API, wire

@@ -214,12 +214,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.8.3 candidate — HTTP wallet discovery compatibility
+### 2.8.3 candidate — BRC100 discovery and action-history compatibility
 
 - Pass the configured caller originator through automatic discovery probes so
   HTTP WalletWire keeps its existing caller binding without rejecting discovery.
 - Bind the default HTTP JSON fetch receiver for native browser implementations;
   preserve supplied HTTP clients, discovery ordering, deadlines and validation.
+- Restore signed `listActions` net amounts with the existing int64 wire encoding,
+  matching established SDK behavior and JSON validation. Reject out-of-range,
+  unsafe, noncanonical and truncated values without relaxing counts, lengths or
+  individual output values.
 - No BRC100 API, wire or account-data migration. Applications affected by these
   client defects can update the SDK without changing their calls; wallet releases
   do not require every application to upgrade in coordination.

@@ -17,10 +17,22 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
+It restores signed `listActions` net amounts with the historical wire encoding,
+matching JSON validation; count, length and individual output bounds stay intact.
 Apps affected by these client defects can update the SDK without changing calls.
 Wallets retain the existing BRC100 contract; an ecosystem-wide application
 migration is not required. The candidate is not published until the protected
 release workflow completes.
+
+The action-history compatibility regression affects signed `listActions` values
+in the 2.8.x binary processor and client. Updating a wallet repairs responses for
+older compatible clients; an application already bundling the affected 2.8.x
+binary client also needs the SDK patch. No call or persisted-data change is
+needed. Synthetic cross-version checks cover SDK 2.4.0, 2.5.0, 2.7.1, 2.8.1 and
+2.8.2 at eight signed/unsigned boundaries: all 40 candidate cases pass, all 32
+previously valid cases retain exact response bytes, and the eight known negative
+2.8.1/2.8.2 failures are recorded separately. These checks are bounded fixture
+evidence, not a claim that every ecosystem application has been tested.
 
 Version 2.8.1 repairs portable decryption of authenticated empty
 AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
