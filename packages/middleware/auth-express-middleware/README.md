@@ -28,6 +28,8 @@ values with BRC-104's `-1` body-length sentinel, matching SDK AuthFetch 2.9.0.
 This includes `express.raw({ type: 'application/octet-stream' })` mounted before
 authentication without `captureRawBody`: Express may expose an empty Buffer even
 when HTTP carries no body. Nonempty byte bodies keep their existing preimages.
+Typed-array framing uses the same copied bytes for the length prefix and payload,
+so a shadowed view-length property cannot produce an inconsistent frame.
 For empty binary requests, upgrade the SDK client and auth receiver together;
 older clients that sign length `0` or receivers that reconstruct length `0`
 require the paired correction. No application payload or persisted-data migration

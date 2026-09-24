@@ -186,9 +186,10 @@ export function writeBodyToWriter(
   }
 
   if (body instanceof Uint8Array) {
-    writer.writeVarIntNum(body.length === 0 ? -1 : body.length)
-    writer.write(Array.from(body))
-    debugLog('[writeBodyToWriter] Body recognized as Uint8Array', { length: body.length })
+    const bodyAsArray = Array.from(body)
+    writer.writeVarIntNum(bodyAsArray.length === 0 ? -1 : bodyAsArray.length)
+    writer.write(bodyAsArray)
+    debugLog('[writeBodyToWriter] Body recognized as Uint8Array', { length: bodyAsArray.length })
     return
   }
 
