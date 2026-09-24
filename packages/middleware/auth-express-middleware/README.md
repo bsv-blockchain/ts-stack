@@ -15,11 +15,23 @@ Set `captureRawBody: true` and install this middleware **before body parsers**
 when composing BRC-118 payments. It collects bounded raw bytes, authenticates the
 whole body and exact multipart Content-Type (including boundary), then exposes
 `req.rawBody` and the verified `req.auth.supportsMultipart` marker. Existing
-non-multipart signature preimages and the default parsed-body integration remain
+nonempty non-multipart signature preimages and the default parsed-body integration remain
 compatible. Pair with payment middleware `enableMultipart: true`; raw auth alone
 does not advertise payment support. Collection enforces request size, aggregate
 memory, pending-request and timeout limits before authentication. See the
 [BRC-118 guide](../../../docs/guides/brc118-payments.md) for limits, CORS and migration.
+
+## Empty binary request bodies
+
+Auth middleware 2.3.0 signs zero-length dense byte arrays and `Uint8Array`/`Buffer`
+values with BRC-104's `-1` body-length sentinel, matching SDK AuthFetch 2.9.0.
+This includes `express.raw({ type: 'application/octet-stream' })` mounted before
+authentication without `captureRawBody`: Express may expose an empty Buffer even
+when HTTP carries no body. Nonempty byte bodies keep their existing preimages.
+For empty binary requests, upgrade the SDK client and auth receiver together;
+older clients that sign length `0` or receivers that reconstruct length `0`
+require the paired correction. No application payload or persisted-data migration
+is required.
 
 ## Requirements
 

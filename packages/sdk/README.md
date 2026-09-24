@@ -41,7 +41,8 @@ same payment with `sendWith`. The wallet must support prepare/submit and
 fail before broadcast; uncertain submission or delivery requires reconciliation
 instead of another automatic spend. See the [BRC-118 guide](../../docs/guides/brc118-payments.md)
 for receiver-first rollout, limits, cancellation, raw-byte payloads and typed
-`PaymentTransportError` outcomes. Non-multipart authentication remains compatible.
+`PaymentTransportError` outcomes. Nonempty non-multipart authentication remains compatible; empty byte bodies use
+the BRC-104 `-1` sentinel and require the matching auth middleware 2.3.0 receiver.
 
 BRC-29 receipt derives the recipient's own child key (`forSelf: true`). Independent
 sender/recipient wallet tests protect this distinction; the payer's sibling

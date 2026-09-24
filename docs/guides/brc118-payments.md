@@ -75,7 +75,14 @@ fit the receiver's bounded multipart profile (at most 128 parts, ASCII part
 headers); applications needing a broader upload format should use a separate
 upload route and pay for its resulting resource.
 
-Existing non-multipart signature preimages retain their released normalization.
+Existing nonempty non-multipart signature preimages retain their released normalization.
+Empty byte requests now consistently use BRC-104's `-1` sentinel in AuthFetch
+and auth middleware, including the existing `express.raw` integration without
+raw capture. SDK clients and auth receivers that previously signed/reconstructed
+length `0` for empty byte arrays must adopt SDK 2.9.0 and auth middleware 2.3.0
+together for those requests. This correction does not change nonempty bodies or
+multipart payload-part bytes; an empty multipart payload part remains distinct
+from a missing part.
 Multipart authenticates the exact Content-Type value. There is no second,
 weaker verification attempt with the boundary removed.
 

@@ -177,14 +177,16 @@ export function writeBodyToWriter(
 
   const byteArray = copyDenseByteArray(body)
   if (byteArray !== undefined) {
-    writer.writeVarIntNum(byteArray.length)
+    // HTTP cannot distinguish an absent body from zero transmitted bytes.
+    // Match AuthFetch's BRC-104 empty-body sentinel after Express raw parsing.
+    writer.writeVarIntNum(byteArray.length === 0 ? -1 : byteArray.length)
     writer.write(byteArray)
     debugLog('[writeBodyToWriter] Body recognized as number[]', { length: byteArray.length })
     return
   }
 
   if (body instanceof Uint8Array) {
-    writer.writeVarIntNum(body.length)
+    writer.writeVarIntNum(body.length === 0 ? -1 : body.length)
     writer.write(Array.from(body))
     debugLog('[writeBodyToWriter] Body recognized as Uint8Array', { length: body.length })
     return
