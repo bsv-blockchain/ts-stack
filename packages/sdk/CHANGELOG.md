@@ -214,6 +214,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.4 candidate — established action-history display metadata
+
+- Accept empty historical action, input and output descriptions, and empty
+  unassigned basket names, without changing stored values or BRC100 wire bytes.
+- Keep nonempty description bounds, UTF-8 ceilings, request validation,
+  requested scripts and labels, and transaction/value checks unchanged.
+- Add direct, HTTP JSON, binary and shared conformance regression coverage.
+- No application API or account-data migration is required. Publication remains
+  a separate protected workflow action.
+
 ### 2.8.3 candidate — BRC100 discovery and action-history compatibility
 
 - Pass the configured caller originator through automatic discovery probes so

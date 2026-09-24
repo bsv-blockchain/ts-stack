@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.3",
-      "releaseType": "none",
-      "summary": "Preserves the configured BRC100 caller originator during automatic wallet discovery, so the HTTP WalletWire probe satisfies the existing transport caller binding. Binds the default HTTP JSON fetch receiver for browsers while retaining custom HTTP clients. Keeps transport preference, bounded discovery, operation timeout behavior, validation and origin checks unchanged. Restores signed listActions net amounts using their historical int64 wire encoding, matching existing JSON validation, while retaining canonical unsigned counts/lengths and nonnegative individual output values.",
-      "migration": "No application API, wire, account-data or wallet protocol migration is required. Applications affected by explicit-originator HTTP discovery or the browser JSON fallback can update their bundled SDK to 2.8.3 without changing calls. Wallets and affected 2.8.x binary clients should include this patch to restore signed action history. Existing older clients retain their original calls and wire bytes. This repairs SDK client and wire compatibility defects; wallet upgrades must continue supporting existing applications and do not require an ecosystem-wide SDK migration. Version 2.8.3 was published by the protected SDK-only release workflow with verified registry integrity and provenance."
+      "releaseType": "patch",
+      "summary": "Restores BRC100 listActions compatibility with established wallet histories whose generated change, imported actions or unassigned outputs have empty display descriptions or basket names. Keeps nonempty description bounds, UTF-8 byte ceilings, own-data validation, requested scripts and labels, signed action amounts, nonnegative individual values, and creation-request validation unchanged.",
+      "migration": "No API, wire, wallet-data or ecosystem-wide application migration is required. Applications affected by history rejection in the hardened 2.8.x SDK can update to 2.8.4 without changing their BRC100 calls. Existing wallets may continue returning their original stored metadata, including empty strings; do not fabricate descriptions or rewrite historical records. Source 2.8.4 remains a candidate until the protected SDK-only npm workflow publishes and verifies it."
     },
     {
       "name": "@bsv/simple",

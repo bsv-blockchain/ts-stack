@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-23",
+  "generated_at": "2026-09-24",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
     "total_files": 77,
-    "total_vectors": 6699,
+    "total_vectors": 6700,
     "fully_required_files": 58,
     "files_with_intended": 17,
     "files_with_mixed_status": 15,
     "vectors_by_status": {
-      "required": 6495,
+      "required": 6496,
       "intended": 204,
       "skipped": 7
     },
@@ -20,7 +20,7 @@
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5116,
       "intended_parity_work": 24,
-      "wallet_stateful_harness_required": 190
+      "wallet_stateful_harness_required": 191
     }
   },
   "files": [
@@ -793,10 +793,10 @@
     {
       "path": "wallet/brc100/listactions.json",
       "id": "wallet.brc100.listactions",
-      "total_vectors": 16,
+      "total_vectors": 17,
       "file_level_parity": "required",
       "effective_status": "mixed",
-      "required_count": 15,
+      "required_count": 16,
       "intended_count": 1,
       "skipped_count": 0,
       "reason_category": "wallet_stateful_harness_required",

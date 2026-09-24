@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.3'
+version: '2.8.4'
 npm: '@bsv/sdk'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,16 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 2.8.4 candidate also restores `listActions` responses containing empty
+stored descriptions or unassigned basket names, including ordinary generated
+change. The original strings are preserved; wallets need not fabricate display
+metadata or rewrite history. Nonempty description limits, UTF-8 byte ceilings,
+required scripts and labels, signed net values, nonnegative outputs and all
+new-action request validation remain unchanged. Direct, HTTP JSON and binary
+clients share the same regression coverage and a portable conformance vector.
+No API, wire or account-data migration is required; only clients already bundling
+the affected hardened SDK need a dependency update for this defect.
 
 The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
