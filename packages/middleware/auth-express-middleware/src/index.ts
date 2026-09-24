@@ -1524,9 +1524,10 @@ export class ExpressTransport implements Transport {
     }
 
     ;(res as any).__set = res.set
-    ;(res as any).set = (keyOrHeaders: string | Record<string, string>, value?: string) => {
-      ;(res as any).__set.call(res, keyOrHeaders, value)
-      wrapper.set(keyOrHeaders, value)
+    ;(res as any).set = (...args: [string | Record<string, string>, string?]) => {
+      // Express selects its header-map overload by argument count.
+      ;(res as any).__set.apply(res, args)
+      wrapper.set(...args)
       return res
     }
 

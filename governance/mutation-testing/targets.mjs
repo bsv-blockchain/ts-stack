@@ -423,7 +423,12 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/middleware/auth-express-middleware/package.json',
       propertyTest:
         'packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts',
-      mutate: ['src/authMiddlewareHelpers.ts:96-103', 'src/authMiddlewareHelpers.ts:186-213'],
+      mutate: [
+        'src/authMiddlewareHelpers.ts:96-103',
+        'src/authMiddlewareHelpers.ts:154-163',
+        'src/authMiddlewareHelpers.ts:180-184',
+        'src/authMiddlewareHelpers.ts:206-233'
+      ],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/authMiddlewareHelpers*.test.ts'])
     },
     'payment-replay': {

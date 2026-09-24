@@ -151,6 +151,17 @@ export function writeHeaderPair(writer: Writer, key: string, value: string): voi
   writer.write(valueBytes)
 }
 
+function isBodylessParserPlaceholder(body: unknown, headers: Request['headers']): boolean {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return false
+  const prototype = Object.getPrototypeOf(body)
+  if (prototype !== Object.prototype && prototype !== null) return false
+  if (Reflect.ownKeys(body).length !== 0) return false
+  return (
+    headers['transfer-encoding'] === undefined &&
+    (headers['content-length'] === undefined || headers['content-length'] === '0')
+  )
+}
+
 /**
  * Helper: Write body to writer
  */
@@ -162,6 +173,15 @@ export function writeBodyToWriter(
 ): void {
   const { body, headers } = req
   const debugLog = makeDebugLogger(logger, logLevel)
+
+  // Express 4/body-parser initializes req.body to {} even when HTTP framing
+  // declares no body. Preserve the same absent-body sentinel as Express 5.
+  // A framed JSON {} is real signed data and must still serialize as {}.
+  if (isBodylessParserPlaceholder(body, headers)) {
+    writer.writeVarIntNum(-1)
+    debugLog('[writeBodyToWriter] No valid body to write', undefined)
+    return
+  }
 
   // Inline-normalised content-type to a single string (Express may return string[]).
   // Inline narrowing rather than a helper so CodeQL's dataflow analysis can see

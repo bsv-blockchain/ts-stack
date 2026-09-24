@@ -49,14 +49,33 @@ SDK 2.8.1 fixes portable AES-GCM decryption of authenticated empty plaintext.
 Encryption bytes and full 16-byte tag verification are unchanged; invalid tags,
 keys and IVs remain rejected.
 
-The 2.8.2 candidate separates wallet discovery timeouts from normal operations.
+SDK 2.8.2 separates wallet discovery timeouts from normal operations.
 Automatic React Native and XDM discovery remains bounded, while subsequent
 calls can wait for user approval without inheriting the one-second/200-millisecond
 probe deadline. Explicit substrate `responseTimeout` values remain enforced.
-Applications using `WalletClient` auto-discovery must upgrade their bundled SDK;
-updating the wallet alone does not update a web application's SDK. No API, wire
-or account-data migration is required. This source candidate is not published
-until the protected npm release workflow completes.
+
+The 2.8.3 candidate preserves the configured BRC100 originator in automatic
+HTTP WalletWire discovery and binds the browser's default JSON `fetch` receiver.
+It also restores negative `listActions` net amounts using their historical signed
+int64 wire bytes, matching existing JSON validation. Counts, lengths and individual
+output values remain unsigned and bounded.
+Applications affected by these client defects can update their bundled SDK
+without changing calls. Wallet upgrades continue to support the existing BRC100
+contract; an ecosystem-wide application migration is not required. No API, wire
+or account-data migration is required. Source 2.8.3 is not published until the
+protected npm release workflow completes.
+
+### Action history compatibility
+
+The 2.8.4 candidate accepts empty stored `listActions` descriptions and empty
+basket names, as returned by established wallets for generated change and
+unassigned outputs. It preserves those values rather than inventing metadata.
+Nonempty descriptions retain their 5–2,000 UTF-8 byte bounds, and basket names
+retain their 300-byte ceiling. Required scripts, label binding, transaction
+identifiers, monetary values and new-action request validation are unchanged.
+Affected SDK clients can update without changing their BRC100 calls; wallet
+upgrades do not require an ecosystem-wide application migration. No wire or
+account-data migration is required. Publication uses the protected npm workflow.
 
 ## Table of Contents
 

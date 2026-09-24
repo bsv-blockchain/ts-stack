@@ -214,6 +214,31 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.4 candidate — established action-history display metadata
+
+- Accept empty historical action, input and output descriptions, and empty
+  unassigned basket names, without changing stored values or BRC100 wire bytes.
+- Keep nonempty description bounds, UTF-8 ceilings, request validation,
+  requested scripts and labels, and transaction/value checks unchanged.
+- Add direct, HTTP JSON, binary and shared conformance regression coverage.
+- No application API or account-data migration is required. Publication remains
+  a separate protected workflow action.
+
+### 2.8.3 candidate — BRC100 discovery and action-history compatibility
+
+- Pass the configured caller originator through automatic discovery probes so
+  HTTP WalletWire keeps its existing caller binding without rejecting discovery.
+- Bind the default HTTP JSON fetch receiver for native browser implementations;
+  preserve supplied HTTP clients, discovery ordering, deadlines and validation.
+- Restore signed `listActions` net amounts with the existing int64 wire encoding,
+  matching established SDK behavior and JSON validation. Reject out-of-range,
+  unsafe, noncanonical and truncated values without relaxing counts, lengths or
+  individual output values.
+- No BRC100 API, wire or account-data migration. Applications affected by these
+  client defects can update the SDK without changing their calls; wallet releases
+  do not require every application to upgrade in coordination.
+- Publication remains a separate protected release workflow.
+
 ### 2.8.2 candidate — wallet discovery timeout lifecycle
 
 - Keep React Native and XDM discovery bounded without carrying the short probe

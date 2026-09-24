@@ -145,15 +145,47 @@ never delete recovery rows merely to bypass that guard. Fresh body-payment
 requests with a server delivery output still require a newly accepted wallet
 result, and `isMerge: true` without a matching accepted intent fails closed.
 
+The September 24 authentication migration creates `auth_message_nonces` for
+`KnexSessionManager`. The service owns this table because it does not run the
+Toolbox wallet database migrations. Both HTTP initial-request replay claims and
+signed-message replay claims must be shared by every HTTP replica. An older
+service database with only `auth_sessions` cannot complete a new HTTP handshake;
+a healthy WebSocket handshake does not prove HTTP authentication works.
+
+Apply the additive migration with the standard migration runner before accepting
+HTTP traffic. It does not rewrite messages, permissions, sessions or payment
+recovery state. Keep its migration file available to the ledger on every replica;
+an older image lacking that file may refuse startup. Retain the replay table
+across application rollbacks. Its down migration refuses to discard any existing
+claim. Never disable replay checks or delete claims to restore availability.
+
 ## Probes
 
 - `GET /healthz` — liveness; does not authenticate or disclose dependencies
 - `GET /ready` — database readiness; returns 503 while unavailable
 
-Gate traffic on readiness. Add an authenticated WebSocket handshake probe when
-live messaging is a required deployment capability.
+Gate traffic on readiness. Also complete an authenticated HTTP initial handshake
+and signed request using a synthetic identity, and verify that replaying the
+same signed request against another replica is rejected. Add an authenticated
+WebSocket handshake probe when live messaging is required; it exercises a
+separate session manager and cannot substitute for the durable HTTP check.
 
 ## Ingress and timeouts
+
+For multiple replicas, preserve Engine.IO polling session affinity: every
+request for one transport session must reach its originating process. Use a
+load-balancer policy that works with existing credential-free cross-domain
+clients, such as source-IP affinity; requiring a new third-party routing cookie
+would force a client migration. Test authenticated polling and WebSocket
+connections separately. Affinity is transport routing, not authentication or
+durable session failover; clients reconnect after endpoint withdrawal.
+
+Configure the proxy's idle upstream HTTP connection lifetime below the server's
+five-second keep-alive timeout (for example, four seconds). Otherwise a proxy
+can reuse a connection at the server's close boundary and return an intermittent
+503 before an application response. Keep active-request and WebSocket stream
+timeouts separate and sufficiently long. Do not add automatic payment-request
+retries as a substitute for correct connection lifecycle settings.
 
 The image serves HTTP and WebSocket traffic directly on `PORT` (8080 by
 default). Put the platform ingress or load balancer in front of the container

@@ -3,10 +3,10 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.5'
+version: '2.2.7'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -34,6 +34,16 @@ native ESM and CommonJS entry points with matching declarations.
 Version 2.2.4 requires `@bsv/sdk` 2.7.1 or later so the identity assigned to
 `req.auth.identityKey` is the identity bound to the verified peer session, not
 unsigned BRC-104 transport metadata.
+
+Version 2.2.6 restores bodyless authenticated requests when the Express 4 JSON
+parser supplies an empty-object placeholder. HTTP message framing distinguishes
+that placeholder from a real JSON `{}` body. Existing clients need no changes;
+framed bodies and authentication checks retain their existing semantics.
+
+Version 2.2.7 preserves Express's one-argument response header-map overload.
+`res.set({ ...headers })` and authenticated payment challenges work with the
+same Express validation, signed headers and wire format. No client migration
+is required.
 
 ## Quick start
 

@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.2'
+version: '2.8.4'
 npm: '@bsv/sdk'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,35 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+Published version 2.8.4 also restores `listActions` responses containing empty
+stored descriptions or unassigned basket names, including ordinary generated
+change. The original strings are preserved; wallets need not fabricate display
+metadata or rewrite history. Nonempty description limits, UTF-8 byte ceilings,
+required scripts and labels, signed net values, nonnegative outputs and all
+new-action request validation remain unchanged. Direct, HTTP JSON and binary
+clients share the same regression coverage and a portable conformance vector.
+No API, wire or account-data migration is required; only clients already bundling
+the affected hardened SDK need a dependency update for this defect.
+
+The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+originator and binds the default JSON transport fetch receiver for browsers.
+It restores signed `listActions` net amounts with the historical wire encoding,
+matching JSON validation; count, length and individual output bounds stay intact.
+Apps affected by these client defects can update the SDK without changing calls.
+Wallets retain the existing BRC100 contract; an ecosystem-wide application
+migration is not required. The candidate is not published until the protected
+release workflow completes.
+
+The action-history compatibility regression affects signed `listActions` values
+in the 2.8.x binary processor and client. Updating a wallet repairs responses for
+older compatible clients; an application already bundling the affected 2.8.x
+binary client also needs the SDK patch. No call or persisted-data change is
+needed. Synthetic cross-version checks cover SDK 2.4.0, 2.5.0, 2.7.1, 2.8.1 and
+2.8.2 at eight signed/unsigned boundaries: all 40 candidate cases pass, all 32
+previously valid cases retain exact response bytes, and the eight known negative
+2.8.1/2.8.2 failures are recorded separately. These checks are bounded fixture
+evidence, not a claim that every ecosystem application has been tested.
 
 Version 2.8.1 repairs portable decryption of authenticated empty
 AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
@@ -395,7 +424,7 @@ is removed. Only a successful locally initiated handshake can select the
 implicit destination for a later `Peer` call; inbound messages cannot retarget
 it.
 
-### Wallet discovery deadlines in the 2.8.2 candidate
+### Wallet discovery deadlines since 2.8.2
 
 Automatic React Native and XDM probes retain their short discovery deadlines
 and remove listeners when unavailable. A successful probe creates a separate
@@ -403,6 +432,5 @@ operational connection so authentication, permission approval and valid slow
 responses do not inherit the one-second/200-millisecond discovery deadline.
 Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
-is needed. Applications must update their bundled SDK; updating only a wallet
-cannot replace a web application's SDK. Publication remains a separate
-protected-workflow action.
+is needed. Applications affected by the timeout defect can update their bundled
+SDK; a wallet release alone cannot replace code served by a web application.

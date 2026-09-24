@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-23",
+  "lastReviewed": "2026-09-24",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -33,10 +33,10 @@
     },
     {
       "name": "@bsv/auth-express-middleware",
-      "publishedVersion": "2.2.5",
+      "publishedVersion": "2.2.7",
       "releaseType": "none",
-      "summary": "Requires the SDK release that binds authenticated BRC-104 request identity to the nonce-selected session; retains application certificate approval against that exact session; canonicalizes parsed request bodies; rejects partial, duplicate, malformed, and unsupported signed input; bounds handshake and response work; contains optional diagnostics; preserves Express sendFile controls; and signs responses emitted through standard Express and Node response methods.",
-      "migration": "No valid BRC-103/104 wire bytes are changed. Upgrade to @bsv/auth-express-middleware 2.2.5 with the coordinated @bsv/sdk 2.8.0 release or later. When onCertificatesReceived is configured, the callback must call its approval function before returning; replicated deployments must inject a shared CertificateApprovalStore as well as shared session state. Parsed URL-encoded objects are limited to flat string fields, and unsupported nonempty parsed bodies now fail closed. BRC-104 v0.1 does not sign Host/authority, cookies, forwarding metadata, arbitrary standard request headers, or arbitrary standard response headers; pin authority at a trusted edge and do not authorize from omitted metadata."
+      "summary": "Preserves the argument count of Express response header overloads so res.set({ headers }) can emit authenticated payment challenges. Real Express4/5 packed probes cover header maps, scalar/array coercion, the header alias, and payment-middleware402 challenges with legacy/current clients. Restores bodyless authenticated requests when Express 4/body-parser supplies an empty-object placeholder, using HTTP message framing to preserve the existing absent-body encoding. Real framed JSON objects remain signed data and unsupported nonempty bodies still fail closed. Adds packed runtime authentication probes on Express 4 and 5 with legacy and current SDK clients. Requires the SDK release that binds authenticated BRC-104 request identity to the nonce-selected session; retains application certificate approval against that exact session; canonicalizes parsed request bodies; rejects partial, duplicate, malformed, and unsupported signed input; bounds handshake and response work; contains optional diagnostics; preserves Express sendFile controls; and signs responses emitted through standard Express and Node response methods.",
+      "migration": "No valid BRC-103/104 wire bytes are changed. No client migration is needed for bodyless requests or header-map responses. Express 4 services should upgrade to @bsv/auth-express-middleware 2.2.7 with the coordinated @bsv/sdk 2.8.0 release or later. When onCertificatesReceived is configured, the callback must call its approval function before returning; replicated deployments must inject a shared CertificateApprovalStore as well as shared session state. Parsed URL-encoded objects are limited to flat string fields, and unsupported nonempty parsed bodies now fail closed. BRC-104 v0.1 does not sign Host/authority, cookies, forwarding metadata, arbitrary standard request headers, or arbitrary standard response headers; pin authority at a trusted edge and do not authorize from omitted metadata."
     },
     {
       "name": "@bsv/authsocket",
@@ -166,10 +166,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.2",
+      "publishedVersion": "2.8.4",
       "releaseType": "none",
-      "summary": "Separates automatic React Native and XDM wallet discovery deadlines from subsequent wallet operations. Successful probes now create an operational substrate without the probe-only timeout, so user approval and valid slow responses can complete. Unresponsive discovery remains bounded with listener cleanup, explicitly configured operation timeouts remain enforced, and all response validation and origin checks are unchanged. SDK 2.8.2 was published by protected release 35912232040 from reviewed main cc1256c4d81b0f64de89a0df7a5af6efbe3b3983; registry bytes and provenance match the verified candidate.",
-      "migration": "No API or wire migration. Upgrade applications that use WalletClient auto-discovery to 2.8.2; earlier auto-discovered React Native/XDM connections can time out later calls at the one-second/200-millisecond discovery deadline. Explicit substrate responseTimeout values still apply. Wallet implementation upgrades alone do not update the SDK bundled by a web application."
+      "summary": "Restores BRC100 listActions compatibility with established wallet histories whose generated change, imported actions or unassigned outputs have empty display descriptions or basket names. Keeps nonempty description bounds, UTF-8 byte ceilings, own-data validation, requested scripts and labels, signed action amounts, nonnegative individual values, and creation-request validation unchanged.",
+      "migration": "No API, wire, wallet-data or ecosystem-wide application migration is required. Applications affected by history rejection in the hardened 2.8.x SDK can update to 2.8.4 without changing their BRC100 calls. Existing wallets may continue returning their original stored metadata, including empty strings; do not fabricate descriptions or rewrite historical records. Version 2.8.4 was published by protected SDK-only release 35962750434 from main commit 57b852d69809c678058b78de914841e17d3ac5ba. Registry bytes, integrity, GitHub attestations and npm provenance were verified against its single immutable candidate."
     },
     {
       "name": "@bsv/simple",
