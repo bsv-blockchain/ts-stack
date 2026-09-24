@@ -75,7 +75,7 @@ describe('BRC-103 untrusted message validation', () => {
     expect(() => snapshotAuthMessage(message)).toThrow('byte limit')
     const copied = snapshotAuthMessage(message, { maxGeneralPayloadBytes: null })
     expect(copied.payload).not.toBe(payload)
-    expect(copied.payload!.length).toBe(payload.length)
+    expect(copied.payload).toHaveLength(payload.length)
     payload[0] = 9
     expect(copied.payload![0]).toBe(1)
     expect(() =>
@@ -176,7 +176,7 @@ describe('BRC-103 untrusted message validation', () => {
     })
     const payload = Array.from({ length: MAX_AUTH_MESSAGE_BYTES / 4 }, () => 7)
     const delivered = jest.fn((_identity: string, bytes: number[]) => {
-      expect(bytes.length).toBe(payload.length)
+      expect(bytes).toHaveLength(payload.length)
       expect(bytes[0]).toBe(7)
       expect(bytes[bytes.length - 1]).toBe(7)
       expect(bytes).not.toBe(payload)

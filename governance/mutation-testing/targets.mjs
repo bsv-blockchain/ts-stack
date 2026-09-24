@@ -116,7 +116,11 @@ export function buildMutationTargets(repositoryRoot) {
           'const separatePayload =',
           'const lengthDescriptor ='
         ],
-        ['src/auth/AuthMessageValidation.ts', 'if (!separatePayload) bytes +=', 'if (snapshot) {'],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'if (!separatePayload) bytes +=',
+          'if (snapshot) retain('
+        ],
         [
           'src/auth/AuthMessageValidation.ts',
           'export function assertGeneralPayloadByteLimit(',
