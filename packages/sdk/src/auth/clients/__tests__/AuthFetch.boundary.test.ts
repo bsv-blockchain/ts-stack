@@ -119,7 +119,7 @@ describe('AuthFetch authenticated response framing', () => {
     const authFetch = new AuthFetch({} as never, undefined, undefined, undefined, {
       maxResponseBytes: 4
     })
-    const maximumFrameBytes = 4 + 128 * 1024
+    const maximumFrameBytes = 4 + 512 * 1024
     const atLimit = buildResponsePayload(nonce, 200, {}, [])
     while (atLimit.length < maximumFrameBytes) atLimit.push(0)
     expect(() => parseAuthenticatedResponse(authFetch, nonce, atLimit)).toThrow(
@@ -132,8 +132,8 @@ describe('AuthFetch authenticated response framing', () => {
 
   test.each([
     ['empty name', '', '', 'invalid response header name length'],
-    ['oversized name', 'k'.repeat(257), '', 'invalid response header name length'],
-    ['oversized value', 'key', 'v'.repeat(8193), 'invalid response header value length']
+    ['oversized name', 'k'.repeat(1025), '', 'invalid response header name length'],
+    ['oversized value', 'key', 'v'.repeat(32 * 1024 + 1), 'invalid response header value length']
   ])('rejects an %s', (_case, key, value, message) => {
     const authFetch = new AuthFetch({} as never)
     expect(() =>
@@ -148,7 +148,7 @@ describe('AuthFetch authenticated response framing', () => {
   test('enforces the aggregate header byte ceiling', () => {
     const authFetch = new AuthFetch({} as never)
     const headers = Object.fromEntries(
-      Array.from({ length: 9 }, (_, index) => [`x-${index}`, 'v'.repeat(8192)])
+      Array.from({ length: 9 }, (_, index) => [`x-${index}`, 'v'.repeat(32 * 1024)])
     )
     expect(() =>
       parseAuthenticatedResponse(authFetch, nonce, buildResponsePayload(nonce, 200, headers, []))

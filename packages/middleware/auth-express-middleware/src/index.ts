@@ -41,11 +41,6 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_PENDING_REQUESTS = 1_000
 const DEFAULT_MAX_REQUEST_BYTES = 8 * 1024 * 1024
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-const MAX_AUTH_HEADER_LENGTH = 4_096
-const MAX_SIGNED_RESPONSE_HEADERS = 128
-const MAX_SIGNED_RESPONSE_HEADER_KEY_BYTES = 256
-const MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES = 8_192
-const MAX_SIGNED_RESPONSE_HEADER_BYTES = 64 * 1_024
 const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i
 
 function parseTraceparent(
@@ -82,7 +77,7 @@ interface ActiveCertificateRequest {
 export interface AuthTransportLimits {
   requestTimeoutMs: number
   maxPendingRequests: number
-  /** Maximum bounded plain-data and encoded bytes accepted per auth request. */
+  /** Maximum handshake/plain-data and encoded request-body bytes; excludes HTTP headers. */
   maxRequestBytes: number
   /**
    * Maximum encoded application-response bytes retained for BRC-104 signing.
@@ -196,12 +191,7 @@ class AuthProtocolError extends Error {
 function singleHeader(req: Request, name: string, required = true): string | undefined {
   const value = req.headers[name]
   if (value === undefined && !required) return undefined
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > MAX_AUTH_HEADER_LENGTH ||
-    containsUnsafeHeaderCharacter(value)
-  ) {
+  if (typeof value !== 'string' || value.length === 0 || containsUnsafeHeaderCharacter(value)) {
     throw new AuthProtocolError(`Invalid ${name} header.`)
   }
   return value
@@ -405,12 +395,7 @@ function validateHandshakeMessage(
   }
   const requestIdHeader = singleHeader(req, 'x-bsv-auth-request-id', false)
   const requestId = requestIdHeader ?? message.initialNonce
-  if (
-    typeof requestId !== 'string' ||
-    requestId.length === 0 ||
-    requestId.length > MAX_AUTH_HEADER_LENGTH ||
-    !isCanonicalBase64(requestId)
-  ) {
+  if (typeof requestId !== 'string' || requestId.length === 0 || !isCanonicalBase64(requestId)) {
     throw new AuthProtocolError('The BRC-104 handshake request identifier is invalid.')
   }
   return { message, requestId }
@@ -1913,10 +1898,13 @@ function buildAuthMessageFromRequest(
   }
   const parsedUrl = new URL(`${protocol}://${host}${req.originalUrl}`)
 
+  let encodedBodyBytes: number
   try {
     writeUrlToWriter(parsedUrl, writer)
     writeRequestHeadersToWriter(req, writer)
+    const bodyStart = writer.getLength()
     writeBodyToWriter(req, writer, logger, logLevel)
+    encodedBodyBytes = writer.getLength() - bodyStart
   } catch {
     throw new AuthProtocolError('The authenticated request cannot be represented canonically.')
   }
@@ -1931,8 +1919,10 @@ function buildAuthMessageFromRequest(
     signature: toArray(singleHeader(req, 'x-bsv-auth-signature')!, 'hex')
   }
 
-  if (maxRequestBytes !== -1 && authMessage.payload.length > maxRequestBytes) {
-    throw new AuthProtocolError('The authenticated request exceeds the byte limit.')
+  // HTTP headers have already passed the server/edge transport policy. The
+  // body budget must not become a second size ceiling for received payments.
+  if (maxRequestBytes !== -1 && encodedBodyBytes > maxRequestBytes) {
+    throw new AuthProtocolError('The authenticated request body exceeds the byte limit.')
   }
 
   debugLog('[buildAuthMessageFromRequest] AuthMessage built', {
@@ -1968,7 +1958,6 @@ function buildResponsePayload(
   // - Include custom headers prefixed with x-bsv (excluding those starting with x-bsv-auth)
   // - Include the authorization header
   const includedHeaders: Array<[string, string]> = []
-  let includedHeaderBytes = 0
   Object.entries(responseHeaders).forEach(([key, value]) => {
     const lowerKey = key.toLowerCase()
     if (
@@ -1976,18 +1965,8 @@ function buildResponsePayload(
       !lowerKey.startsWith('x-bsv-auth')
     ) {
       const headerValue = String(value)
-      const keyBytes = toArray(lowerKey, 'utf8').length
-      const valueBytes = toArray(headerValue, 'utf8').length
-      includedHeaderBytes += keyBytes + valueBytes
-      if (
-        keyBytes < 1 ||
-        keyBytes > MAX_SIGNED_RESPONSE_HEADER_KEY_BYTES ||
-        valueBytes > MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES ||
-        includedHeaders.length >= MAX_SIGNED_RESPONSE_HEADERS ||
-        includedHeaderBytes > MAX_SIGNED_RESPONSE_HEADER_BYTES ||
-        containsUnsafeHeaderCharacter(headerValue)
-      ) {
-        throw new AuthProtocolError('The authenticated response headers exceed their limits.')
+      if (containsUnsafeHeaderCharacter(headerValue)) {
+        throw new AuthProtocolError('The authenticated response contains an invalid header value.')
       }
       includedHeaders.push([lowerKey, headerValue])
     }
@@ -2074,7 +2053,19 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     )
   }
 
-  const peer = new Peer(wallet, transport, certificatesToRequest, sessionMgr)
+  // HTTP transport admission owns header capacity. Keep metadata/signature
+  // validation while avoiding a second general-payload ceiling after receipt.
+  const peer = new Peer(
+    wallet,
+    transport,
+    certificatesToRequest,
+    sessionMgr,
+    undefined,
+    undefined,
+    {
+      maxGeneralPayloadBytes: null
+    }
+  )
   transport.setPeer(peer)
   const telemetry = new Telemetry(telemetryConfig)
 

@@ -9,6 +9,21 @@ This protocol is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Choose one protocol deliberately; their headers and client
 contracts are not interchangeable.
 
+Version 2.1.8 removes middleware payment-header size ceilings. A header already
+received from the client is parsed and its payment validated regardless of size.
+HTTP server, CDN, proxy and WAF configuration own transport budgets; configure
+and validate the full route for supported payment proofs. The deprecated
+`maxPaymentHeaderBytes` option remains accepted for source compatibility but is
+ignored, including when an older application still supplies a value. Move any
+intended transport policy to the HTTP server or edge and remove the option.
+
+Atomic BEEF validation, canonical base64, derivation verification, payment
+pricing, wallet acceptance and atomic replay protection still apply. Invalid
+payment contents are rejected. SDK 2.8.5 separately raises client header capacity;
+that does not constrain what this middleware accepts from other compatible
+clients. No BRC100 call, wire or wallet-data migration is required. Source
+publication is a separate protected release step.
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -85,7 +100,7 @@ with an accepted zero-value receipt. Invalid or failed pricing returns a stable
    }
    ```
 
-5. The middleware bounds and parses the header, verifies the derivation
+5. The middleware parses the received header, verifies the derivation
    prefix, parses the Atomic BEEF transaction, reduces legacy overinclusive
    envelopes to the declared subject and its dependency closure, and requires
    output zero to cover the current price.
@@ -110,7 +125,6 @@ const payment = createPaymentMiddleware({
   wallet,
   calculateRequestPrice,
   replayStore,
-  maxPaymentHeaderBytes: 64 * 1024,
   logger
 })
 ```
@@ -121,8 +135,8 @@ const payment = createPaymentMiddleware({
 - `replayStore` must implement an atomic
   `claim(transactionId): boolean | Promise<boolean>`. It returns `false` if
   the transaction has already been used.
-- `maxPaymentHeaderBytes` defaults to 64 KiB and must be a positive safe
-  integer.
+- `maxPaymentHeaderBytes` is deprecated and ignored; header budgets belong to
+  the HTTP server or edge.
 - `logger` may provide `error` and `warn` methods. Internal failures are sent
   to it as structured context but are never exposed in HTTP responses.
 
