@@ -1,6 +1,6 @@
 import PublicKey from '../primitives/PublicKey.js'
 import { toArray } from '../primitives/utils.js'
-import type { AuthMessage, RequestedCertificateSet } from './types.js'
+import type { AuthMessage, AuthMessageValidationOptions, RequestedCertificateSet } from './types.js'
 import { isUnsafeRecordKey } from '../primitives/SafeRecord.js'
 import { base64ToBytes } from '../wallet/WalletByteEncoding.js'
 
@@ -164,7 +164,7 @@ export function assertRequestedCertificateSet(
   }
 }
 
-function walkAuthData<T>(value: T, snapshot: boolean): T {
+function walkAuthData<T>(value: T, snapshot: boolean, maxGeneralPayloadBytes?: number | null): T {
   const seen = new WeakSet<object>()
   const pending: Array<{
     value: unknown
@@ -203,9 +203,14 @@ function walkAuthData<T>(value: T, snapshot: boolean): T {
       if (seen.has(candidate)) throw new Error('Authentication messages must not contain cycles.')
       seen.add(candidate)
       if (Array.isArray(candidate)) {
+        const separatePayload =
+          maxGeneralPayloadBytes !== undefined && current.depth === 1 && current.key === 'payload'
+        const maxArrayBytes = separatePayload
+          ? (maxGeneralPayloadBytes ?? Number.MAX_SAFE_INTEGER)
+          : MAX_AUTH_MESSAGE_BYTES
         const lengthDescriptor = Object.getOwnPropertyDescriptor(candidate, 'length')
         const length = lengthDescriptor?.value
-        if (!Number.isSafeInteger(length) || length < 0 || length > MAX_AUTH_MESSAGE_BYTES) {
+        if (!Number.isSafeInteger(length) || length < 0 || length > maxArrayBytes) {
           throw new Error('Authentication message array exceeds its limit.')
         }
         const descriptors = Array.from({ length }, (_, index) =>
@@ -222,7 +227,7 @@ function walkAuthData<T>(value: T, snapshot: boolean): T {
         )
         if (denseBytes) {
           // JSON uses at most three digits and a comma for each byte.
-          bytes += length * 4 + 2
+          if (!separatePayload) bytes += length * 4 + 2
           if (snapshot) {
             retain(descriptors.map(descriptor => descriptor!.value))
           }
@@ -282,7 +287,10 @@ export function snapshotBoundedAuthData<T>(value: T): T {
   return walkAuthData(value, true)
 }
 
-function assertValidAuthMessageShape(value: unknown): asserts value is AuthMessage {
+function assertValidAuthMessageShape(
+  value: unknown,
+  maxGeneralPayloadBytes?: number | null
+): asserts value is AuthMessage {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid authentication message.')
   }
@@ -338,7 +346,14 @@ function assertValidAuthMessageShape(value: unknown): asserts value is AuthMessa
     case 'general':
       assertCanonicalBase64(message.nonce, 'general.nonce', 32)
       assertCanonicalBase64(message.yourNonce, 'general.yourNonce', 48)
-      assertAuthByteArray(message.payload, 'general.payload', MAX_AUTH_MESSAGE_BYTES, true)
+      assertAuthByteArray(
+        message.payload,
+        'general.payload',
+        maxGeneralPayloadBytes === null
+          ? Number.MAX_SAFE_INTEGER
+          : (maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
+        true
+      )
       assertAuthByteArray(message.signature, 'general.signature', MAX_AUTH_SIGNATURE_BYTES)
       break
     default:
@@ -351,9 +366,31 @@ export function assertValidAuthMessage(value: unknown): asserts value is AuthMes
   assertValidAuthMessageShape(snapshotBoundedAuthData(value))
 }
 
-/** Validate and own an untrusted BRC-103 message for asynchronous processing. */
-export function snapshotAuthMessage(value: unknown): AuthMessage {
-  const snapshot = snapshotBoundedAuthData(value)
-  assertValidAuthMessageShape(snapshot)
+export function assertGeneralPayloadByteLimit(value: number | null | undefined): void {
+  if (value !== undefined && value !== null && (!Number.isSafeInteger(value) || value < 1)) {
+    throw new TypeError('maxGeneralPayloadBytes must be null or a positive safe integer.')
+  }
+}
+
+/** Validate and own an untrusted BRC-103 message using locally selected payload policy. */
+export function snapshotAuthMessage(
+  value: unknown,
+  options: AuthMessageValidationOptions = {}
+): AuthMessage {
+  const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
+  assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
+  const isGeneral =
+    maxGeneralPayloadBytes !== undefined &&
+    value !== null &&
+    typeof value === 'object' &&
+    Object.getOwnPropertyDescriptor(value, 'messageType')?.value === 'general'
+  const payloadBudget = isGeneral ? maxGeneralPayloadBytes : undefined
+  const snapshot = walkAuthData(value, true, payloadBudget)
+  assertValidAuthMessageShape(snapshot, payloadBudget)
+  // A proxy cannot change message type while descriptors are copied and thereby
+  // transfer the general-payload policy to a handshake or certificate message.
+  if (payloadBudget !== undefined && snapshot.messageType !== 'general') {
+    assertBoundedAuthData(snapshot)
+  }
   return snapshot
 }

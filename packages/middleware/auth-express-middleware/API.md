@@ -126,7 +126,7 @@ export interface AuthTransportLimits {
 
 #### Property maxRequestBytes
 
-Maximum bounded plain-data and encoded bytes accepted per auth request.
+Maximum handshake/plain-data and encoded request-body bytes; excludes HTTP headers.
 
 ```ts
 maxRequestBytes: number
@@ -432,7 +432,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Helper: Write body to writer
 
 ```ts
-export function writeBodyToWriter(req: Request, writer: Utils.Writer, logger?: typeof console, logLevel?: LogLevel): void
+export function writeBodyToWriter(req: Request, writer: Writer, logger?: typeof console, logLevel?: LogLevel): void
 ```
 
 See also: [LogLevel](#type-loglevel)
@@ -445,7 +445,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Write a header pair (key + value) to the binary writer.
 
 ```ts
-export function writeHeaderPair(writer: Utils.Writer, key: string, value: string): void
+export function writeHeaderPair(writer: Writer, key: string, value: string): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
@@ -456,7 +456,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Collect and write signed request headers to the binary writer.
 
 ```ts
-export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer): void
+export function writeRequestHeadersToWriter(req: Request, writer: Writer): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
@@ -467,7 +467,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Write the URL pathname and search components to the binary writer.
 
 ```ts
-export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void
+export function writeUrlToWriter(parsedUrl: URL, writer: Writer): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)

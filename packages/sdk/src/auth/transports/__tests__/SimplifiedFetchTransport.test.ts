@@ -2,6 +2,7 @@ import { jest } from '@jest/globals'
 import { SimplifiedFetchTransport } from '../SimplifiedFetchTransport.js'
 import * as Utils from '../../../primitives/utils.js'
 import { AuthMessage } from '../../types.js'
+import { AuthFetch } from '../../clients/AuthFetch.js'
 
 function createGeneralPayload(
   path = '/resource',
@@ -164,7 +165,7 @@ describe('SimplifiedFetchTransport send', () => {
       'x-bsv-auth-version': '0.1',
       'x-bsv-auth-identity-key': 'server-key',
       'x-bsv-auth-signature': 'deadbeef',
-      'x-bsv-custom': 'x'.repeat(8193)
+      'x-bsv-custom': 'x'.repeat(32 * 1024 + 1)
     }
     const fetchMock = jest
       .fn<typeof fetch>()
@@ -180,7 +181,7 @@ describe('SimplifiedFetchTransport send', () => {
           'x-bsv-auth-version': '0.1',
           'x-bsv-auth-identity-key': 'server-key',
           'x-bsv-auth-signature': 'deadbeef',
-          'x-bsv-auth-requested-certificates': 'x'.repeat(64 * 1024 + 1)
+          'x-bsv-auth-requested-certificates': 'x'.repeat(256 * 1024 + 1)
         }
       })
     )
@@ -418,11 +419,11 @@ describe('SimplifiedFetchTransport send', () => {
 })
 
 describe('BRC-105 payment request header bounds', () => {
-  const aggregateLimit = 64 * 1024
+  const aggregateLimit = 256 * 1024
   const paymentName = 'x-bsv-payment'
   const transport = new SimplifiedFetchTransport('https://api.example.com')
 
-  test('sends a payment proof header larger than an ordinary header without changing its bytes', async () => {
+  test('sends a payment proof header above the historical limit without changing its bytes', async () => {
     const payment = JSON.stringify({
       derivationPrefix: 'a'.repeat(44),
       derivationSuffix: 'b'.repeat(44),
@@ -457,7 +458,7 @@ describe('BRC-105 payment request header bounds', () => {
     ).toThrow('headers exceed their byte limit')
   })
 
-  test('counts other headers against the same unchanged aggregate ceiling', () => {
+  test('counts other headers against the same increased aggregate ceiling', () => {
     const headers: Array<[string, string]> = [
       [paymentName, 'a'.repeat(aggregateLimit - paymentName.length - 2)],
       ['x', 'a']
@@ -472,16 +473,16 @@ describe('BRC-105 payment request header bounds', () => {
   })
 
   test.each(['authorization', 'x-bsv-other', 'x-bsv-payment-extra'])(
-    'retains the ordinary 8192-byte ceiling for %s',
+    'enforces the increased ordinary 32 KiB ceiling for %s',
     name => {
       expect(
         transport.deserializeRequestPayload(
-          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(8192)]])
+          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(32 * 1024)]])
         ).headers[name]
-      ).toHaveLength(8192)
+      ).toHaveLength(32 * 1024)
       expect(() =>
         transport.deserializeRequestPayload(
-          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(8193)]])
+          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(32 * 1024 + 1)]])
         )
       ).toThrow('header value exceeds its byte limit')
     }
@@ -493,5 +494,131 @@ describe('BRC-105 payment request header bounds', () => {
         createGeneralPayload('/paid', 'GET', [[paymentName, 'a'.repeat(aggregateLimit + 1)]])
       )
     ).toThrow('header value exceeds its byte limit')
+  })
+})
+
+describe('HTTP header capacity in both directions', () => {
+  const aggregateLimit = 256 * 1024
+  const valueLimit = 32 * 1024
+  const nameLimit = 1024
+  const countLimit = 512
+
+  async function receive(headers: Array<[string, string]>): Promise<AuthMessage> {
+    const response = new Response(null, {
+      headers: [
+        ['x-bsv-auth-version', '0.1'],
+        ['x-bsv-auth-identity-key', 'server-key'],
+        ['x-bsv-auth-signature', 'deadbeef'],
+        ['x-bsv-auth-request-id', Utils.toBase64(Array.from({ length: 32 }).fill(2))],
+        ...headers
+      ]
+    })
+    const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(response)
+    const transport = new SimplifiedFetchTransport('https://api.example.com', fetchMock)
+    let received: AuthMessage | undefined
+    await transport.onData(async message => {
+      received = message
+    })
+    await transport.send(createGeneralMessage())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(received).toBeDefined()
+    return received!
+  }
+
+  async function roundTrip(
+    direction: string,
+    headers: Array<[string, string]>
+  ): Promise<Array<[string, string]>> {
+    if (direction === 'request') {
+      const transport = new SimplifiedFetchTransport('https://api.example.com')
+      return Object.entries(
+        transport.deserializeRequestPayload(createGeneralPayload('/', 'GET', headers)).headers
+      )
+    }
+    const message = await receive(headers)
+    // Exercise the second SDK parser too, even with a small body budget.
+    const client = new AuthFetch({} as never, undefined, undefined, undefined, {
+      maxResponseBytes: 1
+    })
+    const parsed = (client as any).parseAuthenticatedResponse(
+      'https://api.example.com',
+      Utils.toBase64(Array.from({ length: 32 }).fill(2)),
+      'server-key',
+      message.payload
+    ) as Response
+    for (const [name, value] of headers) expect(parsed.headers.get(name)).toBe(value)
+    const reader = new Utils.Reader(message.payload!)
+    expect(reader.read(32)).toEqual(Array.from({ length: 32 }).fill(2))
+    expect(reader.readVarIntNum()).toBe(200)
+    const count = reader.readVarIntNum()
+    const result: Array<[string, string]> = []
+    for (let i = 0; i < count; i++) {
+      const name = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+      const value = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+      result.push([name, value])
+    }
+    expect(reader.readVarIntNum()).toBe(-1)
+    expect(reader.eof()).toBe(true)
+    return result
+  }
+
+  describe.each(['request', 'response'])('%s', direction => {
+    test('preserves a 32 KiB value and rejects the next byte', async () => {
+      const headers: Array<[string, string]> = [['x-bsv-large', 'a'.repeat(valueLimit)]]
+      await expect(roundTrip(direction, headers)).resolves.toEqual(headers)
+      headers[0][1] += 'a'
+      await expect(roundTrip(direction, headers)).rejects.toThrow(/header/)
+    })
+
+    test('counts value bytes, including multibyte UTF-8', async () => {
+      const headers: Array<[string, string]> = [['x-bsv-large', 'é'.repeat(valueLimit / 2)]]
+      await expect(roundTrip(direction, headers)).resolves.toEqual(headers)
+      headers[0][1] += 'é'
+      await expect(roundTrip(direction, headers)).rejects.toThrow(/header/)
+    })
+
+    test('accepts a 1 KiB name and rejects the next byte', async () => {
+      const headers: Array<[string, string]> = [['x-bsv-' + 'a'.repeat(nameLimit - 6), 'v']]
+      await expect(roundTrip(direction, headers)).resolves.toEqual(headers)
+      headers[0][0] += 'a'
+      await expect(roundTrip(direction, headers)).rejects.toThrow(/header/)
+    })
+
+    test('accepts 512 distinct headers and rejects the next one', async () => {
+      const headers: Array<[string, string]> = Array.from({ length: countLimit }, (_, i) => [
+        `x-bsv-${String(i).padStart(3, '0')}`,
+        'v'
+      ])
+      await expect(roundTrip(direction, headers)).resolves.toEqual(headers)
+      headers.push(['x-bsv-extra', 'v'])
+      await expect(roundTrip(direction, headers)).rejects.toThrow(/header/)
+    })
+
+    test('accepts 256 KiB aggregate names and values and rejects the next byte', async () => {
+      const headers: Array<[string, string]> = Array.from({ length: 8 }, (_, i) => [
+        `x-bsv-${i}`,
+        'a'.repeat(valueLimit - 7)
+      ])
+      expect(headers.reduce((size, [name, value]) => size + name.length + value.length, 0)).toBe(
+        aggregateLimit
+      )
+      await expect(roundTrip(direction, headers)).resolves.toEqual(headers)
+      headers[0][1] += 'a'
+      await expect(roundTrip(direction, headers)).rejects.toThrow(/headers.*limit/)
+    })
+  })
+
+  test('parses a 256 KiB certificate policy and rejects the next byte', async () => {
+    const empty = JSON.stringify({ certifiers: [''], types: {} })
+    const policy = { certifiers: ['a'.repeat(aggregateLimit - empty.length)], types: {} }
+    const value = JSON.stringify(policy)
+    expect(Utils.toArray(value, 'utf8')).toHaveLength(aggregateLimit)
+    await expect(receive([['x-bsv-auth-requested-certificates', value]])).resolves.toMatchObject({
+      requestedCertificates: policy
+    })
+    policy.certifiers[0] += 'a'
+    await expect(
+      receive([['x-bsv-auth-requested-certificates', JSON.stringify(policy)]])
+    ).rejects.toThrow('header exceeds its byte limit')
   })
 })
