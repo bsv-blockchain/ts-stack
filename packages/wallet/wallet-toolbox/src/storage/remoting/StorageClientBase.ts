@@ -362,12 +362,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>
 
   /** Share the asynchronous rejection boundary, including custom transports that throw synchronously. */
-  private forwardRpc<T>(method: string, params: unknown[]): Promise<T> {
-    try {
-      return Promise.resolve(this.rpcCall<T>(method, params))
-    } catch (error) {
-      return Promise.reject(error)
-    }
+  private async forwardRpc<T>(method: string, params: unknown[]): Promise<T> {
+    return this.rpcCall<T>(method, params)
   }
 
   protected nextRequestId(): number {
