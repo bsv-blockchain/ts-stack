@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.4",
-      "releaseType": "none",
-      "summary": "Restores BRC100 listActions compatibility with established wallet histories whose generated change, imported actions or unassigned outputs have empty display descriptions or basket names. Keeps nonempty description bounds, UTF-8 byte ceilings, own-data validation, requested scripts and labels, signed action amounts, nonnegative individual values, and creation-request validation unchanged.",
-      "migration": "No API, wire, wallet-data or ecosystem-wide application migration is required. Applications affected by history rejection in the hardened 2.8.x SDK can update to 2.8.4 without changing their BRC100 calls. Existing wallets may continue returning their original stored metadata, including empty strings; do not fabricate descriptions or rewrite historical records. Version 2.8.4 was published by protected SDK-only release 35962750434 from main commit 57b852d69809c678058b78de914841e17d3ac5ba. Registry bytes, integrity, GitHub attestations and npm provenance were verified against its single immutable candidate."
+      "releaseType": "patch",
+      "summary": "Restores BRC-105 HTTP payments whose Atomic BEEF exceeds the ordinary 8 KiB header-value limit. Only the x-bsv-payment request header may consume the existing 64 KiB aggregate request-header budget; ordinary header values, signed response headers, frame bounds, validation and signature checks remain unchanged.",
+      "migration": "No API, BRC100 call, wire or wallet-data migration is required. Applications using the hardened SDK HTTP payment client can update to 2.8.5 without changing calls. Older conforming clients remain compatible with wallets and servers. Server and proxy header limits still apply; proof headers must fit their configured bounds and the unchanged client aggregate budget. This source candidate is unpublished until the protected SDK release succeeds."
     },
     {
       "name": "@bsv/simple",

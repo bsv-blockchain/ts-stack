@@ -77,6 +77,19 @@ Affected SDK clients can update without changing their BRC100 calls; wallet
 upgrades do not require an ecosystem-wide application migration. No wire or
 account-data migration is required. Publication uses the protected npm workflow.
 
+### HTTP payment proof headers
+
+The 2.8.5 candidate restores BRC-105 payments whose Atomic BEEF makes the
+`x-bsv-payment` request header larger than 8 KiB. That header can use the
+existing 64 KiB aggregate request-header budget, including header-name bytes
+and all other request headers. Ordinary header values and all signed response
+header limits are unchanged. Server and proxy limits still apply; this does
+not make arbitrarily large payment proofs transportable. No BRC100 call,
+API, wire or wallet-data migration is required. Affected applications can
+update their SDK without changing calls; existing conforming applications
+remain compatible with upgraded wallets. Publication is a separate protected
+workflow step.
+
 ## Table of Contents
 
 1. [Objective](#objective)

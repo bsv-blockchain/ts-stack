@@ -214,6 +214,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (2.8.5 candidate)
+
+- Allow BRC-105 `x-bsv-payment` request proof headers to use the existing 64 KiB aggregate header budget. Ordinary 8 KiB header-value limits and signed-response limits are unchanged. No API, BRC100, wire or wallet-data migration is required; protected publication is separate.
+
+
 ### 2.8.4 candidate — established action-history display metadata
 
 - Accept empty historical action, input and output descriptions, and empty

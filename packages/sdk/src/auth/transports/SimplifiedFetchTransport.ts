@@ -645,7 +645,14 @@ export class SimplifiedFetchTransport implements Transport {
         const headerKeyBytes = requestReader.read(nHeaderKeyBytes)
         const headerKey = toUTF8Strict(headerKeyBytes)
         const nHeaderValueBytes = requestReader.readVarIntNumStrict(false)
-        if (nHeaderValueBytes > MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES) {
+        // BRC-105 carries the payment's Atomic BEEF in this request header.
+        // It shares the unchanged aggregate budget; ordinary headers and all
+        // signed response headers retain their smaller per-value ceiling.
+        const maxValueBytes =
+          headerKey.toLowerCase() === 'x-bsv-payment'
+            ? MAX_SIGNED_RESPONSE_HEADER_BYTES
+            : MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES
+        if (nHeaderValueBytes > maxValueBytes) {
           throw new Error('Authenticated request header value exceeds its byte limit')
         }
         const headerValueBytes = requestReader.read(nHeaderValueBytes)

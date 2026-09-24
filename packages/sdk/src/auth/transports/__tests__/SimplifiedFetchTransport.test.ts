@@ -3,7 +3,11 @@ import { SimplifiedFetchTransport } from '../SimplifiedFetchTransport.js'
 import * as Utils from '../../../primitives/utils.js'
 import { AuthMessage } from '../../types.js'
 
-function createGeneralPayload(path = '/resource', method = 'GET'): number[] {
+function createGeneralPayload(
+  path = '/resource',
+  method = 'GET',
+  headers: Array<[string, string]> = []
+): number[] {
   const writer = new Utils.Writer()
   const requestId = Array.from({ length: 32 }).fill(1)
   writer.write(requestId)
@@ -17,7 +21,14 @@ function createGeneralPayload(path = '/resource', method = 'GET'): number[] {
   writer.write(pathBytes)
 
   writer.writeVarIntNum(-1) // no query string
-  writer.writeVarIntNum(0) // no headers
+  writer.writeVarIntNum(headers.length)
+  for (const [name, value] of headers) {
+    for (const text of [name, value]) {
+      const bytes = Utils.toArray(text, 'utf8')
+      writer.writeVarIntNum(bytes.length)
+      writer.write(bytes)
+    }
+  }
   writer.writeVarIntNum(-1) // no body
 
   return writer.toArray()
@@ -403,5 +414,84 @@ describe('SimplifiedFetchTransport send', () => {
     expect(cancel).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Authenticated response deadline exceeded' })
     )
+  })
+})
+
+describe('BRC-105 payment request header bounds', () => {
+  const aggregateLimit = 64 * 1024
+  const paymentName = 'x-bsv-payment'
+  const transport = new SimplifiedFetchTransport('https://api.example.com')
+
+  test('sends a payment proof header larger than an ordinary header without changing its bytes', async () => {
+    const payment = JSON.stringify({
+      derivationPrefix: 'a'.repeat(44),
+      derivationSuffix: 'b'.repeat(44),
+      transaction: Utils.toBase64(Array.from({ length: 8094 }, () => 1))
+    })
+    expect(Utils.toArray(payment, 'utf8')).toHaveLength(10942)
+    const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
+    fetchMock.mockRejectedValue(new Error('network sentinel'))
+    const sendingTransport = new SimplifiedFetchTransport('https://api.example.com', fetchMock)
+    await sendingTransport.onData(async () => {})
+    await expect(
+      sendingTransport.send(
+        createGeneralMessage({
+          payload: createGeneralPayload('/paid', 'GET', [[paymentName, payment]])
+        })
+      )
+    ).rejects.toThrow('network sentinel')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ [paymentName]: payment })
+  })
+
+  test.each(['x-bsv-payment', 'X-BSV-Payment'])('preserves the aggregate boundary for %s', name => {
+    const value = 'a'.repeat(aggregateLimit - name.length)
+    expect(
+      transport.deserializeRequestPayload(createGeneralPayload('/paid', 'GET', [[name, value]]))
+        .headers[name]
+    ).toBe(value)
+    expect(() =>
+      transport.deserializeRequestPayload(
+        createGeneralPayload('/paid', 'GET', [[name, value + 'a']])
+      )
+    ).toThrow('headers exceed their byte limit')
+  })
+
+  test('counts other headers against the same unchanged aggregate ceiling', () => {
+    const headers: Array<[string, string]> = [
+      [paymentName, 'a'.repeat(aggregateLimit - paymentName.length - 2)],
+      ['x', 'a']
+    ]
+    expect(
+      transport.deserializeRequestPayload(createGeneralPayload('/paid', 'GET', headers)).headers.x
+    ).toBe('a')
+    headers[1][1] += 'a'
+    expect(() =>
+      transport.deserializeRequestPayload(createGeneralPayload('/paid', 'GET', headers))
+    ).toThrow('headers exceed their byte limit')
+  })
+
+  test.each(['authorization', 'x-bsv-other', 'x-bsv-payment-extra'])(
+    'retains the ordinary 8192-byte ceiling for %s',
+    name => {
+      expect(
+        transport.deserializeRequestPayload(
+          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(8192)]])
+        ).headers[name]
+      ).toHaveLength(8192)
+      expect(() =>
+        transport.deserializeRequestPayload(
+          createGeneralPayload('/paid', 'GET', [[name, 'a'.repeat(8193)]])
+        )
+      ).toThrow('header value exceeds its byte limit')
+    }
+  )
+
+  test('rejects an over-limit payment value before reading it', () => {
+    expect(() =>
+      transport.deserializeRequestPayload(
+        createGeneralPayload('/paid', 'GET', [[paymentName, 'a'.repeat(aggregateLimit + 1)]])
+      )
+    ).toThrow('header value exceeds its byte limit')
   })
 })

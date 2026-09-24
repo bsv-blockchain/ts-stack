@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.4'
+version: '2.8.5'
 npm: '@bsv/sdk'
 last_updated: '2026-09-24'
 last_verified: '2026-09-24'
@@ -14,6 +14,16 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+
+The 2.8.5 source candidate restores BRC-105 HTTP payments carrying more than
+8 KiB in `x-bsv-payment`. Only that request header may use the existing 64 KiB
+aggregate header budget (names and all values included). Ordinary request
+headers keep their 8 KiB per-value limit; signed-response limits are unchanged.
+Server and proxy limits still apply. Applications affected by this client limit
+can upgrade without changing their BRC100 calls or wire format. Wallets remain
+compatible with existing conforming applications. Publication follows the
+protected SDK release workflow; this candidate is not yet published.
 
 Published version 2.8.4 also restores `listActions` responses containing empty
 stored descriptions or unassigned basket names, including ordinary generated
