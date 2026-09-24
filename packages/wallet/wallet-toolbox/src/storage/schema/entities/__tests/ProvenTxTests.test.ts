@@ -14,7 +14,7 @@ function makeServerVerifiedProof(
   height: number,
   time: number,
   provenTxId = 1
-): { proof: TableProvenTx, header: number[] } {
+): { proof: TableProvenTx; header: number[] } {
   const txid = transaction.id('hex')
   const merklePath = new bsv.MerklePath(height, [[{ offset: 0, hash: txid, txid: true }]])
   const merkleRoot = merklePath.computeRoot(txid)
@@ -49,7 +49,7 @@ function makeProofStorage(header: number[]): StorageProvider & {
   updateProvenTx: jest.Mock
   invalidatePreparedBeefs: jest.Mock
 } {
-  return {
+  return Object.assign(Object.create(StorageProvider.prototype), {
     getServices: () => ({
       getChainTracker: async () => ({ isValidRootForHeight: async () => true }),
       getHeaderForHeight: async () => header
@@ -57,7 +57,7 @@ function makeProofStorage(header: number[]): StorageProvider & {
     insertProvenTx: jest.fn(async () => 77),
     updateProvenTx: jest.fn(async () => 1),
     invalidatePreparedBeefs: jest.fn(async () => 0)
-  } as unknown as StorageProvider & {
+  }) as StorageProvider & {
     insertProvenTx: jest.Mock
     updateProvenTx: jest.Mock
     invalidatePreparedBeefs: jest.Mock
@@ -561,8 +561,9 @@ describe('ProvenTx class method tests', () => {
     const corrupted = { ...proof, rawTx: [...proof.rawTx] }
     corrupted.rawTx[corrupted.rawTx.length - 1] ^= 1
 
-    await expect(syncProofValidation.validateSyncProof(storage, corrupted))
-      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(syncProofValidation.validateSyncProof(storage, corrupted)).rejects.toMatchObject({
+      code: 'WERR_INVALID_PARAMETER'
+    })
 
     expect(storage.insertProvenTx).not.toHaveBeenCalled()
     expect(storage.invalidatePreparedBeefs).not.toHaveBeenCalled()
@@ -591,17 +592,16 @@ describe('ProvenTx class method tests', () => {
     const entity = new EntityProvenTx(original.proof)
 
     await syncProofValidation.validateSyncProof(storage, replacement.proof)
-    await expect(entity.mergeExisting(
-      storage,
-      undefined,
-      replacement.proof,
-      createSyncMap()
-    )).resolves.toBe(true)
+    await expect(entity.mergeExisting(storage, undefined, replacement.proof, createSyncMap())).resolves.toBe(true)
 
-    expect(storage.updateProvenTx).toHaveBeenCalledWith(44, expect.objectContaining({
-      height: 103,
-      blockHash: replacement.proof.blockHash
-    }), undefined)
+    expect(storage.updateProvenTx).toHaveBeenCalledWith(
+      44,
+      expect.objectContaining({
+        height: 103,
+        blockHash: replacement.proof.blockHash
+      }),
+      undefined
+    )
     expect(storage.invalidatePreparedBeefs).toHaveBeenCalledWith(undefined)
   })
 
@@ -617,11 +617,13 @@ describe('ProvenTx class method tests', () => {
     storage.transaction = jest.fn()
     storage.findProvenTxs = jest.fn(async () => [active.proof])
 
-    await expect(StorageProvider.prototype.processSyncChunk.call(
-      storage,
-      {} as sdk.RequestSyncChunkArgs,
-      { provenTxs: [stale.proof] } as sdk.SyncChunk
-    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(
+      StorageProvider.prototype.processSyncChunk.call(
+        storage,
+        {} as sdk.RequestSyncChunkArgs,
+        { provenTxs: [stale.proof] } as sdk.SyncChunk
+      )
+    ).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
 
     expect(storage.transaction).not.toHaveBeenCalled()
   })
@@ -641,11 +643,13 @@ describe('ProvenTx class method tests', () => {
     storage.transaction = jest.fn(async () => merged)
     storage.findProvenTxs = jest.fn(async () => [])
 
-    await expect(StorageProvider.prototype.processSyncChunk.call(
-      storage,
-      {} as sdk.RequestSyncChunkArgs,
-      { provenTxs: [proof] } as sdk.SyncChunk
-    )).resolves.toEqual(merged)
+    await expect(
+      StorageProvider.prototype.processSyncChunk.call(
+        storage,
+        {} as sdk.RequestSyncChunkArgs,
+        { provenTxs: [proof] } as sdk.SyncChunk
+      )
+    ).resolves.toEqual(merged)
 
     expect(proof).toMatchObject({
       txid: proof.txid.toLowerCase(),
@@ -663,12 +667,9 @@ describe('ProvenTx class method tests', () => {
     const storage = makeProofStorage(unvalidated.header)
     const entity = new EntityProvenTx(original.proof)
 
-    await expect(entity.mergeExisting(
-      storage,
-      undefined,
-      unvalidated.proof,
-      createSyncMap()
-    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(entity.mergeExisting(storage, undefined, unvalidated.proof, createSyncMap())).rejects.toMatchObject({
+      code: 'WERR_INVALID_PARAMETER'
+    })
 
     expect(storage.updateProvenTx).not.toHaveBeenCalled()
   })
@@ -689,8 +690,9 @@ describe('ProvenTx class method tests', () => {
     ]
 
     for (const candidate of malformed) {
-      await expect(syncProofValidation.validateSyncProof(storage, candidate))
-        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+      await expect(syncProofValidation.validateSyncProof(storage, candidate)).rejects.toMatchObject({
+        code: 'WERR_INVALID_PARAMETER'
+      })
     }
   })
 
@@ -698,11 +700,8 @@ describe('ProvenTx class method tests', () => {
     const transaction = new bsv.Transaction()
     transaction.addOutput({ satoshis: 1, lockingScript: bsv.Script.fromHex('51') })
     const { proof, header } = makeServerVerifiedProof(transaction, 110, 11)
-    const wrongHeightPath = new bsv.MerklePath(
-      proof.height + 1,
-      [[{ offset: 0, hash: proof.txid, txid: true }]]
-    )
-    const invalidCases: Array<{ candidate: TableProvenTx, storage: StorageProvider }> = [
+    const wrongHeightPath = new bsv.MerklePath(proof.height + 1, [[{ offset: 0, hash: proof.txid, txid: true }]])
+    const invalidCases: Array<{ candidate: TableProvenTx; storage: StorageProvider }> = [
       { candidate: { ...proof, merklePath: wrongHeightPath.toBinary() }, storage: makeProofStorage(header) },
       { candidate: { ...proof, index: 1 }, storage: makeProofStorage(header) },
       { candidate: { ...proof, merkleRoot: 'f'.repeat(64) }, storage: makeProofStorage(header) },
@@ -719,7 +718,9 @@ describe('ProvenTx class method tests', () => {
         candidate: { ...proof },
         storage: {
           getServices: () => ({
-            getChainTracker: async () => { throw new Error('chain tracker unavailable') },
+            getChainTracker: async () => {
+              throw new Error('chain tracker unavailable')
+            },
             getHeaderForHeight: async () => header
           })
         } as unknown as StorageProvider
@@ -729,8 +730,9 @@ describe('ProvenTx class method tests', () => {
     ]
 
     for (const { candidate, storage } of invalidCases) {
-      await expect(syncProofValidation.validateSyncProof(storage, candidate))
-        .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+      await expect(syncProofValidation.validateSyncProof(storage, candidate)).rejects.toMatchObject({
+        code: 'WERR_INVALID_PARAMETER'
+      })
     }
   })
 
@@ -741,8 +743,8 @@ describe('ProvenTx class method tests', () => {
 
     syncProofValidation.markSyncProofInsertOnly(proof)
 
-    expect(() => syncProofValidation.assertSyncProofReplacementAuthorized(proof))
-      .toThrow('concurrent proof row appeared')
+    expect(() => syncProofValidation.assertSyncProofReplacementAuthorized(proof)).toThrow(
+      'concurrent proof row appeared'
+    )
   })
-
 })

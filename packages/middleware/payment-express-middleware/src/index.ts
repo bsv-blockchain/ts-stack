@@ -1,6 +1,9 @@
+import { isMultipartPaymentType, PaymentTransportError } from '@bsv/sdk/auth/utils/paymentTransport'
+import { decodePaymentPayload } from '@bsv/sdk/auth/utils/decodePaymentPayload'
+import { parseMultipartPayment, MissingMultipartPayment } from './multipartPayment.js'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import { Beef, createNonce, PublicKey, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
-import type { RequestHandler, Response } from 'express'
+import type { NextFunction, RequestHandler, Response } from 'express'
 import type {
   BSVPayment,
   PaymentMiddlewareOptions,
@@ -44,17 +47,18 @@ function isPositiveSafeInteger(value: number): boolean {
 }
 
 function isCanonicalBase64(value: string): boolean {
-  if (
-    value.length === 0 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
-  ) {
+  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
     return false
   }
-  try {
-    return toBase64(toArray(value, 'base64')) === value
-  } catch {
-    return false
-  }
+  // Check pad bits without decoding or using a repeated-group regex, whose
+  // engine stack can overflow on the large BEEFs multipart was designed for.
+  let padding = 0
+  if (value.endsWith('==')) padding = 2
+  else if (value.endsWith('=')) padding = 1
+  const last = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+    value[value.length - padding - 1]
+  )
+  return padding === 0 || (padding === 1 ? (last & 3) === 0 : (last & 15) === 0)
 }
 
 function isCompressedPublicKey(value: string): boolean {
@@ -187,7 +191,8 @@ async function issuePaymentChallenge(
   wallet: PaymentMiddlewareOptions['wallet'],
   res: Response,
   requestPrice: number,
-  logger: PaymentMiddlewareOptions['logger']
+  logger: PaymentMiddlewareOptions['logger'],
+  multipart = false
 ): Promise<void> {
   try {
     const derivationPrefix = await createNonce(wallet)
@@ -196,7 +201,8 @@ async function issuePaymentChallenge(
       .set({
         'x-bsv-payment-version': PAYMENT_VERSION,
         'x-bsv-payment-satoshis-required': String(requestPrice),
-        'x-bsv-payment-derivation-prefix': derivationPrefix
+        'x-bsv-payment-derivation-prefix': derivationPrefix,
+        'x-bsv-payment-transports': multipart ? 'header,multipart' : 'header'
       })
       .json({
         status: 'error',
@@ -207,6 +213,145 @@ async function issuePaymentChallenge(
   } catch (error) {
     emitLog(logger, 'error', 'Failed to create a payment challenge.', safeErrorContext(error))
     sendError(res, 503, 'ERR_PAYMENT_UNAVAILABLE', 'Payment processing is temporarily unavailable.')
+  }
+}
+
+interface PaymentInputLimits {
+  enableMultipart: boolean
+  maxPaymentHeaderBytes: number
+  maxPaymentBodyBytes: number
+  maxPaymentBytes: number
+}
+
+function restoreApplicationPayload(
+  req: PaymentRequest,
+  parsed: ReturnType<typeof parseMultipartPayment>
+): void {
+  req.rawBody = parsed.body
+  req.body = decodePaymentPayload(parsed.body, parsed.contentType)
+  delete req.headers['content-type']
+  delete req.headers['content-length']
+  delete req.headers['transfer-encoding']
+  if (parsed.contentType !== undefined) req.headers['content-type'] = parsed.contentType
+  if (parsed.body !== undefined) req.headers['content-length'] = String(parsed.body.length)
+}
+
+function extractPaymentInput(
+  req: PaymentRequest,
+  res: Response,
+  multipart: boolean,
+  limits: PaymentInputLimits
+): { rawPayment: string | null | undefined; paymentLimit: number } | undefined {
+  const { enableMultipart, maxPaymentHeaderBytes, maxPaymentBodyBytes, maxPaymentBytes } = limits
+  const contentType = req.headers['content-type']
+  const rawPayment = paymentHeader(req)
+  const headerInput = { rawPayment, paymentLimit: maxPaymentHeaderBytes }
+  if (!enableMultipart || typeof contentType !== 'string' || !isMultipartPaymentType(contentType))
+    return headerInput
+  if (!multipart || rawPayment !== undefined || !(req.body instanceof Uint8Array)) {
+    sendError(
+      res,
+      400,
+      'ERR_MALFORMED_PAYMENT',
+      'Multipart payments require raw authentication and exactly one payment source.'
+    )
+    return undefined
+  }
+  try {
+    const parsed = parseMultipartPayment(
+      req.body,
+      contentType,
+      maxPaymentBodyBytes,
+      maxPaymentBytes
+    )
+    restoreApplicationPayload(req, parsed)
+    return { rawPayment: parsed.paymentJSON, paymentLimit: maxPaymentBytes }
+  } catch (error) {
+    if (error instanceof MissingMultipartPayment) return headerInput
+    const status =
+      error instanceof PaymentTransportError && error.code === 'ERR_PAYMENT_SIZE' ? 413 : 400
+    sendError(
+      res,
+      status,
+      'ERR_MALFORMED_PAYMENT',
+      'The multipart payment is malformed or exceeds its limit.'
+    )
+    return undefined
+  }
+}
+
+async function settlePayment(
+  paymentRequest: PaymentRequest,
+  res: Response,
+  next: NextFunction,
+  parsed: ParsedPayment,
+  identityKey: string,
+  options: Required<Pick<PaymentMiddlewareOptions, 'wallet' | 'replayStore'>> &
+    Pick<PaymentMiddlewareOptions, 'logger'>
+): Promise<void> {
+  const { wallet, replayStore, logger } = options
+  try {
+    const result: unknown = await wallet.internalizeAction({
+      tx: parsed.transaction,
+      outputs: [
+        {
+          paymentRemittance: {
+            derivationPrefix: parsed.payment.derivationPrefix,
+            derivationSuffix: parsed.payment.derivationSuffix,
+            senderIdentityKey: identityKey
+          },
+          outputIndex: 0,
+          protocol: 'wallet payment'
+        }
+      ],
+      description: 'Payment for request'
+    })
+
+    if (!isNewlyAcceptedInternalization(result)) {
+      sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was not newly accepted.')
+      return
+    }
+
+    // The wallet is the authority that validates the remittance and records
+    // whether it was newly accepted. Claim only after that validation so an
+    // attacker cannot poison a transaction ID by pairing a public BEEF with
+    // invalid derivation material. A buggy wallet that accepts a duplicate is
+    // still contained by the independent atomic replay store.
+    let claimed: boolean
+    try {
+      const claimResult: unknown = await replayStore.claim(parsed.transactionId)
+      if (typeof claimResult !== 'boolean') {
+        throw new TypeError('The replay store returned an invalid claim result.')
+      }
+      claimed = claimResult
+    } catch (error) {
+      emitLog(logger, 'error', 'Payment replay claim failed.', safeErrorContext(error))
+      sendError(
+        res,
+        503,
+        'ERR_PAYMENT_UNAVAILABLE',
+        'Payment processing is temporarily unavailable.'
+      )
+      return
+    }
+    if (!claimed) {
+      sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
+      return
+    }
+
+    paymentRequest.payment = {
+      satoshisPaid: parsed.satoshis,
+      accepted: true,
+      tx: toBase64(parsed.transaction),
+      txid: parsed.transactionId
+    }
+    res.set({
+      'x-bsv-payment-satoshis-paid': String(parsed.satoshis)
+    })
+    next()
+  } catch (error) {
+    emitLog(logger, 'warn', 'Payment internalization failed.', safeErrorContext(error))
+    sendError(res, 400, 'ERR_PAYMENT_FAILED', 'The payment could not be accepted.')
   }
 }
 
@@ -223,6 +368,9 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     wallet,
     replayStore = new InMemoryPaymentReplayStore(),
     maxPaymentHeaderBytes = DEFAULT_MAX_PAYMENT_HEADER_BYTES,
+    enableMultipart = false,
+    maxPaymentBodyBytes = 7 * 1024 * 1024,
+    maxPaymentBytes = 4 * 1024 * 1024,
     logger
   } = options
 
@@ -245,6 +393,12 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
   if (!isPaymentLogger(logger)) {
     throw new TypeError('logger error and warn properties must be functions when provided.')
   }
+  if (typeof enableMultipart !== 'boolean')
+    throw new TypeError('enableMultipart must be a boolean.')
+  for (const value of [maxPaymentBodyBytes, maxPaymentBytes]) {
+    if (!Number.isSafeInteger(value) || value < 1 || value > 16 * 1024 * 1024)
+      throw new RangeError('Multipart payment limits must be integers from 1 through 16777216.')
+  }
 
   return async (req, res, next): Promise<void> => {
     const paymentRequest: PaymentRequest = req
@@ -258,6 +412,16 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       )
       return
     }
+
+    const multipart = enableMultipart && paymentRequest.auth?.supportsMultipart === true
+    const input = extractPaymentInput(paymentRequest, res, multipart, {
+      enableMultipart,
+      maxPaymentHeaderBytes,
+      maxPaymentBodyBytes,
+      maxPaymentBytes
+    })
+    if (input === undefined) return
+    const { rawPayment, paymentLimit } = input
 
     let requestPrice: number
     try {
@@ -284,9 +448,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const rawPayment = paymentHeader(paymentRequest)
     if (rawPayment === undefined) {
-      await issuePaymentChallenge(wallet, res, requestPrice, logger)
+      await issuePaymentChallenge(wallet, res, requestPrice, logger, multipart)
       return
     }
 
@@ -295,7 +458,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const payment = parsePaymentHeader(rawPayment, maxPaymentHeaderBytes)
+    const payment = parsePaymentHeader(rawPayment, paymentLimit)
     if (payment === undefined) {
       sendError(res, 400, 'ERR_MALFORMED_PAYMENT', 'The X-BSV-Payment header is malformed.')
       return
@@ -333,68 +496,10 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    try {
-      const result: unknown = await wallet.internalizeAction({
-        tx: parsed.transaction,
-        outputs: [
-          {
-            paymentRemittance: {
-              derivationPrefix: payment.derivationPrefix,
-              derivationSuffix: payment.derivationSuffix,
-              senderIdentityKey: identityKey
-            },
-            outputIndex: 0,
-            protocol: 'wallet payment'
-          }
-        ],
-        description: 'Payment for request'
-      })
-
-      if (!isNewlyAcceptedInternalization(result)) {
-        sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was not newly accepted.')
-        return
-      }
-
-      // The wallet is the authority that validates the remittance and records
-      // whether it was newly accepted. Claim only after that validation so an
-      // attacker cannot poison a transaction ID by pairing a public BEEF with
-      // invalid derivation material. A buggy wallet that accepts a duplicate is
-      // still contained by the independent atomic replay store.
-      let claimed: boolean
-      try {
-        const claimResult: unknown = await replayStore.claim(parsed.transactionId)
-        if (typeof claimResult !== 'boolean') {
-          throw new TypeError('The replay store returned an invalid claim result.')
-        }
-        claimed = claimResult
-      } catch (error) {
-        emitLog(logger, 'error', 'Payment replay claim failed.', safeErrorContext(error))
-        sendError(
-          res,
-          503,
-          'ERR_PAYMENT_UNAVAILABLE',
-          'Payment processing is temporarily unavailable.'
-        )
-        return
-      }
-      if (!claimed) {
-        sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
-        return
-      }
-
-      paymentRequest.payment = {
-        satoshisPaid: parsed.satoshis,
-        accepted: true,
-        tx: toBase64(parsed.transaction),
-        txid: parsed.transactionId
-      }
-      res.set({
-        'x-bsv-payment-satoshis-paid': String(parsed.satoshis)
-      })
-      next()
-    } catch (error) {
-      emitLog(logger, 'warn', 'Payment internalization failed.', safeErrorContext(error))
-      sendError(res, 400, 'ERR_PAYMENT_FAILED', 'The payment could not be accepted.')
-    }
+    await settlePayment(paymentRequest, res, next, parsed, identityKey, {
+      wallet,
+      replayStore,
+      logger
+    })
   }
 }

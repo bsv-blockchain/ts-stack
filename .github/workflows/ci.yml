@@ -1087,6 +1087,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      # The patch gate compares emitted code to recognize declaration-only
+      # edits. Without its compiler it correctly fails closed, even for a
+      # types-only module that cannot produce executable LCOV points.
+      - name: Install the patch-coverage compiler from the frozen root graph
+        run: pnpm install --filter @bsv/ts-stack --frozen-lockfile --ignore-scripts
+      - name: Rebuild the audited patch-coverage compiler
+        run: pnpm --filter @bsv/ts-stack rebuild esbuild
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: coverage-*

@@ -4,6 +4,34 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## 2.15.0 candidate — bounded synchronization and canonical proof recovery
+
+- Add resumable local atomic pages, durable checkpoints, cancellation/progress,
+  concurrent read capability checks and fair foreground/background ownership.
+- Separate fixed source/commit latency from marginal row cost and bound upward
+  probes, page records and proof concurrency.
+- Reduce redundant storage promise forwarding while retaining authorization
+  inside exclusive ownership; failures release the next queued operation.
+- Share the remote forwarding rejection boundary, skip uncontended priority
+  searches and avoid repeated queue/checkpoint helper allocations. Custom RPC
+  throws remain Promise rejections; wire, result and fairness contracts remain.
+- Share reader/writer admission helpers without moving authorization across the
+  queue boundary. Normalize entity arrays in place using one field list and a
+  Map of property descriptors, avoiding an intermediate mapping array
+  while preserving date, null, byte and non-enumerable-field behavior.
+- Adjust only the reviewed mobile Hermes Brotli ceiling to 1,675,000 bytes,
+  retaining the other five limits. The mobile README records composition,
+  upstream comparison and 9.97% measured headroom; build settings are unchanged.
+- Check chains before sync writes and preserve returned, serialized and thrown
+  failures without advancing progress.
+- Repair stale selected/input/broadcast proofs against canonical evidence; fence
+  monitor updates against primary replacement and concurrent proof corrections.
+- Keep proof changes and prepared-BEEF invalidation atomic, and retain safe custom
+  provider behavior. No persisted-schema migration is required.
+- Exercise large copies, tombstones, restart/lost acknowledgements and foreground
+  latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
+  timestamp boundary traffic remains a snapshot/high-water follow-up.
+
 ## wallet-toolbox (unreleased)
 
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,

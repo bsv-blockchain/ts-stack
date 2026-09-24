@@ -361,6 +361,11 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>
 
+  /** Share the asynchronous rejection boundary, including custom transports that throw synchronously. */
+  private async forwardRpc<T>(method: string, params: unknown[]): Promise<T> {
+    return this.rpcCall<T>(method, params)
+  }
+
   protected nextRequestId(): number {
     if (!Number.isSafeInteger(this.nextId) || this.nextId < 1) {
       throw new Error('Wallet storage request identifier space exhausted.')
@@ -417,8 +422,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   /**
    * Called to cleanup resources when no further use of this object will occur.
    */
-  async destroy(): Promise<void> {
-    return await this.rpcCall<void>('destroy', [])
+  destroy(): Promise<void> {
+    return this.forwardRpc<void>('destroy', [])
   }
 
   /**
@@ -428,8 +433,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param storageIdentityKey Unique identity key for remote storage if it does not yet exist.
    * @returns current schema migration identifier
    */
-  async migrate(storageName: string, _storageIdentityKey: string): Promise<string> {
-    return await this.rpcCall<string>('migrate', [storageName])
+  migrate(storageName: string, _storageIdentityKey: string): Promise<string> {
+    return this.forwardRpc<string>('migrate', [storageName])
   }
 
   /**
@@ -461,8 +466,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Original wallet `internalizeAction` arguments.
    * @returns `internalizeAction` results
    */
-  async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
-    return await this.rpcCall<StorageInternalizeActionResult>('internalizeAction', [auth, args])
+  internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+    return this.forwardRpc<StorageInternalizeActionResult>('internalizeAction', [auth, args])
   }
 
   /**
@@ -515,47 +520,47 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args `StorageProcessActionArgs` convey completed signed transaction to storage.
    * @returns `StorageProcessActionResults` supporting final wallet processing to yield `createAction` or `signAction` results.
    */
-  async processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
-    return await this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
+  processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
+    return this.forwardRpc<StorageProcessActionResults>('processAction', [auth, args])
   }
 
-  async prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
-    return await this.rpcCall<StoragePrepareNoSendExpiryResult>('prepareNoSendExpiry', [auth, args])
+  prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
+    return this.forwardRpc<StoragePrepareNoSendExpiryResult>('prepareNoSendExpiry', [auth, args])
   }
 
-  async activateNoSendExpiry(
+  activateNoSendExpiry(
     auth: AuthId,
     args: StorageActivateNoSendExpiryArgs
   ): Promise<StorageActivateNoSendExpiryResult> {
-    return await this.rpcCall<StorageActivateNoSendExpiryResult>('activateNoSendExpiry', [auth, args])
+    return this.forwardRpc<StorageActivateNoSendExpiryResult>('activateNoSendExpiry', [auth, args])
   }
 
   async armNoSendExpiry(auth: AuthId, args: StorageArmNoSendExpiryArgs): Promise<void> {
     await this.rpcCall<void>('armNoSendExpiry', [auth, args])
   }
 
-  async getCapabilities(): Promise<StorageCapabilities> {
-    return await this.rpcCall<StorageCapabilities>('getCapabilities', [])
+  getCapabilities(): Promise<StorageCapabilities> {
+    return this.forwardRpc<StorageCapabilities>('getCapabilities', [])
   }
 
-  async beginActionBatch(auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
-    return await this.rpcCall<BeginActionBatchResult>('beginActionBatch', [auth, args])
+  beginActionBatch(auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
+    return this.forwardRpc<BeginActionBatchResult>('beginActionBatch', [auth, args])
   }
 
-  async extendActionBatch(auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
-    return await this.rpcCall<ExtendActionBatchResult>('extendActionBatch', [auth, args])
+  extendActionBatch(auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
+    return this.forwardRpc<ExtendActionBatchResult>('extendActionBatch', [auth, args])
   }
 
-  async renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
-    return await this.rpcCall<RenewActionBatchResult>('renewActionBatch', [auth, batchId])
+  renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
+    return this.forwardRpc<RenewActionBatchResult>('renewActionBatch', [auth, batchId])
   }
 
-  async resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
-    return await this.rpcCall<ResumeActionBatchResult>('resumeActionBatch', [auth, args])
+  resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
+    return this.forwardRpc<ResumeActionBatchResult>('resumeActionBatch', [auth, args])
   }
 
-  async prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {
-    return await this.rpcCall<PrepareActionBatchCommitResult>('prepareActionBatchCommit', [auth, manifest])
+  prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {
+    return this.forwardRpc<PrepareActionBatchCommitResult>('prepareActionBatchCommit', [auth, manifest])
   }
 
   async putActionBatchBlob(auth: AuthId, args: PutActionBatchBlobArgs): Promise<void> {
@@ -597,16 +602,16 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     }
   }
 
-  async commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
-    return await this.rpcCall<CommitActionBatchResult>('commitActionBatch', [auth, manifest])
+  commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
+    return this.forwardRpc<CommitActionBatchResult>('commitActionBatch', [auth, manifest])
   }
 
-  async commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
-    return await this.rpcCall<CommitActionBatchResult>('commitActionBatchByDigest', [auth, args])
+  commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
+    return this.forwardRpc<CommitActionBatchResult>('commitActionBatchByDigest', [auth, args])
   }
 
-  async abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
-    return await this.rpcCall<AbortActionBatchResult>('abortActionBatch', [auth, batchId])
+  abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
+    return this.forwardRpc<AbortActionBatchResult>('abortActionBatch', [auth, batchId])
   }
 
   /**
@@ -616,8 +621,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args original wallet `abortAction` args.
    * @returns `abortAction` result.
    */
-  async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
-    return await this.rpcCall<AbortActionResult>('abortAction', [auth, args])
+  abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
+    return this.forwardRpc<AbortActionResult>('abortAction', [auth, args])
   }
 
   /**
@@ -626,8 +631,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param identityKey of the user.
    * @returns `TableUser` for the user and whether a new user was created.
    */
-  async findOrInsertUser(identityKey: string): Promise<{ user: TableUser; isNew: boolean }> {
-    return await this.rpcCall<{ user: TableUser; isNew: boolean }>('findOrInsertUser', [identityKey])
+  findOrInsertUser(identityKey: string): Promise<{ user: TableUser; isNew: boolean }> {
+    return this.forwardRpc<{ user: TableUser; isNew: boolean }>('findOrInsertUser', [identityKey])
   }
 
   /** Read compact progress only when the provider advertises support. */
@@ -672,9 +677,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param certificate the certificate to insert.
    * @returns record Id of the inserted `TableCertificate` record.
    */
-  async insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
-    const r = await this.rpcCall<number>('insertCertificateAuth', [auth, certificate])
-    return r
+  insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
+    return this.forwardRpc<number>('insertCertificateAuth', [auth, certificate])
   }
 
   /**
@@ -684,9 +688,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listActions` arguments.
    * @returns `listActions` results.
    */
-  async listActions(auth: AuthId, vargs: ValidListActionsArgs): Promise<ListActionsResult> {
-    const r = await this.rpcCall<ListActionsResult>('listActions', [auth, vargs])
-    return r
+  listActions(auth: AuthId, vargs: ValidListActionsArgs): Promise<ListActionsResult> {
+    return this.forwardRpc<ListActionsResult>('listActions', [auth, vargs])
   }
 
   /**
@@ -696,9 +699,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listOutputs` arguments.
    * @returns `listOutputs` results.
    */
-  async listOutputs(auth: AuthId, vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
-    const r = await this.rpcCall<ListOutputsResult>('listOutputs', [auth, vargs])
-    return r
+  listOutputs(auth: AuthId, vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
+    return this.forwardRpc<ListOutputsResult>('listOutputs', [auth, vargs])
   }
 
   /**
@@ -708,9 +710,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listCertificates` arguments.
    * @returns `listCertificates` results.
    */
-  async listCertificates(auth: AuthId, vargs: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
-    const r = await this.rpcCall<ListCertificatesResult>('listCertificates', [auth, vargs])
-    return r
+  listCertificates(auth: AuthId, vargs: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+    return this.forwardRpc<ListCertificatesResult>('listCertificates', [auth, vargs])
   }
 
   /**
@@ -793,8 +794,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param args original wallet `relinquishCertificate` args.
    */
-  async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
-    return await this.rpcCall<number>('relinquishCertificate', [auth, args])
+  relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
+    return this.forwardRpc<number>('relinquishCertificate', [auth, args])
   }
 
   /**
@@ -806,8 +807,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param args original wallet `relinquishOutput` args.
    */
-  async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
-    return await this.rpcCall<number>('relinquishOutput', [auth, args])
+  relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
+    return this.forwardRpc<number>('relinquishOutput', [auth, args])
   }
 
   /**
@@ -1034,11 +1035,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args proof request and new transaction proof data
    * @returns results of updates
    */
-  async updateProvenTxReqWithNewProvenTx(
+  updateProvenTxReqWithNewProvenTx(
     args: UpdateProvenTxReqWithNewProvenTxArgs
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
-    const r = await this.rpcCall<UpdateProvenTxReqWithNewProvenTxResult>('updateProvenTxReqWithNewProvenTx', [args])
-    return r
+    return this.forwardRpc<UpdateProvenTxReqWithNewProvenTxResult>('updateProvenTxReqWithNewProvenTx', [args])
   }
 
   /**
@@ -1050,8 +1050,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param newActiveStorageIdentityKey which must be a currently configured backup storage provider.
    */
-  async setActive(auth: AuthId, newActiveStorageIdentityKey: string): Promise<number> {
-    return await this.rpcCall<number>('setActive', [auth, newActiveStorageIdentityKey])
+  setActive(auth: AuthId, newActiveStorageIdentityKey: string): Promise<number> {
+    return this.forwardRpc<number>('setActive', [auth, newActiveStorageIdentityKey])
   }
 
   /** @see {@link validateDate} */

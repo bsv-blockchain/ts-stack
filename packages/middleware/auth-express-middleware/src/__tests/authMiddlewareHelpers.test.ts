@@ -174,6 +174,44 @@ describe('auth middleware helpers', () => {
   })
 
   it.each([
+    ['dense byte array', []],
+    ['Uint8Array', new Uint8Array(0)],
+    ['Buffer', Buffer.alloc(0)],
+    ['empty subarray', new Uint8Array([0, 255]).subarray(1, 1)]
+  ])('writes the absent-body sentinel for an empty %s', (_name, body) => {
+    const writer = new Utils.Writer()
+    writeBodyToWriter(
+      { body, headers: { 'content-type': 'application/octet-stream' } } as any,
+      writer
+    )
+    const reader = new Utils.Reader(writer.toArray())
+    expect(reader.readVarIntNum()).toBe(-1)
+    expect(reader.pos).toBe(reader.bin.length)
+  })
+
+  it.each([
+    ['Uint8Array', new Uint8Array([0, 128, 255]), [0, 128, 255]],
+    ['empty Uint8Array', new Uint8Array(0), []],
+    ['Buffer', Buffer.from([0, 128, 255]), [0, 128, 255]],
+    ['empty Buffer', Buffer.alloc(0), []]
+  ])(
+    'frames copied %s bytes independently of shadowed length metadata',
+    (_name, body, expected) => {
+      const bytes = expected as number[]
+      Object.defineProperty(body, 'length', { value: bytes.length === 0 ? 3 : 0 })
+      const writer = new Utils.Writer()
+      writeBodyToWriter(
+        { body, headers: { 'content-type': 'application/octet-stream' } } as any,
+        writer
+      )
+      const reader = new Utils.Reader(writer.toArray())
+      expect(reader.readVarIntNum()).toBe(bytes.length === 0 ? -1 : bytes.length)
+      expect(reader.read(bytes.length)).toEqual(bytes)
+      expect(reader.pos).toBe(reader.bin.length)
+    }
+  )
+
+  it.each([
     [undefined, undefined],
     ['', 'text/plain'],
     [{}, 'application/x-www-form-urlencoded']

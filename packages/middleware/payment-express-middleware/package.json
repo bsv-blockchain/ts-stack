@@ -1,6 +1,6 @@
 {
   "name": "@bsv/payment-express-middleware",
-  "version": "2.1.7",
+  "version": "2.2.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -33,11 +33,12 @@
     "lint": "oxlint mod.ts src --deny-warnings",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports InMemoryPaymentReplayStore,createPaymentMiddleware && node ../../../scripts/check-auth-express-consumers.mjs @bsv/payment-express-middleware",
     "prepublishOnly": "pnpm build",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand && pnpm test:browser",
     "test:property": "jest --runInBand src/__tests/PaymentReplayStore.property.test.ts",
-    "test:coverage": "jest --coverage --runInBand",
+    "test:coverage": "jest --coverage --runInBand && pnpm test:browser",
     "test:watch": "jest --watch",
-    "typecheck": "tsc --project tsconfig.typecheck.json"
+    "typecheck": "tsc --project tsconfig.typecheck.json",
+    "test:browser": "node test/brc118-browser.mjs"
   },
   "keywords": [
     "BSV",
@@ -69,10 +70,13 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
+    "esbuild": "0.28.1",
     "express": "^5.2.1",
+    "express-rate-limit": "8.6.1",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.76.0",
+    "puppeteer-core": "^25.4.0",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsdown": "0.22.14",
@@ -83,7 +87,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6",
+    "@bsv/sdk": "^2.9.0",
     "@types/express": ">=4.17.0 <6",
     "express": ">=4.18.0 <6"
   },

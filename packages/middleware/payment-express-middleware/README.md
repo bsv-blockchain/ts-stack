@@ -9,6 +9,19 @@ This protocol is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Choose one protocol deliberately; their headers and client
 contracts are not interchangeable.
 
+## BRC-118 multipart payments
+
+Set `enableMultipart: true` behind `createAuthMiddleware({ wallet,
+captureRawBody: true })`, installed before any body parser. Negotiation advertises
+`header,multipart` only when exact-byte authentication is active. Small payments
+retain `x-bsv-payment`; multipart payments share the same amount, BRC-29, BEEF,
+internalization and replay validation. The route receives only the original
+payload/media type, with exact bytes in `req.rawBody`. Defaults bound payment JSON
+to 4 MiB and the complete body to 7 MiB; configure `maxPaymentBytes` and
+`maxPaymentBodyBytes` to match the proxy and auth collector. See the
+[BRC-118 guide](../../../docs/guides/brc118-payments.md) for receiver-first rollout,
+parser policy, browser headers and uncertain payment recovery.
+
 ## Requirements
 
 - Node.js 22 or newer

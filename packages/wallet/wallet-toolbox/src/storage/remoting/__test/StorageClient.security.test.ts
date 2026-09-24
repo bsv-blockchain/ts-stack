@@ -22,6 +22,17 @@ describe.each([
     expect(() => new Client(wallet, 'http://wallet.localhost:8042')).not.toThrow()
   })
 
+  test.each([0x00, 0x1f, 0x7f, 0x85, 0x9f])('rejects a control code unit %i anywhere in an endpoint', code => {
+    expect(() => new Client(wallet, `https://storage.example.com/rpc${String.fromCharCode(code)}suffix`)).toThrow(
+      'exact bounded URL'
+    )
+  })
+
+  test('preserves non-ASCII and supplementary Unicode endpoint paths', () => {
+    const endpoint = 'https://storage.example.com/é/😀'
+    expect(new Client(wallet, endpoint).endpointUrl).toBe(endpoint)
+  })
+
   test('rejects ambiguous endpoint components', () => {
     expect(() => new Client(wallet, '/rpc')).toThrow('absolute URL')
     expect(() => new Client(wallet, 'https://user:pass@storage.example.com/rpc')).toThrow(

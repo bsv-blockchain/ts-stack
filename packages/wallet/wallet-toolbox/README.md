@@ -180,8 +180,13 @@ The toolbox publishes three npm packages from this repo:
 ### Sync performance and recovery
 
 Sync pages start at 64 records and adapt after successful commits toward a
-five-second page budget. Proof-bearing pages cap growth at 128 records; cheap
-metadata pages can grow to 1,000, while provider byte/item ceilings still apply.
+five-second marginal-work budget. A bounded history separates fixed read and
+commit overhead from per-record work, so slow fixed latency does not collapse
+large copies to one record per request. A two-record probe permits recovery from
+the single-record floor. Proof-bearing pages cap growth at 128 records; metadata
+pages can grow to 1,000, while provider byte/item ceilings still apply. These are
+work estimates, not deadlines: an individual proof or unavailable dependency can
+still take longer.
 The server checks at most eight proofs concurrently and waits for all started
 checks to settle on failure before rejecting the page. Every proof still passes
 transaction, Merkle path, active-root and active-header validation before a merge.
@@ -204,9 +209,9 @@ client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.
 include the combined upstream security fixes. These are explicit feature costs;
 the RPC validation coordinator remains excluded from browser/mobile bundles.
 
-The transfer extension is an **unpublished 2.13.0 candidate**. Published 2.12.0
-has no record-transfer methods. Check exact build provenance and authenticated
-runtime capabilities, not a version label alone. An oversized record on a legacy
+The transfer extension is included in the published 2.13.2 graph. Older 2.12.0
+providers have no record-transfer methods. Check exact build provenance and
+authenticated runtime capabilities, not a version label alone. An oversized record on a legacy
 source cannot be rescued by upgrading only its destination; upgrade the source
 before retrying. Records exceeding the negotiated 64 MiB frame limit fail safely
 without being skipped or advancing their checkpoint.
@@ -330,6 +335,93 @@ retained privately, outside this repository.
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
+
+### Resumable pulls and foreground access
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, reader, options)`
+adds per-page progress and cancellation without changing the existing sync
+method signatures. The result reports `completed` or `cancelled`, page and row
+counts, the last acknowledged checkpoint, and the selected execution mode.
+
+The new resumable API defaults to a 256 KiB rough page target, with an explicit
+ceiling up to 10 MB. Existing sync methods retain their previous defaults.
+
+```ts
+const cancellation = new AbortController()
+const result = await storage.syncFromReaderResumable(identityKey, reader, {
+  signal: cancellation.signal,
+  maxItems: 128,
+  maxRoughSize: 262144,
+  onProgress: progress => console.log(progress.state, progress.pages)
+})
+// A later invocation loads durable destination progress, including any page
+// whose acknowledgement was lost. Do not replay a saved request manually.
+```
+
+Local SQLite/MySQL and IndexedDB destinations advertise `storageAccess.version`
+1 with atomic sync checkpoints. Their paged pull reads and prepares one source
+page outside manager write ownership, then queues its atomic data/checkpoint
+commit. Network-backed proof checks finish before that queue is acquired; the
+commit rejects changed proof records. Payloads are detached during preparation,
+and a prepared page can only be consumed once. Foreground operations can run
+between pages and during source/proof I/O. Supported reads share up to eight
+slots; writers remain exclusive. A waiting background page gets a turn within
+eight foreground grants or after one second of waiting at the next release.
+This bounds queue preference, not the duration of a provider operation.
+
+Cancellation before a commit discards that page. Cancellation during a commit
+waits for its acknowledgement, reports the committed checkpoint, then stops.
+Source I/O also settles before the stopped result: custom providers must supply
+their own I/O deadlines. Failures propagate without blind write replay; restart
+loads the durable checkpoint. Changing the selected primary fences an older
+session before its next write. Concurrent copies of the same source cannot both
+commit the same checkpoint. Progress observers receive independent checkpoint
+copies and run outside page ownership in paged mode.
+
+Missing capabilities, remote destinations, self-copies, existing whole-copy
+methods and primary reconciliation retain exclusive execution. A failed
+capability lookup falls back to serialization. Page ceilings are rough encoded
+size hints; the existing negotiated per-record transfer bounds still apply to
+large records. One page is in flight, and progress does not accumulate wallet
+records or per-record logs. Source pagination retains the existing eventual
+replication contract: this API is **not a coherent source snapshot**. Source
+snapshot handles and streaming portable archives require their separate
+consistency and format contracts.
+The existing timestamp boundary is inclusive: an unchanged copy can reread rows
+sharing the final timestamp, including an entire same-timestamp import. Those
+rows are not rewritten. This protects late same-time arrivals; a coherent source
+revision/snapshot is needed to eliminate that boundary traffic safely. Smaller
+`maxRoughSize` values (for example 262144) reduce transient authenticated HTTP
+memory and event-loop work for constrained devices, at the cost of more pages.
+
+Every live sync checks declared network chains before registering a destination
+user or checkpoint. A missing or unrecognized chain is not inferred. Thrown and
+returned provider errors take precedence over `done`, counters and checkpoint
+hints; unfinished pages without durable progress stop instead of spinning.
+`WERR_NETWORK_CHAIN` and `ProcessSyncChunkResult.error` remain compatible.
+
+### Canonical proof recovery during actions
+
+When services are configured, selected-change BEEF is checked before returning
+to the signer, including embedded ancestry and prepared artifacts. The actual
+send/monitor path checks its rebuilt bundle as well. Valid graphs avoid extra
+proof-record reads and copies; checks run with at most eight operations in
+flight. Stale roots trigger bounded canonical lookups. Replacement transaction
+bytes, Merkle membership, root and active header must agree before use.
+
+SQLite/MySQL and IndexedDB persist verified corrections with a compare-and-set
+against the original proof, and invalidate prepared artifacts in the same
+transaction. A concurrent repair is never overwritten. Custom providers may
+implement `compareAndSetProvenTxProof`; the default repairs only the outgoing
+graph. Failed recovery retains the source records, stops before broadcast, and
+returns `WERR_INVALID_MERKLE_ROOT` with its txid, root and height across JSON-RPC.
+Failed construction releases its funding reservation through the existing
+failed-action cleanup; it does not mark the input spent without evidence.
+
+Standalone storage construction without configured services retains its offline
+contract; its caller must validate before signing or broadcasting. This change
+does not audit historical block-hash metadata or repair every stored proof:
+BEEF root validity and an operator's historical-store audit remain distinct.
 
 ### UMP account continuity and phone changes
 

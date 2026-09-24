@@ -3,7 +3,7 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.5.3'
+version: '2.6.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -15,6 +15,8 @@ tags: [messaging, message-box, brc-103, brc-29]
 ---
 
 # @bsv/message-box-client
+
+The unpublished 2.6 candidate accepts strict bounded base64 transaction bytes at the PeerPay receive boundary, alongside deployed array/byte representations. Outgoing encoding stays unchanged. This does not remove encrypted relay message limits or provide a durable settlement journal.
 
 > Browser- and Node-compatible authenticated store-and-forward messaging,
 > live WebSockets, peer payments, token settlement, permissions, quotes, and

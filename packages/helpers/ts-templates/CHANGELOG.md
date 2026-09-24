@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 1.10.4 candidate — packed consumer validation
+
+- Execute five synthetic spends through clean CommonJS/ESM packed consumers on
+  published SDK 2.8.0 and the next candidate SDK, preserving matching script bytes.
+- Preserve the published 1.10.3 named SDK imports and include the consumer-check
+  command in the package manifest. No API or script-format migration is required.
+
 ### 1.10.3 candidate — CommonJS SDK interop
 
 ### Fixed

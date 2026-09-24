@@ -3,8 +3,34 @@ import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageProvider } from '../StorageProvider'
 import { StorageReaderWriter } from '../StorageReaderWriter'
+import { TableProvenTx } from '../schema/tables'
+import { toBinaryBaseBlockHeader } from '../../services/Services'
+import { doubleSha256BE } from '../../utility/utilityHelpers'
+import { asString } from '../../utility/utilityHelpers.noBuffer'
 
 import * as dotenv from 'dotenv'
+
+function canonicalReproof(ctx: TestWalletNoSetup, ptx: TableProvenTx) {
+  const merklePath = new bsv.MerklePath(ptx.height + 1, [[{ offset: 0, hash: ptx.txid, txid: true }]])
+  const header = toBinaryBaseBlockHeader({
+    version: 1,
+    previousHash: '0'.repeat(64),
+    merkleRoot: merklePath.computeRoot(ptx.txid),
+    time: 0,
+    bits: 0,
+    nonce: 0
+  })
+  const services = ctx.storage.getServices()
+  const isValidRootForHeight = jest.fn(async () => true)
+  jest.spyOn(services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight } as bsv.ChainTracker)
+  jest.spyOn(services, 'getHeaderForHeight').mockResolvedValue(header)
+  const lookup = jest.spyOn(services, 'getValidatedMerklePath').mockImplementation(async (_txid, validate) => {
+    const result = { name: 'canonical reproof fixture', merklePath }
+    await validate(result)
+    return result
+  })
+  return { lookup, isValidRootForHeight, height: merklePath.blockHeight, blockHash: asString(doubleSha256BE(header)) }
+}
 
 dotenv.config()
 describe('WalletStorageManager tests', () => {
@@ -60,6 +86,195 @@ describe('WalletStorageManager tests', () => {
     } finally {
       writer.mockRestore()
     }
+  })
+
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s returns a rejection for synchronous callback errors and releases ownership',
+    async method => {
+      for (const { storage } of ctxs) {
+        const failure = new Error('synchronous callback failure')
+        const operation = storage[method](() => {
+          throw failure
+        })
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      }
+    }
+  )
+
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s holds ownership through asynchronous rejection, then releases the waiting writer',
+    async method => {
+      for (const { storage } of ctxs) {
+        let reject!: (error: Error) => void
+        let entered!: () => void
+        const started = new Promise<void>(resolve => {
+          entered = resolve
+        })
+        const pending = new Promise<void>((_resolve, fail) => {
+          reject = fail
+        })
+        const operation = storage[method](() => {
+          entered()
+          return pending
+        })
+        await started
+        const next = jest.fn(async () => 'next writer')
+        const waiting = storage.runAsWriter(next)
+        await Promise.resolve()
+        expect(next).not.toHaveBeenCalled()
+        const failure = new Error('asynchronous callback failure')
+        const rejected = expect(operation).rejects.toBe(failure)
+        reject(failure)
+        await rejected
+        await expect(waiting).resolves.toBe('next writer')
+        expect(next).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  test.each(['migrate', 'getCapabilities', 'findProvenTxReqs'] as const)(
+    '%s preserves synchronous provider failures as rejected promises and releases ownership',
+    async method => {
+      const { storage } = ctxs[0]
+      const failure = new Error('provider failed synchronously')
+      const dispatch = jest.spyOn(storage.getActive(), method).mockImplementation(() => {
+        throw failure
+      })
+      try {
+        const args = method === 'migrate' ? ['name', 'identity'] : method === 'getCapabilities' ? [] : [{}]
+        const operation = Reflect.get(storage, method).apply(storage, args)
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        dispatch.mockRestore()
+      }
+    }
+  )
+
+  test('writer authorization failure never dispatches and releases the next writer', async () => {
+    for (const { storage } of ctxs) {
+      const failure = new Error('authorization unavailable')
+      const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+      const dispatch = jest.spyOn(storage.getActive(), 'createAction')
+      try {
+        await expect(storage.createAction({} as any)).rejects.toBe(failure)
+        expect(auth).toHaveBeenCalledWith(true)
+        expect(dispatch).not.toHaveBeenCalled()
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        auth.mockRestore()
+        dispatch.mockRestore()
+      }
+    }
+  })
+
+  test('writer authorization is evaluated only after the preceding writer releases ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('provider refused action')
+    const dispatch = jest.spyOn(storage.getActive(), 'createAction').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const action = storage.createAction({} as any)
+      const rejected = expect(action).rejects.toBe(failure)
+      await Promise.resolve()
+      expect(auth).not.toHaveBeenCalled()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(auth).toHaveBeenCalledWith(true)
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization still precedes queue admission while provider work waits for ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('reader provider refused request')
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const result = storage.findOutputs({} as any)
+      const rejected = expect(result).rejects.toBe(failure)
+      expect(auth).toHaveBeenCalledWith()
+      await Promise.resolve()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization rejection never dispatches provider work', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('reader authorization unavailable')
+    const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth')
+    try {
+      const result = storage.findOutputs({} as any)
+      expect(result).toBeInstanceOf(Promise)
+      await expect(result).rejects.toBe(failure)
+      expect(dispatch).not.toHaveBeenCalled()
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('borrowed sync callback throws remain asynchronous rejections', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('borrowed callback failed')
+    const operation = storage.runAsSync(() => {
+      throw failure
+    }, storage.getActive())
+    expect(operation).toBeInstanceOf(Promise)
+    await expect(operation).rejects.toBe(failure)
+    await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
   })
 
   test('1_runAsReader runAsWriter runAsSync interlock correctly', async () => {
@@ -477,16 +692,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: '' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
-      expect(reprove).toHaveBeenCalled()
+      expect(lookup).toHaveBeenCalled()
       expect(result.updated.length).toBeGreaterThan(0)
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
     } finally {
@@ -538,12 +748,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: undefined,
-        unchanged: false,
-        unavailable: true
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
+      lookup.mockRejectedValue(new Error('proof unavailable'))
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
@@ -561,16 +767,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: 'height reproof\n' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeightMerkleRoot(ptx.height, ptx.merkleRoot)
 
-      expect(reprove).toHaveBeenCalledWith(ptx, true)
+      expect(lookup).toHaveBeenCalledWith(ptx.txid, expect.any(Function))
       expect(result.updated).toHaveLength(1)
       expect(result.log).toContain('proof data updated')
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
@@ -591,36 +792,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const replacementHash = ptx.blockHash === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
-      const replacementHeight = ptx.height + 1
-      const merklePath = new bsv.MerklePath(replacementHeight, [
-        [
-          {
-            offset: 0,
-            hash: ptx.txid,
-            txid: true
-          }
-        ]
-      ])
-      const services = ctx.storage.getServices()
-      const isValidRootForHeight = jest.fn(async () => 'true' as unknown as boolean)
-      jest.spyOn(services, 'getChainTracker').mockResolvedValue({
-        isValidRootForHeight
-      } as bsv.ChainTracker)
-      jest.spyOn(services, 'getMerklePath').mockResolvedValue({
-        name: 'prepared BEEF reproof test',
-        merklePath,
-        header: {
-          version: 1,
-          previousHash: '0'.repeat(64),
-          merkleRoot: merklePath.computeRoot(ptx.txid),
-          time: 0,
-          bits: 0,
-          nonce: 0,
-          height: replacementHeight,
-          hash: replacementHash
-        }
-      })
+      const { height: replacementHeight, blockHash: replacementHash, isValidRootForHeight } = canonicalReproof(ctx, ptx)
+      isValidRootForHeight.mockResolvedValue('true' as unknown as boolean)
 
       const rejected = await ctx.storage.reproveProven(ptx)
       expect(rejected).toMatchObject({ unavailable: true, updated: undefined })

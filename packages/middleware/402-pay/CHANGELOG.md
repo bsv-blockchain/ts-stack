@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 0.3.3 candidate — protocol selection documentation
+
+- Clarify that BRC-118 extends the separate SDK AuthFetch/BRC-105 middleware path.
+  This package's BRC-121 runtime, headers and replay behavior remain unchanged.
+
 ### 0.3.2 candidate — replay-safe Atomic BEEF payments
 
 ### Maintenance

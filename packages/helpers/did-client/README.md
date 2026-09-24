@@ -87,11 +87,11 @@ const client = new DIDClient({
 
 ## API
 
-| Method                                    | Purpose                                                                 |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
+| Method                                    | Purpose                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
 | `createDID(serialNumber, subject, opts?)` | Mints an issuer-owned legacy token and retains the subject in wallet metadata |
-| `findDID(query)`                          | Looks up DID records by serial number, outpoint, date range, etc.       |
-| `revokeDID(opts)`                         | Spends an existing DID UTXO, removing it from the overlay               |
+| `findDID(query)`                          | Looks up DID records by serial number, outpoint, date range, etc.             |
+| `revokeDID(opts)`                         | Spends an existing DID UTXO, removing it from the overlay                     |
 
 `subject` participates in wallet key derivation and is retained in the
 issuer's authenticated wallet metadata, but it is not present in the v1 public
@@ -104,3 +104,10 @@ TS Stack first-party material is under the [Open BSV License Version 6](./LICENS
 The UMD bundle incorporates separately licensed SDK material; keep
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
 with the bundle.
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

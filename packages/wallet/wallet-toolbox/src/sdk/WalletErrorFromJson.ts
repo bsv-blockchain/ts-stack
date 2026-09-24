@@ -8,6 +8,7 @@ import {
   WERR_INSUFFICIENT_FUNDS,
   WERR_INTERNAL,
   WERR_INVALID_OPERATION,
+  WERR_INVALID_MERKLE_ROOT,
   WERR_INVALID_PARAMETER,
   WERR_INVALID_PUBLIC_KEY,
   WERR_MISSING_PARAMETER,
@@ -188,6 +189,18 @@ export function WalletErrorFromJson(json: object): WalletError {
       break
     case 'WERR_NETWORK_CHAIN':
       e = new WERR_NETWORK_CHAIN(obj.message)
+      break
+    case 'WERR_INVALID_MERKLE_ROOT':
+      if (!Number.isSafeInteger(obj.blockHeight) || obj.blockHeight < 0) {
+        throw new WERR_INTERNAL('Invalid remote wallet error blockHeight')
+      }
+      e = new WERR_INVALID_MERKLE_ROOT(
+        boundedString(obj.blockHash, 'blockHash', 64),
+        obj.blockHeight,
+        boundedString(obj.merkleRoot, 'merkleRoot', 64),
+        obj.txid === undefined ? undefined : boundedString(obj.txid, 'txid', 64)
+      )
+      if (obj.message !== undefined) e.message = boundedString(obj.message, 'message')
       break
     case 'WERR_UNAUTHORIZED':
       e = new WERR_UNAUTHORIZED(obj.message)

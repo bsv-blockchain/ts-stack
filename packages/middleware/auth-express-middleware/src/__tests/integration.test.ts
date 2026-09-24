@@ -84,6 +84,51 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     await expect(authFetch.fetch(`${origin}/empty-404`)).rejects.toThrow(/signature/i)
   })
 
+  describe.each(['POST', 'PUT'])('%s through express.raw without captureRawBody', method => {
+    test.each([
+      ['dense byte array', [], []],
+      ['Uint8Array', new Uint8Array(0), []],
+      ['Buffer', Buffer.alloc(0), []],
+      ['absent body', undefined, []],
+      ['nonempty subarray', new Uint8Array([99, 0, 255, 88]).subarray(1, 3), [0, 255]]
+    ])('authenticates a %s body and the signed response', async (_name, body, expected) => {
+      const authFetch = new AuthFetch(new MockWallet(privKey))
+      const route = method === 'PUT' ? '/put-endpoint' : '/other-endpoint'
+      const result = await authFetch.fetch(`${origin}${route}`, {
+        method,
+        headers: { 'content-type': 'application/octet-stream' },
+        body: body as unknown as BodyInit
+      })
+      expect(result.status).toBe(200)
+      expect(result.headers.get('x-bsv-auth-identity-key')).toBeTruthy()
+      const response = await result.json()
+      if (method === 'PUT') expect(response.body).toEqual(expected)
+    })
+  })
+
+  test('rejects an empty octet-stream request changed to a nonempty body in transit', async () => {
+    const tamper: typeof fetch = async (url, init) =>
+      fetch(
+        url,
+        String(url).endsWith('/put-endpoint') ? { ...init, body: new Uint8Array([1]) } : init
+      )
+    const authFetch = new AuthFetch(
+      new MockWallet(privKey),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      tamper
+    )
+    await expect(
+      authFetch.fetch(`${origin}/put-endpoint`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: new Uint8Array(0)
+      })
+    ).rejects.toThrow(/signature|authentication/i)
+  })
+
   test('Test 1: Simple POST request with JSON', async () => {
     const walletWithRequests = new MockWallet(privKey)
     const authFetch = new AuthFetch(walletWithRequests)

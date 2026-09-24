@@ -1,3 +1,4 @@
+import { recoveredProofUpdate, sameSyncProof } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { deleteDB, IDBPDatabase, IDBPObjectStore, IDBPTransaction, openDB } from 'idb'
 import {
@@ -136,6 +137,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   protected override supportsActionBatchPersistence(): boolean {
+    return true
+  }
+
+  protected override supportsStorageAccessScheduling(): boolean {
     return true
   }
 
@@ -1236,6 +1241,25 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
   }
 
+  override async compareAndSetProvenTxProof(
+    expected: TableProvenTx,
+    replacement: TableProvenTx,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    const update = recoveredProofUpdate(expected, replacement)
+    const dbTrx = this.toDbTrx(['proven_txs'], 'readwrite', trx)
+    const store = dbTrx.objectStore('proven_txs')
+    try {
+      const current = await store.get(expected.provenTxId)
+      if (current == null || !sameSyncProof(current, expected)) return false
+      await (store.put as (value: TableProvenTx) => Promise<IDBValidKey>)({ ...current, ...update })
+      this.isDirty = true
+      return true
+    } finally {
+      if (trx == null) await dbTrx.done
+    }
+  }
+
   async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
     return await this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
   }
@@ -2091,10 +2115,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
+    let offset = args.paged?.offset ?? 0
+    // A full user-label index scan already enforces its entire predicate. Skip
+    // prior pages in IndexedDB rather than cloning and filtering every prior
+    // row for every source query. Keep the filtered/since path unchanged.
+    const indexedOnly =
+      args.since == null &&
+      Object.entries(args.partial ?? {}).every(([key, value]) => value === undefined || key === 'userId')
+    if (cursor != null && indexedOnly && Number.isSafeInteger(offset) && offset > 0) {
+      cursor = await cursor.advance(offset)
+      offset = 0
+    }
     await scanCursor<TableTxLabel>(
       cursor,
       args.since,
-      args.paged?.offset ?? 0,
+      offset,
       args.paged?.limit,
       r => matchesTxLabelPartial(r, args.partial),
       filtered

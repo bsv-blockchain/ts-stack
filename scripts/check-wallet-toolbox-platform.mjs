@@ -487,9 +487,24 @@ async function checkMobile(consumerDirectory, budget) {
 
   const hermesPath = hermesCompilerPath()
   const bytecodePath = path.join(consumerDirectory, 'wallet-toolbox-mobile.hbc')
-  await run(hermesPath, ['-O', '-emit-binary', '-out', bytecodePath, bundlePath])
-  const hermesBytecode = await fs.readFile(bytecodePath)
+  // Hermes retains its input filename in bytecode. A random absolute temporary
+  // path makes identical bundles cross compression budgets nondeterministically.
+  // Keep source/debug data and compile from a stable relative filename instead.
+  const compile = async directory => {
+    await run(
+      hermesPath,
+      ['-O', '-emit-binary', '-out', path.basename(bytecodePath), path.basename(bundlePath)],
+      { cwd: directory }
+    )
+    return fs.readFile(path.join(directory, path.basename(bytecodePath)))
+  }
+  const hermesBytecode = await compile(consumerDirectory)
   if (hermesBytecode.length === 0) throw new Error('Hermes compiler emitted empty bytecode')
+  const repeatDirectory = await fs.mkdtemp(path.join(consumerDirectory, 'hermes-repro-'))
+  await fs.copyFile(bundlePath, path.join(repeatDirectory, path.basename(bundlePath)))
+  if (!hermesBytecode.equals(await compile(repeatDirectory))) {
+    throw new Error('Hermes bytecode must reproduce across independent build directories')
+  }
   const hermesSizes = sizes(hermesBytecode)
   validateBudget(hermesSizes, budget.hermes, 'Hermes mobile bytecode')
 

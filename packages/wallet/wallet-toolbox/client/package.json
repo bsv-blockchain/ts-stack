@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -56,11 +56,12 @@
     "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/client/test packages/wallet/wallet-toolbox/client/tsdown.config.ts packages/wallet/wallet-toolbox/client/vitest.config.ts --deny-warnings",
     "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageIdb,Services,SetupClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,WalletMonitorTask,attemptToPostReqsToNetwork,parseJsonRpc,stringifyJsonRpc,verifyUnlockScripts,sdk",
     "test": "vitest run",
-    "test:browser": "node ../../../../scripts/check-wallet-toolbox-platform.mjs browser",
+    "test:browser": "node ../../../../scripts/check-wallet-toolbox-platform.mjs browser && node test/sync-browser.mjs",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --project tsconfig.typecheck.json",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "bench:sync": "pnpm build && node test/sync-browser.mjs"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
@@ -89,6 +90,7 @@
     "tsdown": "0.22.14",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.1.5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "puppeteer-core": "^25.4.0"
   }
 }

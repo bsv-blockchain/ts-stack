@@ -3,10 +3,10 @@ id: pkg-simple
 title: '@bsv/simple'
 kind: package
 domain: helpers
-version: '0.6.0'
+version: '0.6.1'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-08'
-last_verified: '2026-09-08'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/simple'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple'
@@ -15,6 +15,10 @@ tags: [helpers, simple, payments]
 ---
 
 # @bsv/simple
+
+The unpublished 0.6.1 candidate refreshes the packed first-party dependency
+ranges for the next wallet interoperability release; no independent API or wire
+format changes are introduced. Adopt after the dependency graph is published.
 
 > High-level wallet API for browser and server — manage payments, tokens, inscriptions, DIDs, and credentials without wrestling with private keys or transactions.
 

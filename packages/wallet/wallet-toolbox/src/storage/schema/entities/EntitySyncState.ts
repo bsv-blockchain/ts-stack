@@ -312,7 +312,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       maxRoughSize: maxRoughSize || 10000000,
       maxItems: maxItems || 1000,
       offsets: [],
-      since: this.when,
+      since: this.when == null ? undefined : new Date(this.when),
       fromStorageIdentityKey: this.storageIdentityKey,
       toStorageIdentityKey: forStorageIdentityKey
     }
@@ -338,7 +338,11 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   /** Return progress without the potentially large writer-local ID maps. */
   makeSyncCheckpoint(): SyncCheckpoint {
     const request = this.makeRequestSyncChunkArgs('', '')
-    return { syncStateId: this.id, since: this.when == null ? undefined : new Date(this.when), offsets: request.offsets }
+    return {
+      syncStateId: this.id,
+      since: this.when == null ? undefined : new Date(this.when),
+      offsets: request.offsets
+    }
   }
 
   static syncChunkSummary(c: SyncChunk): string {

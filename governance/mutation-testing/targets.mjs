@@ -423,7 +423,7 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/middleware/auth-express-middleware/package.json',
       propertyTest:
         'packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts',
-      mutate: ['src/authMiddlewareHelpers.ts:96-103', 'src/authMiddlewareHelpers.ts:186-213'],
+      mutate: ['src/authMiddlewareHelpers.ts:97-104', 'src/authMiddlewareHelpers.ts:178-217'],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/authMiddlewareHelpers*.test.ts'])
     },
     'payment-replay': {
@@ -431,7 +431,7 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/middleware/payment-express-middleware/package.json',
       propertyTest:
         'packages/middleware/payment-express-middleware/src/__tests/PaymentReplayStore.property.test.ts',
-      mutate: ['src/index.ts:27-44'],
+      mutate: ['src/index.ts:30-47'],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/PaymentReplayStore*.test.ts'])
     },
     'wallet-script-encoding': {

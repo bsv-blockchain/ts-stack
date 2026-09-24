@@ -968,9 +968,15 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: 8.6.1
+        version: 8.6.1(express@5.2.1)
       fast-check:
         specifier: ^4.9.0
         version: 4.9.0
@@ -980,6 +986,9 @@ importers:
       oxlint:
         specifier: ^1.76.0
         version: 1.76.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.4.0(yauzl@3.4.0)
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
@@ -1923,6 +1932,9 @@ importers:
       oxlint:
         specifier: ^1.76.0
         version: 1.76.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.4.0(yauzl@3.4.0)
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)

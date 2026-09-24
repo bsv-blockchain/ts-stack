@@ -155,3 +155,10 @@ const did = wallet.getDID()
 TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
 The identified pre-monorepo source remains MIT-licensed; see
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

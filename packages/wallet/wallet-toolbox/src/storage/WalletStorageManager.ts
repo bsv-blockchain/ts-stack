@@ -9,17 +9,18 @@ import {
   validateRelinquishOutputArgs
 } from '@bsv/sdk/wallet/validationHelpers'
 import { SyncPageBudget } from './sync/SyncPageBudget'
+import { StorageAccessQueue } from './sync/StorageAccessQueue'
+import { runPullSession, type SyncSessionOptions, type SyncSessionResult } from './sync/syncSession'
 import { validateSyncCheckpoint } from './sync/syncCheckpoint'
+import { assertSyncNetwork, assertSyncProgress, throwSyncResultError } from './sync/syncFailure'
 import {
   AbortActionArgs,
   AbortActionResult,
   Beef,
-  ChainTracker,
   InternalizeActionArgs,
   ListActionsResult,
   ListCertificatesResult,
   ListOutputsResult,
-  MerklePath,
   RelinquishCertificateArgs,
   RelinquishOutputArgs
 } from '@bsv/sdk'
@@ -44,7 +45,9 @@ import {
   TableUser
 } from '../storage/schema/tables'
 import { StorageProvider } from './StorageProvider'
-import { getCanonicalMerklePath } from '../services/getCanonicalMerklePath'
+import { refreshSyncProof } from './methods/refreshSyncProof'
+import { recoveredProofUpdate, sameSyncProof } from './methods/validateSyncProof'
+import { mapProofWork } from './methods/proofWork'
 
 interface PreparedBeefInvalidationExtension {
   invalidatePreparedBeefs: (trx?: sdk.TrxToken) => Promise<number>
@@ -62,6 +65,7 @@ class ManagedStorage {
   isAvailable: boolean
   isStorageProvider: boolean
   settings?: TableSettings
+  access: sdk.StorageCapabilities['storageAccess']
   user?: TableUser
 
   constructor(public storage: sdk.WalletStorageProvider) {
@@ -114,6 +118,9 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * Configured services if any. If valid, shared with stores (which may ignore it).
    */
   _services?: sdk.WalletServices
+  private availability?: Promise<TableSettings>
+  private generation = 0
+  private readonly accessQueue = new StorageAccessQueue()
 
   /**
    * Creates a new WalletStorageManager with the given identityKey and optional active and backup storage providers.
@@ -172,10 +179,27 @@ export class WalletStorageManager implements sdk.WalletStorage {
    */
   private async ensureStoreAvailable(store: ManagedStorage): Promise<void> {
     if (store.isAvailable && store.settings != null && store.user != null) return
-    store.settings = await store.storage.makeAvailable()
+    store.settings ??= await store.storage.makeAvailable()
     const r = await store.storage.findOrInsertUser(this._authId.identityKey)
     store.user = r.user
+    // A failed capability lookup changes only scheduling: old or unavailable
+    // capability endpoints keep the compatible serialized path.
+    try {
+      const access = (await store.storage.getCapabilities?.())?.storageAccess
+      store.access = access?.version === 1 ? access : undefined
+    } catch {
+      store.access = undefined
+    }
     store.isAvailable = true
+  }
+
+  private async preflightManagedNetworks(peer?: TableSettings): Promise<void> {
+    let reference = peer
+    for (const store of this._stores) {
+      store.settings ??= await store.storage.makeAvailable()
+      if (reference != null) assertSyncNetwork(reference, store.settings)
+      reference ??= store.settings
+    }
   }
 
   private selectActiveFromStore(store: ManagedStorage, backups: ManagedStorage[]): void {
@@ -196,6 +220,17 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async makeAvailable(): Promise<TableSettings> {
+    if (this._isAvailable) return this.getActiveSettings()
+    this.availability ??= this.initializeAvailable()
+    const pending = this.availability
+    try {
+      return await pending
+    } finally {
+      if (this.availability === pending) this.availability = undefined
+    }
+  }
+
+  private async initializeAvailable(): Promise<TableSettings> {
     if (this._isAvailable) return (this._active as ManagedStorage).settings as TableSettings
 
     this._active = undefined
@@ -207,6 +242,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     }
 
     const backups: ManagedStorage[] = []
+    // Read all network settings before registering users on any managed store.
+    await this.preflightManagedNetworks()
     for (const store of this._stores) {
       await this.ensureStoreAvailable(store)
       this.selectActiveFromStore(store, backups)
@@ -220,6 +257,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     }
 
     this._isAvailable = true
+    this.generation++
     this._authId.userId = (this._active as unknown as ManagedStorage).user?.userId
     this._authId.isActive = this.isActiveEnabled
 
@@ -280,134 +318,68 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return this._stores.map(b => (b.settings as TableSettings).storageIdentityKey)
   }
 
-  private readonly readerLocks: Array<(value: void | PromiseLike<void>) => void> = []
-  private readonly writerLocks: Array<(value: void | PromiseLike<void>) => void> = []
-  private readonly syncLocks: Array<(value: void | PromiseLike<void>) => void> = []
-  private readonly spLocks: Array<(value: void | PromiseLike<void>) => void> = []
-
-  private async getActiveLock(lockQueue: Array<(value: void | PromiseLike<void>) => void>): Promise<void> {
-    if (!this.isAvailable()) await this.makeAvailable()
-
-    let resolveNewLock: () => void = () => {}
-    const newLock = new Promise<void>(resolve => {
-      resolveNewLock = resolve
-      lockQueue.push(resolve)
-    })
-    if (lockQueue.length === 1) {
-      resolveNewLock()
+  private async withAccess<R>(
+    operation: (active: sdk.WalletStorageProvider) => Promise<R>,
+    read = false,
+    background = false
+  ): Promise<R> {
+    await this.makeAvailable()
+    const concurrent = read && this._active?.access?.concurrentReads === true
+    const release = await this.accessQueue.acquire(
+      concurrent ? 'read' : 'exclusive',
+      background ? 'background' : 'foreground'
+    )
+    // Primary selection may have changed while this request was queued. Never
+    // apply the former provider's read-sharing promise to its replacement.
+    if (concurrent && this._active?.access?.concurrentReads !== true) {
+      release()
+      return await this.withAccess(operation, read, background)
     }
-    await newLock
-  }
-
-  private releaseActiveLock(queue: Array<(value: void | PromiseLike<void>) => void>): void {
-    queue.shift() // Remove the current lock from the queue
-    if (queue.length > 0) {
-      queue[0]()
-    }
-  }
-
-  private async getActiveForReader(): Promise<sdk.WalletStorageReader> {
-    await this.getActiveLock(this.readerLocks)
-    return this.getActive()
-  }
-
-  private releaseActiveForReader(): void {
-    this.releaseActiveLock(this.readerLocks)
-  }
-
-  private async getActiveForWriter(): Promise<sdk.WalletStorageWriter> {
-    await this.getActiveLock(this.readerLocks)
-    await this.getActiveLock(this.writerLocks)
-    return this.getActive()
-  }
-
-  private releaseActiveForWriter(): void {
-    this.releaseActiveLock(this.writerLocks)
-    this.releaseActiveLock(this.readerLocks)
-  }
-
-  private async getActiveForSync(): Promise<sdk.WalletStorageSync> {
-    await this.getActiveLock(this.readerLocks)
-    await this.getActiveLock(this.writerLocks)
-    await this.getActiveLock(this.syncLocks)
-    return this.getActive()
-  }
-
-  private releaseActiveForSync(): void {
-    this.releaseActiveLock(this.syncLocks)
-    this.releaseActiveLock(this.writerLocks)
-    this.releaseActiveLock(this.readerLocks)
-  }
-
-  private async getActiveForStorageProvider(): Promise<StorageProvider> {
-    await this.getActiveLock(this.readerLocks)
-    await this.getActiveLock(this.writerLocks)
-    await this.getActiveLock(this.syncLocks)
-    await this.getActiveLock(this.spLocks)
-
-    const active = this.getActive()
-    // We can finally confirm that active storage is still able to support `StorageProvider`
-    if (!active.isStorageProvider()) {
-      throw new WERR_INVALID_OPERATION('Active "WalletStorageProvider" does not support "StorageProvider" interface.')
-    }
-    // Allow the sync to proceed on the active store.
-    return active as unknown as StorageProvider
-  }
-
-  private releaseActiveForStorageProvider(): void {
-    this.releaseActiveLock(this.spLocks)
-    this.releaseActiveLock(this.syncLocks)
-    this.releaseActiveLock(this.writerLocks)
-    this.releaseActiveLock(this.readerLocks)
-  }
-
-  async runAsWriter<R>(writer: (active: sdk.WalletStorageWriter) => Promise<R>): Promise<R> {
     try {
-      const active = await this.getActiveForWriter()
-      const r = await writer(active)
-      return r
+      return await operation(this.getActive())
     } finally {
-      this.releaseActiveForWriter()
+      release()
     }
   }
 
-  async runAsReader<R>(reader: (active: sdk.WalletStorageReader) => Promise<R>): Promise<R> {
-    try {
-      const active = await this.getActiveForReader()
-      const r = await reader(active)
-      return r
-    } finally {
-      this.releaseActiveForReader()
-    }
+  runAsWriter<R>(writer: (active: sdk.WalletStorageWriter) => Promise<R>): Promise<R> {
+    return this.withAccess(writer)
   }
 
-  /**
-   *
-   * @param sync the function to run with sync access lock
-   * @param activeSync from chained sync functions, active storage already held under sync access lock.
-   * @returns
-   */
+  /** Keep foreground writer authorization inside the acquired ownership boundary. */
+  private runAsAuthorizedWriter<R>(
+    operation: (writer: sdk.WalletStorageWriter, auth: sdk.AuthId) => Promise<R>
+  ): Promise<R> {
+    return this.runAsWriter(async writer => operation(writer, await this.getAuth(true)))
+  }
+
+  runAsReader<R>(reader: (active: sdk.WalletStorageReader) => Promise<R>): Promise<R> {
+    return this.withAccess(reader, true)
+  }
+
+  /** Preserve the legacy reader contract: obtain caller auth before joining the ownership queue. */
+  private async runAsAuthorizedReader<R>(
+    operation: (reader: sdk.WalletStorageReader, auth: sdk.AuthId) => Promise<R>
+  ): Promise<R> {
+    const auth = await this.getAuth()
+    return this.runAsReader(reader => operation(reader, auth))
+  }
+
+  /** Borrowed activeSync is the legacy explicit reentrancy contract for an already-held exclusive operation. */
   async runAsSync<R>(
     sync: (active: sdk.WalletStorageSync) => Promise<R>,
     activeSync?: sdk.WalletStorageSync
   ): Promise<R> {
-    try {
-      const active = activeSync ?? (await this.getActiveForSync())
-      const r = await sync(active)
-      return r
-    } finally {
-      if (activeSync == null) this.releaseActiveForSync()
-    }
+    return activeSync == null ? await this.withAccess(sync) : await sync(activeSync)
   }
 
-  async runAsStorageProvider<R>(sync: (active: StorageProvider) => Promise<R>): Promise<R> {
-    try {
-      const active = await this.getActiveForStorageProvider()
-      const r = await sync(active)
-      return r
-    } finally {
-      this.releaseActiveForStorageProvider()
-    }
+  runAsStorageProvider<R>(sync: (active: StorageProvider) => Promise<R>): Promise<R> {
+    return this.withAccess(active => {
+      if (!active.isStorageProvider()) {
+        throw new WERR_INVALID_OPERATION('Active "WalletStorageProvider" does not support "StorageProvider" interface.')
+      }
+      return sync(active as unknown as StorageProvider)
+    })
   }
 
   /**
@@ -442,11 +414,18 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async addWalletStorageProvider(provider: sdk.WalletStorageProvider): Promise<void> {
-    await provider.makeAvailable()
-    if (this._services != null) provider.setServices(this._services)
-    this._stores.push(new ManagedStorage(provider))
-    this._isAvailable = false
-    await this.makeAvailable()
+    const settings = await provider.makeAvailable()
+    const add = async (): Promise<void> => {
+      await this.preflightManagedNetworks(settings)
+      if (this._services != null) provider.setServices(this._services)
+      const store = new ManagedStorage(provider)
+      store.settings = settings
+      this._stores.push(store)
+      this._isAvailable = false
+      await this.makeAvailable()
+    }
+    if (this._stores.length === 0) await add()
+    else await this.withAccess(add)
   }
 
   setServices(v: sdk.WalletServices): void {
@@ -463,15 +442,14 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return this.getActive().getSettings()
   }
 
-  async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
-    return await this.runAsWriter(async writer => {
-      return await writer.migrate(storageName, storageIdentityKey)
-    })
+  migrate(storageName: string, storageIdentityKey: string): Promise<string> {
+    return this.runAsWriter(writer => writer.migrate(storageName, storageIdentityKey))
   }
 
   async destroy(): Promise<void> {
     if (this._stores.length < 1) return
     return await this.runAsWriter(async _writer => {
+      this.generation++
       for (const store of this._stores) await store.storage.destroy()
     })
   }
@@ -493,52 +471,34 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   async abortAction(args: AbortActionArgs): Promise<AbortActionResult> {
     validateAbortActionArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.abortAction(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.abortAction(auth, args))
   }
 
-  async createAction(vargs: ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.createAction(auth, vargs)
-    })
+  createAction(vargs: ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.createAction(auth, vargs))
   }
 
   async internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
     validateInternalizeActionArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.internalizeAction(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.internalizeAction(auth, args))
   }
 
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
     validateRelinquishCertificateArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.relinquishCertificate(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.relinquishCertificate(auth, args))
   }
 
   async relinquishOutput(args: RelinquishOutputArgs): Promise<number> {
     validateRelinquishOutputArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.relinquishOutput(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.relinquishOutput(auth, args))
   }
 
-  async processAction(args: sdk.StorageProcessActionArgs): Promise<sdk.StorageProcessActionResults> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.processAction(auth, args)
-    })
+  processAction(args: sdk.StorageProcessActionArgs): Promise<sdk.StorageProcessActionResults> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.processAction(auth, args))
   }
 
-  async prepareNoSendExpiry(args: ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
-    return await this.runAsWriter(async writer => {
+  prepareNoSendExpiry(args: ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+    return this.runAsWriter(async writer => {
       if (writer.prepareNoSendExpiry == null) {
         throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
@@ -546,10 +506,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async activateNoSendExpiry(
-    args: sdk.StorageActivateNoSendExpiryArgs
-  ): Promise<sdk.StorageActivateNoSendExpiryResult> {
-    return await this.runAsWriter(async writer => {
+  activateNoSendExpiry(args: sdk.StorageActivateNoSendExpiryArgs): Promise<sdk.StorageActivateNoSendExpiryResult> {
+    return this.runAsWriter(async writer => {
       if (writer.activateNoSendExpiry == null) {
         throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
@@ -566,24 +524,24 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async getCapabilities(): Promise<sdk.StorageCapabilities> {
-    return await this.runAsReader(async () => await this.getActive().getCapabilities())
+  getCapabilities(): Promise<sdk.StorageCapabilities> {
+    return this.runAsReader(() => this.getActive().getCapabilities())
   }
 
-  async beginActionBatch(args: sdk.BeginActionBatchArgs): Promise<sdk.BeginActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.beginActionBatch(await this.getAuth(true), args))
+  beginActionBatch(args: sdk.BeginActionBatchArgs): Promise<sdk.BeginActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.beginActionBatch(auth, args))
   }
 
-  async extendActionBatch(args: sdk.ExtendActionBatchArgs): Promise<sdk.ExtendActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.extendActionBatch(await this.getAuth(true), args))
+  extendActionBatch(args: sdk.ExtendActionBatchArgs): Promise<sdk.ExtendActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.extendActionBatch(auth, args))
   }
 
-  async renewActionBatch(batchId: string): Promise<sdk.RenewActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.renewActionBatch(await this.getAuth(true), batchId))
+  renewActionBatch(batchId: string): Promise<sdk.RenewActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.renewActionBatch(auth, batchId))
   }
 
-  async resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
-    return await this.runAsWriter(async writer => {
+  resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
+    return this.runAsWriter(async writer => {
       if (writer.resumeActionBatch == null) {
         throw new WERR_NOT_IMPLEMENTED('action batch resume is not available')
       }
@@ -591,18 +549,16 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async prepareActionBatchCommit(manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
-    return await this.runAsWriter(
-      async writer => await writer.prepareActionBatchCommit(await this.getAuth(true), manifest)
-    )
+  prepareActionBatchCommit(manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.prepareActionBatchCommit(auth, manifest))
   }
 
-  async putActionBatchBlob(args: sdk.PutActionBatchBlobArgs): Promise<void> {
-    return await this.runAsWriter(async writer => await writer.putActionBatchBlob(await this.getAuth(true), args))
+  putActionBatchBlob(args: sdk.PutActionBatchBlobArgs): Promise<void> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.putActionBatchBlob(auth, args))
   }
 
-  async putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
-    return await this.runAsWriter(async writer => {
+  putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
+    return this.runAsWriter(async writer => {
       if (writer.putActionBatchPack == null) {
         throw new WERR_NOT_IMPLEMENTED('packed action batch uploads are not available')
       }
@@ -610,12 +566,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async commitActionBatch(manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.commitActionBatch(await this.getAuth(true), manifest))
+  commitActionBatch(manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.commitActionBatch(auth, manifest))
   }
 
-  async commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
-    return await this.runAsWriter(async writer => {
+  commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
+    return this.runAsWriter(async writer => {
       if (writer.commitActionBatchByDigest == null) {
         throw new WERR_NOT_IMPLEMENTED('digest-only action batch commit is not available')
       }
@@ -623,63 +579,40 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async abortActionBatch(batchId: string): Promise<sdk.AbortActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.abortActionBatch(await this.getAuth(true), batchId))
+  abortActionBatch(batchId: string): Promise<sdk.AbortActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.abortActionBatch(auth, batchId))
   }
 
-  async insertCertificate(certificate: TableCertificate): Promise<number> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.insertCertificateAuth(auth, certificate)
-    })
+  insertCertificate(certificate: TableCertificate): Promise<number> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.insertCertificateAuth(auth, certificate))
   }
 
-  async listActions(vargs: ValidListActionsArgs): Promise<ListActionsResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listActions(auth, vargs)
-    })
+  listActions(vargs: ValidListActionsArgs): Promise<ListActionsResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listActions(auth, vargs))
   }
 
-  async listCertificates(args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listCertificates(auth, args)
-    })
+  listCertificates(args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listCertificates(auth, args))
   }
 
-  async listOutputs(vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listOutputs(auth, vargs)
-    })
+  listOutputs(vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listOutputs(auth, vargs))
   }
 
-  async findCertificates(args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findCertificatesAuth(auth, args)
-    })
+  findCertificates(args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findCertificatesAuth(auth, args))
   }
 
-  async findOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findOutputBasketsAuth(auth, args)
-    })
+  findOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findOutputBasketsAuth(auth, args))
   }
 
-  async findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findOutputsAuth(auth, args)
-    })
+  findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findOutputsAuth(auth, args))
   }
 
-  async findProvenTxReqs(args: sdk.FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    return await this.runAsReader(async reader => {
-      return await reader.findProvenTxReqs(args)
-    })
+  findProvenTxReqs(args: sdk.FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+    return this.runAsReader(reader => reader.findProvenTxReqs(args))
   }
 
   /**
@@ -691,165 +624,125 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * @returns
    */
   async reproveHeader(deactivatedHash: string): Promise<sdk.ReproveHeaderResult> {
-    const r: sdk.ReproveHeaderResult = { log: '', updated: [], unchanged: [], unavailable: [] }
-
-    // Lookup all the proven_txs records matching the deactivated headers
-    let ptxs: TableProvenTx[] = []
-    await this.runAsStorageProvider(async sp => {
-      ptxs = await sp.findProvenTxs({ partial: { blockHash: deactivatedHash } })
-    })
-
-    r.log += `  block ${deactivatedHash} orphaned with ${ptxs.length} impacted transactions\n`
-
-    for (const ptx of ptxs) {
-      // Loop over proven_txs records matching the deactivated header
-      const rp = await this.reproveProven(ptx, true)
-
-      r.log += rp.log
-      if (rp.unavailable) r.unavailable.push(ptx)
-      if (rp.unchanged) r.unchanged.push(ptx)
-      if (rp.updated != null) r.updated.push({ was: ptx, update: rp.updated.update, logUpdate: rp.updated.logUpdate })
-    }
-
-    // Invalidate as soon as storage contains proof data for the deactivated
-    // header, even when a replacement proof is not available yet. A prepared
-    // artifact carrying the old proof must not remain readable during retries.
-    if (ptxs.length > 0) {
-      await this.runAsStorageProvider(async sp => {
-        await sp.transaction(async trx => {
-          for (const u of r.updated) {
-            await sp.updateProvenTx(u.was.provenTxId, u.update, trx)
-            r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
-          }
-          await invalidatePreparedBeefs(sp, trx)
-        })
-      })
-    }
-
-    return r
+    return await this.reproveMatching({ blockHash: deactivatedHash }, `block ${deactivatedHash} orphaned`)
   }
 
-  /**
-   * For all proven_txs records at the given height currently tied to the given stale merkleRoot,
-   * attempt to reprove them against the current chain and update proof data if new valid proofs are found.
-   *
-   * This is intended for backup auditing of recent heights after the primary reorg event path has run.
-   */
+  /** Audit a stale root against the same canonical evidence as reorg recovery. */
   async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> {
-    const r: sdk.ReproveHeaderResult = { log: '', updated: [], unchanged: [], unavailable: [] }
-
-    let ptxs: TableProvenTx[] = []
-    await this.runAsStorageProvider(async sp => {
-      ptxs = await sp.findProvenTxs({ partial: { height, merkleRoot: staleMerkleRoot } })
-    })
-
-    r.log += `  height ${height} stale merkleRoot ${staleMerkleRoot} with ${ptxs.length} impacted transactions\n`
-
-    for (const ptx of ptxs) {
-      const rp = await this.reproveProven(ptx, true)
-
-      r.log += rp.log
-      if (rp.unavailable) r.unavailable.push(ptx)
-      if (rp.unchanged) r.unchanged.push(ptx)
-      if (rp.updated != null) r.updated.push({ was: ptx, update: rp.updated.update, logUpdate: rp.updated.logUpdate })
-    }
-
-    // A matching stale root invalidates prepared proof material whether or not
-    // this audit can obtain a replacement proof in the same pass.
-    if (ptxs.length > 0) {
-      await this.runAsStorageProvider(async sp => {
-        await sp.transaction(async trx => {
-          for (const u of r.updated) {
-            await sp.updateProvenTx(u.was.provenTxId, u.update, trx)
-            r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
-          }
-          await invalidatePreparedBeefs(sp, trx)
-        })
-      })
-    }
-
-    return r
+    return await this.reproveMatching(
+      { height, merkleRoot: staleMerkleRoot },
+      `height ${height} stale merkleRoot ${staleMerkleRoot}`
+    )
   }
 
-  /**
-   * Attempt to reprove the transaction against the current chain,
-   * If a new valid proof is found and noUpdate is not true,
-   * update the proven_txs record with new block and merkle proof data.
-   * If noUpdate is true, the update to be applied is available in the returned result.
-   *
-   * @param ptx proven_txs record to reprove
-   * @param noUpdate
-   * @returns
-   */
-  private async evaluateNewMerkleLeaf(
-    ptx: TableProvenTx,
-    mp: MerklePath,
-    leaf: { offset: number },
-    blockHash: string,
-    chaintracker: ChainTracker,
-    r: sdk.ReproveProvenResult,
-    update: Partial<TableProvenTx>
-  ): Promise<void> {
-    if (blockHash === ptx.blockHash) {
-      r.log += `    txid ${ptx.txid} merkle path update still based on deactivated header ${ptx.blockHash}\n`
-      r.unchanged = true
-      return
-    }
-    const merkleRoot = mp.computeRoot(ptx.txid)
-    const isValid = await chaintracker.isValidRootForHeight(merkleRoot, update.height as number)
-    const heightChange = ptx.height === update.height ? 'unchanged' : `-> ${String(update.height)}`
-    const logUpdate = `      height ${ptx.height} ${heightChange}\n`
-    r.log += `      blockHash ${ptx.blockHash} -> ${String(update.blockHash)}\n`
-    r.log += `      merkleRoot ${ptx.merkleRoot} -> ${String(update.merkleRoot)}\n`
-    r.log += `      index ${ptx.index} -> ${String(update.index)}\n`
-    if (isValid === true) {
-      r.updated = { update, logUpdate }
-    } else {
-      r.log += `    txid ${ptx.txid} chaintracker fails to confirm updated merkle path update invalid\n` + logUpdate
-      r.unavailable = true
+  private assertProofDestination(storage: StorageProvider, generation: number): void {
+    if (this.getActive() !== storage || this.generation !== generation) {
+      throw new WERR_INVALID_OPERATION(
+        'Proof destination changed during recovery; retry on the selected storage provider.'
+      )
     }
   }
 
-  async reproveProven(ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> {
-    const r: sdk.ReproveProvenResult = { log: '', updated: undefined, unchanged: false, unavailable: false }
-    const services = this.getServices()
-    const chaintracker = await services.getChainTracker()
-
-    const mpr = await getCanonicalMerklePath(services, chaintracker, ptx.txid)
-    if (mpr.merklePath != null && mpr.header != null) {
-      const mp = mpr.merklePath
-      const h = mpr.header
-      const leaf = mp.path[0].find(leaf => leaf.txid === true && leaf.hash === ptx.txid)
-      if (leaf != null) {
-        const update: Partial<TableProvenTx> = {
-          height: mp.blockHeight,
-          index: leaf.offset,
-          merklePath: mp.toBinary(),
-          merkleRoot: h.merkleRoot,
-          blockHash: h.hash
-        }
-        await this.evaluateNewMerkleLeaf(ptx, mp, leaf, h.hash, chaintracker, r, update)
-      } else {
-        r.log += `    txid ${ptx.txid} merkle path update doesn't include txid\n`
-        r.unavailable = true
+  private async prepareReproof(
+    storage: StorageProvider,
+    ptx: TableProvenTx
+  ): Promise<{
+    result: sdk.ReproveProvenResult
+    replacement?: TableProvenTx
+  }> {
+    const result: sdk.ReproveProvenResult = { log: '', updated: undefined, unchanged: false, unavailable: false }
+    try {
+      const replacement = await refreshSyncProof(storage, ptx)
+      if (sameSyncProof(ptx, replacement)) {
+        result.unchanged = true
+        result.log = `    txid ${ptx.txid} canonical proof unchanged\n`
+        return { result }
       }
-    } else {
-      r.log += `    txid ${ptx.txid} merkle path update unavailable\n`
-      r.unavailable = true
+      result.updated = {
+        update: recoveredProofUpdate(ptx, replacement),
+        logUpdate: `      height ${ptx.height} -> ${replacement.height}\n`
+      }
+      return { result, replacement }
+    } catch {
+      result.unavailable = true
+      result.log = `    txid ${ptx.txid} canonical proof unavailable\n`
+      return { result }
     }
+  }
 
-    if (r.updated != null && noUpdate !== true) {
-      const updatedSnapshot = r.updated
-      await this.runAsStorageProvider(async sp => {
-        await sp.transaction(async trx => {
-          await sp.updateProvenTx(ptx.provenTxId, updatedSnapshot.update, trx)
-          await invalidatePreparedBeefs(sp, trx)
-          r.log += `    txid ${ptx.txid} proof data updated\n` + updatedSnapshot.logUpdate
-        })
+  private async reproveMatching(partial: Partial<TableProvenTx>, label: string): Promise<sdk.ReproveHeaderResult> {
+    const { storage, generation, ptxs } = await this.runAsStorageProvider(async storage => ({
+      storage,
+      generation: this.generation,
+      ptxs: await storage.findProvenTxs({ partial })
+    }))
+    // Bound external work and leave foreground storage access available while
+    // providers fetch proofs/headers. Every replacement is validated before SQL/IDB.
+    const prepared = await mapProofWork(ptxs, ptx => this.prepareReproof(storage, ptx))
+    const result: sdk.ReproveHeaderResult = {
+      log: `  ${label} with ${ptxs.length} impacted transactions\n`,
+      updated: [],
+      unchanged: [],
+      unavailable: []
+    }
+    await this.runAsStorageProvider(async active => {
+      this.assertProofDestination(storage, generation)
+      if (ptxs.length === 0) return
+      await active.transaction(async trx => {
+        for (let index = 0; index < ptxs.length; index++) {
+          const ptx = ptxs[index]
+          const { result: proof, replacement } = prepared[index]
+          result.log += proof.log
+          if (replacement !== undefined && proof.updated !== undefined) {
+            if (await active.compareAndSetProvenTxProof(ptx, replacement, trx)) {
+              result.updated.push({ was: ptx, ...proof.updated })
+              result.log += `    txid ${ptx.txid} proof data updated\n` + proof.updated.logUpdate
+            } else {
+              result.unavailable.push(ptx)
+              result.log += `    txid ${ptx.txid} proof changed concurrently or provider cannot commit safely; retry\n`
+            }
+          } else if (proof.unchanged) result.unchanged.push(ptx)
+          else result.unavailable.push(ptx)
+        }
+        // Even unavailable replacements invalidate material built from the
+        // orphaned header. Proof rows and the prepared epoch commit atomically.
+        await invalidatePreparedBeefs(active, trx)
       })
-    }
+    })
+    return result
+  }
 
-    return r
+  /** Validate current-chain evidence; noUpdate returns a proposal without persisting it. */
+  async reproveProven(ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> {
+    // The caller retains its input while proof I/O runs outside queue ownership.
+    ptx = {
+      ...ptx,
+      rawTx: ptx.rawTx.slice(),
+      merklePath: ptx.merklePath.slice(),
+      created_at: new Date(ptx.created_at),
+      updated_at: new Date(ptx.updated_at)
+    }
+    const { storage, generation } = await this.runAsStorageProvider(async storage => ({
+      storage,
+      generation: this.generation
+    }))
+    const { result, replacement } = await this.prepareReproof(storage, ptx)
+    await this.runAsStorageProvider(async active => {
+      this.assertProofDestination(storage, generation)
+      if (replacement === undefined || result.updated === undefined || noUpdate === true) return
+      const updated = result.updated
+      await active.transaction(async trx => {
+        if (await active.compareAndSetProvenTxProof(ptx, replacement, trx)) {
+          await invalidatePreparedBeefs(active, trx)
+          result.log += `    txid ${ptx.txid} proof data updated\n` + updated.logUpdate
+        } else {
+          result.updated = undefined
+          result.unavailable = true
+          result.log += `    txid ${ptx.txid} proof changed concurrently or provider cannot commit safely; retry\n`
+        }
+      })
+    })
+    return result
   }
 
   private async loadSyncRequest(
@@ -883,22 +776,24 @@ export class WalletStorageManager implements sdk.WalletStorage {
     activeSync?: sdk.WalletStorageSync,
     log: string = ''
   ): Promise<{ inserts: number; updates: number; log: string }> {
-    const auth = await this.getAuth()
-    if (identityKey !== auth.identityKey) throw new WERR_UNAUTHORIZED()
-
+    if (identityKey !== this._authId.identityKey) throw new WERR_UNAUTHORIZED()
     const readerSettings = await reader.makeAvailable()
+    await this.preflightManagedNetworks(readerSettings)
+    if (activeSync != null) assertSyncNetwork(readerSettings, activeSync.getSettings())
+    const auth = await this.getAuth()
 
     let inserts = 0
     let updates = 0
 
     log = await this.runAsSync(async sync => {
       const writer = sync
-      const writerSettings = this.getSettings()
+      const writerSettings = writer.getSettings()
+      assertSyncNetwork(readerSettings, writerSettings)
 
       log += `syncFromReader from ${readerSettings.storageName} to ${writerSettings.storageName}\n`
 
-      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
-        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      const loadRequest = (): Promise<sdk.RequestSyncChunkArgs> =>
+        this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
       const budget = new SyncPageBudget()
       let i = -1
@@ -910,26 +805,98 @@ export class WalletStorageManager implements sdk.WalletStorage {
         pageArgs.includeNextCheckpoint = true
         const startedAt = Date.now()
         const chunk = await reader.getSyncChunk(pageArgs)
+        const readMs = Date.now() - startedAt
         if (chunk.user != null) {
           // Merging state from a reader cannot update activeStorage
           chunk.user.activeStorage = ((this._active as ManagedStorage).user as TableUser).activeStorage
         }
         const r = await writer.processSyncChunk(pageArgs, chunk)
-        budget.committed(chunk, Date.now() - startedAt)
+        throwSyncResultError(r)
+        budget.committed(chunk, Date.now() - startedAt, readMs)
         inserts += r.inserts
         updates += r.updates
         log += `chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`
         if (r.done) break
-        args =
+        const next =
           r.nextCheckpoint == null
             ? await loadRequest()
             : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
+        assertSyncProgress(args, next)
+        args = next
       }
       log += `syncFromReader complete: ${inserts} inserts, ${updates} updates\n`
       return log
     }, activeSync)
 
     return { inserts, updates, log }
+  }
+
+  /**
+   * Resumable pull with cancellation and per-page progress. Local providers
+   * advertising atomic checkpoints yield ownership during source I/O. Older
+   * and remote destinations keep the safe exclusive path. This is an eventual
+   * replica merge, not a point-in-time source snapshot or primary activation.
+   */
+  async syncFromReaderResumable(
+    identityKey: string,
+    reader: sdk.WalletStorageSyncReader,
+    options: SyncSessionOptions = {}
+  ): Promise<SyncSessionResult> {
+    if (identityKey !== this._authId.identityKey) throw new WERR_UNAUTHORIZED()
+    const readerSettings = await reader.makeAvailable()
+    await this.preflightManagedNetworks(readerSettings)
+    const auth = { ...(await this.getAuth()) }
+    const writer = this.getActive()
+    const writerSettings = writer.getSettings()
+    assertSyncNetwork(readerSettings, writerSettings)
+    const generation = this.generation
+    const activeStorage = this.getActiveUser().activeStorage
+    const atomicCheckpoint = this._active?.access?.atomicSyncPages === true
+    const paged =
+      writer.isStorageProvider() &&
+      atomicCheckpoint &&
+      reader !== writer &&
+      typeof (writer as Partial<StorageProvider>).prepareSyncChunk === 'function'
+    const assertCurrent = (): void => {
+      if (generation !== this.generation || writer !== this.getActive()) {
+        throw new WERR_INVALID_OPERATION(
+          'Sync destination generation changed; resume on the selected storage provider.'
+        )
+      }
+    }
+    const run = (commit: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SyncSessionResult> =>
+      runPullSession(
+        {
+          reader,
+          writer,
+          activeStorage,
+          atomicCheckpoint,
+          mode: paged ? 'paged' : 'exclusive',
+          loadRequest: () => this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey),
+          prepare: paged ? (args, chunk) => (writer as StorageProvider).prepareSyncChunk(args, chunk) : undefined,
+          commit
+        },
+        options
+      )
+    if (paged) {
+      return await run(operation =>
+        this.withAccess(
+          () => {
+            assertCurrent()
+            return operation()
+          },
+          false,
+          true
+        )
+      )
+    }
+    return await this.runAsSync(() => {
+      assertCurrent()
+      return run(operation => {
+        assertCurrent()
+        return operation()
+      })
+    })
   }
 
   async syncToWriter(
@@ -942,6 +909,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     progLog ||= s => s
 
     const writerSettings = await writer.makeAvailable()
+    await this.preflightManagedNetworks(writerSettings)
+    if (activeSync != null) assertSyncNetwork(activeSync.getSettings(), writerSettings)
 
     let inserts = 0
     let updates = 0
@@ -949,11 +918,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log = await this.runAsSync(async sync => {
       const reader = sync
       const readerSettings = reader.getSettings()
+      assertSyncNetwork(readerSettings, writerSettings)
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
 
-      const loadRequest = async (): Promise<sdk.RequestSyncChunkArgs> =>
-        await this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
+      const loadRequest = (): Promise<sdk.RequestSyncChunkArgs> =>
+        this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey)
       let args = await loadRequest()
       const budget = new SyncPageBudget()
       let i = -1
@@ -965,17 +935,21 @@ export class WalletStorageManager implements sdk.WalletStorage {
         pageArgs.includeNextCheckpoint = true
         const startedAt = Date.now()
         const chunk = await reader.getSyncChunk(pageArgs)
+        const readMs = Date.now() - startedAt
         log += EntitySyncState.syncChunkSummary(chunk)
         const r = await writer.processSyncChunk(pageArgs, chunk)
-        budget.committed(chunk, Date.now() - startedAt)
+        throwSyncResultError(r)
+        budget.committed(chunk, Date.now() - startedAt, readMs)
         inserts += r.inserts
         updates += r.updates
         log += progLog(`chunk ${i} inserted ${r.inserts} updated ${r.updates} ${String(r.maxUpdated_at)}\n`)
         if (r.done) break
-        args =
+        const next =
           r.nextCheckpoint == null
             ? await loadRequest()
             : { ...args, ...validateSyncCheckpoint(r.nextCheckpoint, args) }
+        assertSyncProgress(args, next)
+        args = next
       }
       log += progLog(`syncToWriter complete: ${inserts} inserts, ${updates} updates\n`)
       return log
@@ -1032,6 +1006,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log += progLog('\n')
 
     log += await this.runAsSync(async _sync => {
+      this.generation++
       let log = ''
 
       if ((this._conflictingActives as ManagedStorage[]).length > 0) {

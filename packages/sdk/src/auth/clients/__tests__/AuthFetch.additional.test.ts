@@ -365,11 +365,11 @@ describe('AuthFetch.handlePaymentAndRetry – header validation', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 5. handlePaymentAndRetry – incompatible context triggers new context creation
+// 5. handlePaymentAndRetry – incompatible context requires reconciliation
 // ---------------------------------------------------------------------------
 
 describe('AuthFetch.handlePaymentAndRetry – context compatibility', () => {
-  it('regenerates context when server changes payment requirements', async () => {
+  it('requires reconciliation when server changes payment requirements', async () => {
     const authFetch = new AuthFetch(buildWallet())
     jest.spyOn(authFetch as any, 'logPaymentAttempt').mockImplementation(() => {})
     jest.spyOn(authFetch as any, 'wait').mockResolvedValue(undefined)
@@ -400,15 +400,15 @@ describe('AuthFetch.handlePaymentAndRetry – context compatibility', () => {
       .mockResolvedValue(new Response('ok', { status: 200 }))
 
     const response = make402Response({ 'x-bsv-payment-satoshis-required': '10' }) // changed from 5
-    await (authFetch as any).handlePaymentAndRetry(
-      'https://example.com',
-      { paymentContext: existingContext },
-      response
-    )
-
-    // createNonce should have been called because the context was regenerated
-    expect(createNonceMock).toHaveBeenCalled()
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    await expect(
+      (authFetch as any).handlePaymentAndRetry(
+        'https://example.com',
+        { paymentContext: existingContext },
+        response
+      )
+    ).rejects.toMatchObject({ code: 'ERR_PAYMENT_REQUIREMENTS_CHANGED' })
+    expect(createNonceMock).not.toHaveBeenCalled()
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
 
@@ -742,11 +742,12 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
     expect(result).toEqual(Utils.toArray('name=alice', 'utf8'))
   })
 
-  it('normalizes FormData file entries by filename', async () => {
+  it('rejects FormData files instead of silently replacing their bytes with filenames', async () => {
     const fd = new FormData()
     fd.append('upload', new Blob(['hello']), 'greeting.txt')
-    const result = await (authFetch as any).normalizeBodyToNumberArray(fd)
-    expect(result).toEqual(Utils.toArray('upload=greeting.txt', 'utf8'))
+    await expect((authFetch as any).normalizeBodyToNumberArray(fd)).rejects.toThrow(
+      'Serialize file-bearing FormData'
+    )
   })
 
   it('normalizes URLSearchParams bytes', async () => {
@@ -1128,24 +1129,26 @@ describe('AuthFetch.createPaymentErrorEntry (private)', () => {
     authFetch = new AuthFetch(buildWallet())
   })
 
-  it('extracts message and stack from an Error instance', () => {
-    const err = new Error('something went wrong')
+  it('redacts provider messages and stack traces', () => {
+    const err = new Error('https://user:secret@example.com/private?beef=private-transaction')
     const entry = (authFetch as any).createPaymentErrorEntry(2, err)
     expect(entry.attempt).toBe(2)
-    expect(entry.message).toBe('something went wrong')
-    expect(typeof entry.stack).toBe('string')
+    expect(entry.message).toBe('Payment delivery failed.')
+    expect(JSON.stringify(entry)).not.toContain('secret')
+    expect(JSON.stringify(entry)).not.toContain('private-transaction')
+    expect(entry.stack).toBeUndefined()
     expect(typeof entry.timestamp).toBe('string')
   })
 
-  it('converts non-Error to string message', () => {
+  it('redacts non-Error rejection values', () => {
     const entry = (authFetch as any).createPaymentErrorEntry(1, 'just a string error')
-    expect(entry.message).toBe('just a string error')
+    expect(entry.message).toBe('Payment delivery rejected.')
     expect(entry.stack).toBeUndefined()
   })
 
-  it('converts numeric error to string message', () => {
+  it('categorizes numeric rejection values', () => {
     const entry = (authFetch as any).createPaymentErrorEntry(1, 42)
-    expect(entry.message).toBe('42')
+    expect(entry.message).toBe('Payment delivery rejected.')
   })
 })
 

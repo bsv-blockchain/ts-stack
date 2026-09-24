@@ -15,6 +15,10 @@ Requires Node.js 22 or newer. Install `@bsv/sdk` alongside this package to
 satisfy its peer dependency. The overlay engine, templates, and MongoDB driver
 are direct runtime dependencies.
 
+The unpublished 1.8.5 candidate refreshes the packed templates range for its
+CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
+unchanged; no API migration is required.
+
 ## Quick start
 
 Register a managed topic on an overlay engine:

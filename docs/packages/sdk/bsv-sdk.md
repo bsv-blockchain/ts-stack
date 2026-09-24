@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.3'
+version: '2.9.0'
 npm: '@bsv/sdk'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -15,13 +15,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+The unpublished 2.9 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
 It restores signed `listActions` net amounts with the historical wire encoding,
 matching JSON validation; count, length and individual output bounds stay intact.
 Apps affected by these client defects can update the SDK without changing calls.
 Wallets retain the existing BRC100 contract; an ecosystem-wide application
-migration is not required. The candidate is not published until the protected
+migration is not required. The 2.9.0 candidate remains unpublished until its protected
 release workflow completes.
 
 The action-history compatibility regression affects signed `listActions` values

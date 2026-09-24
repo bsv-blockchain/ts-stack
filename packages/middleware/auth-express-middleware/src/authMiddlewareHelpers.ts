@@ -1,3 +1,4 @@
+import { authenticatedContentType } from '@bsv/sdk/auth/utils/paymentTransport'
 import { Writer, toArray } from '@bsv/sdk/primitives/utils'
 import { Request } from 'express'
 import { stringifyBRC100 } from '@bsv/sdk'
@@ -127,7 +128,7 @@ export function writeRequestHeadersToWriter(req: Request, writer: Writer): void 
       if (typeof v !== 'string') {
         throw new TypeError('Signed request headers must have one exact string value.')
       }
-      const headerValue = k === 'content-type' ? v.split(';')[0].trim() : v
+      const headerValue = k === 'content-type' ? authenticatedContentType(v) : v
       includedHeaders.push([k, headerValue])
     }
   }
@@ -176,16 +177,19 @@ export function writeBodyToWriter(
 
   const byteArray = copyDenseByteArray(body)
   if (byteArray !== undefined) {
-    writer.writeVarIntNum(byteArray.length)
+    // HTTP cannot distinguish an absent body from zero transmitted bytes.
+    // Match AuthFetch's BRC-104 empty-body sentinel after Express raw parsing.
+    writer.writeVarIntNum(byteArray.length === 0 ? -1 : byteArray.length)
     writer.write(byteArray)
     debugLog('[writeBodyToWriter] Body recognized as number[]', { length: byteArray.length })
     return
   }
 
   if (body instanceof Uint8Array) {
-    writer.writeVarIntNum(body.length)
-    writer.write(Array.from(body))
-    debugLog('[writeBodyToWriter] Body recognized as Uint8Array', { length: body.length })
+    const bodyAsArray = Array.from(body)
+    writer.writeVarIntNum(bodyAsArray.length === 0 ? -1 : bodyAsArray.length)
+    writer.write(bodyAsArray)
+    debugLog('[writeBodyToWriter] Body recognized as Uint8Array', { length: bodyAsArray.length })
     return
   }
 

@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Resumable synchronization (2.15 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Remote destinations retain exclusive execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+This is an eventual replica merge; it does not create a coherent source snapshot
+or change the existing archive format.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for
@@ -39,6 +53,10 @@ The package publishes:
 - explicit `react-native`, `import`, and `require` export conditions.
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
+
+The Hermes probe uses a stable relative input filename and verifies identical
+bytecode from two independent build directories. Source maps and debug data are
+retained; random temporary paths must not affect the unchanged size budgets.
 
 ### Password derivation without WebAssembly
 
@@ -163,6 +181,33 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 ```
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
+
+### 2.15 candidate size review
+
+The reviewed Hermes Brotli ceiling increases from 1,520,000 to 1,675,000 bytes
+for bounded resumable sync, proof recovery and prepared BRC-118 payment transport.
+The other five ceilings remain unchanged to retain their existing growth checks;
+this deliberately retains their smaller margins. No production dependency,
+minifier configuration, public export, source-map or compression setting changes
+accompany this budget adjustment.
+
+With official Node 24.18.0, the candidate measures:
+
+| Artifact | Raw bytes | gzip bytes | Brotli bytes |
+| -------- | --------: | ---------: | -----------: |
+| Metro    | 2,377,408 |    609,909 |      463,868 |
+| Hermes   | 4,619,927 |  1,955,135 |    1,523,206 |
+
+The approved Hermes Brotli ceiling gives 9.97% headroom after the final forwarding
+and normalization refinements. Retaining the explicitly reviewed 1,675,000-byte ceiling
+is the rationale for this small difference from the normal 10% margin.
+For comparison, [upstream SDK 2.8.3 validation](https://github.com/bsv-blockchain/ts-stack/actions/runs/35948047970)
+measured Metro at 2,360,475 / 602,505 / 458,183 bytes and Hermes at
+4,609,755 / 1,931,907 / 1,500,120 bytes. The gate continues to inspect the installed
+module graph, reject Node-only modules, validate maps and compile Hermes bytecode.
+A matching-input cross-platform check produced identical Hermes bytes on Linux
+x86_64 and macOS ARM, including reproduction across independent build directories.
+These measurements describe this candidate fixture, not an application-size guarantee.
 
 ## License
 

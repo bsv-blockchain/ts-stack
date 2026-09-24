@@ -5,7 +5,6 @@ import {
   toArray as UtilsToArray,
   toBase64,
   toHex as UtilsToHex,
-  toSafeString,
   toUTF8Strict
 } from '../../primitives/utils.js'
 import Random from '../../primitives/Random.js'
@@ -29,6 +28,16 @@ import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/getVerifiableCertificates.js'
 import { copyAuthByteArray } from '../AuthMessageValidation.js'
+import {
+  authenticatedContentType,
+  PaymentTransportError,
+  paymentTransports,
+  preparePaymentTransport,
+  resolvePaymentTransportLimits,
+  type PaymentTransportLimits
+} from '../utils/paymentTransport.js'
+import { Beef } from '../../transaction/Beef.js'
+import { validateWalletResult } from '../../wallet/WalletResultValidation.js'
 
 interface SimplifiedFetchRequestOptions {
   method?: string
@@ -37,6 +46,10 @@ interface SimplifiedFetchRequestOptions {
   retryCounter?: number
   paymentContext?: PaymentRetryContext
   paymentRetryAttempts?: number
+  /** BRC-118 wire limits. Infeasible payments are refused before broadcast. */
+  paymentTransport?: PaymentTransportLimits
+  /** Cancellation before broadcast releases the prepared action when the wallet permits. */
+  signal?: AbortSignal
   /**
    * Optional wallet action labels applied to BRC-105 payment transactions
    * created for 402 responses. Use these to find payments later via
@@ -72,6 +85,14 @@ interface PaymentRetryContext {
   attempts: number
   maxAttempts: number
   errors: PaymentErrorLogEntry[]
+  txid?: string
+  state?: 'prepared' | 'submitted' | 'uncertain'
+  originalRequest?: { method: string; headers: Record<string, string>; body?: Uint8Array }
+  preparedRequest?: {
+    headers: Record<string, string>
+    body?: Uint8Array
+    transport: 'header' | 'multipart'
+  }
   requestSummary: {
     url: string
     method: string
@@ -224,6 +245,21 @@ export class AuthFetch {
    * @throws Will throw an error if unsupported headers are used or other validation fails.
    */
   async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> {
+    if (config.signal?.aborted === true)
+      throw new PaymentTransportError('ERR_PAYMENT_CANCELLED', 'Paid request cancelled.')
+    // Retain the caller's original bytes before any network or wallet await.
+    const headers = { ...config.headers }
+    const ownedBody =
+      config.body == null
+        ? undefined
+        : new Uint8Array(await this.normalizeBodyToNumberArray(config.body))
+    config = {
+      ...config,
+      headers,
+      body: ownedBody,
+      paymentTransport: { ...config.paymentTransport },
+      labels: config.labels?.slice()
+    }
     if (typeof config.retryCounter === 'number') {
       if (config.retryCounter <= 0) {
         throw new Error('Request failed after maximum number of retries.')
@@ -271,6 +307,7 @@ export class AuthFetch {
             }
             clearTimeout(responseTimeout)
             this.pendingRequestNonces.delete(requestNonceAsBase64)
+            config.signal?.removeEventListener('abort', cancelRequest)
           }
           const resolveRequest = (response: Response): void => {
             cleanup()
@@ -279,6 +316,21 @@ export class AuthFetch {
           const rejectRequest = (error: unknown): void => {
             cleanup()
             reject(error)
+          }
+          const cancelRequest = (): void =>
+            rejectRequest(
+              new PaymentTransportError(
+                'ERR_PAYMENT_CANCELLED',
+                'Paid request cancelled.',
+                config.paymentContext == null
+                  ? undefined
+                  : { txid: config.paymentContext.txid, state: config.paymentContext.state }
+              )
+            )
+          config.signal?.addEventListener('abort', cancelRequest, { once: true })
+          if (config.signal?.aborted === true) {
+            cancelRequest()
+            return
           }
 
           this.pendingRequestNonces.add(requestNonceAsBase64)
@@ -309,7 +361,10 @@ export class AuthFetch {
             // A certificate prompt can outlive the request deadline. Never
             // dispatch a request after its caller has already seen a timeout.
             if (cleaned) return
-            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
+            await peerToUse.peer.toPeer(
+              writer.toArray(),
+              config.paymentContext?.serverIdentityKey ?? peerToUse.identityKey
+            )
           } catch (error) {
             // Late transport/session failures must not start recovery that
             // replays a request after its response deadline has expired.
@@ -575,8 +630,8 @@ export class AuthFetch {
         if (normalizedKey.startsWith('x-bsv-auth')) {
           throw new Error('No BSV auth headers allowed here!')
         }
-      } else if (normalizedKey.startsWith('content-type')) {
-        value = value.split(';')[0].trim()
+      } else if (normalizedKey === 'content-type') {
+        value = authenticatedContentType(value)
       } else {
         throw new Error(
           'Unsupported header in the simplified fetch implementation. Only content-type, authorization, and x-bsv-* headers are supported.'
@@ -612,8 +667,8 @@ export class AuthFetch {
       return
     }
     const bytes = await this.normalizeBodyToNumberArray(body)
-    writer.writeVarIntNum(bytes.length)
-    writer.write(bytes)
+    writer.writeVarIntNum(bytes.length === 0 ? -1 : bytes.length)
+    if (bytes.length > 0) writer.write(bytes)
   }
 
   /**
@@ -700,36 +755,8 @@ export class AuthFetch {
     config: SimplifiedFetchRequestOptions,
     originalResponse: Response
   ): Promise<Response | null> {
-    const paymentVersion = originalResponse.headers.get('x-bsv-payment-version')
-    if (!paymentVersion || paymentVersion !== PAYMENT_VERSION) {
-      throw new Error(
-        `Unsupported x-bsv-payment-version response header. Client version: ${PAYMENT_VERSION}, Server version: ${paymentVersion}`
-      )
-    }
-
-    const satoshisRequiredHeader = originalResponse.headers.get('x-bsv-payment-satoshis-required')
-    if (!satoshisRequiredHeader) {
-      throw new Error('Missing x-bsv-payment-satoshis-required response header.')
-    }
-    if (!/^[1-9]\d*$/.test(satoshisRequiredHeader)) {
-      throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
-    }
-    const satoshisRequired = Number(satoshisRequiredHeader)
-    if (!Number.isSafeInteger(satoshisRequired)) {
-      throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
-    }
-
-    const serverIdentityKey = originalResponse.headers.get('x-bsv-auth-identity-key')
-    if (typeof serverIdentityKey !== 'string') {
-      throw new TypeError('Missing x-bsv-auth-identity-key response header.')
-    }
-
-    const derivationPrefix = originalResponse.headers.get('x-bsv-payment-derivation-prefix')
-    if (typeof derivationPrefix !== 'string' || derivationPrefix.length < 1) {
-      throw new Error('Missing x-bsv-payment-derivation-prefix response header.')
-    }
-
-    const knownTxids = parseKnownTxidsHeader(originalResponse.headers.get(KNOWN_TXIDS_HEADER))
+    const { satoshisRequired, serverIdentityKey, derivationPrefix, knownTxids, transports } =
+      paymentRequirements(originalResponse)
 
     let paymentContext = config.paymentContext
     if (paymentContext == null) {
@@ -739,7 +766,8 @@ export class AuthFetch {
         satoshisRequired,
         serverIdentityKey,
         derivationPrefix,
-        knownTxids
+        knownTxids,
+        transports
       )
     } else {
       const requirementsChanged = !this.isPaymentContextCompatible(
@@ -749,18 +777,10 @@ export class AuthFetch {
         derivationPrefix
       )
       if (requirementsChanged) {
-        this.logPaymentAttempt(
-          'warn',
-          'Server adjusted payment requirements; regenerating transaction',
-          this.composePaymentLogDetails(url, paymentContext)
-        )
-        paymentContext = await this.createPaymentContext(
-          url,
-          config,
-          satoshisRequired,
-          serverIdentityKey,
-          derivationPrefix,
-          knownTxids
+        throw new PaymentTransportError(
+          'ERR_PAYMENT_REQUIREMENTS_CHANGED',
+          'The server changed payment requirements after a payment was prepared. Reconcile the existing payment before authorizing another.',
+          { txid: paymentContext.txid, state: paymentContext.state }
         )
       }
     }
@@ -773,18 +793,32 @@ export class AuthFetch {
       )
     }
 
-    const headersWithPayment: Record<string, string> = {
-      ...config.headers
+    await this.prepareExistingPaymentRequest(paymentContext, config, transports)
+
+    if (config.signal?.aborted === true) {
+      const aborted =
+        paymentContext.state === 'prepared'
+          ? await this.abortPreparedPayment(paymentContext.txid)
+          : undefined
+      throw new PaymentTransportError('ERR_PAYMENT_CANCELLED', 'Paid request cancelled.', {
+        txid: paymentContext.txid,
+        state: paymentContext.state,
+        aborted
+      })
     }
-    headersWithPayment['x-bsv-payment'] = JSON.stringify({
-      derivationPrefix: paymentContext.derivationPrefix,
-      derivationSuffix: paymentContext.derivationSuffix,
-      transaction: paymentContext.transactionBase64
-    })
+    if (paymentContext.state === 'prepared') await this.submitPreparedPayment(paymentContext)
+    if (config.signal?.aborted === true) {
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_CANCELLED',
+        'Paid request cancelled after submission; reconcile its outcome.',
+        { txid: paymentContext.txid, state: paymentContext.state }
+      )
+    }
 
     const nextConfig: SimplifiedFetchRequestOptions = {
       ...config,
-      headers: headersWithPayment,
+      headers: paymentContext.preparedRequest.headers,
+      body: paymentContext.preparedRequest.body,
       paymentContext
     }
 
@@ -802,15 +836,53 @@ export class AuthFetch {
       attemptDetails
     )
 
+    return this.sendPaidRequest(
+      url,
+      nextConfig,
+      originalResponse,
+      paymentContext,
+      attemptDetails,
+      attemptNumber
+    )
+  }
+
+  private async sendPaidRequest(
+    url: string,
+    nextConfig: SimplifiedFetchRequestOptions,
+    originalResponse: Response,
+    paymentContext: PaymentRetryContext,
+    attemptDetails: Record<string, unknown>,
+    attemptNumber: number
+  ): Promise<Response | null> {
     try {
       const response = await this.fetch(url, nextConfig)
+      if (response.status === 413 || response.status === 431) {
+        throw new PaymentTransportError(
+          'ERR_PAYMENT_SIZE',
+          'The authenticated server rejected the paid request size.',
+          { txid: paymentContext.txid, state: paymentContext.state },
+          response.status,
+          true
+        )
+      }
       this.logPaymentAttempt(
-        'info',
-        `Paid request attempt ${attemptNumber} succeeded`,
+        response.ok ? 'info' : 'warn',
+        `Paid request attempt ${attemptNumber} completed with HTTP ${response.status}`,
         attemptDetails
       )
       return response
     } catch (error) {
+      if (error instanceof PaymentTransportError) throw error
+      const status = error instanceof Error ? (error as any).details?.status : undefined
+      if (status === 413 || status === 431) {
+        throw new PaymentTransportError(
+          'ERR_PAYMENT_SIZE',
+          'An unauthenticated intermediary rejected the paid request size. Reconcile the submitted payment.',
+          { txid: paymentContext.txid, state: paymentContext.state },
+          status,
+          false
+        )
+      }
       const errorEntry = this.createPaymentErrorEntry(paymentContext.attempts, error)
       paymentContext.errors.push(errorEntry)
       this.logPaymentAttempt('error', `Paid request attempt ${attemptNumber} failed`, {
@@ -828,6 +900,53 @@ export class AuthFetch {
       const delayMs = this.getPaymentRetryDelay(paymentContext.attempts)
       await this.wait(delayMs)
       return this.handlePaymentAndRetry(url, nextConfig, originalResponse)
+    }
+  }
+
+  private async prepareExistingPaymentRequest(
+    paymentContext: PaymentRetryContext,
+    config: SimplifiedFetchRequestOptions,
+    transports: ReadonlySet<string>
+  ): Promise<void> {
+    // Contexts returned by the released API may already represent a spend.
+    // Preserve them without another wallet mutation, but validate their real wire bytes.
+    const legacy = paymentContext.preparedRequest === undefined
+    if (legacy) {
+      const beef = Beef.fromBinaryStrict(UtilsToArray(paymentContext.transactionBase64, 'base64'))
+      if (beef.atomicTxid == null)
+        throw new PaymentTransportError(
+          'ERR_PAYMENT_TRANSPORT',
+          'Existing payment context requires Atomic BEEF.'
+        )
+      paymentContext.txid = beef.atomicTxid
+      paymentContext.state = 'uncertain'
+      paymentContext.originalRequest = {
+        method: config.method ?? 'GET',
+        headers: { ...config.headers },
+        body:
+          config.body == null
+            ? undefined
+            : new Uint8Array(await this.normalizeBodyToNumberArray(config.body))
+      }
+    } else if (transports.has(paymentContext.preparedRequest.transport)) return
+    try {
+      paymentContext.preparedRequest = preparePaymentTransport(
+        JSON.stringify({
+          derivationPrefix: paymentContext.derivationPrefix,
+          derivationSuffix: paymentContext.derivationSuffix,
+          transaction: paymentContext.transactionBase64
+        }),
+        paymentContext.originalRequest,
+        transports,
+        resolvePaymentTransportLimits(config.paymentTransport)
+      )
+    } catch (error) {
+      if (legacy) throw error
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_TRANSPORT',
+        'The authenticated server no longer supports a deliverable transport for this existing payment.',
+        { txid: paymentContext.txid, state: paymentContext.state }
+      )
     }
   }
 
@@ -850,11 +969,46 @@ export class AuthFetch {
     satoshisRequired: number,
     serverIdentityKey: string,
     derivationPrefix: string,
-    knownTxids?: string[]
+    knownTxids: string[] | undefined,
+    transports: ReadonlySet<string> = new Set(['header'])
   ): Promise<PaymentRetryContext> {
     const requestSummary = this.buildPaymentRequestSummary(url, config)
     const paymentLabels = Array.isArray(config.labels) ? [...config.labels] : []
     const maxAttempts = this.getMaxPaymentAttempts(config)
+    const limits = resolvePaymentTransportLimits(config.paymentTransport)
+    if (typeof this.wallet.abortAction !== 'function')
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_TRANSPORT',
+        'Payment preparation requires a BRC-100 wallet with noSend, sendWith, and abortAction support.'
+      )
+    if (Object.keys(config.headers ?? {}).some(name => name.toLowerCase() === 'x-bsv-payment')) {
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_REQUIREMENTS_CHANGED',
+        'An existing payment was rejected. Reconcile it before authorizing another payment.'
+      )
+    }
+    const originalRequest = {
+      method: config.method ?? 'GET',
+      headers: { ...config.headers },
+      body:
+        config.body == null
+          ? undefined
+          : new Uint8Array(await this.normalizeBodyToNumberArray(config.body))
+    }
+    if (
+      !transports.has('header') &&
+      ['GET', 'HEAD'].includes(originalRequest.method.toUpperCase())
+    ) {
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_TRANSPORT',
+        'GET and HEAD require header payment support.'
+      )
+    }
+    const { publicKey: clientIdentityKey } = validateWalletResult(
+      'getPublicKey',
+      await this.wallet.getPublicKey({ identityKey: true }, this.originator),
+      { identityKey: true }
+    )
     const derivationSuffix = await createNonce(this.wallet, undefined, this.originator)
 
     const { publicKey: derivedPublicKey } = await this.wallet.getPublicKey(
@@ -869,58 +1023,145 @@ export class AuthFetch {
       .lock(PublicKey.fromString(derivedPublicKey).toAddress())
       .toHex()
 
-    const { tx: transactionResult } = await this.wallet.createAction(
-      {
-        description: `Payment for request to ${new URL(url).origin}`,
-        labels: this.buildPaymentActionLabels(
-          { labels: paymentLabels },
-          derivationPrefix,
-          derivationSuffix
-        ),
-        outputs: [
-          {
-            satoshis: satoshisRequired,
-            lockingScript,
-            customInstructions: JSON.stringify({
-              derivationPrefix,
-              derivationSuffix,
-              payee: serverIdentityKey
-            }),
-            outputDescription: 'HTTP request payment'
-          }
-        ],
-        options: {
-          randomizeOutputs: false,
-          // Ancestors the recipient already holds are emitted txid-only rather than in full.
-          // Undefined when the server did not declare any, which is the pre-existing behaviour.
-          ...(knownTxids != null ? { knownTxids } : {})
+    const createArgs = {
+      description: 'BRC-105 HTTP request payment',
+      labels: this.buildPaymentActionLabels(
+        { labels: paymentLabels },
+        derivationPrefix,
+        derivationSuffix
+      ),
+      outputs: [
+        {
+          satoshis: satoshisRequired,
+          lockingScript,
+          customInstructions: JSON.stringify({
+            derivationPrefix,
+            derivationSuffix,
+            payee: serverIdentityKey
+          }),
+          outputDescription: 'HTTP request payment'
         }
-      },
-      this.originator
-    )
+      ],
+      options: {
+        randomizeOutputs: false,
+        noSend: true,
+        acceptDelayedBroadcast: false,
+        // Ancestors the recipient already holds are emitted txid-only rather than in full.
+        // Undefined when the server did not declare any, which is the pre-existing behaviour.
+        ...(knownTxids != null ? { knownTxids } : {})
+      }
+    }
+    if (config.signal?.aborted === true)
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_CANCELLED',
+        'Paid request cancelled before preparation.'
+      )
+    const rawCreated = await this.wallet.createAction(createArgs, this.originator)
+    let txid: string | undefined
+    let reference: string | undefined
+    let preparationError: unknown
+    try {
+      // A malformed result can still identify a prepared reservation. Read only
+      // a canonical own data field, never an accessor supplied by an adapter.
+      const reported =
+        rawCreated == null ? undefined : Object.getOwnPropertyDescriptor(rawCreated, 'txid')?.value
+      if (typeof reported === 'string' && /^[0-9a-f]{64}$/.test(reported)) txid = reported
+      const created = validateWalletResult('createAction', rawCreated, createArgs)
+      reference = created.signableTransaction?.reference
 
-    const transaction = copyAuthByteArray(
-      transactionResult,
-      'BRC-105 payment transaction',
-      MAX_PAYMENT_TRANSACTION_BYTES
+      const transaction = copyAuthByteArray(
+        created.tx,
+        'BRC-105 payment transaction',
+        MAX_PAYMENT_TRANSACTION_BYTES
+      )
+      txid = preparedPaymentTxid(transaction, txid, satoshisRequired, lockingScript)
+      const transactionBase64 = toBase64(transaction)
+      const preparedRequest = preparePaymentTransport(
+        JSON.stringify({ derivationPrefix, derivationSuffix, transaction: transactionBase64 }),
+        originalRequest,
+        transports,
+        limits
+      )
+      // Exercise the actual released wire decoder's caps before the irreversible sendWith call.
+      const frame = await this.serializeRequest(
+        originalRequest.method,
+        preparedRequest.headers,
+        preparedRequest.body,
+        new URL(url),
+        Random(32)
+      )
+      this.#createTransport(new URL(url).origin).deserializeRequestPayload(frame.toArray())
+      if (config.signal?.aborted === true)
+        throw new PaymentTransportError(
+          'ERR_PAYMENT_CANCELLED',
+          'Paid request cancelled during preparation.'
+        )
+      return {
+        satoshisRequired,
+        transactionBase64,
+        derivationPrefix,
+        derivationSuffix,
+        serverIdentityKey,
+        clientIdentityKey,
+        attempts: 0,
+        maxAttempts,
+        errors: [],
+        requestSummary,
+        txid,
+        state: 'prepared',
+        originalRequest,
+        preparedRequest
+      }
+    } catch (error) {
+      preparationError = error
+    }
+    // A failed preparation may still own a reservation. Cleanup precedes the refusal.
+    const aborted = await this.abortPreparedPayment(txid ?? reference)
+    throw new PaymentTransportError(
+      preparationError instanceof PaymentTransportError
+        ? preparationError.code
+        : 'ERR_PAYMENT_TRANSPORT',
+      'Payment preparation could not produce a deliverable request; no broadcast was requested.',
+      txid == null ? undefined : { txid, state: 'prepared', aborted }
     )
+  }
 
-    const { publicKey: clientIdentityKey } = await this.wallet.getPublicKey(
-      { identityKey: true },
-      this.originator
-    )
+  private async abortPreparedPayment(reference: string | undefined): Promise<boolean> {
+    if (reference == null) return false
+    try {
+      return (await this.wallet.abortAction({ reference }, this.originator)).aborted === true
+    } catch {
+      return false
+    }
+  }
 
-    return {
-      satoshisRequired,
-      transactionBase64: toBase64(transaction),
-      derivationPrefix,
-      derivationSuffix,
-      serverIdentityKey,
-      clientIdentityKey,
-      attempts: 0,
-      maxAttempts,
-      errors: [],
-      requestSummary
+  private async submitPreparedPayment(context: PaymentRetryContext): Promise<void> {
+    // Once submission starts its result may be uncertain. Never abort or create a replacement automatically.
+    context.state = 'uncertain'
+    try {
+      const args = {
+        description: 'Submit prepared HTTP payment',
+        options: { sendWith: [context.txid], acceptDelayedBroadcast: false }
+      }
+      const result = validateWalletResult(
+        'createAction',
+        await this.wallet.createAction(args, this.originator),
+        args
+      )
+      if (
+        result.sendWithResults?.length !== 1 ||
+        result.sendWithResults[0].txid !== context.txid ||
+        result.sendWithResults[0].status !== 'unproven'
+      ) {
+        throw new Error('Payment broadcast did not return affirmative acceptance.')
+      }
+      context.state = 'submitted'
+    } catch {
+      throw new PaymentTransportError(
+        'ERR_PAYMENT_OUTCOME_UNKNOWN',
+        'Payment submission was not confirmed. Reconcile this transaction before retrying.',
+        { txid: context.txid, state: context.state }
+      )
     }
   }
 
@@ -1101,21 +1342,14 @@ export class AuthFetch {
   }
 
   private createPaymentErrorEntry(attempt: number, error: unknown): PaymentErrorLogEntry {
-    const entry: PaymentErrorLogEntry = {
+    // Provider exceptions can echo URLs, request headers or payment bytes. Keep
+    // only a bounded category in telemetry and terminal diagnostic history.
+    return {
       attempt,
       timestamp: new Date().toISOString(),
-      message: '',
+      message: error instanceof Error ? 'Payment delivery failed.' : 'Payment delivery rejected.',
       stack: undefined
     }
-
-    if (error instanceof Error) {
-      entry.message = error.message
-      entry.stack = error.stack ?? undefined
-    } else {
-      entry.message = toSafeString(error)
-    }
-
-    return entry
   }
 
   private getPaymentRetryDelay(attempt: number): number {
@@ -1138,7 +1372,11 @@ export class AuthFetch {
   ): Error {
     const safeUrl = this.#safeLogUrl(url)
     const message = `Paid request to ${safeUrl} failed after ${context.attempts}/${context.maxAttempts} attempts. Sent ${context.satoshisRequired} satoshis to ${context.serverIdentityKey}.`
-    const error = new Error(message)
+    const error = new PaymentTransportError(
+      'ERR_PAYMENT_OUTCOME_UNKNOWN',
+      message,
+      context.txid == null ? undefined : { txid: context.txid, state: context.state ?? 'uncertain' }
+    )
 
     const failureDetails = {
       request: context.requestSummary,
@@ -1187,38 +1425,39 @@ export class AuthFetch {
       return UtilsToArray(body, 'utf8')
     }
 
-    // 3. ArrayBuffer / TypedArrays
-    if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-      const typedArray =
-        body instanceof ArrayBuffer
-          ? new Uint8Array(body)
-          : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
-      return Array.from(typedArray)
+    // 3. ArrayBuffer / TypedArrays: preserve the exact view's byte offset and length.
+    if (body instanceof ArrayBuffer) body = new Uint8Array(body)
+    if (ArrayBuffer.isView(body)) {
+      return Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength))
     }
 
     // 4. Blob
-    if (body instanceof Blob) {
+    if (typeof Blob !== 'undefined' && body instanceof Blob) {
       const arrayBuffer = await body.arrayBuffer()
       return Array.from(new Uint8Array(arrayBuffer))
     }
 
     // 5. FormData
-    if (body instanceof FormData) {
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
       const entries: [string, string][] = []
       body.forEach((value, key) => {
-        entries.push([key, typeof value === 'string' ? value : value.name])
+        if (typeof value !== 'string')
+          throw new PaymentTransportError(
+            'ERR_PAYMENT_TRANSPORT',
+            'Serialize file-bearing FormData to owned bytes with its Content-Type before authenticated fetch.'
+          )
+        entries.push([key, value])
       })
-      const urlEncoded = new URLSearchParams(entries).toString()
-      return UtilsToArray(urlEncoded, 'utf8')
+      return UtilsToArray(new URLSearchParams(entries).toString(), 'utf8')
     }
 
     // 6. URLSearchParams
-    if (body instanceof URLSearchParams) {
+    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
       return UtilsToArray(body.toString(), 'utf8')
     }
 
     // 7. ReadableStream
-    if (body instanceof ReadableStream) {
+    if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
       throw new TypeError('ReadableStream cannot be directly converted to number[].')
     }
 
@@ -1228,6 +1467,70 @@ export class AuthFetch {
     // 9. Fallback
     throw new Error('Unsupported body type in this SimplifiedFetch implementation.')
   }
+}
+
+function paymentRequirements(originalResponse: Response) {
+  const paymentVersion = originalResponse.headers.get('x-bsv-payment-version')
+  if (!paymentVersion || paymentVersion !== PAYMENT_VERSION) {
+    throw new Error(
+      `Unsupported x-bsv-payment-version response header. Client version: ${PAYMENT_VERSION}, Server version: ${paymentVersion}`
+    )
+  }
+
+  const satoshisRequiredHeader = originalResponse.headers.get('x-bsv-payment-satoshis-required')
+  if (!satoshisRequiredHeader) {
+    throw new Error('Missing x-bsv-payment-satoshis-required response header.')
+  }
+  if (!/^[1-9]\d*$/.test(satoshisRequiredHeader)) {
+    throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
+  }
+  const satoshisRequired = Number(satoshisRequiredHeader)
+  if (!Number.isSafeInteger(satoshisRequired)) {
+    throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
+  }
+
+  const serverIdentityKey = originalResponse.headers.get('x-bsv-auth-identity-key')
+  if (typeof serverIdentityKey !== 'string') {
+    throw new TypeError('Missing x-bsv-auth-identity-key response header.')
+  }
+
+  const derivationPrefix = originalResponse.headers.get('x-bsv-payment-derivation-prefix')
+  if (typeof derivationPrefix !== 'string' || derivationPrefix.length < 1) {
+    throw new Error('Missing x-bsv-payment-derivation-prefix response header.')
+  }
+
+  const knownTxids = parseKnownTxidsHeader(originalResponse.headers.get(KNOWN_TXIDS_HEADER))
+  const transports = paymentTransports(originalResponse.headers.get('x-bsv-payment-transports'))
+  if (transports.size === 0)
+    throw new PaymentTransportError(
+      'ERR_PAYMENT_TRANSPORT',
+      'The server advertised no supported payment transport.'
+    )
+
+  return { satoshisRequired, serverIdentityKey, derivationPrefix, knownTxids, transports }
+}
+
+function preparedPaymentTxid(
+  transaction: number[],
+  reportedTxid: string | undefined,
+  satoshisRequired: number,
+  lockingScript: string
+): string {
+  const beef = Beef.fromBinaryStrict(transaction)
+  const atomicTxid = beef.atomicTxid
+  const output = atomicTxid == null ? undefined : beef.findTxid(atomicTxid)?.tx?.outputs[0]
+  if (
+    atomicTxid == null ||
+    (reportedTxid != null && reportedTxid !== atomicTxid) ||
+    output?.satoshis !== satoshisRequired ||
+    output.lockingScript.toHex() !== lockingScript
+  ) {
+    throw new PaymentTransportError(
+      'ERR_PAYMENT_TRANSPORT',
+      'The prepared payment does not match its authorized recipient and amount.'
+    )
+  }
+  return atomicTxid
 }
 
 class StrictResponseReader {

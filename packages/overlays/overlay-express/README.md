@@ -431,3 +431,10 @@ under the Open BSV License Version 4. Redistributors must preserve
 [`LICENSES/`](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain Overlay Express Project. Let's build the future of BSV Blockchain together!
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

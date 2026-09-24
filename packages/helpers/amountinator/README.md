@@ -79,3 +79,10 @@ Supported currencies: `BSV`, `SATS`, `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `INR`, `
 ## License
 
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

@@ -84,7 +84,7 @@ conformance/vectors/
   broadcast/*.json
   messaging/{authsocket,brc31/,message-box-http}.json
   overlay/{lookup,submit,topic-management}.json
-  payments/{brc121,brc29-payment-protocol}.json
+  payments/{brc118,brc121,brc29-payment-protocol}.json
   regressions/ (12 files — special format with regression.issue metadata)
   sdk/compat/bsm.json
   sdk/crypto/ (8 files: aes, ecdsa, ecies, hash160, hmac, ripemd160, sha256, signature)

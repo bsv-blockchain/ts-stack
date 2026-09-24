@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 1.8.5 candidate
+
+- Refresh the packed templates range to include its CommonJS interoperability
+  repair. Topic APIs, schemas and admission behavior are unchanged.
+
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Advances the packed overlay dependency candidate for BASM validation hardening.
   Package runtime behavior is unchanged; no consumer migration is required.

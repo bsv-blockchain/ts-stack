@@ -37,6 +37,7 @@ import {
   type PeerMessage
 } from './types.js'
 import * as Logger from './Utils/logger.js'
+import { decodePeerPayTransaction } from './Utils/peerPayTransaction.js'
 
 function hexToBytes(hex: string): number[] {
   if (!/^[0-9a-f]{64}$/.test(hex)) {
@@ -143,13 +144,16 @@ function normalizePaymentParams(value: unknown): PaymentParams {
   return { recipient, amount: payment.amount }
 }
 
-function normalizePaymentToken(value: unknown): PaymentToken {
+function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToken {
   const token = dataRecord(value)
   const customInstructions = dataRecord(token?.customInstructions)
   if (token == null || customInstructions == null) {
     throw new TypeError('Incoming payment token is invalid')
   }
-  const transaction = normalizeBRC100ByteArray(token.transaction)
+  const transaction =
+    allowBase64 && typeof token.transaction === 'string'
+      ? decodePeerPayTransaction(token.transaction, MAX_PAYMENT_TRANSACTION_BYTES)
+      : normalizeBRC100ByteArray(token.transaction)
   if (
     transaction == null ||
     transaction.length === 0 ||
@@ -207,7 +211,7 @@ function paymentFromMessage(value: unknown): IncomingPayment | null {
     return {
       messageId: boundedMessageId(message.messageId),
       sender: canonicalIdentityKey(message.sender),
-      token: normalizePaymentToken(payment)
+      token: normalizePaymentToken(payment, true)
     }
   } catch {
     return null
