@@ -175,6 +175,8 @@ export { MandalaLookupService, createMandalaLookupService } from './mandala/Mand
 export { MandalaStorageManager } from './mandala/MandalaStorageManager.js'
 export { InMemoryScreeningProvider } from './mandala/types.js'
 export { verifyKeyLinkage } from './mandala/verifyKeyLinkage.js'
+export { foldAction, defaultAssetState } from './mandala/AssetStateReducer.js'
+export type { AssetAdminState, FoldContext, FrozenRef } from './mandala/AssetStateReducer.js'
 export type {
   ScreeningProvider,
   SpecificLinkage,
