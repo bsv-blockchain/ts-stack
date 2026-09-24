@@ -275,7 +275,7 @@ export default class HTTPWalletJSON implements WalletInterface {
   constructor(
     originator: OriginatorDomainNameStringUnder250Bytes | undefined,
     baseUrl: string = 'http://localhost:3321',
-    httpClient = fetch
+    httpClient = globalThis.fetch.bind(globalThis)
   ) {
     this.baseUrl = normalizeWalletHttpBaseUrl(baseUrl)
     this.originator = validateOriginator(originator)

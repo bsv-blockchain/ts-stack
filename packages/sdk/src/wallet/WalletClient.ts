@@ -125,26 +125,22 @@ export default class WalletClient implements WalletInterface {
 
     const attemptSubstrate = async (
       factory: () => WalletInterface,
-      timeout?: number,
+      timeout: number,
       connectedFactory?: () => WalletInterface
     ): Promise<{ success: boolean; sub?: WalletInterface }> => {
       try {
         const sub = factory()
         let result
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined
-        if (typeof timeout === 'number') {
-          try {
-            result = await Promise.race([
-              sub.getVersion({}),
-              new Promise<never>((_resolve, reject) => {
-                timeoutHandle = setTimeout(() => reject(new Error('Timed out.')), timeout)
-              })
-            ])
-          } finally {
-            if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
-          }
-        } else {
-          result = await sub.getVersion({})
+        try {
+          result = await Promise.race([
+            sub.getVersion({}, this.originator),
+            new Promise<never>((_resolve, reject) => {
+              timeoutHandle = setTimeout(() => reject(new Error('Timed out.')), timeout)
+            })
+          ])
+        } finally {
+          clearTimeout(timeoutHandle)
         }
         validateWalletResult('getVersion', result)
         // Probe deadlines bound discovery, not later calls that may await user approval.

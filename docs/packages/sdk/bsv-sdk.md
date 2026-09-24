@@ -17,6 +17,25 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 The unpublished 2.9 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
 
+The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
+originator and binds the default JSON transport fetch receiver for browsers.
+It restores signed `listActions` net amounts with the historical wire encoding,
+matching JSON validation; count, length and individual output bounds stay intact.
+Apps affected by these client defects can update the SDK without changing calls.
+Wallets retain the existing BRC100 contract; an ecosystem-wide application
+migration is not required. The 2.9.0 candidate remains unpublished until its protected
+release workflow completes.
+
+The action-history compatibility regression affects signed `listActions` values
+in the 2.8.x binary processor and client. Updating a wallet repairs responses for
+older compatible clients; an application already bundling the affected 2.8.x
+binary client also needs the SDK patch. No call or persisted-data change is
+needed. Synthetic cross-version checks cover SDK 2.4.0, 2.5.0, 2.7.1, 2.8.1 and
+2.8.2 at eight signed/unsigned boundaries: all 40 candidate cases pass, all 32
+previously valid cases retain exact response bytes, and the eight known negative
+2.8.1/2.8.2 failures are recorded separately. These checks are bounded fixture
+evidence, not a claim that every ecosystem application has been tested.
+
 Version 2.8.1 repairs portable decryption of authenticated empty
 AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
 for empty encrypted fields. Encryption bytes and the full authentication tag
@@ -397,7 +416,7 @@ is removed. Only a successful locally initiated handshake can select the
 implicit destination for a later `Peer` call; inbound messages cannot retarget
 it.
 
-### Wallet discovery deadlines in the 2.8.2 candidate
+### Wallet discovery deadlines since 2.8.2
 
 Automatic React Native and XDM probes retain their short discovery deadlines
 and remove listeners when unavailable. A successful probe creates a separate
@@ -405,6 +424,5 @@ operational connection so authentication, permission approval and valid slow
 responses do not inherit the one-second/200-millisecond discovery deadline.
 Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
-is needed. Applications must update their bundled SDK; updating only a wallet
-cannot replace a web application's SDK. Publication remains a separate
-protected-workflow action.
+is needed. Applications affected by the timeout defect can update their bundled
+SDK; a wallet release alone cannot replace code served by a web application.

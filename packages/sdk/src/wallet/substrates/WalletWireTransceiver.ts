@@ -398,14 +398,27 @@ export default class WalletWireTransceiver implements WalletInterface {
     return status
   }
 
+  #readActionSatoshis(reader: ReaderUint8Array): number {
+    // Action history is a signed net amount. Legacy wallet wire encodes negative
+    // values as 0xff followed by signed little-endian int64. This exception is
+    // field-specific: counts, lengths and individual output values stay unsigned.
+    let value: number
+    if (
+      reader.remaining() >= 9 &&
+      reader.bin[reader.pos] === 0xff &&
+      reader.bin[reader.pos + 8] >= 0x80
+    ) {
+      reader.skip(1)
+      value = reader.readInt64LEBn().toNumber()
+    } else {
+      value = reader.readVarIntNumStrict(false)
+    }
+    return this.#requireInteger(value, 'listActions satoshis', -21e14, 21e14)
+  }
+
   #parseAction(reader: ReaderUint8Array): ListActionsResult['actions'][number] {
     const txid = toHex(reader.read(32))
-    const satoshis = this.#requireInteger(
-      reader.readVarIntNumStrict(false),
-      'listActions satoshis',
-      0,
-      21e14
-    )
+    const satoshis = this.#readActionSatoshis(reader)
     const status = this.#parseActionStatus(reader.readInt8())
     const isOutgoing = this.#readBooleanFlag(reader, 'listActions isOutgoing')
     const description = toUTF8Strict(reader.read(reader.readVarIntNumStrict(false)))
