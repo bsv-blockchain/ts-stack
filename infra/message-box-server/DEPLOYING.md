@@ -172,6 +172,21 @@ separate session manager and cannot substitute for the durable HTTP check.
 
 ## Ingress and timeouts
 
+For multiple replicas, preserve Engine.IO polling session affinity: every
+request for one transport session must reach its originating process. Use a
+load-balancer policy that works with existing credential-free cross-domain
+clients, such as source-IP affinity; requiring a new third-party routing cookie
+would force a client migration. Test authenticated polling and WebSocket
+connections separately. Affinity is transport routing, not authentication or
+durable session failover; clients reconnect after endpoint withdrawal.
+
+Configure the proxy's idle upstream HTTP connection lifetime below the server's
+five-second keep-alive timeout (for example, four seconds). Otherwise a proxy
+can reuse a connection at the server's close boundary and return an intermittent
+503 before an application response. Keep active-request and WebSocket stream
+timeouts separate and sufficiently long. Do not add automatic payment-request
+retries as a substitute for correct connection lifecycle settings.
+
 The image serves HTTP and WebSocket traffic directly on `PORT` (8080 by
 default). Put the platform ingress or load balancer in front of the container
 and keep its ceilings aligned with the application:
