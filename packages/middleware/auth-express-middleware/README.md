@@ -11,7 +11,11 @@ rejects parsed bodies that cannot be represented without losing semantics.
 Version 2.2.6 also preserves bodyless authenticated requests on Express 4, whose
 JSON parser can supply an empty-object placeholder where Express 5 supplies
 `undefined`. HTTP message framing distinguishes that placeholder from a real
-JSON `{}` body, which remains signed data. Existing clients need no changes.
+JSON `{}` body, which remains signed data. Existing clients need no changes. Version 2.2.7 also
+preserves Express's one-argument `res.set({ ...headers })` overload, including
+payment challenge headers. The wrapper forwards the original argument count;
+Express retains its own header validation and coercion, and signed responses
+retain their existing BRC-104 representation.
 
 ## Requirements
 

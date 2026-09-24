@@ -314,7 +314,7 @@
     "@bsv/paymail": "2.4.10",
     "@bsv/402-pay": "0.3.2",
     "@bsv/auth": "0.1.5",
-    "@bsv/auth-express-middleware": "2.2.6",
+    "@bsv/auth-express-middleware": "2.2.7",
     "@bsv/payment-express-middleware": "2.1.7",
     "@bsv/teranode-listener": "1.1.6",
     "@bsv/gasp": "1.3.7",

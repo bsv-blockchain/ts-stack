@@ -129,6 +129,12 @@ export const startServer = (_port = 3000): Server => {
   // Add the mutual authentication middleware
   app.use(authMiddleware)
 
+  app.get('/header-overloads', (_req: Request, res: Response) => {
+    res.set({ 'X-BSV-Map': 'map', 'X-BSV-Number': 25, 'X-BSV-Array': ['one', 'two'] })
+    res.header({ 'X-BSV-Alias': 'alias' })
+    res.set('X-BSV-Single', 'single').status(418).json({ headers: 'preserved' })
+  })
+
   for (const status of [204, 401, 403, 404]) {
     app.get(`/empty-${status}`, (_req: Request, res: Response) => {
       res.status(status).end()
