@@ -166,10 +166,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.3",
-      "releaseType": "patch",
+      "publishedVersion": "2.8.4",
+      "releaseType": "none",
       "summary": "Restores BRC100 listActions compatibility with established wallet histories whose generated change, imported actions or unassigned outputs have empty display descriptions or basket names. Keeps nonempty description bounds, UTF-8 byte ceilings, own-data validation, requested scripts and labels, signed action amounts, nonnegative individual values, and creation-request validation unchanged.",
-      "migration": "No API, wire, wallet-data or ecosystem-wide application migration is required. Applications affected by history rejection in the hardened 2.8.x SDK can update to 2.8.4 without changing their BRC100 calls. Existing wallets may continue returning their original stored metadata, including empty strings; do not fabricate descriptions or rewrite historical records. Source 2.8.4 remains a candidate until the protected SDK-only npm workflow publishes and verifies it."
+      "migration": "No API, wire, wallet-data or ecosystem-wide application migration is required. Applications affected by history rejection in the hardened 2.8.x SDK can update to 2.8.4 without changing their BRC100 calls. Existing wallets may continue returning their original stored metadata, including empty strings; do not fabricate descriptions or rewrite historical records. Version 2.8.4 was published by protected SDK-only release 35962750434 from main commit 57b852d69809c678058b78de914841e17d3ac5ba. Registry bytes, integrity, GitHub attestations and npm provenance were verified against its single immutable candidate."
     },
     {
       "name": "@bsv/simple",

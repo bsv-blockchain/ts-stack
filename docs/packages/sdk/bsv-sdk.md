@@ -15,7 +15,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 2.8.4 candidate also restores `listActions` responses containing empty
+Published version 2.8.4 also restores `listActions` responses containing empty
 stored descriptions or unassigned basket names, including ordinary generated
 change. The original strings are preserved; wallets need not fabricate display
 metadata or rewrite history. Nonempty description limits, UTF-8 byte ceilings,
