@@ -19,6 +19,9 @@ attention to changes that materially alter behavior or extend functionality.
   queue boundary. Normalize entity arrays in place using one field list and a
   prototype-free property-descriptor map, avoiding intermediate maps/arrays
   while preserving date, null, byte and non-enumerable-field behavior.
+- Adjust only the reviewed mobile Hermes Brotli ceiling to 1,675,000 bytes,
+  retaining the other five limits. The mobile README records composition,
+  upstream comparison and 10.09% measured headroom; build settings are unchanged.
 - Check chains before sync writes and preserve returned, serialized and thrown
   failures without advancing progress.
 - Repair stale selected/input/broadcast proofs against canonical evidence; fence

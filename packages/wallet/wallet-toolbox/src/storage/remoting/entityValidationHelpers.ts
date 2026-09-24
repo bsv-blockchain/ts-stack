@@ -20,6 +20,10 @@ function ownValue(value: unknown): PropertyDescriptor {
   return { value, writable: true, enumerable: true, configurable: true }
 }
 
+// Property definition copies descriptor fields; null normalization can share
+// this immutable descriptor instead of allocating one for every nullable field.
+const undefinedValue = Object.freeze(ownValue(undefined))
+
 /**
  * Force uniform behaviour across database engines.
  * Use to process all individual records with timestamps retrieved from database.
@@ -41,7 +45,7 @@ export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?
     const replacement = replacements[key]
     const val = replacement == null ? indexedEntity[key] : replacement.value
     if (val === null) {
-      replacements[key] = ownValue(undefined)
+      replacements[key] = undefinedValue
     } else if (val instanceof Uint8Array) {
       replacements[key] = ownValue(Array.from(val))
     }

@@ -224,3 +224,21 @@ plan used 17 queries and about 198 ms; the eight-source cold/prepared paths used
 14 queries and about 7.3/5.8 ms. The funding, action-batch and legacy storage-sync
 benchmark gates pass. Their existing external PXC cohorts require their governed
 MySQL environment and were not executed by the default local invocation.
+
+### September 24 review-update measurements
+
+After integrating the SDK compatibility repair, repeat measurements with official
+Node 24.18.0 and the same sequential fixture passed the acceptance gates:
+
+| Backend | Full-copy ms, exclusive / paged | Foreground p95 ms, exclusive / paged | Paged event-loop p95 ms |
+| --- | ---: | ---: | ---: |
+| Native Chromium IndexedDB | 3943.6 / 3971.1 | 3938.80 / 24.50 | 1.00 |
+| SQLite | 2270.1 / 2238.5 | 2247.25 / 0.17 | 82.23 |
+| Authenticated HTTP to SQLite | 20982.5 / 21004.3 | 20901.51 / 0.31 | 195.69 |
+
+These runs include shared reader/writer admission with unchanged authorization
+ordering and direct entity normalization. Native peak heap was 79.8 MB exclusive
+and 56.8 MB paged. Inclusive boundary replay and the two-page settled unchanged
+copy remain intact. The same timing/sample limitations above apply; HTTP crypto
+and serialization still contribute event-loop delay. Subsequent forwarding and
+immutable-descriptor allocation refinements preserve the measured queue algorithm.

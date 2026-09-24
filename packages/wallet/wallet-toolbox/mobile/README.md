@@ -182,6 +182,31 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
 
+### 2.15 candidate size review
+
+The reviewed Hermes Brotli ceiling increases from 1,520,000 to 1,675,000 bytes
+for bounded resumable sync, proof recovery and prepared BRC-118 payment transport.
+The other five ceilings remain unchanged to retain their existing growth checks;
+this deliberately retains their smaller margins. No production dependency,
+minifier configuration, public export, source-map or compression setting changes
+accompany this budget adjustment.
+
+With official Node 24.18.0, the candidate measures:
+
+| Artifact | Raw bytes | gzip bytes | Brotli bytes |
+| -------- | --------: | ---------: | -----------: |
+| Metro    | 2,377,376 |    609,926 |      463,906 |
+| Hermes   | 4,619,567 |  1,955,050 |    1,521,524 |
+
+The new Hermes Brotli ceiling gives 10.09% headroom, rounded to 5,000 bytes.
+For comparison, [upstream SDK 2.8.3 validation](https://github.com/bsv-blockchain/ts-stack/actions/runs/35948047970)
+measured Metro at 2,360,475 / 602,505 / 458,183 bytes and Hermes at
+4,609,755 / 1,931,907 / 1,500,120 bytes. The gate continues to inspect the installed
+module graph, reject Node-only modules, validate maps and compile Hermes bytecode.
+A matching-input cross-platform check produced identical Hermes bytes on Linux
+x86_64 and macOS ARM, including reproduction across independent build directories.
+These measurements describe this candidate fixture, not an application-size guarantee.
+
 ## License
 
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
