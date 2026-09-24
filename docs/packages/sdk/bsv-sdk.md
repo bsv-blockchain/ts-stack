@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.5'
+version: '2.8.6'
 npm: '@bsv/sdk'
 last_updated: '2026-09-24'
 last_verified: '2026-09-24'
@@ -15,6 +15,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+The 2.8.6 source candidate fixes BRC-29 payment acceptance.
+`Brc29RemittanceModule.acceptSettlement` now derives the recipient's own
+BRC-42 child key (`forSelf: true`) when checking that the settlement output
+pays the recipient. SDK 2.8.0 through 2.8.5 derived the sender-facing key, so
+every valid incoming BRC-29 payment was refused with `brc29.internalize_failed`
+before `internalizeAction`; no funds were internalized to a wrong key and
+refused payments remain pending. `RemittanceManager` and Message Box
+`PeerPayClient` acceptance recover after upgrading. No API, BRC100 wire or
+wallet-data migration is required. This candidate is not yet published.
 
 The 2.8.5 source candidate restores larger BRC-105 HTTP payment proofs and
 raises request and signed-response header capacity by 4x: 32 KiB per ordinary
