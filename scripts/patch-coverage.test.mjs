@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 
 import {
   changedLinesFromDiff,
@@ -260,4 +261,23 @@ test('patch coverage compares emitted code for type-only edits without hiding ru
   assert.equal(hasRuntimeChange('export {}', 'startService(); export {}'), true)
   assert.equal(hasRuntimeChange('enum State { Ready }', 'enum State { Ready = 2 }'), true)
   assert.equal(hasRuntimeChange('export {}', 'invalid TypeScript {'), true)
+})
+
+test('the coverage aggregation job installs its locked compiler before classifying source changes', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
+  const section = workflow.split('  coverage-upload:\n')[1].split(/\n  [a-z][a-z-]*:/)[0]
+  const bootstrap = section.indexOf('name: Install the locked patch-coverage compiler')
+  const gate = section.indexOf('name: Enforce the repository-owned 90% patch-coverage gate')
+  assert.ok(bootstrap >= 0 && gate > bootstrap)
+  const beforeGate = section.slice(0, gate)
+  assert.match(beforeGate, /uses: pnpm\/action-setup@/)
+  assert.match(beforeGate, /uses: actions\/setup-node@/)
+  assert.match(
+    beforeGate,
+    /pnpm install --frozen-lockfile --ignore-scripts --filter @bsv\/ts-stack/
+  )
+  assert.match(beforeGate, /pnpm rebuild esbuild/)
+  assert.match(beforeGate, /if \(!runtimeComparisonAvailable\(\)\) throw new Error/)
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(typeof manifest.devDependencies.esbuild, 'string')
 })
