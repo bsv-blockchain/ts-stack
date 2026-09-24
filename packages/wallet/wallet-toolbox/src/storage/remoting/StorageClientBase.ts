@@ -132,13 +132,10 @@ export interface StorageClientOptions {
 }
 
 function hasControlCharacter(value: string): boolean {
-  // All rejected characters are in the first 160 UTF-16 code units; avoid
-  // allocating a code-point array for every endpoint or storage identifier.
-  for (let index = 0; index < value.length; index++) {
-    const point = value.charCodeAt(index)
-    if (point <= 0x1f || (point >= 0x7f && point <= 0x9f)) return true
-  }
-  return false
+  return Array.from(value).some(character => {
+    const point = character.codePointAt(0)!
+    return point <= 0x1f || (point >= 0x7f && point <= 0x9f)
+  })
 }
 
 function isLoopbackStorageHost(hostname: string): boolean {
@@ -365,12 +362,12 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>
 
   /** Share the asynchronous rejection boundary, including custom transports that throw synchronously. */
-  private async forwardRpc<T>(method: string, params: unknown[]): Promise<T> {
-    return this.rpcCall<T>(method, params)
-  }
-
-  private async readEntities<T extends EntityTimeStamp>(method: string, params: unknown[]): Promise<T[]> {
-    return validateEntities(await this.rpcCall<T[]>(method, params))
+  private forwardRpc<T>(method: string, params: unknown[]): Promise<T> {
+    try {
+      return Promise.resolve(this.rpcCall<T>(method, params))
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
   protected nextRequestId(): number {
@@ -753,8 +750,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args `FindOutputBasketsArgs` determines which baskets to retrieve.
    * @returns array of output baskets matching args.
    */
-  findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
-    return this.readEntities<TableOutputBasket>('findOutputBasketsAuth', [auth, args])
+  async findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+    const r = await this.rpcCall<TableOutputBasket[]>('findOutputBasketsAuth', [auth, args])
+    validateEntities(r)
+    return r
   }
 
   /**
@@ -767,8 +766,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args `FindOutputsArgs` determines which outputs to retrieve.
    * @returns array of outputs matching args.
    */
-  findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
-    return this.readEntities<TableOutput>('findOutputsAuth', [auth, args])
+  async findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
+    const r = await this.rpcCall<TableOutput[]>('findOutputsAuth', [auth, args])
+    validateEntities(r)
+    return r
   }
 
   /**
@@ -781,8 +782,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args `FindProvenTxReqsArgs` determines which proof requests to retrieve.
    * @returns array of proof requests matching args.
    */
-  findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    return this.readEntities<TableProvenTxReq>('findProvenTxReqs', [args])
+  async findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+    const r = await this.rpcCall<TableProvenTxReq[]>('findProvenTxReqs', [args])
+    validateEntities(r)
+    return r
   }
 
   /**

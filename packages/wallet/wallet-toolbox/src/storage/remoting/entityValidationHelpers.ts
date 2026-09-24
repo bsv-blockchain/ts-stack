@@ -16,21 +16,8 @@ export function validateDate(date: Date | string | number): Date {
   return new Date(date)
 }
 
-function defineOwnValues(target: object, values: ReadonlyMap<string, unknown>): void {
-  Object.defineProperties(
-    target,
-    Object.fromEntries(
-      Array.from(values, ([key, value]) => [
-        key,
-        {
-          value,
-          writable: true,
-          enumerable: true,
-          configurable: true
-        }
-      ])
-    )
-  )
+function ownValue(value: unknown): PropertyDescriptor {
+  return { value, writable: true, enumerable: true, configurable: true }
 }
 
 /**
@@ -41,24 +28,25 @@ export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?
   const indexedEntity = entity as T & Record<string, unknown>
   entity.created_at = validateDate(entity.created_at)
   entity.updated_at = validateDate(entity.updated_at)
-  const replacements = new Map<string, unknown>()
+  const replacements: PropertyDescriptorMap = Object.create(null)
   if (dateFields != null) {
     for (const df of dateFields) {
       const value = indexedEntity[df]
       if (Object.hasOwn(entity, df) && value) {
-        replacements.set(df, validateDate(value as Date | string | number))
+        replacements[df] = ownValue(validateDate(value as Date | string | number))
       }
     }
   }
   for (const key of Object.keys(entity)) {
-    const val = replacements.has(key) ? replacements.get(key) : indexedEntity[key]
+    const replacement = replacements[key]
+    const val = replacement == null ? indexedEntity[key] : replacement.value
     if (val === null) {
-      replacements.set(key, undefined)
+      replacements[key] = ownValue(undefined)
     } else if (val instanceof Uint8Array) {
-      replacements.set(key, Array.from(val))
+      replacements[key] = ownValue(Array.from(val))
     }
   }
-  if (replacements.size > 0) defineOwnValues(entity, replacements)
+  Object.defineProperties(entity, replacements)
   return entity
 }
 

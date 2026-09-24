@@ -159,6 +159,34 @@ describe('entityValidationHelpers', () => {
       expect(result.id).toBe(1)
     })
 
+    test('keeps data-only prototype and constructor keys as own values without changing the prototype', () => {
+      const entity = Object.assign(makeEntity(), JSON.parse('{"constructor":null}'))
+      Object.defineProperty(entity, '__proto__', { value: null, writable: true, enumerable: true, configurable: true })
+      const prototype = Object.getPrototypeOf(entity)
+      validateEntity(entity)
+      expect(Object.getPrototypeOf(entity)).toBe(prototype)
+      for (const key of ['__proto__', 'constructor']) {
+        expect(Object.getOwnPropertyDescriptor(entity, key)).toEqual({
+          value: undefined,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        })
+      }
+    })
+
+    test('preserves batch normalization of a non-enumerable own date field', () => {
+      const entity = makeEntity()
+      Object.defineProperty(entity, 'ts', { value: '2024-01-01T00:00:00.000Z', configurable: true })
+      validateEntity(entity, ['ts'])
+      expect(Object.getOwnPropertyDescriptor(entity, 'ts')).toEqual({
+        value: new Date('2024-01-01T00:00:00.000Z'),
+        writable: true,
+        enumerable: true,
+        configurable: true
+      })
+    })
+
     test('only normalizes requested date fields that are own properties', () => {
       const e = makeEntity()
       const originalPrototype = Object.getPrototypeOf(e)
