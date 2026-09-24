@@ -32,25 +32,25 @@ export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?
   const indexedEntity = entity as T & Record<string, unknown>
   entity.created_at = validateDate(entity.created_at)
   entity.updated_at = validateDate(entity.updated_at)
-  const replacements: PropertyDescriptorMap = Object.create(null)
+  const replacements = new Map<string, PropertyDescriptor>()
   if (dateFields != null) {
     for (const df of dateFields) {
       const value = indexedEntity[df]
       if (Object.hasOwn(entity, df) && value) {
-        replacements[df] = ownValue(validateDate(value as Date | string | number))
+        replacements.set(df, ownValue(validateDate(value as Date | string | number)))
       }
     }
   }
   for (const key of Object.keys(entity)) {
-    const replacement = replacements[key]
+    const replacement = replacements.get(key)
     const val = replacement == null ? indexedEntity[key] : replacement.value
     if (val === null) {
-      replacements[key] = undefinedValue
+      replacements.set(key, undefinedValue)
     } else if (val instanceof Uint8Array) {
-      replacements[key] = ownValue(Array.from(val))
+      replacements.set(key, ownValue(Array.from(val)))
     }
   }
-  Object.defineProperties(entity, replacements)
+  Object.defineProperties(entity, Object.fromEntries(replacements))
   return entity
 }
 

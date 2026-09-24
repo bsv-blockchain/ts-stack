@@ -195,11 +195,11 @@ With official Node 24.18.0, the candidate measures:
 
 | Artifact | Raw bytes | gzip bytes | Brotli bytes |
 | -------- | --------: | ---------: | -----------: |
-| Metro    | 2,377,388 |    609,908 |      464,042 |
-| Hermes   | 4,619,850 |  1,955,111 |    1,523,040 |
+| Metro    | 2,377,408 |    609,909 |      463,868 |
+| Hermes   | 4,619,927 |  1,955,135 |    1,523,206 |
 
-The approved Hermes Brotli ceiling gives 9.98% headroom after the final async
-forwarding refinement. Retaining the explicitly reviewed 1,675,000-byte ceiling
+The approved Hermes Brotli ceiling gives 9.97% headroom after the final forwarding
+and normalization refinements. Retaining the explicitly reviewed 1,675,000-byte ceiling
 is the rationale for this small difference from the normal 10% margin.
 For comparison, [upstream SDK 2.8.3 validation](https://github.com/bsv-blockchain/ts-stack/actions/runs/35948047970)
 measured Metro at 2,360,475 / 602,505 / 458,183 bytes and Hermes at
