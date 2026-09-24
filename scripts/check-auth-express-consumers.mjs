@@ -86,6 +86,55 @@ new WalletRelayService({ app, server, wallet })
   }
 }
 
+const authRuntimeProbe = `import assert from 'node:assert/strict'
+import express from 'express'
+import { createAuthMiddleware } from '@bsv/auth-express-middleware'
+import * as currentSdk from '@bsv/sdk'
+import * as oldSdk from 'sdk-legacy'
+
+const serverWallet = new currentSdk.ProtoWallet(currentSdk.PrivateKey.fromRandom())
+const app = express()
+app.use(express.json())
+app.use(express.text({ type: 'text/plain' }))
+app.use(createAuthMiddleware({ wallet: serverWallet }))
+app.all('/private', (req, res) => {
+  res.json({ identityKey: req.auth?.identityKey, body: req.body ?? null })
+})
+const server = app.listen(0, '127.0.0.1')
+await new Promise((resolve, reject) => {
+  server.once('listening', resolve)
+  server.once('error', reject)
+})
+try {
+  for (const sdk of [oldSdk, currentSdk]) {
+    const wallet = new sdk.ProtoWallet(sdk.PrivateKey.fromRandom())
+    const auth = new sdk.AuthFetch(wallet)
+    const identity = await wallet.getPublicKey({ identityKey: true })
+    for (const config of [
+      {},
+      { headers: { 'content-type': 'application/json' } },
+      { method: 'POST' },
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"message":"signed"}' },
+      { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'signed text' }
+    ]) {
+      const response = await auth.fetch('http://127.0.0.1:' + server.address().port + '/private?format=json', config)
+      assert.equal(response.status, 200)
+      const result = await response.json()
+      assert.equal(result.identityKey, identity.publicKey)
+      if (config.body !== undefined) {
+        assert.deepEqual(result.body, config.headers['content-type'] === 'application/json' ? JSON.parse(config.body) : config.body)
+      } else {
+        assert.ok(result.body === null || Object.keys(result.body).length === 0)
+      }
+    }
+  }
+} finally {
+  server.closeAllConnections()
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+}
+`
+
 const tsconfig = {
   compilerOptions: {
     esModuleInterop: true,
@@ -147,7 +196,8 @@ async function verifyProfile(
       sdkTarball,
       `express@${profile.express}`,
       `@types/express@${profile.types}`,
-      'typescript@5.9.3'
+      'typescript@5.9.3',
+      ...(packageName === '@bsv/auth-express-middleware' ? ['sdk-legacy@npm:@bsv/sdk@2.4.0'] : [])
     ],
     { cwd: consumerDirectory }
   )
@@ -155,6 +205,10 @@ async function verifyProfile(
     cwd: consumerDirectory
   })
   await run('npm', ['ls', '--all', 'express', '@types/express'], { cwd: consumerDirectory })
+  if (packageName === '@bsv/auth-express-middleware') {
+    await fs.writeFile(path.join(consumerDirectory, 'runtime.mjs'), authRuntimeProbe)
+    await run(process.execPath, ['runtime.mjs'], { cwd: consumerDirectory })
+  }
   const installedManifest = JSON.parse(
     await fs.readFile(
       path.join(consumerDirectory, 'node_modules', ...packageName.split('/'), 'package.json'),
@@ -192,7 +246,9 @@ try {
       temporaryDirectory
     )
   }
-  console.log(`Verified ${packageName} clean TypeScript consumers on Express 4 and 5.`)
+  console.log(
+    `Verified ${packageName} clean Express 4 and 5 consumers (including authentication runtime probes when applicable).`
+  )
 } finally {
   await fs.rm(temporaryDirectory, { recursive: true, force: true })
 }

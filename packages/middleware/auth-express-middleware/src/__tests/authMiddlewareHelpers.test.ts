@@ -190,6 +190,60 @@ describe('auth middleware helpers', () => {
     expect(readBody(writer)).toBeUndefined()
   })
 
+  it.each([undefined, '0'])(
+    'preserves the absent-body sentinel for Express 4 placeholders (%s)',
+    contentLength => {
+      for (const contentType of [undefined, 'application/json', 'text/plain']) {
+        const writer = new Utils.Writer()
+        writeBodyToWriter(
+          {
+            body: {},
+            headers: {
+              ...(contentLength === undefined ? {} : { 'content-length': contentLength }),
+              ...(contentType === undefined ? {} : { 'content-type': contentType })
+            }
+          } as any,
+          writer
+        )
+        expect(readBody(writer)).toBeUndefined()
+      }
+    }
+  )
+
+  it.each([{ 'content-length': '2' }, { 'transfer-encoding': 'chunked' }])(
+    'preserves real empty JSON objects with body framing (%j)',
+    framing => {
+      const writer = new Utils.Writer()
+      writeBodyToWriter(
+        { body: {}, headers: { 'content-type': 'application/json', ...framing } } as any,
+        writer
+      )
+      expect(readBody(writer)).toEqual(Utils.toArray('{}', 'utf8'))
+    }
+  )
+
+  it.each([
+    { 'content-length': '2' },
+    { 'transfer-encoding': 'chunked' },
+    { 'content-length': ['0'] },
+    { 'content-length': 'invalid' }
+  ])('does not discard an unsupported body with present or ambiguous framing (%j)', headers => {
+    expect(() => writeBodyToWriter({ body: {}, headers } as any, new Utils.Writer())).toThrow(
+      'cannot be represented canonically'
+    )
+  })
+
+  it.each([
+    { hidden: true },
+    Object.create({ inherited: true }),
+    Object.defineProperty({}, 'hidden', { value: true }),
+    { [Symbol('hidden')]: true }
+  ])('does not treat nonempty or nonplain objects as parser placeholders', body => {
+    expect(() => writeBodyToWriter({ body, headers: {} } as any, new Utils.Writer())).toThrow(
+      'cannot be represented canonically'
+    )
+  })
+
   it.each([
     [[0, -1, 256], undefined],
     [{}, 'text/plain'],
@@ -199,7 +253,10 @@ describe('auth middleware helpers', () => {
       writeBodyToWriter(
         {
           body,
-          headers: contentType === undefined ? {} : { 'content-type': contentType }
+          headers: {
+            'content-length': '2',
+            ...(contentType === undefined ? {} : { 'content-type': contentType })
+          }
         } as any,
         new Utils.Writer()
       )
