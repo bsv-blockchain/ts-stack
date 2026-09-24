@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.2'
+version: '2.8.3'
 npm: '@bsv/sdk'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -14,6 +14,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+originator and binds the default JSON transport fetch receiver for browsers.
+Apps affected by these client defects can update the SDK without changing calls.
+Wallets retain the existing BRC100 contract; an ecosystem-wide application
+migration is not required. The candidate is not published until the protected
+release workflow completes.
 
 Version 2.8.1 repairs portable decryption of authenticated empty
 AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
@@ -395,7 +402,7 @@ is removed. Only a successful locally initiated handshake can select the
 implicit destination for a later `Peer` call; inbound messages cannot retarget
 it.
 
-### Wallet discovery deadlines in the 2.8.2 candidate
+### Wallet discovery deadlines since 2.8.2
 
 Automatic React Native and XDM probes retain their short discovery deadlines
 and remove listeners when unavailable. A successful probe creates a separate
@@ -403,6 +410,5 @@ operational connection so authentication, permission approval and valid slow
 responses do not inherit the one-second/200-millisecond discovery deadline.
 Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
-is needed. Applications must update their bundled SDK; updating only a wallet
-cannot replace a web application's SDK. Publication remains a separate
-protected-workflow action.
+is needed. Applications affected by the timeout defect can update their bundled
+SDK; a wallet release alone cannot replace code served by a web application.

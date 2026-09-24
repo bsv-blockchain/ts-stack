@@ -214,6 +214,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.3 candidate — HTTP wallet discovery compatibility
+
+- Pass the configured caller originator through automatic discovery probes so
+  HTTP WalletWire keeps its existing caller binding without rejecting discovery.
+- Bind the default HTTP JSON fetch receiver for native browser implementations;
+  preserve supplied HTTP clients, discovery ordering, deadlines and validation.
+- No BRC100 API, wire or account-data migration. Applications affected by these
+  client defects can update the SDK without changing their calls; wallet releases
+  do not require every application to upgrade in coordination.
+- Publication remains a separate protected release workflow.
+
 ### 2.8.2 candidate — wallet discovery timeout lifecycle
 
 - Keep React Native and XDM discovery bounded without carrying the short probe
