@@ -112,6 +112,38 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
       mutate: [
         [
+          'src/auth/AuthMessageValidation.ts',
+          'const separatePayload =',
+          'const lengthDescriptor ='
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'if (!separatePayload) bytes +=',
+          'if (snapshot) retain('
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'export function assertGeneralPayloadByteLimit(',
+          '/** Validate and own an untrusted BRC-103 message'
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'export function snapshotAuthMessage(',
+          'return snapshot'
+        ],
+        [
+          'src/auth/Peer.ts',
+          'const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes',
+          'this.#wallet = wallet'
+        ],
+        ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
+        ['src/auth/Peer.ts', 'const outbound =', '} catch (error: unknown)'],
+        [
+          'src/auth/Peer.ts',
+          'message = snapshotAuthMessage(message,',
+          'this.#restoreOwnedCertificates(message)'
+        ],
+        [
           'src/auth/Peer.ts',
           '// Register before sending:',
           'Waits for the initial response from the peer'
@@ -168,6 +200,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/src/auth/__tests/Peer.boundary.test.ts',
+          '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts'

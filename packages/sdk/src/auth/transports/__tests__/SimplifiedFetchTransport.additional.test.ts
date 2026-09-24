@@ -632,7 +632,7 @@ describe('SimplifiedFetchTransport deserializeRequestPayload', () => {
     writer.writeVarIntNum(0)
     writer.writeVarIntNum(0)
     writer.writeVarIntNum(0)
-    writer.writeVarIntNum(129)
+    writer.writeVarIntNum(513)
     expect(() => transport.deserializeRequestPayload(writer.toArray())).toThrow(
       'header count exceeds its limit'
     )

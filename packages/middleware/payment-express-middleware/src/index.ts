@@ -9,9 +9,7 @@ import type {
 } from './types.js'
 
 const PAYMENT_VERSION = '1.0'
-const DEFAULT_MAX_PAYMENT_HEADER_BYTES = 64 * 1024
 const DEFAULT_REPLAY_CAPACITY = 100_000
-const MAX_NONCE_LENGTH = 512
 
 interface ParsedPayment {
   payment: BSVPayment
@@ -72,8 +70,9 @@ function paymentHeader(req: PaymentRequest): string | null | undefined {
   return typeof value === 'string' ? value : null
 }
 
-function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefined {
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) return undefined
+function parsePaymentHeader(raw: string): BSVPayment | undefined {
+  // The HTTP server and edge own transport budgets. A payment that has already
+  // arrived must be validated, not discarded by a second header-size policy.
   let value: unknown
   try {
     value = JSON.parse(raw)
@@ -86,8 +85,6 @@ function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefin
     typeof record.derivationPrefix !== 'string' ||
     typeof record.derivationSuffix !== 'string' ||
     typeof record.transaction !== 'string' ||
-    record.derivationPrefix.length > MAX_NONCE_LENGTH ||
-    record.derivationSuffix.length > MAX_NONCE_LENGTH ||
     !isCanonicalBase64(record.derivationPrefix) ||
     !isCanonicalBase64(record.derivationSuffix) ||
     !isCanonicalBase64(record.transaction)
@@ -222,7 +219,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     calculateRequestPrice = () => 100,
     wallet,
     replayStore = new InMemoryPaymentReplayStore(),
-    maxPaymentHeaderBytes = DEFAULT_MAX_PAYMENT_HEADER_BYTES,
     logger
   } = options
 
@@ -238,9 +234,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
   }
   if (replayStore === null || typeof replayStore.claim !== 'function') {
     throw new TypeError('A replay store with an atomic claim method is required.')
-  }
-  if (!Number.isSafeInteger(maxPaymentHeaderBytes) || maxPaymentHeaderBytes < 1) {
-    throw new RangeError('maxPaymentHeaderBytes must be a positive safe integer.')
   }
   if (!isPaymentLogger(logger)) {
     throw new TypeError('logger error and warn properties must be functions when provided.')
@@ -295,7 +288,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const payment = parsePaymentHeader(rawPayment, maxPaymentHeaderBytes)
+    const payment = parsePaymentHeader(rawPayment)
     if (payment === undefined) {
       sendError(res, 400, 'ERR_MALFORMED_PAYMENT', 'The X-BSV-Payment header is malformed.')
       return

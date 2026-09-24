@@ -77,6 +77,61 @@ Affected SDK clients can update without changing their BRC100 calls; wallet
 upgrades do not require an ecosystem-wide application migration. No wire or
 account-data migration is required. Publication uses the protected npm workflow.
 
+### HTTP header compatibility
+
+The 2.8.5 candidate raises authenticated HTTP header capacity by 4x in both
+request and signed-response handling:
+
+| Limit                               | Previous  | 2.8.5   |
+| ----------------------------------- | --------- | ------- |
+| Ordinary header value               | 8 KiB     | 32 KiB  |
+| Aggregate header names and values   | 64 KiB    | 256 KiB |
+| Header count                        | 128       | 512     |
+| Individual header name              | 256 bytes | 1 KiB   |
+| Requested-certificate policy header | 64 KiB    | 256 KiB |
+
+BRC-105 `x-bsv-payment` request headers may use the full aggregate budget,
+including their name and other request headers. This accommodates larger
+Atomic BEEF proofs without truncating or changing their bytes. The separate
+certificate-policy limit applies before JSON parsing. Finite limits remain;
+wire framing, response-body limits, deadlines and signature validation are
+unchanged. The response-frame overhead allowance increases from 128 KiB to
+512 KiB to carry the larger headers alongside even a small configured body limit. Server, proxy and fetch-runtime limits still apply independently;
+operators accepting larger proofs should verify the full HTTP path.
+
+No BRC100 call, public API, wire or wallet-data migration is required. Affected
+applications can update their SDK without changing calls; existing conforming
+applications remain compatible with upgraded wallets. Publication is a separate
+protected workflow step.
+
+### Transport-owned general payload policy
+
+SDK 2.8.5 adds an optional seventh `Peer` constructor argument,
+`AuthMessageValidationOptions`, also accepted as the second argument to
+`snapshotAuthMessage`. `maxGeneralPayloadBytes` may be a positive safe integer
+for a separate general-message payload budget, or `null` to delegate payload
+capacity to the transport. Omission preserves the prior aggregate message
+budget. The setting is local configuration and is never taken from a peer's
+message; `Peer` snapshots it when constructed.
+
+```ts
+const peer = new Peer(wallet, transport, undefined, undefined, undefined, undefined, {
+  maxGeneralPayloadBytes: null
+})
+```
+
+Delegation excludes only the top-level general-message byte payload from the
+SDK message-size accounting. Metadata budgets, dense byte validation, owned
+snapshots, signatures, session identity, nonce/replay handling, and handshake
+and certificate-message validation remain. Configure HTTP server and edge
+capacity before delegating. The HTTP SDK client's own request/response bounds
+still apply independently.
+
+Authentication middleware 2.2.8 requires SDK 2.8.5 and selects this transport
+policy itself, so its received payment headers do not hit a hidden SDK envelope
+budget. Custom `ExpressTransport`/`Peer` integrations should select the same
+policy when the HTTP layer owns payload admission.
+
 ## Table of Contents
 
 1. [Objective](#objective)

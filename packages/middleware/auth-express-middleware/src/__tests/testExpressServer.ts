@@ -10,6 +10,7 @@ import {
 import { MockWallet } from './MockWallet'
 import { createAuthMiddleware } from '../index'
 import { Server, createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 // May be necessary when testing depending on your environment:
 // import * as crypto from 'crypto'
 // global.self = { crypto }
@@ -135,6 +136,14 @@ export const startServer = (_port = 3000): Server => {
     res.set('X-BSV-Single', 'single').status(418).json({ headers: 'preserved' })
   })
 
+  app.get('/large-payment-header', (req: Request, res: Response) => {
+    const proof = req.headers['x-bsv-payment'] as string
+    res.json({
+      bytes: Buffer.byteLength(proof),
+      sha256: createHash('sha256').update(proof).digest('hex')
+    })
+  })
+
   for (const status of [204, 401, 403, 404]) {
     app.get(`/empty-${status}`, (_req: Request, res: Response) => {
       res.status(status).end()
@@ -207,7 +216,8 @@ export const startServer = (_port = 3000): Server => {
     })
   })
 
-  return createServer(app) // Return un-listened server
+  // The HTTP server owns transport capacity; middleware preserves received headers.
+  return createServer({ maxHeaderSize: 512 * 1024 }, app) // Return un-listened server
 }
 // For testing independently of integration tests:
 // const server = startServer(3000);

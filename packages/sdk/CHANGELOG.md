@@ -214,6 +214,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added and fixed (2.8.5 candidate)
+
+- Add optional local general-message payload policy to `Peer` and `snapshotAuthMessage`; HTTP server transports can delegate payload capacity while retaining metadata, byte, signature and replay validation. Existing defaults remain unchanged.
+
+- Raise request and signed-response header limits by 4x: 32 KiB ordinary values, 256 KiB aggregate names and values, 512 headers, and 1 KiB names. Raise the separate certificate-policy header limit to 256 KiB. BRC-105 `x-bsv-payment` request proofs may share the full aggregate budget. Bounds remain finite and server/proxy limits still apply. No API, BRC100, wire or wallet-data migration is required; protected publication is separate.
+
+
 ### 2.8.4 candidate — established action-history display metadata
 
 - Accept empty historical action, input and output descriptions, and empty

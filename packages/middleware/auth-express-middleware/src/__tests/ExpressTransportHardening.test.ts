@@ -945,6 +945,104 @@ describe('ExpressTransport hardening', () => {
     )
   })
 
+  it.each([
+    ['value', { 'x-bsv-large': 'v'.repeat(512 * 1024) }],
+    ['name', { ['x-bsv-' + 'a'.repeat(2042)]: 'v' }],
+    [
+      'count',
+      Object.fromEntries(
+        Array.from({ length: 1024 }, (_, i) => [`x-bsv-${String(i).padStart(4, '0')}`, 'v'])
+      )
+    ],
+    [
+      'aggregate',
+      Object.fromEntries(
+        Array.from({ length: 64 }, (_, i) => [
+          `x-bsv-${String(i).padStart(2, '0')}`,
+          'v'.repeat(32 * 1024)
+        ])
+      )
+    ]
+  ])('signs and restores headers above the former %s ceiling', async (_name, headers) => {
+    const peer = peerMock()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    const res = Object.assign(responseMock(), {
+      statusCode: 200,
+      getHeaders: jest.fn(() => ({ ...headers }))
+    })
+    const originalSend = res.send
+    const originalSet = res.set
+    ;(transport as any).setupAuthenticatedResponse(
+      validGeneralRequest(),
+      res,
+      jest.fn(),
+      IDENTITY_KEY,
+      REQUEST_ID
+    )
+    res.send('capacity')
+    await flushPromises()
+    const payload = responsePayload(200, headers, Utils.toArray('capacity', 'utf8'))
+    expect(peer.toPeer).toHaveBeenCalledWith(payload, SESSION_NONCE)
+    await transport.send({
+      messageType: 'general',
+      version: '1',
+      identityKey: IDENTITY_KEY,
+      nonce: 'AQ==',
+      yourNonce: 'Ag==',
+      signature: [1],
+      payload
+    })
+    for (const [key, value] of Object.entries(headers)) {
+      expect(originalSet).toHaveBeenCalledWith(key, value)
+    }
+    expect(originalSend).toHaveBeenCalledWith(Buffer.from('capacity'))
+    expect(transport.openGeneralHandles.size).toBe(0)
+  })
+
+  it('retains invalid-header rejection independently of header capacity', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    const res = Object.assign(responseMock(), {
+      getHeaders: jest.fn(() => ({ 'x-bsv-invalid': 'injected\r\nheader' }))
+    })
+    const originalJson = res.json
+    ;(transport as any).setupAuthenticatedResponse(
+      validGeneralRequest(),
+      res,
+      jest.fn(),
+      IDENTITY_KEY,
+      REQUEST_ID
+    )
+    res.send('capacity')
+    await flushPromises()
+    expect(peer.toPeer).not.toHaveBeenCalled()
+    expect(originalJson).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ERR_RESPONSE_SIGNING_FAILED' })
+    )
+  })
+
+  it('does not charge received payment headers against the request-body budget', async () => {
+    const transport = new ExpressTransport(false, undefined, undefined, { maxRequestBytes: 128 })
+    const peer = peerMock()
+    transport.peer = peer
+    const received = jest.fn()
+    await transport.onData(async message => {
+      received(message)
+    })
+    const req = validGeneralRequest()
+    req.headers['x-bsv-payment'] = 'p'.repeat(1024 * 1024)
+    const res = responseMock()
+    await transport.handleIncomingRequest(req, res, jest.fn())
+    await flushPromises()
+    expect(res.status).not.toHaveBeenCalledWith(400)
+    expect(received).toHaveBeenCalledTimes(1)
+    const message = received.mock.calls[0][0]
+    expect(message.payload.length).toBeGreaterThan(1024 * 1024)
+    ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
+  })
+
   it('buffers write, writeHead, flushHeaders, and end data into one signed response', async () => {
     const peer = peerMock()
     const transport = new ExpressTransport()
@@ -1730,7 +1828,7 @@ describe('ExpressTransport hardening', () => {
     expect(peer.toPeer).not.toHaveBeenCalled()
   })
 
-  it('rejects invalid methods and encoded requests that exceed the post-serialization limit', async () => {
+  it('rejects invalid methods and encoded bodies that exceed the post-serialization limit', async () => {
     for (const [method, maxRequestBytes] of [
       ['lowercase', -1],
       ['POST', 64]
@@ -1740,7 +1838,11 @@ describe('ExpressTransport hardening', () => {
       transport.peer = peer
       const res = responseMock()
 
-      await transport.handleIncomingRequest(validGeneralRequest({ method }), res, jest.fn())
+      await transport.handleIncomingRequest(
+        validGeneralRequest({ method, body: { value: '\u0001'.repeat(20) } }),
+        res,
+        jest.fn()
+      )
 
       expect(res.status).toHaveBeenCalledWith(400)
       expect(peer.listenForGeneralMessages).not.toHaveBeenCalled()
