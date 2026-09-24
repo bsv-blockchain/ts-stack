@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="bsv-conformance" tests="6694" failures="0" errors="0" skipped="0">
-  <testsuite name="auth/brc31-handshake" tests="16" failures="0" errors="0" skipped="0">
+<testsuites name="bsv-conformance" tests="6700" failures="0" errors="0" skipped="0">
+  <testsuite name="auth/brc31-handshake" tests="21" failures="0" errors="0" skipped="0">
     <testcase name="auth.brc31-handshake.1" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.2" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.3" classname="auth/brc31-handshake" time="0"/>
@@ -17,6 +17,11 @@
     <testcase name="auth.brc31-handshake.14" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.15" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.16" classname="auth/brc31-handshake" time="0"/>
+    <testcase name="auth.brc31-handshake.17" classname="auth/brc31-handshake" time="0"/>
+    <testcase name="auth.brc31-handshake.18" classname="auth/brc31-handshake" time="0"/>
+    <testcase name="auth.brc31-handshake.19" classname="auth/brc31-handshake" time="0"/>
+    <testcase name="auth.brc31-handshake.20" classname="auth/brc31-handshake" time="0"/>
+    <testcase name="auth.brc31-handshake.21" classname="auth/brc31-handshake" time="0"/>
   </testsuite>
   <testsuite name="broadcast/arc-submit" tests="16" failures="0" errors="0" skipped="0">
     <testcase name="broadcast.arcsubmit.1" classname="broadcast/arc-submit" time="0"/>
@@ -6343,7 +6348,7 @@
     <testcase name="wallet.brc100.isauthenticated.4" classname="wallet/brc100/isauthenticated" time="0"/>
     <testcase name="wallet.brc100.isauthenticated.5" classname="wallet/brc100/isauthenticated" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/listactions" tests="16" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/listactions" tests="17" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.listactions.1" classname="wallet/brc100/listactions" time="0"/>
     <testcase name="wallet.brc100.listactions.2" classname="wallet/brc100/listactions" time="0"/>
     <testcase name="wallet.brc100.listactions.3" classname="wallet/brc100/listactions" time="0"/>
@@ -6360,6 +6365,7 @@
     <testcase name="wallet.brc100.listactions.14" classname="wallet/brc100/listactions" time="0"/>
     <testcase name="wallet.brc100.listactions.15" classname="wallet/brc100/listactions" time="0"/>
     <testcase name="wallet.brc100.listactions.16" classname="wallet/brc100/listactions" time="0"/>
+    <testcase name="wallet.brc100.listactions.17" classname="wallet/brc100/listactions" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/listcertificates" tests="8" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.listcertificates.1" classname="wallet/brc100/listcertificates" time="0"/>

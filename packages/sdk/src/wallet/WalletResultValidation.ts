@@ -1748,6 +1748,12 @@ function validateListResult(
   return entries
 }
 
+// Stored history may lack display metadata, particularly wallet-generated change.
+// Keep creation-request requirements and nonempty result bounds unchanged.
+function historyDescription(value: unknown, call: string, field: string): void {
+  string(value, call, field, value === '' ? 0 : 5, 2000)
+}
+
 function validateListActions(result: UnknownRecord, call: string, request?: unknown): void {
   const actions = validateListResult(result, call, 'totalActions', 'actions', request)
   const requestArgs = requestRecord(request)
@@ -1770,7 +1776,7 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
     if (typeof action.isOutgoing !== 'boolean') {
       invalid(call, `${field}.isOutgoing`, 'a boolean')
     }
-    string(action.description, call, `${field}.description`, 5, 2000)
+    historyDescription(action.description, call, `${field}.description`)
     stringArray(action.labels, call, `${field}.labels`, 1, 300)
     if (requestArgs?.includeLabels === true && action.labels === undefined) {
       invalid(call, `${field}.labels`, 'the explicitly requested labels')
@@ -1838,7 +1844,7 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
             'the explicitly requested unlocking script'
           )
         }
-        string(input.inputDescription, call, `${inputField}.inputDescription`, 5, 2000)
+        historyDescription(input.inputDescription, call, `${inputField}.inputDescription`)
         uint(input.sequenceNumber, call, `${inputField}.sequenceNumber`)
       }
     }
@@ -1874,8 +1880,8 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
         }
         stringArray(output.tags, call, `${outputField}.tags`, 1, 300)
         uint(output.outputIndex, call, `${outputField}.outputIndex`)
-        string(output.outputDescription, call, `${outputField}.outputDescription`, 5, 2000)
-        string(output.basket, call, `${outputField}.basket`, 1, 300)
+        historyDescription(output.outputDescription, call, `${outputField}.outputDescription`)
+        string(output.basket, call, `${outputField}.basket`, 0, 300)
       }
     }
   }

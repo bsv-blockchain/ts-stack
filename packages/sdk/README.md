@@ -65,6 +65,18 @@ contract; an ecosystem-wide application migration is not required. No API, wire
 or account-data migration is required. Source 2.8.3 is not published until the
 protected npm release workflow completes.
 
+### Action history compatibility
+
+The 2.8.4 candidate accepts empty stored `listActions` descriptions and empty
+basket names, as returned by established wallets for generated change and
+unassigned outputs. It preserves those values rather than inventing metadata.
+Nonempty descriptions retain their 5–2,000 UTF-8 byte bounds, and basket names
+retain their 300-byte ceiling. Required scripts, label binding, transaction
+identifiers, monetary values and new-action request validation are unchanged.
+Affected SDK clients can update without changing their BRC100 calls; wallet
+upgrades do not require an ecosystem-wide application migration. No wire or
+account-data migration is required. Publication uses the protected npm workflow.
+
 ## Table of Contents
 
 1. [Objective](#objective)
