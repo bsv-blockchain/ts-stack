@@ -42,6 +42,12 @@ Message-box names and message IDs are exact, control-free, UTF-8-byte-bounded
 identifiers on every HTTP and WebSocket path; the server never trims an
 ambiguous identifier into a different routing or authorization key.
 
+HTTP authentication uses durable `auth_sessions` and `auth_message_nonces` tables
+shared by all replicas. The September 24 service migration adds the replay table
+required by `KnexSessionManager`; older databases missing it fail initial HTTP
+authentication even when health and WebSocket checks pass. See
+[deployment and recovery guidance](./DEPLOYING.md#database-migrations).
+
 ## Routes
 
 Public routes:
