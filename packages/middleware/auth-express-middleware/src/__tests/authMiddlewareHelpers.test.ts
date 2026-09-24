@@ -190,6 +190,33 @@ describe('auth middleware helpers', () => {
     expect(readBody(writer)).toBeUndefined()
   })
 
+  it('preserves null JSON data and a null-prototype parser placeholder', () => {
+    const jsonWriter = new Utils.Writer()
+    writeBodyToWriter(
+      { body: null, headers: { 'content-type': 'application/json', 'content-length': '4' } } as any,
+      jsonWriter
+    )
+    expect(readBody(jsonWriter)).toEqual(Utils.toArray('null', 'utf8'))
+    const absentWriter = new Utils.Writer()
+    writeBodyToWriter({ body: Object.create(null), headers: {} } as any, absentWriter)
+    expect(readBody(absentWriter)).toBeUndefined()
+  })
+
+  it('preserves empty URL-encoded parsing with chunked framing', () => {
+    const writer = new Utils.Writer()
+    writeBodyToWriter(
+      {
+        body: {},
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'transfer-encoding': 'chunked'
+        }
+      } as any,
+      writer
+    )
+    expect(readBody(writer)).toBeUndefined()
+  })
+
   it.each([undefined, '0'])(
     'preserves the absent-body sentinel for Express 4 placeholders (%s)',
     contentLength => {
