@@ -13,7 +13,7 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
-## Resumable synchronization (2.14 candidate)
+## Resumable synchronization (2.15 candidate)
 
 `WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
 cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local

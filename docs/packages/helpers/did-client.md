@@ -3,7 +3,7 @@ id: pkg-did-client
 title: '@bsv/did-client'
 kind: package
 domain: helpers
-version: '1.3.3'
+version: '1.3.4'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -16,12 +16,14 @@ tags: [did, identity, helpers]
 
 # @bsv/did-client
 
-The unpublished 1.3.3 candidate refreshes the packed first-party dependency
+The unpublished 1.3.4 candidate refreshes the packed first-party dependency
 ranges for the next wallet interoperability release; no independent API or wire
 format changes are introduced. Adopt after the dependency graph is published.
 
 > Client for the legacy BSV DID PushDrop overlay, including bounded creation,
 > revocation, and lookup flows.
+
+Published 1.3.3 fixes the CommonJS build: `require()` consumers no longer fail with `.default is not a constructor` when `DIDClient` constructs SDK objects. The `@bsv/sdk` peer floor is now `^2.8.0`, the first SDK release providing modules this package already required. No API migration is required.
 
 ## Trust model and wire limitation
 

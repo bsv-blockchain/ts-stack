@@ -10,14 +10,23 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 1.10.3 candidate — CommonJS interoperability
+### 1.10.4 candidate — packed consumer validation
 
-- Consume named SDK category exports so CommonJS and ESM consumers construct
-  and sign scripts with the same classes. Fixes the double-wrapped default
-  imports reported in #571; public APIs and valid script bytes are unchanged.
-- Exercise packed root and wildcard exports, script construction and real
-  signature execution in clean CommonJS/ESM consumers on SDK 2.8.0 and the
-  candidate SDK. Existing browser bundle budgets remain in force.
+- Execute five synthetic spends through clean CommonJS/ESM packed consumers on
+  published SDK 2.8.0 and the next candidate SDK, preserving matching script bytes.
+- Preserve the published 1.10.3 named SDK imports and include the consumer-check
+  command in the package manifest. No API or script-format migration is required.
+
+### 1.10.3 candidate — CommonJS SDK interop
+
+### Fixed
+
+- The CommonJS build no longer wraps `@bsv/sdk` default imports as whole
+  modules, so `require('@bsv/templates')` consumers can construct scripts again
+  instead of failing with `LockingScript.default is not a constructor`
+  ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). SDK classes
+  are now imported by name from the SDK barrels; the ESM build and browser
+  bundle size are unchanged.
 
 ### 1.10.2 candidate — signing-context and template hardening
 

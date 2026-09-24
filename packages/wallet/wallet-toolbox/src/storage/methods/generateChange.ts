@@ -5,10 +5,8 @@ import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { validateStorageFeeModel } from '../StorageProvider'
 import { transactionInputSize, transactionOutputSize, transactionSize, varUintSize } from './utils'
-/**
- * An output of this satoshis amount will be adjusted to the largest fundable amount.
- */
-export const maxPossibleSatoshis = 2099999999999999
+import { maxPossibleSatoshis } from './maxPossibleSatoshis'
+export { maxPossibleSatoshis }
 
 /**
  * Maximum number of change outputs to create in a single transaction.

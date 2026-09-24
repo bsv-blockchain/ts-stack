@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -54,7 +54,7 @@
     "build": "tsdown --config tsdown.config.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/src/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts\" \"packages/wallet/wallet-toolbox/mobile/**/*.{json,md,ts}\"",
     "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/mobile/test packages/wallet/wallet-toolbox/mobile/tsdown.config.ts packages/wallet/wallet-toolbox/mobile/vitest.config.ts --deny-warnings",
-    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,Services,ArcSSEClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,sdk",
+    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,Services,ArcSSEClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,WalletMonitorTask,attemptToPostReqsToNetwork,parseJsonRpc,stringifyJsonRpc,verifyUnlockScripts,sdk",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:mobile": "node ../../../../scripts/check-wallet-toolbox-platform.mjs mobile",
@@ -73,7 +73,7 @@
     "idb": "^8.0.3"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.1"
+    "@bsv/sdk": "^2.8.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

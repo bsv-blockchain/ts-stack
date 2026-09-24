@@ -1,6 +1,6 @@
 {
   "name": "notifier",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -18,7 +18,7 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@bsv/sdk": "^2.8.0",
+    "@bsv/sdk": "^2.8.2",
     "@google-cloud/storage": "^7.21.0",
     "axios": "^1.18.1"
   }

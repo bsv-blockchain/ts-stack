@@ -225,6 +225,26 @@ All notable changes to this project will be documented in this file. The format 
 - Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
   adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
 
+### 2.8.2 candidate — wallet discovery timeout lifecycle
+
+- Keep React Native and XDM discovery bounded without carrying the short probe
+  timeout into later wallet operations that may wait for user approval.
+- Preserve caller-configured operation timeouts, listener cleanup, response
+  validation and origin checks. No API or wire migration is required.
+- Applications using automatic discovery must upgrade their bundled SDK; a
+  wallet-only upgrade does not change the SDK served by an application.
+- This source candidate is not published until the protected npm workflow completes.
+
+### 2.8.1 candidate — portable authenticated empty fields
+
+- Fix portable AES-GCM decryption of valid authenticated empty plaintext. This
+  restores native/browser/mobile interoperability for empty encrypted fields.
+- Preserve historical encryption bytes and full authentication-tag validation;
+  add independent native-oracle tests across AES key sizes, IV lengths and block
+  boundaries, plus tampering and forced-portable SymmetricKey coverage.
+- Migration: none. Existing accounts, ciphertexts and public APIs are unchanged.
+  Publication remains subject to the protected npm workflow.
+
 ### 2.8.0 candidate — authenticated boundaries and additive secure TOTP APIs
 
 - Correct empty authenticated HTTP response preimages to use the BRC-104 `-1`

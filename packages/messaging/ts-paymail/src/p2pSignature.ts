@@ -1,9 +1,6 @@
-import BigNumber from '@bsv/sdk/primitives/BigNumber'
+import { BigNumber, PrivateKey, PublicKey, Signature } from '@bsv/sdk/primitives'
 import { sign as signECDSA, verify as verifyECDSA } from '@bsv/sdk/primitives/ECDSA'
 import { hash256 } from '@bsv/sdk/primitives/Hash'
-import PrivateKey from '@bsv/sdk/primitives/PrivateKey'
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
-import Signature from '@bsv/sdk/primitives/Signature'
 import { Writer, toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 
 const BSM_PREFIX = 'Bitcoin Signed Message:\n'

@@ -4,7 +4,7 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## 2.14.0 candidate — bounded synchronization and canonical proof recovery
+## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
 - Add resumable local atomic pages, durable checkpoints, cancellation/progress,
   concurrent read capability checks and fair foreground/background ownership.
@@ -22,6 +22,66 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,
+  `@bsv/wallet-toolbox-client`, and `@bsv/wallet-toolbox-mobile`. Value imports
+  used by the built mobile/client bundles and by internal helpers
+  (`TransactionEvidenceCoordinator`, `TransactionEvidenceError`,
+  `completeBoundAction`, `createPublicHTTPSFetch`, `decodeCanonicalPushDrop`,
+  `defaultTransactionEvidenceLimits`, `toUTF8Strict`,
+  `MAXIMUM_SEND_WITH_TRANSACTIONS`) do not exist in `@bsv/sdk` 2.4.1 through
+  2.7.1 despite the prior `^2.4.1` peer range; confirmed against the published
+  tarballs for each version.
+- `Monitor`'s scheduler no longer stops running every task when the optional
+  Chaintracks header/reorg push subscription setup fails or is unimplemented.
+  `runOnce`/`startTasks` previously awaited `ready` directly, so any
+  `chaintracksWithEvents` failure (e.g. the built-in HTTP-polling
+  `ChaintracksServiceClient`, which documents `supportsReorgEvents: false` and
+  throws `Method not implemented.` from `subscribeHeaders`/`subscribeReorgs`)
+  rejected the whole task loop and permanently stopped `startTasks()`. Monitor
+  now skips the subscription attempt entirely when an event source declares
+  `supportsReorgEvents: false`, and otherwise retries subscription setup
+  opportunistically on the next tick, logging a `chaintracksEventsError`
+  monitor event, while every other scheduled task keeps running. A genuine
+  configured-chain mismatch still fails closed: subscriptions are never
+  registered against a `chaintracksWithEvents` source reporting the wrong
+  chain.
+- Confirm `relinquishOutput`'s `basket` argument against the output's actual
+  current basket (looked up inside the same transaction) before clearing
+  `basketId`, instead of clearing it unconditionally. Rejects a basket that
+  does not contain the output, a basket name that does not exist, and an
+  already-unbasketed output, each with `WERR_INVALID_PARAMETER`. Without this,
+  `WalletPermissionsManager.relinquishOutput` (which only checks the
+  originator's access to the _claimed_ basket) let an app with permission on
+  any basket relinquish any output by outpoint, including another app's basket
+  output or the admin `default` change basket.
+- Reject `internalizeAction` basket-insertion merges that would reclassify an
+  existing output out of a different basket it already occupies, closing a gap
+  where `validateBasketMerges()` only rejected reclassifying wallet-managed
+  change. An app with insertion permission on basket X could previously
+  internalize an already-known transaction and move another app's output from
+  basket Y into X, then spend it. Idempotent re-internalization into the same
+  basket, and inserting a currently unbasketed (non-managed-change) output —
+  including the documented default-basket legacy-recovery sweep — keep
+  working. The requested basket is resolved with a plain lookup so a rejected
+  request never creates it.
+- Fix `WalletPermissionsManager` rejecting every sendMax `createAction` call.
+  `verifyRequestedOutputsPresent` now matches fixed-amount outputs first by
+  exact (script, satoshis), then matches any output requested with the
+  `maxPossibleSatoshis` sentinel by locking script alone against whatever is
+  left unused, and returns the resolved real amount per requested output.
+  `computeNetSpend` bills that resolved amount instead of the sentinel, so
+  spending authorization reflects the real funded value (previously ~21
+  million BSV) instead of throwing `The transaction returned for signing does
+not contain caller-requested output ...`.
+- Additively export `WalletMonitorTask`, `attemptToPostReqsToNetwork` (with its
+  `PostReqsToNetworkResult` type), `parseJsonRpc`/`stringifyJsonRpc`, and
+  `verifyUnlockScripts` (with its `UnlockScriptVerificationResult` type) from
+  `src/index.mobile.ts` and `src/index.client.ts`. The published
+  `@bsv/wallet-toolbox-mobile` and `@bsv/wallet-toolbox-client` bundles do not
+  support deep imports, so hosts implementing a custom `Monitor.addTask` task,
+  posting signed requests to the network directly, exchanging the storage
+  remoting wire format, or verifying unlock scripts previously could not reach
+  these symbols at all.
 - Keep cold raw-transaction reads on the caller's transaction, including SQLite
   with one connection; do not cache uncommitted settings or start background
   work. Accept missing optional inputBEEF when returning stored raw bytes.

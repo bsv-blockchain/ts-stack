@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-23",
+  "lastReviewed": "2026-09-24",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -89,14 +89,14 @@
     },
     {
       "name": "@bsv/did",
-      "publishedVersion": "0.2.6",
+      "publishedVersion": "0.2.7",
       "releaseType": "none",
-      "summary": "Binds SD-JWT VC verification to a locally configured issuer key or the exact self-certifying did:key identity instead of trusting a credential-selected JOSE header key. Adds strict issuer/type/audience/time and Key Binding context/freshness policy; recursively validates RFC 9901 object and array Disclosures; prevents duplicate-digest, collision, reserved-name, prototype, over-disclosure, and unverified-holder-signing paths; and hardens JSON, JWT, JWK, key, DID, QR, resource, mutation, and ownership boundaries. Retains the exact-tarball Vite and esbuild browser-consumer contract and its existing size limits.",
-      "migration": "Valid compact encodings and public API signatures remain compatible. Non-did:key issuers must provide issuerPublicKey from local trust policy; authorization-sensitive verifiers should also set expectedIssuer and expectedVct. Key Binding verification now requires both expectedAudience and a transaction-specific expectedNonce and rejects stale or future proofs. Credential aud requires expectedCredentialAudience. Holder presentation verifies the credential first, requires the holder key to match cnf.jwk, and accepts trusted non-did:key issuer policy through verificationOptions. Nested disclosure selections use full dotted paths. Malformed, ambiguous, accessor-backed, oversized, noncanonical, duplicate, disconnected, or collision-bearing inputs now fail closed. Applications must still evaluate signed status claims under their own credential policy before granting access."
+      "summary": "Fixes the CommonJS build of the DID key, signature and multibase helpers. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged.",
+      "migration": "None. ESM consumers are unaffected."
     },
     {
       "name": "@bsv/did-client",
-      "publishedVersion": "1.3.2",
+      "publishedVersion": "1.3.3",
       "releaseType": "patch",
       "summary": "Refreshes the packed first-party dependency ranges for the next wallet sync, proof recovery and BRC-118 release graph. This package adds no independent API or wire-format change.",
       "migration": "No API migration. This unpublished candidate resolves the next source graph; adopt only after its dependencies are published. Existing wallet releases retain their current published pins."
@@ -117,7 +117,7 @@
     },
     {
       "name": "@bsv/message-box-client",
-      "publishedVersion": "2.5.2",
+      "publishedVersion": "2.5.3",
       "releaseType": "minor",
       "summary": "Accepts canonical, bounded base64 transaction strings at PeerPay message receive boundaries alongside portable number arrays and legacy numeric-key JSON byte objects. Applies one validation path to list, live and indexed acceptance and rejects malformed or oversized encodings before wallet work or acknowledgement.",
       "migration": "Existing sender byte-array encoding and receiver byte forms remain compatible. Base64 must use the canonical standard alphabet and padding and decode to no more than 64 MiB. This receiver extension does not raise relay/intermediary limits or provide a durable refund/result journal; #548 and #503 retain those remaining milestones. Adopt SDK 2.9.0 to obtain the independently tested BRC-29 recipient-key correction."
@@ -152,10 +152,10 @@
     },
     {
       "name": "@bsv/paymail",
-      "publishedVersion": "2.4.9",
+      "publishedVersion": "2.4.10",
       "releaseType": "none",
-      "summary": "Hardens Paymail capability discovery, DoH/SRV authority, DNS-pinned outbound HTTP, cache ownership, response bounds, public-profile URLs, exact financial and identity results, canonical signatures and keys, immutable router registration, and production-facing examples. Binds every acknowledgement and destination result to pre-handler request evidence, retains raw, BRC-62 BEEF, and BRC-95 Atomic BEEF compatibility, and shares the host application's Express 4 or 5 runtime. Retains the hash-pinned pre-uniformization Open BSV License version 4 grant as a scoped continuity notice and the complete governed package/artifact contract.",
-      "migration": "Valid public APIs and deployed Paymail wire shapes remain supported; malformed, ambiguous, oversized, local-network, wrong-owner, mutation-backed, or request-mismatched input now fails closed. Production origins and capability endpoints must be credential-free public HTTPS, except exact localhost development; custom transports and resolver configuration must use the documented exact runtime types. Receive-route verifySignature defaults to false for legacy compatibility, so unsigned metadata must not authorize a sender. Even when enabled, the legacy P2P signature authenticates only the transaction ID, not recipient, reference, sender-handle context, endpoint, freshness, or replay state. The historical 6745385c3fc0 advertisement is this package's compatibility behavior and is not the upstream signed/timestamped Basic Address Resolution assurance; a complete correction needs a versioned wire migration. Transaction Negotiation v1 is unauthenticated public input. Handlers must validate outputs, references, thread/freshness policy, proofs, callbacks, and durable replay state before financial or authorization effects. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+      "summary": "Fixes the CommonJS build of the P2P signature and PaymailClient key helpers. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged.",
+      "migration": "None. ESM consumers are unaffected."
     },
     {
       "name": "@bsv/payment-express-middleware",
@@ -166,7 +166,7 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.0",
+      "publishedVersion": "2.8.2",
       "releaseType": "minor",
       "summary": "Adds BRC-118 negotiated, byte-preserving multipart payments to AuthFetch with bounded header/body budgets, prepare-before-broadcast validation, one-transaction submission/retry, cancellation and typed permanent recovery outcomes. Preserves non-multipart signature preimages and fixes BRC-29 recipient child-key derivation. Adds independent Python wire/preimage vectors and composed authenticated HTTP/proxy regression coverage.",
       "migration": "Use a BRC-100 wallet that honors noSend and sendWith and implements abortAction for automatic payments. Deploy raw-byte auth and multipart payment receivers first. Header-only or GET/HEAD requests whose payments require multipart fail before broadcast; select an application-supported body-bearing route explicitly. Serialize file-bearing FormData to owned bytes and retain its exact Content-Type; text-only FormData retains URL encoding. Reconcile submitted/uncertain payments before creating another spend, including after changed requirements, cancellation or proxy 413/431. Existing small header payments and non-multipart signing retain their wire format. BRC-29 receivers now derive their own child key. See the BRC-118 guide for limits and known external-peer differences. This candidate is not published and does not change current wallet-release pins."
@@ -180,10 +180,10 @@
     },
     {
       "name": "@bsv/templates",
-      "publishedVersion": "1.10.2",
+      "publishedVersion": "1.10.3",
       "releaseType": "patch",
-      "summary": "Fixes CommonJS construction and signing by consuming the SDK named category exports instead of double-wrapped default leaf imports. Adds exact-tarball CJS/ESM script execution checks with published SDK 2.8.0 and the candidate SDK; public APIs and script encodings are unchanged.",
-      "migration": "No API migration. Upgrade templates to this patch after publication; both CommonJS and ESM consumers retain the same exports and valid script bytes. Existing wallet releases keep their currently qualified pins and compatibility patch until a separately coordinated upgrade."
+      "summary": "Preserves the published 1.10.3 CommonJS SDK interop repair and adds exact-tarball CommonJS/ESM script execution checks with published SDK 2.8.0 and the candidate SDK. The package manifest exposes the consumer-check command; public APIs and script encodings are unchanged.",
+      "migration": "No API migration. Existing 1.10.3 consumers already contain the CommonJS repair; this next candidate retains it and validates the next dependency graph."
     },
     {
       "name": "@bsv/teranode-listener",
@@ -215,21 +215,21 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.13.2",
+      "publishedVersion": "2.14.0",
       "releaseType": "minor",
       "summary": "Adds capability-gated resumable local sync with atomic page/checkpoint commits, cancellation, progress timings, fair foreground scheduling, provider/generation fencing and separated fixed/marginal page-cost fitting. Preserves returned/serialized sync failures and checks chain compatibility before writes. Repairs stale selected/input/broadcast proofs against canonical headers and paths, commits proof corrections with compare-and-set, and fences concurrent monitor repairs. Optimizes unfiltered IndexedDB label offsets without a schema change.",
       "migration": "Use syncFromReaderResumable for the new local atomic-page path; legacy/custom or remote destinations retain exclusive fallback. Cancellation drains in-flight work and resumes from the durable destination checkpoint. Custom providers opt into concurrent reads/atomic pages only when those contracts hold; safe proof persistence additionally requires compareAndSetProvenTxProof. Configured proof services must validate active 80-byte headers. No persisted-schema migration is required. Inclusive timestamp boundaries may reread equal-time rows; this API is not a coherent source snapshot or streaming archive. Choose maxRoughSize deliberately for device/proxy memory budgets. Current wallet releases remain on their published dependency pins."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.13.2",
+      "publishedVersion": "2.14.0",
       "releaseType": "minor",
       "summary": "Carries the compatible Toolbox resumable sync, fair storage scheduling, canonical proof recovery and IndexedDB paging improvements into the browser entry point. Adds native Chromium large-copy/foreground-latency acceptance alongside the packed browser contract.",
       "migration": "Use the additive syncFromReaderResumable API and its progress/cancellation contracts; custom providers keep the exclusive fallback until they implement the capability contract. No IndexedDB schema migration is required. Source timestamps remain inclusive rather than a coherent snapshot; equal-time boundary rows can be reread. Select explicit page bytes for constrained devices. Publication and downstream wallet adoption are separate actions."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.13.2",
+      "publishedVersion": "2.14.0",
       "releaseType": "minor",
       "summary": "Carries the compatible Toolbox sync contracts, fair scheduling and canonical proof recovery into the mobile entry point without adding Node or IndexedDB dependencies.",
       "migration": "The additive syncFromReaderResumable API uses atomic local pages only for capable local providers; remote/custom destinations keep the serialized fallback. Existing mobile runtime/crypto backend registration and RPC wires remain unchanged. No schema migration is required. Reconcile cancellation and lost acknowledgements using the durable checkpoint; do not infer coherent source snapshots. Current wallet releases are not required to consume this candidate."

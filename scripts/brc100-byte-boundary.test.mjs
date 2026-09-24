@@ -107,13 +107,13 @@ const dependentPackageSdkRanges = [
   ['packages/middleware/payment-express-middleware/package.json', '^2.9.0'],
   ['packages/messaging/authsocket-client/package.json', '^2.4.1'],
   ['packages/messaging/authsocket/package.json', '^2.4.1'],
-  ['packages/messaging/message-box-client/package.json', '^2.4.1'],
+  ['packages/messaging/message-box-client/package.json', '^2.8.0'],
   ['packages/helpers/simple/package.json', '^2.4.1'],
   ['packages/wallet/btms/package.json', '^2.4.1'],
   ['packages/wallet/ts-wallet-relay/package.json', '^2.4.1'],
-  ['packages/wallet/wallet-toolbox/package.json', '^2.4.1'],
-  ['packages/wallet/wallet-toolbox/client/package.json', '^2.4.1'],
-  ['packages/wallet/wallet-toolbox/mobile/package.json', '^2.4.1']
+  ['packages/wallet/wallet-toolbox/package.json', '^2.8.0'],
+  ['packages/wallet/wallet-toolbox/client/package.json', '^2.8.0'],
+  ['packages/wallet/wallet-toolbox/mobile/package.json', '^2.8.0']
 ]
 
 for (const [file, requiredSdkRange] of dependentPackageSdkRanges) {

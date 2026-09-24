@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.0'
+version: '2.15.0'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
 review_cadence_days: 30
@@ -91,6 +91,23 @@ The package publishes browser/import ESM and CommonJS conditions with matching
 declarations. Its installed-consumer gate bundles the exact tarball with Vite
 and esbuild, rejects Node-only modules, validates source maps, and enforces
 compressed and uncompressed size budgets.
+
+This single bundle also exports `WalletMonitorTask` (the base class for a
+custom task passed to `Monitor.addTask`), `attemptToPostReqsToNetwork` with
+its `PostReqsToNetworkResult` type, `parseJsonRpc` / `stringifyJsonRpc` (the
+storage remoting wire format), and `verifyUnlockScripts` with its
+`UnlockScriptVerificationResult` type, so a host no longer needs an
+unsupported deep import to reach them:
+
+```ts
+import {
+  WalletMonitorTask,
+  attemptToPostReqsToNetwork,
+  parseJsonRpc,
+  stringifyJsonRpc,
+  verifyUnlockScripts
+} from '@bsv/wallet-toolbox-client'
+```
 
 Remote Wallet Storage often serves public web, extension, WUI, and mobile
 clients from origins unknown at build time. The client imposes no origin

@@ -10,7 +10,7 @@
  * proofs reuse the same machinery PeerPayClient uses for satoshi payments.
  */
 import { createNonce } from '@bsv/sdk/auth/utils/createNonce'
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import { PublicKey } from '@bsv/sdk/primitives'
 import { normalizeBRC100ByteArray, stringifyBRC100 } from '@bsv/sdk/wallet/BRC100ByteEncoding'
 import type {
   OriginatorDomainNameStringUnder250Bytes,

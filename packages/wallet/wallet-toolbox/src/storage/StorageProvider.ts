@@ -1393,8 +1393,22 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
     const vargs = validateRelinquishOutputArgs(args)
     const { txid, vout } = parseWalletOutpoint(vargs.output)
-    const output = verifyOne(await this.findOutputs({ partial: { userId: auth.userId, txid, vout } }))
-    return await this.updateOutput(output.outputId, { basketId: undefined })
+    return await this.transaction(async trx => {
+      // Keep existing "not found" behavior for a missing output.
+      const output = verifyOne(await this.findOutputs({ partial: { userId: auth.userId, txid, vout }, trx }))
+      // Confirm the output actually belongs to the caller-claimed basket before
+      // clearing it. Without this, any caller that names an arbitrary basket it
+      // happens to hold basket-removal permission for could relinquish (and
+      // thereby free for reuse/spend by whichever app claims the output next)
+      // an output belonging to a different basket entirely, by outpoint alone.
+      const basket = verifyOneOrNone(
+        await this.findOutputBaskets({ partial: { userId: auth.userId, name: vargs.basket }, trx })
+      )
+      if (basket == null || output.basketId == null || output.basketId !== basket.basketId) {
+        throw new WERR_INVALID_PARAMETER('basket', `the basket currently containing output ${vargs.output}`)
+      }
+      return await this.updateOutput(output.outputId, { basketId: undefined }, trx)
+    })
   }
 
   private async prepareSyncProofs(chunk: SyncChunk): Promise<Map<string, TableProvenTx>> {

@@ -1,7 +1,7 @@
-import { Signature, TransactionSignature } from '@bsv/sdk/primitives'
-import { LockingScript, OP, UnlockingScript } from '@bsv/sdk/script'
 import { hash160, hash256, sha256 } from '@bsv/sdk/primitives/Hash'
+import { Signature, TransactionSignature } from '@bsv/sdk/primitives'
 import { toArray, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP, UnlockingScript } from '@bsv/sdk/script'
 import type ScriptTemplateUnlock from '@bsv/sdk/script/ScriptTemplateUnlock'
 import type Transaction from '@bsv/sdk/transaction/Transaction'
 import type {

@@ -1,5 +1,5 @@
-import { LockingScript, OP } from '@bsv/sdk/script'
 import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP } from '@bsv/sdk/script'
 import type Script from '@bsv/sdk/script/Script'
 import type ScriptTemplate from '@bsv/sdk/script/ScriptTemplate'
 import type UnlockingScript from '@bsv/sdk/script/UnlockingScript'

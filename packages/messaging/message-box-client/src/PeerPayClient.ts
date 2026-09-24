@@ -12,7 +12,7 @@
 
 import { AuthFetch } from '@bsv/sdk/auth/clients/AuthFetch'
 import { createNonce } from '@bsv/sdk/auth/utils/createNonce'
-import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import { PublicKey } from '@bsv/sdk/primitives'
 import { Brc29RemittanceModule } from '@bsv/sdk/remittance/modules/BasicBRC29'
 import {
   normalizeBRC100ByteArray,

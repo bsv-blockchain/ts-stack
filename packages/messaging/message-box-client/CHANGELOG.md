@@ -21,6 +21,18 @@ All notable changes to this project will be documented in this file. The format 
   acknowledgement order. Sender encoding and relay limits are unchanged.
 - Keep #548 relay/preflight and #503 durable refund/outcome milestones open.
 
+### 2.5.3 candidate — CommonJS SDK interop and send failure codes
+
+- Fix the CommonJS build so `new MessageBoxClient()` no longer fails with
+  `LookupResolver.default is not a constructor`; SDK classes are imported by
+  name from the SDK barrels.
+- `sendMessage()` HTTP failures now include the server's well-formed failure
+  code, for example `Message Box send failed with HTTP 400
+(ERR_DUPLICATE_MESSAGE).`, so callers can recognise an already-delivered
+  message. Free-text server descriptions are still never copied into errors.
+- Raise the `@bsv/sdk` peer floor to `^2.8.0`. The package already required
+  SDK modules that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.
+
 ### 2.5.2 candidate — authenticated transport and payment hardening
 
 - Internalize notification payments with the configured originator before acknowledgment.

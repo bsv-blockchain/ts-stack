@@ -150,6 +150,12 @@ export class Monitor {
    * Resolves once the optional Chaintracks subscriptions have been registered.
    * Await this before calling `startTasks()` if `chaintracksWithEvents` is provided
    * and you need subscriptions to be active before the first task loop runs.
+   *
+   * `runOnce`/`startTasks` do not await this directly — they call it through
+   * `ensureEventSubscriptions`, which treats a rejection as best-effort and
+   * always lets the scheduler proceed. A rejection here is not itself a
+   * disaster: on failure `_readyInit` is reset below so the next access
+   * retries `_init()`.
    */
   get ready(): Promise<void> {
     this._readyInit ??= this._init().catch(error => {
@@ -202,6 +208,14 @@ export class Monitor {
   private async _init(): Promise<void> {
     if (this.chaintracksWithEvents != null) {
       const eventSource = this.chaintracksWithEvents
+      // Method presence is not capability (see ChaintracksClientApi's own doc
+      // comment on `supportsReorgEvents`): `false` means subscribeHeaders /
+      // subscribeReorgs are unsupported stubs that must not be called, e.g.
+      // ChaintracksServiceClient, an HTTP-polling client. Regular scheduled
+      // tasks (TaskNewHeader, TaskReorg, ...) already poll the configured
+      // `chaintracks` every tick regardless of push events, so there is
+      // nothing to set up here; skip without touching the network.
+      if (eventSource.supportsReorgEvents === false) return
       const actualChain = await eventSource.getChain()
       if (actualChain !== this.chain) {
         throw new WERR_INVALID_PARAMETER('chaintracksWithEvents', `a ChainTracks source on ${this.chain}`)
@@ -395,12 +409,58 @@ export class Monitor {
   }
 
   async runOnce(): Promise<void> {
-    await this.ready
+    await this.ensureEventSubscriptions()
     await this.setupTasksOnce()
     if (!this.storage.getActive().isStorageProvider()) return
     for (const task of await this.tasksReadyToRun()) {
       await this.runScheduledTask(task)
     }
+  }
+
+  /**
+   * Best-effort attempt to (re)register the optional Chaintracks header/reorg
+   * push subscriptions ahead of this scheduler tick.
+   *
+   * Header and reorg events are a latency optimization, not a requirement:
+   * every task that cares about chain height or reorgs (TaskNewHeader,
+   * TaskReorg, ...) already polls the configured `chaintracks` on its own
+   * schedule regardless of whether push events are flowing. An offline,
+   * unimplemented (see the `supportsReorgEvents` skip in `_init`), or
+   * otherwise misconfigured event source must not stop the scheduler that
+   * runs every other maintenance task.
+   *
+   * A failure here is swallowed and logged once per outage; the `ready`
+   * getter's own `.catch` resets `_readyInit` first, so the *next* call to
+   * this method (i.e. the next scheduler tick) retries `_init()` from
+   * scratch. A genuine configured-chain mismatch (see
+   * `_init`) still fails `ready` every time it is retried, so the event
+   * source never transitions to a subscribed state on mismatched data —
+   * only this outer scheduling loop is decoupled from that failure.
+   *
+   * A caller that specifically needs subscriptions active before its own
+   * first task loop can still `await monitor.ready` directly and handle the
+   * rejection itself; that public contract is unchanged.
+   */
+  private async ensureEventSubscriptions(): Promise<void> {
+    try {
+      await this.ready
+      this._chaintracksEventsErrorLogged = false
+    } catch (error_: unknown) {
+      // Record the first failure of each outage only: the scheduler retries
+      // every tick, and a persistent failure must not grow monitor events.
+      if (this._chaintracksEventsErrorLogged) return
+      this._chaintracksEventsErrorLogged = true
+      await this.logChaintracksEventsError(error_)
+    }
+  }
+
+  private _chaintracksEventsErrorLogged = false
+
+  private async logChaintracksEventsError(error_: unknown): Promise<void> {
+    const error = WalletError.fromUnknown(error_)
+    const details = `monitor chaintracksWithEvents subscription unavailable ${safeDiagnostic(error.code, 64)} ${safeDiagnostic(error.description)}`
+    this.emitLog(details)
+    await this.logEvent('chaintracksEventsError', details)
   }
 
   private async setupTasksOnce(): Promise<void> {

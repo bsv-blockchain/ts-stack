@@ -424,6 +424,112 @@ function exportValidation(expectedExports) {
   ].join('\n')
 }
 
+function quotedSpecifier(literal) {
+  return literal.slice(1, -1)
+}
+
+/**
+ * Returns the specifiers whose CommonJS interop binding is created in "Node
+ * mode" (`__toESM(module, 1)`) and whose `default` is then read. Bundlers emit
+ * that form when ESM source in a `"type": "module"` package default-imports a
+ * CommonJS module: `default` becomes the whole `module.exports`. Against a
+ * dependency compiled with `__esModule` and its own `exports.default`, such as
+ * the `@bsv/sdk` CommonJS build, the binding is the namespace object rather than
+ * the intended value, so the artifact loads but fails when used.
+ */
+export function nodeModeDefaultImports(source) {
+  const required = new Map()
+  for (const match of source.matchAll(
+    /\b(?:let|var|const)\s+([\w$]+)\s*=\s*require\(\s*(["'][^"']*["'])\s*\)/g
+  )) {
+    required.set(match[1], quotedSpecifier(match[2]))
+  }
+  const bindings = new Map()
+  for (const match of source.matchAll(
+    /\b([\w$]+)\s*=\s*(?:[\w$]+\.)?__toESM\(([^,]+),\s*1\s*\)/g
+  )) {
+    const argument = match[2].trim()
+    const inline = /^require\(\s*(["'][^"']*["'])\s*\)$/.exec(argument)
+    const specifier = inline == null ? required.get(argument) : quotedSpecifier(inline[1])
+    if (specifier !== undefined) bindings.set(match[1], specifier)
+  }
+  const specifiers = new Set()
+  for (const [binding, specifier] of bindings) {
+    const escaped = binding.replaceAll('$', String.raw`\$`)
+    if (new RegExp(String.raw`(?<![\w$])${escaped}\.default\b`).test(source)) {
+      specifiers.add(specifier)
+    }
+  }
+  return [...specifiers].sort((left, right) => left.localeCompare(right))
+}
+
+async function nearestPackageType(directory, root, cache) {
+  if (cache.has(directory)) return cache.get(directory)
+  let type
+  try {
+    const nearest = JSON.parse(await fs.readFile(path.join(directory, 'package.json'), 'utf8'))
+    type = nearest.type ?? 'commonjs'
+  } catch (error) {
+    if (error.code !== 'ENOENT' || directory === root) throw error
+    type = await nearestPackageType(path.dirname(directory), root, cache)
+  }
+  cache.set(directory, type)
+  return type
+}
+
+async function installedCommonJsFiles(packageRoot) {
+  const files = []
+  const typeCache = new Map()
+  async function visit(directory) {
+    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') await visit(entryPath)
+      } else if (
+        entry.name.endsWith('.cjs') ||
+        (entry.name.endsWith('.js') &&
+          (await nearestPackageType(directory, packageRoot, typeCache)) === 'commonjs')
+      ) {
+        files.push(entryPath)
+      }
+    }
+  }
+  await visit(packageRoot)
+  return files.sort((left, right) => left.localeCompare(right))
+}
+
+async function checkCommonJsDefaultInterop(consumerDirectory, manifest) {
+  const packageRoot = path.join(consumerDirectory, 'node_modules', ...manifest.name.split('/'))
+  const candidates = []
+  for (const file of await installedCommonJsFiles(packageRoot)) {
+    for (const specifier of nodeModeDefaultImports(await fs.readFile(file, 'utf8'))) {
+      candidates.push({ file: path.relative(packageRoot, file), specifier })
+    }
+  }
+  if (candidates.length === 0) return
+  const probe = [
+    "const { createRequire } = require('node:module');",
+    "const path = require('node:path');",
+    `const packageRoot = ${JSON.stringify(packageRoot)};`,
+    `const candidates = ${JSON.stringify(candidates)};`,
+    'const broken = candidates.filter(({ file, specifier }) => {',
+    '  const loaded = createRequire(path.join(packageRoot, file))(specifier);',
+    "  return loaded != null && loaded.__esModule === true && Object.hasOwn(loaded, 'default');",
+    '});',
+    'process.stdout.write(JSON.stringify(broken));'
+  ].join('\n')
+  const { stdout } = await run('node', ['--eval', probe], { cwd: consumerDirectory })
+  const broken = JSON.parse(stdout)
+  if (broken.length > 0) {
+    throw new Error(
+      [
+        'CommonJS output binds default imports of __esModule modules to module.exports:',
+        ...broken.map(({ file, specifier }) => `  ${file}: ${specifier}`)
+      ].join('\n')
+    )
+  }
+}
+
 function declaredBin(manifest, binName) {
   if (typeof manifest.bin === 'string') {
     const defaultName = manifest.name.split('/').at(-1)
@@ -480,6 +586,7 @@ async function checkConsumer({
       { cwd: consumerDirectory }
     )
 
+    if (modes.includes('cjs')) await checkCommonJsDefaultInterop(consumerDirectory, manifest)
     for (const [subpath, expectedExports] of Object.entries(entryExports)) {
       const specifier = packageSpecifier(manifest.name, subpath)
       const validation = exportValidation(expectedExports)

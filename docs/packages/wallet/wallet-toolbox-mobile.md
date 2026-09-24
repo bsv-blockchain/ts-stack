@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.14.0'
+version: '2.15.0'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
 review_cadence_days: 30
@@ -91,6 +91,23 @@ The package publishes `react-native`, import ESM, and CommonJS conditions with
 matching declarations. Its installed-consumer gate bundles the exact tarball
 with Metro, checks the mobile-safe module boundary, compiles optimized Hermes
 bytecode, validates source maps, and enforces size budgets.
+
+This single bundle also exports `WalletMonitorTask` (the base class for a
+custom task passed to `Monitor.addTask`), `attemptToPostReqsToNetwork` with
+its `PostReqsToNetworkResult` type, `parseJsonRpc` / `stringifyJsonRpc` (the
+storage remoting wire format), and `verifyUnlockScripts` with its
+`UnlockScriptVerificationResult` type, so a host no longer needs an
+unsupported deep import to reach them:
+
+```ts
+import {
+  WalletMonitorTask,
+  attemptToPostReqsToNetwork,
+  parseJsonRpc,
+  stringifyJsonRpc,
+  verifyUnlockScripts
+} from '@bsv/wallet-toolbox-mobile'
+```
 
 Native requests are not governed by browser CORS, while WebView and hybrid
 clients can be. Remote Storage should remain reachable by intended public

@@ -125,7 +125,8 @@ export default class WalletClient implements WalletInterface {
 
     const attemptSubstrate = async (
       factory: () => WalletInterface,
-      timeout?: number
+      timeout?: number,
+      connectedFactory?: () => WalletInterface
     ): Promise<{ success: boolean; sub?: WalletInterface }> => {
       try {
         const sub = factory()
@@ -146,7 +147,8 @@ export default class WalletClient implements WalletInterface {
           result = await sub.getVersion({})
         }
         validateWalletResult('getVersion', result)
-        return { success: true, sub }
+        // Probe deadlines bound discovery, not later calls that may await user approval.
+        return { success: true, sub: connectedFactory?.() ?? sub }
       } catch {
         return { success: false }
       }
@@ -166,7 +168,8 @@ export default class WalletClient implements WalletInterface {
       attemptSubstrate(() => new HTTPWalletJSON(this.originator), MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
       attemptSubstrate(
         () => new ReactNativeWebView('*', MAX_FAST_SUBSTRATE_RESPONSE_WAIT),
-        MAX_FAST_SUBSTRATE_RESPONSE_WAIT
+        MAX_FAST_SUBSTRATE_RESPONSE_WAIT,
+        () => new ReactNativeWebView()
       )
     ]
 
@@ -186,7 +189,8 @@ export default class WalletClient implements WalletInterface {
     // Fall back to slower XDM substrate
     const xdmResult = await attemptSubstrate(
       () => new XDMSubstrate('*', MAX_XDM_RESPONSE_WAIT),
-      MAX_XDM_RESPONSE_WAIT
+      MAX_XDM_RESPONSE_WAIT,
+      () => new XDMSubstrate()
     )
     if (xdmResult.success && xdmResult.sub !== undefined) {
       this.substrate = xdmResult.sub

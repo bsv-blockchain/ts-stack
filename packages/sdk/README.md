@@ -16,7 +16,7 @@ emits a portable `number[]` settlement artifact so HTTP, WebSocket, Message Box,
 and JSON transports preserve identical transaction bytes. The same boundary
 protects overlay lookup queries and JSON BEEF responses.
 
-SDK 2.8.0 verifies bodyless authenticated HTTP responses
+Version 2.8.0 verifies bodyless authenticated HTTP responses
 using the BRC-104 `-1` body-length sentinel. Conforming 204 and empty error
 responses now verify; non-empty response encoding is unchanged. Servers that
 sign a zero body length for an empty response must adopt the specified sentinel.
@@ -57,6 +57,18 @@ path measures 742,126 raw bytes in the SDK Vite fixture and 555,548 raw bytes
 in UMD; their reviewed ceilings are 742,500 and 556,000 bytes respectively.
 The combined sync and security candidate measures 560,560 raw bytes with esbuild;
 its reviewed raw ceiling is 561,000 bytes. Compression ceilings are unchanged.
+
+SDK 2.8.1 fixes portable AES-GCM decryption of authenticated empty plaintext.
+Encryption bytes and full 16-byte tag verification are unchanged; invalid tags,
+keys and IVs remain rejected.
+
+SDK 2.8.2 separates wallet discovery timeouts from normal operations.
+Automatic React Native and XDM discovery remains bounded, while subsequent
+calls can wait for user approval without inheriting the one-second/200-millisecond
+probe deadline. Explicit substrate `responseTimeout` values remain enforced.
+Applications using `WalletClient` auto-discovery must upgrade their bundled SDK;
+updating the wallet alone does not update a web application's SDK. No API, wire
+or account-data migration is required. SDK 2.8.2 is published; the 2.9.0 additions remain an unpublished candidate.
 
 ## Table of Contents
 

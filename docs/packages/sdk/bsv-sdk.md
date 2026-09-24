@@ -17,7 +17,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 The unpublished 2.9 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing non-multipart signing preimages and the 8 KiB header selection default are preserved.
 
-The released 2.8 line corrects BUMP offset arithmetic above 32 bits
+Version 2.8.1 repairs portable decryption of authenticated empty
+AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
+for empty encrypted fields. Encryption bytes and the full authentication tag
+remain unchanged. No ciphertext, account-data or API migration is required.
+The patch is published through the protected [SDK release](https://github.com/bsv-blockchain/ts-stack/actions/runs/35888747366) from commit `e09515508bf5bf22d7b56085170debc2b0803b2a`, with matching npm integrity and verified provenance.
+
+Version 2.8.0 corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
 calculation, extraction, combination and trimming use the same exact numeric
 domain; malformed non-integer and unsafe offsets fail explicitly. No consumer
@@ -390,3 +396,15 @@ If every slot is authenticated, new handshakes fail until a session expires or
 is removed. Only a successful locally initiated handshake can select the
 implicit destination for a later `Peer` call; inbound messages cannot retarget
 it.
+
+### Wallet discovery deadlines in the 2.8.2 candidate
+
+Automatic React Native and XDM probes retain their short discovery deadlines
+and remove listeners when unavailable. A successful probe creates a separate
+operational connection so authentication, permission approval and valid slow
+responses do not inherit the one-second/200-millisecond discovery deadline.
+Explicitly configured substrate `responseTimeout` values remain enforced, and
+response validation and origin checks are unchanged. No API or wire migration
+is needed. Applications must update their bundled SDK; updating only a wallet
+cannot replace a web application's SDK. Publication remains a separate
+protected-workflow action.

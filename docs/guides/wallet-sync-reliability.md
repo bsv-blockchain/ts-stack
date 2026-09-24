@@ -12,7 +12,7 @@ tags: [wallet, sync, storage, performance]
 
 # Resumable wallet synchronization and proof recovery
 
-The unpublished Toolbox 2.14 candidate provides a complete bounded pull-sync
+The unpublished Toolbox 2.15 candidate provides a complete bounded pull-sync
 session for local Knex and IndexedDB destinations. Source requests, proof-provider
 I/O and progress callbacks run outside exclusive page ownership; the destination
 commits each page and its checkpoint atomically. Foreground reads and writes can
