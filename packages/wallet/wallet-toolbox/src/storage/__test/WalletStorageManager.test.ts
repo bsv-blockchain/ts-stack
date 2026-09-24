@@ -134,6 +134,27 @@ describe('WalletStorageManager tests', () => {
     }
   )
 
+  test.each(['migrate', 'getCapabilities', 'findProvenTxReqs'] as const)(
+    '%s preserves synchronous provider failures as rejected promises and releases ownership',
+    async method => {
+      const { storage } = ctxs[0]
+      const failure = new Error('provider failed synchronously')
+      const dispatch = jest.spyOn(storage.getActive(), method).mockImplementation(() => {
+        throw failure
+      })
+      try {
+        const args = method === 'migrate' ? ['name', 'identity'] : method === 'getCapabilities' ? [] : [{}]
+        const operation = Reflect.get(storage, method).apply(storage, args)
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        dispatch.mockRestore()
+      }
+    }
+  )
+
   test('writer authorization failure never dispatches and releases the next writer', async () => {
     for (const { storage } of ctxs) {
       const failure = new Error('authorization unavailable')
@@ -185,6 +206,61 @@ describe('WalletStorageManager tests', () => {
     } finally {
       release()
       await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization still precedes queue admission while provider work waits for ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('reader provider refused request')
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const result = storage.findOutputs({} as any)
+      const rejected = expect(result).rejects.toBe(failure)
+      expect(auth).toHaveBeenCalledWith()
+      await Promise.resolve()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization rejection never dispatches provider work', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('reader authorization unavailable')
+    const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth')
+    try {
+      const result = storage.findOutputs({} as any)
+      expect(result).toBeInstanceOf(Promise)
+      await expect(result).rejects.toBe(failure)
+      expect(dispatch).not.toHaveBeenCalled()
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
       auth.mockRestore()
       dispatch.mockRestore()
     }

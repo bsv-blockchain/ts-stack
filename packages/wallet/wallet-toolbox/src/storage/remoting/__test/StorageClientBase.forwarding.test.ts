@@ -13,7 +13,26 @@ class ForwardingClient extends StorageClientBase {
 
 const auth = { identityKey: `02${'11'.repeat(32)}`, userId: 7, isActive: true }
 const abort = { reference: 'action-reference' }
+const findArgs = { partial: {} }
+const entityCases = [
+  {
+    method: 'findOutputBasketsAuth',
+    params: [auth, findArgs],
+    run: (client: ForwardingClient) => client.findOutputBasketsAuth(auth, findArgs)
+  },
+  {
+    method: 'findOutputsAuth',
+    params: [auth, findArgs],
+    run: (client: ForwardingClient) => client.findOutputsAuth(auth, findArgs)
+  },
+  {
+    method: 'findProvenTxReqs',
+    params: [findArgs],
+    run: (client: ForwardingClient) => client.findProvenTxReqs(findArgs)
+  }
+]
 const cases = [
+  ...entityCases,
   { method: 'getCapabilities', params: [], run: (client: ForwardingClient) => client.getCapabilities() },
   { method: 'abortAction', params: [auth, abort], run: (client: ForwardingClient) => client.abortAction(auth, abort) },
   {
@@ -65,3 +84,20 @@ test.each(cases)(
     expect(settled).toHaveBeenCalledTimes(1)
   }
 )
+
+test.each(entityCases)('$method normalizes dates, nulls and bytes in place', async ({ run }) => {
+  const record = {
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: 0,
+    optional: null,
+    bytes: new Uint8Array([0, 128, 255])
+  }
+  const records = [record]
+  const client = new ForwardingClient(async () => records)
+  await expect(run(client)).resolves.toBe(records)
+  expect(records[0]).toBe(record)
+  expect(record.created_at).toEqual(new Date('2024-01-01T00:00:00.000Z'))
+  expect(record.updated_at).toEqual(new Date(0))
+  expect(record.optional).toBeUndefined()
+  expect(record.bytes).toEqual([0, 128, 255])
+})

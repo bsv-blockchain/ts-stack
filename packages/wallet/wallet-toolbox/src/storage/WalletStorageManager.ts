@@ -346,8 +346,23 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return this.withAccess(writer)
   }
 
+  /** Keep foreground writer authorization inside the acquired ownership boundary. */
+  private runAsAuthorizedWriter<R>(
+    operation: (writer: sdk.WalletStorageWriter, auth: sdk.AuthId) => Promise<R>
+  ): Promise<R> {
+    return this.runAsWriter(async writer => operation(writer, await this.getAuth(true)))
+  }
+
   runAsReader<R>(reader: (active: sdk.WalletStorageReader) => Promise<R>): Promise<R> {
     return this.withAccess(reader, true)
+  }
+
+  /** Preserve the legacy reader contract: obtain caller auth before joining the ownership queue. */
+  private async runAsAuthorizedReader<R>(
+    operation: (reader: sdk.WalletStorageReader, auth: sdk.AuthId) => Promise<R>
+  ): Promise<R> {
+    const auth = await this.getAuth()
+    return this.runAsReader(reader => operation(reader, auth))
   }
 
   /** Borrowed activeSync is the legacy explicit reentrancy contract for an already-held exclusive operation. */
@@ -427,10 +442,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return this.getActive().getSettings()
   }
 
-  async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
-    return await this.runAsWriter(async writer => {
-      return await writer.migrate(storageName, storageIdentityKey)
-    })
+  migrate(storageName: string, storageIdentityKey: string): Promise<string> {
+    return this.runAsWriter(writer => writer.migrate(storageName, storageIdentityKey))
   }
 
   async destroy(): Promise<void> {
@@ -458,52 +471,34 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   async abortAction(args: AbortActionArgs): Promise<AbortActionResult> {
     validateAbortActionArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.abortAction(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.abortAction(auth, args))
   }
 
-  async createAction(vargs: ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.createAction(auth, vargs)
-    })
+  createAction(vargs: ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.createAction(auth, vargs))
   }
 
   async internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
     validateInternalizeActionArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.internalizeAction(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.internalizeAction(auth, args))
   }
 
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
     validateRelinquishCertificateArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.relinquishCertificate(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.relinquishCertificate(auth, args))
   }
 
   async relinquishOutput(args: RelinquishOutputArgs): Promise<number> {
     validateRelinquishOutputArgs(args)
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.relinquishOutput(auth, args)
-    })
+    return await this.runAsAuthorizedWriter((writer, auth) => writer.relinquishOutput(auth, args))
   }
 
-  async processAction(args: sdk.StorageProcessActionArgs): Promise<sdk.StorageProcessActionResults> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.processAction(auth, args)
-    })
+  processAction(args: sdk.StorageProcessActionArgs): Promise<sdk.StorageProcessActionResults> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.processAction(auth, args))
   }
 
-  async prepareNoSendExpiry(args: ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
-    return await this.runAsWriter(async writer => {
+  prepareNoSendExpiry(args: ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+    return this.runAsWriter(async writer => {
       if (writer.prepareNoSendExpiry == null) {
         throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
@@ -511,10 +506,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async activateNoSendExpiry(
-    args: sdk.StorageActivateNoSendExpiryArgs
-  ): Promise<sdk.StorageActivateNoSendExpiryResult> {
-    return await this.runAsWriter(async writer => {
+  activateNoSendExpiry(args: sdk.StorageActivateNoSendExpiryArgs): Promise<sdk.StorageActivateNoSendExpiryResult> {
+    return this.runAsWriter(async writer => {
       if (writer.activateNoSendExpiry == null) {
         throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
@@ -531,24 +524,24 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async getCapabilities(): Promise<sdk.StorageCapabilities> {
-    return await this.runAsReader(async () => await this.getActive().getCapabilities())
+  getCapabilities(): Promise<sdk.StorageCapabilities> {
+    return this.runAsReader(() => this.getActive().getCapabilities())
   }
 
-  async beginActionBatch(args: sdk.BeginActionBatchArgs): Promise<sdk.BeginActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.beginActionBatch(await this.getAuth(true), args))
+  beginActionBatch(args: sdk.BeginActionBatchArgs): Promise<sdk.BeginActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.beginActionBatch(auth, args))
   }
 
-  async extendActionBatch(args: sdk.ExtendActionBatchArgs): Promise<sdk.ExtendActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.extendActionBatch(await this.getAuth(true), args))
+  extendActionBatch(args: sdk.ExtendActionBatchArgs): Promise<sdk.ExtendActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.extendActionBatch(auth, args))
   }
 
-  async renewActionBatch(batchId: string): Promise<sdk.RenewActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.renewActionBatch(await this.getAuth(true), batchId))
+  renewActionBatch(batchId: string): Promise<sdk.RenewActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.renewActionBatch(auth, batchId))
   }
 
-  async resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
-    return await this.runAsWriter(async writer => {
+  resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
+    return this.runAsWriter(async writer => {
       if (writer.resumeActionBatch == null) {
         throw new WERR_NOT_IMPLEMENTED('action batch resume is not available')
       }
@@ -556,18 +549,16 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async prepareActionBatchCommit(manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
-    return await this.runAsWriter(
-      async writer => await writer.prepareActionBatchCommit(await this.getAuth(true), manifest)
-    )
+  prepareActionBatchCommit(manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.prepareActionBatchCommit(auth, manifest))
   }
 
-  async putActionBatchBlob(args: sdk.PutActionBatchBlobArgs): Promise<void> {
-    return await this.runAsWriter(async writer => await writer.putActionBatchBlob(await this.getAuth(true), args))
+  putActionBatchBlob(args: sdk.PutActionBatchBlobArgs): Promise<void> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.putActionBatchBlob(auth, args))
   }
 
-  async putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
-    return await this.runAsWriter(async writer => {
+  putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
+    return this.runAsWriter(async writer => {
       if (writer.putActionBatchPack == null) {
         throw new WERR_NOT_IMPLEMENTED('packed action batch uploads are not available')
       }
@@ -575,12 +566,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async commitActionBatch(manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.commitActionBatch(await this.getAuth(true), manifest))
+  commitActionBatch(manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.commitActionBatch(auth, manifest))
   }
 
-  async commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
-    return await this.runAsWriter(async writer => {
+  commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
+    return this.runAsWriter(async writer => {
       if (writer.commitActionBatchByDigest == null) {
         throw new WERR_NOT_IMPLEMENTED('digest-only action batch commit is not available')
       }
@@ -588,63 +579,40 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async abortActionBatch(batchId: string): Promise<sdk.AbortActionBatchResult> {
-    return await this.runAsWriter(async writer => await writer.abortActionBatch(await this.getAuth(true), batchId))
+  abortActionBatch(batchId: string): Promise<sdk.AbortActionBatchResult> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.abortActionBatch(auth, batchId))
   }
 
-  async insertCertificate(certificate: TableCertificate): Promise<number> {
-    return await this.runAsWriter(async writer => {
-      const auth = await this.getAuth(true)
-      return await writer.insertCertificateAuth(auth, certificate)
-    })
+  insertCertificate(certificate: TableCertificate): Promise<number> {
+    return this.runAsAuthorizedWriter((writer, auth) => writer.insertCertificateAuth(auth, certificate))
   }
 
-  async listActions(vargs: ValidListActionsArgs): Promise<ListActionsResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listActions(auth, vargs)
-    })
+  listActions(vargs: ValidListActionsArgs): Promise<ListActionsResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listActions(auth, vargs))
   }
 
-  async listCertificates(args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listCertificates(auth, args)
-    })
+  listCertificates(args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listCertificates(auth, args))
   }
 
-  async listOutputs(vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.listOutputs(auth, vargs)
-    })
+  listOutputs(vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.listOutputs(auth, vargs))
   }
 
-  async findCertificates(args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findCertificatesAuth(auth, args)
-    })
+  findCertificates(args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findCertificatesAuth(auth, args))
   }
 
-  async findOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findOutputBasketsAuth(auth, args)
-    })
+  findOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findOutputBasketsAuth(auth, args))
   }
 
-  async findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]> {
-    const auth = await this.getAuth()
-    return await this.runAsReader(async reader => {
-      return await reader.findOutputsAuth(auth, args)
-    })
+  findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]> {
+    return this.runAsAuthorizedReader((reader, auth) => reader.findOutputsAuth(auth, args))
   }
 
-  async findProvenTxReqs(args: sdk.FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    return await this.runAsReader(async reader => {
-      return await reader.findProvenTxReqs(args)
-    })
+  findProvenTxReqs(args: sdk.FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+    return this.runAsReader(reader => reader.findProvenTxReqs(args))
   }
 
   /**

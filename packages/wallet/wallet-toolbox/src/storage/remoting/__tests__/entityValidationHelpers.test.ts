@@ -1,9 +1,4 @@
-import {
-  validateDate,
-  validateEntities,
-  validateEntity,
-  validateSyncChunkEntities
-} from '../entityValidationHelpers'
+import { validateDate, validateEntities, validateEntity, validateSyncChunkEntities } from '../entityValidationHelpers'
 import { EntityTimeStamp } from '../../../sdk/types'
 import { SyncChunk } from '../../../sdk/WalletStorage.interfaces'
 
@@ -199,7 +194,11 @@ describe('entityValidationHelpers', () => {
 
     test('validates every entity in a multi-entity array', () => {
       const arr: TestEntity[] = [
-        { created_at: '2024-01-01T00:00:00.000Z' as unknown as Date, updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date, name: null },
+        {
+          created_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
+          updated_at: '2024-01-01T00:00:00.000Z' as unknown as Date,
+          name: null
+        },
         makeEntity({ blob: new Uint8Array([1, 2, 3]) }),
         makeEntity({ blob: Buffer.from([4, 5, 6]) as unknown as Uint8Array })
       ]
@@ -323,6 +322,15 @@ describe('entityValidationHelpers', () => {
         certificateFields: [makeEntity()] as never,
         user: makeEntity() as never
       }
+      const originalArrays = new Map<string, TestEntity[]>()
+      for (const [name, value] of Object.entries(chunk)) {
+        if (!Array.isArray(value)) continue
+        const entities = value as TestEntity[]
+        originalArrays.set(name, entities)
+        entities[0].created_at = '2024-01-01T00:00:00.000Z' as unknown as Date
+        entities[0].updated_at = 0 as unknown as Date
+        entities[0].optional = null
+      }
       const result = validateSyncChunkEntities(chunk)
       expect(result).toBe(chunk)
       expect((result.provenTxs as unknown as TestEntity[])[0].blob).toEqual([1, 2])
@@ -345,7 +353,9 @@ describe('entityValidationHelpers', () => {
       ]
       for (const k of everyArrayKey) {
         const arr = result[k] as unknown as TestEntity[]
+        expect(arr).toBe(originalArrays.get(k))
         expect(Array.isArray(arr)).toBe(true)
+        expect(arr[0].optional).toBeUndefined()
         expect(arr[0].created_at).toBeInstanceOf(Date)
         expect(arr[0].updated_at).toBeInstanceOf(Date)
       }

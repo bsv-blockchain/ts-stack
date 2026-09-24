@@ -116,18 +116,10 @@ function validateSyncChunkTotals(totals: SyncChunkTotals): void {
  */
 export function validateSyncChunkEntities(r: SyncChunk): SyncChunk {
   if (r.totals != null) validateSyncChunkTotals(r.totals)
-  if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
-  if (r.certificates != null) r.certificates = validateEntities(r.certificates)
-  if (r.commissions != null) r.commissions = validateEntities(r.commissions)
-  if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
-  if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
-  if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
-  if (r.outputs != null) r.outputs = validateEntities(r.outputs)
-  if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
-  if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
-  if (r.transactions != null) r.transactions = validateEntities(r.transactions)
-  if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
-  if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
+  for (const name of syncChunkTotalRecordNames) {
+    const entities = r[name]
+    if (entities != null) validateEntities<EntityTimeStamp>(entities)
+  }
   if (r.user != null) r.user = validateEntity(r.user)
   return r
 }
