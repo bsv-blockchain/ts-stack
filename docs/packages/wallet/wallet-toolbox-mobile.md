@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
 version: '2.14.0'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -66,6 +66,18 @@ endpoint.
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
+
+## Backup and recovery
+
+Recover both key material and wallet records; a manager snapshot or device
+keystore alone is not a complete data backup. App removal or device loss can
+remove locally retained secrets and state.
+Test the independent key and data recovery paths on a replacement device.
+Use the [recovery guide](../../guides/wallet-backup-recovery.md),
+[BRC-38/39 integration](../../guides/wallet-data-portability.md) and
+[recovery drill](../../guides/wallet-recovery-drill.md). The portable helpers
+require a concrete provider and a tested consistency/resource-limit strategy.
+
 
 ## Install
 
