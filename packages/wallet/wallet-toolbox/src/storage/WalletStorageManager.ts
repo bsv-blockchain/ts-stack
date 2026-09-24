@@ -342,12 +342,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     }
   }
 
-  async runAsWriter<R>(writer: (active: sdk.WalletStorageWriter) => Promise<R>): Promise<R> {
-    return await this.withAccess(writer)
+  runAsWriter<R>(writer: (active: sdk.WalletStorageWriter) => Promise<R>): Promise<R> {
+    return this.withAccess(writer)
   }
 
-  async runAsReader<R>(reader: (active: sdk.WalletStorageReader) => Promise<R>): Promise<R> {
-    return await this.withAccess(reader, true)
+  runAsReader<R>(reader: (active: sdk.WalletStorageReader) => Promise<R>): Promise<R> {
+    return this.withAccess(reader, true)
   }
 
   /** Borrowed activeSync is the legacy explicit reentrancy contract for an already-held exclusive operation. */
@@ -358,12 +358,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return activeSync == null ? await this.withAccess(sync) : await sync(activeSync)
   }
 
-  async runAsStorageProvider<R>(sync: (active: StorageProvider) => Promise<R>): Promise<R> {
-    return await this.withAccess(async active => {
+  runAsStorageProvider<R>(sync: (active: StorageProvider) => Promise<R>): Promise<R> {
+    return this.withAccess(active => {
       if (!active.isStorageProvider()) {
         throw new WERR_INVALID_OPERATION('Active "WalletStorageProvider" does not support "StorageProvider" interface.')
       }
-      return await sync(active as unknown as StorageProvider)
+      return sync(active as unknown as StorageProvider)
     })
   }
 
@@ -905,24 +905,21 @@ export class WalletStorageManager implements sdk.WalletStorage {
           atomicCheckpoint,
           mode: paged ? 'paged' : 'exclusive',
           loadRequest: () => this.loadSyncRequest(auth, writer, readerSettings, writerSettings.storageIdentityKey),
-          prepare: paged
-            ? (args, chunk) => (writer as StorageProvider).prepareSyncChunk(args, chunk)
-            : undefined,
+          prepare: paged ? (args, chunk) => (writer as StorageProvider).prepareSyncChunk(args, chunk) : undefined,
           commit
         },
         options
       )
     if (paged) {
-      return await run(
-        operation =>
-          this.withAccess(
-            () => {
-              assertCurrent()
-              return operation()
-            },
-            false,
-            true
-          )
+      return await run(operation =>
+        this.withAccess(
+          () => {
+            assertCurrent()
+            return operation()
+          },
+          false,
+          true
+        )
       )
     }
     return await this.runAsSync(() => {

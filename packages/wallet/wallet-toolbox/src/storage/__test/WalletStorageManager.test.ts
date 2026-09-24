@@ -88,6 +88,119 @@ describe('WalletStorageManager tests', () => {
     }
   })
 
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s returns a rejection for synchronous callback errors and releases ownership',
+    async method => {
+      for (const { storage } of ctxs) {
+        const failure = new Error('synchronous callback failure')
+        const operation = storage[method](() => {
+          throw failure
+        })
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      }
+    }
+  )
+
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s holds ownership through asynchronous rejection, then releases the waiting writer',
+    async method => {
+      for (const { storage } of ctxs) {
+        let reject!: (error: Error) => void
+        let entered!: () => void
+        const started = new Promise<void>(resolve => {
+          entered = resolve
+        })
+        const pending = new Promise<void>((_resolve, fail) => {
+          reject = fail
+        })
+        const operation = storage[method](() => {
+          entered()
+          return pending
+        })
+        await started
+        const next = jest.fn(async () => 'next writer')
+        const waiting = storage.runAsWriter(next)
+        await Promise.resolve()
+        expect(next).not.toHaveBeenCalled()
+        const failure = new Error('asynchronous callback failure')
+        const rejected = expect(operation).rejects.toBe(failure)
+        reject(failure)
+        await rejected
+        await expect(waiting).resolves.toBe('next writer')
+        expect(next).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  test('writer authorization failure never dispatches and releases the next writer', async () => {
+    for (const { storage } of ctxs) {
+      const failure = new Error('authorization unavailable')
+      const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+      const dispatch = jest.spyOn(storage.getActive(), 'createAction')
+      try {
+        await expect(storage.createAction({} as any)).rejects.toBe(failure)
+        expect(auth).toHaveBeenCalledWith(true)
+        expect(dispatch).not.toHaveBeenCalled()
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        auth.mockRestore()
+        dispatch.mockRestore()
+      }
+    }
+  })
+
+  test('writer authorization is evaluated only after the preceding writer releases ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('provider refused action')
+    const dispatch = jest.spyOn(storage.getActive(), 'createAction').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const action = storage.createAction({} as any)
+      const rejected = expect(action).rejects.toBe(failure)
+      await Promise.resolve()
+      expect(auth).not.toHaveBeenCalled()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(auth).toHaveBeenCalledWith(true)
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('borrowed sync callback throws remain asynchronous rejections', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('borrowed callback failed')
+    const operation = storage.runAsSync(() => {
+      throw failure
+    }, storage.getActive())
+    expect(operation).toBeInstanceOf(Promise)
+    await expect(operation).rejects.toBe(failure)
+    await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+  })
+
   test('1_runAsReader runAsWriter runAsSync interlock correctly', async () => {
     const { storage } = await _tu.createSQLiteTestSetup1Wallet({
       databaseName: 'syncTest1'

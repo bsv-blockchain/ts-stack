@@ -10,6 +10,11 @@ attention to changes that materially alter behavior or extend functionality.
   concurrent read capability checks and fair foreground/background ownership.
 - Separate fixed source/commit latency from marginal row cost and bound upward
   probes, page records and proof concurrency.
+- Reduce redundant storage promise forwarding while retaining authorization
+  inside exclusive ownership; failures release the next queued operation.
+- Share the remote forwarding rejection boundary, skip uncontended priority
+  searches and avoid repeated queue/checkpoint helper allocations. Custom RPC
+  throws remain Promise rejections; wire, result and fairness contracts remain.
 - Check chains before sync writes and preserve returned, serialized and thrown
   failures without advancing progress.
 - Repair stale selected/input/broadcast proofs against canonical evidence; fence

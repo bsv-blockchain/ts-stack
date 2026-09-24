@@ -25,17 +25,25 @@ export class StorageAccessQueue {
     })
   }
 
+  private first(priority: Priority): number {
+    for (let index = 0; index < this.waiters.length; index++) {
+      if (this.waiters[index].priority === priority) return index
+    }
+    return -1
+  }
+
   private nextIndex(): number {
-    const background = this.waiters.findIndex(waiter => waiter.priority === 'background')
+    const background = this.first('background')
     if (background >= 0 && (this.foregroundGrants >= 8 || Date.now() - this.waiters[background].queuedAt >= 1000))
       return background
-    const foreground = this.waiters.findIndex(waiter => waiter.priority === 'foreground')
+    const foreground = this.first('foreground')
     return Math.max(foreground, 0)
   }
 
   private pump(): void {
     while (!this.exclusive && this.waiters.length > 0) {
-      const index = this.nextIndex()
+      // Uncontended access needs no priority search or predicate allocation.
+      const index = this.waiters.length === 1 ? 0 : this.nextIndex()
       const waiter = this.waiters[index]
       if (waiter.mode === 'exclusive' ? this.readers > 0 : this.readers >= 8) return
       this.waiters.splice(index, 1)

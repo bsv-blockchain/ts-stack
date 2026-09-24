@@ -93,3 +93,39 @@ test('ages a background page ahead of newly queued foreground work', async () =>
     now.mockRestore()
   }
 })
+
+test.each(['foreground', 'background'] as const)('retains FIFO order with only %s waiters', async priority => {
+  const queue = new StorageAccessQueue()
+  const unblock = await queue.acquire('exclusive')
+  const order: number[] = []
+  const waiting = Array.from({ length: 12 }, (_, index) =>
+    queue.acquire('exclusive', priority).then(release => {
+      order.push(index)
+      release()
+    })
+  )
+  unblock()
+  await Promise.all(waiting)
+  expect(order).toEqual(Array.from({ length: 12 }, (_, index) => index))
+})
+
+test('finds an aged background waiter behind the foreground head', async () => {
+  const now = jest.spyOn(Date, 'now').mockReturnValue(1000)
+  try {
+    const queue = new StorageAccessQueue()
+    const unblock = await queue.acquire('exclusive')
+    const order: string[] = []
+    const waiting = (['foreground', 'background', 'foreground'] as const).map((priority, index) =>
+      queue.acquire('exclusive', priority).then(release => {
+        order.push(`${priority} ${index}`)
+        release()
+      })
+    )
+    now.mockReturnValue(2000)
+    unblock()
+    await Promise.all(waiting)
+    expect(order).toEqual(['background 1', 'foreground 0', 'foreground 2'])
+  } finally {
+    now.mockRestore()
+  }
+})
