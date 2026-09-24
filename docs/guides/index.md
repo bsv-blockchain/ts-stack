@@ -3,8 +3,8 @@ id: guides-overview
 title: 'Guides'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: [guides, tutorials, how-to]
@@ -15,6 +15,17 @@ tags: [guides, tutorials, how-to]
 Comprehensive step-by-step walkthroughs for building production applications
 with the ts-stack. Guides use current public APIs, runnable examples, and
 explicit operational assumptions.
+
+## Wallet recovery learning path
+
+1. [Wallet backup and recovery](wallet-backup-recovery.md): inventory keys, data,
+   product state and independent recovery access.
+2. [BRC-38/39 wallet data portability](wallet-data-portability.md): implement
+   encrypted exports, preview and explicit restore/merge using current APIs.
+3. [Recovery drill and acceptance checklist](wallet-recovery-drill.md): prove
+   clean-device/provider-loss recovery and document limits.
+4. [AI-agent implementation brief](wallet-recovery-agent-brief.md): give a coding
+   agent the source map, constraints and acceptance criteria.
 
 ## Available Guides
 

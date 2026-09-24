@@ -2,9 +2,9 @@
 id: infra-wallet-infra
 title: 'Wallet Infrastructure Services'
 kind: infra
-version: '2.0.38'
-last_updated: '2026-09-07'
-last_verified: '2026-09-07'
+version: '2.0.44'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -194,6 +194,21 @@ The default task set handles:
 
 For `mock`, the reference server uses `MockServices` with shorter task timing so
 local integration tests complete quickly.
+
+## Backup and recovery
+
+This service preserves wallet data, while the wallet owns user-key recovery.
+Its server identity is not a user's root key. Provide consistent encrypted
+backups with retained versions, independent access and documented data-loss
+and restore-time objectives. Include schema/migration history and external
+stores required by the deployed configuration. Replication does not protect
+against every deletion, corruption or provider-loss scenario.
+
+Follow [Wallet backup and recovery](../guides/wallet-backup-recovery.md) and
+[the operator recovery drill](../guides/wallet-recovery-drill.md). Restore into
+an isolated environment with monitor/broadcast side effects controlled before
+reconnecting writers. A user's [BRC-39 export](../guides/wallet-data-portability.md)
+is a separate portability path, not a full service/database backup.
 
 ## Health checks
 

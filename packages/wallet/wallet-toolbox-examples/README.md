@@ -53,8 +53,14 @@ Treat the following boundaries as security decisions:
 
 ## Documentation
 
-[The Docs](https://bsv-blockchain.github.io/wallet-toolbox) are available here on Github pages.  
-[Example code](https://docs.bsvblockchain.org/guides/sdks/ts/examples) is available over on our gitbook.
+Use the maintained [Wallet Toolbox docs](https://bsv-blockchain.github.io/ts-stack/packages/wallet/wallet-toolbox/)
+and [workspace examples](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples).
+
+The [SQLite backup example](src/backup.ts) copies wallet data through storage
+replication; it does not export the root key or establish independent retention.
+Follow [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
+[BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
+[recovery drill](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/) to build a complete flow.
 
 The Toolbox is richly documented with code-level annotations. This should show up well within editors like VSCode.
 

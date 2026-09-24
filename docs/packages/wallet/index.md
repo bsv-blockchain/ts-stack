@@ -4,8 +4,8 @@ title: Wallet
 kind: meta
 domain: wallet
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'wallet']
@@ -128,6 +128,14 @@ wallet interface or exposing the scalar.
 
 - Don't use wallet packages if you only need transaction building — use [@bsv/sdk](../sdk/bsv-sdk.md) directly
 - Don't use wallet-toolbox if you only need BRC-100 interface types — import from SDK instead
+
+## Backup and recovery
+
+Wallet recovery needs both key material and records/derivation metadata.
+Browser storage, remote replication and key-manager snapshots each cover only
+part of that requirement. Use the [recovery guide](../../guides/wallet-backup-recovery.md),
+[BRC-38/39 API guide](../../guides/wallet-data-portability.md) and
+[recovery drill](../../guides/wallet-recovery-drill.md) before shipping a wallet.
 
 ## Next Steps
 
