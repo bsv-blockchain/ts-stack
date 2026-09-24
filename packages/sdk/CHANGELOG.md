@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (2.8.6 candidate)
+
+- `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own BRC-42 child key (`forSelf: true`) when checking settlement output ownership. Since 2.8.0 it derived the sender-facing key, so every valid incoming BRC-29 payment was rejected with `brc29.internalize_failed` before `internalizeAction` (funds were never lost; payments stayed pending). Adds a sender/recipient round-trip test using real `ProtoWallet` key derivation. No API, wire or wallet-data migration is required.
+
 ### Added and fixed (2.8.5 candidate)
 
 - Add optional local general-message payload policy to `Peer` and `snapshotAuthMessage`; HTTP server transports can delegate payload capacity while retaining metadata, byte, signature and replay validation. Existing defaults remain unchanged.

@@ -344,7 +344,8 @@ export class Brc29RemittanceModule implements RemittanceModule<
       }
 
       const keyID = `${settlement.customInstructions.derivationPrefix} ${settlement.customInstructions.derivationSuffix}`
-      const keyRequest = { protocolID, keyID, counterparty: sender }
+      // BRC-42: the recipient derives its own child key for this sender.
+      const keyRequest = { protocolID, keyID, counterparty: sender, forSelf: true }
       const { publicKey } = validateWalletResult(
         'getPublicKey',
         await wallet.getPublicKey(keyRequest, origin),
