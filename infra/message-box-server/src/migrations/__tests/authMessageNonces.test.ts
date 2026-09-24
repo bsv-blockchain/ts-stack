@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import knexFactory, { type Knex } from 'knex'
 import {
   AuthFetch,
@@ -55,6 +56,7 @@ describe('Message Box durable HTTP authentication migration', () => {
   async function startReplica(index: number, onRequest: () => void): Promise<string> {
     const app = express()
     app.use(express.json())
+    app.use(rateLimit({ windowMs: 60_000, limit: 20 }))
     app.use(
       createAuthMiddleware({
         wallet: new CompletedProtoWallet(new PrivateKey(2)),
