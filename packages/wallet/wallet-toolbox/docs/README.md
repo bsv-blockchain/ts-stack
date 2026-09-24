@@ -2,7 +2,11 @@
 
 The documentation is split into various pages, each covering a set of related functionality. The pages are as follows:
 
-- [Examples](https://bsv-blockchain.github.io/wallet-toolbox-examples/) - Getting started and specialized examples.
+- [Backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/) — Both key material and wallet records are required.
+- [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) — Current portable data APIs and import/export limits.
+- [Recovery drill](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/) — Acceptance checklist and evidence template.
+- [Agent implementation brief](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-agent-brief/) — Source map and implementation guidance.
+- [Examples](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples) — Current workspace examples and safety instructions.
 - [Setup](./setup.md) — Classes supporting wallet setup, experimentation and customization.
 - [Wallet](./wallet.md) — Top level `Wallet` class and related APIs.
 - [Client](./client.md) — Browser deployment friendly toolbox subset.
@@ -18,7 +22,7 @@ The documentation is split into various pages, each covering a set of related fu
 
 [BRC-100](https://brc.dev/100) defines a Unified, Vendor-Neutral, Unchanging, and Open BSV Blockchain Standard Wallet-to-Application Interface which is implemented in this library within the WalletClient class. The API is laid out here as a swagger openapi document to offer a fast-track to understanding the interface which is implemented across multiple substrates. The JSON api is generally considered a developer friendly introduction to the WalletClient, where an binary equivalent ABI may be preferred for production use cases.
 
-- [Wallet API Swagger UI](https://bsv-blockchain.github.io/ts-sdk/swagger)
+- [BRC-100 wallet API](https://bsv-blockchain.github.io/ts-stack/specs/brc-100-wallet/)
 
 ## Open RPC
 
@@ -47,11 +51,13 @@ npm install @bsv/wallet-toolbox
 Here's a simple example of using the toolbox to create and fund a testnet wallet using SQLite for persistent storage:
 
 ```ts
-import { InternalizeActionArgs, PrivateKey, Utils } from '@bsv/sdk'
+import { InternalizeActionArgs, Utils } from '@bsv/sdk'
 import { Setup } from '@bsv/wallet-toolbox'
 
-const rootKeyHex = PrivateKey.fromRandom().toString()
-console.log(`MAKE A SECURE COPY OF YOUR WALLET PRIVATE ROOT KEY: ${rootKeyHex}`)
+// Test fixture only: supply a recoverable test key; never log it.
+// Production wallets use their reviewed secret-store/key-recovery integration.
+const rootKeyHex = process.env.TEST_WALLET_ROOT_KEY
+if (!rootKeyHex) throw new Error('Configure a test wallet root key first')
 
 const { wallet } = await Setup.createWalletSQLite({
   filePath: './myTestWallet.sqlite',

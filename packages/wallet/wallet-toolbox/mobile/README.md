@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Backup and recovery
+
+A BRC-100 wallet needs both recoverable keys and wallet records/derivation
+metadata. BRC-39 exports contain wallet data, not root keys or manager snapshots.
+App removal or device loss can remove locally retained secrets and state.
+Test the independent key and data recovery paths on a replacement device.
+
+Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
+[BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
+[recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+Portable helpers require a concrete local `StorageProvider`; a remote client
+is not one. Qualify the local-copy path and device memory limits before adding
+export/import UI.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for

@@ -3,8 +3,8 @@ id: choose-your-stack
 title: Choose Your Stack
 kind: meta
 version: 'n/a'
-last_updated: '2026-04-30'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: ['decision-guide']
@@ -13,6 +13,11 @@ tags: ['decision-guide']
 # Choose Your Stack
 
 Start from who controls the keys and how close you need to be to the protocol.
+
+If you run a server/agent wallet or build a wallet product, plan for both
+recoverable keys and wallet records from the start. See
+[Wallet backup and recovery](../guides/wallet-backup-recovery.md) and the
+[agent implementation brief](../guides/wallet-recovery-agent-brief.md).
 
 ```text
 Browser app using a user's wallet?

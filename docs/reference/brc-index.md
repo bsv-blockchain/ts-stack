@@ -3,8 +3,8 @@ id: brc-index
 title: 'BRC Standards Index'
 kind: reference
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: [reference, brc, standards]
@@ -21,6 +21,9 @@ All Bitcoin Request for Comments (BRC) standards referenced in ts-stack source, 
 | BRC-14  | Script Evaluation & Sighash                  | Scripts      | —                                       | `@bsv/sdk`                                                                                   |
 | BRC-29  | Peer-to-Peer Payment Protocol                | Payments     | [spec](../specs/brc-29-peer-payment.md) | `@bsv/paymail`, `@bsv/message-box-client`                                                    |
 | BRC-31  | HTTP Mutual Authentication Handshake         | Auth         | [spec](../specs/brc-31-auth.md)         | `@bsv/auth-express-middleware`, `@bsv/authsocket`                                            |
+| BRC-38 | User Wallet Data Format | Wallet | [standard](https://github.com/bitcoin-sv/BRCs/blob/master/outpoints/0038.md) | `@bsv/wallet-toolbox`; [integration guide](../guides/wallet-data-portability.md) |
+| BRC-39 | User Wallet Data Format Encryption Extension | Wallet | [standard](https://github.com/bitcoin-sv/BRCs/blob/master/outpoints/0039.md) | `@bsv/wallet-toolbox`; [recovery guide](../guides/wallet-backup-recovery.md) |
+| BRC-40 | User Wallet Data Synchronization | Wallet | [standard](https://github.com/bitcoin-sv/BRCs/blob/master/outpoints/0040.md) | `@bsv/wallet-toolbox` |
 | BRC-42  | Key Derivation Scheme (BKDS)                 | Crypto       | —                                       | `@bsv/sdk`, `@bsv/wallet-toolbox` (heavy BRC-42 vector coverage in sdk/keys + wallet/brc100) |
 | BRC-43  | Security Levels for BKDS                     | Crypto       | —                                       | `@bsv/sdk`                                                                                   |
 | BRC-48  | PushDrop Token Protocol                      | Tokens       | —                                       | `@bsv/overlay-topics`, `@bsv/btms`                                                           |
@@ -86,6 +89,15 @@ BRC-103 specifies the peer-to-peer mutual authentication protocol (AuthMessage e
 Implementations: `@bsv/auth-express-middleware`, `@bsv/authsocket`, `@bsv/sdk` (`Peer`, `Transport`)
 
 Spec: `specs/auth/brc103-mutual-auth.yaml`
+
+### BRC-38/39: Wallet data portability and encryption
+
+[BRC-38](https://github.com/bitcoin-sv/BRCs/blob/master/outpoints/0038.md)
+defines a single user's portable wallet records;
+[BRC-39](https://github.com/bitcoin-sv/BRCs/blob/master/outpoints/0039.md)
+defines their encrypted file wrapper. These cover wallet data, not root-key
+recovery. Use the [implementation guide](../guides/wallet-data-portability.md)
+and [recovery plan](../guides/wallet-backup-recovery.md) together.
 
 ### BRC-42: Key Derivation Scheme (BKDS)
 
