@@ -82,6 +82,24 @@ describe('WalletClient discovery timeout lifecycle', () => {
     expect(jest.getTimerCount()).toBe(0)
   })
 
+  it('falls back cleanly when a CWI probe throws synchronously', async () => {
+    const { listeners } = walletHost('react-native')
+    Object.defineProperty(window, 'CWI', {
+      value: {
+        getVersion: () => {
+          throw new Error('Provider closed during discovery')
+        }
+      }
+    })
+    const client = new WalletClient('auto', 'app.example')
+    const connected = client.connectToSubstrate()
+    await jest.advanceTimersByTimeAsync(10)
+    await connected
+    expect(client.substrate).toBeInstanceOf(ReactNativeWebView)
+    expect(listeners.size).toBe(0)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
   it.each<Transport>(['react-native', 'xdm'])(
     'does not impose the %s discovery deadline on subsequent user approval',
     async transport => {

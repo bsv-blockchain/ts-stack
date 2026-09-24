@@ -902,7 +902,7 @@ export default class WalletWireProcessor implements WalletWire {
 
                 // satoshis
                 resultWriter.writeVarIntNum(
-                  this.#requireInteger(action.satoshis, 'listActions satoshis', 0, 21e14)
+                  this.#requireInteger(action.satoshis, 'listActions satoshis', -21e14, 21e14)
                 )
 
                 // status
