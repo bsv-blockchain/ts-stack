@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.5",
-      "releaseType": "none",
-      "summary": "Raises HTTP client header capacity by 4x and allows BRC-105 proof headers within the increased aggregate budget. Adds local general-payload policy to Peer and snapshotAuthMessage: explicit byte budget or transport delegation, retaining legacy defaults, metadata budgets, dense byte validation, owned snapshots, signatures, session identity and replay checks.",
-      "migration": "Existing APIs and defaults remain compatible. SDK 2.8.5 adds optional AuthMessageValidationOptions; maxGeneralPayloadBytes=null delegates only general-message payload capacity to the transport. HTTP servers and edges must own transport admission. Auth middleware 2.2.8 selects that policy. HTTP client limits are separately increased: 32 KiB values, 256 KiB aggregate, 512 headers, 1 KiB names, 256 KiB certificate policy, 512 KiB response-frame overhead. No BRC100 call, wire or wallet-data migration. Published 2.8.5 is verified against protected release 36052862859 and its immutable source artifacts. Maintainer-directed patch release for the compatibility correction and its additive server configuration."
+      "releaseType": "patch",
+      "summary": "Fixes Brc29RemittanceModule.acceptSettlement rejecting every valid incoming BRC-29 payment. The recipient-side output ownership check introduced in 2.8.0 derived the expected key without forSelf: true, so it computed the key the recipient would pay to the sender instead of its own BRC-42 child key; the derived P2PKH never matched the paid output and acceptance terminated with brc29.internalize_failed before internalizeAction. The check now derives the recipient's own key. Payments are refused, never internalized to a wrong key, so no funds were lost on affected versions.",
+      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Affects callers of acceptSettlement (RemittanceManager and @bsv/message-box-client PeerPayClient acceptPayment/rejectPayment) on @bsv/sdk 2.8.0 through 2.8.5; payments that were refused remain pending in the sender's message box and can be accepted after upgrading to 2.8.6."
     },
     {
       "name": "@bsv/simple",
