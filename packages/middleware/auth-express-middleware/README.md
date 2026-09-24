@@ -8,6 +8,10 @@ verifiable certificates.
 The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
 rejects parsed bodies that cannot be represented without losing semantics.
+Version 2.2.6 also preserves bodyless authenticated requests on Express 4, whose
+JSON parser can supply an empty-object placeholder where Express 5 supplies
+`undefined`. HTTP message framing distinguishes that placeholder from a real
+JSON `{}` body, which remains signed data. Existing clients need no changes.
 
 ## Requirements
 
@@ -291,7 +295,8 @@ pnpm pack:check
 ```
 
 `pack:check` builds and validates the exact npm tarball in ESM and CommonJS
-consumer probes. Tests do not rebuild the package as a side effect.
+consumer probes, plus real authenticated requests on Express 4 and 5 with
+legacy and current SDK clients. Tests do not rebuild the package as a side effect.
 
 ## Specifications
 
