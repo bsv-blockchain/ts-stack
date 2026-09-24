@@ -420,18 +420,27 @@ export function snapshotAuthMessage(
 ): AuthMessage {
   const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
   assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
-  const isGeneral =
+  // Capture top-level descriptors once before selecting the local policy. A
+  // proxy cannot present one message type for selection and another for copy.
+  let candidate = value
+  if (
     maxGeneralPayloadBytes !== undefined &&
     value !== null &&
     typeof value === 'object' &&
-    Object.getOwnPropertyDescriptor(value, 'messageType')?.value === 'general'
-  const payloadBudget = isGeneral ? maxGeneralPayloadBytes : undefined
-  const snapshot = walkAuthData(value, true, payloadBudget)
-  assertValidAuthMessageShape(snapshot, payloadBudget)
-  // A proxy cannot change message type while descriptors are copied and thereby
-  // transfer the general-payload policy to a handshake or certificate message.
-  if (payloadBudget !== undefined && snapshot.messageType !== 'general') {
-    assertBoundedAuthData(snapshot)
+    !Array.isArray(value)
+  ) {
+    candidate = Object.defineProperties(
+      Object.create(null),
+      Object.getOwnPropertyDescriptors(value)
+    )
   }
+  const isGeneral =
+    maxGeneralPayloadBytes !== undefined &&
+    candidate !== null &&
+    typeof candidate === 'object' &&
+    Object.getOwnPropertyDescriptor(candidate, 'messageType')?.value === 'general'
+  const payloadBudget = isGeneral ? maxGeneralPayloadBytes : undefined
+  const snapshot = walkAuthData(candidate, true, payloadBudget)
+  assertValidAuthMessageShape(snapshot, payloadBudget)
   return snapshot
 }

@@ -97,26 +97,37 @@ describe('BRC-103 untrusted message validation', () => {
     ).toThrow('byte limit')
   }, 30000)
 
-  test('does not transfer a general payload exemption to a changing message type', () => {
-    let reads = 0
-    const message = new Proxy(
-      general({ initialNonce: sessionNonce, payload: Array(MAX_AUTH_MESSAGE_BYTES / 4).fill(1) }),
-      {
-        getOwnPropertyDescriptor(target, key) {
-          const descriptor = Reflect.getOwnPropertyDescriptor(target, key)
-          if (key === 'messageType') {
-            reads += 1
-            return { ...descriptor, value: reads === 1 ? 'general' : 'initialRequest' }
+  test.each(['general', 'initialRequest'])(
+    'captures a changing %s message type only once',
+    firstType => {
+      let reads = 0
+      const message = new Proxy(
+        general({ initialNonce: sessionNonce, payload: Array(MAX_AUTH_MESSAGE_BYTES / 4).fill(1) }),
+        {
+          getOwnPropertyDescriptor(target, key) {
+            const descriptor = Reflect.getOwnPropertyDescriptor(target, key)
+            if (key === 'messageType') {
+              reads += 1
+              return { ...descriptor, value: reads === 1 ? firstType : 'certificateResponse' }
+            }
+            return descriptor
           }
-          return descriptor
         }
+      )
+      if (firstType === 'general') {
+        const snapshot = snapshotAuthMessage(message, { maxGeneralPayloadBytes: null })
+        expect(snapshot.messageType).toBe('general')
+        expect(snapshot.payload).toHaveLength(MAX_AUTH_MESSAGE_BYTES / 4)
+        expect(snapshot).not.toBe(message)
+      } else {
+        expect(() => snapshotAuthMessage(message, { maxGeneralPayloadBytes: null })).toThrow(
+          'byte limit'
+        )
       }
-    )
-    expect(() => snapshotAuthMessage(message, { maxGeneralPayloadBytes: null })).toThrow(
-      'byte limit'
-    )
-    expect(reads).toBe(2)
-  }, 30000)
+      expect(reads).toBe(1)
+    },
+    30000
+  )
 
   test('a finite Peer budget rejects outgoing and incoming excess before wallet work', async () => {
     let receive!: (message: AuthMessage) => Promise<void>
