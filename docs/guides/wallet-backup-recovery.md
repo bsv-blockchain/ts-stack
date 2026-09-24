@@ -66,17 +66,22 @@ is gone.
 
 ## Choose complementary protections
 
-| Mechanism                                             | Useful for                                             | Required qualification                                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Key vault or threshold recovery                       | Recovering signing authority                           | Prove recovery without the lost device and with the stated provider/factor unavailable                                    |
-| Storage-provider replication                          | Availability and maintaining another data copy         | Monitor lag and failures; replication can propagate mistakes and deletion                                                 |
-| Versioned database backups and point-in-time recovery | Operator disaster recovery and rollback                | Use a database-supported consistent backup, preserve schema/migrations and required external stores, and test restoration |
-| Per-user BRC-39 file                                  | User-controlled data recovery and vendor/provider exit | Pair with separate key recovery; verify freshness, completeness, passphrase access and target compatibility               |
+| Mechanism                                             | Responsible party                | Useful for                                             | Required qualification                                                                                                    |
+| ----------------------------------------------------- | -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Key vault or threshold recovery                       | User or organizational custodian | Recovering signing authority                           | Prove recovery without the lost device and with the stated provider/factor unavailable                                    |
+| Storage-provider replication                          | Storage operator                 | Availability and maintaining another data copy         | Monitor lag and failures; replication can propagate mistakes and deletion                                                 |
+| Versioned database backups and point-in-time recovery | Storage operator                 | Operator disaster recovery and rollback                | Use a database-supported consistent backup, preserve schema/migrations and required external stores, and test restoration |
+| Per-user BRC-39 file                                  | User or organizational custodian | User-controlled data recovery and vendor/provider exit | Pair with separate key recovery; verify freshness, completeness, passphrase access and target compatibility               |
+
+These custody and operational roles map to [Assign responsibilities explicitly](#assign-responsibilities-explicitly)
+below. The wallet product must still provide and test the key-recovery and
+export/import flows that users rely on.
 
 Keep a retained backup outside the failure domain of the live store. For
-example, an operator may combine a managed key vault with an independent
-offline recovery copy, and database backups with versioned retention. That is
-a design pattern, not a guarantee: test the vault permissions, decryption keys,
+example, a user or organizational custodian may keep key-recovery material in
+a managed vault with an independent offline copy, while the storage operator
+maintains versioned database backups. This does not give the storage operator
+custody of the user's root key. Test the vault permissions, decryption keys,
 database restore and provider-loss scenario together. A daily backup can leave
 up to a day of new wallet records unprotected; choose and disclose a recovery
 point objective (maximum acceptable data loss) and recovery time objective
@@ -98,7 +103,7 @@ or a verified closed-database copy.
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Wallet product                   | Key recovery, profile/network selection, encrypted data export/import, backup reminders/status, product-data coverage, independent recovery instructions and a tested restore flow |
 | Storage operator                 | Consistent retained data backups, encryption and access control, retention and restore objectives, monitoring, schema compatibility and a rehearsed provider recovery plan         |
-| User or organizational custodian | Custody of the chosen recovery material and export passphrase, accessible copies, and periodic checks using the product's instructions                                             |
+| User or organizational custodian | Custody of key-recovery material, BRC-39 files and their passphrases, accessible copies, and periodic checks using the product's instructions                                      |
 | Application developer            | Durable application-specific data where applicable; clear links to the wallet's recovery controls without collecting wallet secrets                                                |
 
 For hosted storage, document whether the user can recover data when the provider
