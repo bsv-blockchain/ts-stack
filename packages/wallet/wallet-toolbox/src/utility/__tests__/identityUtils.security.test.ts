@@ -172,9 +172,23 @@ describe('identity overlay certificate verification', () => {
     } as unknown as VerifiableCertificate
 
     expect(filterCertificatesByAttributes([cert], { name: '   ' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { name: 'al', company: ' ' })).toEqual([cert])
     expect(filterCertificatesByAttributes([cert], { age: '42' })).toEqual([])
     expect(filterCertificatesByAttributes([cert], { any: 'al' })).toEqual([cert])
     expect(filterCertificatesByAttributes([cert], { any: 'zz' })).toEqual([])
     expect(filterCertificatesByAttributes([cert], { any: 'bob' })).toEqual([])
+  })
+
+  test('mirrors overlay text search for any: diacritics, phrases, exclusions, unsearchable fields', () => {
+    const jose = {
+      subject,
+      decryptedFields: { name: 'José Alice Smith', profilePhoto: 'uhrp://bob' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([jose], { any: 'jose' })).toEqual([jose])
+    expect(filterCertificatesByAttributes([jose], { any: '"Alice Smith"' })).toEqual([jose])
+    expect(filterCertificatesByAttributes([jose], { any: '"Smith Alice"' })).toEqual([])
+    expect(filterCertificatesByAttributes([jose], { any: 'alice -smith' })).toEqual([])
+    expect(filterCertificatesByAttributes([jose], { any: 'bob' })).toEqual([])
   })
 })

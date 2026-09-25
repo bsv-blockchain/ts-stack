@@ -11,7 +11,12 @@ attention to changes that materially alter behavior or extend functionality.
   all-fields `any` search as a literal field name, so no certificate matched.
   It now accepts a certificate when a decrypted field contains a search term,
   and named attributes use the overlay's fuzzy matching (`userName` stays
-  exact). Results are still bound to the query they answered.
+  exact). `any` follows the overlay's MongoDB text search: case- and
+  diacritic-insensitive, quoted phrases required, `-term` excluded, and
+  `profilePhoto`/`icon` not searched. Word stemming is not reproduced, so a
+  stem-only overlay match can still be dropped. Blank named attributes are
+  ignored, as on the overlay; a query with no usable attribute matches nothing.
+  Results are still bound to the query they answered.
 
 ## wallet-toolbox 2.14.1
 
