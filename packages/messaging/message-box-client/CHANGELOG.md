@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.5.4 candidate — require the BRC-29 acceptance fix
+
+- Raise the `@bsv/sdk` peer floor from `^2.8.0` to `^2.8.6`. SDK 2.8.0 through
+  2.8.5 derive the wrong recipient key in `Brc29RemittanceModule.acceptSettlement`,
+  so `PeerPayClient.acceptPayment()` and `rejectPayment()` fail for every valid
+  incoming payment. No source change; SDK 2.8.6 fixes acceptance.
+
 ### 2.5.3 candidate — CommonJS SDK interop and send failure codes
 
 - Fix the CommonJS build so `new MessageBoxClient()` no longer fails with
