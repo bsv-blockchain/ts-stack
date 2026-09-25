@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.6",
-      "releaseType": "none",
-      "summary": "Fixes Brc29RemittanceModule.acceptSettlement rejecting every valid incoming BRC-29 payment. The recipient-side output ownership check introduced in 2.8.0 derived the expected key without forSelf: true, so it computed the key the recipient would pay to the sender instead of its own BRC-42 child key; the derived P2PKH never matched the paid output and acceptance terminated with brc29.internalize_failed before internalizeAction. The check now derives the recipient's own key. Payments are refused, never internalized to a wrong key, so no funds were lost on affected versions.",
-      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Affects callers of acceptSettlement (RemittanceManager and @bsv/message-box-client PeerPayClient acceptPayment/rejectPayment) on @bsv/sdk 2.8.0 through 2.8.5; payments that were refused remain pending in the sender's message box and can be accepted after upgrading to 2.8.6."
+      "releaseType": "patch",
+      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered.",
+      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
     },
     {
       "name": "@bsv/simple",
@@ -216,23 +216,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.14.1",
-      "releaseType": "none",
-      "summary": "Keeps exact action-spend accounting in a shared local WeakMap instead of adding Symbol keys to public createAction results. Preserves storage service charges through permission-module response transforms and separately loaded bundles. Consumes legacy local Symbol metadata before returning permission-managed results, restoring completed and two-step binary BRC-100 responses without relaxing SDK validation.",
-      "migration": "No BRC-100 application, wire, persisted-data, BRC-39 or account-recovery migration. Upgrade the wallet host and permission manager together to 2.14.1. Hosts already removing internal metadata at their JSON bridge are unaffected by the binary response defect. A failed response from an older affected host can occur after a transaction was created; reconcile wallet history before retrying the action. Earlier provider and storage migration guidance remains in the package changelog and operator guides."
+      "releaseType": "patch",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.14.1",
-      "releaseType": "none",
-      "summary": "Keeps exact action-spend accounting in a shared local WeakMap instead of adding Symbol keys to public createAction results. Preserves storage service charges through permission-module response transforms and separately loaded bundles. Consumes legacy local Symbol metadata before returning permission-managed results, restoring completed and two-step binary BRC-100 responses without relaxing SDK validation.",
-      "migration": "No BRC-100 application, wire, persisted-data, BRC-39 or account-recovery migration. Upgrade the wallet host and permission manager together to 2.14.1. Hosts already removing internal metadata at their JSON bridge are unaffected by the binary response defect. A failed response from an older affected host can occur after a transaction was created; reconcile wallet history before retrying the action. Earlier provider and storage migration guidance remains in the package changelog and operator guides."
+      "releaseType": "patch",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.14.1",
-      "releaseType": "none",
-      "summary": "Keeps exact action-spend accounting in a shared local WeakMap instead of adding Symbol keys to public createAction results. Preserves storage service charges through permission-module response transforms and separately loaded bundles. Consumes legacy local Symbol metadata before returning permission-managed results, restoring completed and two-step binary BRC-100 responses without relaxing SDK validation.",
-      "migration": "No BRC-100 application, wire, persisted-data, BRC-39 or account-recovery migration. Upgrade the wallet host and permission manager together to 2.14.1. Hosts already removing internal metadata at their JSON bridge are unaffected by the binary response defect. A failed response from an older affected host can occur after a transaction was created; reconcile wallet history before retrying the action. Earlier provider and storage migration guidance remains in the package changelog and operator guides."
+      "releaseType": "patch",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "create-bsv-app",

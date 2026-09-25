@@ -139,4 +139,56 @@ describe('identity overlay certificate verification', () => {
       })
     ).toEqual([expected])
   })
+
+  test('treats the any attribute as an all-fields search, not a field name', () => {
+    const match = {
+      subject,
+      decryptedFields: { userName: 'Deggen', profilePhoto: 'uhrp://x' }
+    } as unknown as VerifiableCertificate
+    const unrelated = {
+      subject,
+      decryptedFields: { userName: 'Mallory', profilePhoto: 'uhrp://y' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([match, unrelated], { any: 'deggen' })).toEqual([match])
+    expect(filterCertificatesByAttributes([match], { any: 'd' })).toEqual([])
+  })
+
+  test('mirrors overlay fuzzy matching for named attributes', () => {
+    const cert = {
+      subject,
+      decryptedFields: { name: 'Alice Smith', userName: 'alice' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([cert], { name: 'ali smi' })).toEqual([cert])
+    expect(filterCertificatesByAttributes([cert], { userName: 'ali' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { name: 'bob' })).toEqual([])
+  })
+
+  test('rejects blank, short, and non-string attribute matches', () => {
+    const cert = {
+      subject,
+      decryptedFields: { name: 'Al', age: 42 }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([cert], { name: '   ' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { name: 'al', company: ' ' })).toEqual([cert])
+    expect(filterCertificatesByAttributes([cert], { age: '42' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { any: 'al' })).toEqual([cert])
+    expect(filterCertificatesByAttributes([cert], { any: 'zz' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { any: 'bob' })).toEqual([])
+  })
+
+  test('mirrors overlay text search for any: diacritics, phrases, exclusions, unsearchable fields', () => {
+    const jose = {
+      subject,
+      decryptedFields: { name: 'José Alice Smith', profilePhoto: 'uhrp://bob' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([jose], { any: 'jose' })).toEqual([jose])
+    expect(filterCertificatesByAttributes([jose], { any: '"Alice Smith"' })).toEqual([jose])
+    expect(filterCertificatesByAttributes([jose], { any: '"Smith Alice"' })).toEqual([])
+    expect(filterCertificatesByAttributes([jose], { any: 'alice -smith' })).toEqual([])
+    expect(filterCertificatesByAttributes([jose], { any: 'bob' })).toEqual([])
+  })
 })

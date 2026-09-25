@@ -117,8 +117,65 @@ export interface ExtendedVerifiableCertificate extends IdentityCertificate {
   publiclyRevealedKeyring: Record<string, Base64String>
 }
 
-function identityAttributeMatches(actual: unknown, expected: string): boolean {
-  return typeof actual === 'string' && (actual === expected || actual.toLowerCase() === expected.toLowerCase())
+function normalizeIdentitySearch(input: string): string {
+  return input.trim().replaceAll(/\s+/g, ' ')
+}
+
+/** Mirrors the identity overlay's fuzzy attribute regex (tokens in order, case-insensitive). */
+function identityFuzzyMatches(actual: string, expected: string): boolean {
+  const normalized = normalizeIdentitySearch(expected)
+  const pattern = normalized
+    .split(' ')
+    .map(token => token.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
+    .join('.*')
+  return new RegExp(pattern, 'i').test(actual)
+}
+
+function identityAttributeMatches(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  // The overlay matches userName exactly and every other field fuzzily.
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+/** Case- and diacritic-insensitive form used by the overlay's MongoDB text index. */
+function foldIdentityText(input: string): string {
+  return input.normalize('NFD').replaceAll(/\p{Mn}/gu, '').toLowerCase()
+}
+
+/** The overlay indexes every certificate field except these in searchableAttributes. */
+const UNSEARCHABLE_IDENTITY_FIELDS = new Set(['profilePhoto', 'icon'])
+
+/**
+ * Mirrors MongoDB `$text` search over the overlay's searchableAttributes: every quoted
+ * phrase must appear, no `-term` may appear, and otherwise at least one term must appear.
+ * Word stemming is not reproduced.
+ */
+function identityTextMatches(searchable: string, search: string): boolean {
+  const text = foldIdentityText(searchable)
+  const query = foldIdentityText(search)
+  const phrases = [...query.matchAll(/"([^"]*)"/g)].map(match => normalizeIdentitySearch(match[1])).filter(Boolean)
+  const words = query.replaceAll(/"[^"]*"/g, ' ').split(/\s+/).filter(Boolean)
+  const excluded = words.filter(word => word.startsWith('-') && word.length > 1).map(word => word.slice(1))
+  const terms = words.filter(word => !word.startsWith('-'))
+  if (excluded.some(word => text.includes(word))) return false
+  if (phrases.length > 0) return phrases.every(phrase => text.includes(phrase))
+  return terms.some(term => text.includes(term))
+}
+
+/**
+ * `any` is the overlay's all-fields search, not a field name. Accept a certificate
+ * when its searchable fields satisfy the same search the overlay ran.
+ */
+function identityAnyMatches(fields: Record<string, unknown>, expected: string): boolean {
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const searchable = Object.entries(fields)
+    .filter(([key, value]) => !UNSEARCHABLE_IDENTITY_FIELDS.has(key) && typeof value === 'string')
+    .map(([, value]) => value as string)
+    .join(' ')
+  if (normalized.length === 2) return identityFuzzyMatches(searchable, normalized)
+  return identityTextMatches(searchable, normalized)
 }
 
 /** Re-bind authenticated certificates to the identity lookup they answered. */
@@ -137,13 +194,15 @@ export function filterCertificatesByAttributes(
   certificates: VerifiableCertificate[],
   attributes: Record<string, string>
 ): VerifiableCertificate[] {
-  const expected = Object.entries(attributes)
+  // The overlay ignores blank named attributes; a query with no usable attribute matches nothing.
+  const expected = Object.entries(attributes).filter(([, value]) => normalizeIdentitySearch(value).length > 0)
+  if (!('any' in attributes) && expected.length === 0) return []
   return certificates.filter(certificate => {
     const fields = certificate.decryptedFields
     if (fields == null || typeof fields !== 'object' || Array.isArray(fields)) return false
-    return expected.every(([fieldName, value]) =>
-      identityAttributeMatches((fields as Record<string, unknown>)[fieldName], value)
-    )
+    const record = fields as Record<string, unknown>
+    if ('any' in attributes) return identityAnyMatches(record, attributes.any)
+    return expected.every(([fieldName, value]) => identityAttributeMatches(fieldName, record[fieldName], value))
   })
 }
 

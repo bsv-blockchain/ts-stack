@@ -1268,6 +1268,64 @@ describe('wallet result trust boundary', () => {
     ).toThrow('requested public attribute')
   })
 
+  it('binds discoverByAttributes results with the identity overlay matching contract', () => {
+    const discovered = (decryptedFields: Record<string, string>): unknown => ({
+      totalCertificates: 1,
+      certificates: [
+        {
+          ...CERTIFICATE,
+          certifierInfo: {
+            name: 'Certifier',
+            iconUrl: 'https://example.com/icon.png',
+            description: 'Trusted certifier',
+            trust: 1
+          },
+          publiclyRevealedKeyring: {},
+          decryptedFields
+        }
+      ]
+    })
+    const accepts = (fields: Record<string, string>, attributes: Record<string, unknown>): void => {
+      expect(() =>
+        validateWalletResult('discoverByAttributes', discovered(fields), { attributes })
+      ).not.toThrow()
+    }
+    const rejects = (
+      fields: Record<string, string>,
+      attributes: Record<string, unknown>,
+      message: string
+    ): void => {
+      expect(() =>
+        validateWalletResult('discoverByAttributes', discovered(fields), { attributes })
+      ).toThrow(message)
+    }
+    const person = { name: 'José Alice Smith', userName: 'deggen', profilePhoto: 'uhrp://bob' }
+
+    accepts(person, { any: 'deggen' })
+    accepts(person, { any: 'jose' })
+    accepts(person, { any: 'al' })
+    accepts(person, { any: '"Alice Smith"' })
+    accepts(person, { any: '"" nobody alice' })
+    accepts(person, { any: 'alice - nobody' })
+    rejects(person, { any: '"Smith Alice"' }, 'requested any attribute')
+    rejects(person, { any: 'alice -smith' }, 'requested any attribute')
+    rejects(person, { any: 'bob' }, 'requested any attribute')
+    rejects(person, { any: 'zz' }, 'requested any attribute')
+    rejects(person, { any: 'd' }, 'requested any attribute')
+    rejects(person, { any: 7 }, 'requested any attribute')
+
+    accepts(person, { name: 'ali smi' })
+    accepts(person, { name: 'ali', company: ' ' })
+    accepts(person, { userName: ' deggen ' })
+    rejects(person, { userName: 'deg' }, 'requested public attribute')
+    rejects(person, { city: 'London' }, 'requested public attribute')
+    rejects(person, { name: '   ' }, 'usable requested attribute')
+    rejects(person, { name: 7 }, 'request.attributes.name')
+
+    // Without a request record there is no lookup to bind to (unchanged behavior).
+    expect(() => validateWalletResult('discoverByAttributes', discovered(person))).not.toThrow()
+  })
+
   it('binds direct acquisition and returned proof certificates to the exact request', () => {
     const directRequest = {
       acquisitionProtocol: 'direct',

@@ -42,6 +42,11 @@ const intrinsicRegExpExec = RegExp.prototype.exec
 const intrinsicRegExpTest = RegExp.prototype.test
 const intrinsicStringSplit = String.prototype.split
 const intrinsicStringToLowerCase = String.prototype.toLowerCase
+const intrinsicStringTrim = String.prototype.trim
+const intrinsicStringReplace = String.prototype.replace
+const intrinsicStringNormalize = String.prototype.normalize
+const intrinsicStringIndexOf = String.prototype.indexOf
+const IntrinsicRegExp = RegExp
 const intrinsicURLProtocolGetter = intrinsicObjectGetOwnPropertyDescriptor(
   URL.prototype,
   'protocol'
@@ -1450,7 +1455,7 @@ function stringRecord(
   call: string,
   field: string,
   encodedValues = false
-): UnknownRecord {
+): Record<string, string> {
   const values = record(value, call, field)
   const keys = intrinsicObjectKeys(values)
   for (let index = 0; index < keys.length; index++) {
@@ -1463,7 +1468,8 @@ function stringRecord(
     if (encodedValues) base64(item, call, `${field}.${key}`)
     else string(item, call, `${field}.${key}`)
   }
-  return values
+  // Every value was validated as a string above.
+  return values as Record<string, string>
 }
 
 function validateCertificate(value: unknown, call: string, field: string): UnknownRecord {
@@ -1566,12 +1572,131 @@ function sameString(actual: unknown, expected: unknown): boolean {
   )
 }
 
-function sameIdentityAttribute(actual: unknown, expected: unknown): boolean {
-  return (
-    typeof actual === 'string' &&
-    typeof expected === 'string' &&
-    (actual === expected || lower(actual) === lower(expected))
-  )
+function normalizeIdentitySearch(value: string): string {
+  const collapsed = intrinsicApply(intrinsicStringReplace, value, [/\s+/g, ' ']) as string
+  return intrinsicApply(intrinsicStringTrim, collapsed, []) as string
+}
+
+function foldIdentityText(value: string): string {
+  const decomposed = intrinsicApply(intrinsicStringNormalize, value, ['NFD']) as string
+  return lower(intrinsicApply(intrinsicStringReplace, decomposed, [/\p{Mn}/gu, '']) as string)
+}
+
+function containsText(haystack: string, needle: string): boolean {
+  return (intrinsicApply(intrinsicStringIndexOf, haystack, [needle]) as number) !== -1
+}
+
+/** Mirrors the identity overlay's fuzzy attribute regex (tokens in order, case-insensitive). */
+function identityFuzzyMatches(actual: string, expected: string): boolean {
+  const escaped = intrinsicApply(intrinsicStringReplace, normalizeIdentitySearch(expected), [
+    /[.*+?^${}()|[\]\\]/g,
+    String.raw`\$&`
+  ]) as string
+  const pattern = intrinsicApply(intrinsicStringReplace, escaped, [/ /g, '.*']) as string
+  return regexTest(new IntrinsicRegExp(pattern, 'i'), actual)
+}
+
+/** Every quoted phrase in the query appears; undefined when the query has no phrase. */
+function identityPhrasesMatch(text: string, query: string): boolean | undefined {
+  const phrasePattern = /"([^"]*)"/g
+  let sawPhrase = false
+  let match = regexExec(phrasePattern, query)
+  while (match != null) {
+    const phrase = normalizeIdentitySearch(match[1])
+    if (phrase.length > 0) {
+      if (!containsText(text, phrase)) return false
+      sawPhrase = true
+    }
+    match = regexExec(phrasePattern, query)
+  }
+  return sawPhrase ? true : undefined
+}
+
+/** Whether any word matched by `pattern` (capture group 1) appears in the text. */
+function identityWordPresent(text: string, words: string, pattern: RegExp): boolean {
+  let match = regexExec(pattern, words)
+  while (match != null) {
+    if (containsText(text, match[1])) return true
+    match = regexExec(pattern, words)
+  }
+  return false
+}
+
+/**
+ * Mirrors MongoDB `$text` over the overlay's searchable attributes: every quoted phrase
+ * must appear, no `-term` may appear, and otherwise one term must appear. Word stemming
+ * is not reproduced.
+ */
+function identityTextMatches(searchable: string, search: string): boolean {
+  const text = foldIdentityText(searchable)
+  const query = foldIdentityText(search)
+  const words = intrinsicApply(intrinsicStringReplace, query, [/"[^"]*"/g, ' ']) as string
+  if (identityWordPresent(text, words, /(?:^|\s)-(\S+)/g)) return false
+  return identityPhrasesMatch(text, query) ?? identityWordPresent(text, words, /(?:^|\s)([^\s-]\S*)/g)
+}
+
+/** The overlay excludes these fields from its all-fields `any` index. */
+function isSearchableIdentityField(fieldName: string): boolean {
+  return fieldName !== 'profilePhoto' && fieldName !== 'icon'
+}
+
+/** `any` is the overlay's all-fields search, not a field name. */
+function identityAnyMatches(decryptedFields: Record<string, string>, expected: unknown): boolean {
+  if (typeof expected !== 'string') return false
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const fieldNames = intrinsicObjectKeys(decryptedFields)
+  let searchable = ''
+  let index = 0
+  while (index < fieldNames.length) {
+    const fieldName = fieldNames[index++]
+    if (!isSearchableIdentityField(fieldName)) continue
+    const value = decryptedFields[fieldName]
+    searchable = searchable.length > 0 ? `${searchable} ${value}` : value
+  }
+  if (normalized.length === 2) return identityFuzzyMatches(searchable, normalized)
+  return identityTextMatches(searchable, normalized)
+}
+
+/** The overlay matches userName exactly and every other named field fuzzily. */
+function sameIdentityAttribute(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+/** Bind a discovered certificate to the attribute lookup it answered, as the overlay matched it. */
+function bindDiscoveredAttributes(
+  call: string,
+  field: string,
+  decryptedFields: Record<string, string>,
+  requested: unknown
+): void {
+  const requestedAttributes = requestRecord(requested)
+  if (requestedAttributes == null) return
+  if (hasOwn(requestedAttributes, 'any')) {
+    if (!identityAnyMatches(decryptedFields, requestedAttributes.any)) {
+      invalid(call, `${field}.decryptedFields`, 'a match for the requested any attribute')
+    }
+    return
+  }
+  // The overlay ignores blank named attributes; with none usable it matches nothing.
+  const fieldNames = intrinsicObjectKeys(requestedAttributes)
+  let usable = 0
+  let index = 0
+  while (index < fieldNames.length) {
+    const fieldName = fieldNames[index++]
+    const expectedValue = requestedAttributes[fieldName]
+    if (typeof expectedValue !== 'string') {
+      invalid(call, `request.attributes.${fieldName}`, 'a string')
+    }
+    if (normalizeIdentitySearch(expectedValue).length === 0) continue
+    usable++
+    if (!sameIdentityAttribute(fieldName, decryptedFields[fieldName], expectedValue)) {
+      invalid(call, `${field}.decryptedFields.${fieldName}`, 'the requested public attribute')
+    }
+  }
+  if (usable === 0) invalid(call, `${field}.decryptedFields`, 'a usable requested attribute')
 }
 
 function sameOutpoint(actual: unknown, expected: unknown, call: string, field: string): boolean {
@@ -1706,21 +1831,7 @@ function validateCertificatesResult(result: UnknownRecord, call: string, request
         `${field}.decryptedFields`
       )
       if (call === 'discoverByAttributes') {
-        const requestedAttributes = requestRecord(requestArgs?.attributes)
-        if (requestedAttributes != null) {
-          const fieldNames = intrinsicObjectKeys(requestedAttributes)
-          for (let index = 0; index < fieldNames.length; index++) {
-            const fieldName = fieldNames[index]
-            const expectedValue = requestedAttributes[fieldName]
-            if (!sameIdentityAttribute(decryptedFields[fieldName], expectedValue)) {
-              invalid(
-                call,
-                `${field}.decryptedFields.${fieldName}`,
-                'the requested public attribute'
-              )
-            }
-          }
-        }
+        bindDiscoveredAttributes(call, field, decryptedFields, requestArgs?.attributes)
       }
     }
   }
