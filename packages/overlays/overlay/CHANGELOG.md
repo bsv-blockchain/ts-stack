@@ -20,6 +20,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Adds an optional `Engine.onTopicFailed` reporter and the exported
+  `TopicFailureReporter` type. `submit` already records a per-topic validation
+  failure in `failedTopics` and returns `{ outputsToAdmit: [], coinsToRetain: [] }`
+  for that topic, which is the same STEAK as a duplicate or an empty admission;
+  the reporter receives the topic, the error, the txid and the submission mode
+  so a host can distinguish them. Unset by default, invoked inside a try/catch,
+  and no constructor parameter is added. No migration is required.
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
 - Adds `storageHasAdmission` for the optional `Storage.admission` field.
 - Adds an opt-in MongoDB schema, payload-publication, reference-guard, and

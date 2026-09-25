@@ -125,9 +125,9 @@
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.6.1",
-      "releaseType": "none",
-      "summary": "Hardens overlay persistence and network boundaries with topical-output uniqueness, spent-by tracking, conditional unspent updates, serialized submission, canonical reorganization checks, authenticated discovery advertisements, and bounded DNS-pinned GASP, BASM, SHIP, and related outbound processing.",
-      "migration": "Stop writes and take coordinated SQL and lookup-store backups before running every new Knex migration. Preflight and reconcile exact duplicate (txid, outputIndex, topic) output keys and (txid, topic) applied-transaction keys from transaction, topic, and lookup evidence; the uniqueness migration intentionally fails rather than deleting security state. Apply topical uniqueness before the additive spentBy column and verify both before serving writes. Prefer roll-forward: older versions do not know these migration names, so an image-only rollback can fail migration-list validation. To restore an older version, keep writes stopped and either use the new migration source to reverse spentBy and topical uniqueness in reverse order after exporting and reconciling every spent/spentBy association, or restore coordinated pre-migration SQL and lookup-store backups. Configure canonical header resolution and public HTTPS endpoints for production network paths; custom storage, topic, discovery, and transport adapters must satisfy the new validation and resource bounds. External topic indexes are not made globally atomic by SQL submission serialization, so retain idempotent compensation for side effects outside the overlay database. Valid canonical overlay wire shapes remain supported."
+      "releaseType": "minor",
+      "summary": "Adds an optional Engine.onTopicFailed reporter and the exported TopicFailureReporter type so a host can observe each per-topic submit validation failure, which the STEAK otherwise reports identically to a duplicate or an empty admission. The reporter is unset by default, called inside a try/catch, and adds no constructor parameter.",
+      "migration": "No consumer migration is required. Existing Engine construction, STEAK shapes, wire formats, and storage behavior are unchanged; set engine.onTopicFailed only where per-topic failure observability is wanted."
     },
     {
       "name": "@bsv/overlay-discovery-services",

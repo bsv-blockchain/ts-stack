@@ -318,7 +318,7 @@
     "@bsv/payment-express-middleware": "2.1.8",
     "@bsv/teranode-listener": "1.1.6",
     "@bsv/gasp": "1.3.7",
-    "@bsv/overlay": "2.6.1",
+    "@bsv/overlay": "2.7.0",
     "@bsv/overlay-discovery-services": "2.2.5",
     "@bsv/overlay-express": "2.7.2",
     "@bsv/overlay-topics": "1.9.0",
