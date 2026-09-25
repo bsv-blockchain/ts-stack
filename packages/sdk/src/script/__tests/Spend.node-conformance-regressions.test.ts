@@ -3,6 +3,8 @@ import ScriptEvaluationError from '../ScriptEvaluationError'
 import ScriptResourceLimitError from '../ScriptResourceLimitError'
 import Spend from '../Spend'
 import Transaction from '../../transaction/Transaction'
+import TransactionSignature from '../../primitives/TransactionSignature'
+import Script from '../Script'
 
 // Minimal synthetic transactions for node v1.2.2 conformance. These assert
 // node v1.2.2 block/relay verdicts, not error-message wording.
@@ -290,6 +292,37 @@ describe('node script conformance regressions', () => {
     const vector = vectors.find(item => item.name === '13: arith-00163')!
     const lockHex = vector.lockHex.replace('98010087', '99010087')
     expect(createSpend(vector.txHex, lockHex, vector.coinHeight).validateJavaScript()).toBe(true)
+  })
+
+  it('rejects a numeric left shift count above the node int32 bound', () => {
+    const vector = vectors.find(item => item.name === '12: gen-00835')!
+    const lockHex = vector.lockHex.replace('b7', 'b6')
+    expect(() =>
+      createSpend(vector.txHex, lockHex, vector.coinHeight).validateJavaScript()
+    ).toThrow(ScriptEvaluationError)
+  })
+
+  it.each([
+    ['complete PUSHDATA2', '4d0100aa', '044d0100aa'],
+    ['complete PUSHDATA4', '4e01000000aa', '064e01000000aa'],
+    ['truncated PUSHDATA4 length', '6a4e050000', '056a4e'],
+    ['truncated PUSHDATA4 body', '6a4e05000000aabb', '086a4e05000000']
+  ])('serializes the original digest script walk for %s', (_name, scriptHex, expectedHex) => {
+    const preimage = TransactionSignature.formatOTDA({
+      sourceTXID: '00'.repeat(32),
+      sourceOutputIndex: 0,
+      sourceSatoshis: 1000,
+      transactionVersion: 2,
+      otherInputs: [],
+      outputs: [],
+      inputIndex: 0,
+      subscript: Script.fromHex(scriptHex),
+      inputSequence: 0xffffffff,
+      lockTime: 0,
+      scope: TransactionSignature.SIGHASH_NONE | TransactionSignature.SIGHASH_ANYONECANPAY
+    })
+    // Version, input count, outpoint precede this CompactSize and script body.
+    expect(Buffer.from(preimage.slice(41, -13)).toString('hex')).toBe(expectedHex)
   })
 
   it('reports local resource exhaustion for the largest node-representable NUM2BIN size', () => {
