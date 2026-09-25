@@ -6,10 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.2
 
+- Match complete English text tokens and default stopwords consistently with SDK 2.8.7; preserve quoted and excluded phrases. Scan ordered literal tokens without a combined wildcard expression. Direct filtering ignores inherited attributes and rejects non-string requested values without coercion.
+
 - `discoverByAttributes` no longer drops every overlay result for `any`
   searches. `filterCertificatesByAttributes` treated the identity overlay's
   all-fields `any` search as a literal field name, so no certificate matched.
-  It now accepts a certificate when a decrypted field contains a search term,
+  It now accepts a certificate when searchable decrypted fields satisfy the requested text terms,
   and named attributes use the overlay's fuzzy matching (`userName` stays
   exact). `any` follows the overlay's MongoDB text search: case- and
   diacritic-insensitive, quoted phrases required, `-term` excluded, and

@@ -87,6 +87,28 @@ parser catches and rejects that candidate. C01 does not claim an invalid
 certificate can bypass this throw. There is no existing topic contract for an
 arbitrary `lockingPublicKey` equality rule, so none is added.
 
+## Search binding
+
+SDK 2.8.7 and Toolbox 2.14.2 interpret the `any` key as a search across public
+fields other than `profilePhoto` and `icon`. Two-character searches retain the
+overlay's fuzzy behavior. Longer searches compare complete English tokens,
+ignore the default English stopwords, require each quoted phrase and at least
+one positive indexed term, and exclude requested words or phrases. Punctuation
+separates tokens; ASCII apostrophes remain part of English names. Text matching
+is case- and diacritic-insensitive. Named attributes retain ordered literal
+matching on one line, and `userName` remains exact after query whitespace
+normalization. Empty optional named fields are ignored.
+
+This follows the ordinary word/phrase behavior documented for
+[MongoDB text queries](https://www.mongodb.com/docs/manual/reference/operator/query/text/),
+with explicit limits: language-specific suffix stemming and custom index
+languages are not implemented in this client-side binding. A stem-only overlay
+match can still be omitted. Use a complete public name/username token or the
+named-field search when that distinction matters. This is not a claim of full
+MongoDB linguistic equivalence, and the release does not change the server's
+index or lookup protocol. Local MongoDB 8.2.6 characterization covers the
+ordinary complete-word, punctuation, phrase, exclusion and stopword cases.
+
 ## Cache and contact boundaries
 
 The wallet keeps three distinct boundaries:

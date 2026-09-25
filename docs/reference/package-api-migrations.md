@@ -359,7 +359,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/sdk/bsv-sdk.md](../packages/sdk/bsv-sdk.md)
 - Source: [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
-- Release note: Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered.
+- Release note: Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.
 - Migration: None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2.
 
 | Public subpath                     | Runtime target(s)                                                                                          | Declaration target(s)                                                                                            |
@@ -523,7 +523,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.
+- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.
 - Migration: No consumer, wire, or database migration is required.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
@@ -537,7 +537,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.
+- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.
 - Migration: No consumer, wire, or database migration is required.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
@@ -549,7 +549,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.
+- Release note: Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.
 - Migration: No consumer, wire, or database migration is required.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |

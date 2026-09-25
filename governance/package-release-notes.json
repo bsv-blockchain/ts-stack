@@ -168,7 +168,7 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.6",
       "releaseType": "patch",
-      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered.",
+      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
     },
     {
@@ -217,21 +217,21 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.14.1",
       "releaseType": "patch",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.14.1",
       "releaseType": "patch",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.14.1",
       "releaseType": "patch",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching.",
+      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
