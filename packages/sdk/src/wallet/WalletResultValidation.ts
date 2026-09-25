@@ -47,6 +47,7 @@ const intrinsicStringReplace = String.prototype.replace
 const intrinsicStringNormalize = String.prototype.normalize
 const intrinsicStringIndexOf = String.prototype.indexOf
 const intrinsicStringSlice = String.prototype.slice
+const intrinsicStringStartsWith = String.prototype.startsWith
 const IntrinsicRegExp = RegExp
 const intrinsicURLProtocolGetter = intrinsicObjectGetOwnPropertyDescriptor(
   URL.prototype,
@@ -1591,7 +1592,8 @@ function containsText(haystack: string, needle: string): boolean {
 function identityFuzzyMatches(actual: string, expected: string): boolean {
   const tokens = split(normalizeIdentitySearch(expected), ' ')
   const lines = intrinsicApply(intrinsicStringSplit, actual, [/\r\n?|\n|\u2028|\u2029/]) as string[]
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
     let cursor = 0
     let tokenIndex = 0
     while (tokenIndex < tokens.length) {
@@ -1607,6 +1609,7 @@ function identityFuzzyMatches(actual: string, expected: string): boolean {
       tokenIndex++
     }
     if (tokenIndex === tokens.length) return true
+    lineIndex++
   }
   return false
 }
@@ -1630,8 +1633,9 @@ function identityTextTokens(text: string): string[] {
 }
 
 function identityContainsToken(tokens: string[], expected: string): boolean {
-  for (let index = 0; index < tokens.length; index++) {
-    if (tokens[index] === expected) return true
+  let index = 0
+  while (index < tokens.length) {
+    if (tokens[index++] === expected) return true
   }
   return false
 }
@@ -1643,7 +1647,8 @@ function identityQueryPartMatch(
   raw: string,
   phrase: string | undefined
 ): -1 | 0 | 1 {
-  const negative = raw[0] === '-' && raw.length > 1
+  const negative =
+    (intrinsicApply(intrinsicStringStartsWith, raw, ['-']) as boolean) && raw.length > 1
   if (phrase !== undefined) {
     const present = containsText(text, phrase)
     if (negative ? present : !present) return -1
@@ -1653,8 +1658,9 @@ function identityQueryPartMatch(
     phrase ?? (negative ? (intrinsicApply(intrinsicStringSlice, raw, [1]) as string) : raw)
   )
   let matched = false
-  for (let index = 0; index < terms.length; index++) {
-    const present = identityContainsToken(tokens, terms[index])
+  let index = 0
+  while (index < terms.length) {
+    const present = identityContainsToken(tokens, terms[index++])
     if (negative && present) return -1
     matched = matched || present
   }

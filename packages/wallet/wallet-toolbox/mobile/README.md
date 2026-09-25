@@ -187,7 +187,7 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
 
-The reviewed 2.14.2 identity correction measures Metro **2,379,919 / 612,262 /
+The reviewed 2.14.2 identity candidate `b088c1bef` measures Metro **2,379,919 / 612,262 /
 462,261** bytes and Hermes **4,629,563 / 1,943,675 / 1,510,174** bytes
 (raw/gzip/Brotli). Compared with the preceding unpublished 2.14.2 candidate,
 Metro gzip grows by 3,553 bytes (0.58%). This is the required SDK/Toolbox

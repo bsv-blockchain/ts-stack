@@ -155,7 +155,7 @@ function identityTextTokens(text: string): string[] {
 
 /** -1 rejects the result; 1 records a positive indexed term; 0 is neutral. */
 function identityQueryPartMatch(tokens: string[], text: string, raw: string, phrase: string | undefined): -1 | 0 | 1 {
-  const negative = raw[0] === '-' && raw.length > 1
+  const negative = raw.startsWith('-') && raw.length > 1
   if (phrase !== undefined) {
     const present = containsText(text, phrase)
     if (negative ? present : !present) return -1
