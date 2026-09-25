@@ -125,9 +125,9 @@
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.6.2",
-      "releaseType": "none",
-      "summary": "Maps SQL NULL output block heights to absent confirmation metadata without inventing a height or changing stored state. Strict engine height validation remains unchanged.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "minor",
+      "summary": "Adds an optional Engine.onTopicFailed reporter and the exported TopicFailureReporter type so a host can observe each per-topic submit validation failure, which the STEAK otherwise reports identically to a duplicate or an empty admission. The reporter is unset by default, called inside a try/catch, and adds no constructor parameter.",
+      "migration": "No consumer migration is required. Existing Engine construction, STEAK shapes, wire formats, and storage behavior are unchanged; set engine.onTopicFailed only where per-topic failure observability is wanted."
     },
     {
       "name": "@bsv/overlay-discovery-services",
