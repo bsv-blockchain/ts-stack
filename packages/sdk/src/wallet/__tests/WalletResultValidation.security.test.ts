@@ -1321,6 +1321,9 @@ describe('wallet result trust boundary', () => {
     rejects(person, { city: 'London' }, 'requested public attribute')
     rejects(person, { name: '   ' }, 'usable requested attribute')
     rejects(person, { name: 7 }, 'request.attributes.name')
+
+    // Without a request record there is no lookup to bind to (unchanged behavior).
+    expect(() => validateWalletResult('discoverByAttributes', discovered(person))).not.toThrow()
   })
 
   it('binds direct acquisition and returned proof certificates to the exact request', () => {
