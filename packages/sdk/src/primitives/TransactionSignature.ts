@@ -51,6 +51,35 @@ interface TransactionSignatureFormatParams {
 const EMPTY_SCRIPT = new Uint8Array(0)
 const ZERO_HASH = Object.freeze(Array.from({ length: 32 }, () => 0))
 
+function originalPushLength(
+  source: number[],
+  position: number,
+  opcode: number
+): { length: number; nextPosition: number } | undefined {
+  if (opcode > 0 && opcode < OP.OP_PUSHDATA1) return { length: opcode, nextPosition: position }
+  if (opcode === OP.OP_PUSHDATA1) {
+    if (source.length - position < 1) return undefined
+    return { length: source[position], nextPosition: position + 1 }
+  }
+  if (opcode === OP.OP_PUSHDATA2) {
+    if (source.length - position < 2) return undefined
+    return { length: source[position] | (source[position + 1] << 8), nextPosition: position + 2 }
+  }
+  if (opcode === OP.OP_PUSHDATA4) {
+    if (source.length - position < 4) return undefined
+    return {
+      length:
+        (source[position] |
+          (source[position + 1] << 8) |
+          (source[position + 2] << 16) |
+          (source[position + 3] << 24)) >>>
+        0,
+      nextPosition: position + 4
+    }
+  }
+  return { length: 0, nextPosition: position }
+}
+
 /** Match the node's original-digest script walk, including a failed final push. */
 function originalScriptCode(script: Script): { bytes: number[]; encodedLength: number } {
   const source = script.toBinary()
@@ -65,28 +94,11 @@ function originalScriptCode(script: Script): { bytes: number[]; encodedLength: n
   while (position < source.length) {
     const opcodeStart = position
     const opcode = source[position++]
-    let pushLength = 0
-    if (opcode > 0 && opcode < OP.OP_PUSHDATA1) {
-      pushLength = opcode
-    } else if (opcode === OP.OP_PUSHDATA1) {
-      if (source.length - position < 1) break
-      pushLength = source[position++]
-    } else if (opcode === OP.OP_PUSHDATA2) {
-      if (source.length - position < 2) break
-      pushLength = source[position] | (source[position + 1] << 8)
-      position += 2
-    } else if (opcode === OP.OP_PUSHDATA4) {
-      if (source.length - position < 4) break
-      pushLength =
-        (source[position] |
-          (source[position + 1] << 8) |
-          (source[position + 2] << 16) |
-          (source[position + 3] << 24)) >>>
-        0
-      position += 4
-    }
-    if (source.length - position < pushLength) break
-    position += pushLength
+    const push = originalPushLength(source, position, opcode)
+    if (push == null) break
+    position = push.nextPosition
+    if (source.length - position < push.length) break
+    position += push.length
     if (opcode === OP.OP_CODESEPARATOR) {
       appendSegment(opcodeStart)
       segmentStart = position

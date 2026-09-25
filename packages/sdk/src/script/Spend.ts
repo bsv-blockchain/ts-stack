@@ -889,6 +889,49 @@ export default class Spend {
     }
   }
 
+  #verifyCheckLockTime(): void {
+    if (!this.#hasFlag('CHECKLOCKTIMEVERIFY') || this.#isAfterGenesis()) return
+    this.#requireStackItems(1, 'OP_CHECKLOCKTIMEVERIFY requires one stack item.')
+    const required = this.#readLockTimeOperand(this.#stackTop())
+    if (required < 0n) this.#scriptEvaluationError('Negative lock time.')
+    const requiredIsHeight = required < BigInt(locktimeThreshold)
+    const transactionIsHeight = this.lockTime < locktimeThreshold
+    if (
+      requiredIsHeight !== transactionIsHeight ||
+      required > BigInt(this.lockTime) ||
+      this.inputSequence === 0xffffffff
+    ) {
+      this.#scriptEvaluationError('OP_CHECKLOCKTIMEVERIFY lock time is unsatisfied.')
+    }
+  }
+
+  #verifyCheckSequence(): void {
+    if (!this.#hasFlag('CHECKSEQUENCEVERIFY') || this.#isAfterGenesis()) return
+    this.#requireStackItems(
+      1,
+      'OP_CHECKSEQUENCEVERIFY requires at least one item to be on the stack.'
+    )
+    // BIP112 permits five bytes so the disable flag can be represented.
+    const sequenceLock = this.#readLockTimeOperand(this.#stackTop())
+    if (sequenceLock < 0n) {
+      this.#scriptEvaluationError('OP_CHECKSEQUENCEVERIFY requires a non-negative lock time.')
+    }
+    if ((sequenceLock & BigInt(sequenceLocktimeDisableFlag)) !== 0n) return
+    const sequence = BigInt(this.inputSequence >>> 0)
+    const mask = BigInt(sequenceLocktimeTypeFlag | sequenceLocktimeMask)
+    const required = sequenceLock & mask
+    const actual = sequence & mask
+    if (
+      this.transactionVersion >>> 0 < 2 ||
+      (sequence & BigInt(sequenceLocktimeDisableFlag)) !== 0n ||
+      (required & BigInt(sequenceLocktimeTypeFlag)) !==
+        (actual & BigInt(sequenceLocktimeTypeFlag)) ||
+      required > actual
+    ) {
+      this.#scriptEvaluationError('OP_CHECKSEQUENCEVERIFY lock time is unsatisfied.')
+    }
+  }
+
   #advanceAfterStep(currentScript: Script): void {
     if (this.returningFromConditional && this.ifStack.length === 0) {
       this.programCounter = currentScript.chunks.length
@@ -1086,51 +1129,10 @@ export default class Spend {
         case OP.OP_NOP1:
           break
         case OP.OP_CHECKLOCKTIMEVERIFY:
-          if (this.#hasFlag('CHECKLOCKTIMEVERIFY') && !this.#isAfterGenesis()) {
-            this.#requireStackItems(1, 'OP_CHECKLOCKTIMEVERIFY requires one stack item.')
-            const required = this.#readLockTimeOperand(this.#stackTop())
-            if (required < 0n) this.#scriptEvaluationError('Negative lock time.')
-            const requiredIsHeight = required < BigInt(locktimeThreshold)
-            const transactionIsHeight = this.lockTime < locktimeThreshold
-            if (
-              requiredIsHeight !== transactionIsHeight ||
-              required > BigInt(this.lockTime) ||
-              this.inputSequence === 0xffffffff
-            ) {
-              this.#scriptEvaluationError('OP_CHECKLOCKTIMEVERIFY lock time is unsatisfied.')
-            }
-          }
+          this.#verifyCheckLockTime()
           break
         case OP.OP_CHECKSEQUENCEVERIFY:
-          ;(() => {
-            if (this.#hasFlag('CHECKSEQUENCEVERIFY') && !this.#isAfterGenesis()) {
-              if (this.stack.length < 1)
-                this.#scriptEvaluationError(
-                  'OP_CHECKSEQUENCEVERIFY requires at least one item to be on the stack.'
-                )
-              // BIP112 permits five bytes so the disable flag can be represented.
-              const sequenceLock = this.#readLockTimeOperand(this.#stackTop())
-              if (sequenceLock < 0n)
-                this.#scriptEvaluationError(
-                  'OP_CHECKSEQUENCEVERIFY requires a non-negative lock time.'
-                )
-              if ((sequenceLock & BigInt(sequenceLocktimeDisableFlag)) === 0n) {
-                const sequence = BigInt(this.inputSequence >>> 0)
-                const mask = BigInt(sequenceLocktimeTypeFlag | sequenceLocktimeMask)
-                const required = sequenceLock & mask
-                const actual = sequence & mask
-                if (
-                  this.transactionVersion >>> 0 < 2 ||
-                  (sequence & BigInt(sequenceLocktimeDisableFlag)) !== 0n ||
-                  (required & BigInt(sequenceLocktimeTypeFlag)) !==
-                    (actual & BigInt(sequenceLocktimeTypeFlag)) ||
-                  required > actual
-                ) {
-                  this.#scriptEvaluationError('OP_CHECKSEQUENCEVERIFY lock time is unsatisfied.')
-                }
-              }
-            }
-          })()
+          this.#verifyCheckSequence()
           break
         case OP.OP_NOP9:
         case OP.OP_NOP10:
