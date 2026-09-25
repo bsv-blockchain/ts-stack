@@ -163,6 +163,15 @@ For production deployments:
 - avoid logging raw secrets, authorization headers, or unbounded payloads;
 - monitor readiness, proof acquisition, synchronization, and unproven state.
 
+`submit` records a per-topic validation failure in its internal `failedTopics`
+set and answers that topic with `{ outputsToAdmit: [], coinsToRetain: [] }`, the
+same STEAK as a duplicate or an empty admission. Set the optional
+`engine.onTopicFailed` reporter to receive the topic, the error, the txid and
+the submission mode for each such failure, for example to count it in a metric
+or alert on the first occurrence. The Engine calls the reporter inside its own
+try/catch, so a throwing reporter is logged and never changes the admission
+result.
+
 Run every `KnexStorageMigrations` migration before serving traffic. The topical
 uniqueness migration deliberately stops when duplicate `(txid, outputIndex,
 topic)` output rows or `(txid, topic)` applied-transaction rows already exist;
