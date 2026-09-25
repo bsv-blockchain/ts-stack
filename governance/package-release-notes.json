@@ -118,9 +118,9 @@
     {
       "name": "@bsv/message-box-client",
       "publishedVersion": "2.5.4",
-      "releaseType": "none",
-      "summary": "Raises the @bsv/sdk peer floor from ^2.8.0 to ^2.8.6. SDK 2.8.0 through 2.8.5 derive the recipient key in Brc29RemittanceModule.acceptSettlement without forSelf, so PeerPayClient.acceptPayment() and rejectPayment() terminate with brc29.internalize_failed for every valid incoming payment. SDK 2.8.6 fixes acceptance; this package has no source change.",
-      "migration": "Install @bsv/sdk 2.8.6 or later alongside this package. No API, BRC100 wire or wallet-data migration. Payments refused on earlier SDKs remain pending in the message box and can be accepted after upgrading."
+      "releaseType": "minor",
+      "summary": "listMessages() and listMessagesLite() report paymentOutcome ('internalized', 'failed', 'skipped' or 'no-wallet-outputs') on each message that carried a payment, and keep that payment on the returned message unless the wallet accepted it (issue #503). Previously the payment envelope was always removed and a failed internalization was only logged, so acknowledging a listed message could delete the only copy of a payment. Both PeerMessage fields are optional and absent on messages without a payment.",
+      "migration": "No migration required: the new PeerMessage fields are optional and messages without a payment are unchanged. To avoid losing payments, store any returned payment (validate it first; it is the raw envelope value) before acknowledging its message. No BRC100 wire or wallet-data change."
     },
     {
       "name": "@bsv/overlay",

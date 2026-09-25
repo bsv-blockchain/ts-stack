@@ -57,6 +57,7 @@ import {
   MessageBoxClientOptions,
   Payment,
   PeerMessage,
+  PeerMessagePaymentOutcome,
   SendMessageParams,
   SendMessageResponse,
   DeviceRegistrationParams,
@@ -2108,13 +2109,13 @@ export class MessageBoxClient {
   private async internalizeRecipientPayment(p: {
     message: PeerMessage
     paymentData?: OwnDataRecord
-  }): Promise<void> {
+  }): Promise<PeerMessagePaymentOutcome> {
     try {
       Logger.log('[MB CLIENT] Processing a recipient payment')
       const request = snapshotIncomingPayment(p.paymentData, 'Message Box stored-message payment')
       if (request.outputs.length === 0) {
         Logger.log('[MB CLIENT] No wallet payment outputs found in payment data')
-        return
+        return 'no-wallet-outputs'
       }
       Logger.log('[MB CLIENT] Internalizing recipient payment outputs')
       const bindingRequest = snapshotWalletResultRequest('internalizeAction', request)
@@ -2124,8 +2125,43 @@ export class MessageBoxClient {
         bindingRequest
       )
       Logger.log('[MB CLIENT] Successfully internalized recipient payment')
+      return 'internalized'
     } catch {
       Logger.error('[MB CLIENT ERROR] Failed to internalize recipient payment')
+      return 'failed'
+    }
+  }
+
+  /**
+   * The payment record of a listed envelope, or undefined when there is none.
+   * A payment that is not a record cannot be used, and must not cost the
+   * message its body, so it is logged and left out.
+   */
+  private listedPaymentRecord(payment: unknown): OwnDataRecord | undefined {
+    if (payment == null) return undefined
+    try {
+      return ownDataRecord(payment, 'Message Box stored-message payment')
+    } catch {
+      Logger.error('[MB CLIENT ERROR] Ignoring a malformed payment in a listed message')
+      return undefined
+    }
+  }
+
+  /**
+   * Report what happened to a listed message's payment, and keep the payment
+   * unless the wallet stored it: the message holds the only copy of its
+   * derivation data, so dropping it here would let the caller acknowledge
+   * (and so delete) a payment it never received.
+   */
+  private attachPaymentOutcome(
+    message: PeerMessage,
+    paymentData: OwnDataRecord | undefined,
+    outcome: PeerMessagePaymentOutcome
+  ): void {
+    if (paymentData == null) return
+    message.paymentOutcome = outcome
+    if (outcome !== 'internalized') {
+      message.payment = paymentData
     }
   }
 
@@ -2613,6 +2649,8 @@ export class MessageBoxClient {
    * - Automatically internalizes recipient payment outputs, allowing you to receive payments without additional API calls.
    * - Only recipient payments are stored with messages - delivery fees are already processed by the server.
    * - Continues processing messages even if payment internalization fails.
+   * - Reports each payment's `paymentOutcome`, and keeps the `payment` on the returned
+   *   message unless the wallet accepted it, so it can be stored before acknowledging.
    *
    * Decryption automatically derives a shared secret using the sender's identity key and the receiver's child private key.
    * If the sender is the same as the recipient, the `counterparty` is set to `'self'`.
@@ -2694,19 +2732,19 @@ export class MessageBoxClient {
     const messages: PeerMessage[] = limit == null ? deduplicated : deduplicated.slice(0, limit)
 
     const parsed = messages.map(message => this.parseMessageEnvelope(message))
+    const outcomes = new Map<PeerMessage, PeerMessagePaymentOutcome>()
 
     if (shouldAcceptPayments) {
-      const paymentJobs = parsed.filter(
-        p => p.paymentData?.tx != null && p.paymentData.outputs != null
-      )
+      const paymentJobs = parsed.filter(p => p.paymentData != null)
       await this.mapWithConcurrency(paymentJobs, 2, async p => {
-        await this.internalizeRecipientPayment(p)
+        outcomes.set(p.message, await this.internalizeRecipientPayment(p))
         return null
       })
     }
 
     await this.mapWithConcurrency(parsed, 4, async p => {
       await this.decryptMessageBody(p)
+      this.attachPaymentOutcome(p.message, p.paymentData, outcomes.get(p.message) ?? 'skipped')
       return null
     })
 
@@ -2742,6 +2780,7 @@ export class MessageBoxClient {
    * - Parses message bodies as JSON when possible.
    * - Decrypts messages if they contain an `encryptedMessage` field, using AES-256-GCM via BRC-2-compliant ECDH key derivation.
    * - Returns messages in the order provided by the host.
+   * - Returns any payment a message carries as `payment`, with `paymentOutcome: 'skipped'`.
    *
    * This is intended for cases where you already know the host and need faster,
    * simpler retrieval without the additional processing overhead of `listMessages`.
@@ -2792,12 +2831,12 @@ export class MessageBoxClient {
           !Array.isArray(parsedBody) &&
           Object.hasOwn(parsedBody, 'message')
         ) {
-          const wrappedMessage = ownDataRecord(
-            parsedBody,
-            'Message Box stored-message envelope'
-          ).message
+          const envelope = ownDataRecord(parsedBody, 'Message Box stored-message envelope')
+          const wrappedMessage = envelope.message
           messageContent =
             typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
+          // The lite path never internalizes, so a payment is always returned
+          this.attachPaymentOutcome(message, this.listedPaymentRecord(envelope.payment), 'skipped')
         }
         if (
           messageContent != null &&

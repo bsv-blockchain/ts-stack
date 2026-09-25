@@ -3,7 +3,7 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.5.4'
+version: '2.6.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-25'
 last_verified: '2026-09-25'
@@ -20,7 +20,9 @@ tags: [messaging, message-box, brc-103, brc-29]
 > live WebSockets, peer payments, token settlement, permissions, quotes, and
 > push-device registration.
 
-The 2.5.4 source candidate raises the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. There is no source change.
+The 2.6.0 source candidate adds optional `paymentOutcome` and `payment` fields to the `PeerMessage` values returned by `listMessages()` and `listMessagesLite()`, so a payment the wallet did not store is no longer lost when its message is acknowledged. See [Payment acceptance and acknowledgment ordering](#payment-acceptance-and-acknowledgment-ordering).
+
+The 2.5.4 release raises the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. There is no source change.
 
 The 2.5.3 release fixes the CommonJS build (`new MessageBoxClient()` failed with `LookupResolver.default is not a constructor` under `require()`). `sendMessage()` HTTP failures now append the server's well-formed failure code, for example `Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).`; free-text server descriptions are never copied into errors. The `@bsv/sdk` peer floor is now `^2.8.0`, the first SDK release providing modules this package already required.
 
@@ -60,6 +62,11 @@ await client.acknowledgeMessage({
   messageIds: messages.map(message => message.messageId)
 })
 ```
+
+Before acknowledging a message that carried a payment, check its
+`paymentOutcome`: unless it is `'internalized'`, the payment is returned as
+`payment` and must be stored first, because the message holds the only copy of
+its derivation data.
 
 Initialization is automatic. Call `init()` only when explicit startup control
 is useful.
@@ -150,12 +157,20 @@ and then acknowledges. A failed internalization prevents both refund and
 acknowledgment; a failed refund send leaves the message queued. The existing
 small-payment policy is unchanged.
 
-This is the initial ordering remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
+`listMessages` and `listMessagesLite` set `paymentOutcome` on each message
+that carried a payment: `'internalized'` (the wallet accepted it), `'failed'`
+(internalizing threw, the wallet refused it, or the payment was malformed),
+`'skipped'` (not attempted: `acceptPayments: false`, or always for
+`listMessagesLite`) or `'no-wallet-outputs'`. Unless the outcome is
+`'internalized'`, the raw, unvalidated envelope payment is kept on the message as
+`payment`; validate and store it before acknowledging the message. Messages
+without a payment carry neither field.
+
+This is the ordering and list-outcome remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
 It does not provide a durable refund journal or exactly-once delivery. Reconcile
 uncertain refund-send outcomes before retrying, since a send may have completed
-before its response was lost. Payment-envelope retention and outcome reporting
-through `listMessages`/`listMessagesLite`, basket-insertion policy, and resumable
-refund semantics remain open. Use the original envelope for notification payment
+before its response was lost. Basket-insertion policy, mixed-output failures and
+resumable refund semantics remain open. Use the original envelope for notification payment
 processing; a plain acknowledgment is not evidence that a payment was accepted.
 
 Payment and token request fulfillment is not cross-process or cross-crash

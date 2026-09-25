@@ -108,7 +108,31 @@ export interface PeerMessage {
   created_at: string
   updated_at: string
   acknowledged?: boolean
+  /**
+   * What `listMessages` or `listMessagesLite` did with the payment this message
+   * carried. Set only on messages that carried one.
+   */
+  paymentOutcome?: PeerMessagePaymentOutcome
+  /**
+   * The payment from the stored-message envelope, exactly as the server
+   * returned it: shaped like {@link Payment} when well formed, but not
+   * validated, so validate it before use (after a `'failed'` outcome it may be
+   * malformed). Kept whenever `paymentOutcome` is not `'internalized'`: the
+   * message holds the only copy of its derivation data, so store the payment
+   * before acknowledging the message.
+   */
+  payment?: Record<string, unknown>
 }
+
+/**
+ * How the list call processed a message's payment (not whether it was later
+ * spent or refunded):
+ * - `'internalized'`: the wallet accepted the payment.
+ * - `'failed'`: internalizing threw or the wallet did not accept it.
+ * - `'skipped'`: not attempted (`acceptPayments: false`, or `listMessagesLite`).
+ * - `'no-wallet-outputs'`: it has no `wallet payment` outputs to internalize.
+ */
+export type PeerMessagePaymentOutcome = 'internalized' | 'failed' | 'skipped' | 'no-wallet-outputs'
 
 /**
  * Parameters required to send a message.
