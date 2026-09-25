@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.7",
-      "releaseType": "none",
-      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
-      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
+      "releaseType": "patch",
+      "summary": "Aligns explicit Script verification with bitcoin-sv coin-era, Chronicle version, locktime, sequence, signature-hash and numeric rules, including original-digest serialization. Rejects node-invalid OP_NUM2BIN sizes and checks an optional local memory budget before allocation.",
+      "migration": "No API, wire or wallet-data migration. Omitting memoryLimit continues to leave local allocation unbounded. The default JavaScript interpreter still lacks block and coin heights and is not an exact node consensus validator. OP_NUM2BIN rejects sizes above the node's signed 32-bit limit before allocation; an optional finite memoryLimit bounds otherwise permitted local work before allocation. Resource exhaustion does not establish script invalidity. Published 2.8.7 remains the registry baseline until protected release."
     },
     {
       "name": "@bsv/simple",

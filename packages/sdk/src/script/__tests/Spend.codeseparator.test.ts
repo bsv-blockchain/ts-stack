@@ -26,7 +26,9 @@ describe('Spend — CHECKSIG subscript across OP_CODESEPARATOR in the unlocking 
     const pub = priv.toPublicKey()
     const pubEnc = pub.encode(true) as number[]
     const satoshis = 1000
-    const scope = TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID
+    // Original-digest signatures remove their own push from scriptCode. A
+    // FORKID signature would retain it and cannot use this signing fixture.
+    const scope = TransactionSignature.SIGHASH_ALL
 
     // Non-empty locking-script tail that MUST be part of the subscript (proves the concat).
     const lockingScript = new LockingScript([{ op: OP.OP_NOP }, { op: OP.OP_NOP }])
@@ -35,7 +37,7 @@ describe('Spend — CHECKSIG subscript across OP_CODESEPARATOR in the unlocking 
     // below is permitted (push-only is only enforced for legacy v1 transactions).
     const sourceTx = new Transaction(2, [], [{ lockingScript, satoshis }], 0)
 
-    // The subscript the interpreter derives (after findAndDelete removes the signature push):
+    // The subscript the interpreter derives (after original-digest cleanup):
     //   <unlock-after-codesep without the sig> ++ <locking script>
     //   = [ <pubkey> OP_CHECKSIG ] ++ [ OP_NOP OP_NOP ]
     const subscript = new Script([

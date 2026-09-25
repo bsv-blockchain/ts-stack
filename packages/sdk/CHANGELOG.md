@@ -214,6 +214,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (2.8.8 candidate)
+
+- Align explicit Script verification with bitcoin-sv's coin-era and Chronicle version gates, CLTV/CSV, historical signature hashing, original-digest serialization, numeric widths and shift bounds. Node-derived transaction fixtures cover each corrected mismatch.
+- Reject `OP_NUM2BIN` sizes above the node's signed 32-bit bound before allocation. Check an optional caller-supplied `memoryLimit` before allocating; omitted limits remain unbounded. Resource exhaustion does not prove a script invalid. No API, wire or wallet-data migration is required.
+
 ### Fixed (2.8.7 candidate)
 
 - Identity search now compares complete English text tokens, ignores default stopwords, and handles excluded phrases without treating each phrase word as independently excluded. Ordered named-field matches scan one literal token at a time, preserving case, punctuation and line-boundary semantics. The existing limitation for language-specific stemming remains; this release does not claim full MongoDB linguistic equivalence.
@@ -229,7 +234,6 @@ All notable changes to this project will be documented in this file. The format 
 - Add optional local general-message payload policy to `Peer` and `snapshotAuthMessage`; HTTP server transports can delegate payload capacity while retaining metadata, byte, signature and replay validation. Existing defaults remain unchanged.
 
 - Raise request and signed-response header limits by 4x: 32 KiB ordinary values, 256 KiB aggregate names and values, 512 headers, and 1 KiB names. Raise the separate certificate-policy header limit to 256 KiB. BRC-105 `x-bsv-payment` request proofs may share the full aggregate budget. Bounds remain finite and server/proxy limits still apply. No API, BRC100, wire or wallet-data migration is required; protected publication is separate.
-
 
 ### 2.8.4 candidate — established action-history display metadata
 
