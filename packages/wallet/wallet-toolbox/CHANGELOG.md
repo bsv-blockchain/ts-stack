@@ -4,6 +4,15 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.2
+
+- `discoverByAttributes` no longer drops every overlay result for `any`
+  searches. `filterCertificatesByAttributes` treated the identity overlay's
+  all-fields `any` search as a literal field name, so no certificate matched.
+  It now accepts a certificate when a decrypted field contains a search term,
+  and named attributes use the overlay's fuzzy matching (`userName` stays
+  exact). Results are still bound to the query they answered.
+
 ## wallet-toolbox 2.14.1
 
 - Keep exact action-spend metadata in a shared local WeakMap, preserving storage
@@ -15,12 +24,6 @@ attention to changes that materially alter behavior or extend functionality.
   required; upgrade the wallet host and permission manager together. Reconcile
   history before retrying an older host's failed response because the transaction
   may already exist.
-- `discoverByAttributes` no longer drops every overlay result for `any`
-  searches. `filterCertificatesByAttributes` treated the identity overlay's
-  all-fields `any` search as a literal field name, so no certificate matched.
-  It now accepts a certificate when a decrypted field contains a search term,
-  and named attributes use the overlay's fuzzy matching (`userName` stays
-  exact). Results are still bound to the query they answered.
 
 ## wallet-toolbox (unreleased)
 
