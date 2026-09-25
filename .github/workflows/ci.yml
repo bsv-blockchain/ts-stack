@@ -168,7 +168,6 @@ jobs:
     needs:
       - repository-health
       - scope
-      - sonar-zero-findings
       - dependency-review
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -178,14 +177,12 @@ jobs:
         env:
           HEALTH_RESULT: ${{ needs.repository-health.result }}
           SCOPE_RESULT: ${{ needs.scope.result }}
-          SONAR_RESULT: ${{ needs.sonar-zero-findings.result }}
           DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
         run: |
           if [[ "$HEALTH_RESULT" != "success" ||
                 "$SCOPE_RESULT" != "success" ||
-                ( "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ) ||
                 ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
-            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT sonar=$SONAR_RESULT dependency=$DEPENDENCY_RESULT"
+            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT dependency=$DEPENDENCY_RESULT"
             exit 1
           fi
 
@@ -370,39 +367,6 @@ jobs:
             pnpm -r --if-present "${filters[@]}" run typecheck
           fi
 
-      - name: Compile documentation examples against exact package tarballs
-        if: needs.scope.outputs.direct-projects != '[]'
-        env:
-          DOC_EXAMPLE_DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
-          DOC_EXAMPLE_PREBUILT_PROJECTS: ${{ needs.scope.outputs.build-projects }}
-        run: pnpm docs:examples
-
-      - name: Verify changed package artifacts
-        env:
-          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
-        run: |
-          filters=()
-          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
-            jq -r '.[].name' <<<"$DIRECT_PROJECTS"
-          )
-          if [ "${#filters[@]}" -eq 0 ]; then
-            echo "No changed package artifact requires verification."
-          else
-            pnpm -r --if-present "${filters[@]}" run pack:check
-          fi
-
-      - name: Dry-run the npm artifact supply-chain boundary
-        run: |
-          output="$RUNNER_TEMP/npm-release-artifacts"
-          node scripts/package-release-artifacts.mjs stage \
-            --output "$output" \
-            --package @bsv/sdk \
-            --include-published
-          node scripts/package-release-artifacts.mjs verify "$output/manifest.json"
-          node scripts/package-release-artifacts.mjs publish \
-            "$output/manifest.json" \
-            --dry-run
-
       - name: Lint all authored code with zero warnings
         run: pnpm lint
 
@@ -433,6 +397,63 @@ jobs:
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+  package-artifacts:
+    name: Package artifacts and documentation consumers
+    if: always() && !cancelled() && needs.prepare.result == 'success'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm rebuild esbuild
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Compile documentation examples against exact package tarballs
+        if: needs.prepare.outputs.direct-projects != '[]'
+        env:
+          DOC_EXAMPLE_DIRECT_PROJECTS: ${{ needs.prepare.outputs.direct-projects }}
+          DOC_EXAMPLE_PREBUILT_PROJECTS: ${{ needs.prepare.outputs.build-projects }}
+        run: pnpm docs:examples
+
+      - name: Verify changed package artifacts
+        env:
+          DIRECT_PROJECTS: ${{ needs.prepare.outputs.direct-projects }}
+        run: |
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name' <<<"$DIRECT_PROJECTS"
+          )
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "No changed package artifact requires verification."
+          else
+            pnpm -r --if-present "${filters[@]}" run pack:check
+          fi
+
+      - name: Dry-run the npm artifact supply-chain boundary
+        run: |
+          output="$RUNNER_TEMP/npm-release-artifacts"
+          node scripts/package-release-artifacts.mjs stage \
+            --output "$output" \
+            --package @bsv/sdk \
+            --include-published
+          node scripts/package-release-artifacts.mjs verify "$output/manifest.json"
+          node scripts/package-release-artifacts.mjs publish \
+            "$output/manifest.json" \
+            --dry-run
 
   mutation-tests:
     name: Mutation / ${{ matrix.target }}
@@ -827,7 +848,7 @@ jobs:
           retention-days: 1
 
   coverage-wallet:
-    name: Coverage / wallet-toolbox (${{ matrix.shard }}/4)
+    name: Coverage / wallet-toolbox (${{ matrix.id }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
@@ -837,7 +858,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - { id: shard-1, shard: 1 }
+          - { id: shard-2, shard: 2 }
+          - { id: shard-3, shard: 3 }
+          - { id: shard-4, shard: 4 }
+          - { id: sync-http-0, latency: 0 }
+          - { id: sync-http-1000, latency: 1000 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -855,21 +882,30 @@ jobs:
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Generate wallet-toolbox coverage shard
+        env:
+          WALLET_SHARD: ${{ matrix.shard }}
+          SYNC_LATENCY: ${{ matrix.latency }}
         run: |
-          pnpm --filter @bsv/wallet-toolbox exec jest \
-            --testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test' \
-            --coverage \
-            --shard=${{ matrix.shard }}/4 \
-            --coverageDirectory=coverage/shard-${{ matrix.shard }}
+          # The two real-HTTP latency scenarios run in independent processes;
+          # their global transport spies must never overlap in one Jest worker.
+          args=(--coverage --coverageDirectory=coverage/${{ matrix.id }})
+          if [ -n "$WALLET_SHARD" ]; then
+            args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts')
+            args+=(--shard="$WALLET_SHARD/4")
+          else
+            args+=(--runInBand --runTestsByPath src/storage/sync/syncTransferHttp.test.ts)
+            args+=(--testNamePattern="with $SYNC_LATENCY ms request latency")
+          fi
+          pnpm --filter @bsv/wallet-toolbox exec jest "${args[@]}"
           node scripts/normalize-lcov-paths.mjs \
-            packages/wallet/wallet-toolbox/coverage/shard-${{ matrix.shard }}/lcov.info \
+            packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
             packages/wallet/wallet-toolbox
           mkdir -p .coverage-output
-          cp packages/wallet/wallet-toolbox/coverage/shard-${{ matrix.shard }}/lcov.info \
-            .coverage-output/wallet-${{ matrix.shard }}.lcov.info
+          cp packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
+            .coverage-output/wallet-${{ matrix.id }}.lcov.info
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-wallet-${{ matrix.shard }}
+          name: coverage-wallet-${{ matrix.id }}
           path: .coverage-output/
           if-no-files-found: error
           include-hidden-files: true
@@ -1125,9 +1161,48 @@ jobs:
           --lcov-directory .coverage-artifacts
           --target 90
 
+      - name: SonarQube Cloud scan and quality gate
+        # SONAR_CI_ENABLED is flipped only after a Sonar organization admin
+        # disables Automatic Analysis; the two methods cannot run together.
+        # Dependabot changes are covered by audit + dependency review and do
+        # not receive Actions secrets.
+        if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  coverage-report:
+    name: Coverage / external reporting
+    if: always() && !cancelled() && needs.coverage-upload.result == 'success' && needs.prepare.outputs.coverage-required == 'true'
+    needs: [prepare, coverage-upload]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: coverage-*
+          path: .coverage-artifacts
+          merge-multiple: true
+      - name: Compose Codecov inputs
+        id: cov
+        run: |
+          FILES="$(find .coverage-artifacts -type f -name '*.lcov.info' | sort | paste -sd, -)"
+          if [ -n "$FILES" ]; then
+            echo "has-coverage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-coverage=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
       # Public fork PRs use the pinned action's tokenless mode. GitHub does not
       # expose repository secrets to these pull_request runs; no privileged
-      # trigger or OIDC/write permission is needed. Their required codecov/patch
+      # trigger or OIDC/write permission is needed. Their advisory codecov/patch
       # status must be produced just like same-repository PRs.
       - name: Upload coverage to Codecov
         if: steps.cov.outputs.has-coverage == 'true'
@@ -1181,16 +1256,6 @@ jobs:
           run_command: send-notifications
           # Notification delivery is non-blocking for the same reason as upload.
           fail_ci_if_error: false
-
-      - name: SonarQube Cloud scan and quality gate
-        # SONAR_CI_ENABLED is flipped only after a Sonar organization admin
-        # disables Automatic Analysis; the two methods cannot run together.
-        # Dependabot changes are covered by audit + dependency review and do
-        # not receive Actions secrets.
-        if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   build-and-test:
     name: build-and-test (24.x)
@@ -1456,6 +1521,7 @@ jobs:
     needs:
       - scope
       - prepare
+      - package-artifacts
       - infra-scope
       - standard-tests
       - dependent-tests

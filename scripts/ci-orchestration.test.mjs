@@ -146,11 +146,11 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = workflowJobBlocks(workflow)
   const selected = jobs.filter(job => /^    needs: (?:prepare|infra-scope)$/m.test(job.source))
-  assert.equal(selected.length, 13)
+  assert.equal(selected.length, 14)
   for (const job of selected) {
     assert.match(
       job.source,
-      /^    if: always\(\) && !cancelled\(\) && needs\.(?:prepare|infra-scope)\.result == 'success' && /m,
+      /^    if: always\(\) && !cancelled\(\) && needs\.(?:prepare|infra-scope)\.result == 'success'(?: && |$)/m,
       job.name
     )
   }
@@ -162,7 +162,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   assert.match(gate, /run: node scripts\/ci-result-gate\.mjs/)
 })
 
-test('fork PRs can produce the required Codecov status without a privileged workflow', () => {
+test('fork PRs retain advisory Codecov reports without a privileged workflow', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   for (const step of [
     'Upload coverage to Codecov',
@@ -177,4 +177,53 @@ test('fork PRs can produce the required Codecov status without a privileged work
   }
   assert.doesNotMatch(workflow, /pull_request_target|id-token:\s*write/)
   assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
+})
+
+test('slow analysis and external coverage reporting do not serialize required execution', () => {
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  assert.doesNotMatch(jobs['early-gates'], /sonar-zero-findings|SONAR_RESULT/)
+  assert.match(jobs['merge-gate'], /      - sonar-zero-findings/)
+  assert.match(jobs['merge-gate'], /      - package-artifacts/)
+  assert.doesNotMatch(jobs.prepare, /name: Verify changed package artifacts/)
+  assert.match(jobs['package-artifacts'], /name: Verify changed package artifacts/)
+  assert.match(
+    jobs['package-artifacts'],
+    /name: Compile documentation examples against exact package tarballs/
+  )
+  assert.match(jobs['coverage-upload'], /--target 90/)
+  assert.doesNotMatch(jobs['coverage-upload'], /Wait for Codecov/)
+  assert.match(jobs['coverage-report'], /continue-on-error: true/)
+  assert.doesNotMatch(jobs['merge-gate'], /      - coverage-report/)
+})
+
+test('every HTTP latency scenario retains its own required coverage execution', () => {
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  const wallet = jobs['coverage-wallet']
+  const suite = readFileSync(
+    join(
+      REPOSITORY_ROOT,
+      'packages/wallet/wallet-toolbox/src/storage/sync/syncTransferHttp.test.ts'
+    ),
+    'utf8'
+  )
+  const latencies = JSON.parse(suite.match(/test\.each\((\[[\d, ]+\])\)/)[1])
+  const selected = [...wallet.matchAll(/id: sync-http-(\d+), latency: (\d+)/g)]
+  assert.deepEqual(
+    selected.map(match => Number(match[2])),
+    latencies
+  )
+  assert.ok(selected.every(match => match[1] === match[2]))
+  assert.equal(wallet.match(/id: shard-\d, shard: \d/g).length, 4)
+  assert.match(
+    wallet,
+    /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/
+  )
+  assert.match(wallet, /--testNamePattern="with \$SYNC_LATENCY ms request latency"/)
+  assert.match(wallet, /args=\(--coverage --coverageDirectory=coverage\/\$\{\{ matrix\.id \}\}\)/)
+  assert.match(wallet, /name: coverage-wallet-\$\{\{ matrix\.id \}\}/)
+  assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
