@@ -122,8 +122,8 @@ implementation intent. Neither count may be silently presented as the other.
 ## Coverage reporting
 
 Coverage numbers below come from the latest committed CI-artifact snapshot, while package
-participation comes directly from current manifests. Codecov is the aggregate and
-changed-line authority. These are reporting facts, not a claim that the final QA coverage
+participation comes directly from current manifests. Codecov supplies the aggregate
+report; the repository-owned patch-coverage gate enforces changed-line acceptance. These are reporting facts, not a claim that the final QA coverage
 targets have been completed.
 
 | Metric | Current value | Authority |
@@ -133,11 +133,12 @@ targets have been completed.
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Project threshold | 80% for packages/sdk/src | codecov.yml and .github/workflows/ci.yml |
-| Changed-line threshold | 90% | codecov.yml and .github/workflows/ci.yml |
+| Changed-line threshold | 90% | scripts/patch-coverage.mjs and .github/workflows/ci.yml |
 
 The CI workflow generates package-specific LCOV artifacts in parallel, normalizes their
-repository paths, combines them in the coverage-upload job, and requires the aggregate
-Codecov status before the merge gate succeeds. Updating the committed aggregate snapshot
+repository paths, and combines them in the required coverage-upload job. The local
+90% patch-coverage gate must pass before the merge gate succeeds; external Codecov
+processing runs separately as advisory reporting. Updating the committed aggregate snapshot
 requires a linked exact-main CI artifact; it must never be estimated from local partial
 runs.
 
