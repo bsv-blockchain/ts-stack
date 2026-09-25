@@ -4,14 +4,26 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox (unreleased)
+## wallet-toolbox 2.14.1
 
+- Keep exact action-spend metadata in a shared local WeakMap, preserving storage
+  service-charge authorization across permission-module transforms and separately
+  loaded core, client and mobile bundles without adding keys to public results.
+- Consume the legacy internal Symbol before returning permission-managed results.
+  Completed and two-step `createAction` responses now pass the existing strict
+  binary BRC-100 codec. No app, wire, database, BRC-39 or recovery migration is
+  required; upgrade the wallet host and permission manager together. Reconcile
+  history before retrying an older host's failed response because the transaction
+  may already exist.
 - `discoverByAttributes` no longer drops every overlay result for `any`
   searches. `filterCertificatesByAttributes` treated the identity overlay's
   all-fields `any` search as a literal field name, so no certificate matched.
   It now accepts a certificate when a decrypted field contains a search term,
   and named attributes use the overlay's fuzzy matching (`userName` stays
   exact). Results are still bound to the query they answered.
+
+## wallet-toolbox (unreleased)
+
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,
   `@bsv/wallet-toolbox-client`, and `@bsv/wallet-toolbox-mobile`. Value imports
   used by the built mobile/client bundles and by internal helpers

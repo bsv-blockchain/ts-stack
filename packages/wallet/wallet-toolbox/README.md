@@ -161,7 +161,12 @@ the final wallet transaction; a partial-action reference never authorizes a
 different transaction. When the underlying Wallet Toolbox signer adds a storage
 service charge, its exact wallet-funded amount is carried locally into the
 spending check so the charge is visible and counted in authorization. This
-metadata is deliberately not a BRC-100 wire extension.
+metadata is deliberately not a BRC-100 wire extension. Since 2.14.1, it lives in a
+shared local WeakMap rather than on the public result object, preserving exact
+accounting across separately loaded bundles while allowing strict binary result
+validation. Upgrade the wallet host and permission manager together. If an older
+host reports a result-serialization failure, check its transaction history before
+retrying: the wallet may already have created or completed the action.
 
 Permission modules may transform calls with `onRequest` and `onResponse`, or
 own a P-scheme's semantics with the optional `handleRequest(request, next)`
