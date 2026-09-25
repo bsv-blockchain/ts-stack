@@ -117,8 +117,8 @@
     },
     {
       "name": "@bsv/message-box-client",
-      "publishedVersion": "2.5.3",
-      "releaseType": "patch",
+      "publishedVersion": "2.5.4",
+      "releaseType": "none",
       "summary": "Raises the @bsv/sdk peer floor from ^2.8.0 to ^2.8.6. SDK 2.8.0 through 2.8.5 derive the recipient key in Brc29RemittanceModule.acceptSettlement without forSelf, so PeerPayClient.acceptPayment() and rejectPayment() terminate with brc29.internalize_failed for every valid incoming payment. SDK 2.8.6 fixes acceptance; this package has no source change.",
       "migration": "Install @bsv/sdk 2.8.6 or later alongside this package. No API, BRC100 wire or wallet-data migration. Payments refused on earlier SDKs remain pending in the message box and can be accepted after upgrading."
     },
@@ -166,8 +166,8 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.6",
-      "releaseType": "patch",
+      "publishedVersion": "2.8.7",
+      "releaseType": "none",
       "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
     },
@@ -215,22 +215,22 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.1",
-      "releaseType": "patch",
+      "publishedVersion": "2.14.2",
+      "releaseType": "none",
       "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.1",
-      "releaseType": "patch",
+      "publishedVersion": "2.14.2",
+      "releaseType": "none",
       "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.1",
-      "releaseType": "patch",
+      "publishedVersion": "2.14.2",
+      "releaseType": "none",
       "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
       "migration": "No consumer, wire, or database migration is required."
     },
