@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
 version: '1.9.0'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
@@ -16,6 +16,16 @@ tags: ['overlay', 'topics', 'uhrp']
 # @bsv/overlay-topics
 
 > Canonical collection of pre-built BSV overlay topic managers and lookup services for identity, tokens, supply chain, messaging, and more.
+
+## Registry topics and publisher authority
+
+ProtoMap, BasketMap and CertMap index optional signed descriptions of protocol
+identifiers, baskets and certificate types. An overlay host serves records; the
+signing publisher supplies their attribution. Hosting the service does not grant
+the publisher's key or control which protocols applications can use. See
+[registry metadata](../../guides/registry-metadata.md) for lookup identities,
+BRC-based inclusion requests, replication and wallet fallback expectations.
+These descriptive registries do not install executable permission modules.
 
 ## Install
 
@@ -179,8 +189,8 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **any** — Catch-all topic accepting any PushDrop output
 - **btms** — Basic Token Management System (token issuance/transfer)
 - **apps** — Application catalog
-- **basketmap** — Logical grouping of tokens
-- **certmap** — Certificate mapping
+- **basketmap** — Publisher-attributed descriptions of basket identifiers
+- **certmap** — Publisher-attributed certificate-type and field descriptions
 - **desktopintegrity** — Desktop integrity verification
 - **did** — Decentralized Identifiers
 - **fractionalize** — Token fractionalization
@@ -189,7 +199,7 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **kvstore** — Key-value store
 - **message-box** — Inbox/messaging
 - **monsterbattle** — Game state (demo)
-- **protomap** — Protocol registry
+- **protomap** — Publisher-attributed descriptions of wallet protocol tuples
 - **slackthreads** — Slack thread indexing
 - **supplychain** — Supply chain tracking
 - **uhrp** — Unified Hash Registry Protocol

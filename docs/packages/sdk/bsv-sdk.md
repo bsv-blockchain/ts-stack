@@ -15,6 +15,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
+see [registry metadata](../../guides/registry-metadata.md). It covers exact
+lookups, BRC-based inclusion requests, publisher choice and the boundary between
+display metadata and wallet permissions.
+
 The 2.8.6 source candidate fixes BRC-29 payment acceptance.
 `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own
 BRC-42 child key (`forSelf: true`) when checking that the settlement output
