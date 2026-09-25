@@ -117,8 +117,43 @@ export interface ExtendedVerifiableCertificate extends IdentityCertificate {
   publiclyRevealedKeyring: Record<string, Base64String>
 }
 
-function identityAttributeMatches(actual: unknown, expected: string): boolean {
-  return typeof actual === 'string' && (actual === expected || actual.toLowerCase() === expected.toLowerCase())
+function normalizeIdentitySearch(input: string): string {
+  return input.trim().replaceAll(/\s+/g, ' ')
+}
+
+/** Mirrors the identity overlay's fuzzy attribute regex (tokens in order, case-insensitive). */
+function identityFuzzyMatches(actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length === 0) return false
+  const pattern = normalized
+    .split(' ')
+    .map(token => token.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
+    .join('.*')
+  return new RegExp(pattern, 'i').test(actual)
+}
+
+function identityAttributeMatches(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  // The overlay matches userName exactly and every other field fuzzily.
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+/**
+ * `any` is the overlay's all-fields search, not a field name. Accept a certificate
+ * when at least one decrypted field contains one of the search terms.
+ */
+function identityAnyMatches(fields: Record<string, unknown>, expected: string): boolean {
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const values = Object.values(fields).filter((v): v is string => typeof v === 'string')
+  if (normalized.length === 2) return values.some(v => identityFuzzyMatches(v, normalized))
+  const terms = normalized.toLowerCase().split(' ')
+  return values.some(v => {
+    const lower = v.toLowerCase()
+    return terms.some(term => lower.includes(term))
+  })
 }
 
 /** Re-bind authenticated certificates to the identity lookup they answered. */
@@ -141,9 +176,9 @@ export function filterCertificatesByAttributes(
   return certificates.filter(certificate => {
     const fields = certificate.decryptedFields
     if (fields == null || typeof fields !== 'object' || Array.isArray(fields)) return false
-    return expected.every(([fieldName, value]) =>
-      identityAttributeMatches((fields as Record<string, unknown>)[fieldName], value)
-    )
+    const record = fields as Record<string, unknown>
+    if ('any' in attributes) return identityAnyMatches(record, attributes.any)
+    return expected.every(([fieldName, value]) => identityAttributeMatches(fieldName, record[fieldName], value))
   })
 }
 

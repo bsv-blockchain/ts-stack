@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- `discoverByAttributes` no longer drops every overlay result for `any`
+  searches. `filterCertificatesByAttributes` treated the identity overlay's
+  all-fields `any` search as a literal field name, so no certificate matched.
+  It now accepts a certificate when a decrypted field contains a search term,
+  and named attributes use the overlay's fuzzy matching (`userName` stays
+  exact). Results are still bound to the query they answered.
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,
   `@bsv/wallet-toolbox-client`, and `@bsv/wallet-toolbox-mobile`. Value imports
   used by the built mobile/client bundles and by internal helpers

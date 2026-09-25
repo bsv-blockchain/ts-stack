@@ -139,4 +139,29 @@ describe('identity overlay certificate verification', () => {
       })
     ).toEqual([expected])
   })
+
+  test('treats the any attribute as an all-fields search, not a field name', () => {
+    const match = {
+      subject,
+      decryptedFields: { userName: 'Deggen', profilePhoto: 'uhrp://x' }
+    } as unknown as VerifiableCertificate
+    const unrelated = {
+      subject,
+      decryptedFields: { userName: 'Mallory', profilePhoto: 'uhrp://y' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([match, unrelated], { any: 'deggen' })).toEqual([match])
+    expect(filterCertificatesByAttributes([match], { any: 'd' })).toEqual([])
+  })
+
+  test('mirrors overlay fuzzy matching for named attributes', () => {
+    const cert = {
+      subject,
+      decryptedFields: { name: 'Alice Smith', userName: 'alice' }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([cert], { name: 'ali smi' })).toEqual([cert])
+    expect(filterCertificatesByAttributes([cert], { userName: 'ali' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { name: 'bob' })).toEqual([])
+  })
 })
