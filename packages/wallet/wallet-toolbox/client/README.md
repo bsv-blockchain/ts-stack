@@ -13,6 +13,15 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## BRC-100 result compatibility
+
+Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
+results, fixing strict binary bridge failures after the wallet operation while
+retaining fee and service-charge authorization. Upgrade the wallet and permission
+manager together. Existing JSON bridges that remove internal metadata retain their
+behavior; no application, BRC-39 or account-recovery migration is required. Check
+wallet history before retrying an action whose response failed on an older host.
+
 ## Backup and recovery
 
 A BRC-100 wallet needs both recoverable keys and wallet records/derivation

@@ -4,6 +4,18 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.1
+
+- Keep exact action-spend metadata in a shared local WeakMap, preserving storage
+  service-charge authorization across permission-module transforms and separately
+  loaded core, client and mobile bundles without adding keys to public results.
+- Consume the legacy internal Symbol before returning permission-managed results.
+  Completed and two-step `createAction` responses now pass the existing strict
+  binary BRC-100 codec. No app, wire, database, BRC-39 or recovery migration is
+  required; upgrade the wallet host and permission manager together. Reconcile
+  history before retrying an older host's failed response because the transaction
+  may already exist.
+
 ## wallet-toolbox (unreleased)
 
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,

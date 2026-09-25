@@ -1,6 +1,6 @@
 import { LockingScript, Transaction, UnlockingScript } from '@bsv/sdk'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
-import { exactActionSpendSymbol } from '../utility/exactActionSpend'
+import { setExactActionSpend } from '../utility/exactActionSpend'
 import { maxPossibleSatoshis } from '../storage/methods/generateChange'
 
 /**
@@ -231,9 +231,9 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     partial.addOutput({ lockingScript: LockingScript.fromHex(SCRIPT_A), satoshis: 100 })
     partial.addOutput({ lockingScript: LockingScript.fromHex(CHANGE_SCRIPT), satoshis: 800 })
     const createResult = {
-      signableTransaction: { reference: 'commission-bound', tx: partial.toAtomicBEEF() },
-      [exactActionSpendSymbol]: 1200
+      signableTransaction: { reference: 'commission-bound', tx: partial.toAtomicBEEF() }
     }
+    setExactActionSpend(createResult, 1200)
     const underlying = {
       createAction: jest.fn(async () => createResult),
       signAction: jest.fn(async () => ({ txid: partial.id('hex'), tx: partial.toAtomicBEEF() })),
