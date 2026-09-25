@@ -164,4 +164,17 @@ describe('identity overlay certificate verification', () => {
     expect(filterCertificatesByAttributes([cert], { userName: 'ali' })).toEqual([])
     expect(filterCertificatesByAttributes([cert], { name: 'bob' })).toEqual([])
   })
+
+  test('rejects blank, short, and non-string attribute matches', () => {
+    const cert = {
+      subject,
+      decryptedFields: { name: 'Al', age: 42 }
+    } as unknown as VerifiableCertificate
+
+    expect(filterCertificatesByAttributes([cert], { name: '   ' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { age: '42' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { any: 'al' })).toEqual([cert])
+    expect(filterCertificatesByAttributes([cert], { any: 'zz' })).toEqual([])
+    expect(filterCertificatesByAttributes([cert], { any: 'bob' })).toEqual([])
+  })
 })

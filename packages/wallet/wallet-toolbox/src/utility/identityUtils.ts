@@ -122,8 +122,7 @@ function normalizeIdentitySearch(input: string): string {
 }
 
 /** Mirrors the identity overlay's fuzzy attribute regex (tokens in order, case-insensitive). */
-function identityFuzzyMatches(actual: unknown, expected: string): boolean {
-  if (typeof actual !== 'string') return false
+function identityFuzzyMatches(actual: string, expected: string): boolean {
   const normalized = normalizeIdentitySearch(expected)
   if (normalized.length === 0) return false
   const pattern = normalized
