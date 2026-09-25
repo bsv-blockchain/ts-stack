@@ -2133,6 +2133,21 @@ export class MessageBoxClient {
   }
 
   /**
+   * The payment record of a listed envelope, or undefined when there is none.
+   * A payment that is not a record cannot be used, and must not cost the
+   * message its body, so it is logged and left out.
+   */
+  private listedPaymentRecord(payment: unknown): OwnDataRecord | undefined {
+    if (payment == null) return undefined
+    try {
+      return ownDataRecord(payment, 'Message Box stored-message payment')
+    } catch {
+      Logger.error('[MB CLIENT ERROR] Ignoring a malformed payment in a listed message')
+      return undefined
+    }
+  }
+
+  /**
    * Report what happened to a listed message's payment, and keep the payment
    * unless the wallet stored it: the message holds the only copy of its
    * derivation data, so dropping it here would let the caller acknowledge
@@ -2820,18 +2835,8 @@ export class MessageBoxClient {
           const wrappedMessage = envelope.message
           messageContent =
             typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
-          // The lite path never internalizes, so a payment is always returned.
-          // A payment that is not a record cannot be used, and must not cost
-          // the message its body, so it is left out as before.
-          if (envelope.payment != null) {
-            let paymentData: OwnDataRecord | undefined
-            try {
-              paymentData = ownDataRecord(envelope.payment, 'Message Box stored-message payment')
-            } catch {
-              Logger.error('[MB CLIENT ERROR] Ignoring a malformed payment in a listed message')
-            }
-            this.attachPaymentOutcome(message, paymentData, 'skipped')
-          }
+          // The lite path never internalizes, so a payment is always returned
+          this.attachPaymentOutcome(message, this.listedPaymentRecord(envelope.payment), 'skipped')
         }
         if (
           messageContent != null &&
