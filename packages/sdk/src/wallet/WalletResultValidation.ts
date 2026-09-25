@@ -46,6 +46,8 @@ const intrinsicStringTrim = String.prototype.trim
 const intrinsicStringReplace = String.prototype.replace
 const intrinsicStringNormalize = String.prototype.normalize
 const intrinsicStringIndexOf = String.prototype.indexOf
+const intrinsicStringSlice = String.prototype.slice
+const intrinsicStringStartsWith = String.prototype.startsWith
 const IntrinsicRegExp = RegExp
 const intrinsicURLProtocolGetter = intrinsicObjectGetOwnPropertyDescriptor(
   URL.prototype,
@@ -1586,53 +1588,104 @@ function containsText(haystack: string, needle: string): boolean {
   return (intrinsicApply(intrinsicStringIndexOf, haystack, [needle]) as number) !== -1
 }
 
-/** Mirrors the identity overlay's fuzzy attribute regex (tokens in order, case-insensitive). */
+/** Match literal tokens in order, without a combinatorial wildcard expression. */
 function identityFuzzyMatches(actual: string, expected: string): boolean {
-  const escaped = intrinsicApply(intrinsicStringReplace, normalizeIdentitySearch(expected), [
-    /[.*+?^${}()|[\]\\]/g,
-    String.raw`\$&`
-  ]) as string
-  const pattern = intrinsicApply(intrinsicStringReplace, escaped, [/ /g, '.*']) as string
-  return regexTest(new IntrinsicRegExp(pattern, 'i'), actual)
-}
-
-/** Every quoted phrase in the query appears; undefined when the query has no phrase. */
-function identityPhrasesMatch(text: string, query: string): boolean | undefined {
-  const phrasePattern = /"([^"]*)"/g
-  let sawPhrase = false
-  let match = regexExec(phrasePattern, query)
-  while (match != null) {
-    const phrase = normalizeIdentitySearch(match[1])
-    if (phrase.length > 0) {
-      if (!containsText(text, phrase)) return false
-      sawPhrase = true
+  const tokens = split(normalizeIdentitySearch(expected), ' ')
+  const lines = intrinsicApply(intrinsicStringSplit, actual, [/\r\n?|\n|\u2028|\u2029/]) as string[]
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
+    let cursor = 0
+    let tokenIndex = 0
+    while (tokenIndex < tokens.length) {
+      const escaped = intrinsicApply(intrinsicStringReplace, tokens[tokenIndex], [
+        /[.*+?^${}()|[\]\\]/g,
+        String.raw`\$&`
+      ]) as string
+      const literal = new IntrinsicRegExp(escaped, 'gi')
+      literal.lastIndex = cursor
+      const found = regexExec(literal, lines[lineIndex])
+      if (found == null) break
+      cursor = found.index + found[0].length
+      tokenIndex++
     }
-    match = regexExec(phrasePattern, query)
-  }
-  return sawPhrase ? true : undefined
-}
-
-/** Whether any word matched by `pattern` (capture group 1) appears in the text. */
-function identityWordPresent(text: string, words: string, pattern: RegExp): boolean {
-  let match = regexExec(pattern, words)
-  while (match != null) {
-    if (containsText(text, match[1])) return true
-    match = regexExec(pattern, words)
+    if (tokenIndex === tokens.length) return true
+    lineIndex++
   }
   return false
 }
 
+// The default English text index omits these words before matching. Apostrophes
+// inside English words are retained; punctuation otherwise separates terms.
+const IDENTITY_STOP_WORDS =
+  " a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves "
+
+function identityTextTokens(text: string): string[] {
+  const tokens: string[] = []
+  // ASCII apostrophes are part of English names such as O'Neil.
+  const pattern =
+    /(?:[^\p{Dash}\p{Pattern_Syntax}\p{Quotation_Mark}\p{Terminal_Punctuation}\p{White_Space}]|')+/gu
+  let match = regexExec(pattern, text)
+  while (match != null) {
+    if (!containsText(IDENTITY_STOP_WORDS, ` ${match[0]} `)) tokens[tokens.length] = match[0]
+    match = regexExec(pattern, text)
+  }
+  return tokens
+}
+
+function identityContainsToken(tokens: string[], expected: string): boolean {
+  let index = 0
+  while (index < tokens.length) {
+    if (tokens[index++] === expected) return true
+  }
+  return false
+}
+
+/** -1 rejects the result; 1 records a positive indexed term; 0 is neutral. */
+function identityQueryPartMatch(
+  tokens: string[],
+  text: string,
+  raw: string,
+  phrase: string | undefined
+): -1 | 0 | 1 {
+  const negative =
+    (intrinsicApply(intrinsicStringStartsWith, raw, ['-']) as boolean) && raw.length > 1
+  if (phrase !== undefined) {
+    const present = containsText(text, phrase)
+    if (negative ? present : !present) return -1
+    if (negative) return 0
+  }
+  const terms = identityTextTokens(
+    phrase ?? (negative ? (intrinsicApply(intrinsicStringSlice, raw, [1]) as string) : raw)
+  )
+  let matched = false
+  let index = 0
+  while (index < terms.length) {
+    const present = identityContainsToken(tokens, terms[index++])
+    if (negative && present) return -1
+    matched = matched || present
+  }
+  return matched && !negative ? 1 : 0
+}
+
 /**
- * Mirrors MongoDB `$text` over the overlay's searchable attributes: every quoted phrase
- * must appear, no `-term` may appear, and otherwise one term must appear. Word stemming
- * is not reproduced.
+ * Bind the overlay's English text search using complete tokens, stopwords and
+ * exact phrases. Language-specific stemming remains unsupported; a stem-only
+ * overlay result may be conservatively dropped rather than treated as a substring.
  */
 function identityTextMatches(searchable: string, search: string): boolean {
   const text = foldIdentityText(searchable)
   const query = foldIdentityText(search)
-  const words = intrinsicApply(intrinsicStringReplace, query, [/"[^"]*"/g, ' ']) as string
-  if (identityWordPresent(text, words, /(?:^|\s)-(\S+)/g)) return false
-  return identityPhrasesMatch(text, query) ?? identityWordPresent(text, words, /(?:^|\s)([^\s-]\S*)/g)
+  const tokens = identityTextTokens(text)
+  const parts = /-?"([^"]*)"|[^\s"]+/g
+  let positiveMatch = false
+  let match = regexExec(parts, query)
+  while (match != null) {
+    const result = identityQueryPartMatch(tokens, text, match[0], match[1])
+    if (result === -1) return false
+    if (result === 1) positiveMatch = true
+    match = regexExec(parts, query)
+  }
+  return positiveMatch
 }
 
 /** The overlay excludes these fields from its all-fields `any` index. */
@@ -1692,7 +1745,10 @@ function bindDiscoveredAttributes(
     }
     if (normalizeIdentitySearch(expectedValue).length === 0) continue
     usable++
-    if (!sameIdentityAttribute(fieldName, decryptedFields[fieldName], expectedValue)) {
+    if (
+      !hasOwn(decryptedFields, fieldName) ||
+      !sameIdentityAttribute(fieldName, decryptedFields[fieldName], expectedValue)
+    ) {
       invalid(call, `${field}.decryptedFields.${fieldName}`, 'the requested public attribute')
     }
   }
