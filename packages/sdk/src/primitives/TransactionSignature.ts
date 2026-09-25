@@ -3,6 +3,7 @@ import BigNumber from './BigNumber.js'
 import { hash256 } from './Hash.js'
 import { toArray, Writer } from './utils.js'
 import Script from '../script/Script.js'
+import OP from '../script/OP.js'
 import TransactionInput from '../transaction/TransactionInput.js'
 import TransactionOutput from '../transaction/TransactionOutput.js'
 
@@ -43,10 +44,70 @@ interface TransactionSignatureFormatParams {
    * Supports running bitcoin-abc test vectors which reuses the CHRONICLE bit.
    */
   ignoreChronicle?: boolean
+  /** The spending block's FORKID activation flag when verifying historical scripts. */
+  sighashForkIdEnabled?: boolean
 }
 
 const EMPTY_SCRIPT = new Uint8Array(0)
 const ZERO_HASH = Object.freeze(Array.from({ length: 32 }, () => 0))
+
+function originalPushLength(
+  source: number[],
+  position: number,
+  opcode: number
+): { length: number; nextPosition: number } | undefined {
+  if (opcode > 0 && opcode < OP.OP_PUSHDATA1) return { length: opcode, nextPosition: position }
+  if (opcode === OP.OP_PUSHDATA1) {
+    if (source.length - position < 1) return undefined
+    return { length: source[position], nextPosition: position + 1 }
+  }
+  if (opcode === OP.OP_PUSHDATA2) {
+    if (source.length - position < 2) return undefined
+    return { length: source[position] | (source[position + 1] << 8), nextPosition: position + 2 }
+  }
+  if (opcode === OP.OP_PUSHDATA4) {
+    if (source.length - position < 4) return undefined
+    return {
+      length:
+        (source[position] |
+          (source[position + 1] << 8) |
+          (source[position + 2] << 16) |
+          (source[position + 3] << 24)) >>>
+        0,
+      nextPosition: position + 4
+    }
+  }
+  return { length: 0, nextPosition: position }
+}
+
+/** Match the node's original-digest script walk, including a failed final push. */
+function originalScriptCode(script: Script): { bytes: number[]; encodedLength: number } {
+  const source = script.toBinary()
+  const bytes: number[] = []
+  let position = 0
+  let segmentStart = 0
+  let separators = 0
+  const appendSegment = (end: number): void => {
+    for (let index = segmentStart; index < end; index++) bytes.push(source[index])
+  }
+
+  while (position < source.length) {
+    const opcodeStart = position
+    const opcode = source[position++]
+    const push = originalPushLength(source, position, opcode)
+    if (push == null) break
+    position = push.nextPosition
+    if (source.length - position < push.length) break
+    position += push.length
+    if (opcode === OP.OP_CODESEPARATOR) {
+      appendSegment(opcodeStart)
+      segmentStart = position
+      separators++
+    }
+  }
+  appendSegment(position)
+  return { bytes, encodedLength: source.length - separators }
+}
 
 function bip143Inputs(
   params: TransactionSignatureFormatParams,
@@ -198,14 +259,14 @@ export default class TransactionSignature extends Signature {
     const isNone = (params.scope & 31) === TransactionSignature.SIGHASH_NONE
     const isAll = (params.scope & 31) === TransactionSignature.SIGHASH_ALL || (!isSingle && !isNone)
 
-    const subscript = Script.fromBinary(params.subscript.toBinary())
-    subscript.removeCodeseparators()
+    const subscript = originalScriptCode(params.subscript)
 
     const currentInput = {
       sourceTXID: params.sourceTXID,
       sourceOutputIndex: params.sourceOutputIndex,
       sequence: params.inputSequence,
-      script: subscript.toBinary()
+      script: subscript.bytes,
+      scriptLength: subscript.encodedLength
     }
 
     const writer = new Writer()
@@ -216,13 +277,14 @@ export default class TransactionSignature extends Signature {
         sourceOutputIndex: number
         sequence: number
         script: number[]
+        scriptLength?: number
       }>
     ): void {
       writer.writeVarIntNum(inputs.length)
       for (const input of inputs) {
         writer.writeReverse(toArray(input.sourceTXID, 'hex'))
         writer.writeUInt32LE(input.sourceOutputIndex)
-        writer.writeVarIntNum(input.script.length)
+        writer.writeVarIntNum(input.scriptLength ?? input.script.length)
         writer.write(input.script)
         writer.writeUInt32LE(input.sequence)
       }
@@ -370,11 +432,11 @@ export default class TransactionSignature extends Signature {
       params.ignoreChronicle !== true &&
       (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
 
-    if (hasForkId && !hasChronicle) {
+    if (hasForkId && params.sighashForkIdEnabled !== false && !hasChronicle) {
       return TransactionSignature.formatBip143(params)
     }
 
-    if (!hasForkId || (hasForkId && hasChronicle)) {
+    if (params.sighashForkIdEnabled === false || !hasForkId || hasChronicle) {
       return TransactionSignature.formatOTDA(params)
     }
 
@@ -386,7 +448,7 @@ export default class TransactionSignature extends Signature {
     const hasChronicle =
       params.ignoreChronicle !== true &&
       (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
-    const usesOtda = !hasForkId || (hasForkId && hasChronicle)
+    const usesOtda = params.sighashForkIdEnabled === false || !hasForkId || hasChronicle
     return (
       usesOtda &&
       (params.scope & 31) === TransactionSignature.SIGHASH_SINGLE &&

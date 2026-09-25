@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.7'
+version: '2.8.8'
 npm: '@bsv/sdk'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-25'
+last_verified: '2026-09-25'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 2.8.8 source candidate aligns explicit script verification flags with
+spending-era rules, historical signature hashing, locktime operations, and
+bounded numeric allocations. The default JavaScript interpreter still lacks
+the block and coin heights needed for exact node consensus validation.
+There is no default local allocation cap. Callers evaluating untrusted scripts
+may supply a finite `memoryLimit`; a resource limit does not prove that a script
+is invalid. This candidate is not yet published.
 
 The 2.8.6 source candidate fixes BRC-29 payment acceptance.
 `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own

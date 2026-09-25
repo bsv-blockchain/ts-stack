@@ -189,6 +189,20 @@ await tx.broadcast()
 
 For a more detailed tutorial and advanced examples, check our [Documentation](#documentation).
 
+### Script verification
+
+`Spend` accepts explicit `verifyFlags` for applications that know the spending
+block's flags and the source output's era. The default JavaScript interpreter
+does not know either height, so its version-based behavior is not a substitute
+for node consensus validation. `Transaction.verify()` uses that default when no
+optional verification backend is selected.
+
+`OP_NUM2BIN` sizes above the node's signed 32-bit limit are invalid. There is
+no default local allocation cap. Callers evaluating untrusted scripts can pass
+an optional finite `memoryLimit` to bound local work before allocation.
+`ScriptResourceLimitError` means the local evaluator did not complete, rather
+than that the script is invalid.
+
 ## Features & Deliverables
 
 - **Sound Cryptographic Primitives**: Secure key management, signature computations, and encryption protocols.
