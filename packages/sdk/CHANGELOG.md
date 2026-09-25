@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (2.8.7 candidate)
+
+- `WalletClient` and the binary BRC-100 wire no longer reject valid `discoverByAttributes` results. Result validation bound every requested key to an exact decrypted-field value, so the identity overlay's all-fields `any` search (read as a literal field name) and its fuzzy named-field matches were rejected even after the wallet had verified them. Validation now applies the overlay's matching contract, matching `@bsv/wallet-toolbox` 2.14.2: `any` is a case- and diacritic-insensitive text search with quoted phrases and `-term` exclusions over every field except `profilePhoto`/`icon`; named fields match fuzzily, `userName` exactly, and blank named attributes are ignored. Every result is still bound to the query it answered; certificate and identity verification are unchanged. Word stemming is not reproduced. No API, wire or wallet-data migration is required.
+
 ### Fixed (2.8.6 candidate)
 
 - `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own BRC-42 child key (`forSelf: true`) when checking settlement output ownership. Since 2.8.0 it derived the sender-facing key, so every valid incoming BRC-29 payment was rejected with `brc29.internalize_failed` before `internalizeAction` (funds were never lost; payments stayed pending). Adds a sender/recipient round-trip test using real `ProtoWallet` key derivation. No API, wire or wallet-data migration is required.

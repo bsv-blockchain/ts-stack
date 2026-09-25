@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.6",
-      "releaseType": "none",
-      "summary": "Fixes Brc29RemittanceModule.acceptSettlement rejecting every valid incoming BRC-29 payment. The recipient-side output ownership check introduced in 2.8.0 derived the expected key without forSelf: true, so it computed the key the recipient would pay to the sender instead of its own BRC-42 child key; the derived P2PKH never matched the paid output and acceptance terminated with brc29.internalize_failed before internalizeAction. The check now derives the recipient's own key. Payments are refused, never internalized to a wrong key, so no funds were lost on affected versions.",
-      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Affects callers of acceptSettlement (RemittanceManager and @bsv/message-box-client PeerPayClient acceptPayment/rejectPayment) on @bsv/sdk 2.8.0 through 2.8.5; payments that were refused remain pending in the sender's message box and can be accepted after upgrading to 2.8.6."
+      "releaseType": "patch",
+      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered.",
+      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
     },
     {
       "name": "@bsv/simple",
