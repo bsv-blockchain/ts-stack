@@ -7,6 +7,7 @@ function evidence(selected = true) {
     'repository-health',
     'scope',
     'prepare',
+    'package-artifacts',
     'infra-scope',
     'build-and-test',
     'mutation-quality'

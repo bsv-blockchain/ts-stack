@@ -19,6 +19,7 @@ import {
   RelinquishOutputArgs,
   GetPublicKeyArgs,
   CreateActionArgs,
+  CreateActionResult,
   ListOutputsResult,
   ListActionsArgs,
   ListActionsResult,
@@ -33,7 +34,12 @@ import { toArray, toBase64, toUTF8, toUTF8Strict } from '@bsv/sdk/primitives/uti
 
 import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
 import { parseBrc177NoSendExpiryLabels } from './utility/brc177NoSendExpiry'
-import { exactActionSpendSymbol, type ExactActionSpendCarrier } from './utility/exactActionSpend'
+import {
+  exactActionSpendSymbol,
+  getExactActionSpend,
+  setExactActionSpend,
+  type ExactActionSpendCarrier
+} from './utility/exactActionSpend'
 import { WERR_UNAUTHORIZED } from './sdk/WERR_errors'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
@@ -4333,7 +4339,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originalOutputDescriptions,
         resolvedOutputSatoshis
       )
-      const exactWalletSpend = (createResult as ExactActionSpendCarrier)[exactActionSpendSymbol]
+      const exactWalletSpend = getExactActionSpend(createResult)
       if (exactWalletSpend !== undefined) {
         if (
           !Number.isSafeInteger(exactWalletSpend) ||
@@ -4456,8 +4462,6 @@ export class WalletPermissionsManager implements WalletInterface {
     pModulesByScheme: Map<string, PermissionsModule>,
     originator?: string
   ): Promise<Awaited<ReturnType<WalletInterface['createAction']>>> {
-    if (pModulesByScheme.size === 0) return await this.underlying.createAction(finalArgs, originator)
-
     const pModules = Array.from(pModulesByScheme.values())
     let transformedArgs: object = finalArgs
     for (const module of pModules) {
@@ -4469,14 +4473,18 @@ export class WalletPermissionsManager implements WalletInterface {
       transformedArgs = transformed.args
     }
     let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
-    const exactWalletSpend = (createResult as ExactActionSpendCarrier)[exactActionSpendSymbol]
+    const exactWalletSpend = getExactActionSpend(createResult)
     for (let i = pModules.length - 1; i >= 0; i--) {
       createResult = await pModules[i].onResponse(createResult, { method: 'createAction', originator: originator! })
     }
+    // Older local wallets may still attach the legacy symbol. Consume it for
+    // authorization, but never return it across a public BRC-100 boundary.
+    const { [exactActionSpendSymbol]: _legacySpend, ...publicResult } = createResult as CreateActionResult &
+      ExactActionSpendCarrier
     if (exactWalletSpend !== undefined) {
-      ;(createResult as ExactActionSpendCarrier)[exactActionSpendSymbol] = exactWalletSpend
+      setExactActionSpend(publicResult, exactWalletSpend)
     }
-    return createResult
+    return publicResult
   }
 
   /**

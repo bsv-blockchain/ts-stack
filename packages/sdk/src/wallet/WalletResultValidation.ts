@@ -42,6 +42,13 @@ const intrinsicRegExpExec = RegExp.prototype.exec
 const intrinsicRegExpTest = RegExp.prototype.test
 const intrinsicStringSplit = String.prototype.split
 const intrinsicStringToLowerCase = String.prototype.toLowerCase
+const intrinsicStringTrim = String.prototype.trim
+const intrinsicStringReplace = String.prototype.replace
+const intrinsicStringNormalize = String.prototype.normalize
+const intrinsicStringIndexOf = String.prototype.indexOf
+const intrinsicStringSlice = String.prototype.slice
+const intrinsicStringStartsWith = String.prototype.startsWith
+const IntrinsicRegExp = RegExp
 const intrinsicURLProtocolGetter = intrinsicObjectGetOwnPropertyDescriptor(
   URL.prototype,
   'protocol'
@@ -1450,7 +1457,7 @@ function stringRecord(
   call: string,
   field: string,
   encodedValues = false
-): UnknownRecord {
+): Record<string, string> {
   const values = record(value, call, field)
   const keys = intrinsicObjectKeys(values)
   for (let index = 0; index < keys.length; index++) {
@@ -1463,7 +1470,8 @@ function stringRecord(
     if (encodedValues) base64(item, call, `${field}.${key}`)
     else string(item, call, `${field}.${key}`)
   }
-  return values
+  // Every value was validated as a string above.
+  return values as Record<string, string>
 }
 
 function validateCertificate(value: unknown, call: string, field: string): UnknownRecord {
@@ -1566,12 +1574,185 @@ function sameString(actual: unknown, expected: unknown): boolean {
   )
 }
 
-function sameIdentityAttribute(actual: unknown, expected: unknown): boolean {
-  return (
-    typeof actual === 'string' &&
-    typeof expected === 'string' &&
-    (actual === expected || lower(actual) === lower(expected))
+function normalizeIdentitySearch(value: string): string {
+  const collapsed = intrinsicApply(intrinsicStringReplace, value, [/\s+/g, ' ']) as string
+  return intrinsicApply(intrinsicStringTrim, collapsed, []) as string
+}
+
+function foldIdentityText(value: string): string {
+  const decomposed = intrinsicApply(intrinsicStringNormalize, value, ['NFD']) as string
+  return lower(intrinsicApply(intrinsicStringReplace, decomposed, [/\p{Mn}/gu, '']) as string)
+}
+
+function containsText(haystack: string, needle: string): boolean {
+  return (intrinsicApply(intrinsicStringIndexOf, haystack, [needle]) as number) !== -1
+}
+
+/** Match literal tokens in order, without a combinatorial wildcard expression. */
+function identityFuzzyMatches(actual: string, expected: string): boolean {
+  const tokens = split(normalizeIdentitySearch(expected), ' ')
+  const lines = intrinsicApply(intrinsicStringSplit, actual, [/\r\n?|\n|\u2028|\u2029/]) as string[]
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
+    let cursor = 0
+    let tokenIndex = 0
+    while (tokenIndex < tokens.length) {
+      const escaped = intrinsicApply(intrinsicStringReplace, tokens[tokenIndex], [
+        /[.*+?^${}()|[\]\\]/g,
+        String.raw`\$&`
+      ]) as string
+      const literal = new IntrinsicRegExp(escaped, 'gi')
+      literal.lastIndex = cursor
+      const found = regexExec(literal, lines[lineIndex])
+      if (found == null) break
+      cursor = found.index + found[0].length
+      tokenIndex++
+    }
+    if (tokenIndex === tokens.length) return true
+    lineIndex++
+  }
+  return false
+}
+
+// The default English text index omits these words before matching. Apostrophes
+// inside English words are retained; punctuation otherwise separates terms.
+const IDENTITY_STOP_WORDS =
+  " a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves "
+
+function identityTextTokens(text: string): string[] {
+  const tokens: string[] = []
+  // ASCII apostrophes are part of English names such as O'Neil.
+  const pattern =
+    /(?:[^\p{Dash}\p{Pattern_Syntax}\p{Quotation_Mark}\p{Terminal_Punctuation}\p{White_Space}]|')+/gu
+  let match = regexExec(pattern, text)
+  while (match != null) {
+    if (!containsText(IDENTITY_STOP_WORDS, ` ${match[0]} `)) tokens[tokens.length] = match[0]
+    match = regexExec(pattern, text)
+  }
+  return tokens
+}
+
+function identityContainsToken(tokens: string[], expected: string): boolean {
+  let index = 0
+  while (index < tokens.length) {
+    if (tokens[index++] === expected) return true
+  }
+  return false
+}
+
+/** -1 rejects the result; 1 records a positive indexed term; 0 is neutral. */
+function identityQueryPartMatch(
+  tokens: string[],
+  text: string,
+  raw: string,
+  phrase: string | undefined
+): -1 | 0 | 1 {
+  const negative =
+    (intrinsicApply(intrinsicStringStartsWith, raw, ['-']) as boolean) && raw.length > 1
+  if (phrase !== undefined) {
+    const present = containsText(text, phrase)
+    if (negative ? present : !present) return -1
+    if (negative) return 0
+  }
+  const terms = identityTextTokens(
+    phrase ?? (negative ? (intrinsicApply(intrinsicStringSlice, raw, [1]) as string) : raw)
   )
+  let matched = false
+  let index = 0
+  while (index < terms.length) {
+    const present = identityContainsToken(tokens, terms[index++])
+    if (negative && present) return -1
+    matched = matched || present
+  }
+  return matched && !negative ? 1 : 0
+}
+
+/**
+ * Bind the overlay's English text search using complete tokens, stopwords and
+ * exact phrases. Language-specific stemming remains unsupported; a stem-only
+ * overlay result may be conservatively dropped rather than treated as a substring.
+ */
+function identityTextMatches(searchable: string, search: string): boolean {
+  const text = foldIdentityText(searchable)
+  const query = foldIdentityText(search)
+  const tokens = identityTextTokens(text)
+  const parts = /-?"([^"]*)"|[^\s"]+/g
+  let positiveMatch = false
+  let match = regexExec(parts, query)
+  while (match != null) {
+    const result = identityQueryPartMatch(tokens, text, match[0], match[1])
+    if (result === -1) return false
+    if (result === 1) positiveMatch = true
+    match = regexExec(parts, query)
+  }
+  return positiveMatch
+}
+
+/** The overlay excludes these fields from its all-fields `any` index. */
+function isSearchableIdentityField(fieldName: string): boolean {
+  return fieldName !== 'profilePhoto' && fieldName !== 'icon'
+}
+
+/** `any` is the overlay's all-fields search, not a field name. */
+function identityAnyMatches(decryptedFields: Record<string, string>, expected: unknown): boolean {
+  if (typeof expected !== 'string') return false
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const fieldNames = intrinsicObjectKeys(decryptedFields)
+  let searchable = ''
+  let index = 0
+  while (index < fieldNames.length) {
+    const fieldName = fieldNames[index++]
+    if (!isSearchableIdentityField(fieldName)) continue
+    const value = decryptedFields[fieldName]
+    searchable = searchable.length > 0 ? `${searchable} ${value}` : value
+  }
+  if (normalized.length === 2) return identityFuzzyMatches(searchable, normalized)
+  return identityTextMatches(searchable, normalized)
+}
+
+/** The overlay matches userName exactly and every other named field fuzzily. */
+function sameIdentityAttribute(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+/** Bind a discovered certificate to the attribute lookup it answered, as the overlay matched it. */
+function bindDiscoveredAttributes(
+  call: string,
+  field: string,
+  decryptedFields: Record<string, string>,
+  requested: unknown
+): void {
+  const requestedAttributes = requestRecord(requested)
+  if (requestedAttributes == null) return
+  if (hasOwn(requestedAttributes, 'any')) {
+    if (!identityAnyMatches(decryptedFields, requestedAttributes.any)) {
+      invalid(call, `${field}.decryptedFields`, 'a match for the requested any attribute')
+    }
+    return
+  }
+  // The overlay ignores blank named attributes; with none usable it matches nothing.
+  const fieldNames = intrinsicObjectKeys(requestedAttributes)
+  let usable = 0
+  let index = 0
+  while (index < fieldNames.length) {
+    const fieldName = fieldNames[index++]
+    const expectedValue = requestedAttributes[fieldName]
+    if (typeof expectedValue !== 'string') {
+      invalid(call, `request.attributes.${fieldName}`, 'a string')
+    }
+    if (normalizeIdentitySearch(expectedValue).length === 0) continue
+    usable++
+    if (
+      !hasOwn(decryptedFields, fieldName) ||
+      !sameIdentityAttribute(fieldName, decryptedFields[fieldName], expectedValue)
+    ) {
+      invalid(call, `${field}.decryptedFields.${fieldName}`, 'the requested public attribute')
+    }
+  }
+  if (usable === 0) invalid(call, `${field}.decryptedFields`, 'a usable requested attribute')
 }
 
 function sameOutpoint(actual: unknown, expected: unknown, call: string, field: string): boolean {
@@ -1706,21 +1887,7 @@ function validateCertificatesResult(result: UnknownRecord, call: string, request
         `${field}.decryptedFields`
       )
       if (call === 'discoverByAttributes') {
-        const requestedAttributes = requestRecord(requestArgs?.attributes)
-        if (requestedAttributes != null) {
-          const fieldNames = intrinsicObjectKeys(requestedAttributes)
-          for (let index = 0; index < fieldNames.length; index++) {
-            const fieldName = fieldNames[index]
-            const expectedValue = requestedAttributes[fieldName]
-            if (!sameIdentityAttribute(decryptedFields[fieldName], expectedValue)) {
-              invalid(
-                call,
-                `${field}.decryptedFields.${fieldName}`,
-                'the requested public attribute'
-              )
-            }
-          }
-        }
+        bindDiscoveredAttributes(call, field, decryptedFields, requestArgs?.attributes)
       }
     }
   }

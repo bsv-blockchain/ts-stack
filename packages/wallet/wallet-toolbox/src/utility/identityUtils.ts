@@ -117,8 +117,110 @@ export interface ExtendedVerifiableCertificate extends IdentityCertificate {
   publiclyRevealedKeyring: Record<string, Base64String>
 }
 
-function identityAttributeMatches(actual: unknown, expected: string): boolean {
-  return typeof actual === 'string' && (actual === expected || actual.toLowerCase() === expected.toLowerCase())
+function normalizeIdentitySearch(input: string): string {
+  return input.trim().replaceAll(/\s+/g, ' ')
+}
+
+/** Match literal tokens in order, without a combinatorial wildcard expression. */
+function identityFuzzyMatches(actual: string, expected: string): boolean {
+  const tokens = normalizeIdentitySearch(expected).split(' ')
+  const lines = actual.split(/\r\n?|\n|\u2028|\u2029/)
+  for (const line of lines) {
+    let cursor = 0
+    let tokenIndex = 0
+    while (tokenIndex < tokens.length) {
+      const literal = new RegExp(tokens[tokenIndex].replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`), 'gi')
+      literal.lastIndex = cursor
+      const found = literal.exec(line)
+      if (found == null) break
+      cursor = found.index + found[0].length
+      tokenIndex++
+    }
+    if (tokenIndex === tokens.length) return true
+  }
+  return false
+}
+
+// The default English text index omits these words before matching. Apostrophes
+// inside English words are retained; punctuation otherwise separates terms.
+const IDENTITY_STOP_WORDS =
+  " a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves "
+
+function identityTextTokens(text: string): string[] {
+  // ASCII apostrophes are part of English names such as O'Neil.
+  const tokens =
+    text.match(/(?:[^\p{Dash}\p{Pattern_Syntax}\p{Quotation_Mark}\p{Terminal_Punctuation}\p{White_Space}]|')+/gu) ?? []
+  return tokens.filter(token => !IDENTITY_STOP_WORDS.includes(` ${token} `))
+}
+
+/** -1 rejects the result; 1 records a positive indexed term; 0 is neutral. */
+function identityQueryPartMatch(tokens: string[], text: string, raw: string, phrase: string | undefined): -1 | 0 | 1 {
+  const negative = raw.startsWith('-') && raw.length > 1
+  if (phrase !== undefined) {
+    const present = containsText(text, phrase)
+    if (negative ? present : !present) return -1
+    if (negative) return 0
+  }
+  const terms = identityTextTokens(phrase ?? (negative ? raw.slice(1) : raw))
+  const matched = terms.some(term => tokens.includes(term))
+  if (!matched) return 0
+  return negative ? -1 : 1
+}
+
+/**
+ * Bind the overlay's English text search using complete tokens, stopwords and
+ * exact phrases. Language-specific stemming remains unsupported; a stem-only
+ * overlay result may be conservatively dropped rather than treated as a substring.
+ */
+function identityTextMatches(searchable: string, search: string): boolean {
+  const text = foldIdentityText(searchable)
+  const query = foldIdentityText(search)
+  const tokens = identityTextTokens(text)
+  const parts = /-?"([^"]*)"|[^\s"]+/g
+  let positiveMatch = false
+  let match = parts.exec(query)
+  while (match != null) {
+    const result = identityQueryPartMatch(tokens, text, match[0], match[1])
+    if (result === -1) return false
+    if (result === 1) positiveMatch = true
+    match = parts.exec(query)
+  }
+  return positiveMatch
+}
+
+/** The overlay matches userName exactly and other named fields fuzzily. */
+function identityAttributeMatches(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+function foldIdentityText(input: string): string {
+  return input
+    .normalize('NFD')
+    .replaceAll(/\p{Mn}/gu, '')
+    .toLowerCase()
+}
+
+function containsText(haystack: string, needle: string): boolean {
+  return haystack.includes(needle)
+}
+
+const UNSEARCHABLE_IDENTITY_FIELDS = new Set(['profilePhoto', 'icon'])
+
+/**
+ * `any` is the overlay's all-fields search, not a field name. Accept a certificate
+ * when its searchable fields satisfy the same search the overlay ran.
+ */
+function identityAnyMatches(fields: Record<string, unknown>, expected: string): boolean {
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const searchable = Object.entries(fields)
+    .filter(([key, value]) => !UNSEARCHABLE_IDENTITY_FIELDS.has(key) && typeof value === 'string')
+    .map(([, value]) => value as string)
+    .join(' ')
+  if (normalized.length === 2) return identityFuzzyMatches(searchable, normalized)
+  return identityTextMatches(searchable, normalized)
 }
 
 /** Re-bind authenticated certificates to the identity lookup they answered. */
@@ -132,19 +234,42 @@ export function filterCertificatesByIdentityKey(
   )
 }
 
+function usableIdentityAttributes(attributes: Record<string, string>): Array<[string, string]> | undefined {
+  const expected: Array<[string, string]> = []
+  for (const key of Object.keys(attributes)) {
+    const descriptor = Object.getOwnPropertyDescriptor(attributes, key)
+    if (descriptor == null || !('value' in descriptor) || typeof descriptor.value !== 'string') return undefined
+    if (normalizeIdentitySearch(descriptor.value).length > 0) expected.push([key, descriptor.value])
+  }
+  return expected
+}
+
+function certificateMatchesAttributes(
+  certificate: VerifiableCertificate,
+  anySearch: string | undefined,
+  expected: Array<[string, string]>
+): boolean {
+  const fields = certificate.decryptedFields
+  if (fields == null || typeof fields !== 'object' || Array.isArray(fields)) return false
+  const record = fields as Record<string, unknown>
+  if (anySearch !== undefined) return identityAnyMatches(record, anySearch)
+  return expected.every(([fieldName, value]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(record, fieldName)
+    return descriptor != null && 'value' in descriptor && identityAttributeMatches(fieldName, descriptor.value, value)
+  })
+}
+
 /** Re-bind authenticated certificates to the attribute lookup they answered. */
 export function filterCertificatesByAttributes(
   certificates: VerifiableCertificate[],
   attributes: Record<string, string>
 ): VerifiableCertificate[] {
-  const expected = Object.entries(attributes)
-  return certificates.filter(certificate => {
-    const fields = certificate.decryptedFields
-    if (fields == null || typeof fields !== 'object' || Array.isArray(fields)) return false
-    return expected.every(([fieldName, value]) =>
-      identityAttributeMatches((fields as Record<string, unknown>)[fieldName], value)
-    )
-  })
+  if (attributes == null || typeof attributes !== 'object' || Array.isArray(attributes)) return []
+  const any = Object.getOwnPropertyDescriptor(attributes, 'any')
+  if (any != null && (!('value' in any) || typeof any.value !== 'string')) return []
+  const expected = any == null ? usableIdentityAttributes(attributes) : []
+  if (expected == null || (any == null && expected.length === 0)) return []
+  return certificates.filter(certificate => certificateMatchesAttributes(certificate, any?.value, expected))
 }
 
 // --- Helper Types for Grouping ---
