@@ -747,6 +747,26 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
     expect(manager.pendingActionTemplates.has('caller-abort')).toBe(false)
   })
 
+  test('lets the admin originator abort actions this manager did not issue', async () => {
+    const abortAction = jest.fn().mockResolvedValue({ aborted: true })
+    const manager = managerWith({ abortAction }) as any
+
+    await expect(manager.abortAction({ reference: 'earlier-session' }, 'admin.example')).resolves.toEqual({
+      aborted: true
+    })
+    expect(abortAction).toHaveBeenCalledWith({ reference: 'earlier-session' }, 'admin.example')
+  })
+
+  test.each(['example.com', undefined])('refuses %s aborting an action it was not issued', async originator => {
+    const abortAction = jest.fn().mockResolvedValue({ aborted: true })
+    const manager = managerWith({ abortAction }) as any
+
+    await expect(manager.abortAction({ reference: 'earlier-session' }, originator)).rejects.toThrow('not issued')
+    manager.pendingActionOriginators.set('other-app', 'other.example')
+    await expect(manager.abortAction({ reference: 'other-app' }, originator)).rejects.toThrow()
+    expect(abortAction).not.toHaveBeenCalled()
+  })
+
   test.each(['[broken', 'bad_host.example'])('rejects the malformed originator %s', originator => {
     const manager = managerWith() as any
     expect(() => manager.prepareOriginator(originator)).toThrow('valid')
