@@ -4792,7 +4792,11 @@ export class WalletPermissionsManager implements WalletInterface {
     ...args: Parameters<WalletInterface['abortAction']>
   ): ReturnType<WalletInterface['abortAction']> {
     const [requestArgs, originator] = args
-    this.assertPendingActionOriginator(requestArgs.reference, originator, true)
+    // Pending references live in memory only. The admin may abort any of the
+    // wallet's actions, including signed noSend actions and earlier sessions'.
+    if (originator === undefined || !this.isAdminOriginator(originator)) {
+      this.assertPendingActionOriginator(requestArgs.reference, originator, true)
+    }
     const result = await this.underlying.abortAction(...args)
     if (result.aborted === true) this.clearPendingAction(requestArgs.reference)
     return result
