@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.9",
-      "releaseType": "none",
-      "summary": "Aligns explicit Script verification with bitcoin-sv coin-era, Chronicle version, locktime, sequence, signature-hash and numeric rules, including original-digest serialization. Rejects node-invalid OP_NUM2BIN sizes and checks an optional local memory budget before allocation. AuthFetch retains a finite general payload budget matching HTTP request and configured response capacity, allowing full 4 MiB CHIRP chunks without charging their JSON expansion against the generic envelope budget. Existing HTTP, handshake, certificate, nonce, signature and redirect limits remain enforced.",
-      "migration": "No API, wire or wallet-data migration. Omitting memoryLimit continues to leave local allocation unbounded. The default JavaScript interpreter still lacks block and coin heights and is not an exact node consensus validator. OP_NUM2BIN rejects sizes above the node's signed 32-bit limit before allocation; an optional finite memoryLimit bounds otherwise permitted local work before allocation. Resource exhaustion does not establish script invalidity. Published 2.8.9 is verified against protected release 36297773288, exact immutable registry bytes, source provenance and CycloneDX evidence. Update applications using full-size authenticated binary uploads to SDK 2.8.9. No API, wire or wallet-data migration is required; custom Peer transports retain their existing default policy."
+      "releaseType": "patch",
+      "summary": "Accepts normal full WhatsOnChain block-header metadata within the existing 64-property header-response boundary instead of rejecting valid mainnet Merkle proofs at 16 properties. Exact Merkle-root equality, hash/height validation, finite HTTP limits, plain-data checks and accessor/symbol rejection remain enforced.",
+      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Source 2.8.10 remains a candidate until the protected npm publication workflow succeeds."
     },
     {
       "name": "@bsv/simple",

@@ -19,6 +19,7 @@ interface WhatsOnChainBlockHeader {
 const HASH = /^[0-9a-f]{64}$/i
 const MAX_BLOCK_HEIGHT = 0x7fffffff
 const MAX_HEADER_RESULTS = 256
+const MAX_HEADER_PROPERTIES = 64
 
 function boundedText(value: unknown, label: string, maximumBytes: number): string {
   if (
@@ -98,7 +99,11 @@ function normalizeQuery(root: unknown, height: unknown): { root: string; height:
 
 function responseMerkleRoot(value: unknown): string | undefined {
   try {
-    const properties = ownDataProperties(value, "What's On Chain block header", 16)
+    const properties = ownDataProperties(
+      value,
+      "What's On Chain block header",
+      MAX_HEADER_PROPERTIES
+    )
     const root = properties.merkleroot?.value
     return typeof root === 'string' && HASH.test(root) ? root.toLowerCase() : undefined
   } catch {
@@ -126,7 +131,7 @@ function responseCurrentHeight(value: unknown): number | undefined {
     const first = ownDataProperties(
       arrayProperties[0]?.value,
       "What's On Chain height response",
-      64
+      MAX_HEADER_PROPERTIES
     )
     const height = first.height?.value
     return Number.isSafeInteger(height) &&

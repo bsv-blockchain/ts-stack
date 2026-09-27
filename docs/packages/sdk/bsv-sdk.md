@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.9'
+version: '2.8.10'
 npm: '@bsv/sdk'
 last_updated: '2026-09-27'
 last_verified: '2026-09-27'
@@ -14,6 +14,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 2.8.10 source candidate restores WhatsOnChain Merkle-proof verification
+for block headers containing the provider's full metadata. Header objects may
+contain up to 64 owned data properties, matching the existing header-list
+bound. Merkle-root equality, response size limits, and rejection of accessors,
+symbols, and inherited properties remain unchanged. No API, wire, proof, or
+wallet-data migration is required. Publication follows the protected SDK
+release workflow.
 
 The 2.8.8 source candidate aligns explicit script verification flags with
 spending-era rules, historical signature hashing, locktime operations, and

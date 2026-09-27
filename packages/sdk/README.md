@@ -34,6 +34,13 @@ the most recent 1,000 entries. Simplified authenticated HTTP frames, bodies,
 headers, signatures, request IDs, and certificate-request headers have fixed
 size/count limits and redirects are rejected.
 
+SDK 2.8.10 accepts full WhatsOnChain block headers with up to 64 own data
+properties, matching the existing header-list response bound. Normal provider
+metadata no longer causes valid mainnet Merkle proofs to fail a 16-property
+limit. Merkle-root matching, hash and height checks, HTTP limits, and rejection
+of accessors, symbols and inherited objects remain enforced. No API, wire,
+proof or wallet-data migration is required.
+
 SDK 2.8.9 gives AuthFetch a finite binary payload budget matching its
 existing HTTP request and configured response capacity. A full 4 MiB CHIRP chunk no longer consumes the
 generic authentication envelope's JSON expansion budget before HTTP dispatch.
