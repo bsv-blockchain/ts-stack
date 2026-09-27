@@ -166,10 +166,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.9",
-      "releaseType": "patch",
+      "publishedVersion": "2.8.10",
+      "releaseType": "none",
       "summary": "Accepts normal full WhatsOnChain block-header metadata within the existing 64-property header-response boundary instead of rejecting valid mainnet Merkle proofs at 16 properties. Exact Merkle-root equality, hash/height validation, finite HTTP limits, plain-data checks and accessor/symbol rejection remain enforced.",
-      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Source 2.8.10 remains a candidate until the protected npm publication workflow succeeds."
+      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Published 2.8.10 is verified against protected release 36324548797, source 5a4053223692b020372f5a8e20f59bf9c82cc968, exact registry bytes, source provenance and CycloneDX SBOM."
     },
     {
       "name": "@bsv/simple",
