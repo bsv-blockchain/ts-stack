@@ -5,6 +5,14 @@ import express from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { CHIRPUploader, objectIdentifierForBytes } from '../src/index.js'
 
+// Full-chunk hashing can outlast an idle socket while the loopback event loop is busy.
+// Use fresh fixture connections beneath the default AuthFetch authentication path.
+const loopbackFetch: typeof fetch = (url, options = {}) => {
+  const headers = new Headers(options.headers)
+  headers.set('Connection', 'close')
+  return fetch(url, { ...options, headers })
+}
+
 test.each<[string, Uint8Array]>([
   ['non-text bytes', Uint8Array.of(0, 1, 127, 128, 255)],
   ['complete 4 MiB chunk', new Uint8Array(4_194_304).fill(255)]
@@ -74,6 +82,7 @@ test.each<[string, Uint8Array]>([
         storageURL: origin,
         allowPrivateHosts: true,
         allowInsecureHTTP: true,
+        fetchClient: loopbackFetch,
         retriesPerRequest: 0
       }).publish({ source, retentionSeconds: 60 })
       expect(result.commits).toHaveLength(1)
