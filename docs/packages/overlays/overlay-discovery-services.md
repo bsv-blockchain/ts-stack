@@ -4,9 +4,9 @@ title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-discovery-services'
-version: '2.2.6'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '2.2.7'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services'
 status: stable
@@ -15,7 +15,7 @@ tags: ['overlay', 'discovery']
 
 # @bsv/overlay-discovery-services
 
-The unpublished 2.2.6 candidate refreshes the packed first-party dependency
+The unpublished 2.2.7 candidate refreshes the packed first-party dependency
 ranges for the next wallet interoperability release; no independent API or wire
 format changes are introduced. Adopt after the dependency graph is published.
 

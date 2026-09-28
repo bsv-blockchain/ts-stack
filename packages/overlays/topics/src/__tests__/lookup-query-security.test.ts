@@ -27,6 +27,7 @@ function uhrpHarness(): {
   const skip = jest.fn(() => cursor)
   const cursor = {
     project: jest.fn(() => cursor),
+    sort: jest.fn(() => cursor),
     limit,
     skip,
     toArray
@@ -75,7 +76,7 @@ describe('public lookup query security boundaries', () => {
 
     await expect(
       service.lookup({ service: 'ls_uhrp', query: { hostIdentityKey: CERTIFIER_KEY, limit: 0 } })
-    ).rejects.toThrow('limit must be an integer from 1 to 100')
+    ).rejects.toThrow('limit must be an integer from 1 to 200')
     await expect(
       service.lookup({ service: 'ls_uhrp', query: { outpoint: `${TXID}.1.trailing` } })
     ).rejects.toThrow('canonical outpoint')

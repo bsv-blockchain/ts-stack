@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: '2.9.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -16,6 +16,92 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 # @bsv/sdk
 
 The unpublished 2.9 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+Ordinary HTTP fallback retains native text, URLSearchParams, typed Blob and
+FormData serialization and inferred Content-Type, including cached peers.
+Mutable inputs are copied before asynchronous work; explicit headers prevail.
+Authenticated payment retries retain their owned-byte snapshots.
+
+Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
+for block headers containing the provider's full metadata. Header objects may
+contain up to 64 owned data properties, matching the existing header-list
+bound. Merkle-root equality, response size limits, and rejection of accessors,
+symbols, and inherited properties remain unchanged. No API, wire, proof, or
+wallet-data migration is required. Protected release
+[36324548797](https://github.com/bsv-blockchain/ts-stack/actions/runs/36324548797)
+verified the exact registry bytes, source provenance and CycloneDX SBOM for
+source `5a4053223692b020372f5a8e20f59bf9c82cc968`.
+
+The 2.8.8 source candidate aligns explicit script verification flags with
+spending-era rules, historical signature hashing, locktime operations, and
+bounded numeric allocations. The default JavaScript interpreter still lacks
+the block and coin heights needed for exact node consensus validation.
+There is no default local allocation cap. Callers evaluating untrusted scripts
+may supply a finite `memoryLimit`; a resource limit does not prove that a script
+is invalid. This candidate is not yet published.
+
+The 2.8.6 source candidate fixes BRC-29 payment acceptance.
+`Brc29RemittanceModule.acceptSettlement` now derives the recipient's own
+BRC-42 child key (`forSelf: true`) when checking that the settlement output
+pays the recipient. SDK 2.8.0 through 2.8.5 derived the sender-facing key, so
+every valid incoming BRC-29 payment was refused with `brc29.internalize_failed`
+before `internalizeAction`; no funds were internalized to a wrong key and
+refused payments remain pending. `RemittanceManager` and Message Box
+`PeerPayClient` acceptance recover after upgrading. No API, BRC100 wire or
+wallet-data migration is required. This candidate is not yet published.
+
+The 2.8.5 source candidate restores larger BRC-105 HTTP payment proofs and
+raises request and signed-response header capacity by 4x: 32 KiB per ordinary
+value, 256 KiB aggregate names and values, 512 headers, and 1 KiB per name.
+The requested-certificate policy header also increases to 256 KiB, checked
+before JSON parsing. Only `x-bsv-payment` request values may share the full
+aggregate budget rather than the ordinary per-value limit. Resource bounds
+remain finite; wire framing, body limits, deadlines and signature validation
+are unchanged. The response-frame overhead allowance increases from 128 KiB
+to 512 KiB to accommodate the larger header budget.
+Server, proxy and fetch-runtime limits apply independently and must be verified
+end to end for larger proofs. Applications affected by these client limits can
+upgrade without changing BRC100 calls, public APIs, wire bytes or wallet data.
+Wallets remain compatible with existing conforming applications. Publication
+follows the protected SDK workflow; this candidate is not yet published.
+
+### Transport-owned general payload policy
+
+SDK 2.8.5 adds an optional seventh `Peer` constructor argument,
+`AuthMessageValidationOptions`, also accepted as the second argument to
+`snapshotAuthMessage`. `maxGeneralPayloadBytes` may be a positive safe integer
+for a separate general-message payload budget, or `null` to delegate payload
+capacity to the transport. Omission preserves the prior aggregate message
+budget. The setting is local configuration and is never taken from a peer's
+message; `Peer` snapshots it when constructed.
+
+```ts
+const peer = new Peer(wallet, transport, undefined, undefined, undefined, undefined, {
+  maxGeneralPayloadBytes: null
+})
+```
+
+Delegation excludes only the top-level general-message byte payload from the
+SDK message-size accounting. Metadata budgets, dense byte validation, owned
+snapshots, signatures, session identity, nonce/replay handling, and handshake
+and certificate-message validation remain. Configure HTTP server and edge
+capacity before delegating. The HTTP SDK client's own request/response bounds
+still apply independently.
+
+Authentication middleware 2.2.8 requires SDK 2.8.5 and selects this transport
+policy itself, so its received payment headers do not hit a hidden SDK envelope
+budget. Custom `ExpressTransport`/`Peer` integrations should select the same
+policy when the HTTP layer owns payload admission.
+
+Published version 2.8.4 also restores `listActions` responses containing empty
+stored descriptions or unassigned basket names, including ordinary generated
+change. The original strings are preserved; wallets need not fabricate display
+metadata or rewrite history. Nonempty description limits, UTF-8 byte ceilings,
+required scripts and labels, signed net values, nonnegative outputs and all
+new-action request validation remain unchanged. Direct, HTTP JSON and binary
+clients share the same regression coverage and a portable conformance vector.
+No API, wire or account-data migration is required; only clients already bundling
+the affected hardened SDK need a dependency update for this defect.
 
 The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.

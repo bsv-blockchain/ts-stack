@@ -27,6 +27,29 @@ See the [sync contract and next-stage design](../../../../docs/guides/wallet-syn
 This is an eventual replica merge; it does not create a coherent source snapshot
 or change the existing archive format.
 
+## BRC-100 result compatibility
+
+Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
+results, fixing strict binary bridge failures after the wallet operation while
+retaining fee and service-charge authorization. Upgrade the wallet and permission
+manager together. Existing JSON bridges that remove internal metadata retain their
+behavior; no application, BRC-39 or account-recovery migration is required. Check
+wallet history before retrying an action whose response failed on an older host.
+
+## Backup and recovery
+
+A BRC-100 wallet needs both recoverable keys and wallet records/derivation
+metadata. BRC-39 exports contain wallet data, not root keys or manager snapshots.
+App removal or device loss can remove locally retained secrets and state.
+Test the independent key and data recovery paths on a replacement device.
+
+Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
+[BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
+[recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+Portable helpers require a concrete local `StorageProvider`; a remote client
+is not one. Qualify the local-copy path and device memory limits before adding
+export/import UI.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for
@@ -182,16 +205,23 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
 
-### 2.15 candidate size review
+### 2.15 candidate size review and integration history
+
+The September 28 integration with current main measures Metro **2,401,423 /
+619,596 / 468,551** bytes and Hermes **4,646,003 / 1,969,117 / 1,532,602**
+bytes (raw/gzip/Brotli), within every retained ceiling. Native module composition,
+source maps and Hermes compilation pass.
 
 The reviewed Hermes Brotli ceiling increases from 1,520,000 to 1,675,000 bytes
 for bounded resumable sync, proof recovery and prepared BRC-118 payment transport.
-The other five ceilings remain unchanged to retain their existing growth checks;
-this deliberately retains their smaller margins. No production dependency,
+The integrated candidate retains main’s subsequently reviewed Metro ceilings
+and Hermes raw/gzip ceilings, plus this candidate’s 1,675,000-byte Hermes
+Brotli ceiling. No production dependency,
 minifier configuration, public export, source-map or compression setting changes
 accompany this budget adjustment.
 
-With official Node 24.18.0, the candidate measures:
+The September 24 candidate, before current-main integration, measured with
+official Node 24.18.0:
 
 | Artifact | Raw bytes | gzip bytes | Brotli bytes |
 | -------- | --------: | ---------: | -----------: |
@@ -208,6 +238,17 @@ module graph, reject Node-only modules, validate maps and compile Hermes bytecod
 A matching-input cross-platform check produced identical Hermes bytes on Linux
 x86_64 and macOS ARM, including reproduction across independent build directories.
 These measurements describe this candidate fixture, not an application-size guarantee.
+
+The reviewed 2.14.2 identity candidate `b088c1bef` measures Metro **2,379,919 / 612,262 /
+462,261** bytes and Hermes **4,629,563 / 1,943,675 / 1,510,174** bytes
+(raw/gzip/Brotli). Compared with the preceding unpublished 2.14.2 candidate,
+Metro gzip grows by 3,553 bytes (0.58%). This is the required SDK/Toolbox
+identity matcher, portable text tokenization and direct-filter guards; no new
+dependency, Node adapter or public export was introduced. The packed consumer
+passes the module/runtime composition and source-map checks and compiles with
+Hermes. The versioned budgets retain at least 10% headroom above these reviewed
+measurements, rounded up to 5,000 bytes, following the shared artifact policy.
+All composition and byte-dimension gates remain enforced.
 
 ## License
 

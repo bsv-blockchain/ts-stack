@@ -25,7 +25,7 @@ import { completeSignedTransaction, verifyUnlockScripts } from './completeSigned
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { setResultBeef } from './resultBeef'
-import { exactActionSpendSymbol, type ExactActionSpendCarrier } from '../../utility/exactActionSpend'
+import { setExactActionSpend } from '../../utility/exactActionSpend'
 
 export interface CreateActionResultX extends CreateActionResult {
   txid?: TXIDHexString
@@ -199,14 +199,14 @@ function makeSignableTransactionResult(
 
   const txid = prior.tx.id('hex')
 
-  const r: CreateActionResult & ExactActionSpendCarrier = {
+  const r: CreateActionResult = {
     noSendChange: args.isNoSend ? prior.dcr.noSendChangeOutputVouts?.map(vout => `${txid}.${vout}`) : undefined,
     signableTransaction: {
       reference: prior.dcr.reference,
       tx: makeSignableTransactionBeef(prior.tx)
-    },
-    [exactActionSpendSymbol]: prior.amount
+    }
   }
+  setExactActionSpend(r, prior.amount)
 
   wallet.pendingSignActions[r.signableTransaction!.reference] = prior
 

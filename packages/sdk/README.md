@@ -34,6 +34,11 @@ the most recent 1,000 entries. Simplified authenticated HTTP frames, bodies,
 headers, signatures, request IDs, and certificate-request headers have fixed
 size/count limits and redirects are rejected.
 
+Ordinary HTTP fallback preserves native fetch body semantics: text, URLSearchParams,
+typed Blob and FormData retain their generated media types and serialization.
+Mutable inputs are snapshotted before discovery; authenticated payment retries
+continue to use owned bytes. Explicit caller Content-Type headers take precedence.
+
 The next release adds negotiated BRC-118 multipart payments. AuthFetch prepares
 with `noSend`, validates the actual final payment/request size, then submits that
 same payment with `sendWith`. The wallet must support prepare/submit and
@@ -47,6 +52,20 @@ the BRC-104 `-1` sentinel and require the matching auth middleware 2.3.0 receive
 BRC-29 receipt derives the recipient's own child key (`forSelf: true`). Independent
 sender/recipient wallet tests protect this distinction; the payer's sibling
 output is not a valid payment to the recipient.
+
+SDK 2.8.10 accepts full WhatsOnChain block headers with up to 64 own data
+properties, matching the existing header-list response bound. Normal provider
+metadata no longer causes valid mainnet Merkle proofs to fail a 16-property
+limit. Merkle-root matching, hash and height checks, HTTP limits, and rejection
+of accessors, symbols and inherited objects remain enforced. No API, wire,
+proof or wallet-data migration is required.
+
+SDK 2.8.9 gives AuthFetch a finite binary payload budget matching its
+existing HTTP request and configured response capacity. A full 4 MiB CHIRP chunk no longer consumes the
+generic authentication envelope's JSON expansion budget before HTTP dispatch.
+Request framing remains capped at 16 MiB, configured response body limits remain
+enforced, and handshake, certificate, signature, nonce and redirect checks are
+unchanged. No API, wire or wallet-data migration is required.
 
 For signature payloads of at least 64 KiB, `ProtoWallet` uses asynchronous
 platform SHA-256 when Web Crypto is available, avoiding long synchronous
@@ -77,6 +96,73 @@ Applications affected by these client defects can update their bundled SDK
 without changing calls. Wallet upgrades continue to support the existing BRC100
 contract; an ecosystem-wide application migration is not required. No API, wire
 or account-data migration is required. These compatibility fixes are also included in the unpublished 2.9.0 candidate.
+
+### Action history compatibility
+
+The 2.8.4 candidate accepts empty stored `listActions` descriptions and empty
+basket names, as returned by established wallets for generated change and
+unassigned outputs. It preserves those values rather than inventing metadata.
+Nonempty descriptions retain their 5–2,000 UTF-8 byte bounds, and basket names
+retain their 300-byte ceiling. Required scripts, label binding, transaction
+identifiers, monetary values and new-action request validation are unchanged.
+Affected SDK clients can update without changing their BRC100 calls; wallet
+upgrades do not require an ecosystem-wide application migration. No wire or
+account-data migration is required. Publication uses the protected npm workflow.
+
+### HTTP header compatibility
+
+The 2.8.5 candidate raises authenticated HTTP header capacity by 4x in both
+request and signed-response handling:
+
+| Limit                               | Previous  | 2.8.5   |
+| ----------------------------------- | --------- | ------- |
+| Ordinary header value               | 8 KiB     | 32 KiB  |
+| Aggregate header names and values   | 64 KiB    | 256 KiB |
+| Header count                        | 128       | 512     |
+| Individual header name              | 256 bytes | 1 KiB   |
+| Requested-certificate policy header | 64 KiB    | 256 KiB |
+
+BRC-105 `x-bsv-payment` request headers may use the full aggregate budget,
+including their name and other request headers. This accommodates larger
+Atomic BEEF proofs without truncating or changing their bytes. The separate
+certificate-policy limit applies before JSON parsing. Finite limits remain;
+wire framing, response-body limits, deadlines and signature validation are
+unchanged. The response-frame overhead allowance increases from 128 KiB to
+512 KiB to carry the larger headers alongside even a small configured body limit. Server, proxy and fetch-runtime limits still apply independently;
+operators accepting larger proofs should verify the full HTTP path.
+
+No BRC100 call, public API, wire or wallet-data migration is required. Affected
+applications can update their SDK without changing calls; existing conforming
+applications remain compatible with upgraded wallets. Publication is a separate
+protected workflow step.
+
+### Transport-owned general payload policy
+
+SDK 2.8.5 adds an optional seventh `Peer` constructor argument,
+`AuthMessageValidationOptions`, also accepted as the second argument to
+`snapshotAuthMessage`. `maxGeneralPayloadBytes` may be a positive safe integer
+for a separate general-message payload budget, or `null` to delegate payload
+capacity to the transport. Omission preserves the prior aggregate message
+budget. The setting is local configuration and is never taken from a peer's
+message; `Peer` snapshots it when constructed.
+
+```ts
+const peer = new Peer(wallet, transport, undefined, undefined, undefined, undefined, {
+  maxGeneralPayloadBytes: null
+})
+```
+
+Delegation excludes only the top-level general-message byte payload from the
+SDK message-size accounting. Metadata budgets, dense byte validation, owned
+snapshots, signatures, session identity, nonce/replay handling, and handshake
+and certificate-message validation remain. Configure HTTP server and edge
+capacity before delegating. The HTTP SDK client's own request/response bounds
+still apply independently.
+
+Authentication middleware 2.2.8 requires SDK 2.8.5 and selects this transport
+policy itself, so its received payment headers do not hit a hidden SDK envelope
+budget. Custom `ExpressTransport`/`Peer` integrations should select the same
+policy when the HTTP layer owns payload admission.
 
 ## Table of Contents
 
@@ -134,6 +220,20 @@ await tx.broadcast()
 ```
 
 For a more detailed tutorial and advanced examples, check our [Documentation](#documentation).
+
+### Script verification
+
+`Spend` accepts explicit `verifyFlags` for applications that know the spending
+block's flags and the source output's era. The default JavaScript interpreter
+does not know either height, so its version-based behavior is not a substitute
+for node consensus validation. `Transaction.verify()` uses that default when no
+optional verification backend is selected.
+
+`OP_NUM2BIN` sizes above the node's signed 32-bit limit are invalid. There is
+no default local allocation cap. Callers evaluating untrusted scripts can pass
+an optional finite `memoryLimit` to bound local work before allocation.
+`ScriptResourceLimitError` means the local evaluator did not complete, rather
+than that the script is invalid.
 
 ## Features & Deliverables
 

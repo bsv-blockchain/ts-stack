@@ -5,8 +5,8 @@ kind: package
 domain: middleware
 version: '2.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'
@@ -25,6 +25,21 @@ a verified receipt.
 
 This contract is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Their headers and clients are not interchangeable.
+
+Version 2.1.8 removes middleware payment-header size ceilings. A header already
+received from the client is parsed and its payment validated regardless of size.
+HTTP server, CDN, proxy and WAF configuration own transport budgets; configure
+and validate the full route for supported payment proofs. The deprecated
+`maxPaymentHeaderBytes` option remains accepted for source compatibility but is
+ignored, including when an older application still supplies a value. Move any
+intended transport policy to the HTTP server or edge and remove the option.
+
+Atomic BEEF validation, canonical base64, derivation verification, payment
+pricing, wallet acceptance and atomic replay protection still apply. Invalid
+payment contents are rejected. SDK 2.8.5 separately raises client header capacity;
+that does not constrain what this middleware accepts from other compatible
+clients. No BRC100 call, wire or wallet-data migration is required. Source
+publication is a separate protected release step.
 
 ## Install
 
@@ -87,7 +102,7 @@ accepted zero-value receipt. Invalid pricing fails closed.
 8. `req.payment.satoshisPaid` and the response header report the actual output
    value.
 
-The raw header is bounded to 64 KiB by default. Duplicated, malformed,
+The middleware does not impose a raw-header size ceiling. Duplicated, malformed,
 underfunded, replayed, rejected, or ambiguous payments never call `next()`.
 
 ## Replay storage
@@ -126,7 +141,8 @@ an expiring single-use replay database.
 - `wallet` — required BRC-100 wallet with `internalizeAction`
 - `calculateRequestPrice` — sync or async price; defaults to 100
 - `replayStore` — atomic transaction-ID claim store
-- `maxPaymentHeaderBytes` — positive safe integer; defaults to 64 KiB
+- `maxPaymentHeaderBytes` — deprecated and ignored; configure transport budgets
+  on the HTTP server or edge
 - `logger` — optional structured `error`/`warn` sink
 
 The logger receives sanitized failure metadata, not exception messages,

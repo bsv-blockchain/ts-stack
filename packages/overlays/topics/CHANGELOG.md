@@ -9,10 +9,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 1.8.5 candidate
+### 1.9.2 candidate
 
 - Refresh the packed templates range to include its CommonJS interoperability
   repair. Topic APIs, schemas and admission behavior are unchanged.
+
+- Accept SDK-compatible 200-row UHRP lookup pages with deterministic outpoint ordering and unchanged selector/signature validation.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Advances the packed overlay dependency candidate for BASM validation hardening.
@@ -20,6 +22,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- `foldAction`, `defaultAssetState` and the `AssetAdminState` / `FoldContext` /
+  `FrozenRef` types are exported from the package entry point, so consumers can
+  replay Mandala admin history themselves (for example to rebuild an asset's
+  state while excluding an evicted transaction) with the exact reducer the
+  lookup service uses. The `exports` map is unchanged; no consumer migration is
+  required.
 - `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation
   anchors (`uora-anchor-v3`), keyed on the `did:key` of the party that made the
   claim. Anchors name their anchoring service in the output and lock to its

@@ -1,4 +1,14 @@
-import { Beef, CachedKeyDeriver, PrivateKey, Script, Transaction, Utils, Validation } from '@bsv/sdk'
+import {
+  Beef,
+  CachedKeyDeriver,
+  PrivateKey,
+  Script,
+  Transaction,
+  Utils,
+  Validation,
+  WalletWireProcessor,
+  WalletWireTransceiver
+} from '@bsv/sdk'
 import { Knex, knex as makeKnex } from 'knex'
 import { Wallet } from '../../../src/Wallet'
 import { MockServices } from '../../../src/mockchain/MockServices'
@@ -9,6 +19,7 @@ import { WalletStorageManager } from '../../../src/storage/WalletStorageManager'
 import { processNoSendExpiryLifecycle } from '../../../src/storage/methods/noSendExpiryLifecycle'
 import { ScriptTemplateBRC29 } from '../../../src/utility/ScriptTemplateBRC29'
 import { randomBytesHex, verifyOne } from '../../../src/utility/utilityHelpers'
+import { getExactActionSpend } from '../../../src/utility/exactActionSpend'
 import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
 
 function memoryKnex(_name: string): Knex {
@@ -196,6 +207,28 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       }
     } as const
   }
+
+  test.each([false, true])('binary BRC-100 returns the protected action (signAndProcess=%s)', async signAndProcess => {
+    const ctx = await createHarness()
+    try {
+      const create = jest.spyOn(ctx.wallet, 'createAction')
+      const wire = new WalletWireTransceiver(new WalletWireProcessor(ctx.wallet))
+      const received = await wire.createAction(protectedArgs(3600, signAndProcess), 'wallet.example')
+      const local = await create.mock.results[0].value
+      expect(getExactActionSpend(local)).toBeGreaterThanOrEqual(5000)
+      expect(Object.getOwnPropertySymbols(local)).toEqual([])
+      expect(Object.getOwnPropertySymbols(received)).toEqual([])
+      if (signAndProcess) {
+        expect(received.txid).toBe(local.txid)
+        expect(Array.from(received.tx!)).toEqual(Array.from(local.tx!))
+      } else {
+        expect(received.signableTransaction?.reference).toBe(local.signableTransaction.reference)
+        expect(Array.from(received.signableTransaction!.tx)).toEqual(Array.from(local.signableTransaction.tx))
+      }
+    } finally {
+      await ctx.destroy()
+    }
+  })
 
   async function expectArmFailure(
     mutate: (

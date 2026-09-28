@@ -5,8 +5,8 @@ kind: package
 domain: middleware
 version: '2.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -36,6 +36,34 @@ native ESM and CommonJS entry points with matching declarations.
 Version 2.2.4 requires `@bsv/sdk` 2.7.1 or later so the identity assigned to
 `req.auth.identityKey` is the identity bound to the verified peer session, not
 unsigned BRC-104 transport metadata.
+
+Version 2.2.6 restores bodyless authenticated requests when the Express 4 JSON
+parser supplies an empty-object placeholder. HTTP message framing distinguishes
+that placeholder from a real JSON `{}` body. Existing clients need no changes;
+framed bodies and authentication checks retain their existing semantics.
+
+Version 2.2.7 preserves Express's one-argument response header-map overload.
+`res.set({ ...headers })` and authenticated payment challenges work with the
+same Express validation, signed headers and wire format. No client migration
+is required.
+
+Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
+header-count ceilings. `createAuthMiddleware` configures its Peer with
+`maxGeneralPayloadBytes: null`, avoiding an indirect SDK general-message
+ceiling for received headers while retaining metadata and signature validation.
+Received headers are excluded from `maxRequestBytes`, which still applies to
+handshake/plain-data and encoded request bodies. The middleware preserves all
+selected header bytes for BRC-104 signing and verification, rather than rejecting
+a received payment because of an additional header budget. HTTP server, CDN,
+proxy and WAF configuration own transport header limits. Configure those layers
+for the largest supported payment proof and validate the complete route.
+
+Malformed or duplicate signed headers, unsafe header values, authentication
+failures and invalid signatures still fail validation. Body budgets, timeouts
+and replay protection remain separate. Clients consuming larger signed responses
+need matching capacity; SDK 2.8.5 raises its header limits by 4x. No BRC100 call,
+wire or wallet-data migration is required. Source publication is a separate
+protected release step.
 
 ## Quick start
 

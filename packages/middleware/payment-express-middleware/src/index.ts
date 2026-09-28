@@ -12,9 +12,7 @@ import type {
 } from './types.js'
 
 const PAYMENT_VERSION = '1.0'
-const DEFAULT_MAX_PAYMENT_HEADER_BYTES = 64 * 1024
 const DEFAULT_REPLAY_CAPACITY = 100_000
-const MAX_NONCE_LENGTH = 512
 
 interface ParsedPayment {
   payment: BSVPayment
@@ -76,8 +74,9 @@ function paymentHeader(req: PaymentRequest): string | null | undefined {
   return typeof value === 'string' ? value : null
 }
 
-function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefined {
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) return undefined
+function parsePaymentHeader(raw: string): BSVPayment | undefined {
+  // The HTTP server and edge own transport budgets. A payment that has already
+  // arrived must be validated, not discarded by a second header-size policy.
   let value: unknown
   try {
     value = JSON.parse(raw)
@@ -90,8 +89,6 @@ function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefin
     typeof record.derivationPrefix !== 'string' ||
     typeof record.derivationSuffix !== 'string' ||
     typeof record.transaction !== 'string' ||
-    record.derivationPrefix.length > MAX_NONCE_LENGTH ||
-    record.derivationSuffix.length > MAX_NONCE_LENGTH ||
     !isCanonicalBase64(record.derivationPrefix) ||
     !isCanonicalBase64(record.derivationSuffix) ||
     !isCanonicalBase64(record.transaction)
@@ -218,7 +215,6 @@ async function issuePaymentChallenge(
 
 interface PaymentInputLimits {
   enableMultipart: boolean
-  maxPaymentHeaderBytes: number
   maxPaymentBodyBytes: number
   maxPaymentBytes: number
 }
@@ -241,11 +237,11 @@ function extractPaymentInput(
   res: Response,
   multipart: boolean,
   limits: PaymentInputLimits
-): { rawPayment: string | null | undefined; paymentLimit: number } | undefined {
-  const { enableMultipart, maxPaymentHeaderBytes, maxPaymentBodyBytes, maxPaymentBytes } = limits
+): { rawPayment: string | null | undefined } | undefined {
+  const { enableMultipart, maxPaymentBodyBytes, maxPaymentBytes } = limits
   const contentType = req.headers['content-type']
   const rawPayment = paymentHeader(req)
-  const headerInput = { rawPayment, paymentLimit: maxPaymentHeaderBytes }
+  const headerInput = { rawPayment }
   if (!enableMultipart || typeof contentType !== 'string' || !isMultipartPaymentType(contentType))
     return headerInput
   if (!multipart || rawPayment !== undefined || !(req.body instanceof Uint8Array)) {
@@ -265,7 +261,7 @@ function extractPaymentInput(
       maxPaymentBytes
     )
     restoreApplicationPayload(req, parsed)
-    return { rawPayment: parsed.paymentJSON, paymentLimit: maxPaymentBytes }
+    return { rawPayment: parsed.paymentJSON }
   } catch (error) {
     if (error instanceof MissingMultipartPayment) return headerInput
     const status =
@@ -367,7 +363,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     calculateRequestPrice = () => 100,
     wallet,
     replayStore = new InMemoryPaymentReplayStore(),
-    maxPaymentHeaderBytes = DEFAULT_MAX_PAYMENT_HEADER_BYTES,
     enableMultipart = false,
     maxPaymentBodyBytes = 7 * 1024 * 1024,
     maxPaymentBytes = 4 * 1024 * 1024,
@@ -386,9 +381,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
   }
   if (replayStore === null || typeof replayStore.claim !== 'function') {
     throw new TypeError('A replay store with an atomic claim method is required.')
-  }
-  if (!Number.isSafeInteger(maxPaymentHeaderBytes) || maxPaymentHeaderBytes < 1) {
-    throw new RangeError('maxPaymentHeaderBytes must be a positive safe integer.')
   }
   if (!isPaymentLogger(logger)) {
     throw new TypeError('logger error and warn properties must be functions when provided.')
@@ -416,12 +408,11 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     const multipart = enableMultipart && paymentRequest.auth?.supportsMultipart === true
     const input = extractPaymentInput(paymentRequest, res, multipart, {
       enableMultipart,
-      maxPaymentHeaderBytes,
       maxPaymentBodyBytes,
       maxPaymentBytes
     })
     if (input === undefined) return
-    const { rawPayment, paymentLimit } = input
+    const { rawPayment } = input
 
     let requestPrice: number
     try {
@@ -458,7 +449,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const payment = parsePaymentHeader(rawPayment, paymentLimit)
+    const payment = parsePaymentHeader(rawPayment)
     if (payment === undefined) {
       sendError(res, 400, 'ERR_MALFORMED_PAYMENT', 'The X-BSV-Payment header is malformed.')
       return

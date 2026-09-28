@@ -21,12 +21,13 @@ const defaultFetch: typeof fetch =
 export const DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 export const DEFAULT_SIMPLIFIED_FETCH_MAX_HANDSHAKE_RESPONSE_BYTES = 1024 * 1024
 export const DEFAULT_SIMPLIFIED_FETCH_REQUEST_TIMEOUT_MS = 30_000
-const MAX_SIGNED_RESPONSE_HEADERS = 128
-const MAX_SIGNED_RESPONSE_HEADER_KEY_BYTES = 256
-const MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES = 8192
-const MAX_SIGNED_RESPONSE_HEADER_BYTES = 64 * 1024
+// Request and signed-response header capacity is bounded independently of bodies.
+const MAX_SIGNED_RESPONSE_HEADERS = 512
+const MAX_SIGNED_RESPONSE_HEADER_KEY_BYTES = 1024
+const MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES = 32 * 1024
+const MAX_SIGNED_RESPONSE_HEADER_BYTES = 256 * 1024
 const MAX_AUTH_SIGNATURE_HEX_BYTES = 1024
-const MAX_REQUESTED_CERTIFICATES_HEADER_BYTES = 64 * 1024
+const MAX_REQUESTED_CERTIFICATES_HEADER_BYTES = 256 * 1024
 const MAX_REQUEST_METHOD_BYTES = 32
 const MAX_REQUEST_TARGET_COMPONENT_BYTES = 8192
 const MAX_AUTH_REQUEST_PAYLOAD_BYTES = 16 * 1024 * 1024
@@ -645,7 +646,14 @@ export class SimplifiedFetchTransport implements Transport {
         const headerKeyBytes = requestReader.read(nHeaderKeyBytes)
         const headerKey = toUTF8Strict(headerKeyBytes)
         const nHeaderValueBytes = requestReader.readVarIntNumStrict(false)
-        if (nHeaderValueBytes > MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES) {
+        // BRC-105 carries the payment's Atomic BEEF in this request header.
+        // It shares the aggregate budget; ordinary headers and all
+        // signed response headers retain their smaller per-value ceiling.
+        const maxValueBytes =
+          headerKey.toLowerCase() === 'x-bsv-payment'
+            ? MAX_SIGNED_RESPONSE_HEADER_BYTES
+            : MAX_SIGNED_RESPONSE_HEADER_VALUE_BYTES
+        if (nHeaderValueBytes > maxValueBytes) {
           throw new Error('Authenticated request header value exceeds its byte limit')
         }
         const headerValueBytes = requestReader.read(nHeaderValueBytes)

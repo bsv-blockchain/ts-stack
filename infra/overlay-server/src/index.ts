@@ -52,6 +52,7 @@ import packageJson from '../package.json' with { type: 'json' }
 import { log } from './logger.js'
 import { createOverlayLifecycle, type OverlayLifecycle } from './lifecycle.js'
 import { readBooleanEnv, readMandalaRuntimeConfiguration } from './securityConfig.js'
+import { readDiscoveryRuntimeConfiguration } from './discoveryConfig.js'
 config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
@@ -247,17 +248,20 @@ const main = async () => {
   const providerServer = server as OverlayProviderConfigMethods
   server.configureLogger(overlayLogger as unknown as typeof console)
 
+  const discovery = readDiscoveryRuntimeConfiguration(process.env, NETWORK, HOSTING_URL)
   const wa = new WalletAdvertiser(
-    NETWORK as 'main' | 'test',
+    NETWORK,
     SERVER_PRIVATE_KEY,
     WALLET_STORAGE_URL,
-    HOSTING_URL
+    HOSTING_URL,
+    discovery.lookupResolverConfig
   )
 
   await wa.init()
 
   server.configureEngineParams({
     advertiser: wa,
+    suppressDefaultSyncAdvertisements: discovery.suppressDefaultSyncAdvertisements,
     throwOnBroadcastFailure: boolEnv('THROW_ON_BROADCAST_FAIL', true)
   })
 

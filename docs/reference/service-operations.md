@@ -169,7 +169,7 @@ Incident handling follows this evidence-preserving sequence:
 ### overlay-server
 
 - Configuration: required `HOSTING_URL`, `KNEX_URL`, `MONGO_URL`, `NETWORK`, `NODE_NAME`, `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARCADE_DEPLOYMENT_ID`, `ARCADE_URL`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `CHAINTRACKS_URL`, `GASP_ENABLED`; secret-bearing
+  `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARCADE_DEPLOYMENT_ID`, `ARCADE_URL`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `CHAINTRACKS_URL`, `GASP_ENABLED`, `DISCOVERY_ROOT`; secret-bearing
   `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `KNEX_URL`, `MONGO_URL`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
@@ -180,6 +180,7 @@ Incident handling follows this evidence-preserving sequence:
 - query each enabled lookup service
 - ingest and classify provider callbacks
 - reconcile GASP/BASM state across a reorganization
+- discover SHIP/SLAP services through default SDK network presets when operating as a discovery root
 - Alerts:
 - readiness dependency checks fail or provider callback processing errors repeat
 - unproven rows age beyond policy or maintenance repeatedly fails

@@ -1,3 +1,4 @@
+import { extendObjectRetention } from '../utils/extendObjectRetention'
 import { Storage, type Bucket, type File } from '@google-cloud/storage'
 import { createHash, randomUUID } from 'node:crypto'
 import { objectIdentifierForHash } from './core/hash'
@@ -167,7 +168,7 @@ export class CloudBucketChirpStore implements ChirpStore {
             })
           } catch (error) {
             if (!isPreconditionFailure(error)) throw error
-            await extendCustomTime(object, currentSession.stagingExpiresAt)
+            await extendObjectRetention(object, currentSession.stagingExpiresAt)
           }
           try {
             await this.file(markerName(uploadId, objectIdentifier)).save('', {
@@ -244,7 +245,7 @@ export class CloudBucketChirpStore implements ChirpStore {
           'ERR_CHIRP_MISSING_OBJECT',
           'Cannot lease an incomplete CHIRP closure.'
         )
-      await extendCustomTime(object, record.expiryTime)
+      await extendObjectRetention(object, record.expiryTime)
     })
     await this.writeJSON(rootName(record.rootIdentifier), record, record.expiryTime)
     this.commitIndex.invalidate(record.rootIdentifier)
@@ -301,7 +302,7 @@ export class CloudBucketChirpStore implements ChirpStore {
     if (expiryTime > record.expiryTime) {
       record.expiryTime = expiryTime
       await mapLimited(record.closure, 16, async identifier => {
-        await extendCustomTime(this.file(objectName(identifier)), expiryTime)
+        await extendObjectRetention(this.file(objectName(identifier)), expiryTime)
       })
       await this.writeJSON(rootName(rootIdentifier), record, expiryTime)
       this.commitIndex.set(record)
@@ -647,12 +648,6 @@ async function downloadJSON<T>(file: File): Promise<T | null> {
   }
 }
 
-async function extendCustomTime(file: File, expiryTime: number): Promise<void> {
-  const [metadata] = await file.getMetadata()
-  const current = metadata.customTime == null ? 0 : Date.parse(metadata.customTime)
-  const proposed = (expiryTime + 300) * 1000
-  if (proposed > current) await file.setMetadata({ customTime: new Date(proposed).toISOString() })
-}
 
 async function deletePrefix(bucket: Bucket, prefix: string): Promise<void> {
   const [files] = await bucket.getFiles({ prefix })

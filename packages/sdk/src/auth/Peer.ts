@@ -3,11 +3,18 @@ import { createNonce } from './utils/createNonce.js'
 import { verifyNonce } from './utils/verifyNonce.js'
 import { getVerifiableCertificates } from './utils/getVerifiableCertificates.js'
 import { validateCertificates } from './utils/validateCertificates.js'
-import { AuthMessage, PeerSession, RequestedCertificateSet, Transport } from './types.js'
+import {
+  AuthMessage,
+  AuthMessageValidationOptions,
+  PeerSession,
+  RequestedCertificateSet,
+  Transport
+} from './types.js'
 import { VerifiableCertificate } from './certificates/VerifiableCertificate.js'
 import {
   assertAuthIdentityKey,
   assertAuthPeerTarget,
+  assertGeneralPayloadByteLimit,
   assertRequestedCertificateSet,
   copyAuthByteArray,
   snapshotAuthMessage,
@@ -48,6 +55,7 @@ export class Peer {
   public sessionManager: SessionManager
   readonly #transport: Transport
   readonly #wallet: WalletInterface
+  readonly #maxGeneralPayloadBytes: number | null | undefined
   certificatesToRequest: RequestedCertificateSet
   private readonly certificateSessionUpdates = new Map<string, Promise<void>>()
   private readonly onGeneralMessageReceivedCallbacks: Map<
@@ -126,6 +134,7 @@ export class Peer {
    * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} with atomic `claimMessageNonce` and `claimInitialRequestNonce` for shared/durable storage in load-balanced deployments; otherwise the bounded default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
+   * @param {AuthMessageValidationOptions} [messageValidation] - Local policy; set maxGeneralPayloadBytes to null to delegate capacity to the transport. Omission preserves existing limits.
    */
   constructor(
     wallet: WalletInterface,
@@ -133,8 +142,12 @@ export class Peer {
     certificatesToRequest?: RequestedCertificateSet,
     sessionManager?: SessionManager | AsyncSessionManager,
     autoPersistLastSession?: boolean,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    messageValidation: AuthMessageValidationOptions = {}
   ) {
+    const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes
+    assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
+    this.#maxGeneralPayloadBytes = maxGeneralPayloadBytes
     this.#wallet = wallet
     this.#originator = originator
     this.#transport = transport
@@ -165,7 +178,14 @@ export class Peer {
    * @throws Will throw an error if the message fails to send.
    */
   async toPeer(message: number[], identityKey?: string): Promise<void> {
-    message = copyAuthByteArray(message, 'general.payload', MAX_AUTH_MESSAGE_BYTES, true)
+    message = copyAuthByteArray(
+      message,
+      'general.payload',
+      this.#maxGeneralPayloadBytes === null
+        ? Number.MAX_SAFE_INTEGER
+        : (this.#maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
+      true
+    )
     if (identityKey !== undefined) assertAuthPeerTarget(identityKey)
     if (
       this.#autoPersistLastSession &&
@@ -210,7 +230,13 @@ export class Peer {
     await this.#touchSession(peerSession.sessionNonce as string)
 
     try {
-      await this.#transport.send(snapshotBoundedAuthData(generalMessage))
+      const outbound =
+        this.#maxGeneralPayloadBytes === undefined
+          ? snapshotBoundedAuthData(generalMessage)
+          : snapshotAuthMessage(generalMessage, {
+              maxGeneralPayloadBytes: this.#maxGeneralPayloadBytes
+            })
+      await this.#transport.send(outbound)
     } catch (error: unknown) {
       this.propagateTransportError(peerSession.peerIdentityKey, error)
     }
@@ -738,7 +764,7 @@ export class Peer {
    * @returns {Promise<void>}
    */
   async #handleIncomingMessage(message: AuthMessage): Promise<void> {
-    message = snapshotAuthMessage(message)
+    message = snapshotAuthMessage(message, { maxGeneralPayloadBytes: this.#maxGeneralPayloadBytes })
     this.#restoreOwnedCertificates(message)
 
     switch (message.messageType) {

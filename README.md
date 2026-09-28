@@ -26,6 +26,14 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 
 Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infra packages.
 
+## Wallet recovery resources
+
+Wallet builders need both recoverable root key material and wallet records,
+including derivation metadata. Start with [Wallet backup and recovery](docs/guides/wallet-backup-recovery.md),
+then use the [BRC-38/39 integration guide](docs/guides/wallet-data-portability.md),
+[recovery drill](docs/guides/wallet-recovery-drill.md) and
+[AI-agent implementation brief](docs/guides/wallet-recovery-agent-brief.md).
+
 ## Contributing
 
 The entire stack follows one [contribution policy](./CONTRIBUTING.md), one

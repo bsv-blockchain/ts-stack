@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.15.0'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -15,11 +15,26 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
-The unpublished 2.14 candidate adds `syncFromReaderResumable`, fair foreground scheduling, network/error preflight and canonical proof recovery. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md). Existing sync methods and BRC-38/39/40 formats remain supported.
+The unpublished 2.15 candidate adds `syncFromReaderResumable`, fair foreground scheduling, network/error preflight and canonical proof recovery. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md). Existing sync methods and BRC-38/39/40 formats remain supported.
 
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+## Backup and recovery
+
+**Recoverable root key material and wallet records are both required.** A seed
+alone cannot reconstruct every BRC-100 output's derivation metadata. BRC-38/39
+exports preserve wallet data, not root keys or unrelated product state.
+
+Start with [Wallet backup and recovery](../../guides/wallet-backup-recovery.md),
+then use [BRC-38/39 integration](../../guides/wallet-data-portability.md), the
+[recovery drill](../../guides/wallet-recovery-drill.md) and the
+[agent implementation brief](../../guides/wallet-recovery-agent-brief.md).
+The integration guide documents concrete-provider requirements, explicit
+restore/merge modes and the limits of the current in-memory export helpers.
+
+## Current capabilities
 
 Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
 pre-funds expiring `noSend` actions, stores a signed reclaim durably across
@@ -43,8 +58,9 @@ normal verified lineage resolution remains ambiguous and the outpoint is one
 of the wallet's verified candidates. Applications must persist
 `saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
 
-Snapshots intentionally carry everything needed to restore sensitive wallet
-state; possession of a snapshot is possession of the wallet. Store each
+Wallet-manager snapshots can carry root and privileged key material; they do
+not include the Wallet Toolbox storage database. Possession of such a snapshot
+is possession of the wallet's key material. Store each
 complete snapshot only in an OS Keychain, hardware-backed keystore, or
 comparably trusted secret store. Remote storage and credential-bearing Arcade
 SSE require HTTPS except for explicit loopback development, and transport

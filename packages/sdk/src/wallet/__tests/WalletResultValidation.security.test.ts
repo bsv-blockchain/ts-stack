@@ -1268,6 +1268,401 @@ describe('wallet result trust boundary', () => {
     ).toThrow('requested public attribute')
   })
 
+  it('binds discoverByAttributes results with the identity overlay matching contract', () => {
+    const discovered = (decryptedFields: Record<string, string>): unknown => ({
+      totalCertificates: 1,
+      certificates: [
+        {
+          ...CERTIFICATE,
+          certifierInfo: {
+            name: 'Certifier',
+            iconUrl: 'https://example.com/icon.png',
+            description: 'Trusted certifier',
+            trust: 1
+          },
+          publiclyRevealedKeyring: {},
+          decryptedFields
+        }
+      ]
+    })
+    const accepts = (fields: Record<string, string>, attributes: Record<string, unknown>): void => {
+      expect(() =>
+        validateWalletResult('discoverByAttributes', discovered(fields), { attributes })
+      ).not.toThrow()
+    }
+    const rejects = (
+      fields: Record<string, string>,
+      attributes: Record<string, unknown>,
+      message: string
+    ): void => {
+      expect(() =>
+        validateWalletResult('discoverByAttributes', discovered(fields), { attributes })
+      ).toThrow(message)
+    }
+    const person = { name: 'José Alice Smith', userName: 'deggen', profilePhoto: 'uhrp://bob' }
+
+    accepts(person, { any: 'deggen' })
+    accepts(person, { any: 'jose' })
+    accepts(person, { any: 'al' })
+    accepts(person, { any: '"Alice Smith"' })
+    accepts(person, { any: '"" nobody alice' })
+    accepts(person, { any: 'alice - nobody' })
+    rejects(person, { any: '"Smith Alice"' }, 'requested any attribute')
+    rejects(person, { any: 'alice -smith' }, 'requested any attribute')
+    rejects(person, { any: 'bob' }, 'requested any attribute')
+    rejects(person, { any: 'zz' }, 'requested any attribute')
+    rejects(person, { any: 'd' }, 'requested any attribute')
+    rejects(person, { any: 7 }, 'requested any attribute')
+
+    accepts(person, { name: 'ali smi' })
+    accepts(person, { name: 'ali', company: ' ' })
+    accepts(person, { userName: ' deggen ' })
+    rejects(person, { userName: 'deg' }, 'requested public attribute')
+    rejects(person, { city: 'London' }, 'requested public attribute')
+    rejects(person, { name: '   ' }, 'usable requested attribute')
+    rejects(person, { name: 7 }, 'request.attributes.name')
+
+    // Without a request record there is no lookup to bind to (unchanged behavior).
+    expect(() => validateWalletResult('discoverByAttributes', discovered(person))).not.toThrow()
+  })
+
+  it.each([
+    {
+      label: 'complete name',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'alice'
+      },
+      accepted: true
+    },
+    {
+      label: 'partial word',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'ali'
+      },
+      accepted: false
+    },
+    {
+      label: 'stopword only',
+      fields: {
+        name: 'The Alice Smith'
+      },
+      attributes: {
+        any: 'the'
+      },
+      accepted: false
+    },
+    {
+      label: 'stopword and name',
+      fields: {
+        name: 'The Alice Smith'
+      },
+      attributes: {
+        any: 'the alice'
+      },
+      accepted: true
+    },
+    {
+      label: 'punctuation separates words',
+      fields: {
+        name: 'Alice-Smith'
+      },
+      attributes: {
+        any: 'smith'
+      },
+      accepted: true
+    },
+    {
+      label: 'hyphenated query',
+      fields: {
+        name: 'Alice Jones'
+      },
+      attributes: {
+        any: 'Alice-Smith'
+      },
+      accepted: true
+    },
+    {
+      label: 'whole excluded word',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'alice -smith'
+      },
+      accepted: false
+    },
+    {
+      label: 'excluded partial word',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'alice -smi'
+      },
+      accepted: true
+    },
+    {
+      label: 'excluded name suffix',
+      fields: {
+        name: 'Alice Smithson'
+      },
+      attributes: {
+        any: 'alice -smith'
+      },
+      accepted: true
+    },
+    {
+      label: 'excluded stopword',
+      fields: {
+        name: 'The Alice Smith'
+      },
+      attributes: {
+        any: 'alice -the'
+      },
+      accepted: true
+    },
+    {
+      label: 'required phrase',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: '"Alice Smith"'
+      },
+      accepted: true
+    },
+    {
+      label: 'phrase preserves spacing',
+      fields: {
+        name: 'Alice  Smith'
+      },
+      attributes: {
+        any: '"Alice Smith"'
+      },
+      accepted: false
+    },
+    {
+      label: 'phrase word order',
+      fields: {
+        name: 'Smith Alice'
+      },
+      attributes: {
+        any: '"Alice Smith"'
+      },
+      accepted: false
+    },
+    {
+      label: 'quoted stopword only',
+      fields: {
+        name: 'The Alice Smith'
+      },
+      attributes: {
+        any: '"the"'
+      },
+      accepted: false
+    },
+    {
+      label: 'quoted stopword with indexed name',
+      fields: {
+        name: 'The Alice Smith'
+      },
+      attributes: {
+        any: '"the" alice'
+      },
+      accepted: true
+    },
+    {
+      label: 'negative phrase',
+      fields: {
+        name: 'Alice Smith Jones'
+      },
+      attributes: {
+        any: 'alice -"smith jones"'
+      },
+      accepted: false
+    },
+    {
+      label: 'negative phrase does not exclude individual word',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'alice -"smith jones"'
+      },
+      accepted: true
+    },
+    {
+      label: 'empty phrase',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: '"" nobody alice'
+      },
+      accepted: true
+    },
+    {
+      label: 'space after minus',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'alice - nobody'
+      },
+      accepted: true
+    },
+    {
+      label: 'diacritics',
+      fields: {
+        name: 'José Smith'
+      },
+      attributes: {
+        any: 'jose'
+      },
+      accepted: true
+    },
+    {
+      label: 'ASCII apostrophe',
+      fields: {
+        name: "Alice O'Neil"
+      },
+      attributes: {
+        any: "O'Neil"
+      },
+      accepted: true
+    },
+    {
+      label: 'two-character search remains fuzzy',
+      fields: {
+        name: 'Alice Smith'
+      },
+      attributes: {
+        any: 'al'
+      },
+      accepted: true
+    },
+    {
+      label: 'excluded image metadata',
+      fields: {
+        name: 'Alice Smith',
+        icon: 'Bob',
+        profilePhoto: 'Bob'
+      },
+      attributes: {
+        any: 'bob'
+      },
+      accepted: false
+    },
+    {
+      label: 'ordered named tokens',
+      fields: {
+        name: 'Alice Barbara Smith'
+      },
+      attributes: {
+        name: 'ali smi'
+      },
+      accepted: true
+    },
+    {
+      label: 'reversed named tokens',
+      fields: {
+        name: 'Smith Alice'
+      },
+      attributes: {
+        name: 'ali smi'
+      },
+      accepted: false
+    },
+    {
+      label: 'line boundary',
+      fields: {
+        name: 'Alice\nSmith'
+      },
+      attributes: {
+        name: 'ali smi'
+      },
+      accepted: false
+    },
+    {
+      label: 'literal punctuation',
+      fields: {
+        name: 'Alice (Smith)'
+      },
+      attributes: {
+        name: 'alice (smith)'
+      },
+      accepted: true
+    },
+    {
+      label: 'literal plus',
+      fields: {
+        name: 'C++ Club'
+      },
+      attributes: {
+        name: 'c++ club'
+      },
+      accepted: true
+    },
+    {
+      label: 'Greek sigma case folding',
+      fields: {
+        name: 'ΟΣ'
+      },
+      attributes: {
+        name: 'ος'
+      },
+      accepted: true
+    },
+    {
+      label: 'username stays exact',
+      fields: {
+        userName: 'Alice'
+      },
+      attributes: {
+        userName: 'alice'
+      },
+      accepted: false
+    },
+    {
+      label: 'blank optional named attribute',
+      fields: {
+        name: 'Alice'
+      },
+      attributes: {
+        name: 'ali',
+        city: ' '
+      },
+      accepted: true
+    }
+  ])('identity search parity: $label', ({ fields, attributes, accepted }) => {
+    const result = {
+      totalCertificates: 1,
+      certificates: [
+        {
+          ...CERTIFICATE,
+          certifierInfo: {
+            name: 'Certifier',
+            iconUrl: 'https://example.com/icon.png',
+            description: 'Trusted',
+            trust: 1
+          },
+          publiclyRevealedKeyring: {},
+          decryptedFields: fields
+        }
+      ]
+    }
+    const validate = (): unknown =>
+      validateWalletResult('discoverByAttributes', result, { attributes })
+    if (accepted) expect(validate).not.toThrow()
+    else expect(validate).toThrow('Invalid discoverByAttributes result')
+  })
+
   it('binds direct acquisition and returned proof certificates to the exact request', () => {
     const directRequest = {
       acquisitionProtocol: 'direct',

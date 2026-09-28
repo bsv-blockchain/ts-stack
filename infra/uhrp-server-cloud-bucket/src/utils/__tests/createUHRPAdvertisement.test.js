@@ -19,11 +19,20 @@ const mockWallet = {
   verifySignature: async args => await cryptoWallet.verifySignature(args),
   createAction: jest.fn(async args => {
     partial = new Transaction()
-    partial.addInput({ sourceTXID: '66'.repeat(32), sourceOutputIndex: 0, unlockingScript: Script.fromASM('OP_0') })
+    partial.addInput({
+      sourceTXID: '66'.repeat(32),
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_0')
+    })
     for (const output of args.outputs ?? []) {
-      partial.addOutput({ satoshis: output.satoshis, lockingScript: Script.fromHex(output.lockingScript) })
+      partial.addOutput({
+        satoshis: output.satoshis,
+        lockingScript: Script.fromHex(output.lockingScript)
+      })
     }
-    return { signableTransaction: { reference: 'Y2xvdWQtYWR2ZXJ0', tx: partial.toAtomicBEEF(true) } }
+    return {
+      signableTransaction: { reference: 'Y2xvdWQtYWR2ZXJ0', tx: partial.toAtomicBEEF(true) }
+    }
   }),
   signAction: jest.fn(async () => ({ tx: partial.toAtomicBEEF(true), txid: partial.id('hex') })),
   abortAction: jest.fn(async () => ({ aborted: true }))
@@ -53,7 +62,9 @@ beforeEach(() => {
   jest.clearAllMocks()
   jest.restoreAllMocks()
   jest.spyOn(SHIPBroadcaster.prototype, 'broadcast').mockImplementation(async tx => ({
-    status: 'success', txid: tx.id('hex'), message: 'accepted'
+    status: 'success',
+    txid: tx.id('hex'),
+    message: 'accepted'
   }))
 })
 
@@ -71,9 +82,22 @@ it('accepts the canonical UHRP URL form of a hash', async () => {
   ).resolves.toMatchObject({ txid: expect.any(String) })
 })
 
+it('creates an authenticated advertisement for a CHIRP root at its real serving path', async () => {
+  const root = StorageUtils.getURLForHash(hash)
+  await expect(
+    createUHRPAdvertisement({
+      ...valid,
+      objectIdentifier: root,
+      url: `https://files.example/chirp/v1/${root}/objects/${root}`
+    })
+  ).resolves.toMatchObject({ txid: expect.stringMatching(/^[0-9a-f]{64}$/) })
+})
+
 it('exposes failure to CHIRP and fails the legacy success wrapper closed', async () => {
   const broadcastResult = {
-    status: 'error', code: 'ERR_NO_HOSTS_INTERESTED', description: 'No host accepted.'
+    status: 'error',
+    code: 'ERR_NO_HOSTS_INTERESTED',
+    description: 'No host accepted.'
   }
   jest.spyOn(SHIPBroadcaster.prototype, 'broadcast').mockResolvedValue(broadcastResult)
   await expect(createUHRPAdvertisementWithResult(valid)).resolves.toMatchObject({ broadcastResult })

@@ -9,6 +9,7 @@ import {
   AuthFetch
 } from '@bsv/sdk'
 import { Server } from 'node:http'
+import { createHash } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { holdNextDelayedResponse, startServer } from './testExpressServer'
 import { MockWallet } from './MockWallet'
@@ -57,6 +58,77 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
   // --------------------------------------------------------------------------
   // Main Tests
   // --------------------------------------------------------------------------
+
+  test('preserves Express header-map, scalar, array and alias overloads in signed responses', async () => {
+    const authFetch = new AuthFetch(new MockWallet(privKey))
+    const response = await authFetch.fetch(`${origin}/header-overloads`)
+    expect(response.status).toBe(418)
+    expect(await response.json()).toEqual({ headers: 'preserved' })
+    for (const [name, value] of Object.entries({
+      map: 'map',
+      number: '25',
+      array: 'one, two',
+      alias: 'alias',
+      single: 'single'
+    })) {
+      expect(response.headers.get(`x-bsv-${name}`)).toBe(value)
+    }
+    expect(response.headers.get('x-bsv-auth-identity-key')).toBeTruthy()
+  })
+
+  test('authenticates a 128 KiB payment header unchanged through a configured HTTP server', async () => {
+    const proof = 'p'.repeat(128 * 1024)
+    const authFetch = new AuthFetch(new MockWallet(privKey))
+    const response = await authFetch.fetch(`${origin}/large-payment-header`, {
+      headers: { 'x-bsv-payment': proof }
+    })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      bytes: Buffer.byteLength(proof),
+      sha256: createHash('sha256').update(proof).digest('hex')
+    })
+  })
+
+  test('rejects tampering with a large signed request header', async () => {
+    const tamper: typeof fetch = async (url, init) => {
+      if (!String(url).endsWith('/large-payment-header')) return await fetch(url, init)
+      const headers = new Headers(init?.headers)
+      headers.set('x-bsv-payment', 'q'.repeat(128 * 1024))
+      return await fetch(url, { ...init, headers })
+    }
+    const authFetch = new AuthFetch(
+      new MockWallet(privKey),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      tamper
+    )
+    await expect(
+      authFetch.fetch(`${origin}/large-payment-header`, {
+        headers: { 'x-bsv-payment': 'p'.repeat(128 * 1024) }
+      })
+    ).rejects.toThrow(/401|authentication|signature/i)
+  })
+
+  test('rejects a changed signed header supplied through the header-map overload', async () => {
+    const tamper: typeof fetch = async (url, init) => {
+      const response = await fetch(url, init)
+      if (!String(url).endsWith('/header-overloads')) return response
+      const headers = new Headers(response.headers)
+      headers.set('x-bsv-map', 'changed')
+      return new Response(await response.arrayBuffer(), { status: response.status, headers })
+    }
+    const authFetch = new AuthFetch(
+      new MockWallet(privKey),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      tamper
+    )
+    await expect(authFetch.fetch(`${origin}/header-overloads`)).rejects.toThrow(/signature/i)
+  })
 
   test.each([204, 401, 403, 404])('verifies a signed bodyless HTTP %i response', async status => {
     const authFetch = new AuthFetch(new MockWallet(privKey))

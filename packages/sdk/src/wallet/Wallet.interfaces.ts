@@ -501,6 +501,7 @@ export interface WalletActionInput {
   sourceSatoshis: SatoshiValue
   sourceLockingScript?: HexString
   unlockingScript?: HexString
+  /** Stored history may use an empty string when no display description was recorded. */
   inputDescription: DescriptionString5to50Bytes
   sequenceNumber: PositiveIntegerOrZero
 }
@@ -515,8 +516,10 @@ export interface WalletActionOutput {
   tags: OutputTagStringUnder300Bytes[]
 
   outputIndex: PositiveIntegerOrZero
+  /** Stored history may use an empty string when no display description was recorded. */
   outputDescription: DescriptionString5to50Bytes
 
+  /** Empty when the historical output was not assigned to a basket. */
   basket: BasketStringUnder300Bytes
 }
 
@@ -539,6 +542,7 @@ export interface WalletAction {
   satoshis: SatoshiValue
   status: ActionStatus
   isOutgoing: boolean
+  /** Stored history may use an empty string when no display description was recorded. */
   description: DescriptionString5to50Bytes
   labels?: LabelStringUnder300Bytes[]
   version: PositiveIntegerOrZero

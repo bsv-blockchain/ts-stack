@@ -8,6 +8,32 @@ verifiable certificates.
 The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
 rejects parsed bodies that cannot be represented without losing semantics.
+Version 2.2.6 also preserves bodyless authenticated requests on Express 4, whose
+JSON parser can supply an empty-object placeholder where Express 5 supplies
+`undefined`. HTTP message framing distinguishes that placeholder from a real
+JSON `{}` body, which remains signed data. Existing clients need no changes. Version 2.2.7 also
+preserves Express's one-argument `res.set({ ...headers })` overload, including
+payment challenge headers. The wrapper forwards the original argument count;
+Express retains its own header validation and coercion, and signed responses
+retain their existing BRC-104 representation.
+
+Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
+header-count ceilings. `createAuthMiddleware` configures its Peer with
+`maxGeneralPayloadBytes: null`, avoiding an indirect SDK general-message
+ceiling for received headers while retaining metadata and signature validation.
+Received headers are excluded from `maxRequestBytes`, which still applies to
+handshake/plain-data and encoded request bodies. The middleware preserves all
+selected header bytes for BRC-104 signing and verification, rather than rejecting
+a received payment because of an additional header budget. HTTP server, CDN,
+proxy and WAF configuration own transport header limits. Configure those layers
+for the largest supported payment proof and validate the complete route.
+
+Malformed or duplicate signed headers, unsafe header values, authentication
+failures and invalid signatures still fail validation. Body budgets, timeouts
+and replay protection remain separate. Clients consuming larger signed responses
+need matching capacity; SDK 2.8.5 raises its header limits by 4x. No BRC100 call,
+wire or wallet-data migration is required. Source publication is a separate
+protected release step.
 
 ## Exact-byte multipart authentication
 
@@ -136,7 +162,7 @@ const auth = createAuthMiddleware({
 - `transportLimits.maxPendingRequests` bounds per-process pending protocol
   state. It defaults to 1,000 and fails closed with `503` at capacity.
 - `transportLimits.maxRequestBytes` bounds handshake plain-data and encoded
-  signed-request work before peer processing. It defaults to 8 MiB. Set it to
+  request-body work before peer processing, excluding received HTTP headers. It defaults to 8 MiB. Set it to
   `-1` only when the embedding service enforces an equivalent request budget.
 - `transportLimits.maxResponseBytes` bounds application responses buffered for
   BRC-104 signing, including files passed to `res.sendFile`. It defaults to 8
@@ -317,7 +343,8 @@ pnpm pack:check
 ```
 
 `pack:check` builds and validates the exact npm tarball in ESM and CommonJS
-consumer probes. Tests do not rebuild the package as a side effect.
+consumer probes, plus real authenticated requests on Express 4 and 5 with
+legacy and current SDK clients. Tests do not rebuild the package as a side effect.
 
 ## Specifications
 

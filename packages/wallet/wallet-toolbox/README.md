@@ -6,6 +6,28 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Backup and recovery: keep both keys and wallet data
+
+**A root key or seed alone is not a complete BRC-100 wallet backup.** Users
+need recoverable key material **and** wallet records, including derivation
+metadata, transactions and basketed outputs. A database copy or BRC-39 file
+preserves data; it does not replace root-key recovery. Wallet-manager snapshots
+can contain keys and must be protected as secrets, but are not storage backups.
+
+Wallet builders must provide both recovery paths, explain what their product
+backs up, and test restoration after device or storage-provider loss. Storage
+replication helps availability but does not replace versioned, independently
+accessible backups and a tested restore procedure.
+
+- [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/) — recovery inventory, product/operator responsibilities and user guidance.
+- [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) — current export/import APIs, provider constraints, restore versus merge and limits.
+- [Recovery drill and checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/) — clean-device recovery, negative tests and evidence template.
+- [AI-agent implementation brief](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-agent-brief/) — source-grounded task and review guidance.
+
+These guides cover the recovery design. The measurements below describe
+specific tests and do not establish that every wallet product has complete
+key-and-data disaster recovery.
+
 ## Backup and sync: tested results
 
 **Live E2E testing used a large wallet in the native desktop client**, covering
@@ -29,7 +51,7 @@ Timing compares successive candidates, not a controlled comparison against upstr
 
 ### SQLite migration recovery
 
-The unpublished 2.13.2 candidate runs SQLite migration DDL and the migration
+SQLite migration handling introduced in 2.13.2 runs migration DDL and the migration
 journal update transactionally. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
 Failed migrations can be retried after reopening the database without partial
@@ -139,7 +161,12 @@ the final wallet transaction; a partial-action reference never authorizes a
 different transaction. When the underlying Wallet Toolbox signer adds a storage
 service charge, its exact wallet-funded amount is carried locally into the
 spending check so the charge is visible and counted in authorization. This
-metadata is deliberately not a BRC-100 wire extension.
+metadata is deliberately not a BRC-100 wire extension. Since 2.14.1, it lives in a
+shared local WeakMap rather than on the public result object, preserving exact
+accounting across separately loaded bundles while allowing strict binary result
+validation. Upgrade the wallet host and permission manager together. If an older
+host reports a result-serialization failure, check its transaction history before
+retrying: the wallet may already have created or completed the action.
 
 Permission modules may transform calls with `onRequest` and `onResponse`, or
 own a P-scheme's semantics with the optional `handleRequest(request, next)`

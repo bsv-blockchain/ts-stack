@@ -1,6 +1,6 @@
 # CHANGELOG for `@bsv/overlay-express`
 
-## 2.7.3 (unreleased)
+## 2.7.4 (unreleased)
 
 - Refresh packed first-party dependency ranges for the next wallet interoperability release; no independent API migration.
 
@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file. The format 
 - [0.7.11](#0711-2025-08-13)
 
 ## [Unreleased]
+
+- Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening
 

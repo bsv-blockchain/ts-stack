@@ -27,6 +27,29 @@ See the [sync contract and next-stage design](../../../../docs/guides/wallet-syn
 This is an eventual replica merge; it does not create a coherent source snapshot
 or change the existing archive format.
 
+## BRC-100 result compatibility
+
+Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
+results, fixing strict binary bridge failures after the wallet operation while
+retaining fee and service-charge authorization. Upgrade the wallet and permission
+manager together. Existing JSON bridges that remove internal metadata retain their
+behavior; no application, BRC-39 or account-recovery migration is required. Check
+wallet history before retrying an action whose response failed on an older host.
+
+## Backup and recovery
+
+A BRC-100 wallet needs both recoverable keys and wallet records/derivation
+metadata. BRC-39 exports contain wallet data, not root keys or manager snapshots.
+IndexedDB can be evicted or lost with the browser profile. Keep an independent
+data copy and test recovery on a clean profile.
+
+Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
+[BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
+[recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+Portable helpers require a concrete local `StorageProvider`; a remote client
+is not one. Qualify the local-copy path and device memory limits before adding
+export/import UI.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for

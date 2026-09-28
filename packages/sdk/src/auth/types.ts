@@ -47,6 +47,18 @@ export interface Transport {
   onData: (callback: (message: AuthMessage) => Promise<void>) => Promise<void>
 }
 
+/** Locally selected payload policy; never read from a remote message. */
+export interface AuthMessageValidationOptions {
+  /**
+   * Optional separate general-message payload byte budget. Omission preserves
+   * the existing aggregate message budget. A positive safe integer sets an
+   * explicit payload budget; null delegates payload capacity to the transport.
+   * Metadata, byte validity, signatures and non-general messages retain their
+   * existing validation. Configure the HTTP server/edge before delegating.
+   */
+  maxGeneralPayloadBytes?: number | null
+}
+
 export interface PeerSession {
   /**
    * True after the peer has proved control of the session identity key. This is

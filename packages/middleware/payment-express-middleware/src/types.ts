@@ -34,6 +34,10 @@ export interface PaymentMiddlewareOptions {
   calculateRequestPrice?: (req: PaymentRequest) => number | Promise<number>
   wallet: WalletInterface
   replayStore?: PaymentReplayStore
+  /**
+   * @deprecated Retained for source compatibility; ignored. Configure transport
+   * header budgets on the HTTP server, CDN, proxy or WAF before middleware.
+   */
   maxPaymentHeaderBytes?: number
   /** Advertise multipart only when raw-byte auth support is present on the request. */
   enableMultipart?: boolean

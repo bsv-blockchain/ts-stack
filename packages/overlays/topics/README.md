@@ -5,6 +5,8 @@
 
 Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, DIDs, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
 
+UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
+
 ## Install
 
 ```bash
@@ -15,7 +17,7 @@ Requires Node.js 22 or newer. Install `@bsv/sdk` alongside this package to
 satisfy its peer dependency. The overlay engine, templates, and MongoDB driver
 are direct runtime dependencies.
 
-The unpublished 1.8.5 candidate refreshes the packed templates range for its
+The unpublished 1.9.2 candidate refreshes the packed templates range for its
 CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
 unchanged; no API migration is required.
 

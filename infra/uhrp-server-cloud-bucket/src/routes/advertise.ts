@@ -1,4 +1,5 @@
-import { Storage } from '@google-cloud/storage';
+import { extendObjectRetention } from '../utils/extendObjectRetention'
+import { createGoogleCloudStorage } from '../utils/googleCloudStorage';
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { StorageUtils } from '@bsv/sdk';
@@ -11,7 +12,7 @@ const {
   GCP_BUCKET_NAME
 } = process.env
 
-const storage = new Storage()
+const storage = createGoogleCloudStorage()
 
 interface AdvertiseRequest extends Request {
   body: {
@@ -72,9 +73,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     .bucket(GCP_BUCKET_NAME as string)
     .file(`cdn/${req.body.objectIdentifier}`)
     
-    await storageFile.setMetadata({
-      customTime: new Date((expiryTime + 300) * 1000).toISOString()
-    })
+    await extendObjectRetention(storageFile, expiryTime)
 
     res.status(200).json({ status: 'success' })
   } catch (error) {

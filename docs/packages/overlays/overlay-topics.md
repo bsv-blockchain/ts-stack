@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.8.5'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.9.2'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
@@ -23,7 +23,7 @@ tags: ['overlay', 'topics', 'uhrp']
 npm install @bsv/overlay-topics
 ```
 
-The unpublished 1.8.5 candidate refreshes the packed templates range for its
+The unpublished 1.9.2 candidate refreshes the packed templates range for its
 CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
 unchanged; no API migration is required.
 

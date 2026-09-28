@@ -216,6 +216,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### 2.9.0 candidate — prepared BRC-118 payments and recipient interoperability
 
+- Preserve native body serialization and inferred Content-Type on ordinary HTTP
+  fallback, including cached unauthenticated peers; retain owned payment bytes.
+
 - Negotiate bounded multipart payments, preserving original payload bytes and exact
   signed boundary parameters while retaining nonempty non-multipart signature preimages.
 - Prepare the real payment and request before broadcast; submit once, reuse the
@@ -228,6 +231,41 @@ All notable changes to this project will be documented in this file. The format 
 - Derive the recipient's own BRC-29 child key on settlement receipt.
 - Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
   adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
+### Fixed (2.8.9 candidate)
+
+- AuthFetch bounds general payloads in binary bytes using its HTTP request and configured response budgets instead of charging each byte against the generic JSON authentication envelope budget. Complete 4 MiB CHIRP chunks now reach the transport; HTTP request/response bounds, authentication checks, certificate limits and redirect rejection remain enforced. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.8 candidate)
+
+- Align explicit Script verification with bitcoin-sv's coin-era and Chronicle version gates, CLTV/CSV, historical signature hashing, original-digest serialization, numeric widths and shift bounds. Node-derived transaction fixtures cover each corrected mismatch.
+- Reject `OP_NUM2BIN` sizes above the node's signed 32-bit bound before allocation. Check an optional caller-supplied `memoryLimit` before allocating; omitted limits remain unbounded. Resource exhaustion does not prove a script invalid. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.7 candidate)
+
+- Identity search now compares complete English text tokens, ignores default stopwords, and handles excluded phrases without treating each phrase word as independently excluded. Ordered named-field matches scan one literal token at a time, preserving case, punctuation and line-boundary semantics. The existing limitation for language-specific stemming remains; this release does not claim full MongoDB linguistic equivalence.
+
+- `WalletClient` and the binary BRC-100 wire no longer reject valid `discoverByAttributes` results. Result validation bound every requested key to an exact decrypted-field value, so the identity overlay's all-fields `any` search (read as a literal field name) and its fuzzy named-field matches were rejected even after the wallet had verified them. Validation now applies the overlay's matching contract, matching `@bsv/wallet-toolbox` 2.14.2: `any` is a case- and diacritic-insensitive text search with quoted phrases and `-term` exclusions over every field except `profilePhoto`/`icon`; named fields match fuzzily, `userName` exactly, and blank named attributes are ignored. Every result is still bound to the query it answered; certificate and identity verification are unchanged. Word stemming is not reproduced. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.6 candidate)
+
+- `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own BRC-42 child key (`forSelf: true`) when checking settlement output ownership. Since 2.8.0 it derived the sender-facing key, so every valid incoming BRC-29 payment was rejected with `brc29.internalize_failed` before `internalizeAction` (funds were never lost; payments stayed pending). Adds a sender/recipient round-trip test using real `ProtoWallet` key derivation. No API, wire or wallet-data migration is required.
+
+### Added and fixed (2.8.5 candidate)
+
+- Add optional local general-message payload policy to `Peer` and `snapshotAuthMessage`; HTTP server transports can delegate payload capacity while retaining metadata, byte, signature and replay validation. Existing defaults remain unchanged.
+
+- Raise request and signed-response header limits by 4x: 32 KiB ordinary values, 256 KiB aggregate names and values, 512 headers, and 1 KiB names. Raise the separate certificate-policy header limit to 256 KiB. BRC-105 `x-bsv-payment` request proofs may share the full aggregate budget. Bounds remain finite and server/proxy limits still apply. No API, BRC100, wire or wallet-data migration is required; protected publication is separate.
+
+### 2.8.4 candidate — established action-history display metadata
+
+- Accept empty historical action, input and output descriptions, and empty
+  unassigned basket names, without changing stored values or BRC100 wire bytes.
+- Keep nonempty description bounds, UTF-8 ceilings, request validation,
+  requested scripts and labels, and transaction/value checks unchanged.
+- Add direct, HTTP JSON, binary and shared conformance regression coverage.
+- No application API or account-data migration is required. Publication remains
+  a separate protected workflow action.
 
 ### 2.8.3 candidate — BRC100 discovery and action-history compatibility
 

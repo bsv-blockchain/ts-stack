@@ -16,6 +16,8 @@ An opinionated but configurable Overlay Services deployment system:
   Chaintracks header validation, BASM reorg streaming, and active
   monitor-driven maintenance
 
+Built-in discovery overflow probes use deterministic pages of at most 1000 rows. The configured engine result ceiling and extra-row overflow error remain enforced, including standard and high-throughput profiles.
+
 ## Requirements and installation
 
 Overlay Express requires Node.js 22 or newer and a separately installed

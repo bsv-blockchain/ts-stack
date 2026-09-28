@@ -59,7 +59,10 @@ function makeRequest(paymentHeader?: string | string[]): PaymentRequest {
   } as unknown as PaymentRequest
 }
 
-function makeAtomicPayment(satoshis = 100): {
+function makeAtomicPayment(
+  satoshis = 100,
+  unlockingScriptBytes = 1
+): {
   header: string
   transaction: string
   transactionId: string
@@ -68,7 +71,7 @@ function makeAtomicPayment(satoshis = 100): {
   transaction.addInput({
     sourceTXID: '0'.repeat(64),
     sourceOutputIndex: 0xffffffff,
-    unlockingScript: Script.fromHex('00'),
+    unlockingScript: Script.fromBinary(Array.from({ length: unlockingScriptBytes }, () => 0)),
     sequence: 0xffffffff
   })
   transaction.addOutput({
@@ -180,15 +183,12 @@ describe('createPaymentMiddleware configuration', () => {
     ).toThrow('logger')
   })
 
-  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid maximum header size %s',
+  it.each([undefined, 0, -1, 1.5, 8, Number.MAX_SAFE_INTEGER + 1])(
+    'accepts the deprecated header-size option without enforcing it (%s)',
     maxPaymentHeaderBytes => {
       expect(() =>
-        createPaymentMiddleware({
-          wallet: makeWallet(),
-          maxPaymentHeaderBytes
-        })
-      ).toThrow(RangeError)
+        createPaymentMiddleware({ wallet: makeWallet(), maxPaymentHeaderBytes })
+      ).not.toThrow()
     }
   )
 })
@@ -329,15 +329,34 @@ describe('createPaymentMiddleware request handling', () => {
     expect(response.body?.code).toBe('ERR_MALFORMED_PAYMENT')
   })
 
-  it('rejects oversized payment headers before parsing', async () => {
-    const { response } = await invoke(
-      {
-        wallet: makeWallet(),
-        maxPaymentHeaderBytes: 8
-      },
-      makeRequest(makeAtomicPayment().header)
-    )
+  it.each([undefined, 8, 64 * 1024, 256 * 1024])(
+    'validates a received payment larger than 1 MiB despite legacy limit %s',
+    async maxPaymentHeaderBytes => {
+      const payment = makeAtomicPayment(100, 1024 * 1024)
+      expect(Buffer.byteLength(payment.header)).toBeGreaterThan(1024 * 1024)
+      const wallet = makeWallet()
+      const request = makeRequest(payment.header)
+      const accepted = await invoke({ wallet, maxPaymentHeaderBytes }, request)
+      expect(accepted.next).toHaveBeenCalledTimes(1)
+      expect(request.payment).toMatchObject({
+        accepted: true,
+        satoshisPaid: 100,
+        txid: payment.transactionId
+      })
+      expect(wallet.verifyHmac).toHaveBeenCalledTimes(1)
+      expect(wallet.internalizeAction).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('still rejects malformed large payment contents without calling the wallet', async () => {
+    const wallet = makeWallet()
+    const payment = JSON.parse(makeAtomicPayment().header)
+    payment.transaction = 'x'.repeat(1024 * 1024) + '*'
+    const { response, next } = await invoke({ wallet }, makeRequest(JSON.stringify(payment)))
     expect(response.body?.code).toBe('ERR_MALFORMED_PAYMENT')
+    expect(next).not.toHaveBeenCalled()
+    expect(wallet.verifyHmac).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
   })
 
   it('rejects false and failed nonce verification without exposing errors', async () => {

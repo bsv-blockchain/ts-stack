@@ -32,6 +32,46 @@ attention to changes that materially alter behavior or extend functionality.
   latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
   timestamp boundary traffic remains a snapshot/high-water follow-up.
 
+## wallet-toolbox 2.14.3
+
+- Surplus change shaping no longer splits change into outputs below the dust
+  floor. Baskets still on the legacy 32-sat `minimumDesiredUTXOValue` produced
+  split outputs that were later folded away, leaving a fee sized for the larger
+  transaction and failing with `generateChangeSdk error: required fee error`.
+  Each split output now gets at least `max(dustFloor, changeInitialSatoshis)`.
+- `WalletPermissionsManager.abortAction` lets the admin originator abort any of
+  the wallet's actions, including signed `noSend` actions and actions from an
+  earlier session, which the in-memory pending-reference map no longer holds.
+  Other originators still need a reference this manager issued to them.
+
+## wallet-toolbox 2.14.2
+
+- Match complete English text tokens and default stopwords consistently with SDK 2.8.7; preserve quoted and excluded phrases. Scan ordered literal tokens without a combined wildcard expression. Direct filtering ignores inherited attributes and rejects non-string requested values without coercion.
+
+- `discoverByAttributes` no longer drops every overlay result for `any`
+  searches. `filterCertificatesByAttributes` treated the identity overlay's
+  all-fields `any` search as a literal field name, so no certificate matched.
+  It now accepts a certificate when searchable decrypted fields satisfy the requested text terms,
+  and named attributes use the overlay's fuzzy matching (`userName` stays
+  exact). `any` follows the overlay's MongoDB text search: case- and
+  diacritic-insensitive, quoted phrases required, `-term` excluded, and
+  `profilePhoto`/`icon` not searched. Word stemming is not reproduced, so a
+  stem-only overlay match can still be dropped. Blank named attributes are
+  ignored, as on the overlay; a query with no usable attribute matches nothing.
+  Results are still bound to the query they answered.
+
+## wallet-toolbox 2.14.1
+
+- Keep exact action-spend metadata in a shared local WeakMap, preserving storage
+  service-charge authorization across permission-module transforms and separately
+  loaded core, client and mobile bundles without adding keys to public results.
+- Consume the legacy internal Symbol before returning permission-managed results.
+  Completed and two-step `createAction` responses now pass the existing strict
+  binary BRC-100 codec. No app, wire, database, BRC-39 or recovery migration is
+  required; upgrade the wallet host and permission manager together. Reconcile
+  history before retrying an older host's failed response because the transaction
+  may already exist.
+
 ## wallet-toolbox (unreleased)
 
 - Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,

@@ -50,6 +50,8 @@ export class KnexStorage implements Storage {
   private parseOutputRecord(row: any, includeBEEF: boolean, beefOverride?: number[]): Output {
     return {
       ...row,
+      // SQL NULL denotes an unconfirmed output, not a block at height zero.
+      blockHeight: row.blockHeight === null ? undefined : row.blockHeight,
       outputScript: Array.from(row.outputScript),
       beef: (() => {
         if (!includeBEEF) return undefined

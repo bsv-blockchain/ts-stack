@@ -9,7 +9,7 @@ import type { ActionBatchManifest } from '../../../src/sdk/ActionBatch.interface
 import { maxPossibleSatoshis } from '../../../src/storage/methods/generateChange'
 import { additionalFundingTarget, fundingRunwayExtension } from '../../../src/signer/actionBatch/ActionBatchWorkspace'
 import { WERR_INSUFFICIENT_FUNDS } from '../../../src/sdk/WERR_errors'
-import { exactActionSpendSymbol, type ExactActionSpendCarrier } from '../../../src/utility/exactActionSpend'
+import { getExactActionSpend } from '../../../src/utility/exactActionSpend'
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
@@ -394,7 +394,8 @@ describe('in-memory action batch workspace', () => {
     })
     expect(created.signableTransaction).toBeDefined()
     const pending = ctx.wallet.pendingSignActions[created.signableTransaction!.reference]
-    expect((created as ExactActionSpendCarrier)[exactActionSpendSymbol]).toBe(pending.amount)
+    expect(getExactActionSpend(created)).toBe(pending.amount)
+    expect(Object.getOwnPropertySymbols(created)).toEqual([])
     pending.dcr.inputBeef = Array.from(pending.dcr.inputBeef as Uint8Array)
     const signed = await ctx.wallet.signAction({
       reference: created.signableTransaction!.reference,

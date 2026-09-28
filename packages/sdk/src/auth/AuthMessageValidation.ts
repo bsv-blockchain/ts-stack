@@ -1,6 +1,6 @@
 import PublicKey from '../primitives/PublicKey.js'
 import { toArray } from '../primitives/utils.js'
-import type { AuthMessage, RequestedCertificateSet } from './types.js'
+import type { AuthMessage, AuthMessageValidationOptions, RequestedCertificateSet } from './types.js'
 import { isUnsafeRecordKey } from '../primitives/SafeRecord.js'
 import { base64ToBytes } from '../wallet/WalletByteEncoding.js'
 
@@ -164,105 +164,151 @@ export function assertRequestedCertificateSet(
   }
 }
 
-function walkAuthData<T>(value: T, snapshot: boolean): T {
-  const seen = new WeakSet<object>()
-  const pending: Array<{
-    value: unknown
-    depth: number
-    parent?: object
-    key?: PropertyKey
-  }> = [{ value, depth: 0 }]
+interface AuthDataFrame {
+  value: unknown
+  depth: number
+  parent?: object
+  key?: PropertyKey
+}
+
+interface AuthDataWalk {
+  snapshot: boolean
+  maxGeneralPayloadBytes?: number | null
+  seen: WeakSet<object>
+  pending: AuthDataFrame[]
+}
+
+type RetainAuthData = (value: unknown) => void
+
+function visitAuthArray(
+  candidate: unknown[],
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const { snapshot, maxGeneralPayloadBytes, pending } = context
+  const separatePayload =
+    maxGeneralPayloadBytes !== undefined && current.depth === 1 && current.key === 'payload'
+  const maxArrayBytes = separatePayload
+    ? (maxGeneralPayloadBytes ?? Number.MAX_SAFE_INTEGER)
+    : MAX_AUTH_MESSAGE_BYTES
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(candidate, 'length')
+  const length = lengthDescriptor?.value
+  if (!Number.isSafeInteger(length) || length < 0 || length > maxArrayBytes) {
+    throw new Error('Authentication message array exceeds its limit.')
+  }
+  const descriptors = Array.from({ length }, (_, index) =>
+    Object.getOwnPropertyDescriptor(candidate, index)
+  )
+  if (descriptors.some(descriptor => descriptor == null || !('value' in descriptor))) {
+    throw new Error('Authentication messages must not contain sparse arrays.')
+  }
+  const denseBytes = descriptors.every(
+    descriptor =>
+      Number.isInteger(descriptor!.value) && descriptor!.value >= 0 && descriptor!.value <= 255
+  )
+  if (denseBytes) {
+    // JSON uses at most three digits and a comma for each byte.
+    let bytes = 0
+    if (!separatePayload) bytes += length * 4 + 2
+    if (snapshot) retain(descriptors.map(descriptor => descriptor!.value))
+    return bytes
+  }
+  const copy = snapshot ? Array.from({ length }, () => undefined as unknown) : undefined
+  retain(copy)
+  for (let index = length - 1; index >= 0; index--) {
+    pending.push({
+      value: descriptors[index]!.value,
+      depth: current.depth + 1,
+      parent: copy,
+      key: index
+    })
+  }
+  return 0
+}
+
+function visitAuthObject(
+  candidate: object,
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const keys = Reflect.ownKeys(candidate)
+  const copy = context.snapshot ? (Object.create(null) as Record<PropertyKey, unknown>) : undefined
+  retain(copy)
+  let bytes = 0
+  for (let index = keys.length - 1; index >= 0; index--) {
+    const key = keys[index]
+    if (typeof key !== 'string' || isUnsafeRecordKey(key)) {
+      throw new Error('Authentication messages contain an unsafe property key.')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(candidate, key)
+    if (descriptor == null || !Object.hasOwn(descriptor, 'value')) {
+      throw new Error('Authentication messages must not contain accessors.')
+    }
+    bytes += byteLength(key) + 3
+    context.pending.push({
+      value: descriptor.value,
+      depth: current.depth + 1,
+      parent: copy,
+      key
+    })
+  }
+  return bytes
+}
+
+function visitAuthValue(
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const candidate = current.value
+  if (candidate == null || typeof candidate === 'boolean' || candidate === undefined) {
+    retain(candidate)
+    return 4
+  }
+  if (typeof candidate === 'string') {
+    retain(candidate)
+    return byteLength(candidate) + 2
+  }
+  if (typeof candidate === 'number') {
+    if (!Number.isFinite(candidate))
+      throw new Error('Authentication messages require finite numbers.')
+    retain(candidate)
+    return 24
+  }
+  if (typeof candidate !== 'object') {
+    throw new Error('Authentication messages contain an unsupported value.')
+  }
+  if (context.seen.has(candidate))
+    throw new Error('Authentication messages must not contain cycles.')
+  context.seen.add(candidate)
+  return Array.isArray(candidate)
+    ? visitAuthArray(candidate, current, context, retain)
+    : visitAuthObject(candidate, current, context, retain)
+}
+
+function walkAuthData<T>(value: T, snapshot: boolean, maxGeneralPayloadBytes?: number | null): T {
+  const context: AuthDataWalk = {
+    snapshot,
+    maxGeneralPayloadBytes,
+    seen: new WeakSet<object>(),
+    pending: [{ value, depth: 0 }]
+  }
   let result: unknown = value
   let bytes = 0
   let nodes = 0
-
-  while (pending.length > 0) {
-    const current = pending.pop()!
+  while (context.pending.length > 0) {
+    const current = context.pending.pop()!
     nodes += 1
     if (nodes > MAX_AUTH_MESSAGE_NODES || current.depth > MAX_AUTH_MESSAGE_DEPTH) {
       throw new Error('Authentication message structure exceeds its limit.')
     }
-    const candidate = current.value
-    const retain = (retained: unknown): void => {
+    bytes += visitAuthValue(current, context, retained => {
       if (!snapshot) return
       if (current.parent === undefined) result = retained
       else Reflect.set(current.parent, current.key!, retained)
-    }
-    if (candidate == null || typeof candidate === 'boolean' || candidate === undefined) {
-      bytes += 4
-      retain(candidate)
-    } else if (typeof candidate === 'string') {
-      bytes += byteLength(candidate) + 2
-      retain(candidate)
-    } else if (typeof candidate === 'number') {
-      if (!Number.isFinite(candidate))
-        throw new Error('Authentication messages require finite numbers.')
-      bytes += 24
-      retain(candidate)
-    } else if (typeof candidate === 'object') {
-      if (seen.has(candidate)) throw new Error('Authentication messages must not contain cycles.')
-      seen.add(candidate)
-      if (Array.isArray(candidate)) {
-        const lengthDescriptor = Object.getOwnPropertyDescriptor(candidate, 'length')
-        const length = lengthDescriptor?.value
-        if (!Number.isSafeInteger(length) || length < 0 || length > MAX_AUTH_MESSAGE_BYTES) {
-          throw new Error('Authentication message array exceeds its limit.')
-        }
-        const descriptors = Array.from({ length }, (_, index) =>
-          Object.getOwnPropertyDescriptor(candidate, index)
-        )
-        if (descriptors.some(descriptor => descriptor == null || !('value' in descriptor))) {
-          throw new Error('Authentication messages must not contain sparse arrays.')
-        }
-        const denseBytes = descriptors.every(
-          descriptor =>
-            Number.isInteger(descriptor!.value) &&
-            descriptor!.value >= 0 &&
-            descriptor!.value <= 255
-        )
-        if (denseBytes) {
-          // JSON uses at most three digits and a comma for each byte.
-          bytes += length * 4 + 2
-          if (snapshot) {
-            retain(descriptors.map(descriptor => descriptor!.value))
-          }
-        } else {
-          const copy = snapshot ? Array.from({ length }, () => undefined as unknown) : undefined
-          retain(copy)
-          for (let index = length - 1; index >= 0; index--) {
-            pending.push({
-              value: descriptors[index]!.value,
-              depth: current.depth + 1,
-              parent: copy,
-              key: index
-            })
-          }
-        }
-      } else {
-        const keys = Reflect.ownKeys(candidate)
-        const copy = snapshot ? (Object.create(null) as Record<PropertyKey, unknown>) : undefined
-        retain(copy)
-        for (let index = keys.length - 1; index >= 0; index--) {
-          const key = keys[index]
-          if (typeof key !== 'string' || isUnsafeRecordKey(key)) {
-            throw new Error('Authentication messages contain an unsafe property key.')
-          }
-          const descriptor = Object.getOwnPropertyDescriptor(candidate, key)
-          if (descriptor == null || !Object.hasOwn(descriptor, 'value')) {
-            throw new Error('Authentication messages must not contain accessors.')
-          }
-          bytes += byteLength(key) + 3
-          pending.push({
-            value: descriptor.value,
-            depth: current.depth + 1,
-            parent: copy,
-            key
-          })
-        }
-      }
-    } else {
-      throw new Error('Authentication messages contain an unsupported value.')
-    }
+    })
     if (bytes > MAX_AUTH_MESSAGE_BYTES) {
       throw new Error('Authentication message exceeds the byte limit.')
     }
@@ -282,7 +328,10 @@ export function snapshotBoundedAuthData<T>(value: T): T {
   return walkAuthData(value, true)
 }
 
-function assertValidAuthMessageShape(value: unknown): asserts value is AuthMessage {
+function assertValidAuthMessageShape(
+  value: unknown,
+  maxGeneralPayloadBytes?: number | null
+): asserts value is AuthMessage {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid authentication message.')
   }
@@ -338,7 +387,14 @@ function assertValidAuthMessageShape(value: unknown): asserts value is AuthMessa
     case 'general':
       assertCanonicalBase64(message.nonce, 'general.nonce', 32)
       assertCanonicalBase64(message.yourNonce, 'general.yourNonce', 48)
-      assertAuthByteArray(message.payload, 'general.payload', MAX_AUTH_MESSAGE_BYTES, true)
+      assertAuthByteArray(
+        message.payload,
+        'general.payload',
+        maxGeneralPayloadBytes === null
+          ? Number.MAX_SAFE_INTEGER
+          : (maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
+        true
+      )
       assertAuthByteArray(message.signature, 'general.signature', MAX_AUTH_SIGNATURE_BYTES)
       break
     default:
@@ -351,9 +407,40 @@ export function assertValidAuthMessage(value: unknown): asserts value is AuthMes
   assertValidAuthMessageShape(snapshotBoundedAuthData(value))
 }
 
-/** Validate and own an untrusted BRC-103 message for asynchronous processing. */
-export function snapshotAuthMessage(value: unknown): AuthMessage {
-  const snapshot = snapshotBoundedAuthData(value)
-  assertValidAuthMessageShape(snapshot)
+export function assertGeneralPayloadByteLimit(value: number | null | undefined): void {
+  if (value !== undefined && value !== null && (!Number.isSafeInteger(value) || value < 1)) {
+    throw new TypeError('maxGeneralPayloadBytes must be null or a positive safe integer.')
+  }
+}
+
+/** Validate and own an untrusted BRC-103 message using locally selected payload policy. */
+export function snapshotAuthMessage(
+  value: unknown,
+  options: AuthMessageValidationOptions = {}
+): AuthMessage {
+  const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
+  assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
+  // Capture top-level descriptors once before selecting the local policy. A
+  // proxy cannot present one message type for selection and another for copy.
+  let candidate = value
+  if (
+    maxGeneralPayloadBytes !== undefined &&
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
+    candidate = Object.defineProperties(
+      Object.create(null),
+      Object.getOwnPropertyDescriptors(value)
+    )
+  }
+  const isGeneral =
+    maxGeneralPayloadBytes !== undefined &&
+    candidate !== null &&
+    typeof candidate === 'object' &&
+    Object.getOwnPropertyDescriptor(candidate, 'messageType')?.value === 'general'
+  const payloadBudget = isGeneral ? maxGeneralPayloadBytes : undefined
+  const snapshot = walkAuthData(candidate, true, payloadBudget)
+  assertValidAuthMessageShape(snapshot, payloadBudget)
   return snapshot
 }

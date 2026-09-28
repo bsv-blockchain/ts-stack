@@ -60,7 +60,35 @@ export class ResourceBoundedLookupWrapper implements LookupService {
   }
 
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
-    return await this.wrapped.lookup(this.boundQuestion(question))
+    const bounded = this.boundQuestion(question)
+    const query = bounded.query as Record<string, unknown>
+    if (
+      typeof query !== 'object' || query === null || Array.isArray(query) ||
+      typeof query.limit !== 'number' || !Number.isSafeInteger(query.limit) ||
+      query.limit <= 1000 || this.maxLookupResults === -1
+    ) return await this.wrapped.lookup(bounded)
+
+    // Discovery services accept at most 1000 rows per query. Preserve the
+    // engine's extra-row overflow probe using bounded, deterministic pages.
+    const skip = query.skip ?? 0
+    if (typeof skip !== 'number' || !Number.isSafeInteger(skip) || skip < 0 || skip > 1_000_000) {
+      return await this.wrapped.lookup(bounded)
+    }
+    const result: LookupFormula = []
+    while (result.length < query.limit) {
+      const pageSkip = skip + result.length
+      if (pageSkip > 1_000_000) throw new RangeError('Discovery lookup exceeds the maximum skip')
+      const pageLimit = Math.min(1000, query.limit - result.length)
+      const page = await this.wrapped.lookup({
+        ...bounded, query: { ...query, limit: pageLimit, skip: pageSkip }
+      })
+      if (!Array.isArray(page) || page.length > pageLimit) {
+        throw new TypeError('Discovery lookup returned an invalid bounded page')
+      }
+      result.push(...page)
+      if (page.length < pageLimit) break
+    }
+    return result
   }
 
   async getDocumentation(): Promise<string> {

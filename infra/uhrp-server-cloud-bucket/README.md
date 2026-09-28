@@ -23,6 +23,34 @@ limits with `CHIRP_MAX_ACTIVE_SESSIONS`,
 `CHIRP_MAX_STAGED_BYTES_PER_SESSION`; invalid or non-positive values fail
 startup.
 
+UHRP and CHIRP renewal keep the existing retention timestamp or advance it to the renewed expiry plus five minutes. Metadata updates use metageneration preconditions and bounded retries; a short extension never reduces Google Cloud Storage `customTime`.
+
+Signed ownership metadata accepts the ordinary `/cdn/<object>` location and the
+exact CHIRP root route `/chirp/v1/<root>/objects/<root>`. A CHIRP root identifier
+must equal the advertised content hash identifier; unrelated objects, query
+strings and credentials are rejected. Renewal reads the actual CHIRP root
+object, extends its committed closure and rejects an inactive root. It does not
+create or rely on a duplicate CDN copy.
+
+Renewal pricing reads that same verified storage object: ordinary advertisements
+use `cdn/<object>`, and CHIRP root advertisements use
+`chirp/v1/objects/<root>`. Both paths retain the signed-owner and current provider
+size checks; a missing root fails closed without a CDN fallback.
+
+Authenticated staged-object HEAD responses have no body, including existence
+and validation-error responses. Authentication signs the same empty bytes
+that HTTP sends, allowing clients to verify both present and absent objects
+before an upload. Other methods retain their existing JSON error responses.
+
+Authenticated staged-object PUTs parse bounded identity bytes before BRC-103
+verification. The handler stages those same verified bytes rather than rereading
+the consumed request stream. The parser is scoped to staged-object PUTs, rejects
+compressed bodies, and retains the `CHIRP_OBJECT_MAX_BODY_BYTES` ceiling
+(default 4 MiB). JSON routes, HMAC streaming `/put`, and bodyless HEAD responses
+retain their existing behavior. Use SDK 2.8.9 or later for full-size authenticated
+CHIRP chunks; its HTTP transport keeps its existing framing and response limits.
+No object, session, advertisement or persistence migration is required.
+
 ## Advertisement, ownership, and upload trust
 
 The public UHRP token authenticates the host identity, content hash, HTTPS
@@ -30,9 +58,41 @@ location, expiry, size, and host-derived locking key. Uploader identity and the
 GCS object identifier are not wire fields, so owner-only list, find, and renew
 operations additionally require locally server-signed wallet metadata bound to
 the exact token, BEEF output, and tags. Unsigned legacy metadata is not accepted
-as ownership evidence. Re-advertise legacy objects with this release before
-using private owner-management or renewal routes; their public UHRP availability
-is not changed by this local migration.
+as ownership evidence. Owner listings omit those rows and report
+`legacyAdvertisementsPending` for the current raw wallet page; `nextOffset`
+lets clients continue through older rows to verified records. Signed rows still
+fail closed on signature, source-output, selector, or tag disagreement.
+
+The four ownership/lookup tags must match signed metadata. Older insertions
+may lack descriptive name, size, and type tags; their size and type remain
+authenticated in the envelope, and present descriptive tags must agree.
+
+## Recover legacy ownership without replacing transactions
+
+The 0.2.45 operator tool can add signed metadata to an existing output without
+spending, rebroadcasting, or extending its hosting commitment. Run it with the
+service identity and private runtime configuration, first without `--apply`:
+
+```sh
+node out/src/cli/migrateLegacyAdvertisements.js
+node out/src/cli/migrateLegacyAdvertisements.js --apply
+```
+
+It verifies the token signature and host key, source output, exact configured
+location, provider ownership receipt, size, retention, generation, and streamed
+SHA-256 content before signing. A second metadata read detects generation
+races. The wallet merges the envelope into the original output and read-back
+confirms its outpoint, value, and spendable state. Lookup tags are checked
+against provider ownership; they never supply ownership authority.
+
+The scan and each stream are bounded. Summaries contain counts only. A failed
+row makes the command exit nonzero and needs private operator investigation;
+expired, invalid, missing, or changed objects must not be silently reissued or
+given new retention. Already verified records are idempotent. Keep a private
+pre-migration inventory and validate owner list/find/renew plus public lookup
+and retrieval in staging before production. Earlier images cannot manage
+legacy records without signed metadata; forward-fix recovery rather than
+rolling back verification. Public token bytes and object contents are unchanged.
 
 Paid upload capabilities are valid for at most 15 minutes and never beyond the
 purchased retention window. Their signatures bind the exact content length,
@@ -347,3 +407,5 @@ route, and failure-path checks above pass.
 ---
 
 © 2025 – Feel free to adapt, improve, and PR!
+
+Advertisement, owner metadata and renewal operations use the same `GCP_STORAGE_CREDS`/`GCP_PROJECT_ID` identity as signed uploads. When credentials are explicitly configured, those operations must not fall back to the runtime metadata server. Unset credentials retain ADC for installations that intentionally use a runtime service account. Malformed configured credentials fail without logging their contents.

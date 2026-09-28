@@ -62,41 +62,51 @@ afterEach(() => {
 })
 
 describe('AuthFetch authenticated peer lifecycle', () => {
-  test('binds the configured originator when a certificate request creates a peer', async () => {
-    let certificatesReceived:
-      ((senderPublicKey: string, certificates: unknown[]) => void) | undefined
-    const peer = {
-      ready: Promise.resolve(),
-      listenForCertificatesReceived: jest.fn(
-        (listener: (senderPublicKey: string, certificates: unknown[]) => void) => {
-          certificatesReceived = listener
-          return 7
-        }
-      ),
-      listenForCertificatesRequested: jest.fn(),
-      stopListeningForCertificatesReceived: jest.fn(),
-      requestCertificates: jest.fn(async () => {
-        certificatesReceived?.('server-key', [])
+  test.each([
+    [4, 16 * 1024 * 1024],
+    [16 * 1024 * 1024, 16 * 1024 * 1024 + 512 * 1024],
+    [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]
+  ])(
+    'binds the originator and finite HTTP payload budget with response limit %i',
+    async (maxResponseBytes, payloadBudget) => {
+      let certificatesReceived:
+        ((senderPublicKey: string, certificates: unknown[]) => void) | undefined
+      const peer = {
+        ready: Promise.resolve(),
+        listenForCertificatesReceived: jest.fn(
+          (listener: (senderPublicKey: string, certificates: unknown[]) => void) => {
+            certificatesReceived = listener
+            return 7
+          }
+        ),
+        listenForCertificatesRequested: jest.fn(),
+        stopListeningForCertificatesReceived: jest.fn(),
+        requestCertificates: jest.fn(async () => {
+          certificatesReceived?.('server-key', [])
+        })
+      }
+      PeerMock.mockImplementation(() => peer)
+      const wallet = { getPublicKey: jest.fn() }
+      const authFetch = new AuthFetch(wallet as any, undefined, undefined, 'app.example' as any, {
+        maxResponseBytes
       })
+
+      await authFetch.sendCertificateRequest('https://service.example/certificates', {
+        certifiers: [],
+        types: {}
+      })
+
+      expect(PeerMock).toHaveBeenCalledWith(
+        wallet,
+        expect.anything(),
+        undefined,
+        expect.anything(),
+        undefined,
+        'app.example',
+        { maxGeneralPayloadBytes: payloadBudget }
+      )
     }
-    PeerMock.mockImplementation(() => peer)
-    const wallet = { getPublicKey: jest.fn() }
-    const authFetch = new AuthFetch(wallet as any, undefined, undefined, 'app.example' as any)
-
-    await authFetch.sendCertificateRequest('https://service.example/certificates', {
-      certifiers: [],
-      types: {}
-    })
-
-    expect(PeerMock).toHaveBeenCalledWith(
-      wallet,
-      expect.anything(),
-      undefined,
-      expect.anything(),
-      undefined,
-      'app.example'
-    )
-  })
+  )
 
   test('creates a peer, exchanges certificates, and resolves an authenticated response', async () => {
     let certificatesReceived:
@@ -171,7 +181,8 @@ describe('AuthFetch authenticated peer lifecycle', () => {
       requestedCertificates,
       expect.anything(),
       undefined,
-      'app.example'
+      'app.example',
+      { maxGeneralPayloadBytes: 16 * 1024 * 1024 + 512 * 1024 }
     )
     expect(response.status).toBe(201)
     expect(response.headers.get('x-test')).toBe('passed')

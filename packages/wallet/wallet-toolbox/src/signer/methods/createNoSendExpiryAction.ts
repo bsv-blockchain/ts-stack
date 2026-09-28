@@ -11,7 +11,7 @@ import { completeSignedTransaction, verifyUnlockScripts } from './completeSigned
 import { CreateActionResultX, processAction } from './createAction'
 import { setResultBeef } from './resultBeef'
 import { makeNoSendExpiryFundingArgs } from '../../storage/methods/noSendExpiry'
-import { exactActionSpendSymbol, type ExactActionSpendCarrier } from '../../utility/exactActionSpend'
+import { setExactActionSpend } from '../../utility/exactActionSpend'
 
 function pendingFromPlan(
   wallet: Wallet,
@@ -276,13 +276,13 @@ export async function createNoSendExpiryAction(
     try {
       const tx = makeSignableBeef(target.tx)
       wallet.pendingSignActions[target.reference] = target
-      const result: CreateActionResultX & ExactActionSpendCarrier = {
+      const result: CreateActionResultX = {
         signableTransaction: {
           reference: target.reference,
           tx
-        },
-        [exactActionSpendSymbol]: target.amount
+        }
       }
+      setExactActionSpend(result, target.amount)
       return result
     } catch (error) {
       await wallet.storage.abortAction({ reference: target.reference }).catch(() => undefined)
@@ -303,7 +303,7 @@ export async function createNoSendExpiryAction(
       sendWithResults: processed.sendWithResults,
       notDelayedResults: processed.notDelayedResults
     }
-    ;(result as CreateActionResultX & ExactActionSpendCarrier)[exactActionSpendSymbol] = target.amount
+    setExactActionSpend(result, target.amount)
     setResultBeef(result, beef)
     return result
   } catch (error) {

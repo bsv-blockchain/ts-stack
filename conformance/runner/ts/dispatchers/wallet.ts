@@ -65,7 +65,12 @@ import {
   LookupQuestion,
   LookupResolver,
   PrivateKey,
-  ProtoWallet
+  ProtoWallet,
+  WalletClient,
+  WalletWireProcessor,
+  WalletWireTransceiver,
+  type ListActionsResult,
+  type ListActionsArgs
 } from '@bsv/sdk'
 
 // Wallet-toolbox imports via moduleNameMapper aliases (see jest.config.mjs).
@@ -695,6 +700,18 @@ async function dispatchListActions(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
+  if (input.walletResult !== undefined) {
+    const result = input.walletResult as ListActionsResult
+    const provider = await setupTestWallet()
+    provider.listActions = async () => result
+    const binary = new WalletWireTransceiver(new WalletWireProcessor(provider))
+    for (const substrate of [provider, binary]) {
+      const client = new WalletClient(substrate, 'conformance.example')
+      await expect(client.listActions(input.args as ListActionsArgs)).resolves.toEqual(expected)
+    }
+    return
+  }
+
   // Vector 14 expects 1 action (pre-populated state) — demoted.
   // All other vectors expect empty results from a fresh wallet.
   const rootHex =

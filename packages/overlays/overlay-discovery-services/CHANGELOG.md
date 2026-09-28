@@ -1,6 +1,6 @@
 # CHANGELOG for `@bsv/overlay-discovery-services`
 
-## 2.2.6 (unreleased)
+## 2.2.7 (unreleased)
 
 - Refresh packed first-party dependency ranges for the next wallet interoperability release; no independent API migration.
 
@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file. The format 
 - [1.6.1 - 2026-02-05](#161---2026-02-05)
 
 ## [Unreleased]
+
+- Order equal creation timestamps by unique MongoDB _id for stable discovery pagination.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Advances the packed overlay dependency candidate for BASM validation hardening.

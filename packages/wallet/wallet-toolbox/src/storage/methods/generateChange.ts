@@ -138,6 +138,7 @@ interface SurplusChangeShapingRequest {
   targetNetCount: number
   netChangeCount: () => number
   maxChangeOutputs: number
+  dustFloor: number
   feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
   rand: (min: number, max: number) => number
 }
@@ -204,6 +205,9 @@ function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
   if (request.targetNetCount <= request.netChangeCount()) return
 
   const originalSatoshis = result.changeOutputs[0].satoshis
+  // Legacy baskets can target less than the dust floor. Split outputs below it
+  // would later be folded away, leaving the fee sized for outputs that no longer exist.
+  const perOutputFloor = Math.max(request.dustFloor, params.changeInitialSatoshis)
   const desiredOutputs = Math.min(
     request.maxChangeOutputs,
     Math.max(1, request.targetNetCount + result.allocatedChangeInputs.length)
@@ -212,17 +216,12 @@ function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
     const addedOutputs = count - 1
     const addedFee = request.feeTarget(0, addedOutputs) - request.feeTarget()
     const distributable = originalSatoshis - addedFee
-    if (distributable < count * params.changeInitialSatoshis) continue
+    if (distributable < count * perOutputFloor) continue
     result.changeOutputs = Array.from({ length: count }, () => ({
-      satoshis: params.changeInitialSatoshis,
+      satoshis: perOutputFloor,
       lockingScriptLength: params.changeLockingScriptLength
     }))
-    distributeExcessFees(
-      result.changeOutputs,
-      params.changeInitialSatoshis,
-      distributable - count * params.changeInitialSatoshis,
-      request.rand
-    )
+    distributeExcessFees(result.changeOutputs, perOutputFloor, distributable - count * perOutputFloor, request.rand)
     break
   }
 }
@@ -683,6 +682,7 @@ async function generateChangeSdkCore(
       targetNetCount,
       netChangeCount,
       maxChangeOutputs,
+      dustFloor,
       feeTarget,
       rand
     })

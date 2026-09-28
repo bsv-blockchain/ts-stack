@@ -30,6 +30,7 @@ import {
 } from './security/edgePolicy'
 import { createServiceHealth } from './serviceHealth'
 import { getChirpCommitPrice } from './chirp/routes'
+import { CHIRP_STAGED_OBJECT_PATH, createChirpObjectBodyParser } from './chirp/bodyMiddleware'
 import { startChirpGarbageCollector } from './chirp/store'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
@@ -66,6 +67,8 @@ app.use(concurrencyLimit('UHRP', profileValue(resourceProfile, {
 })))
 serviceHealth.register(app)
 app.use(preAuthRateLimit)
+// Parse only staged-object PUTs before authentication, preserving exact binary bytes.
+app.put(CHIRP_STAGED_OBJECT_PATH, createChirpObjectBodyParser())
 app.use(bodyparser.json({
   limit: readBodyLimitBytes('UHRP_JSON', 256 * 1024),
   type: 'application/json'

@@ -111,11 +111,13 @@ const PAYMENT_VERSION = '1.0'
 const AUTH_RESPONSE_TIMEOUT_MS = 30000
 const MAX_PENDING_AUTH_REQUESTS = 1000
 const MAX_BUFFERED_CERTIFICATES = 1000
-const MAX_AUTH_RESPONSE_HEADERS = 128
-const MAX_AUTH_RESPONSE_HEADER_KEY_BYTES = 256
-const MAX_AUTH_RESPONSE_HEADER_VALUE_BYTES = 8192
-const MAX_AUTH_RESPONSE_HEADER_BYTES = 64 * 1024
-const MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES = 128 * 1024
+const MAX_AUTH_RESPONSE_HEADERS = 512
+const MAX_AUTH_RESPONSE_HEADER_KEY_BYTES = 1024
+const MAX_AUTH_RESPONSE_HEADER_VALUE_BYTES = 32 * 1024
+const MAX_AUTH_RESPONSE_HEADER_BYTES = 256 * 1024
+const MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES = 512 * 1024
+// Matches SimplifiedFetchTransport's fixed complete-request frame ceiling.
+const MAX_AUTH_HTTP_REQUEST_FRAME_BYTES = 16 * 1024 * 1024
 const MAX_PAYMENT_TRANSACTION_BYTES = 16 * 1024 * 1024
 const REDACTED_LOG_VALUE = '[redacted]'
 
@@ -247,12 +249,10 @@ export class AuthFetch {
   async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> {
     if (config.signal?.aborted === true)
       throw new PaymentTransportError('ERR_PAYMENT_CANCELLED', 'Paid request cancelled.')
-    // Retain the caller's original bytes before any network or wallet await.
+    // Own mutable input before any network or wallet await. Keep native body
+    // types so the ordinary HTTP fallback retains fetch's media-type handling.
     const headers = { ...config.headers }
-    const ownedBody =
-      config.body == null
-        ? undefined
-        : new Uint8Array(await this.normalizeBodyToNumberArray(config.body))
+    const ownedBody = await this.snapshotRequestBody(config.body)
     config = {
       ...config,
       headers,
@@ -402,7 +402,18 @@ export class AuthFetch {
       this.requestedCertificates,
       this.sessionManager,
       undefined,
-      this.originator
+      this.originator,
+      // Budget binary bytes separately from the generic JSON envelope,
+      // retaining a finite bound before Peer snapshots either HTTP frame.
+      {
+        maxGeneralPayloadBytes: Math.max(
+          MAX_AUTH_HTTP_REQUEST_FRAME_BYTES,
+          Math.min(
+            Number.MAX_SAFE_INTEGER,
+            this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES
+          )
+        )
+      }
     )
     await newPeer.ready
     const peerState: AuthPeer = {
@@ -1409,6 +1420,23 @@ export class AuthFetch {
     }
   }
 
+  private async snapshotRequestBody(
+    body: BodyInit | null | undefined
+  ): Promise<BodyInit | undefined> {
+    if (body == null) return undefined
+    if (typeof body === 'string') return body
+    // Blobs (including Files) are immutable and retain their declared type.
+    if (typeof Blob !== 'undefined' && body instanceof Blob) return body
+    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams)
+      return new URLSearchParams(body)
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+      const snapshot = new FormData()
+      body.forEach((value, key) => snapshot.append(key, value))
+      return snapshot
+    }
+    return new Uint8Array(await this.normalizeBodyToNumberArray(body))
+  }
+
   private async normalizeBodyToNumberArray(body: BodyInit | null | undefined): Promise<number[]> {
     // 0. Null / undefined
     if (body == null) {
@@ -1417,7 +1445,7 @@ export class AuthFetch {
 
     // 1. number[]
     if (Array.isArray(body) && body.every(item => typeof item === 'number')) {
-      return body // Return the array as is
+      return body.slice()
     }
 
     // 2. string

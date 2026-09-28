@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-15",
+  "lastReviewed": "2026-09-27",
   "owner": "ts-stack-maintainers",
   "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
   "copies": [
@@ -108,6 +108,10 @@
         "infra/wallet-infra/src/telemetry.ts",
         "infra/message-box-server/src/telemetry.ts"
       ]
+    },
+    {
+      "canonicalSource": "infra/uhrp-server-basic/src/chirp/bodyMiddleware.ts",
+      "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/bodyMiddleware.ts"]
     }
   ]
 }

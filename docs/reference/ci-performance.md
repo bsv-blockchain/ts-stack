@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.2.0'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.3.0'
+last_updated: '2026-09-25'
+last_verified: '2026-09-25'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -45,8 +45,11 @@ outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
 package-composition reports without rebuilding the workspace. The cheap
-repository-health, scope, Sonar, and dependency-review gates complete before
-dependency installation. Matrix siblings finish after a failure so acceptance
+repository-health, scope, and dependency-review gates complete before
+dependency installation. Exact-head Sonar analysis runs concurrently and remains
+mandatory in the final merge gate. Package artifact checks and documentation
+consumers run beside the tests after the shared build, with their own required
+result. Matrix siblings finish after a failure so acceptance
 evidence includes every selected shard. Within a regression or coverage shard,
 packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
@@ -118,6 +121,33 @@ Public fork PRs upload the merged LCOV evidence through the pinned Codecov actio
 GitHub withholds repository secrets from these ordinary `pull_request` jobs;
 no privileged trigger or additional write/OIDC permission is granted. The uploader,
 processing check and final notifications run for every nonempty report, so the
-required `codecov/patch` status is available for contributors as well as maintainers.
-The repository-owned 90% patch-coverage check remains the first blocking check
-on the exact diff.
+advisory `codecov/patch` report is available for contributors as well as maintainers.
+The repository-owned 90% patch-coverage check is mandatory on the exact diff.
+The repository ruleset must require `merge-gate` and must not require the duplicate
+external `codecov/patch` status. Uploading, processing and notification run in a
+separate reporting job after the local gate, so an external service outage cannot
+block a tested change. Sonar, CodeQL, Socket, dependency review, conformance,
+review resolution and branch protections remain required.
+
+## September 25 critical-path correction
+
+PR #617 run [36094137059](https://github.com/bsv-blockchain/ts-stack/actions/runs/36094137059)
+took 1,018 seconds to reach merge-gate. Wallet shard 4 took 612 seconds, including
+524 seconds for two sequential real-HTTP sync scenarios; the other wallet shards
+took 85–124 seconds. Main run 36095294323 confirmed the same long tail. These are
+observations, not a replacement performance baseline.
+
+The 0 ms and 1,000 ms HTTP scenarios now execute independently in two additional
+required wallet coverage matrix entries. The four ordinary shards exclude only
+that file, and each added entry selects one exact latency scenario from it. Their
+LCOV reports participate in the same mandatory aggregate check. Payload sizes,
+real authentication, retry/restart/integrity assertions, artificial latency and
+production deadlines are unchanged. Separate Jest processes preserve the suite's
+global transport spies; running the two cases concurrently inside one process
+would be unsafe. No scenario is moved to a schedule or omitted from a wallet change.
+
+Sonar waiting (79 seconds), package checks (71 seconds), and Codecov processing
+(29 seconds) were also on that PR's serial path. Required Sonar analysis and
+package checks now overlap execution; the duplicate external reporting wait is
+outside the merge gate. Verify the new run timings before claiming a measured
+speedup. Shared CI changes still select the complete governed execution graph.
