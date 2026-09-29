@@ -161,6 +161,19 @@ function setup(overrides: Partial<OutputLookupTransportOptions> = {}, authentica
 }
 
 describe('retained BRC-193 lookup transport', () => {
+  it('gives an injected native-style Fetch the global receiver', async () => {
+    const f = setup()
+    const nativeStyleFetch: typeof fetch = async function (this: typeof globalThis, input, init) {
+      if (this !== globalThis)
+        throw new TypeError('Illegal invocation: Fetch requires its global receiver')
+      expect(input).toBe('https://example.test/tenant/api/overlay/v1/lookup/open')
+      expect(init?.redirect).toBe('error')
+      return f.response(f.snapshot)
+    }
+    const client = new OutputLookupTransport({ ...f.options, fetch: nativeStyleFetch })
+    expect(await client.open(opening)).toEqual(f.snapshot)
+  })
+
   it('resumes from an owned compact receipt boundary without duplicating evidence bytes', async () => {
     const f = setup()
     const batch = structuredClone(f.snapshot)

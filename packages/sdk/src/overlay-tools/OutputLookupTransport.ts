@@ -121,8 +121,11 @@ export class OutputLookupTransport {
       this.selection.profile.authentication === 'none' || this.wallet !== undefined,
       'Authenticated lookup requires a wallet'
     )
-    this.fetchClient = options.fetch ?? globalThis.fetch?.bind(globalThis)
-    outputAssert(typeof this.fetchClient === 'function', 'Lookup requires a fetch implementation')
+    const fetchClient = options.fetch ?? globalThis.fetch
+    outputAssert(typeof fetchClient === 'function', 'Lookup requires a fetch implementation')
+    // Fetch is a Web IDL global method. Calling an injected Window.fetch as a
+    // property of this transport supplies the wrong receiver in browsers.
+    this.fetchClient = fetchClient.bind(globalThis)
     this.now = options.now ?? (() => String(Math.floor(Date.now() / 1000)))
     this.timeout = options.requestTimeoutMs ?? 30000
     outputAssert(

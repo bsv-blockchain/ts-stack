@@ -89,7 +89,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,741 tests across 222 suites, including all proposal endpoint
+The SDK run passes 7,742 tests across 222 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
 run passes 328 tests across 27 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
@@ -102,7 +102,7 @@ original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, 
 write acknowledgements and receipt capacity checked before admission. The concrete
 evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
 Journal append mutation testing kills all 26 generated mutations.
-The bounded BRC-193 client adds 47 unit tests and nine actual local HTTP tests
+The bounded BRC-193 client adds 48 unit tests and nine actual local HTTP tests
 using SDK BRC-103/104 and the existing Express authentication middleware. They
 cover signed snapshot/live/close responses, wrong peers, no authentication
 downgrade, signed selection mismatches, corrupted signed bodies, unpaid errors
