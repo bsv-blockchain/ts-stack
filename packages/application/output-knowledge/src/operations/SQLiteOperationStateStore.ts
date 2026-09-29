@@ -2,13 +2,12 @@ import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
 import {
-  OperationStateCodec,
   type OperationStateLimits,
   type OperationStateStore,
   type OperationStateSnapshot,
-  type OperationStateResult,
-  type StoredOperationState
+  type OperationStateResult
 } from './OperationStateStore.js'
+import { OperationStateCodec, type StoredOperationState } from './OperationStateCodec.js'
 
 /** Node-only, one bounded CAS cell per local namespace; WAL with synchronous=FULL. */
 export class SQLiteOperationStateStore implements OperationStateStore {

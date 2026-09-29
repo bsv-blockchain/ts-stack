@@ -1,12 +1,11 @@
 import { OutputProtocolError, outputString, type OutputJSONObject } from '@bsv/sdk'
 import {
-  OperationStateCodec,
   type OperationStateLimits,
   type OperationStateStore,
   type OperationStateSnapshot,
-  type OperationStateResult,
-  type StoredOperationState
+  type OperationStateResult
 } from './OperationStateStore.js'
+import { OperationStateCodec, type StoredOperationState } from './OperationStateCodec.js'
 
 export interface IndexedDBOperationStateOptions {
   factory?: IDBFactory

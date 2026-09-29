@@ -13,7 +13,7 @@ import {
   type OperationStateLimits
 } from '../src/operations/index.js'
 import { SQLiteOperationStateStore } from '../src/operations/SQLiteOperationStateStore.js'
-import { OperationStateCodec } from '../src/operations/OperationStateStore.js'
+import { OperationStateCodec } from '../src/operations/OperationStateCodec.js'
 
 const binding = { profile: 'test-workflow/1', journal: 'receipts', generation: '4' }
 const initial = { job: '0', phase: 'idle' }

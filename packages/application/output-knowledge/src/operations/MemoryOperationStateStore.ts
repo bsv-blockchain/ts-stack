@@ -1,12 +1,11 @@
 import { OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
 import {
-  OperationStateCodec,
   type OperationStateLimits,
   type OperationStateStore,
   type OperationStateSnapshot,
-  type OperationStateResult,
-  type StoredOperationState
+  type OperationStateResult
 } from './OperationStateStore.js'
+import { OperationStateCodec, type StoredOperationState } from './OperationStateCodec.js'
 
 /** Volatile reference adapter; a process loss destroys its workflow state. */
 export class MemoryOperationStateStore implements OperationStateStore {

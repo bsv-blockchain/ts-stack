@@ -71,6 +71,7 @@ export function buildMutationTargets(repositoryRoot) {
           '  async read('
         ),
         'src/operations/OperationStateStore.ts',
+        'src/operations/OperationStateCodec.ts',
         'src/operations/MemoryOperationStateStore.ts',
         ...['SQLiteOperationStateStore', 'IndexedDBOperationStateStore'].map(name =>
           sourceLineRange(
