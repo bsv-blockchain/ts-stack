@@ -28,6 +28,9 @@ attention to changes that materially alter behavior or extend functionality.
   monitor updates against primary replacement and concurrent proof corrections.
 - Keep proof changes and prepared-BEEF invalidation atomic, and retain safe custom
   provider behavior. No persisted-schema migration is required.
+- Make sequential storage and proof iteration explicit while preserving the
+  eight-worker proof limit, failure draining, deterministic transaction order
+  and Promise rejection contracts.
 - Exercise large copies, tombstones, restart/lost acknowledgements and foreground
   latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
   timestamp boundary traffic remains a snapshot/high-water follow-up.

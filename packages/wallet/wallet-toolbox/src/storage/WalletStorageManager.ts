@@ -195,7 +195,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   private async preflightManagedNetworks(peer?: TableSettings): Promise<void> {
     let reference = peer
-    for (const store of this._stores) {
+    // The first available store establishes the network for each later store.
+    for await (const store of this._stores) {
       store.settings ??= await store.storage.makeAvailable()
       if (reference != null) assertSyncNetwork(reference, store.settings)
       reference ??= store.settings
@@ -689,8 +690,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
       this.assertProofDestination(storage, generation)
       if (ptxs.length === 0) return
       await active.transaction(async trx => {
-        for (let index = 0; index < ptxs.length; index++) {
-          const ptx = ptxs[index]
+        // Keep proof writes and their result log in source order within this transaction.
+        for await (const [index, ptx] of ptxs.entries()) {
           const { result: proof, replacement } = prepared[index]
           result.log += proof.log
           if (replacement !== undefined && proof.updated !== undefined) {
@@ -722,10 +723,9 @@ export class WalletStorageManager implements sdk.WalletStorage {
       created_at: new Date(ptx.created_at),
       updated_at: new Date(ptx.updated_at)
     }
-    const { storage, generation } = await this.runAsStorageProvider(async storage => ({
-      storage,
-      generation: this.generation
-    }))
+    const { storage, generation } = await this.runAsStorageProvider(storage =>
+      Promise.resolve({ storage, generation: this.generation })
+    )
     const { result, replacement } = await this.prepareReproof(storage, ptx)
     await this.runAsStorageProvider(async active => {
       this.assertProofDestination(storage, generation)

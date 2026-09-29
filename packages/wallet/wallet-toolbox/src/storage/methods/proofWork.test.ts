@@ -47,7 +47,15 @@ test('bounds proof concurrency and drains already-started I/O before rejecting',
 })
 
 test('deduplicates and bounds large proof lookups before reaching SQL bindings', async () => {
-  const findProvenTxs = jest.fn(async () => [])
+  let active = 0
+  let peak = 0
+  const findProvenTxs = jest.fn(async () => {
+    active++
+    peak = Math.max(peak, active)
+    await Promise.resolve()
+    active--
+    return []
+  })
   const txids = Array.from({ length: 1201 }, (_, i) => i.toString(16).padStart(64, '0'))
   await expect(
     findProofRecords({ findProvenTxs } as unknown as StorageProvider, [...txids, ...txids])
@@ -56,4 +64,22 @@ test('deduplicates and bounds large proof lookups before reaching SQL bindings',
   const requests = findProvenTxs.mock.calls as unknown as [{ txids: string[] }][]
   expect(requests.every(([args]) => args.txids.length <= 250)).toBe(true)
   expect(requests.flatMap(([args]) => args.txids)).toEqual(txids)
+  expect(peak).toBe(1)
+  expect(active).toBe(0)
+})
+
+test('keeps proof results in input order across multiple bounded worker batches', async () => {
+  let active = 0
+  let peak = 0
+  const items = Array.from({ length: 21 }, (_, index) => index)
+  const results = await mapProofWork(items, async index => {
+    active++
+    peak = Math.max(peak, active)
+    await new Promise(resolve => setTimeout(resolve, 8 - (index % 8)))
+    active--
+    return index * 2
+  })
+  expect(results).toEqual(items.map(index => index * 2))
+  expect(peak).toBe(8)
+  expect(active).toBe(0)
 })

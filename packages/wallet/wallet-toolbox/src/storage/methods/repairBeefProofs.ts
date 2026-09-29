@@ -86,7 +86,8 @@ export async function repairBeefProofs(storage: StorageProvider, beef: Beef, trx
   if (replacements.some(result => result.expected != null)) {
     await storage.transaction(async trx => {
       let changed = false
-      for (const { proof, expected } of replacements) {
+      // Preserve transaction write order and finish each compare-and-set before the next.
+      for await (const { proof, expected } of replacements) {
         if (expected != null) changed = (await storage.compareAndSetProvenTxProof(expected, proof, trx)) || changed
       }
       const extension = storage as StorageProvider & { invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number> }

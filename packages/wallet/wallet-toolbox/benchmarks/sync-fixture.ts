@@ -7,6 +7,10 @@ export const proofBytes = 32 * 1024
 export const pageBytes = 256 * 1024
 export const fixedReadMs = 15
 
+function* fixtureIndexes(count: number) {
+  for (let index = 0; index < count; index++) yield index
+}
+
 export async function seedSyncBenchmark(
   storage: Pick<
     StorageProvider,
@@ -17,7 +21,8 @@ export async function seedSyncBenchmark(
   const { user } = await storage.findOrInsertUser(identityKey)
   const timestamp = new Date(1_700_000_000_000)
   await storage.transaction(async trx => {
-    for (let i = 0; i < labels; i++)
+    // Seed in order on one transaction without queuing thousands of pending writes.
+    for await (const i of fixtureIndexes(labels))
       await storage.insertTxLabel(
         {
           txLabelId: 0,
@@ -29,7 +34,7 @@ export async function seedSyncBenchmark(
         },
         trx
       )
-    for (let i = 0; i < proofCount; i++) {
+    for await (const i of fixtureIndexes(proofCount)) {
       const tx = new Transaction()
       tx.addOutput({ satoshis: i + 1, lockingScript: Script.fromASM(`OP_FALSE OP_RETURN ${'01'.repeat(proofBytes)}`) })
       const txid = tx.id('hex')

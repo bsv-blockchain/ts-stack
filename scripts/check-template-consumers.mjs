@@ -157,6 +157,15 @@ check.equal(MandalaToken, templates.MandalaToken)
 `
 }
 
+async function completeConsumers(pending) {
+  // Drain every started child before the caller removes their temporary directories.
+  const settled = await Promise.allSettled(pending)
+  return settled.map(result => {
+    if (result.status === 'rejected') throw result.reason
+    return result.value
+  })
+}
+
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'template-consumers-'))
 try {
   const templates = await pack(path.join(root, 'packages/helpers/ts-templates'), temporary)
@@ -172,39 +181,44 @@ try {
       version: '2.8.0'
     }
   ]
-  const results = []
-  for (const profile of profiles) {
-    const cwd = path.join(temporary, profile.label)
-    await fs.mkdir(cwd)
-    await fs.writeFile(path.join(cwd, 'package.json'), '{"private":true,"type":"module"}\n')
-    await run(
-      'npm',
-      [
-        'install',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        '--package-lock=false',
-        '--omit=dev',
-        templates,
-        profile.sdk
-      ],
-      { cwd }
-    )
-    const installed = JSON.parse(
-      await fs.readFile(path.join(cwd, 'node_modules/@bsv/sdk/package.json'), 'utf8')
-    )
-    assert.equal(installed.version, profile.version)
-    for (const format of ['cjs', 'mjs']) {
-      const filename = `consumer.${format}`
-      await fs.writeFile(path.join(cwd, filename), consumerSource(format))
-      const { stdout } = await run(process.execPath, [filename], { cwd })
-      results.push(JSON.parse(stdout))
-      console.log(
-        `Verified packed templates script construction and signing: SDK ${profile.version}, ${format}.`
+  // Profiles install into separate directories; formats only read their shared dependencies.
+  const profileResults = await completeConsumers(
+    profiles.map(async profile => {
+      const cwd = path.join(temporary, profile.label)
+      await fs.mkdir(cwd)
+      await fs.writeFile(path.join(cwd, 'package.json'), '{"private":true,"type":"module"}\n')
+      await run(
+        'npm',
+        [
+          'install',
+          '--ignore-scripts',
+          '--no-audit',
+          '--no-fund',
+          '--package-lock=false',
+          '--omit=dev',
+          templates,
+          profile.sdk
+        ],
+        { cwd }
       )
-    }
-  }
+      const installed = JSON.parse(
+        await fs.readFile(path.join(cwd, 'node_modules/@bsv/sdk/package.json'), 'utf8')
+      )
+      assert.equal(installed.version, profile.version)
+      return await completeConsumers(
+        ['cjs', 'mjs'].map(async format => {
+          const filename = `consumer.${format}`
+          await fs.writeFile(path.join(cwd, filename), consumerSource(format))
+          const { stdout } = await run(process.execPath, [filename], { cwd })
+          console.log(
+            `Verified packed templates script construction and signing: SDK ${profile.version}, ${format}.`
+          )
+          return JSON.parse(stdout)
+        })
+      )
+    })
+  )
+  const results = profileResults.flat()
   for (const result of results.slice(1)) assert.deepEqual(result, results[0])
 } finally {
   await fs.rm(temporary, { recursive: true, force: true })

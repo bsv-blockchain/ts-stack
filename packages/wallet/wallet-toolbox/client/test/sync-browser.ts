@@ -46,7 +46,8 @@ async function benchmark() {
     return chunk
   }
   try {
-    for (const mode of ['exclusive', 'paged'] as const) {
+    // Modes share a source fixture and must be measured without competing workloads.
+    for await (const mode of ['exclusive', 'paged'] as const) {
       const destination = await open()
       const capabilities = destination.getCapabilities.bind(destination)
       if (mode === 'exclusive')

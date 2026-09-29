@@ -133,7 +133,8 @@ try {
     },
     { contentType: 'text/plain', body: [], ancestorBytes: 0, multipart: false }
   ]
-  for (const item of cases) {
+  // Reuse the page only after the preceding wallet scenario has settled.
+  for await (const item of cases) {
     const target = await receiver(item)
     const result = await page.evaluate(async args => await globalThis.pay(args), {
       ...item,
@@ -181,7 +182,7 @@ try {
     assert.equal(manifest.version, '2.8.0')
     legacyBundle = await build({ ...bundleOptions, alias: { '@bsv/sdk': legacyModule } })
     await page.addScriptTag({ url: `${pageOrigin}/legacy.js`, type: 'module' })
-    for (const multipart of [true, false]) {
+    for await (const multipart of [true, false]) {
       const target = await receiver({ multipart })
       const item = {
         origin: target.origin,
