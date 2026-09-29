@@ -32,6 +32,8 @@ submission and GASP behavior remains available to applications that do not opt i
   terminal outcomes and serialized expiry/finalization.
 - Separate bounded Memory/SQLite proposal journals, immutable service configuration,
   atomic private events/jobs/operation claims and recovery after actual process exit.
+- Atomic bounded local context, compatible body-only replay, terminal receipt capacity
+  reservations and a shared SQLite capacity seal across independent writers.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -67,10 +69,12 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,638 tests across 217 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 273 tests across 22 suites, with more than 95% line and 89% branch
+run passes 295 tests across 23 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
-projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
+projection publication/error isolation. Proposal tests also cover exact completion capacity,
+concurrent-writer limit sealing, immutable local context and malformed SQLite
+metadata/encodings. Journal append mutation testing kills all 26 generated mutations.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across

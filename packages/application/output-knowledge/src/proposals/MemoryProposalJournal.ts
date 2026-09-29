@@ -1,4 +1,4 @@
-import { outputString, OutputProtocolError } from '@bsv/sdk'
+import { outputString, OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
 import { ProposalJournalState } from './ProposalJournalState.js'
 import type {
   ProposalJournalLimits,
@@ -16,6 +16,8 @@ import type {
 /** Volatile reference adapter. It cannot promise recovery after process loss. */
 export class MemoryProposalJournal implements ProposalJournalStorage {
   readonly durability = 'volatile' as const
+  readonly contextRetention = 'proposal-journal-context/1' as const
+  readonly completionReservation = 'proposal-journal-completion/1' as const
   private readonly state: ProposalJournalState
   private closed = false
 
@@ -57,9 +59,12 @@ export class MemoryProposalJournal implements ProposalJournalStorage {
     this.closed = true
   }
 
-  async commit(transition: ProposalTransition): Promise<ProposalCommitResult> {
+  async commit(
+    transition: ProposalTransition,
+    local?: OutputJSONObject
+  ): Promise<ProposalCommitResult> {
     const state = this.ready(),
-      prepared = state.prepare(transition),
+      prepared = state.prepare(transition, local),
       result = state.plan(prepared)
     if (result.status === 'committed') state.apply(prepared, result.revision)
     return result

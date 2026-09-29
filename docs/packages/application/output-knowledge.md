@@ -63,6 +63,11 @@ private events together. It preserves retry bindings, pending jobs and terminal
 fences across process loss. The reference journal seals its service identity and
 configuration and refuses silent resets. Its bounded full-history retention is
 not a completed service compaction or capability-recovery implementation.
+Local recovery context can be retained atomically alongside a transition without
+changing older entry encodings or retry keys. New admission jobs reserve capacity
+for a bounded terminal receipt; concurrent writers share sealed capacity limits.
+Hosts must validate retained context and bound receipts before admission. An older
+journal's pending jobs are preserved but do not gain a retroactive capacity promise.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current

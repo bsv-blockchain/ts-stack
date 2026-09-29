@@ -23,6 +23,7 @@ import {
   type ProposalTransition
 } from '../src/proposals/index.js'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
+import { ProposalJournalState } from '../src/proposals/ProposalJournalState.js'
 import { author, recipient, scope, registry, signed, finalize } from './proposal-fixture.js'
 
 const clock = { maxLifetimeSeconds: '100', futureSkewSeconds: '2' }
@@ -258,6 +259,137 @@ describe.each(['memory', 'sqlite'] as const)('%s proposal journal contract', kin
     expect((await store.head()).entries).toBe(3)
   })
 
+  it('holds an entry for completion before admitting work and prevents unrelated writes from consuming it', async () => {
+    const first = publication(),
+      reserved = reservation(first),
+      done = completed(reserved),
+      other = publication(signed({ channel: 'ff'.repeat(32) }))
+    const tooSmall = open({ entries: 2 })
+    await tooSmall.commit(first)
+    expect((await tooSmall.commit(reserved)).status).toBe('limited')
+    expect(
+      await tooSmall.getOperation(author, scope.service, 'original-operation-id')
+    ).toBeUndefined()
+    const store = open({ entries: 3 })
+    expect(store.completionReservation).toBe('proposal-journal-completion/1')
+    await store.commit(first)
+    await store.commit(reserved)
+    expect((await store.head()).reserved).toEqual({ bytes: 4194304, entries: 1 })
+    expect((await store.commit(other)).status).toBe('limited')
+    expect((await store.commit(reserved)).status).toBe('replayed')
+    expect((await store.commit(done)).status).toBe('committed')
+    expect((await store.head()).reserved).toEqual({ bytes: 0, entries: 0 })
+    expect((await store.head()).entries).toBe(3)
+  })
+
+  it('charges atomic context against the exact byte reservation boundary and releases unused capacity', async () => {
+    const first = publication(),
+      reserved = reservation(first),
+      done = completed(reserved),
+      other = publication(signed({ channel: 'ff'.repeat(32) }))
+    const local = { retainedContract: 'signed-provider-contract' }
+    const probe = open()
+    await probe.commit(first)
+    await probe.commit(reserved, local)
+    const used = (await probe.head()).bytes
+    const entryBytes = 32768
+    const small = open({ bytes: used + entryBytes - 1, entryBytes })
+    await small.commit(first)
+    expect((await small.commit(reserved, local)).status).toBe('limited')
+    const exact = open({ bytes: used + entryBytes, entryBytes })
+    await exact.commit(first)
+    expect((await exact.commit(reserved, local)).status).toBe('committed')
+    expect(await exact.head()).toMatchObject({
+      bytes: used,
+      reserved: { bytes: entryBytes, entries: 1 }
+    })
+    expect((await exact.commit(other)).status).toBe('limited')
+    expect((await exact.commit(done, local)).status).toBe('committed')
+    expect((await exact.commit(other)).status).toBe('committed')
+    expect((await exact.head()).reserved).toEqual({ bytes: 0, entries: 0 })
+  })
+
+  it('returns complete entries within the read byte budget without advancing past an omitted entry', async () => {
+    const first = publication(),
+      reserved = reservation(first),
+      done = completed(reserved)
+    const entryBytes = Math.max(
+      ...[first, reserved, done].map(
+        plan => new TextEncoder().encode(canonicalOutputJSON(plan)).length
+      )
+    )
+    const store = open({ entryBytes })
+    await store.commit(first)
+    await store.commit(reserved)
+    await store.commit(done)
+    expect((await store.read('0', 256)).map(entry => entry.revision)).toEqual(['1'])
+    expect((await store.read('1', 256)).map(entry => entry.revision)).toEqual(['2'])
+    expect((await store.read('2', 256)).map(entry => entry.revision)).toEqual(['3'])
+  })
+
+  it('atomically retains bounded local context while preserving body-only history and replay identity', async () => {
+    const store = open(),
+      first = publication(),
+      reserved = reservation(first)
+    await store.commit(first)
+    const local = {
+      profile: 'urn:test:retained-contract:1',
+      version: 1,
+      contract: { digest: '01'.repeat(32), selectedAt: '99' }
+    }
+    const saved = structuredClone(local)
+    expect(await appendProposalWithRecovery(store, reserved, local)).toEqual({
+      status: 'committed',
+      revision: '2'
+    })
+    local.contract.digest = 'ff'.repeat(32)
+    const record = await store.getCommit(proposalCommitKey(reserved))
+    expect(record?.local).toEqual(saved)
+    expect(record?.localDigest).toMatch(/^[0-9a-f]{64}$/)
+    expect((await store.read('0', 10))[0].local).toBeUndefined()
+    expect((await store.read('0', 10))[1].local).toEqual(saved)
+    expect((await store.head()).bytes).toBeGreaterThan(
+      new TextEncoder().encode(canonicalOutputJSON(first) + canonicalOutputJSON(reserved)).length
+    )
+    expect(await store.commit(reserved, saved)).toEqual({ status: 'replayed', revision: '2' })
+    expect(await store.commit(reserved)).toEqual({ status: 'replayed', revision: '2' })
+    await expect(store.commit(reserved, local)).rejects.toThrow('different local context')
+    await expect(store.commit(first, saved)).rejects.toThrow('different local context')
+    const contextual = open()
+    await contextual.commit(first, saved)
+    const noChange = lifecycle.put(first.next, first.next.proposal, author, '500')
+    expect(noChange.changed).toBe(false)
+    expect(await contextual.commit(noChange, saved)).toEqual({ status: 'replayed', revision: '1' })
+    await expect(contextual.commit(noChange, local)).rejects.toThrow('different local context')
+    expect(
+      await appendProposalWithRecovery(
+        {
+          contextRetention: 'proposal-journal-context/1',
+          async commit(plan, context) {
+            await store.commit(plan, context)
+            throw new Error('reply lost')
+          },
+          getCommit: key => store.getCommit(key)
+        },
+        reserved,
+        saved
+      )
+    ).toEqual({ status: 'replayed', revision: '2' })
+    await expect(
+      appendProposalWithRecovery(
+        {
+          async commit() {
+            throw new Error('must not be called')
+          },
+          getCommit: key => store.getCommit(key)
+        },
+        reserved,
+        saved
+      )
+    ).rejects.toThrow('cannot retain')
+    expect((await store.head()).entries).toBe(2)
+  })
+
   it('recovers a commit-before-response fault using its original plan and never creates another job', async () => {
     const store = open(),
       first = publication()
@@ -364,8 +496,14 @@ describe('SQLite proposal recovery and identity seal', () => {
     expect((await other.head()).revision).toBe('0')
     await first.close()
     await second.close()
+    // The earlier body-only format has no capacity table. Upgrade adds its seal
+    // without changing the retained transition bytes or commit identities.
+    const legacy = new DatabaseSync(file)
+    legacy.exec('DROP TABLE proposal_journal_capacity')
+    legacy.close()
     const recovered = new SQLiteProposalJournal(file, 'server', author, lifecycle)
     stores.push(recovered)
+    expect((await recovered.head()).reserved).toEqual({ bytes: 4194304, entries: 1 })
     expect(await recovered.getOperation(author, scope.service, 'original-operation-id')).toEqual(
       reserved.next
     )
@@ -390,6 +528,9 @@ describe('SQLite proposal recovery and identity seal', () => {
     expect(() => new SQLiteProposalJournal(file, 'server', author, changed)).toThrow(
       'configuration changed'
     )
+    expect(
+      () => new SQLiteProposalJournal(file, 'server', author, lifecycle, { entries: 100 })
+    ).toThrow('capacity limits changed')
     expect(() => new SQLiteProposalJournal(':memory:', 'server', author, lifecycle)).toThrow(
       'ordinary file'
     )
@@ -425,6 +566,39 @@ describe('SQLite proposal recovery and identity seal', () => {
     expect(await recovered.commit(reserved)).toEqual({ status: 'replayed', revision: '2' })
   })
 
+  it('reopens mixed legacy and context-bearing rows and refuses altered local replay material', async () => {
+    const file = path(),
+      store = new SQLiteProposalJournal(file, 'context', author, lifecycle)
+    stores.push(store)
+    const first = publication(),
+      reserved = reservation(first)
+    const local = { profile: 'urn:test:retained-contract:1', version: 1, selectedAt: '99' }
+    await store.commit(first)
+    await store.commit(reserved, local)
+    await store.close()
+    const reopened = new SQLiteProposalJournal(file, 'context', author, lifecycle)
+    stores.push(reopened)
+    const entries = await reopened.read('0', 256)
+    expect(entries.map(entry => entry.local)).toEqual([undefined, local])
+    expect(await reopened.getOperation(author, scope.service, 'original-operation-id')).toEqual(
+      reserved.next
+    )
+    await reopened.close()
+    const database = new DatabaseSync(file)
+    const row = database
+      .prepare('SELECT transition FROM proposal_journal_entries WHERE namespace=? AND revision=?')
+      .get('context', '0000000000000002')!
+    const frame = JSON.parse(row.transition as string)
+    frame.local.selectedAt = '98'
+    database
+      .prepare('UPDATE proposal_journal_entries SET transition=? WHERE namespace=? AND revision=?')
+      .run(canonicalOutputJSON(frame), 'context', '0000000000000002')
+    database.close()
+    expect(() => new SQLiteProposalJournal(file, 'context', author, lifecycle)).toThrow(
+      'integrity mismatch'
+    )
+  })
+
   it('rejects incomplete or changed committed prefixes without silently resetting the service', async () => {
     const file = path(),
       store = new SQLiteProposalJournal(file, 'corrupt', author, lifecycle)
@@ -440,4 +614,82 @@ describe('SQLite proposal recovery and identity seal', () => {
       'Incomplete'
     )
   })
+
+  it.each([
+    ["UPDATE proposal_journal_meta SET revision='bad'", 'revision'],
+    ['UPDATE proposal_journal_meta SET retained_bytes=-1', 'metadata'],
+    ['UPDATE proposal_journal_meta SET entries=-1', 'metadata'],
+    ['UPDATE proposal_journal_meta SET entries=4097', 'metadata'],
+    ['UPDATE proposal_journal_meta SET retained_bytes=67108865', 'metadata'],
+    ['UPDATE proposal_journal_entries SET entry_bytes=1', 'length'],
+    ["UPDATE proposal_journal_entries SET commit_key='wrong'", 'integrity'],
+    ['DELETE FROM proposal_journal_capacity', 'capacity limits changed']
+  ])(
+    'refuses changed durable state while an existing connection is open: %s',
+    async (sql, error) => {
+      const file = path(),
+        store = new SQLiteProposalJournal(file, 'guarded', author, lifecycle)
+      stores.push(store)
+      await store.commit(publication())
+      const database = new DatabaseSync(file)
+      database.exec(sql)
+      database.close()
+      // New entry corruption is checked on cold replay; metadata is checked on
+      // every read. The immutable committed prefix is not rehashed on warm reads.
+      if (sql.includes('proposal_journal_entries')) {
+        await store.close()
+        expect(() => new SQLiteProposalJournal(file, 'guarded', author, lifecycle)).toThrow(error)
+      } else {
+        await expect(store.head()).rejects.toThrow(error)
+        await expect(
+          store.commit(publication(signed({ channel: 'aa'.repeat(32) })))
+        ).rejects.toThrow(error)
+      }
+    }
+  )
+
+  it('rejects backwards revisions and noncanonical stored encodings without resetting the namespace', async () => {
+    const file = path(),
+      store = new SQLiteProposalJournal(file, 'encoding', author, lifecycle)
+    stores.push(store)
+    const first = publication()
+    await store.commit(first)
+    const database = new DatabaseSync(file)
+    database.exec("UPDATE proposal_journal_meta SET revision='0000000000000000'")
+    await expect(store.head()).rejects.toThrow('backwards')
+    database.exec("UPDATE proposal_journal_meta SET revision='0000000000000001'")
+    await store.close()
+    const text = ' ' + canonicalOutputJSON(first)
+    const size = new TextEncoder().encode(text).length
+    database
+      .prepare('UPDATE proposal_journal_entries SET transition=?, entry_bytes=?')
+      .run(text, size)
+    database.prepare('UPDATE proposal_journal_meta SET retained_bytes=?').run(size)
+    database.close()
+    expect(() => new SQLiteProposalJournal(file, 'encoding', author, lifecycle)).toThrow(
+      'Noncanonical'
+    )
+  })
+})
+
+it('replays legacy pending jobs without retroactively requiring completion capacity', () => {
+  const first = publication(),
+    reserved = reservation(first)
+  const state = new ProposalJournalState(lifecycle, author, { entries: 2 })
+  for (const [index, transition] of [first, reserved].entries())
+    state.replay({ revision: String(index + 1), key: proposalCommitKey(transition), transition })
+  expect(state.head()).toMatchObject({ entries: 2, reserved: { entries: 1 } })
+  expect(state.operation(author, scope.service, 'original-operation-id')).toEqual(reserved.next)
+  expect(state.plan(state.prepare(completed(reserved))).status).toBe('limited')
+  expect(state.plan(state.prepare(reserved)).status).toBe('replayed')
+})
+
+it('does not partially apply an invalid local revision or replace a retained commit', () => {
+  const state = new ProposalJournalState(lifecycle, author)
+  const prepared = state.prepare(publication())
+  expect(() => state.apply(prepared, '2')).toThrow('Invalid proposal journal history')
+  expect(state.head().revision).toBe('0')
+  state.apply(prepared, '1')
+  expect(() => state.apply(prepared, '2')).toThrow('Invalid proposal journal history')
+  expect(state.head().revision).toBe('1')
 })

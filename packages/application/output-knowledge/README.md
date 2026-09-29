@@ -449,6 +449,24 @@ write; absence surfaces the error and never creates a replacement transaction.
 All storage reads, including event history, contain private data and require host
 authorization before any external serialization.
 
+An optional local JSON context is committed atomically beside the transition. The
+`contextRetention` capability identifies adapters that support it. The storage
+frame retains a domain-separated digest and charges the complete frame against
+byte limits; it does not validate a capability contract or confer authority on its
+contents. Hosts must validate that context before writing and again during
+recovery. Existing body-only entries keep their bytes and transition commit keys.
+An identical retry recovers the original context; a different supplied context
+fails rather than replacing it. A body-only commit cannot acquire context later.
+
+The `completionReservation` capability holds one maximum-sized entry and its byte
+budget for every newly accepted finalizing job. Other writes cannot consume that
+space. A terminal receipt releases the reservation. Hosts must bound the complete
+terminal entry, including the retained job, STEAK and local context, to `entryBytes`
+before starting admission. This reserves storage capacity, not admission success
+or availability of the disk. Earlier journals replay without retroactively
+requiring reservations; previously accepted jobs may already exceed the available
+completion capacity. Recover those obligations before promising the new guarantee.
+
 The reference limits are 64 MiB retained bytes, 4 MiB per transition, 4,096 entries,
 1,024 channels and 128 channels per author. Callers may lower these bounds. Reads
 return at most 256 entries and stop at the configured entry-byte budget. Terminal
@@ -457,8 +475,13 @@ does not compact or delete it; exhaustion is an explicit limit, never permission
 forget an operation, pending job or terminal fence. Further compaction and contract
 evolution are part of the service integration work.
 
-SQLite seals the provider identity, chain/service, installed policies and clock
-configuration in its namespace. It refuses to reinterpret an existing journal or
+SQLite seals the provider identity, chain/service, installed policies, clock
+configuration and capacity limits in its namespace. Independent connections must
+use identical limits. An older database gains a separate capacity seal without
+rewriting its entries; stop older writers before relying on the reservation
+guarantee. Reopening a sealed journal with different limits requires an explicit
+future migration; deleting its seal is not a supported capacity change.
+It refuses to reinterpret an existing journal or
 open the same service identity under a fresh namespace in that database. Protect
 the containing directory and backup through SQLite's online backup facility. Do
 not point an existing service identity at an empty replacement database: loss of

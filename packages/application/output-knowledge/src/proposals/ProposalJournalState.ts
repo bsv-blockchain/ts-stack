@@ -7,7 +7,7 @@ import {
   outputString,
   outputU64,
   OutputProtocolError,
-  parseOutputJSON
+  type OutputJSONObject
 } from '@bsv/sdk'
 import { proposalChannelKey } from './ProposalPolicyRegistry.js'
 import {
@@ -16,12 +16,16 @@ import {
   type ProposalTransition
 } from './ProposalTransitions.js'
 import {
-  proposalCommitKey,
   type ProposalCommitResult,
   type ProposalJournalEntry,
   type ProposalJournalHead,
   type ProposalJournalLimits
 } from './ProposalJournal.js'
+import {
+  proposalPayload,
+  validateProposalLocalContext,
+  type ProposalPayload
+} from './ProposalJournalPayload.js'
 
 const defaults: Readonly<ProposalJournalLimits> = Object.freeze({
   bytes: 64 * 1024 * 1024,
@@ -31,12 +35,7 @@ const defaults: Readonly<ProposalJournalLimits> = Object.freeze({
   channelsPerAuthor: 128
 })
 
-export interface PreparedProposalCommit {
-  key: string
-  text: string
-  bytes: number
-  transition: ProposalTransition
-}
+export type PreparedProposalCommit = ProposalPayload
 
 /** Shared bounded, deterministic journal index; SQLite persists the same immutable entries. */
 export class ProposalJournalState {
@@ -50,6 +49,7 @@ export class ProposalJournalState {
   private readonly operations = new Map<string, string>()
   private readonly authors = new Map<string, number>()
   private retainedBytes = 0
+  private pendingAdmissions = 0
 
   constructor(
     readonly lifecycle: ProposalTransitions,
@@ -84,7 +84,11 @@ export class ProposalJournalState {
       revision: this.entries.at(-1)?.revision ?? '0',
       entries: this.entries.length,
       bytes: this.retainedBytes,
-      channels: this.channels.size
+      channels: this.channels.size,
+      reserved: {
+        bytes: this.pendingAdmissions * this.limits.entryBytes,
+        entries: this.pendingAdmissions
+      }
     }
   }
 
@@ -120,20 +124,13 @@ export class ProposalJournalState {
     return entry && structuredClone(entry)
   }
 
-  prepare(input: ProposalTransition): PreparedProposalCommit {
-    const text = canonicalOutputJSON(input, { bytes: this.limits.entryBytes })
-    const transition = parseOutputJSON(text) as unknown as ProposalTransition
-    return {
-      key: proposalCommitKey(transition),
-      text,
-      transition,
-      bytes: new TextEncoder().encode(text).length
-    }
+  prepare(input: ProposalTransition, local?: OutputJSONObject): PreparedProposalCommit {
+    return proposalPayload(input, this.limits.entryBytes, local)
   }
 
-  plan(prepared: PreparedProposalCommit): ProposalCommitResult {
+  plan(prepared: PreparedProposalCommit, replay = false): ProposalCommitResult {
     const existing = this.commits.get(prepared.key)
-    if (existing) return { status: 'replayed', revision: existing.revision }
+    if (existing) return this.replayed(existing, prepared.local)
     const next = this.lifecycle.parse(prepared.transition.next)
     const channel = proposalChannelKey(next.proposal.body)
     const previous = this.channels.get(channel)
@@ -145,7 +142,8 @@ export class ProposalJournalState {
         return { status: 'conflict', reason: error.message }
       throw error
     }
-    if (!checked.changed) return { status: 'replayed', revision: previous!.revision }
+    if (!checked.changed)
+      return this.replayed(this.entries[Number(previous!.revision) - 1], prepared.local)
     const job = next.admission
     if (job) {
       const claimed = this.operations.get(
@@ -154,7 +152,7 @@ export class ProposalJournalState {
       if (claimed !== undefined && claimed !== next.proposalId)
         return { status: 'conflict', reason: 'Proposal operation already names another proposal' }
     }
-    if (this.exceedsLimits(prepared.bytes, next, previous === undefined))
+    if (this.exceedsLimits(prepared.bytes, next, previous?.record, replay))
       return {
         status: 'limited',
         reason: 'Proposal retention limit; retain terminal fences and pending work'
@@ -163,17 +161,21 @@ export class ProposalJournalState {
   }
 
   /** Apply only after a durable commit, or when replaying a verified committed prefix. */
-  apply(prepared: PreparedProposalCommit, revision: string): void {
-    const plan = this.plan(prepared)
+  apply(prepared: PreparedProposalCommit, revision: string, replay = false): void {
+    const plan = this.plan(prepared, replay)
     if (plan.status !== 'committed' || plan.revision !== revision)
       throw new OutputProtocolError('unavailable', 'Invalid proposal journal history')
     const entry: ProposalJournalEntry = {
       revision,
       key: prepared.key,
-      transition: structuredClone(prepared.transition)
+      transition: structuredClone(prepared.transition),
+      ...(prepared.local !== undefined
+        ? { local: structuredClone(prepared.local), localDigest: prepared.localDigest }
+        : {})
     }
     const record = entry.transition.next
     const key = proposalChannelKey(record.proposal.body)
+    this.pendingAdmissions += pending(record) - pending(this.channels.get(key)?.record)
     if (!this.channels.has(key))
       this.authors.set(
         record.proposal.body.author,
@@ -196,12 +198,21 @@ export class ProposalJournalState {
   }
 
   replay(input: unknown): void {
-    closedOutputObject(input, ['revision', 'key', 'transition'])
+    closedOutputObject(input, ['revision', 'key', 'transition'], ['local', 'localDigest'])
     outputU64(input.revision)
-    const prepared = this.prepare(input.transition as ProposalTransition)
+    validateProposalLocalContext(
+      input.local as OutputJSONObject | undefined,
+      input.localDigest as string | undefined
+    )
+    const prepared = this.prepare(
+      input.transition as ProposalTransition,
+      input.local as OutputJSONObject | undefined
+    )
     if (input.key !== prepared.key)
       throw new OutputProtocolError('unavailable', 'Proposal journal integrity mismatch')
-    this.apply(prepared, input.revision as string)
+    // Earlier body-only journals did not reserve completion space. Preserve
+    // their historical decisions; apply the new promise only to future writes.
+    this.apply(prepared, input.revision as string, true)
   }
 
   read(after: string, maximum: number): ProposalJournalEntry[] {
@@ -212,7 +223,7 @@ export class ProposalJournalState {
     let bytes = 0
     for (const entry of this.entries) {
       if (outputU64(entry.revision) <= position) continue
-      const size = new TextEncoder().encode(canonicalOutputJSON(entry.transition)).length
+      const size = this.prepare(entry.transition, entry.local).bytes
       if (result.length === maximum || (result.length > 0 && bytes + size > this.limits.entryBytes))
         break
       result.push(structuredClone(entry))
@@ -224,16 +235,50 @@ export class ProposalJournalState {
   private exceedsLimits(
     bytes: number,
     record: ProposalChannelRecord,
-    newChannel: boolean
+    previous: ProposalChannelRecord | undefined,
+    replay: boolean
   ): boolean {
     return (
       this.entries.length >= this.limits.entries ||
       this.retainedBytes + bytes > this.limits.bytes ||
-      (newChannel &&
+      (previous === undefined &&
         (this.channels.size >= this.limits.channels ||
-          (this.authors.get(record.proposal.body.author) ?? 0) >= this.limits.channelsPerAuthor))
+          (this.authors.get(record.proposal.body.author) ?? 0) >= this.limits.channelsPerAuthor)) ||
+      (!replay && this.exceedsReservedCapacity(bytes, record, previous))
     )
   }
+
+  private replayed(entry: ProposalJournalEntry, local?: OutputJSONObject): ProposalCommitResult {
+    if (
+      local !== undefined &&
+      (entry.local === undefined || canonicalOutputJSON(entry.local) !== canonicalOutputJSON(local))
+    )
+      throw new OutputProtocolError(
+        'context-changed',
+        'Proposal commit already has a different local context'
+      )
+    return { status: 'replayed', revision: entry.revision }
+  }
+
+  private exceedsReservedCapacity(
+    bytes: number,
+    record: ProposalChannelRecord,
+    previous: ProposalChannelRecord | undefined
+  ): boolean {
+    const delta = pending(record) - pending(previous)
+    // A terminal receipt releases its reserved slot. Legacy overcommitted jobs
+    // may still complete if the actual retained-byte/entry bounds permit it.
+    if (delta < 0) return false
+    const pendingAfter = this.pendingAdmissions + delta
+    return (
+      this.entries.length + 1 + pendingAfter > this.limits.entries ||
+      this.retainedBytes + bytes + pendingAfter * this.limits.entryBytes > this.limits.bytes
+    )
+  }
+}
+
+function pending(record: ProposalChannelRecord | undefined): number {
+  return record?.state.status === 'finalizing' ? 1 : 0
 }
 
 function operationKey(caller: string, service: string, operationId: string): string {

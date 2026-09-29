@@ -187,7 +187,7 @@ export class ProposalTransitions {
     previous: ProposalChannelRecord | undefined,
     next: ProposalChannelRecord
   ): ProposalTransition {
-    if (!previous || previous.proposalId !== next.proposalId)
+    if (previous?.proposalId !== next.proposalId)
       return this.update(previous, next.proposal, next.state.recordedAt)
     if (next.state.status === 'expired') return this.expire(previous, next.state.recordedAt)
     if (next.state.status === 'finalizing' && next.admission) {

@@ -5,9 +5,10 @@ import {
   outputString,
   outputU64,
   OutputProtocolError,
-  parseOutputJSON
+  type OutputJSONObject
 } from '@bsv/sdk'
 import { ProposalJournalState } from './ProposalJournalState.js'
+import { parseProposalPayload, proposalPayload } from './ProposalJournalPayload.js'
 import type {
   ProposalJournalLimits,
   ProposalJournalStorage,
@@ -31,6 +32,8 @@ function decimal(value: unknown): string {
 /** Node-only WAL/FULL reference journal. The event, head, operation claim and job are one commit. */
 export class SQLiteProposalJournal implements ProposalJournalStorage {
   readonly durability = 'durable' as const
+  readonly contextRetention = 'proposal-journal-context/1' as const
+  readonly completionReservation = 'proposal-journal-completion/1' as const
   private readonly database: DatabaseSync
   private readonly state: ProposalJournalState
   private closed = false
@@ -73,12 +76,26 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
           PRIMARY KEY(namespace, revision), UNIQUE(namespace, commit_key),
           FOREIGN KEY(namespace) REFERENCES proposal_journal_meta(namespace)
         ) STRICT;
+        CREATE TABLE IF NOT EXISTS proposal_journal_capacity (
+          namespace TEXT PRIMARY KEY, limits TEXT NOT NULL,
+          FOREIGN KEY(namespace) REFERENCES proposal_journal_meta(namespace)
+        ) STRICT;
       `)
+      this.database.exec('BEGIN IMMEDIATE')
       this.database
         .prepare('INSERT OR IGNORE INTO proposal_journal_meta VALUES (?, ?, ?, ?, 0, 0)')
         .run(namespace, this.state.serviceIdentity, this.state.configuration, position('0'))
+      // A legacy database gains its capacity seal without rewriting its entries.
+      // All writers must use this version before relying on held completion space.
+      this.database
+        .prepare(
+          'INSERT OR IGNORE INTO proposal_journal_capacity SELECT namespace, ? FROM proposal_journal_meta WHERE namespace=?'
+        )
+        .run(canonicalOutputJSON(this.state.limits), namespace)
       this.refresh()
+      this.database.exec('COMMIT')
     } catch (error) {
+      this.rollback()
       this.database.close()
       throw error
     }
@@ -109,9 +126,12 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
     return this.readState().read(after, maximum)
   }
 
-  async commit(transition: ProposalTransition): Promise<ProposalCommitResult> {
+  async commit(
+    transition: ProposalTransition,
+    local?: OutputJSONObject
+  ): Promise<ProposalCommitResult> {
     this.ready()
-    const prepared = this.state.prepare(transition)
+    const prepared = this.state.prepare(transition, local)
     this.database.exec('BEGIN IMMEDIATE')
     try {
       this.refresh()
@@ -191,6 +211,11 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
         'context-changed',
         'Proposal journal identity or installed configuration changed'
       )
+    const capacity = this.database
+      .prepare('SELECT limits FROM proposal_journal_capacity WHERE namespace=?')
+      .get(this.namespace)
+    if (capacity?.limits !== canonicalOutputJSON(this.state.limits))
+      throw new OutputProtocolError('context-changed', 'Proposal journal capacity limits changed')
     if (
       !Number.isSafeInteger(row.retained_bytes) ||
       !Number.isSafeInteger(row.entries) ||
@@ -212,10 +237,13 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
       new TextEncoder().encode(entry.transition).length !== entry.entry_bytes
     )
       throw new OutputProtocolError('unavailable', 'Invalid proposal journal entry length')
-    const transition = parseOutputJSON(entry.transition, { bytes: this.state.limits.entryBytes })
-    if (canonicalOutputJSON(transition) !== entry.transition)
+    const payload = parseProposalPayload(entry.transition, this.state.limits.entryBytes)
+    if (
+      proposalPayload(payload.transition, this.state.limits.entryBytes, payload.local).text !==
+      entry.transition
+    )
       throw new OutputProtocolError('unavailable', 'Noncanonical proposal journal entry')
-    this.state.replay({ revision: decimal(entry.revision), key: entry.commit_key, transition })
+    this.state.replay({ revision: decimal(entry.revision), key: entry.commit_key, ...payload })
   }
 
   private ready(): void {
