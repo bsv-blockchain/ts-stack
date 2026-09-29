@@ -220,6 +220,22 @@ describe('knownTxids in the result BEEF', () => {
 
       const beef = Beef.fromBinary(signed.tx!)
       expect(unverifiableInFull(beef, [first.txid!])).toEqual([])
+
+      // returnTXIDOnly is decided at sign time. The result must carry no transaction bytes,
+      // including no re-materialized ancestor.
+      const third = await wallet.createAction({
+        description: 'txid-only sign result',
+        outputs: [{ satoshis: 5_000, lockingScript: '51', outputDescription: 'recipient' }],
+        options: { randomizeOutputs: false, signAndProcess: false }
+      })
+      expect(third.signableTransaction).toBeDefined()
+      const txidOnly = await wallet.signAction({
+        reference: third.signableTransaction!.reference,
+        spends: {},
+        options: { returnTXIDOnly: true }
+      })
+      expect(txidOnly.txid).toBeDefined()
+      expect(txidOnly.tx).toBeUndefined()
     } finally {
       await destroy()
     }
