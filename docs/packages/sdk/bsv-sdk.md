@@ -16,11 +16,17 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 # @bsv/sdk
 
 The 2.9.0 source candidate adds explicitly selected BRC-192–194 output observation,
-lookup and signed capability representations, bounded protocol JSON and packet
+lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
 verification. Existing lookup, submit and wallet interfaces retain their behavior.
 Stateful orchestration is provided by the separate
 [output-knowledge package](../application/output-knowledge.md). The candidate is
 not a package publication.
+
+Proposal endpoint parsers preserve the author-signed envelope separately from the
+provider's lifecycle state. They validate closed schemas and intrinsic proposal
+constraints, including predecessor shape and selected critical extensions. Signature,
+installed-policy, current authorization and evidence verification remain required
+before any storage, admission or application effect.
 
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may

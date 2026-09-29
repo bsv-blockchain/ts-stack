@@ -333,7 +333,10 @@ wallet-derived locking key, and field signature before reading or spending it.
 
   The proposed BRC-192–194 extensions add explicitly selected output observations,
   progressive lookup representations, canonical protocol JSON, signed capability
-  validation and endpoint construction. Parsing a packet checks its representation;
+  validation and endpoint construction. `parseOutputProposalPut`,
+  `parseOutputProposalGet` and `parseOutputProposalFinalize`, with their respective
+  response parsers, enforce BRC-194's closed endpoint envelopes. Provider lifecycle
+  state remains separate from the author's unchanged signed proposal. Parsing a packet checks its representation;
   it does not by itself authorize a source, validate a transaction or establish
   unspentness. Stateful orchestration and durable storage are implemented in the
   separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).

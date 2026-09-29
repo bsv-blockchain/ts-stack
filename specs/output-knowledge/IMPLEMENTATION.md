@@ -12,7 +12,8 @@ submission and GASP behavior remains available to applications that do not opt i
 ## Implemented foundation
 
 - Additive SDK wire codecs, canonical encodings, digest domains, signed capability
-  profiles, observation schemas and bounded BRC-193 request/response schemas.
+  profiles, observation schemas and bounded BRC-193 request/response schemas,
+  plus closed BRC-194 put/get/finalize endpoint codecs.
 - Memory, SQLite and IndexedDB receipt journals with atomic local replay material,
   exact U64 revisions, compare-and-swap and recovery after an uncertain append.
 - Exact-target BEEF assembly, alternative cross-source evidence, actual SDK
@@ -57,7 +58,8 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
+The SDK run passes 7,638 tests across 217 suites, including all proposal endpoint
+variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
 run passes 229 tests across 19 suites, with more than 95% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and

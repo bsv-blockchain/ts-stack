@@ -217,6 +217,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Added (2.9.0 candidate)
 
 - Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.
+- Add closed BRC-194 proposal put/get/finalize request and response codecs. Author signature and policy checks, authenticated provider state, Bitcoin evidence and topical admission remain separate responsibilities; parsing never authorizes an action.
 
 ### Fixed (2.8.9 candidate)
 

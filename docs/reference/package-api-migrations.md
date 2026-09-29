@@ -376,7 +376,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/sdk/bsv-sdk.md](../packages/sdk/bsv-sdk.md)
 - Source: [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
-- Release note: Adds opt-in BRC-192–199 protocol representations, exact encodings, capability selection and live lookup boundaries while preserving all existing overlay APIs.
+- Release note: Adds opt-in BRC-192–199 protocol representations, exact encodings, capability selection, live lookup boundaries and closed proposal endpoint codecs while preserving all existing overlay APIs.
 - Migration: Existing exports, endpoints and lookup defaults remain unchanged. Select the new versioned profiles explicitly; the accompanying output-knowledge runtime provides durable application state above the SDK.
 
 | Public subpath                     | Runtime target(s)                                                                                          | Declaration target(s)                                                                                            |

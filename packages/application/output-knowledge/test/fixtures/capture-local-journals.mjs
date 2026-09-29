@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import {
   BitcoinKnowledge,
@@ -12,6 +11,9 @@ import { candidate, chain, context, partition, resolver } from '../evidence-fixt
 
 // Run explicitly after a package build. These are historical compatibility
 // samples, never fixtures to regenerate automatically to accept a changed result.
+const sourceCommit = process.argv[2]
+if (typeof sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(sourceCommit))
+  throw new Error('Supply the checked-out full source commit as the only argument')
 const now = Date.now()
 const scope = {
   chain,
@@ -84,7 +86,7 @@ for (const version of [1, 2]) {
   await store.close()
 }
 const fixture = {
-  sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  sourceCommit,
   now,
   partition,
   cases

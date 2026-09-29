@@ -58,7 +58,9 @@ These samples are not additional BRC conformance vectors.
 
 `capture-local-journals.mjs` records these samples using actual SDK Script/SPV
 verification and the approved transaction corpus. After building the package, run
-it explicitly with Node 24 or newer from the repository root to capture a proposed
-replacement. It records the source commit and capture clock. Never regenerate the
+it explicitly with Node 24 or newer from the repository root, supplying the full
+checked-out source commit as its only argument, to capture a proposed replacement.
+It records that revision metadata and the capture clock without launching another
+executable. Verify the supplied commit against the checkout before capture. Never regenerate the
 samples automatically or to make a changed replay result pass; changing historical
 compatibility evidence requires review of both saved bytes and expected behavior.
