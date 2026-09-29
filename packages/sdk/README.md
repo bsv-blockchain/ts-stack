@@ -359,6 +359,58 @@ wallet-derived locking key, and field signature before reading or spending it.
   work. Endpoint/key migration needs separately verified authority. Neither helper
   makes network requests, runs remote code, persists data or calls a wallet.
 
+  `OutputLookupTransport` executes BRC-193 `open`, `read` and `close` against one
+  retained contract. Construct it with `{ contract, trust, wallet }`; `trust` is
+  the same recovery binding used by `restoreOutputCapability`. A wallet is
+  required only for the selected `brc103` authentication mode. The transport owns
+  its contract and each request before asynchronous work. It appends endpoint
+  suffixes to the complete base path, refuses redirects and cookie credentials,
+  sets `Cache-Control: no-store`, pins the selected authentication identity and
+  verifies the signed capability/profile echoes. It never invokes BRC-105 payment
+  or downgrades authentication. Explicit public `none` profiles use ordinary HTTPS
+  and bind source scope to its origin. Local HTTP needs trusted development opt-in.
+
+  Capture a fresh capability and persist a randomly generated opening request ID
+  with the complete opening request before calling `open`. A retained contract
+  can retry that opening or continue its existing session after manifest expiry;
+  it does not authorize a new opening under an expired contract. For `read`, supply
+  the previous **durably committed** batch and requested limits. The transport
+  validates session, scope, fixed deadlines, negotiated limits and snapshot/live
+  continuity, but cannot inspect your checkpoint store. Commit every returned
+  observation group and its cursor together before issuing the next read. It
+  neither saves nor advances cursors automatically, and never converts a reset,
+  expiry, malformed response or service failure into empty successful data.
+
+  `outputLookupCheckpoint(batch)` creates an owned compact continuity boundary
+  containing the scope, phase, watermarks, session/cursor and fixed deadlines.
+  Store that boundary in the same transaction as the complete groups; it does
+  not replace their durable receipt. `parseOutputLookupCheckpoint` validates
+  restored metadata, and `readCheckpoint` resumes directly from it. This avoids
+  storing evidence twice or fabricating a previous wire response during recovery.
+  A valid checkpoint representation alone proves neither authentication nor a
+  storage commit. Extensions requiring additional local state must retain it too.
+
+  Complete transmitted UTF-8 bytes, including whitespace, count against response
+  limits before decoding. The separate 4 KiB error budget still applies to tiny
+  page requests. `OutputLookupServiceError.packet` preserves validated retry and
+  capacity hints. BRC-104 authenticates the body, not its MIME label: strict JSON
+  decoding also supports the existing middleware's `application/octet-stream`
+  response label. Content encoding must be absent or identity. The transport
+  checks 16 KiB of HTTP header fields exposed by Fetch; browsers can hide fields
+  and add their own, so the server/proxy must also enforce the complete wire-header
+  bound and expose the required authentication and selection headers through CORS.
+
+  Calls accept an `AbortSignal`. The total deadline covers authentication, HTTP
+  and body consumption (default 30 seconds, configurable up to 30 seconds).
+  One request is active per instance. Cancellation returns promptly, but a
+  non-cancellable wallet or injected Fetch operation keeps its capacity until it
+  settles; later work cannot silently accumulate or dispatch after cancellation.
+  Each authenticated call uses an isolated AuthFetch session. This trades another
+  handshake for independent cancellation and avoids changing existing AuthFetch
+  defaults. `close` remains available after session expiry once pending I/O ends.
+  This transport is a component, not a durable live service or checkpoint store;
+  their complete integration and application demonstration remain in progress.
+
   `parseOutputServiceError` validates the common packet-service error envelope and
   its separate 4,096-byte budget; `outputServiceErrorHTTPStatus` supplies the exact
   BRC-193 status mapping. Capacity details are accepted only for `limited`, with

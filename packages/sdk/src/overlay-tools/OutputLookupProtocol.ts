@@ -42,6 +42,58 @@ export type OutputLookupRead = ReturnType<typeof read>
 export type OutputLookupClose = ReturnType<typeof close>
 export type OutputLookupBatch = ReturnType<typeof batch>
 
+const checkpoint = s.object({
+  version: s.literal(1),
+  session: s.text,
+  scope: s.scope,
+  phase: s.literal('snapshot', 'live'),
+  cursor: s.text,
+  snapshotComplete: s.bool,
+  through: s.u64,
+  highWater: s.u64,
+  expiresAt: s.u64,
+  replayUntil: s.u64
+})
+
+/** Local committed receipt boundary, not a wire response or proof of persistence. */
+export type OutputLookupCheckpoint = ReturnType<typeof checkpoint>
+
+function validateBoundary(result: OutputLookupCheckpoint): void {
+  outputAssert(outputU64(result.through) <= outputU64(result.highWater), 'Invalid lookup watermark')
+  outputAssert(
+    outputU64(result.expiresAt) <= outputU64(result.replayUntil),
+    'Invalid replay deadline'
+  )
+  outputAssert(result.phase !== 'live' || result.snapshotComplete, 'Live before completed snapshot')
+}
+
+/** Recover a compact boundary saved atomically with its complete received groups. */
+export function parseOutputLookupCheckpoint(input: unknown): OutputLookupCheckpoint {
+  const result = s.normalized(input, checkpoint, 16384)
+  validateBoundary(result)
+  return result
+}
+
+/** Copy only continuity metadata; the caller must also durably retain the groups. */
+export function outputLookupCheckpoint(
+  input: unknown,
+  supportedExtensions: readonly string[] = []
+): OutputLookupCheckpoint {
+  const value = parseOutputLookupBatch(input, 4194304, supportedExtensions)
+  return {
+    version: value.version,
+    session: value.session,
+    scope: value.scope,
+    phase: value.phase,
+    cursor: value.cursor,
+    snapshotComplete: value.snapshotComplete,
+    through: value.through,
+    highWater: value.highWater,
+    expiresAt: value.expiresAt,
+    replayUntil: value.replayUntil
+  }
+}
+
 function positiveLimits(value: OutputLookupLimits): void {
   outputAssert(value.maxBytes > 0 && value.maxObservations > 0, 'Lookup limits must be positive')
 }
@@ -101,12 +153,7 @@ export function parseOutputLookupBatch(
       'Response limits exceed profile'
     )
   }
-  outputAssert(outputU64(result.through) <= outputU64(result.highWater), 'Invalid lookup watermark')
-  outputAssert(
-    outputU64(result.expiresAt) <= outputU64(result.replayUntil),
-    'Invalid replay deadline'
-  )
-  outputAssert(result.phase !== 'live' || result.snapshotComplete, 'Live before completed snapshot')
+  validateBoundary(result)
   const scope = canonicalOutputJSON(result.scope)
   const groupIds = new Set<string>(),
     observationIds = new Set<string>()
@@ -147,7 +194,7 @@ export function parseOutputLookupBatch(
 
 /** Check an already authenticated next body against the retained prior boundary. */
 export function validateOutputLookupContinuation(
-  previous: OutputLookupBatch,
+  previous: OutputLookupCheckpoint,
   next: OutputLookupBatch
 ): void {
   outputAssert(

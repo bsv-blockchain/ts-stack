@@ -18,6 +18,7 @@ export {
   type OutputSourceGroup
 } from './OutputObservation.js'
 export * from './OutputLookupProtocol.js'
+export * from './OutputLookupTransport.js'
 export * from './OutputProposalProtocol.js'
 export * from './OutputEndpoint.js'
 export * from './OutputCapabilities.js'

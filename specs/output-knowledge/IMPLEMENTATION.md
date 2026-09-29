@@ -20,6 +20,10 @@ submission and GASP behavior remains available to applications that do not opt i
   preserved across authentication recovery without changing existing defaults.
 - Reusable SDK capability retention/revalidation at the original selection time,
   independent of current authorization, operation deadlines and discovery changes.
+- Bounded retained-contract BRC-193 client HTTP open/read/close, authenticated peer
+  and signed selection checks, payment refusal, cancellation and fixed continuity
+  validation. Cursor persistence remains the caller's separate atomic obligation.
+  Actual signed local HTTP tests qualify the client component, not a durable feed.
 - Memory, SQLite and IndexedDB receipt journals with atomic local replay material,
   exact U64 revisions, compare-and-swap and recovery after an uncertain append.
 - Exact-target BEEF assembly, alternative cross-source evidence, actual SDK
@@ -63,8 +67,9 @@ submission and GASP behavior remains available to applications that do not opt i
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
   fences, concrete durable admission bridges and restart-aware expiry scheduling.
-- Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
-  retention, source adapters and consistent Overlay/Overlay Express storage hooks.
+- Complete BRC-193 durable snapshot/replay/long-poll services, retention, client
+  source adapters and consistent Overlay/Overlay Express storage hooks, using
+  the bounded client transport now implemented.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
   non-final profiles while preserving finite legacy defaults.
 - Exercise existing private off-chain values and lookup context, then implement
@@ -84,7 +89,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,694 tests across 221 suites, including all proposal endpoint
+The SDK run passes 7,741 tests across 222 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
 run passes 328 tests across 27 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
@@ -97,6 +102,13 @@ original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, 
 write acknowledgements and receipt capacity checked before admission. The concrete
 evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
 Journal append mutation testing kills all 26 generated mutations.
+The bounded BRC-193 client adds 47 unit tests and nine actual local HTTP tests
+using SDK BRC-103/104 and the existing Express authentication middleware. They
+cover signed snapshot/live/close responses, wrong peers, no authentication
+downgrade, signed selection mismatches, corrupted signed bodies, unpaid errors
+and cancelled-poll recovery. The complete middleware suite passes 217 tests.
+These fixtures intentionally do not claim durable provider or client-store
+qualification; source integration and the required live application remain open.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across

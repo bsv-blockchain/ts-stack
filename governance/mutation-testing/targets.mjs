@@ -136,6 +136,11 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
       mutate: [
         [
+          'src/overlay-tools/OutputLookupProtocol.ts',
+          'const checkpoint =',
+          'function positiveLimits('
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'const allowPayments = config.allowPayments',
           "if (typeof config.retryCounter === 'number')"
@@ -232,9 +237,11 @@ export function buildMutationTargets(repositoryRoot) {
           'async onData(callback:',
           '#createNetworkError('
         ]
-      ].map(([filePath, startMarker, endMarker]) =>
-        sourceLineRange(repositoryRoot, 'packages/sdk', filePath, startMarker, endMarker)
-      ),
+      ]
+        .map(([filePath, startMarker, endMarker]) =>
+          sourceLineRange(repositoryRoot, 'packages/sdk', filePath, startMarker, endMarker)
+        )
+        .concat('src/overlay-tools/OutputLookupTransport.ts'),
       ...jestTarget(
         'jest.config.js',
         [
@@ -244,7 +251,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.authenticationPolicy.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.paymentPolicy.test.ts',
-          '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts'
+          '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
         ],
         { esm: true }
       )

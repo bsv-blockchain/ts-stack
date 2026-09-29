@@ -216,6 +216,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (2.9.0 candidate)
 
+- Add `OutputLookupTransport` for retained-contract BRC-193 HTTP open/read/close, explicit peer and signed contract binding, bounded original response bytes, unpaid error recovery and cancellation. Reads validate scope, limits, fixed deadlines and snapshot/live continuity without automatically persisting or advancing a cursor. Existing SDK defaults and endpoints remain unchanged. Callers must persist opening identity and atomically commit received groups with each checkpoint; this client component does not claim a complete durable service.
+
 - Add per-request `requireMutualAuth` and `expectedIdentityKey` to AuthFetch. Required authentication disables ordinary HTTP fallback; a canonical peer pin authenticates the handshake before application dispatch and checks matched response senders. Restrictions survive stale-session recovery and caller option changes. Existing defaults, wire formats and payment behavior remain unchanged.
 
 - Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.

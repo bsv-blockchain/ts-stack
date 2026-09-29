@@ -37,6 +37,39 @@ recovery deadline still govern access. Never accept this local record from a rem
 caller or use it to initiate a new operation with an expired manifest. These pure
 helpers do not persist, fetch, pay or submit anything.
 
+`OutputLookupTransport` composes that retained contract with bounded BRC-193
+HTTP open/read/close. It pins the selected BRC-103 peer, validates signed selection
+headers, refuses automatic payments and redirects, and preserves the advertised
+base path. Public unauthenticated profiles remain explicitly selected. Request
+and response bodies, observable HTTP headers, negotiated limits, session scope,
+fixed deadlines and snapshot/live continuity are checked. Signed bodies are
+strictly decoded as UTF-8 JSON independently of the unsigned MIME label, including
+the existing middleware's `application/octet-stream` responses. Browser-hidden or
+runtime-added headers still require the server/proxy's complete wire-header limit.
+
+Save the fresh contract and high-entropy opening ID with the normalized request
+before first use. Supply only a durably committed prior batch to `read`, then
+commit its whole returned groups and cursor atomically before requesting more.
+The transport cannot enforce that local storage obligation and does not advance
+cursors itself. Original operations can recover after manifest expiry while
+their session remains usable; expired contracts cannot initiate new operations.
+Verified `OutputLookupServiceError` values retain bounded retry/limit hints.
+Errors and unknown continuity never become empty successful batches.
+
+For compact recovery, `outputLookupCheckpoint(batch)` copies the complete core
+continuity metadata without duplicating evidence. Save it atomically with the
+received groups, validate it with `parseOutputLookupCheckpoint` on recovery, then
+call `readCheckpoint`. Parsing never proves authentication or persistence; retain
+any extension-specific local state alongside the core boundary.
+
+Cancellation and the configurable total deadline cover authentication and body
+consumption. One call, including late non-cancellable work, occupies each instance.
+Authenticated calls use isolated sessions so cancellation cannot affect a different
+call; no existing AuthFetch default changes. Nine actual local signed-HTTP tests
+cover snapshot/live/close, identity pinning, payment refusal, altered bytes,
+contract echoes, independent error bounds and cancelled-poll recovery. The fixture
+is not a durable provider or client journal; full service integration remains open.
+
 `parseOutputServiceError` validates bounded common error bodies, including capacity
 details within the BRC-193 hard maxima. `outputServiceErrorHTTPStatus` provides the
 specified status mapping. Verify authenticated errors before changing trusted
