@@ -329,8 +329,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       throw new Error('Corrupt Mongo applied admission identity')
     const admission = await this.runner.readRetainedAdmission(applied.admissionId)
     if (
-      admission === undefined ||
-      admission.identity.txid !== query.txid ||
+      admission?.identity.txid !== query.txid ||
       admission.identity.contextDigest !== query.contextDigest ||
       !admission.identity.topics.some(item => item.topic === query.topic && item.policyId === query.policyId)
     ) return { state: 'unresolved' }
