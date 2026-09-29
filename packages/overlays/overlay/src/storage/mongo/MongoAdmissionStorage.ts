@@ -7,6 +7,9 @@ import {
   isReplaySafeProjection,
   type AdmissionCommit,
   type AdmissionCommitResult,
+  type AdmissionHistory,
+  type AdmissionHistoryQuery,
+  type AdmissionHistoryResult,
   type AdmissionOperationKey,
   type AdmissionOutboxIntent,
   type AdmissionOutpoint,
@@ -43,6 +46,7 @@ import {
   type MongoTransactionContext,
   type MongoTransactionOptions
 } from './MongoTransactionRunner.js'
+import { encodeMongoAdmissionReceipt } from './MongoAdmissionReceipt.js'
 
 function isMongoWriteConflict(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
@@ -63,6 +67,8 @@ export interface MongoEnlistedLookupIndex {
 }
 
 export interface MongoAdmissionStorageOptions {
+  /** Explicitly retain identity with new receipts and expose trusted local history reads. Default false. */
+  retainAdmissionHistory?: boolean
   runner?: MongoTransactionRunner
   payloads?: MongoPayloadStore
   readGuards?: MongoReadGuards
@@ -156,6 +162,7 @@ const isPayloadKind = (value: string): value is MongoPayloadKind =>
  */
 export class MongoAdmissionStorage implements AdmissionStorage {
   readonly protocol = 'overlay-admission-v1' as const
+  readonly history?: AdmissionHistory
   readonly scope: StorageScope
   private readonly runner: MongoTransactionRunner
   private readonly payloads: MongoPayloadStore
@@ -169,12 +176,20 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     scope: StorageScope,
     options: MongoAdmissionStorageOptions = {}
   ) {
+    if (options.retainAdmissionHistory !== undefined && typeof options.retainAdmissionHistory !== 'boolean')
+      throw new Error('Invalid admission-history retention option')
     this.scope = { ...scope }
     this.runner = options.runner ?? new MongoTransactionRunner(db, this.scope)
     this.payloads = options.payloads ?? new MongoPayloadStore(db, this.scope)
     this.guards = options.readGuards ?? new MongoReadGuards(db)
     this.enlisted = [...(options.enlistedIndexes ?? [])]
     this.projector = options.projector
+    if (options.retainAdmissionHistory === true) {
+      this.history = {
+        protocol: 'overlay-admission-history-v1',
+        read: async query => await this.readHistory(query)
+      }
+    }
     if (
       this.enlisted.some(
         index => index.protocol !== 'overlay-mongo-index-v1' || index.target.length === 0
@@ -221,6 +236,8 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     let receipt
     try {
       receipt = admissionReceiptFor(plan, this.enlistedTargets())
+      // Include retained provenance in the bound before guards, uploads or commit effects.
+      encodeMongoAdmissionReceipt(receipt, plan.identity, this.history !== undefined)
     } catch (error) {
       return this.asResult(error)
     }
@@ -236,7 +253,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const result = await this.runner.run(
-          { key: plan.key, identity: plan.identity, receipt },
+          { key: plan.key, identity: plan.identity, receipt, retainIdentity: this.history !== undefined },
           async context => {
             await this.applyPlan(context, plan)
           }
@@ -288,13 +305,46 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     ])
   }
 
+  private async readHistory(input: AdmissionHistoryQuery): Promise<AdmissionHistoryResult> {
+    // Own the complete selector before I/O; a caller cannot change its authorization
+    // or semantic scope while either majority read is pending.
+    const query = { ...input, scope: { ...input.scope } }
+    // Match the Mongo identity-part limits before hashing caller-controlled strings.
+    mongoRecordKey(query.topic, query.policyId, query.txid, query.contextDigest)
+    admissionSemanticDigest({
+      scope: query.scope,
+      txid: query.txid,
+      contextDigest: query.contextDigest,
+      mode: 'live',
+      topics: [{ topic: query.topic, policyId: query.policyId }]
+    })
+    if (mongoNodeKey(query.scope) !== mongoNodeKey(this.scope))
+      throw new Error('Admission-history reader belongs to a different scope')
+    const applied = await this.applied().findOne(
+      { _id: this.appliedId(query.topic, query.txid) },
+      { readConcern: { level: 'majority' }, readPreference: 'primary', timeoutMS: 5000 }
+    )
+    if (applied === null) return { state: 'unresolved' }
+    if (applied.topic !== query.topic || applied.txid !== query.txid)
+      throw new Error('Corrupt Mongo applied admission identity')
+    const admission = await this.runner.readRetainedAdmission(applied.admissionId)
+    if (
+      admission === undefined ||
+      admission.identity.txid !== query.txid ||
+      admission.identity.contextDigest !== query.contextDigest ||
+      !admission.identity.topics.some(item => item.topic === query.topic && item.policyId === query.policyId)
+    ) return { state: 'unresolved' }
+    return { state: 'committed', admission }
+  }
+
   private peerFor(scope: StorageScope): MongoAdmissionStorage {
     const id = mongoNodeKey(scope)
     const existing = this.peers.get(id)
     if (existing !== undefined) return existing
     const peer = new MongoAdmissionStorage(this.db, scope, {
       enlistedIndexes: this.enlisted,
-      projector: this.projector
+      projector: this.projector,
+      retainAdmissionHistory: this.history !== undefined
     })
     this.peers.set(id, peer)
     return peer

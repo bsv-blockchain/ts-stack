@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 - Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening

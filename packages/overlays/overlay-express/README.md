@@ -18,6 +18,8 @@ An opinionated but configurable Overlay Services deployment system:
 
 Built-in discovery overflow probes use deterministic pages of at most 1000 rows. The configured engine result ceiling and extra-row overflow error remain enforced, including standard and high-throughput profiles.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This package keeps its existing behavior and does not enable history retention automatically. No consumer or database migration is required.
+
 ## Requirements and installation
 
 Overlay Express requires Node.js 22 or newer and a separately installed

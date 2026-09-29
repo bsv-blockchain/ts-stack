@@ -7,6 +7,8 @@ Canonical topic managers and lookup services for the BSV overlay network. Bundle
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This package keeps its existing behavior and does not enable history retention automatically. No consumer or database migration is required.
+
 ## Install
 
 ```bash

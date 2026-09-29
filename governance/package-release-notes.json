@@ -125,30 +125,30 @@
     {
       "name": "@bsv/overlay",
       "publishedVersion": "2.6.2",
-      "releaseType": "none",
-      "summary": "Maps SQL NULL output block heights to absent confirmation metadata without inventing a height or changing stored state. Strict engine height validation remains unchanged.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "minor",
+      "summary": "Adds an optional retained-admission history contract and explicit Mongo retention. New opt-in commits preserve bounded immutable identity alongside the existing public receipt; trusted history reads bind applied topic, policy, context and operation after restart without asserting current unspentness or visibility. Legacy submission, receipt bytes and database validators remain unchanged.",
+      "migration": "None for existing consumers. To retain provenance for new commits, explicitly construct MongoOverlayStorage or MongoAdmissionStorage with retainAdmissionHistory: true. Existing receipts are not rewritten or retroactively certified; history remains unresolved when binding material is absent. Readers must authorize and project private multi-topic results. Disable the option to return to legacy writes; saved metadata remains compatible with legacy receipt readers. No database schema migration or deployment is performed."
     },
     {
       "name": "@bsv/overlay-discovery-services",
       "publishedVersion": "2.2.6",
-      "releaseType": "none",
-      "summary": "Adds the unique MongoDB _id tie breaker to discovery pagination so bounded overflow probes preserve stable ordering.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "patch",
+      "summary": "Advances the packed Overlay runtime dependency for the additive retained-admission history API. Existing package behavior and defaults remain unchanged; history retention is not enabled automatically.",
+      "migration": "None. The compatible dependency candidate does not change HTTP routes, topic/lookup interfaces, storage selection, or deployment configuration. Publication and deployment remain separate authorized actions."
     },
     {
       "name": "@bsv/overlay-express",
       "publishedVersion": "2.7.3",
-      "releaseType": "none",
-      "summary": "Pages built-in discovery overflow probes within the discovery service 1000-row query bound, retaining the configured engine ceiling and explicit overflow failure.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "patch",
+      "summary": "Advances the packed Overlay runtime dependency for the additive retained-admission history API. Existing package behavior and defaults remain unchanged; history retention is not enabled automatically.",
+      "migration": "None. The compatible dependency candidate does not change HTTP routes, topic/lookup interfaces, storage selection, or deployment configuration. Publication and deployment remain separate authorized actions."
     },
     {
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.9.1",
-      "releaseType": "none",
-      "summary": "Accepts SDK StorageDownloader UHRP pages up to 200 rows with deterministic outpoint ordering. Retains selector allowlists and authenticated advertisement admission.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "patch",
+      "summary": "Advances the packed Overlay runtime dependency for the additive retained-admission history API. Existing package behavior and defaults remain unchanged; history retention is not enabled automatically.",
+      "migration": "None. The compatible dependency candidate does not change HTTP routes, topic/lookup interfaces, storage selection, or deployment configuration. Publication and deployment remain separate authorized actions."
     },
     {
       "name": "@bsv/paymail",

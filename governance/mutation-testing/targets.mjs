@@ -413,11 +413,16 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/overlay',
       manifest: 'packages/overlays/overlay/package.json',
       propertyTest: 'packages/overlays/overlay/src/__tests/BASM.property.test.ts',
-      mutate: ['src/BASM.ts:154-190', 'src/SafeLog.ts'],
+      mutate: [
+        'src/BASM.ts:154-190',
+        'src/SafeLog.ts',
+        'src/storage/mongo/MongoAdmissionReceipt.ts'
+      ],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/__tests/BASM.test.ts',
         '<rootDir>/src/__tests/BASM.property.test.ts',
-        '<rootDir>/src/__tests/SafeLog.test.ts'
+        '<rootDir>/src/__tests/SafeLog.test.ts',
+        '<rootDir>/src/__tests/mongo/MongoAdmissionReceipt.test.ts'
       ])
     },
     'verifast-batch': {

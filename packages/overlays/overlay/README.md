@@ -83,7 +83,7 @@ applications should prefer the root entry point wherever possible.
 
 ## Optional persistence capability
 
-`AdmissionStorage` defines an additive v1 atomic admission contract for future
+`AdmissionStorage` defines an additive v1 atomic admission contract for optional
 adapters. `storageHasAdmission(storage)` reports whether the optional
 `admission` field is present. `getAdmissionStorage(storage)` detects an explicit provider with both
 commit and reconciliation methods. Existing Knex and injected legacy adapters
@@ -126,6 +126,43 @@ the guarded payload row becomes `ready`; caller-session reference and GC
 operations share that row guard. See the [Mongo v1
 foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md)
 for operational bounds, recovery rules, and the opt-in admission path.
+
+## Optional retained admission history
+
+Construct `MongoOverlayStorage` (or its admission adapter) with
+`{ retainAdmissionHistory: true }` to preserve the original immutable admission
+identity with **new** durable receipts. The default remains false.
+`getAdmissionHistory(storage)` detects the separate
+`overlay-admission-history-v1` capability; `history.read({ scope, txid, topic,
+policyId, contextDigest })` follows retained applied history to the original
+committed operation. It checks scope, transaction, policy and private-context
+digest against that operation's retained identity. A topic appearing only as a
+duplicate in STEAK is insufficient.
+
+A committed result contains `{ state: 'committed', admission: { identity,
+receipt } }`, retaining the original mode, exact STEAK JSON and index/propagation
+observation. Missing, pending, mismatching or older unbound history returns
+`{ state: 'unresolved' }`. Corrupt storage, invalid selectors and I/O failures
+throw. The reader does not retry admission, broadcast, resolve pending commit
+attempts or claim rejection. History survives serving eviction and output
+spending; it does not establish current unspentness, chain assessment, visibility
+or authorization.
+
+This is a **trusted local** interface. Its full receipt and identity can include
+other private topics admitted by the same operation. Authorize and project a
+response before exposing it to a client. One reader belongs to one node/chain
+scope; select that scope's adapter explicitly. Each of its two primary-majority
+reads has a five-second database deadline.
+
+The extra provenance uses a versioned member within the existing 1 MiB binary
+receipt field. The complete encoded record is bounded before operation claims
+or database effects; new collection fields, validators and schema migration are
+unnecessary. Default writes retain exact legacy bytes and every public receipt
+keeps its existing shape. Older readers ignore the added private member. Enabling
+retention does not rewrite or certify old receipts, even when a retry succeeds.
+Disable the option to return to default writes without erasing retained history.
+This capability is a building block for proposal/admission recovery; it does not
+by itself implement a BRC-194 service or durable negative admission decisions.
 
 ## Runtime and package formats
 

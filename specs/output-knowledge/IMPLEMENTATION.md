@@ -46,6 +46,9 @@ submission and GASP behavior remains available to applications that do not opt i
   original publication/admission contract recovery and preflight receipt capacity.
 - Optional owned verification-context retention in versioned proposal reservations,
   compatible legacy replay and original-context admission recovery after restart.
+- Optional Mongo admission-history retention and exact scoped lookup, preserving
+  default receipts and leaving older unbound provenance unresolved. This supplies
+  history access; the concrete bounded Engine admission bridge remains required.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
@@ -81,9 +84,9 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,666 tests across 220 suites, including all proposal endpoint
+The SDK run passes 7,694 tests across 221 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 320 tests across 27 suites, with more than 95% line and 90% branch
+run passes 328 tests across 27 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,

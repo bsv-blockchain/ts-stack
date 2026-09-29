@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 - Accept SDK-compatible 200-row UHRP lookup pages with deterministic outpoint ordering and unchanged selector/signature validation.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
