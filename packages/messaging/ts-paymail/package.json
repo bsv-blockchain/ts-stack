@@ -189,7 +189,7 @@
   ],
   "dependencies": {
     "cross-fetch": "^4.1.0",
-    "joi": "^18.2.5"
+    "joi": "^18.2.6"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
