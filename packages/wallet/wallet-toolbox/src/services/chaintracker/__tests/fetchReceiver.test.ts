@@ -63,4 +63,14 @@ describe('chain-tracker clients call fetch the way browsers require', () => {
     const client = new GoChaintracksServiceClient('main', 'https://chaintracks.example/v2')
     await expect(client.getPresentHeight()).resolves.toBe(7)
   })
+
+  test('ChaintracksServiceClient refuses a fetch that is not a function', () => {
+    expect(
+      () =>
+        new ChaintracksServiceClient('main', 'https://chaintracks.example', {
+          ...ChaintracksServiceClient.createChaintracksServiceClientOptions(),
+          fetch: 1 as unknown as typeof fetch
+        })
+    ).toThrow('fetch must be a function')
+  })
 })

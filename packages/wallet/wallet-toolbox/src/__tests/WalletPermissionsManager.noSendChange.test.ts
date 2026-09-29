@@ -104,10 +104,73 @@ describe('permission-managed noSend createAction', () => {
     })
     jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
     const { txid } = await manager.createAction(
-      { description: 'Broadcast probe', outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'Probe output' }] },
+      {
+        description: 'Broadcast probe',
+        outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'Probe output' }]
+      },
       'app.example'
     )
     await expect(manager.abortAction({ reference: txid! }, 'app.example')).rejects.toThrow('not issued')
+    expect(underlying.abortAction).not.toHaveBeenCalled()
+  })
+
+  function noSendManager(abortResult = { aborted: true }) {
+    const source = new Transaction()
+    source.addOutput({ lockingScript: LockingScript.fromHex('51'), satoshis: 2000 })
+    const tx = new Transaction()
+    tx.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: UnlockingScript.fromHex('51') })
+    tx.addOutput({ lockingScript: LockingScript.fromHex('51'), satoshis: 1 })
+    tx.addOutput({ lockingScript: LockingScript.fromHex('52'), satoshis: 1900 })
+    const created = { signableTransaction: { reference: 'bm8tb3JpZ2luYXRvcg==', tx: tx.toAtomicBEEF() } }
+    setExactActionSpend(created, 1901)
+    const underlying = {
+      createAction: jest.fn(async () => created),
+      signAction: jest.fn(async () => ({ txid: tx.id('hex'), tx: tx.toAtomicBEEF() })),
+      abortAction: jest.fn(async () => abortResult)
+    }
+    const manager = new WalletPermissionsManager(underlying as unknown as WalletInterface, 'admin.example', {
+      encryptWalletMetadata: false
+    })
+    jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+    const args: CreateActionArgs = {
+      description: 'Conformance no-send probe',
+      outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'Probe output' }],
+      options: { noSend: true }
+    }
+    return { manager, underlying, args }
+  }
+
+  test('binds a no-send action created without an originator to that same empty originator', async () => {
+    const { manager, underlying, args } = noSendManager()
+    const { txid } = await manager.createAction(args)
+
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).rejects.toThrow('different originator')
+    await expect(manager.abortAction({ reference: txid! })).resolves.toEqual({ aborted: true })
+    expect(underlying.abortAction).toHaveBeenCalledTimes(1)
+  })
+
+  test('refuses an abort with no originator for a no-send action an app created', async () => {
+    const { manager, underlying, args } = noSendManager()
+    const { txid } = await manager.createAction(args, 'app.example')
+
+    await expect(manager.abortAction({ reference: txid! })).rejects.toThrow('different originator')
+    expect(underlying.abortAction).not.toHaveBeenCalled()
+  })
+
+  test('keeps a no-send action abortable when the wallet did not abort it', async () => {
+    const { manager, underlying, args } = noSendManager({ aborted: false })
+    const { txid } = await manager.createAction(args, 'app.example')
+
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).resolves.toEqual({ aborted: false })
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).resolves.toEqual({ aborted: false })
+    expect(underlying.abortAction).toHaveBeenCalledTimes(2)
+  })
+
+  test('treats a non-string abort reference as one the manager did not issue', async () => {
+    const { manager, underlying } = noSendManager()
+    await expect(manager.abortAction({ reference: 42 as unknown as string }, 'app.example')).rejects.toThrow(
+      'not issued'
+    )
     expect(underlying.abortAction).not.toHaveBeenCalled()
   })
 })
