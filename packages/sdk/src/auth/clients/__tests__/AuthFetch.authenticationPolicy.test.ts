@@ -189,14 +189,18 @@ describe('AuthFetch explicit peer authentication policy', () => {
     const replacement = peer()
     PeerMock.mockImplementationOnce(() => first).mockImplementationOnce(() => replacement)
     const fetcher = new AuthFetch({} as never, undefined, manager as never)
-    const pending = fetcher.fetch(url, { expectedIdentityKey: identity })
+    const pending = fetcher
+      .fetch(url, { expectedIdentityKey: identity })
+      .catch((error: unknown) => error)
     await started
     expect(manager.getSession).toHaveBeenCalledWith(identity)
     expect(manager.removeSession).toHaveBeenCalledWith(session)
     expect(PeerMock).toHaveBeenCalledTimes(1)
     expect(replacement.toPeer).not.toHaveBeenCalled()
     release()
-    expect((await pending).status).toBe(200)
+    const response = await pending
+    expect(response).toBeInstanceOf(Response)
+    expect((response as Response).status).toBe(200)
     expect(replacement.toPeer.mock.calls[0][1]).toBe(identity)
   })
 
@@ -241,20 +245,28 @@ describe('AuthFetch explicit peer authentication policy', () => {
     endpoint.toPeer.mockImplementation(async () => {
       if (endpoint.toPeer.mock.calls.length === 2) dispatch()
     })
-    const first = fetcher.fetch(url, { expectedIdentityKey: identity })
-    const firstAssertion = expect(first).rejects.toThrow(
-      'Authenticated response identity does not match'
-    )
-    const second = fetcher.fetch(url, { expectedIdentityKey: identity })
+    // Attach both rejection handlers before waiting for dispatch. A deliberately
+    // broken implementation must fail assertions, not crash the mutation worker
+    // with the other request's unhandled rejection.
+    const first = fetcher
+      .fetch(url, { expectedIdentityKey: identity })
+      .catch((error: unknown) => error)
+    const second = fetcher
+      .fetch(url, { expectedIdentityKey: identity })
+      .catch((error: unknown) => error)
     await dispatched
     const firstNonce = endpoint.toPeer.mock.calls[0][0].slice(0, 32)
     const secondNonce = endpoint.toPeer.mock.calls[1][0].slice(0, 32)
     endpoint.emit(otherIdentity, firstNonce)
-    await firstAssertion
+    expect(await first).toMatchObject({
+      message: 'Authenticated response identity does not match expectedIdentityKey.'
+    })
     expect(fetcher.peers[origin].identityKey).toBeUndefined()
     expect(fetcher.peers[origin].supportsMutualAuth).toBeUndefined()
     endpoint.emit(identity, secondNonce)
-    expect((await second).status).toBe(200)
+    const response = await second
+    expect(response).toBeInstanceOf(Response)
+    expect((response as Response).status).toBe(200)
     expect(fetcher.peers[origin].identityKey).toBe(identity)
     expect(endpoint.stopListeningForGeneralMessages).toHaveBeenCalledTimes(2)
     expect(jest.getTimerCount()).toBe(0)
