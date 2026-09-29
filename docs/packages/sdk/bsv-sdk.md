@@ -97,6 +97,11 @@ options preserve existing behavior. Use HTTPS for confidentiality; BRC-103/104
 mutual authentication does not encrypt the body. Applications must separately
 verify selected capability/profile bindings and authorize operations.
 
+For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
+see [registry metadata](../../guides/registry-metadata.md). It covers exact
+lookups, BRC-based inclusion requests, publisher choice and the boundary between
+display metadata and wallet permissions.
+
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may
 contain up to 64 owned data properties, matching the existing header-list
