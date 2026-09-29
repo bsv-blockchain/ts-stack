@@ -472,8 +472,9 @@ export class AuthFetch {
         // A new Peer still shares this store. Discard the selected stale session
         // so its explicit identity target cannot immediately reuse it. Preserve
         // other identities and await durable/async stores before retrying.
-        const session = await this.sessionManager.getSession(config.expectedIdentityKey)
-        if (session != null) await this.sessionManager.removeSession(session)
+        const manager = this.sessionManager as SessionManager | AsyncSessionManager
+        const session = await manager.getSession(config.expectedIdentityKey)
+        if (session != null) await manager.removeSession(session)
       }
       delete this.peers[baseURL]
       config.retryCounter ??= 3
