@@ -273,9 +273,11 @@ backpressure and publication semantics. The default-worker integration tests sep
 verification and the durable journal: they cover SQLite recovery with the network
 disabled, cross-source predecessor completion, whole-group quarantine, live
 withdrawals, source re-entry after spending, partial verification, and historical
-replacement preservation during context changes. They do not replace the full BRC
-trace corpus, actual-browser recovery, authenticated service transport or application
-demonstrations required before checkpoint-two approval. Test sources are in-process
+replacement preservation during context changes. The full 32-scenario BRC trace corpus also runs through the default worker and
+SQLite, including delayed verification, generation fencing, snapshot page order
+and offline restart. The binding is described in `test/fixtures/README.md`.
+Actual-browser recovery, authenticated service transport and application
+demonstrations remain required before checkpoint-two approval. Test sources are in-process
 fixtures; they are not evidence of a deployed BRC-193 transport.
 
 ## License

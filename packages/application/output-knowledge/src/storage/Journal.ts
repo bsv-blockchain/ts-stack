@@ -174,14 +174,12 @@ export function cloneEntry(entry: JournalEntry): JournalEntry {
     throw new OutputProtocolError('unavailable', 'Local journal integrity check failed')
   // The enclosing storage row is local metadata and may slightly exceed the
   // protocol body limit; each body has already been independently bounded.
-  return JSON.parse(
-    JSON.stringify({
-      key: entry.key,
-      body: entry.body,
-      revision: entry.revision,
-      ...(entry.local !== undefined ? { local: entry.local, localDigest: entry.localDigest } : {})
-    })
-  ) as JournalEntry
+  return structuredClone({
+    key: entry.key,
+    body: entry.body,
+    revision: entry.revision,
+    ...(entry.local !== undefined ? { local: entry.local, localDigest: entry.localDigest } : {})
+  })
 }
 
 /** Freeze trusted local provenance once and reuse this exact mutation on retry. */

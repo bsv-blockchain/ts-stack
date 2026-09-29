@@ -221,7 +221,7 @@ export interface SourceRequest {
   generation: OutputU64
   scope: OutputScope
   limits: RuntimeLimits
-  checkpoint?: SourceBatch['checkpoint']
+  checkpoint?: NonNullable<SourceBatch['checkpoint']>
 }
 export interface Source {
   readonly id: string

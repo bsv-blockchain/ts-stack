@@ -88,6 +88,21 @@ describe('whole-group source membership ordering', () => {
     expect(ledger.observations()).toHaveLength(2)
   })
 
+  it('publishes only the accepted snapshot prefix when pages share a watermark', () => {
+    const ledger = new SourceMembershipLedger()
+    accepted(ledger, batch('page-0', '10', [observation('seed')], 'snapshot', '0', false), '1')
+    ledger.receive(
+      batch('page-1', '10', [observation('remove', true)], 'snapshot', '0', false),
+      '2'
+    )
+    accepted(ledger, batch('page-2', '10', [observation('return')]), '3')
+    expect(ledger.memberships()[0]).toMatchObject({ present: true, observationId: 'seed' })
+    expect(ledger.observations().map(row => row.id)).toEqual(['seed'])
+    ledger.decide(scope, '0', 'page-1', 'accepted')
+    expect(ledger.memberships()[0]).toMatchObject({ present: true, observationId: 'return' })
+    expect(ledger.observations()).toHaveLength(3)
+  })
+
   it('stages a replacement snapshot and fences late work from the retired generation', () => {
     const ledger = new SourceMembershipLedger()
     accepted(ledger, batch('seed'), '1')

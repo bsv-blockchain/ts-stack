@@ -55,7 +55,27 @@ interface Family {
   highest: Generation
   visible?: Generation
 }
-const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const copy = <T>(value: T): T => structuredClone(value)
+
+function membershipOutpoint(
+  observation: OutputObservation
+): SourceMembership['outpoint'] | undefined {
+  if (observation.kind === 'output')
+    return {
+      chain: observation.scope.chain,
+      txid: observation.payload.evidence.txid,
+      outputIndex: observation.payload.evidence.outputIndex
+    }
+  if (observation.kind === 'withdraw') return observation.payload.outpoint
+  return undefined
+}
+function compareGeneration(a: string, b: string): number {
+  const left = outputU64(a),
+    right = outputU64(b)
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
 
 /**
  * Deterministic reducer of already schema-checked journal receipts and whole-group
@@ -73,19 +93,41 @@ export class SourceMembershipLedger {
   receive(input: SourceBatch, received: string): void {
     outputU64(received)
     const batch = copy(input),
-      { scope, generation } = batch.provenance
-    const familyKey = outputSourceIdentity(scope),
+      { scope, generation } = batch.provenance,
+      familyKey = outputSourceIdentity(scope),
       family = this.families.get(familyKey),
       scopeKey = canonicalOutputJSON(scope),
-      identities = new Map(this.observationIdentities.get(scopeKey))
-    let active: Generation
+      identities = new Map(this.observationIdentities.get(scopeKey)),
+      active = this.stageGeneration(scope, generation, batch.coverage.phase, family)
+    this.checkCoverage(active, batch.coverage)
+    for (const group of batch.groups)
+      this.stageGroup(active, group, batch.coverage.phase, identities, received)
+    this.finishReceipt(active, batch.coverage)
+    const replacing = family !== undefined && active.generation !== family.highest.generation
+    if (replacing) family.highest.retired = true
+    const visible =
+      family !== undefined && family.visible === family.highest && !replacing
+        ? active
+        : family?.visible
+    this.generations.set(canonicalOutputJSON({ scope, generation }), active)
+    this.observationIdentities.set(scopeKey, identities)
+    this.families.set(familyKey, { highest: active, ...(visible ? { visible } : {}) })
+    this.publishCompleted(familyKey)
+  }
+
+  private stageGeneration(
+    scope: OutputScope,
+    generation: string,
+    phase: Coverage['phase'],
+    family?: Family
+  ): Generation {
     if (!family || outputU64(generation) > outputU64(family.highest.generation)) {
-      if (batch.coverage.phase === 'live')
+      if (phase === 'live')
         throw new OutputProtocolError(
           'reset-required',
           'A new source generation requires a snapshot'
         )
-      active = {
+      return {
         scope,
         generation,
         groups: [],
@@ -99,35 +141,31 @@ export class SourceMembershipLedger {
         unavailable: false,
         retired: false
       }
-    } else {
-      if (
-        generation !== family.highest.generation ||
-        canonicalOutputJSON(scope) !== canonicalOutputJSON(family.highest.scope)
-      )
-        throw new OutputProtocolError(
-          'context-changed',
-          'Retired source generation or changed epoch'
-        )
-      active = {
-        ...family.highest,
-        groups: [...family.highest.groups],
-        byId: new Map(family.highest.byId),
-        observations: new Map(family.highest.observations),
-        sequenceGroups: new Map(family.highest.sequenceGroups)
-      }
     }
-    const phase = batch.coverage.phase
+    if (
+      generation !== family.highest.generation ||
+      canonicalOutputJSON(scope) !== canonicalOutputJSON(family.highest.scope)
+    )
+      throw new OutputProtocolError('context-changed', 'Retired source generation or changed epoch')
+    return {
+      ...family.highest,
+      groups: [...family.highest.groups],
+      byId: new Map(family.highest.byId),
+      observations: new Map(family.highest.observations),
+      sequenceGroups: new Map(family.highest.sequenceGroups)
+    }
+  }
+
+  private checkCoverage(active: Generation, coverage: Coverage): void {
+    const phase = coverage.phase
     if (active.unavailable)
       throw new OutputProtocolError('reset-required', 'Source continuity requires a new generation')
     if (phase === 'snapshot') {
-      if (batch.coverage.through === undefined)
+      if (coverage.through === undefined)
         throw new OutputProtocolError('invalid', 'Snapshot watermark is required')
-      if (
-        active.snapshotWatermark !== undefined &&
-        active.snapshotWatermark !== batch.coverage.through
-      )
+      if (active.snapshotWatermark !== undefined && active.snapshotWatermark !== coverage.through)
         throw new OutputProtocolError('equivocation', 'Snapshot watermark changed')
-      active.snapshotWatermark = batch.coverage.through
+      active.snapshotWatermark = coverage.through
     }
     if (
       phase === 'live' &&
@@ -139,85 +177,86 @@ export class SourceMembershipLedger {
       (phase !== 'finite' && active.groups.some(row => row.phase === 'finite'))
     )
       throw new OutputProtocolError('invalid', 'Mixed finite and durable source generation')
-    const additions: ReceivedSourceGroup[] = []
-    for (const group of batch.groups) {
-      const prior = active.byId.get(group.id)
-      if (prior) {
-        if (
-          prior.phase !== phase ||
-          canonicalOutputJSON(prior.group) !== canonicalOutputJSON(group)
-        )
-          throw new OutputProtocolError('equivocation', 'Source group identity was reused')
-        continue
-      }
-      if (
-        (phase === 'snapshot' && (active.receivedSnapshotComplete || active.liveStarted)) ||
-        (phase === 'finite' && active.receivedFiniteComplete)
+  }
+
+  private stageGroup(
+    active: Generation,
+    group: OutputSourceGroup,
+    phase: Coverage['phase'],
+    identities: Map<string, string>,
+    received: string
+  ): void {
+    const prior = active.byId.get(group.id)
+    if (prior) {
+      if (prior.phase !== phase || canonicalOutputJSON(prior.group) !== canonicalOutputJSON(group))
+        throw new OutputProtocolError('equivocation', 'Source group identity was reused')
+      return
+    }
+    if (
+      (phase === 'snapshot' && (active.receivedSnapshotComplete || active.liveStarted)) ||
+      (phase === 'finite' && active.receivedFiniteComplete)
+    )
+      throw new OutputProtocolError(
+        'equivocation',
+        'Completed source snapshot acquired another group'
       )
+    if (phase === 'live') this.stageLiveSequence(active, group)
+    this.stageObservationIdentities(active, group, identities)
+    const row: ReceivedSourceGroup = {
+      scope: active.scope,
+      generation: active.generation,
+      group,
+      phase,
+      received,
+      status: 'pending'
+    }
+    active.byId.set(group.id, row)
+    active.groups.push(row)
+  }
+
+  private stageLiveSequence(active: Generation, group: OutputSourceGroup): void {
+    if (outputU64(group.sequence) <= outputU64(active.through ?? active.snapshotWatermark!))
+      throw new OutputProtocolError(
+        'equivocation',
+        'New live group predates the received watermark'
+      )
+    if (active.sequenceGroups.has(group.sequence))
+      throw new OutputProtocolError('equivocation', 'Live sequence was reused')
+    active.sequenceGroups.set(group.sequence, group.id)
+  }
+
+  private stageObservationIdentities(
+    active: Generation,
+    group: OutputSourceGroup,
+    identities: Map<string, string>
+  ): void {
+    for (const observation of group.observations) {
+      if (active.observations.has(observation.id))
+        throw new OutputProtocolError('equivocation', 'Observation belongs to another source group')
+      const encoded = canonicalOutputJSON(observation),
+        previous = identities.get(observation.id)
+      if (previous !== undefined && previous !== encoded)
         throw new OutputProtocolError(
           'equivocation',
-          'Completed source snapshot acquired another group'
+          'Observation identity changed within the source epoch'
         )
-      if (phase === 'live') {
-        if (outputU64(group.sequence) <= outputU64(active.through ?? active.snapshotWatermark!))
-          throw new OutputProtocolError(
-            'equivocation',
-            'New live group predates the received watermark'
-          )
-        if (active.sequenceGroups.has(group.sequence))
-          throw new OutputProtocolError('equivocation', 'Live sequence was reused')
-        active.sequenceGroups.set(group.sequence, group.id)
-      }
-      for (const observation of group.observations) {
-        if (active.observations.has(observation.id))
-          throw new OutputProtocolError(
-            'equivocation',
-            'Observation belongs to another source group'
-          )
-        const encoded = canonicalOutputJSON(observation),
-          previous = identities.get(observation.id)
-        if (previous !== undefined && previous !== encoded)
-          throw new OutputProtocolError(
-            'equivocation',
-            'Observation identity changed within the source epoch'
-          )
-        identities.set(observation.id, encoded)
-        active.observations.set(observation.id, encoded)
-      }
-      const row: ReceivedSourceGroup = {
-        scope,
-        generation,
-        group,
-        phase,
-        received,
-        status: 'pending'
-      }
-      active.byId.set(group.id, row)
-      additions.push(row)
+      identities.set(observation.id, encoded)
+      active.observations.set(observation.id, encoded)
     }
-    active.groups.push(...additions)
-    if (phase === 'live') active.liveStarted = true
+  }
+
+  private finishReceipt(active: Generation, coverage: Coverage): void {
+    if (coverage.phase === 'live') active.liveStarted = true
     if (
-      batch.coverage.through !== undefined &&
-      (active.through === undefined ||
-        outputU64(batch.coverage.through) > outputU64(active.through))
+      coverage.through !== undefined &&
+      (active.through === undefined || outputU64(coverage.through) > outputU64(active.through))
     )
-      active.through = batch.coverage.through
-    if (batch.coverage.status === 'complete') {
-      if (phase === 'snapshot') active.receivedSnapshotComplete = true
-      if (phase === 'finite') active.receivedFiniteComplete = true
+      active.through = coverage.through
+    if (coverage.status === 'complete') {
+      if (coverage.phase === 'snapshot') active.receivedSnapshotComplete = true
+      if (coverage.phase === 'finite') active.receivedFiniteComplete = true
     }
-    if (batch.coverage.status === 'reset-required') active.unavailable = true
-    const replacing = family !== undefined && active.generation !== family.highest.generation
-    if (replacing) family.highest.retired = true
-    const visible =
-      family !== undefined && family.visible === family.highest && !replacing
-        ? active
-        : family?.visible
-    this.generations.set(canonicalOutputJSON({ scope, generation }), active)
-    this.observationIdentities.set(scopeKey, identities)
-    this.families.set(familyKey, { highest: active, ...(visible ? { visible } : {}) })
-    this.publishCompleted(familyKey)
+    if (coverage.status === 'reset-required') active.unavailable = true
   }
 
   decide(
@@ -272,9 +311,14 @@ export class SourceMembershipLedger {
 
   private publishedRows(active: Generation): ReceivedSourceGroup[] {
     const seed = active.groups.filter(row => row.phase !== 'live')
-    const result = seed.filter(row => row.status === 'accepted')
-    if (!active.receivedSnapshotComplete || seed.some(row => row.status !== 'accepted'))
-      return result
+    const result: ReceivedSourceGroup[] = []
+    // Snapshot pages share a watermark, so receipt order is their membership
+    // order. A later verified page must not pass an unfinished earlier page.
+    for (const row of seed) {
+      if (row.status !== 'accepted') return result
+      result.push(row)
+    }
+    if (!active.receivedSnapshotComplete) return result
     const live = active.groups
       .filter(row => row.phase === 'live')
       .sort((a, b) => (outputU64(a.group.sequence) < outputU64(b.group.sequence) ? -1 : 1))
@@ -285,51 +329,39 @@ export class SourceMembershipLedger {
     return result
   }
 
+  private generationMemberships(visible: Generation): SourceMembership[] {
+    const rows = new Map<string, SourceMembership>()
+    for (const row of this.publishedRows(visible))
+      for (const observation of row.group.observations) {
+        const outpoint = membershipOutpoint(observation)
+        if (!outpoint) continue
+        rows.set(canonicalOutputJSON(outpoint), {
+          scope: row.scope,
+          generation: row.generation,
+          outpoint,
+          present: observation.kind === 'output',
+          phase: row.phase,
+          sequence: row.group.sequence,
+          observationId: observation.id
+        })
+      }
+    return [...rows.values()]
+  }
+
   memberships(): SourceMembership[] {
-    const result: SourceMembership[] = []
-    for (const { visible } of this.families.values()) {
-      if (!visible) continue
-      const rows = new Map<string, SourceMembership>()
-      for (const row of this.publishedRows(visible))
-        for (const observation of row.group.observations) {
-          const outpoint =
-            observation.kind === 'output'
-              ? {
-                  chain: observation.scope.chain,
-                  txid: observation.payload.evidence.txid,
-                  outputIndex: observation.payload.evidence.outputIndex
-                }
-              : observation.kind === 'withdraw'
-                ? observation.payload.outpoint
-                : undefined
-          if (!outpoint) continue
-          rows.set(canonicalOutputJSON(outpoint), {
-            scope: row.scope,
-            generation: row.generation,
-            outpoint,
-            present: observation.kind === 'output',
-            phase: row.phase,
-            sequence: row.group.sequence,
-            observationId: observation.id
-          })
-        }
-      result.push(...rows.values())
-    }
-    return copy(
-      result.sort(
-        (a, b) =>
-          compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
-          (outputU64(a.generation) < outputU64(b.generation)
-            ? -1
-            : outputU64(a.generation) > outputU64(b.generation)
-              ? 1
-              : 0) ||
-          compareKnowledgeText(a.outpoint.chain.network, b.outpoint.chain.network) ||
-          compareKnowledgeText(a.outpoint.chain.genesisHash, b.outpoint.chain.genesisHash) ||
-          compareKnowledgeText(a.outpoint.txid, b.outpoint.txid) ||
-          a.outpoint.outputIndex - b.outpoint.outputIndex
-      )
+    const result = [...this.families.values()].flatMap(({ visible }) =>
+      visible ? this.generationMemberships(visible) : []
     )
+    result.sort(
+      (a, b) =>
+        compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
+        compareGeneration(a.generation, b.generation) ||
+        compareKnowledgeText(a.outpoint.chain.network, b.outpoint.chain.network) ||
+        compareKnowledgeText(a.outpoint.chain.genesisHash, b.outpoint.chain.genesisHash) ||
+        compareKnowledgeText(a.outpoint.txid, b.outpoint.txid) ||
+        a.outpoint.outputIndex - b.outpoint.outputIndex
+    )
+    return copy(result)
   }
 
   observations(): OutputObservation[] {
@@ -337,22 +369,21 @@ export class SourceMembershipLedger {
     for (const { visible } of this.families.values())
       if (visible)
         for (const row of this.publishedRows(visible)) result.push(...row.group.observations)
-    return copy(
-      result.sort(
-        (a, b) =>
-          compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
-          compareKnowledgeText(a.id, b.id)
-      )
+    result.sort(
+      (a, b) =>
+        compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
+        compareKnowledgeText(a.id, b.id)
     )
+    return copy(result)
   }
+
   groups(): ReceivedSourceGroup[] {
     return copy([...this.generations.values()].flatMap(active => active.groups))
   }
   isCurrent(scope: OutputScope, generation: string): boolean {
     const active = this.families.get(outputSourceIdentity(scope))?.highest
     return (
-      active !== undefined &&
-      active.generation === generation &&
+      active?.generation === generation &&
       canonicalOutputJSON(active.scope) === canonicalOutputJSON(scope)
     )
   }

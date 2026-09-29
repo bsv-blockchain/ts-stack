@@ -35,27 +35,29 @@ export interface EvidencePlan {
   atomicBeef?: number[]
 }
 
-/**
- * Inspect and target an exact received variant. This never declares transaction
- * validity. A txid-only entry remains missing even if the bundle has other rows.
- */
-export function assembleOutputEvidence(
-  input: OutputEvidence,
-  selectedChain: OutputChain,
-  limits: EvidenceAssemblyLimits
-): EvidencePlan {
-  const chain = parseOutputChain(selectedChain),
-    evidence = parseOutputEvidence(input)
+const assemblyMaximums: EvidenceAssemblyLimits = {
+  bytes: 4194304,
+  transactions: 4096,
+  dependencies: 16384
+}
+
+function checkAssemblyLimits(limits: EvidenceAssemblyLimits): void {
   for (const [key, value] of Object.entries(limits)) {
-    const maximum =
-      key === 'bytes' ? 4194304 : key === 'transactions' ? 4096 : key === 'dependencies' ? 16384 : 0
+    const maximum = Object.hasOwn(assemblyMaximums, key)
+      ? assemblyMaximums[key as keyof EvidenceAssemblyLimits]
+      : 0
     if (!Number.isSafeInteger(value) || value < 1 || value > maximum)
       throw new OutputProtocolError('invalid', 'Invalid evidence assembly limit')
   }
   if (Object.keys(limits).length !== 3)
     throw new OutputProtocolError('invalid', 'Missing evidence assembly limit')
-  const bytes = decodeOutputBytes(evidence.beef, limits.bytes)
-  const variantId = Utils.toHex(Hash.sha256(bytes))
+}
+
+function parseBeef(
+  bytes: number[],
+  evidence: OutputEvidence,
+  limits: EvidenceAssemblyLimits
+): Beef {
   let beef: Beef
   try {
     beef = Beef.fromBinaryStrict(bytes)
@@ -66,8 +68,16 @@ export function assembleOutputEvidence(
     throw new OutputProtocolError('invalid', 'Atomic BEEF target differs from asserted txid')
   if (beef.txs.length > limits.transactions)
     throw new OutputProtocolError('limited', 'Evidence transaction limit')
-  const transactions: AssembledRawTransaction[] = []
-  const seen = new Set<string>()
+  return beef
+}
+
+function readTransactions(
+  beef: Beef,
+  chain: OutputChain,
+  limits: EvidenceAssemblyLimits
+): AssembledRawTransaction[] {
+  const transactions: AssembledRawTransaction[] = [],
+    seen = new Set<string>()
   let inputs = 0
   for (const item of beef.txs) {
     if (seen.has(item.txid)) throw new OutputProtocolError('invalid', 'Duplicate BEEF transaction')
@@ -93,18 +103,16 @@ export function assembleOutputEvidence(
         : {})
     })
   }
-  const byId = new Map(transactions.map(transaction => [transaction.txid, transaction]))
-  const target = byId.get(evidence.txid)
-  const missing = new Map<string, OutputOutpoint>()
-  if (!target)
-    missing.set(`${evidence.txid}:${evidence.outputIndex}`, {
-      chain,
-      txid: evidence.txid,
-      outputIndex: evidence.outputIndex
-    })
-  else if (evidence.outputIndex >= beef.findTxid(evidence.txid)!.tx!.outputs.length)
-    throw new OutputProtocolError('invalid', 'Target output does not exist')
-  const pending = target ? [target] : [],
+  transactions.sort((a, b) => (a.txid < b.txid ? -1 : 1))
+  return transactions
+}
+
+function missingPredecessors(
+  target: AssembledRawTransaction,
+  byId: ReadonlyMap<string, AssembledRawTransaction>
+): OutputOutpoint[] {
+  const missing = new Map<string, OutputOutpoint>(),
+    pending = [target],
     visited = new Set<string>()
   while (pending.length) {
     const current = pending.pop()!
@@ -117,23 +125,53 @@ export function assembleOutputEvidence(
       else pending.push(parent)
     }
   }
-  let atomicBeef: number[] | undefined
-  if (target && missing.size === 0) {
-    try {
-      atomicBeef = beef.toBinaryAtomic(evidence.txid)
-    } catch {
-      throw new OutputProtocolError('invalid', 'Cannot construct target-specific BEEF')
-    }
-    if (atomicBeef.length > limits.bytes)
-      throw new OutputProtocolError('limited', 'Target-specific evidence byte limit')
+  return [...missing.values()]
+}
+
+function targetBeef(beef: Beef, txid: string, maximumBytes: number): number[] {
+  let result: number[]
+  try {
+    result = beef.toBinaryAtomic(txid)
+  } catch {
+    throw new OutputProtocolError('invalid', 'Cannot construct target-specific BEEF')
   }
+  if (result.length > maximumBytes)
+    throw new OutputProtocolError('limited', 'Target-specific evidence byte limit')
+  return result
+}
+
+/**
+ * Inspect and target an exact received variant. This never declares transaction
+ * validity. A txid-only entry remains missing even if the bundle has other rows.
+ */
+export function assembleOutputEvidence(
+  input: OutputEvidence,
+  selectedChain: OutputChain,
+  limits: EvidenceAssemblyLimits
+): EvidencePlan {
+  const chain = parseOutputChain(selectedChain),
+    evidence = parseOutputEvidence(input)
+  checkAssemblyLimits(limits)
+  const bytes = decodeOutputBytes(evidence.beef, limits.bytes),
+    variantId = Utils.toHex(Hash.sha256(bytes)),
+    beef = parseBeef(bytes, evidence, limits),
+    transactions = readTransactions(beef, chain, limits),
+    byId = new Map(transactions.map(transaction => [transaction.txid, transaction])),
+    target = byId.get(evidence.txid)
+  if (target && evidence.outputIndex >= beef.findTxid(evidence.txid)!.tx!.outputs.length)
+    throw new OutputProtocolError('invalid', 'Target output does not exist')
+  const missing = target
+    ? missingPredecessors(target, byId)
+    : [{ chain, txid: evidence.txid, outputIndex: evidence.outputIndex }]
+  const atomicBeef =
+    target && missing.length === 0 ? targetBeef(beef, evidence.txid, limits.bytes) : undefined
   return {
     variantId,
     evidence,
     chain,
-    transactions: transactions.sort((a, b) => (a.txid < b.txid ? -1 : 1)),
+    transactions,
     ...(target ? { target } : {}),
-    missing: [...missing.values()],
+    missing,
     ...(atomicBeef ? { atomicBeef } : {})
   }
 }

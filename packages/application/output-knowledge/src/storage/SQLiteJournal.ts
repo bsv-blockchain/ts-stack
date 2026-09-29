@@ -95,8 +95,7 @@ export class SQLiteJournal implements JournalStorage {
       .prepare('SELECT * FROM output_journal_meta WHERE namespace=?')
       .get(this.namespace) as Row | undefined
     if (
-      !row ||
-      row.format !== 1 ||
+      row?.format !== 1 ||
       !Number.isSafeInteger(row.retained_bytes) ||
       !Number.isSafeInteger(row.entries) ||
       Number(row.retained_bytes) < 0 ||

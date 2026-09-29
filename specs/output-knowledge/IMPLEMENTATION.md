@@ -21,14 +21,14 @@ submission and GASP behavior remains available to applications that do not opt i
   fences and projection publication independent of authorized wallet actions.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
+- All 32 approved reconciliation traces through the default worker and SQLite,
+  with actual SDK verification, delayed proof completion and offline restart.
 - Bounded wallet basket pages, finite provider-scoped lookup receipts and direct
   delivery with commit-before-acknowledgement. Optional adapters live under the
   separate `@bsv/output-knowledge/sources` entry.
 
 ## Remaining checkpoint-two work
 
-- Qualify the full approved reconciliation trace corpus through real journals and
-  the default worker, including all source, historical-context and restart cases.
 - Add explicit scoped source-currentness policy, durable freshness invalidation,
   proposal namespaces, validation policies and finalization/admission bridges.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
@@ -52,19 +52,20 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The foundation SDK run passes 7,608 tests across 215 suites. The output-knowledge
-run passes 147 tests across 14 suites, with more than 91% line and 85% branch
+The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
+run passes 180 tests across 15 suites, with more than 91% line and 85% branch
 coverage. Journal append mutation testing kills all 26 generated mutations.
 The source tests include a held SQLite append, storage failure, finite pagination,
-non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh. Observation identities remain immutable within their complete
-source epoch across local refresh generations and SQLite restart.
+non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
+Observation identities remain immutable within their complete source epoch across
+local refresh generations and SQLite restart.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and both declared browser entries pass. Core browser byte limits remain unchanged;
 the optional adapter entry is independently measured and enforced. IndexedDB unit
 tests use fake-indexeddb, so actual-browser qualification is still required. The
-existing selection-function trace tests are not a substitute for complete journal
-and worker trace qualification.
+journal-backed trace binding is documented alongside the unchanged approved
+fixtures; selection-function tests remain an independent layer.
 
 These are local, intermediate results. The PR remains draft until the entire
 checkpoint and all required checks succeed on its exact final head. Remote CI,

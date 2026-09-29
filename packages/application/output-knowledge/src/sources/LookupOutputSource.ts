@@ -169,11 +169,9 @@ export class LookupOutputSource implements Source {
           progress.failedHosts === 0 &&
           progress.rejectedHosts === 0 &&
           progress.freeformHosts === 0
-      yield this.session.batch(
-        request,
-        [],
-        limited ? 'limited' : complete ? 'complete' : 'unavailable'
-      )
+      let status: SourceBatch['coverage']['status'] = complete ? 'complete' : 'unavailable'
+      if (limited) status = 'limited'
+      yield this.session.batch(request, [], status)
     } finally {
       transport.abort()
       inbox.close()

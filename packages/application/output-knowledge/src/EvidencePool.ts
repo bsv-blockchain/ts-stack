@@ -64,7 +64,7 @@ interface Search {
   bytes: number[]
   rows: Row[]
 }
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const clone = <T>(value: T): T => structuredClone(value)
 
 /**
  * Bounded cross-receipt dependency planning. Every alternative is still untrusted

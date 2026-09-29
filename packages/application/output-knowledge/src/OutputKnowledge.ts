@@ -339,9 +339,12 @@ export class OutputKnowledge {
       .filter(row => row.state !== 'stale' && row.expiresAt !== undefined)
       .map(row => outputU64(row.expiresAt!))
     if (!deadlines.length) return
-    const earliest = deadlines.reduce((a, b) => (a < b ? a : b)),
+    // U64 deadlines may exceed Number.MAX_SAFE_INTEGER. Compare in bigint;
+    // converting the bounded difference preserves only the comparator sign.
+    deadlines.sort((a, b) => Number(a - b))
+    const earliest = deadlines[0],
       remaining = earliest * 1000n - BigInt(this.now())
-    const delay = remaining > 60000n ? 60000 : remaining < 1n ? 1 : Number(remaining)
+    const delay = Math.max(1, Math.min(60000, Number(remaining)))
     this.expiry = setTimeout(() => {
       if (BigInt(this.now()) >= earliest * 1000n) this.schedule()
       else this.armExpiry(input)

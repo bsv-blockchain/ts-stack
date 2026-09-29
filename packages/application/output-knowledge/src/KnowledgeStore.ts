@@ -52,7 +52,7 @@ export interface KnowledgeStoreOptions {
   pollMs?: number
   now?: () => number
 }
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const clone = <T>(value: T): T => structuredClone(value)
 
 /** CAS journal port with bounded replay, exact-key recovery and ordered watches. */
 export class KnowledgeStore {

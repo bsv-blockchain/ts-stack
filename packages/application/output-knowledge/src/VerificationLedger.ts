@@ -40,7 +40,14 @@ export interface KnowledgeLocalFrame {
   work: VerifiedWork[]
 }
 const profile = 'urn:bsv:output-knowledge:local-verification:1' as const
-const statuses = ['verified', 'invalid', 'unresolved', 'limited', 'cancelled', 'context-changed']
+const statuses = new Set([
+  'verified',
+  'invalid',
+  'unresolved',
+  'limited',
+  'cancelled',
+  'context-changed'
+])
 function assertLocal(condition: unknown, message: string): asserts condition {
   if (!condition) throw new OutputProtocolError('invalid', message)
 }
@@ -107,7 +114,7 @@ export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
       closedOutputObject(raw, ['contextId', 'status'], ['placement'])
       const contextId = outputString(raw.contextId)
       assertLocal(
-        !contexts.has(contextId) && statuses.includes(raw.status as string),
+        !contexts.has(contextId) && statuses.has(raw.status as string),
         'Invalid or duplicated local context check'
       )
       contexts.add(contextId)
@@ -198,13 +205,13 @@ export class VerificationLedger {
     this.work = next
   }
   entries(): VerifiedWork[] {
-    return JSON.parse(JSON.stringify([...this.work.values()])) as VerifiedWork[]
+    return structuredClone([...this.work.values()])
   }
   get(proof: ProofReference, contextId: string): ProofCheck | undefined {
     const check = this.work
       .get(proofReferenceKey(proof))
       ?.checks.find(value => value.contextId === contextId)
-    return check ? (JSON.parse(JSON.stringify(check)) as ProofCheck) : undefined
+    return check ? structuredClone(check) : undefined
   }
 }
 
@@ -249,7 +256,7 @@ export async function checkRetainedProof(
   if (
     result.contextId !== id ||
     result.variantId !== candidate.variantId ||
-    !statuses.includes(result.status)
+    !statuses.has(result.status)
   )
     throw new OutputProtocolError('invalid', 'Verifier result identity mismatch')
   if (result.status !== 'verified') return { contextId: original.id, status: result.status }
