@@ -1,6 +1,6 @@
 import { canonicalOutputJSON, outputU64, OutputProtocolError, type OutputScope } from '@bsv/sdk'
 import { parseVerificationContext } from '../validation.js'
-import type { SourceBatch } from '../ports.js'
+import type { SourceBatch, VerificationContext } from '../ports.js'
 import type { KnowledgeStore } from '../KnowledgeStore.js'
 import { outputSourceIdentity } from '../SourceMembership.js'
 import { knowledgeMutation, type JournalEntry } from '../storage/Journal.js'
@@ -34,13 +34,7 @@ export class LookupSourceGuard {
     if (outputU64(history.revision.received) < outputU64(minimumReceived))
       throw new OutputProtocolError('reset-required', 'Core journal precedes retained lookup state')
     this.checkPredecessor(history.entries, continuity)
-    const context = history.entries.filter(entry => entry.body.kind === 'context').at(-1)?.body
-    if (context?.kind !== 'context')
-      throw new OutputProtocolError(
-        'revision-unavailable',
-        'Live lookup requires an initial verification context'
-      )
-    const current = parseVerificationContext(context.context)
+    const current = this.latestContext(history.entries)
     if (
       canonicalOutputJSON(current.partition) !==
         canonicalOutputJSON(this.configuration.partition) ||
@@ -54,6 +48,18 @@ export class LookupSourceGuard {
     return history.revision.received
   }
 
+  private latestContext(entries: readonly JournalEntry[]): VerificationContext {
+    // Preserve the ES2022 consumer target without copying the complete history.
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const body = entries[index].body
+      if (body.kind === 'context') return parseVerificationContext(body.context)
+    }
+    throw new OutputProtocolError(
+      'revision-unavailable',
+      'Live lookup requires an initial verification context'
+    )
+  }
+
   private checkPredecessor(
     entries: readonly JournalEntry[],
     continuity: Pick<LookupSourceState, 'previous' | 'previousReceipt'>
@@ -62,8 +68,7 @@ export class LookupSourceGuard {
     if (expected === null) return
     const receipt = entries.find(entry => entry.key === expected.key)
     if (
-      !receipt ||
-      receipt.revision.received !== expected.received ||
+      receipt?.revision.received !== expected.received ||
       receipt.body.kind !== 'receive' ||
       canonicalOutputJSON(lookupSourceCheckpoint(receipt.body.batch)) !==
         canonicalOutputJSON(continuity.previous)

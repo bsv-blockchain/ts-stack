@@ -79,7 +79,9 @@ async function openPage(browser, baseURL, errors) {
     waitUntil: 'networkidle0'
   })
   assert.equal(response.headers()['content-security-policy'], CSP)
-  await page.waitForFunction(() => window.outputKnowledgeBrowser !== undefined, { timeout: 30000 })
+  await page.waitForFunction(() => Reflect.has(window, 'outputKnowledgeBrowser'), {
+    timeout: 30000
+  })
   return page
 }
 

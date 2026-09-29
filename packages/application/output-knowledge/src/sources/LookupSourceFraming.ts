@@ -94,6 +94,8 @@ export class LookupSourceFraming {
     const packet = parseOutputLookupBatch(input, maximumWireBytes)
     const scope = this.checkScope(packet.scope)
     outputU64(receivedAt)
+    const complete =
+      packet.phase === 'snapshot' ? packet.snapshotComplete : packet.through === packet.highWater
     return this.parse({
       provenance: {
         partition: this.frame.partition,
@@ -108,14 +110,7 @@ export class LookupSourceFraming {
       coverage: {
         scope,
         phase: packet.phase,
-        status:
-          packet.phase === 'snapshot'
-            ? packet.snapshotComplete
-              ? 'complete'
-              : 'partial'
-            : packet.through === packet.highWater
-              ? 'complete'
-              : 'partial',
+        status: complete ? 'complete' : 'partial',
         through: packet.through,
         highWater: packet.highWater
       },

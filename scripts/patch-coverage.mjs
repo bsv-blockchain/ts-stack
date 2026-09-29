@@ -169,14 +169,20 @@ export function isUninstrumentedModule(source) {
 // text. Named re-exports are emitted as named imports followed by an export
 // list. Accept those exact binding forms; a side-effect import, declaration,
 // initializer, namespace import or any other statement stays in the gate.
+function retainBindingNames(match, names, index) {
+  if (match === null) return
+  for (const item of match[1].split(',').filter(Boolean))
+    names.add(item.trim().split(' as ').at(index))
+}
+
 function onlyReexportBindings(code) {
-  const name = '[$A-Z_a-z][$\\w]*'
+  const name = String.raw`[$A-Z_a-z][$\w]*`
   const binding = `${name}(?: as ${name})?`
-  const list = `(${binding}(?:,\\s*${binding})*,?)`
-  const moduleName = '"(?:[^"\\\\]|\\\\.)*"'
-  const imported = new RegExp(`^import \\{\\s*${list}\\s*\\} from ${moduleName};`)
-  const exported = new RegExp(`^export \\{\\s*${list}\\s*\\};`)
-  const star = new RegExp(`^export \\* from ${moduleName};`)
+  const list = String.raw`(${binding}(?:,\s*${binding})*,?)`
+  const moduleName = String.raw`"(?:[^"\\]|\\.)*"`
+  const imported = new RegExp(String.raw`^import \{\s*${list}\s*\} from ${moduleName};`)
+  const exported = new RegExp(String.raw`^export \{\s*${list}\s*\};`)
+  const star = new RegExp(String.raw`^export \* from ${moduleName};`)
   const imports = new Set()
   const exports = new Set()
   let remaining = code.trim()
@@ -186,12 +192,8 @@ function onlyReexportBindings(code) {
     const output = simple === null && input === null ? exported.exec(remaining) : null
     const match = simple ?? input ?? output
     if (match === null) return false
-    if (input !== null)
-      for (const item of input[1].split(',').filter(Boolean))
-        imports.add(item.trim().split(' as ').at(-1))
-    if (output !== null)
-      for (const item of output[1].split(',').filter(Boolean))
-        exports.add(item.trim().split(' as ')[0])
+    retainBindingNames(input, imports, -1)
+    retainBindingNames(output, exports, 0)
     remaining = remaining.slice(match[0].length).trimStart()
   }
   return imports.size === exports.size && [...exports].every(name => imports.has(name))

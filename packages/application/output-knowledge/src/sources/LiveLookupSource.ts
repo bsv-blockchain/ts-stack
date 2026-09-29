@@ -224,18 +224,25 @@ export class LiveLookupSource implements Source {
         const key = knowledgeMutation({ kind: 'receive', batch }).key
         if (!previous || knowledgeMutation({ kind: 'receive', batch: previous }).key !== key)
           return batch
-        if (batch.coverage.status === 'reset-required')
-          throw new OutputProtocolError('reset-required', 'Live lookup requires a new generation')
-        const lookup = await this.options.core.getMutation(key)
-        this.work.check(signal)
-        const advanced = this.codec.advance(saved.state, lookup)
-        if (await this.save(saved, advanced, signal)) previous = undefined
+        if (await this.advancePending(saved, key, signal)) previous = undefined
         continue
       }
       const captured = await this.capture(saved, signal)
       if (captured) return captured
     }
     throw new OutputProtocolError('limited', 'Live lookup control contention budget', true)
+  }
+
+  private async advancePending(
+    saved: SavedState,
+    key: string,
+    signal: AbortSignal
+  ): Promise<SavedState | undefined> {
+    if (saved.state.pending?.coverage.status === 'reset-required')
+      throw new OutputProtocolError('reset-required', 'Live lookup requires a new generation')
+    const lookup = await this.options.core.getMutation(key)
+    this.work.check(signal)
+    return this.save(saved, this.codec.advance(saved.state, lookup), signal)
   }
 
   private async capture(saved: SavedState, signal: AbortSignal): Promise<SourceBatch | undefined> {

@@ -107,9 +107,7 @@ async function initialize(create: boolean) {
     partition,
     nonFinal: false,
     verifier: {
-      verify: async () => {
-        throw new Error('Storage-only fixture must not verify evidence')
-      }
+      verify: () => Promise.reject(new Error('Storage-only fixture must not verify evidence'))
     }
   })
   core = new KnowledgeStore(journal, worker, { partition })
@@ -163,27 +161,28 @@ async function initialize(create: boolean) {
     control,
     trust: selection,
     now: () => 1000000,
-    fetch: async (_url, init) => {
-      const request = JSON.parse(String(init?.body)) as OutputJSONObject
-      requests.push(request)
-      return new Response(
-        JSON.stringify({
-          version: 1,
-          session: 'browser-session',
-          scope: { ...scope, access: 'public', epoch: 'epoch' },
-          phase: request.requestId ? 'snapshot' : 'live',
-          groups: [],
-          cursor: request.requestId ? 'snapshot-cursor' : 'live-cursor',
-          snapshotComplete: true,
-          through: '5',
-          highWater: '5',
-          expiresAt: '1300',
-          replayUntil: '1900',
-          limits: request.limits
-        }),
-        { headers }
-      )
-    }
+    fetch: (_url, init) =>
+      Promise.resolve().then(() => {
+        const request = JSON.parse(String(init?.body)) as OutputJSONObject
+        requests.push(request)
+        return new Response(
+          JSON.stringify({
+            version: 1,
+            session: 'browser-session',
+            scope: { ...scope, access: 'public', epoch: 'epoch' },
+            phase: request.requestId ? 'snapshot' : 'live',
+            groups: [],
+            cursor: request.requestId ? 'snapshot-cursor' : 'live-cursor',
+            snapshotComplete: true,
+            through: '5',
+            highWater: '5',
+            expiresAt: '1300',
+            replayUntil: '1900',
+            limits: request.limits
+          }),
+          { headers }
+        )
+      })
   })
   const request = await source.connect()
   iterator = source.open(request, new AbortController().signal)[Symbol.asyncIterator]()
@@ -232,7 +231,7 @@ async function loseCore() {
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase('browser-receipts')
     request.onblocked = () => reject(new Error('Unexpected remaining core database owner'))
-    request.onerror = () => reject(request.error)
+    request.onerror = () => reject(request.error ?? new Error('Core database deletion failed'))
     request.onsuccess = () => resolve()
   })
   requests.length = 0
