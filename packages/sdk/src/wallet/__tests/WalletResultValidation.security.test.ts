@@ -1704,26 +1704,90 @@ describe('wallet result trust boundary', () => {
     ).toThrow('requested certificate serialNumber')
   })
 
-  it('binds issuance results to the caller-supplied certificate fields', () => {
+  it('binds issuance results to the requested field names, whose values come back encrypted', () => {
+    // Issuance sends plaintext field values; the certifier signs, and the wallet
+    // stores and returns, the certificate with each value encrypted. Only the
+    // field names can be compared with the request.
     const issuanceRequest = {
       acquisitionProtocol: 'issuance',
       type: TYPE,
       certifier: PUBLIC_KEY,
-      fields: { name: 'Alice' },
+      fields: { name: 'Alice', 'pipe fitting': 'expert' },
       certifierUrl: 'https://certifier.example'
+    }
+    const encrypted = { name: TYPE, 'pipe fitting': OTHER_TYPE }
+    expect(
+      validateWalletResult(
+        'acquireCertificate',
+        { ...CERTIFICATE, fields: encrypted },
+        issuanceRequest
+      )
+    ).toMatchObject({ fields: encrypted })
+    expect(() =>
+      validateWalletResult(
+        'acquireCertificate',
+        { ...CERTIFICATE, fields: { name: TYPE } },
+        issuanceRequest
+      )
+    ).toThrow('requested certificate fields')
+    expect(() =>
+      validateWalletResult(
+        'acquireCertificate',
+        { ...CERTIFICATE, fields: { ...encrypted, admin: TYPE } },
+        issuanceRequest
+      )
+    ).toThrow('requested certificate fields')
+  })
+
+  it('rejects an issuance result that renames a requested field or answers malformed request fields', () => {
+    const issuanceRequest = {
+      acquisitionProtocol: 'issuance',
+      type: TYPE,
+      certifier: PUBLIC_KEY,
+      fields: { name: 'Alice', email: 'a@example.com' },
+      certifierUrl: 'https://certifier.example'
+    }
+    expect(() =>
+      validateWalletResult(
+        'acquireCertificate',
+        { ...CERTIFICATE, fields: { name: TYPE, phone: OTHER_TYPE } },
+        issuanceRequest
+      )
+    ).toThrow('requested certificate fields')
+    expect(() =>
+      validateWalletResult(
+        'acquireCertificate',
+        { ...CERTIFICATE, fields: { name: TYPE } },
+        {
+          ...issuanceRequest,
+          fields: ['name']
+        }
+      )
+    ).toThrow('requested certificate fields')
+  })
+
+  it('binds direct acquisition results to the exact requested field values', () => {
+    const directRequest = {
+      acquisitionProtocol: 'direct',
+      type: TYPE,
+      serialNumber: OTHER_TYPE,
+      certifier: PUBLIC_KEY,
+      revocationOutpoint: `${'ab'.repeat(32)}.0`,
+      fields: { name: TYPE },
+      signature: CERTIFICATE.signature
     }
     expect(
       validateWalletResult(
         'acquireCertificate',
-        { ...CERTIFICATE, fields: { name: 'Alice' } },
-        issuanceRequest
+        { ...CERTIFICATE, fields: { name: TYPE } },
+        directRequest
       )
-    ).toMatchObject({ fields: { name: 'Alice' } })
+    ).toMatchObject({ fields: { name: TYPE } })
     expect(() =>
       validateWalletResult(
         'acquireCertificate',
-        { ...CERTIFICATE, fields: { name: 'Mallory' } },
-        issuanceRequest
+        { ...CERTIFICATE, fields: { name: OTHER_TYPE } },
+        directRequest
       )
     ).toThrow('requested certificate fields')
   })

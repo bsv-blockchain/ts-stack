@@ -68,8 +68,10 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     }
     this.options = Object.freeze({ ...resolvedOptions })
     this.serviceUrl = this.normalizeServiceUrl(serviceUrl)
-    this.fetcher = this.options.fetch ?? fetch
-    if (typeof this.fetcher !== 'function') throw new Error('fetch must be a function.')
+    const fetchImpl = this.options.fetch ?? fetch
+    if (typeof fetchImpl !== 'function') throw new Error('fetch must be a function.')
+    // Call fetch with no receiver: browsers refuse it on anything but the window.
+    this.fetcher = async (input, init) => await fetchImpl(input, init)
     this.requestTimeoutMsecs = this.positiveInteger(
       this.options.requestTimeoutMsecs ?? 30_000,
       'requestTimeoutMsecs',

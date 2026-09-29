@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
-      "releaseType": "none",
-      "summary": "Accepts normal full WhatsOnChain block-header metadata within the existing 64-property header-response boundary instead of rejecting valid mainnet Merkle proofs at 16 properties. Exact Merkle-root equality, hash/height validation, finite HTTP limits, plain-data checks and accessor/symbol rejection remain enforced.",
-      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Published 2.8.10 is verified against protected release 36324548797, source 5a4053223692b020372f5a8e20f59bf9c82cc968, exact registry bytes, source provenance and CycloneDX SBOM."
+      "releaseType": "patch",
+      "summary": "WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly.",
+      "migration": "No API, wire, or wallet-data migration is required."
     },
     {
       "name": "@bsv/simple",
@@ -215,24 +215,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "create-bsv-app",

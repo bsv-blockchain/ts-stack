@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.10'
+version: '2.8.11'
 npm: '@bsv/sdk'
 last_updated: '2026-09-27'
 last_verified: '2026-09-27'
@@ -14,6 +14,11 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
+see [registry metadata](../../guides/registry-metadata.md). It covers exact
+lookups, BRC-based inclusion requests, publisher choice and the boundary between
+display metadata and wallet permissions.
 
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may

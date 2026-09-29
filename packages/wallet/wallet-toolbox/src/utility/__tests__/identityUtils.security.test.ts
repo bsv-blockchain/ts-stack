@@ -7,6 +7,7 @@ import {
   transformVerifiableCertificatesWithTrust
 } from '../identityUtils'
 import { createIdentityVerificationFixture } from './identityVerification.fixtures'
+import { DEFAULT_SETTINGS, TESTNET_DEFAULT_SETTINGS, TrustSettings } from '../../WalletSettingsManager'
 
 const subject = PrivateKey.fromHex('1'.padStart(64, '0')).toPublicKey().toString()
 const certifier = PrivateKey.fromHex('2'.padStart(64, '0')).toPublicKey().toString()
@@ -552,5 +553,60 @@ describe('identity overlay certificate verification', () => {
         name: 'alice'
       })
     ).toEqual([])
+  })
+
+  describe('certifierInfo satisfies the BRC-100 discover result bounds', () => {
+    const discovered = (certifierKey: string, trustSettings: TrustSettings) => {
+      const certificate = {
+        type: Utils.toBase64(Array(32).fill(1)),
+        serialNumber: Utils.toBase64(Array(32).fill(2)),
+        subject,
+        certifier: certifierKey,
+        revocationOutpoint: `${'ab'.repeat(32)}.0`,
+        signature: '3006020101020101',
+        fields: {},
+        keyring: {},
+        decryptedFields: { userName: 'deggen' }
+      } as unknown as VerifiableCertificate
+      return transformVerifiableCertificatesWithTrust({ ...trustSettings, trustLevel: 1 }, [certificate])
+    }
+    const validate = (result: unknown): unknown =>
+      validateWalletResult('discoverByAttributes', result, { attributes: { userName: 'deggen' } })
+
+    test.each([
+      ['mainnet', DEFAULT_SETTINGS.trustSettings],
+      ['testnet', TESTNET_DEFAULT_SETTINGS.trustSettings]
+    ])('for every %s default certifier', (_network, trustSettings) => {
+      for (const { identityKey } of trustSettings.trustedCertifiers) {
+        const result = discovered(identityKey, trustSettings)
+        expect(result.certificates).toHaveLength(1)
+        expect(() => validate(result)).not.toThrow()
+      }
+    })
+
+    test.each([
+      ['over 50 bytes', 'Certifies social media handles, phone numbers and emails', 'Certifies social media handles, phone numbers and'],
+      ['multibyte at the cut', `${'a'.repeat(48)}\u00e9\u00e9`, `${'a'.repeat(48)}\u00e9`],
+      ['trailing space at the cut', `${'a'.repeat(49)} bcd`, 'a'.repeat(49)],
+      ['under 5 bytes', 'ID', 'Trusted certifier'],
+      ['blank after trimming', `     ${'\u3000'.repeat(20)}`, 'Trusted certifier']
+    ])('conforms a stored description %s', (_label, description, expected) => {
+      const trustSettings: TrustSettings = {
+        trustLevel: 1,
+        trustedCertifiers: [{ name: 'Custom', description, identityKey: certifier, trust: 1 }]
+      }
+      const result = discovered(certifier, trustSettings)
+      expect(result.certificates[0].certifierInfo.description).toBe(expected)
+      expect(() => validate(result)).not.toThrow()
+    })
+
+    test('keeps the shipped default descriptions intact rather than truncated', () => {
+      for (const settings of [DEFAULT_SETTINGS, TESTNET_DEFAULT_SETTINGS]) {
+        for (const { description } of settings.trustSettings.trustedCertifiers) {
+          expect(Utils.toArray(description, 'utf8').length).toBeGreaterThanOrEqual(5)
+          expect(Utils.toArray(description, 'utf8').length).toBeLessThanOrEqual(50)
+        }
+      }
+    })
   })
 })

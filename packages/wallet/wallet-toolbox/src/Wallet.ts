@@ -221,6 +221,18 @@ export interface ContactRecord {
 }
 
 /**
+ * The requested page of a discovery result. BRC-100 discovery takes limit and
+ * offset, and callers reject a page longer than the limit; totalCertificates
+ * still counts every trusted match.
+ */
+function discoveryPage(result: DiscoverCertificatesResult, offset: number, limit: number): DiscoverCertificatesResult {
+  return {
+    totalCertificates: result.totalCertificates,
+    certificates: result.certificates.slice(offset, offset + limit)
+  }
+}
+
+/**
  * Build a {@link DiscoverCertificatesResult} from contact records so {@link Wallet.discoverByIdentityKey}
  * and {@link Wallet.discoverByAttributes} can short-circuit on a local contacts hit. The synthetic
  * result has `trust: Infinity` by default so downstream trust filtering honors the user's local
@@ -994,9 +1006,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
       forceRefresh,
       now
     )
-    return transformVerifiableCertificatesWithTrust(
-      trustSettings,
-      filterCertificatesByIdentityKey(certificates, vargs.identityKey)
+    return discoveryPage(
+      transformVerifiableCertificatesWithTrust(
+        trustSettings,
+        filterCertificatesByIdentityKey(certificates, vargs.identityKey)
+      ),
+      vargs.offset,
+      vargs.limit
     )
   }
 
@@ -1056,9 +1072,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
       forceRefresh,
       now
     )
-    return transformVerifiableCertificatesWithTrust(
-      trustSettings,
-      filterCertificatesByAttributes(certificates, vargs.attributes)
+    return discoveryPage(
+      transformVerifiableCertificatesWithTrust(
+        trustSettings,
+        filterCertificatesByAttributes(certificates, vargs.attributes)
+      ),
+      vargs.offset,
+      vargs.limit
     )
   }
 
