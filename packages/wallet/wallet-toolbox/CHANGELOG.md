@@ -4,6 +4,20 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.4
+
+- `discoverByIdentityKey` and `discoverByAttributes` keep each certificate's
+  `certifierInfo.description` within BRC-100's 5-50 UTF-8 bytes. The default
+  SocialCert (56 bytes) and Metanet Trust Services (55 bytes) descriptions
+  exceeded it, so `@bsv/sdk` 2.8.8+ rejected every discovery result from one of
+  them with `Invalid discoverByAttributes result
+  certificates[n].certifierInfo.description: expected 5–50 UTF-8 bytes`, which
+  broke `IdentityClient.resolveByAttributes` and `resolveByIdentityKey`. Both
+  defaults are shortened. Trust settings still accept descriptions of up to 500
+  bytes so stored settings stay readable; a longer one is cut at a code point
+  boundary when the result is built, and one under 5 bytes becomes
+  `Trusted certifier`.
+
 ## wallet-toolbox 2.14.3
 
 - Surplus change shaping no longer splits change into outputs below the dust

@@ -215,24 +215,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "create-bsv-app",
