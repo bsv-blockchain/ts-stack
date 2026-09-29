@@ -61,6 +61,9 @@ continuity metadata without duplicating evidence. Save it atomically with the
 received groups, validate it with `parseOutputLookupCheckpoint` on recovery, then
 call `readCheckpoint`. Parsing never proves authentication or persistence; retain
 any extension-specific local state alongside the core boundary.
+The separate 64 KiB checkpoint allowance includes worst-case JSON escaping of
+all valid bounded scope, session and cursor strings. Wire response limits remain
+unchanged.
 
 Cancellation and the configurable total deadline cover authentication and body
 consumption. One call, including late non-cancellable work, occupies each instance.

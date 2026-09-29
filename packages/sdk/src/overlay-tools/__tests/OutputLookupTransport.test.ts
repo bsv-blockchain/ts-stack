@@ -167,7 +167,9 @@ describe('retained BRC-193 lookup transport', () => {
     const f = setup({ now: undefined })
     expect(await f.client.open(opening)).toEqual(f.snapshot)
     clock.mockReturnValue(1_300_000)
-    await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({ code: 'reset-required' })
+    await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({
+      code: 'reset-required'
+    })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
   })
 
@@ -278,10 +280,32 @@ describe('retained BRC-193 lookup transport', () => {
     const checkpoint = outputLookupCheckpoint({ ...f.snapshot, snapshotComplete: false })
     expect(parseOutputLookupCheckpoint(checkpoint).snapshotComplete).toBe(false)
     expect(() =>
-      parseOutputLookupCheckpoint(' '.repeat(16384) + JSON.stringify(checkpoint))
+      parseOutputLookupCheckpoint(' '.repeat(65536) + JSON.stringify(checkpoint))
     ).toThrow('byte limit')
     const live = outputLookupCheckpoint(f.live)
     expect(parseOutputLookupCheckpoint(live)).toEqual(live)
+  })
+
+  it('retains valid maximum-length checkpoint strings even when JSON escaping expands them', () => {
+    const f = setup()
+    const text = '\u0000'.repeat(1024)
+    const full = {
+      ...f.snapshot,
+      session: text,
+      cursor: text,
+      scope: {
+        ...f.snapshot.scope,
+        chain: { ...chain, network: text },
+        provider: text,
+        service: text,
+        access: text,
+        epoch: text
+      }
+    }
+    const checkpoint = outputLookupCheckpoint(full)
+    const encoded = JSON.stringify(checkpoint)
+    expect(new TextEncoder().encode(encoded).length).toBeGreaterThan(16384)
+    expect(parseOutputLookupCheckpoint(encoded)).toEqual(checkpoint)
   })
 
   it('requires mutual authentication, exact peer identity and payment denial on every authenticated call', async () => {

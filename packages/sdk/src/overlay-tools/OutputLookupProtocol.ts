@@ -69,7 +69,10 @@ function validateBoundary(result: OutputLookupCheckpoint): void {
 
 /** Recover a compact boundary saved atomically with its complete received groups. */
 export function parseOutputLookupCheckpoint(input: unknown): OutputLookupCheckpoint {
-  const result = s.normalized(input, checkpoint, 16384)
+  // Seven bounded strings (five in Scope plus session/cursor) can each require
+  // six JSON bytes per source UTF-8 byte. 64 KiB covers that 42 KiB ceiling plus
+  // fixed keys, hashes, tags and U64s, while retaining a separate metadata bound.
+  const result = s.normalized(input, checkpoint, 65536)
   validateBoundary(result)
   return result
 }
