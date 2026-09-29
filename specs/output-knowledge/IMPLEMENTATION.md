@@ -23,6 +23,8 @@ submission and GASP behavior remains available to applications that do not opt i
   receipt lifetimes, durable timer-driven expiry and scoped remote invalidation.
 - Bounded, durable equivocation quarantine with immutable original identities,
   source continuity invalidation, accepted reconciliation and snapshot recovery.
+- Canonical assessment presentation in new version-3 journals with fixture-based
+  offline replay and continuation compatibility for existing version-1/2 records.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -47,8 +49,6 @@ submission and GASP behavior remains available to applications that do not opt i
   fences, restoration and multi-host consistency demonstrations.
 - Complete a working reference application, actual-browser persistence/restart,
   multi-host demonstrations and an application consuming live lookup updates.
-- Complete versioned replay compatibility for canonical assessment presentation
-  order, preserving historical version-1 decisions while qualifying new journals.
 - Finish API guides, operator guidance, conformance, property/mutation evidence,
   mobile/browser/packed-consumer checks and all exact-head remote quality gates.
 
@@ -58,7 +58,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 ## Validation evidence and limits
 
 The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
-run passes 224 tests across 18 suites, with more than 94% line and 89% branch
+run passes 229 tests across 19 suites, with more than 95% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
@@ -78,7 +78,7 @@ tests use fake-indexeddb, so actual-browser qualification is still required. The
 journal-backed trace binding is documented alongside the unchanged approved
 fixtures; selection-function tests remain an independent layer.
 
-Foundation head `7c1899d7f66415c7d77ac1c6a1a1a442b8c2a2db` passed all 40 applicable
+Currentness head `12fcb7bc3c6c1239ce4ad3cc8c6a98f64f9e6100` passed all 41 applicable
 hosted checks; two infrastructure/dependent-test skips were accepted by merge-gate.
 This includes CodeQL, zero new Sonar findings, external Codecov and the repository
 coverage gate. Subsequent implementation increments require their own validation.

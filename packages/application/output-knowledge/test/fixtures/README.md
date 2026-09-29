@@ -1,6 +1,6 @@
 # Approved reconciliation corpus
 
-The JSON fixtures are copied without semantic changes from the approved
+The two `reconciliation-*.json` fixtures are copied without semantic changes from the approved
 [BRC-192–199 packet](https://github.com/bsv-blockchain/BRCs/pull/284), commit
 `9dade70dd17d48efb087a2c5da56bb53c164383e`. Transaction bytes, headers, expected
 outcomes and the 32 traces remain independent of the reference implementation.
@@ -40,3 +40,25 @@ traces perform zero wallet actions. They do not qualify wallet purchase workflow
 Run `pnpm --filter @bsv/output-knowledge test -- test/worker-traces.test.ts`.
 These journal-backed traces do not replace actual-browser, service transport,
 private acquisition, covenant, root-host or application qualification.
+
+## Historical local storage samples
+
+`local-journals-v1-v2.json` is separate implementation compatibility evidence,
+captured from TS Stack commit `02a620fdb687f12a48f61c4ca8a0049c655b0588` before
+introducing version-3 journal presentation. It retains actual receipt, verification,
+acceptance and context mutations, their local integrity digests and complete
+expected snapshots. The version-1 sample deliberately has multiple assessments in
+its historical outpoint order; version 2 includes provider currentness rules.
+
+`local-replay-compatibility.test.ts` imports the exact saved entries, checks their
+integrity, reconstructs both historical revisions with verification disabled, and
+continues each namespace without changing its frame version or earlier results.
+It separately checks the canonical assessment order of a new version-3 journal.
+These samples are not additional BRC conformance vectors.
+
+`capture-local-journals.mjs` records these samples using actual SDK Script/SPV
+verification and the approved transaction corpus. After building the package, run
+it explicitly with Node 24 or newer from the repository root to capture a proposed
+replacement. It records the source commit and capture clock. Never regenerate the
+samples automatically or to make a changed replay result pass; changing historical
+compatibility evidence requires review of both saved bytes and expected behavior.

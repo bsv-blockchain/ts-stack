@@ -64,8 +64,13 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     this.options.partition = initial.partition
     this.options.sourceCurrentness = initial.sourceCurrentness.rules
   }
-  private localFrame(work: VerifiedWork[]): OutputJSONObject {
-    return knowledgeLocalFrame(this.options.nonFinal, work, this.options.sourceCurrentness)
+  private localFrame(state: BitcoinKnowledgeState, work: VerifiedWork[]): OutputJSONObject {
+    return knowledgeLocalFrame(
+      this.options.nonFinal,
+      work,
+      this.options.sourceCurrentness,
+      state.ledger.version ?? 3
+    )
   }
   private ready(signal: AbortSignal): void {
     if (signal.aborted)
@@ -109,13 +114,13 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     const prior = entries.slice(0, -1),
       state = await this.replay(prior, signal)
     let local: OutputJSONObject | undefined
-    if (entry.body.kind === 'context') local = this.localFrame([])
+    if (entry.body.kind === 'context') local = this.localFrame(state, [])
     if (entry.body.kind === 'accept' || entry.body.kind === 'reconcile') {
       const staged = this.staged.get(entry.key)
       if (staged?.parent === this.parent(prior)) local = staged.local
       else {
         const work = await this.collect(state, signal)
-        local = this.localFrame(work.additions)
+        local = this.localFrame(state, work.additions)
       }
     }
     this.ready(signal)
@@ -231,7 +236,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     const history = await store.inspect(signal),
       state = await this.replay(history.entries, signal),
       work = await this.collect(state, signal, deadline),
-      local = this.localFrame(work.additions)
+      local = this.localFrame(state, work.additions)
     state.applyLocal(local)
     const row = state.membership
       .groups()
@@ -289,7 +294,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
         mutation = knowledgeMutation(current.transition(revision, group))
       this.staged.set(mutation.key, {
         parent: this.parent(latest.entries),
-        local: this.localFrame([])
+        local: this.localFrame(current, [])
       })
       try {
         const result = await store.commit(latest.revision.received, mutation, signal)

@@ -246,7 +246,7 @@
       "publishedVersion": null,
       "releaseType": "initial",
       "summary": "Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness, durable expiry and bounded source equivocation quarantine.",
-      "migration": "New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes. Currentness rules are explicitly configured and sealed in local frame v2; legacy empty-policy v1 journals remain readable, while changing policies requires a new journal namespace."
+      "migration": "New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes. New journals seal configured currentness rules in local frame v3 with canonical assessment ordering. Existing v1/v2 journals retain their encoding and replay behavior when read or extended. Adopting v3 for an older journal or changing policies requires a new namespace; retain the old journal for audit and recovery."
     }
   ]
 }

@@ -44,6 +44,7 @@ import type {
   OutputPartition,
   OutputOutpoint,
   RuntimeLimits,
+  SourceBatch,
   VerificationContext,
   VerificationResult,
   StoreRevision
@@ -260,6 +261,11 @@ export class BitcoinKnowledgeState {
       return
     }
     this.sourceCurrentness.receive(batch, received, this.context.id)
+    this.retainEvidence(batch, received)
+  }
+
+  private retainEvidence(batch: SourceBatch, received: string): void {
+    const origin = batch.provenance
     const additions: EvidenceReceipt[] = []
     for (const group of batch.groups) {
       const groupId = outputGroupIdentity(origin.scope, origin.generation, group.id)
@@ -494,6 +500,8 @@ export class BitcoinKnowledgeState {
       return this.assessment(body)
     })
     this.appendSourceAssessments(assessments, reconciled, context, accepted)
+    if (this.ledger.version === 3 || this.sourceCurrentness.rules.length)
+      assessments.sort((a, b) => compareKnowledgeText(a.id, b.id))
     return {
       partition: this.partition,
       generation: context.generation,
@@ -545,7 +553,6 @@ export class BitcoinKnowledgeState {
           })
           .map(({ id: _id, ...body }) => this.assessment(body))
       )
-      assessments.sort((a, b) => compareKnowledgeText(a.id, b.id))
     }
   }
 

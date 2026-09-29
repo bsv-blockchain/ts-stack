@@ -75,9 +75,12 @@ Optional `sourceCurrentness` rules bind provider reports to exact configured
 source identities, retain each actual epoch, and expire from the original trusted
 receipt. Expiry is journaled even without new source traffic; reads refuse an
 expired assessment while a delayed timer catches up. A source invalidation cannot
-change local Bitcoin facts or another provider's report. Enabling these rules uses
-local frame version 2 and requires a new namespace when changing an existing policy;
-empty-policy version-1 journals remain readable without migration.
+change local Bitcoin facts or another provider's report. New journals seal these
+rules in local frame version 3 and use canonical assessment ID order. Older
+version-1 and version-2 journals retain their recorded presentation and remain
+readable and writable without migration. Changing an existing policy or adopting
+version 3 for an older journal requires an explicit new namespace; no saved history
+is silently upgraded or downgraded.
 
 Proposal admission, authenticated BRC-193 service transport, private acquisition and full application demonstrations are separate
 parts of the active implementation program. Existing finite lookup and submission

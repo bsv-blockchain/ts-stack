@@ -321,24 +321,27 @@ describe('explicit source currentness and durable expiry', () => {
     expect(reports((await store.read()).assessments)).toHaveLength(1)
   })
 
-  it('seals the policy in a new local frame and preserves legacy empty-policy journals', async () => {
+  it('seals configured rules and prevents changing an existing journal policy', async () => {
     const storage = new MemoryJournal('policy'),
       original = open(storage)
     await initialize(original.store)
     expect((await original.store.inspect()).entries[0].local).toMatchObject({
-      version: 2,
+      version: 3,
       currentnessRules: [rule()]
     })
     await expect(open(storage, [rule('host-a', '3')]).store.read()).rejects.toMatchObject({
       code: 'reset-required'
     })
     await expect(open(storage, []).store.read()).rejects.toMatchObject({ code: 'reset-required' })
-    const legacyStorage = new MemoryJournal('legacy'),
-      legacy = open(legacyStorage, [])
-    await initialize(legacy.store)
-    expect((await legacy.store.inspect()).entries[0].local).toMatchObject({ version: 1 })
-    expect((await open(legacyStorage, []).store.read()).revision.accepted).toBe('1')
-    await expect(open(legacyStorage, [rule()]).store.read()).rejects.toMatchObject({
+    const emptyStorage = new MemoryJournal('empty-policy'),
+      empty = open(emptyStorage, [])
+    await initialize(empty.store)
+    expect((await empty.store.inspect()).entries[0].local).toMatchObject({
+      version: 3,
+      currentnessRules: []
+    })
+    expect((await open(emptyStorage, []).store.read()).revision.accepted).toBe('1')
+    await expect(open(emptyStorage, [rule()]).store.read()).rejects.toMatchObject({
       code: 'reset-required'
     })
   })

@@ -52,6 +52,15 @@ export type KnowledgeLocalFrame =
       currentnessRules: SourceCurrentnessRule[]
       work: VerifiedWork[]
     }
+  | {
+      profile: 'urn:bsv:output-knowledge:local-verification:3'
+      version: 3
+      nonFinal: boolean
+      currentnessRules: SourceCurrentnessRule[]
+      work: VerifiedWork[]
+    }
+export type KnowledgeLocalVersion = KnowledgeLocalFrame['version']
+const canonicalProfile = 'urn:bsv:output-knowledge:local-verification:3' as const
 const currentnessProfile = 'urn:bsv:output-knowledge:local-verification:2' as const
 const profile = 'urn:bsv:output-knowledge:local-verification:1' as const
 const statuses = new Set([
@@ -92,13 +101,14 @@ export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
   closedOutputObject(value, ['profile', 'version', 'nonFinal', 'work'], ['currentnessRules'])
   const legacy = value.profile === profile && value.version === 1
   const currentness = value.profile === currentnessProfile && value.version === 2
-  if (!legacy && !currentness)
+  const canonical = value.profile === canonicalProfile && value.version === 3
+  if (!legacy && !currentness && !canonical)
     throw new OutputProtocolError('unsupported', 'Unknown local verification storage profile')
   assertLocal(
     legacy === (value.currentnessRules === undefined),
     'Invalid currentness frame configuration'
   )
-  const currentnessRules = currentness ? parseSourceCurrentnessRules(value.currentnessRules) : []
+  const currentnessRules = legacy ? [] : parseSourceCurrentnessRules(value.currentnessRules)
   assertLocal(
     typeof value.nonFinal === 'boolean' && Array.isArray(value.work),
     'Invalid local verification frame'
@@ -158,6 +168,14 @@ export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
     return { proof, checks }
   })
   if (legacy) return { profile, version: 1, nonFinal: value.nonFinal, work }
+  if (canonical)
+    return {
+      profile: canonicalProfile,
+      version: 3,
+      nonFinal: value.nonFinal,
+      currentnessRules,
+      work
+    }
   return {
     profile: currentnessProfile,
     version: 2,
@@ -170,12 +188,27 @@ export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
 export function knowledgeLocalFrame(
   nonFinal: boolean,
   work: VerifiedWork[],
-  rules: readonly SourceCurrentnessRule[] = []
+  rules: readonly SourceCurrentnessRule[] = [],
+  version?: KnowledgeLocalVersion
 ): OutputJSONObject {
   const currentnessRules = parseSourceCurrentnessRules(rules)
-  const frame = currentnessRules.length
-    ? { profile: currentnessProfile, version: 2, nonFinal, currentnessRules, work }
-    : { profile, version: 1, nonFinal, work }
+  const selected = version ?? (currentnessRules.length ? 2 : 1)
+  if (selected === 1 && currentnessRules.length)
+    throw new OutputProtocolError('invalid', 'Version 1 cannot retain source currentness rules')
+  let frame: KnowledgeLocalFrame
+  switch (selected) {
+    case 1:
+      frame = { profile, version: 1, nonFinal, work }
+      break
+    case 2:
+      frame = { profile: currentnessProfile, version: 2, nonFinal, currentnessRules, work }
+      break
+    case 3:
+      frame = { profile: canonicalProfile, version: 3, nonFinal, currentnessRules, work }
+      break
+    default:
+      throw new OutputProtocolError('unsupported', 'Unknown local verification storage version')
+  }
   return JSON.parse(canonicalOutputJSON(parseKnowledgeLocalFrame(frame))) as OutputJSONObject
 }
 
@@ -183,6 +216,10 @@ export function knowledgeLocalFrame(
 export class VerificationLedger {
   private work = new Map<string, VerifiedWork>()
   private readonly currentnessRules: SourceCurrentnessRule[]
+  private storageVersion: KnowledgeLocalVersion | undefined
+  get version(): KnowledgeLocalVersion | undefined {
+    return this.storageVersion
+  }
   constructor(
     readonly nonFinal: boolean,
     currentnessRules: readonly SourceCurrentnessRule[] = []
@@ -196,12 +233,17 @@ export class VerificationLedger {
     contexts: ReadonlyMap<string, VerificationContext>
   ): void {
     const frame = parseKnowledgeLocalFrame(input)
+    if (this.storageVersion !== undefined && (this.storageVersion === 3) !== (frame.version === 3))
+      throw new OutputProtocolError(
+        'reset-required',
+        'Local replay version changed without a new journal namespace'
+      )
     if (frame.nonFinal !== this.nonFinal)
       throw new OutputProtocolError(
         'reset-required',
         'Spend policy changed without an explicit journal generation reset'
       )
-    const rules = frame.version === 2 ? frame.currentnessRules : []
+    const rules = frame.version === 1 ? [] : frame.currentnessRules
     if (canonicalOutputJSON(rules) !== canonicalOutputJSON(this.currentnessRules))
       throw new OutputProtocolError(
         'reset-required',
@@ -223,6 +265,7 @@ export class VerificationLedger {
       next.set(key, { proof: addition.proof, checks: [...checks.values()] })
     }
     this.work = next
+    this.storageVersion = frame.version
   }
   private applyCheck(
     check: ProofCheck,

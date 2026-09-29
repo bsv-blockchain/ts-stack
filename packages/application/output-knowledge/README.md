@@ -251,11 +251,21 @@ after restart. `KnowledgeStore.read` independently checks wall time and returns
 runtime or calling `flush` performs that durable work. Replay reconstructs the
 recorded outcome without contacting the verifier and never grants a new lifetime.
 
-A nonempty currentness policy uses local verification frame version 2, sealing
-its normalized rules alongside the non-final setting. Existing empty-policy
-version-1 journals keep their encoding and replay behavior. Enabling, disabling or
-changing the policy requires an explicit new journal namespace, with the old
-journal retained for audit/recovery. No existing journal is silently reinterpreted.
+New journals use local verification frame version 3, sealing normalized currentness
+rules (including an empty list) alongside the non-final setting. Assessments use
+the BRC-192 canonical ID order, independent of whether source currentness is enabled.
+Historical version-1 and version-2 journals retain their original encoding,
+assessment presentation and accepted decisions when reopened or extended. In
+particular, version 1 used outpoint order for its local assessments. Saved fixture
+journals qualify that compatibility without contacting a verifier during replay.
+
+Activating the canonical version-3 presentation for an older journal, or enabling,
+disabling or changing currentness rules, requires an explicit new namespace. Keep
+the previous journal for audit/recovery and populate the new one through authorized
+sources; never copy old accepted mutations as new acceptance authority. A newer
+frame cannot be mixed into an older namespace, and a version-3 journal cannot be
+downgraded in place. Unknown versions fail explicitly. No saved history is silently
+rewritten or interpreted under different presentation rules.
 
 ## Source adapters
 
