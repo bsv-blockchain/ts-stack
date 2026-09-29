@@ -64,7 +64,9 @@
         "ProposalPolicyRegistry",
         "AuthorDocumentPolicy",
         "proposalChannelKey",
-        "validateProposalWindow"
+        "validateProposalWindow",
+        "ProposalTransitions",
+        "proposalRecordToken"
       ],
       "prohibitedExports": ["SQLiteJournal", "BitcoinKnowledge", "WalletOutputSource"],
       "maximumBytes": {

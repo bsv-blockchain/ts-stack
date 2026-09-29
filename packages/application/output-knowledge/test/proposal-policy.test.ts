@@ -6,10 +6,7 @@ import {
   PrivateKey,
   signOutputPacket,
   Transaction,
-  UnlockingScript,
-  Utils,
-  type OutputProposalBody,
-  type OutputSignedProposal
+  Utils
 } from '@bsv/sdk'
 import {
   AuthorDocumentPolicy,
@@ -19,63 +16,20 @@ import {
   type ProposalPolicy
 } from '../src/proposals/index.js'
 
-const authorKey = new PrivateKey(1)
-const author = authorKey.toPublicKey().toString()
-const recipient = new PrivateKey(2).toPublicKey().toString()
-const outsider = new PrivateKey(3).toPublicKey().toString()
-const chain = { network: 'test', genesisHash: '01'.repeat(32) }
-const scope = { chain, service: 'tm_documents' }
-const policy = new AuthorDocumentPolicy()
-const registry = new ProposalPolicyRegistry([{ policy, parameters: { maxTextBytes: 32 } }])
-const { parameters: _parameters, ...reference } = registry.describe()[0]
-const bytes = (text: string) => Utils.toBase64(Utils.toArray(text, 'utf8'))
-function signed(changes: Partial<OutputProposalBody> = {}): OutputSignedProposal {
-  return signOutputPacket<OutputProposalBody>(
-    'proposal',
-    {
-      version: 1,
-      ...scope,
-      policy: reference,
-      channel: '02'.repeat(32),
-      revision: '0',
-      previous: null,
-      author,
-      recipients: [author, recipient].sort(),
-      anchors: [],
-      issuedAt: '10',
-      expiresAt: '100',
-      operation: 'update',
-      payload: bytes(canonicalOutputJSON({ text: 'shared draft' })),
-      ...changes
-    },
-    authorKey
-  )
-}
-function finalize(proposal: OutputSignedProposal): Transaction {
-  return new Transaction(
-    1,
-    [
-      {
-        sourceTXID: '03'.repeat(32),
-        sourceOutputIndex: 2,
-        unlockingScript: new UnlockingScript(),
-        sequence: 0xfffffffe
-      }
-    ],
-    [
-      {
-        satoshis: 1,
-        lockingScript: LockingScript.fromHex(
-          '006a045052503120' + outputPacketDigest('proposal', proposal.body)
-        )
-      }
-    ],
-    42
-  )
-}
-function checkFinalization(proposal: OutputSignedProposal, tx: Transaction): void {
-  registry.finalization(proposal, Utils.toBase64(tx.toBinary()), tx.id('hex'))
-}
+import {
+  author,
+  recipient,
+  outsider,
+  chain,
+  scope,
+  policy,
+  registry,
+  reference,
+  bytes,
+  signed,
+  finalize,
+  checkFinalization
+} from './proposal-fixture.js'
 
 describe('installed BRC-194 proposal policies', () => {
   it('selects exact installed parameters and validates an owned, author-signed envelope', () => {

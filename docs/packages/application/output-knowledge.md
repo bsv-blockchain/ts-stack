@@ -52,6 +52,11 @@ including fixed recipients/anchor and its one-satoshi PRP1 finalization output.
 Policy authorization must still intersect with the host's current access policy.
 These pure checks do not persist a channel, verify Bitcoin evidence, authorize a
 wallet action or perform topic admission; the durable service layer is separate.
+`ProposalTransitions` supplies pure lifecycle plans that reserve exact admission
+jobs, retain uncertain results and serialize expiry against finalization. Its plans
+require an atomic storage adapter for the head, operation binding and lifecycle
+events before any admission effect. It preserves historical finalized/failed
+outcomes separately from current chain assessments.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current

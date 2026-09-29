@@ -406,8 +406,36 @@ It is a relation check, not evidence verification: the service must independentl
 verify complete BEEF and configured topic admission before reporting success.
 Recording or validating a document never consumes an input or releases a secret.
 
-The durable proposal lifecycle and service integration remain in progress. Policy
-validation alone does not qualify a host as a BRC-194 proposal service.
+`ProposalTransitions` implements the pure channel lifecycle. Each change returns a
+whole-record compare-and-swap token, the next local record and the exact proposal
+and/or proposal-state events to commit together. It does not write storage itself.
+Storage must compare that token, claim a new `(caller, service, operationId)` binding
+when applicable, retain the channel and job, and append its events atomically.
+Terminal channel fences must survive compaction for the service identity's lifetime.
+An identical signed-body retry retains the original signature, clock and state.
+
+Reservation stores the exact raw transaction, original verified BEEF and admission
+job before any external topic effect. The caller supplies raw bytes obtained from
+its trusted complete-BEEF verifier; a relation check does not replace that verifier.
+Expiry, updates and withdrawal compete with reservation on the same token. Once a
+reservation wins, expiry cannot cancel the job. A retry with a different verified
+BEEF encoding of the same raw transaction recovers the original job. Reusing the
+same operation for other bytes conflicts. Another operation on that already bound
+proposal resolves the original state and cannot start another transaction.
+
+An uncertain topic result remains finalizing. A positive recovered result, including
+an empty duplicate STEAK, links finalization. Definitive local rejection terminates
+the channel as finalization-failed with global outcome unknown. Later callbacks and
+timer expiry do not rewrite finalized or failed history. Reorganizations belong in
+separate currentness assessments, not a reversal of the historical admission record.
+The local replay parser rechecks signatures and record/job bindings offline; it is
+not an API for accepting remote provider claims as locally completed admissions.
+
+Durable proposal storage and service integration remain in progress. Transition
+plans alone do not qualify a host as a BRC-194 proposal service. Hosts must retain
+the selected capability contract, recheck current read permissions on retries and
+serialization, impose resource/retention limits and implement recovery before
+advertising the profile.
 
 ## Compatibility boundary
 

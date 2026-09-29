@@ -28,6 +28,8 @@ submission and GASP behavior remains available to applications that do not opt i
   offline replay and continuation compatibility for existing version-1/2 records.
 - Explicit installed proposal policies, actual author signatures, canonical
   author-document payloads, exact successor and PRP1 finalization relations.
+- Pure proposal lifecycle plans with whole-record CAS, exact admission jobs,
+  terminal outcomes and serialized expiry/finalization; storage integration remains.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -62,7 +64,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,638 tests across 217 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 242 tests across 20 suites, with more than 95% line and 89% branch
+run passes 252 tests across 21 suites, with more than 95% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
@@ -82,7 +84,7 @@ tests use fake-indexeddb, so actual-browser qualification is still required. The
 journal-backed trace binding is documented alongside the unchanged approved
 fixtures; selection-function tests remain an independent layer.
 
-Currentness head `12fcb7bc3c6c1239ce4ad3cc8c6a98f64f9e6100` passed all 41 applicable
+Installed-policy head `332cfd9f5` passed all 41 applicable
 hosted checks; two infrastructure/dependent-test skips were accepted by merge-gate.
 This includes CodeQL, zero new Sonar findings, external Codecov and the repository
 coverage gate. Subsequent implementation increments require their own validation.
