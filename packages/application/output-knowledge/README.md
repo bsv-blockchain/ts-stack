@@ -67,6 +67,69 @@ The default Bitcoin reducer requires a policy frame on every context transition;
 an older body-only context requires an explicit reset instead of silently adopting
 the current spend policy.
 
+## Local workflow control state
+
+`@bsv/output-knowledge/operations` exports `OperationStateStore`,
+`MemoryOperationStateStore` and `IndexedDBOperationStateStore`. The separate
+`@bsv/output-knowledge/operations/sqlite` entry exports
+`SQLiteOperationStateStore`. These bounded local cells retain workflow control
+state separately from Bitcoin receipt journals. A cell does not verify a
+transaction, implement a lookup session, authorize a payment or validate an
+application's state transitions. Its caller implements those rules.
+
+Each namespace binds an immutable configuration and capacity to one mutable JSON
+object with an exact decimal U64 revision. The `configuration` getter returns owned
+binding and limit copies; a workflow adapter must check them when accepting an
+injected store. Memory is volatile. SQLite uses a
+WAL/FULL transaction; IndexedDB uses a strict read/write transaction. A write
+compares the previous revision and replaces the entire object atomically. An
+exact retry against the immediately following identical state returns `replayed`.
+Any later revision returns `conflict`, even if the same value appears again.
+An uncertain write is not proof of rollback: reread the saved workflow identity
+and reconcile it before deciding the next operation. Never blindly repeat an
+external effect because a local acknowledgement was lost.
+
+```typescript
+import { SQLiteOperationStateStore } from '@bsv/output-knowledge/operations/sqlite'
+
+// Application-owned, newly allocated identity and immutable binding.
+const control = SQLiteOperationStateStore.create(path, workflowId, binding, {
+  phase: 'reserved',
+  job: '0'
+})
+const before = await control.read()
+const result = await control.compareAndSwap(before.revision, {
+  phase: 'response-pending',
+  job: '0',
+  response: validatedResponse
+})
+// A conflict requires a reread and workflow-specific reconciliation.
+// Only a successful durable commit can authorize the corresponding next step.
+await control.close()
+const recovered = SQLiteOperationStateStore.open(path, workflowId, binding)
+```
+
+Use `create` only for a new workflow identity or an exact initialization retry.
+Retrying initialization preserves the current state and rejects changed initial
+values. `open` recovers an existing namespace; missing storage never creates a
+replacement operation. Changed configuration or capacity fails. Separate workflows
+use separate namespaces, whose count/lifecycle the application must bound. There
+is no automatic deletion, compaction or remote write endpoint. Configuration and
+state are independently bounded at 2 MiB and 4 MiB by default; callers may narrow
+these limits. State values must be bounded JSON objects, and reads/writes own their
+data. Checksums detect inconsistent persisted bytes and revisions; they do not
+authenticate a malicious local writer or prove that an old backup is current.
+
+Use a dedicated database name for `IndexedDBOperationStateStore.create/open`.
+Browser eviction, rollback and private browsing can remove data. Retain an
+independent application recovery expectation, request browser persistence where
+available, and treat a missing expected namespace as a reset. Protect SQLite's
+parent directory and backups; new files are owner-only. Restore a coherent backup
+of the workflow cell and its associated receipt journal, including their WALs,
+and enforce the workflow's cross-store recovery rules. Receipt and cursor must
+still commit together in the receipt journal before a live cursor is used. This
+storage primitive alone does not satisfy the complete BRC-193 client contract.
+
 ## Protocol work and application projection
 
 `KnowledgeStore` owns compare-and-swap, bounded coherent replay, mutation recovery

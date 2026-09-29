@@ -24,7 +24,10 @@
     "SQLiteProposalJournal",
     "ProposalCapabilityContracts",
     "ProposalService",
-    "SDKProposalEvidence"
+    "SDKProposalEvidence",
+    "MemoryOperationStateStore",
+    "IndexedDBOperationStateStore",
+    "SQLiteOperationStateStore"
   ],
   "maximumBytes": {
     "vite": {
@@ -94,6 +97,32 @@
           "raw": 410000,
           "gzip": 130000,
           "brotli": 110000
+        }
+      }
+    },
+    {
+      "entry": "./operations",
+      "requiredExports": [
+        "MemoryOperationStateStore",
+        "IndexedDBOperationStateStore",
+        "DEFAULT_OPERATION_STATE_LIMITS"
+      ],
+      "prohibitedExports": [
+        "SQLiteOperationStateStore",
+        "SQLiteJournal",
+        "BitcoinKnowledge",
+        "ProposalService"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 70000,
+          "gzip": 21000,
+          "brotli": 18000
+        },
+        "esbuild": {
+          "raw": 80000,
+          "gzip": 27000,
+          "brotli": 23000
         }
       }
     }

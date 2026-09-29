@@ -27,6 +27,12 @@
       ],
       "proposals/sqlite": [
         "dist/proposals/SQLiteProposalJournal.d.ts"
+      ],
+      "operations": [
+        "dist/operations/index.d.ts"
+      ],
+      "operations/sqlite": [
+        "dist/operations/SQLiteOperationStateStore.d.ts"
       ]
     }
   },
@@ -56,6 +62,16 @@
       "types": "./dist/proposals/SQLiteProposalJournal.d.ts",
       "import": "./dist/proposals/SQLiteProposalJournal.js",
       "default": "./dist/proposals/SQLiteProposalJournal.js"
+    },
+    "./operations": {
+      "types": "./dist/operations/index.d.ts",
+      "import": "./dist/operations/index.js",
+      "default": "./dist/operations/index.js"
+    },
+    "./operations/sqlite": {
+      "types": "./dist/operations/SQLiteOperationStateStore.d.ts",
+      "import": "./dist/operations/SQLiteOperationStateStore.js",
+      "default": "./dist/operations/SQLiteOperationStateStore.js"
     }
   },
   "files": [
@@ -73,7 +89,7 @@
     "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|ProposalCapabilityContracts|ProposalService|SDKProposalEvidence|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|ProposalCapabilityContracts|ProposalService|SDKProposalEvidence|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal;./operations=MemoryOperationStateStore|IndexedDBOperationStateStore|DEFAULT_OPERATION_STATE_LIMITS;./operations/sqlite=SQLiteOperationStateStore\"",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {

@@ -44,6 +44,24 @@ Node 22.13 or newer. The browser root never imports SQLite. All three adapters u
 idempotent mutations and compare-and-swap revisions; SQLite and IndexedDB atomically
 retain receipt, checkpoint and local verification material.
 
+The optional `@bsv/output-knowledge/operations` entry provides bounded local
+workflow control cells: `OperationStateStore`, `MemoryOperationStateStore` and
+`IndexedDBOperationStateStore`. `SQLiteOperationStateStore` lives only in
+`@bsv/output-knowledge/operations/sqlite`. These cells bind immutable configuration
+and capacities to an atomic whole-object compare-and-swap revision. Exact retries
+of the immediately following state are recognized; stale writes cannot overwrite
+newer state. Explicit `open` never initializes a missing namespace. Configuration
+and state have separate 2 MiB/4 MiB default bounds, which may be narrowed.
+
+This is local control storage, separate from Bitcoin receipt and proposal journals.
+Workflow code validates transitions, limits namespace count, reconciles uncertain
+effects, checks related journal revisions and detects restoration of stale backups.
+The cells do not supply lookup continuity, admission, payment authorization or
+remote trust. IndexedDB is subject to browser storage eviction; SQLite uses
+WAL/FULL and newly created owner-only files. See the package README for initialization,
+recovery and backup guidance. Existing receipt formats and browser root exports
+remain unchanged.
+
 The optional `@bsv/output-knowledge/proposals` entry installs immutable policy
 descriptions and validates actual author signatures, selected chain/service,
 policy-specific payloads, signed revision relations and exact finalization bytes.

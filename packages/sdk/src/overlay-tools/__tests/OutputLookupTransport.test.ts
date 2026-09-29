@@ -4,6 +4,7 @@ import {
   OutputLookupServiceError,
   OUTPUT_LOOKUP_PROFILE,
   AuthFetch,
+  SimplifiedFetchTransport,
   CompletedProtoWallet,
   PrivateKey,
   outputPacketDigest,
@@ -161,6 +162,59 @@ function setup(overrides: Partial<OutputLookupTransportOptions> = {}, authentica
 }
 
 describe('retained BRC-193 lookup transport', () => {
+  it('uses whole Unix seconds from the default clock and rejects the expiry boundary', async () => {
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1_299_999)
+    const f = setup({ now: undefined })
+    expect(await f.client.open(opening)).toEqual(f.snapshot)
+    clock.mockReturnValue(1_300_000)
+    await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({ code: 'reset-required' })
+    expect(f.fetchClient).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['URL', 'Request'] as const)(
+    'bounds the authentication dependency when it passes a %s instead of a string',
+    async representation => {
+      const f = setup({ wallet: new CompletedProtoWallet(new PrivateKey(43)) }, 'brc103')
+      const url = 'https://example.test/.well-known/auth'
+      const input = representation === 'URL' ? new URL(url) : new Request(url)
+      const stop = new Error('Authentication dependency fixture finished')
+      // Exercise the dependency's public fetch port. Actual handshake/signature
+      // completion is covered separately by the real HTTP integration fixture.
+      const send = jest
+        .spyOn(SimplifiedFetchTransport.prototype, 'send')
+        .mockImplementation(async function (this: SimplifiedFetchTransport, message) {
+          expect(message.messageType).toBe('initialRequest')
+          const response = await this.fetchClient(input, { method: 'POST' })
+          expect(await response.json()).toEqual(f.snapshot)
+          throw stop
+        })
+      await expect(f.client.open(opening)).rejects.toBe(stop)
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(f.fetchClient).toHaveBeenCalledWith(
+        input,
+        expect.objectContaining({
+          method: 'POST',
+          redirect: 'error',
+          cache: 'no-store',
+          credentials: 'omit',
+          signal: expect.any(AbortSignal)
+        })
+      )
+    }
+  )
+
+  it('rejects an authentication dependency changing the endpoint before dispatch', async () => {
+    const f = setup({ wallet: new CompletedProtoWallet(new PrivateKey(43)) }, 'brc103')
+    const send = jest
+      .spyOn(SimplifiedFetchTransport.prototype, 'send')
+      .mockImplementation(async function (this: SimplifiedFetchTransport) {
+        await this.fetchClient(new URL('https://other.test/.well-known/auth'))
+      })
+    await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'unauthorized' })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(f.fetchClient).not.toHaveBeenCalled()
+  })
+
   it('gives an injected native-style Fetch the global receiver', async () => {
     const f = setup()
     const nativeStyleFetch: typeof fetch = async function (this: typeof globalThis, input, init) {

@@ -26,6 +26,10 @@ submission and GASP behavior remains available to applications that do not opt i
   Actual signed local HTTP tests qualify the client component, not a durable feed.
 - Memory, SQLite and IndexedDB receipt journals with atomic local replay material,
   exact U64 revisions, compare-and-swap and recovery after an uncertain append.
+- Separate optional workflow control storage with immutable configuration, whole-state
+  CAS, exact immediate-write recovery and Memory/SQLite/IndexedDB adapters. Recovery
+  never silently initializes lost storage. This is a local primitive, not yet the
+  BRC-193 source state machine or a replacement for atomic receipt/checkpoint commits.
 - Exact-target BEEF assembly, alternative cross-source evidence, actual SDK
   Script/SPV verification, historical readiness and deterministic spend selection.
 - Whole-group acceptance, source membership order, generation replacement, context
@@ -89,9 +93,9 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,742 tests across 222 suites, including all proposal endpoint
+The SDK run passes 7,746 tests across 222 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 328 tests across 27 suites, with more than 95% line and 90% branch
+run passes 378 tests across 28 suites, with more than 96% line and 91% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
@@ -101,8 +105,10 @@ SQLite restart and manifest expiry. Service tests include current-access revocat
 original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, lost
 write acknowledgements and receipt capacity checked before admission. The concrete
 evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
-Journal append mutation testing kills all 26 generated mutations.
-The bounded BRC-193 client adds 48 unit tests and nine actual local HTTP tests
+The original journal-append target killed all 26 generated mutations. The expanded
+receipt/workflow CAS target passes 94.12% over 170 mutations (160 killed, ten
+surviving, zero uncovered/invalid) at the unchanged 90% gate.
+The bounded BRC-193 client adds 52 unit tests and nine actual local HTTP tests
 using SDK BRC-103/104 and the existing Express authentication middleware. They
 cover signed snapshot/live/close responses, wrong peers, no authentication
 downgrade, signed selection mismatches, corrupted signed bodies, unpaid errors
@@ -113,6 +119,16 @@ The source tests include a held SQLite append, storage failure, finite paginatio
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
 local refresh generations and SQLite restart.
+
+The expanded SDK authentication mutation target passes 86.36% over 733 mutants
+(579 killed, 54 timeouts, 100 surviving, zero uncovered/invalid) at its unchanged
+gate. Workflow control storage adds 49 cases across three adapters, including
+multiple connections, lost acknowledgement, SQLite process exit, changed binding,
+corrupt revisions, missing storage, aborted IndexedDB transactions and late opens
+after timeout. A 300-run property checks concurrent CAS winners and stale retries.
+The IndexedDB cases use a test implementation; actual-browser restart remains part
+of the full application qualification. Its optional browser entry is separately
+measured and bounded; no existing entry budget is raised.
 Changed identities now retain the conflicting receipt in bounded quarantine,
 publish a durable source continuity change, and recover through a new snapshot.
 Offline restart reproduces the quarantine without additional verification; other

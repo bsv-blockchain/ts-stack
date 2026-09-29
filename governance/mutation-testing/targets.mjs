@@ -69,11 +69,26 @@ export function buildMutationTargets(repositoryRoot) {
           'src/storage/MemoryJournal.ts',
           '  async append(',
           '  async read('
+        ),
+        'src/operations/OperationStateStore.ts',
+        'src/operations/MemoryOperationStateStore.ts',
+        ...['SQLiteOperationStateStore', 'IndexedDBOperationStateStore'].map(name =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/application/output-knowledge',
+            `src/operations/${name}.ts`,
+            '  async compareAndSwap(',
+            '  async close('
+          )
         )
       ],
       ...jestTarget(
         'jest.config.js',
-        ['<rootDir>/test/journal.property.test.ts', '<rootDir>/test/journal.test.ts'],
+        [
+          '<rootDir>/test/journal.property.test.ts',
+          '<rootDir>/test/journal.test.ts',
+          '<rootDir>/test/operation-state.test.ts'
+        ],
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
