@@ -11,11 +11,11 @@ import {
   type OutputJSONObject
 } from './OutputProtocolJSON.js'
 
-export type OutputHex32 = string
-export type OutputIdentity = string
-export type OutputBytes = string
-export type OutputU64 = string
-export type OutputU32 = number
+export type OutputHex32 = ReturnType<typeof outputHex32>
+export type OutputIdentity = ReturnType<typeof outputIdentity>
+export type OutputBytes = ReturnType<typeof toBase64>
+export type OutputU64 = ReturnType<bigint['toString']>
+export type OutputU32 = ReturnType<typeof outputU32>
 
 export interface OutputChain {
   network: string
@@ -91,7 +91,7 @@ const maximumU64 = 18446744073709551615n
 
 export function outputU64(value: unknown): bigint {
   outputAssert(
-    typeof value === 'string' && value.length <= 20 && /^(0|[1-9][0-9]*)$/.test(value),
+    typeof value === 'string' && value.length <= 20 && /^(0|[1-9]\d*)$/.test(value),
     'Expected canonical U64'
   )
   const integer = BigInt(value)
@@ -113,7 +113,7 @@ export function outputU32(value: unknown): number {
   return value
 }
 
-export function outputHex32(value: unknown): OutputHex32 {
+export function outputHex32(value: unknown): string {
   outputAssert(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value), 'Expected Hex32')
   return value
 }
@@ -129,7 +129,7 @@ export function outputString(value: unknown): string {
   return value
 }
 
-export function outputIdentity(value: unknown): OutputIdentity {
+export function outputIdentity(value: unknown): string {
   outputAssert(
     typeof value === 'string' && /^(02|03)[0-9a-f]{64}$/.test(value),
     'Expected compressed identity'
@@ -213,7 +213,14 @@ export function validateOutputExtensions(
       outputAssert(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(iri), 'Expected absolute extension IRI')
     }
   }
-  const critical = value.critical === undefined ? [] : value.critical
+  validateCriticalExtensions(value, supported, value.critical)
+}
+
+function validateCriticalExtensions(
+  value: OutputExtensions,
+  supported: readonly string[],
+  critical: unknown = []
+): void {
   outputAssert(Array.isArray(critical) && critical.length <= 32, 'Invalid critical extensions')
   outputAssert(new Set(critical).size === critical.length, 'Duplicate critical extension')
   for (const iri of critical) {

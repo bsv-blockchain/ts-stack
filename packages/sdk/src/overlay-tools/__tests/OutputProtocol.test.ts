@@ -121,6 +121,8 @@ describe('BRC-192 representation boundary', () => {
       hidden,
       array,
       sparse,
+      Object.defineProperty([1], 'hidden', { value: 'ignored' }),
+      Object.defineProperty([1], '0', { value: 1, enumerable: false }),
       { [Symbol('k')]: 1 },
       { toJSON: () => ({}) }
     ]) {

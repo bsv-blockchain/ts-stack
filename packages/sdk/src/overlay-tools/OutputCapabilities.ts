@@ -275,7 +275,7 @@ export function selectOutputCapability(
   const selectedProfile = selectedService.profiles.find(p => p.id === request.profile)
   outputAssert(
     selectedProfile !== undefined &&
-      Object.values(OUTPUT_PROFILES).some(id => id === request.profile),
+      (Object.values(OUTPUT_PROFILES) as readonly string[]).includes(request.profile),
     'Required profile unavailable',
     'unsupported'
   )

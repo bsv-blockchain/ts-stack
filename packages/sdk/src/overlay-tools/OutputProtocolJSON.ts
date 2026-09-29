@@ -44,14 +44,9 @@ function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
 
 function wellFormed(value: string): void {
   // Check UTF-16 before TextEncoder can silently replace a lone surrogate.
-  for (let i = 0; i < value.length; i++) {
-    const unit = value.charCodeAt(i)
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(++i)
-      outputAssert(next >= 0xdc00 && next <= 0xdfff, 'Unpaired JSON surrogate')
-    } else {
-      outputAssert(unit < 0xdc00 || unit > 0xdfff, 'Unpaired JSON surrogate')
-    }
+  for (const character of value) {
+    const point = character.codePointAt(0)!
+    outputAssert(point < 0xd800 || point > 0xdfff, 'Unpaired JSON surrogate')
   }
 }
 
@@ -80,7 +75,7 @@ export function parseOutputJSON(
       throw new OutputProtocolError('invalid', 'Malformed UTF-8')
     }
   }
-  outputAssert(source.charCodeAt(0) !== 0xfeff, 'JSON BOM is not permitted')
+  outputAssert(source.codePointAt(0) !== 0xfeff, 'JSON BOM is not permitted')
   return new OutputJSONParser(source, bounds).parse()
 }
 
@@ -177,10 +172,10 @@ class OutputJSONParser {
       case '[':
         return this.array(depth)
       default: {
+        const rest = this.source.slice(this.offset)
         const token =
-          /^(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/.exec(
-            this.source.slice(this.offset)
-          )?.[0]
+          /^(?:true|false|null)/.exec(rest)?.[0] ??
+          /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)?.[0]
         outputAssert(token !== undefined, 'Invalid JSON token')
         this.offset += token.length
         const result: unknown = JSON.parse(token)
@@ -214,6 +209,42 @@ export function canonicalOutputJSON(
     wellFormed(text)
     emit(JSON.stringify(text))
   }
+  function array(node: unknown[], depth: number): void {
+    outputAssert(node.length <= bounds.arrayElements, 'JSON array limit', 'limited')
+    outputAssert(
+      Object.getOwnPropertyNames(node).length === node.length + 1 &&
+        Object.keys(node).length === node.length,
+      'Sparse or decorated JSON array'
+    )
+    emit('[')
+    for (let i = 0; i < node.length; i++) {
+      if (i > 0) emit(',')
+      const descriptor = Object.getOwnPropertyDescriptor(node, i)
+      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+      visit(descriptor.value, depth + 1)
+    }
+    emit(']')
+  }
+  function object(node: object, depth: number): void {
+    outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+    // RFC 8785 orders property names by UTF-16 code units, never locale rules.
+    const keys = Object.getOwnPropertyNames(node).sort((a, b) => {
+      if (a < b) return -1
+      if (a > b) return 1
+      return 0
+    })
+    outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
+    emit('{')
+    keys.forEach((key, index) => {
+      const descriptor = Object.getOwnPropertyDescriptor(node, key)
+      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+      if (index > 0) emit(',')
+      string(key)
+      emit(':')
+      visit(descriptor.value, depth + 1)
+    })
+    emit('}')
+  }
   function visit(node: unknown, depth: number): void {
     outputAssert(depth <= bounds.depth, 'JSON depth limit', 'limited')
     if (node === null || typeof node === 'boolean') {
@@ -228,35 +259,8 @@ export function canonicalOutputJSON(
       outputAssert(!ancestors.has(node), 'Cyclic JSON value')
       outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
       ancestors.add(node)
-      if (Array.isArray(node)) {
-        outputAssert(node.length <= bounds.arrayElements, 'JSON array limit', 'limited')
-        outputAssert(Object.keys(node).length === node.length, 'Sparse or decorated JSON array')
-        emit('[')
-        for (let i = 0; i < node.length; i++) {
-          if (i > 0) emit(',')
-          const descriptor = Object.getOwnPropertyDescriptor(node, i)
-          outputAssert(descriptor && 'value' in descriptor, 'JSON array accessor or hole')
-          visit(descriptor.value, depth + 1)
-        }
-        emit(']')
-      } else {
-        outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-        const keys = Object.getOwnPropertyNames(node).sort()
-        outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
-        emit('{')
-        keys.forEach((key, index) => {
-          const descriptor = Object.getOwnPropertyDescriptor(node, key)
-          outputAssert(
-            descriptor?.enumerable && 'value' in descriptor,
-            'JSON accessor or hidden key'
-          )
-          if (index > 0) emit(',')
-          string(key)
-          emit(':')
-          visit(descriptor.value, depth + 1)
-        })
-        emit('}')
-      }
+      if (Array.isArray(node)) array(node, depth)
+      else object(node, depth)
       ancestors.delete(node)
     }
   }

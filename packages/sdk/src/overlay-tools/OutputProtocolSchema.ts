@@ -5,7 +5,6 @@ import {
   closedOutputObject,
   decodeOutputBytes,
   outputHex32,
-  outputIdentity,
   outputString,
   outputU32,
   outputU64
@@ -48,10 +47,7 @@ export function literal<const T extends readonly (string | number | boolean | nu
   ...values: T
 ): Schema<T[number]> {
   return value => {
-    outputAssert(
-      values.some(expected => expected === value),
-      'Unexpected protocol tag'
-    )
+    outputAssert(values.includes(value as T[number]), 'Unexpected protocol tag')
     return value as T[number]
   }
 }
@@ -88,7 +84,7 @@ export const jsonMap: Schema<OutputJSONObject> = value => {
 }
 export const text = outputString
 export const hex = outputHex32
-export const identity = outputIdentity
+export { outputIdentity as identity } from './OutputProtocol.js'
 export const u32 = outputU32
 export const u64: Schema<string> = value => {
   outputU64(value)

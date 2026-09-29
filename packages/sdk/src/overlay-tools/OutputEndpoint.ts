@@ -15,9 +15,9 @@ export function canonicalOutputBase(input: string, allowLocalHTTP = false): stri
   outputAssert(
     !Array.from(input).some(
       character =>
-        character.charCodeAt(0) <= 32 ||
-        character.charCodeAt(0) === 127 ||
-        '\\?#'.includes(character)
+        character.codePointAt(0)! <= 32 ||
+        character.codePointAt(0)! === 127 ||
+        String.raw`\?#`.includes(character)
     ),
     'Invalid overlay base characters'
   )
@@ -37,9 +37,9 @@ export function canonicalOutputBase(input: string, allowLocalHTTP = false): stri
     if (path[i] !== '%') continue
     const escape = path.slice(i + 1, i + 3)
     outputAssert(/^[0-9a-fA-F]{2}$/.test(escape), 'Malformed overlay percent escape')
-    const decoded = String.fromCharCode(Number.parseInt(escape, 16))
+    const decoded = String.fromCodePoint(Number.parseInt(escape, 16))
     outputAssert(
-      decoded.charCodeAt(0) !== 0 && !/[A-Za-z0-9\-._~/\\%]/.test(decoded),
+      decoded.codePointAt(0) !== 0 && !/[A-Za-z0-9\-._~/\\%]/.test(decoded),
       'Ambiguous overlay path escape'
     )
     i += 2
@@ -55,12 +55,9 @@ export function canonicalOutputBase(input: string, allowLocalHTTP = false): stri
     'Invalid overlay base components'
   )
   if (authority.startsWith('[')) {
-    outputAssert(
-      /^\[[0-9a-fA-F:]+\](?::[0-9]+)?$/.test(authority),
-      'Invalid IPv6 overlay authority'
-    )
+    outputAssert(/^\[[0-9a-fA-F:]+\](?::\d+)?$/.test(authority), 'Invalid IPv6 overlay authority')
   } else {
-    const match = /^([^:]+)(?::([0-9]+))?$/.exec(authority)
+    const match = /^([^:]+)(?::(\d+))?$/.exec(authority)
     outputAssert(match !== null, 'Invalid overlay host or port')
     const host = match[1].toLowerCase()
     outputAssert(host.length <= 253 && host === url.hostname, 'Noncanonical overlay host')
