@@ -68,7 +68,7 @@ describe('durable lookup core binding', () => {
     await volatile.close()
   })
 
-  it('requires a verification context for the selected partition and chain', async () => {
+  it('requires the latest verification context to match the selected partition and chain', async () => {
     const h = await fixture()
     const history = await h.stores.core.inspect()
     const inspect = jest.spyOn(h.stores.core, 'inspect')
@@ -89,9 +89,14 @@ describe('durable lookup core binding', () => {
     ])) {
       const entry = {
         ...history.entries[0],
-        ...knowledgeMutation({ kind: 'context', context: changed })
+        ...knowledgeMutation({ kind: 'context', context: changed }),
+        revision: { ...history.entries[0].revision, received: '2' }
       }
-      inspect.mockResolvedValueOnce({ ...history, entries: [entry] })
+      inspect.mockResolvedValueOnce({
+        ...history,
+        entries: [...history.entries, entry],
+        revision: { ...history.revision, received: '2' }
+      })
       await expect(h.guard.inspect('1', undefined, h.signal, h.empty)).rejects.toThrow(
         'chain changed'
       )

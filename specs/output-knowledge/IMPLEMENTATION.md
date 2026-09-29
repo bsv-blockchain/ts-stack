@@ -125,9 +125,12 @@ verification and SQLite, including progressive pages and a missed live group
 recovered after disconnect/reopen. Its 85 focused cases also cover five actual
 process-exit stages, exact receipt substitution, reset persistence, physical
 cancellation ownership, authenticated binding, timing and storage capacity.
-The complete live-source mutation target passes 91.32% over 945 mutations
-(754 killed, 109 timeouts, 82 surviving, zero uncovered or invalid) at the
-unchanged 90% gate. The complete provider and required live application remain open.
+After the analysis refactor, the complete live-source mutation target passes
+91.18% over 941 mutations (751 killed, 107 timeouts, 83 surviving, zero uncovered
+or invalid) at the unchanged 90% gate. This run covers all six production files
+at `a8f75b04e`; a subsequent guard assertion also checks that a newer conflicting
+context cannot be hidden by an older matching context. The complete provider and
+required live application remain open.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
