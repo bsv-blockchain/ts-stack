@@ -17,6 +17,21 @@ attention to changes that materially alter behavior or extend functionality.
   bytes so stored settings stay readable; a longer one is cut at a code point
   boundary when the result is built, and one under 5 bytes becomes
   `Trusted certifier`.
+- A non-admin `createAction` with `noSend` that `WalletPermissionsManager`
+  signs internally returned `noSendChange` outpoints on the unsigned txid next
+  to the signed `txid`, so `@bsv/sdk` 2.8.8+ rejected it with `Invalid
+  createAction result noSendChange[0]: expected an outpoint of the returned
+  transaction`. The outpoints now name the signed transaction (vouts are
+  unchanged by signing).
+- That same no-send action could not be released: the caller only gets its
+  `txid`, and `abortAction` from a non-admin originator accepted only references
+  the manager had issued, which it drops once it signs. The originator that
+  created a no-send action can now abort it by that `txid`; other originators
+  still cannot, and a broadcast action is never abortable this way.
+- `discoverByIdentityKey` and `discoverByAttributes` return the requested
+  `limit`/`offset` page (limit 10 when omitted). They returned every trusted
+  match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`
+  still counts every trusted match.
 
 ## wallet-toolbox 2.14.3
 
