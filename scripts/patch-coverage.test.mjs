@@ -6,11 +6,53 @@ import {
   changedLinesFromDiff,
   evaluatePatchCoverage,
   hasRuntimeChange,
+  isUninstrumentedModule,
+  omitUninstrumentedModules,
   isStaticMarkdownModule,
   omitStaticMarkdownModules,
   mergeLcov,
   runtimeComparisonAvailable
 } from './patch-coverage.mjs'
+
+test('only compiler-erased declarations and pure star bindings lack instrumentable statements', () => {
+  for (const source of [
+    'export interface Scope { id: string }; export type Generation = string',
+    "import type { Context } from './context.js'; export type Scope = Context",
+    "export * from './worker.js'; export type { Context } from './context.js'",
+    'export {}',
+    '/** Documentation without runtime code. */'
+  ])
+    assert.equal(isUninstrumentedModule(source), runtimeComparisonAvailable(), source)
+  for (const source of [
+    "export * from './worker.js'; startService()",
+    "import './startup.js'; export * from './worker.js'",
+    'export const value = 1',
+    'export const run = () => process.exit(1)',
+    'export class Worker { start() {} }',
+    'export enum State { Ready }',
+    'const text = \'export * from \\"./x\\";\'; export { text }',
+    'export * from "./worker.js"; throw new Error("startup")',
+    'invalid TypeScript {'
+  ])
+    assert.equal(isUninstrumentedModule(source), false, source)
+})
+
+test('statement classification retains executable code regardless of a barrel-like filename', () => {
+  const declaration = 'packages/example/src/ports.ts',
+    barrel = 'packages/example/src/index.ts',
+    executable = 'packages/example/src/other/index.ts',
+    changed = new Map([declaration, barrel, executable].map(file => [file, new Set([1])]))
+  const sources = new Map([
+    [declaration, 'export interface Context { epoch: string }'],
+    [barrel, "export * from './worker.js'"],
+    [executable, "export * from './worker.js'; registerPlugin()"]
+  ])
+  omitUninstrumentedModules(changed, file => sources.get(file))
+  assert.deepEqual(
+    [...changed.keys()],
+    runtimeComparisonAvailable() ? [executable] : [declaration, barrel, executable]
+  )
+})
 
 test('patch coverage intersects changed production lines with merged LCOV line and branch data', () => {
   const changed =

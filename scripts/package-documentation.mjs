@@ -178,11 +178,13 @@ const binDescription = bin => {
   return `\nCLI entry points: \`${escapeCell(target)}\`.\n`
 }
 
+const publishedVersion = version => (version === null ? 'Unpublished' : codeTargets([version]))
+
 export function renderPackageDocumentation({ lastReviewed, packages }) {
   const summaryRows = packages
     .map(
       pkg =>
-        `| \`${escapeCell(pkg.name)}\` | ${pkg.publishedVersion === null ? 'Unpublished' : `\`${pkg.publishedVersion}\``} | ` +
+        `| \`${escapeCell(pkg.name)}\` | ${publishedVersion(pkg.publishedVersion)} | ` +
         `\`${pkg.sourceVersion}\` | ${pkg.releaseType} | ` +
         `[API and usage](${docsLink(pkg.docsPath)}) | ${escapeCell(pkg.migration)} |`
     )

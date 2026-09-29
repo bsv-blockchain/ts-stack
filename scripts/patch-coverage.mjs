@@ -144,6 +144,42 @@ export function hasRuntimeChange(before, after) {
   }
 }
 
+// Istanbul does not emit LCOV rows for erased declarations or star-re-export
+// bindings. Inspect the locked compiler's complete output rather than granting
+// an exemption by filename: adding any executable statement keeps a module in
+// the coverage boundary. These modules still undergo type/artifact/API checks.
+// Intentionally fail closed on other module forms and unavailable compilers.
+export function isUninstrumentedModule(source) {
+  const transformSync = loadEsbuildTransform()
+  if (transformSync === null) return false
+  try {
+    const { code } = transformSync(source, {
+      loader: 'ts',
+      format: 'esm',
+      target: 'esnext',
+      legalComments: 'none'
+    })
+    return code.split('\n').every(line => {
+      const statement = line.trim()
+      return (
+        statement === '' ||
+        statement === ';' ||
+        statement === 'export {};' ||
+        /^export \* from "(?:[^"\\]|\\.)*";$/.test(statement)
+      )
+    })
+  } catch {
+    return false
+  }
+}
+
+export function omitUninstrumentedModules(changed, readSource) {
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    if (isUninstrumentedModule(readSource(file))) changed.delete(file)
+  }
+}
+
 // Markdown modules are not instrumented by package test configurations. Omit
 // one only when its complete source is a static default-exported template
 // literal. Imports, interpolation, declarations, and any other statements fail
@@ -336,6 +372,13 @@ async function main(arguments_) {
     })
   )
   omitTypeOnlyChanges(changed, base)
+  omitUninstrumentedModules(changed, file =>
+    execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024
+    })
+  )
   const directoryPath = path.resolve(directory)
   const files = fs.existsSync(directoryPath) ? lcovFiles(directoryPath) : []
   if (changed.size > 0 && files.length === 0) {

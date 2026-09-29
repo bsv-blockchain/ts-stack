@@ -9,7 +9,7 @@ last_updated: '2026-09-29'
 last_verified: '2026-09-29'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge'
-status: draft
+status: experimental
 tags: ['application', 'utxo', 'overlays', 'state']
 ---
 
@@ -80,5 +80,6 @@ The current tests cover actual SDK Script/SPV evidence, whole-group barriers,
 SQLite recovery with network access disabled, cross-source predecessor completion,
 source-generation replacement, non-final history during context changes and a
 snapshot/live withdrawal through the public runtime. Browser persistence still
-requires actual-browser qualification beyond the fake-indexeddb unit tests. Full
-trace, service, application and remote CI gates remain required before review.
+requires actual-browser qualification beyond the fake-indexeddb unit tests. All 32 approved reconciliation traces now run through the default worker and
+SQLite with delayed verification and offline restart. Service, application and
+remote CI gates remain required before review.
