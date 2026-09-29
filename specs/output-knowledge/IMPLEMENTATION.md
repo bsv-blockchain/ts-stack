@@ -93,9 +93,9 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,746 tests across 222 suites, including all proposal endpoint
+The SDK run passes 7,751 tests across 223 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 378 tests across 28 suites, with more than 96% line and 91% branch
+run passes 385 tests across 30 suites, with more than 96% line and 91% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
@@ -106,9 +106,9 @@ original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, 
 write acknowledgements and receipt capacity checked before admission. The concrete
 evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
 The original journal-append target killed all 26 generated mutations. The expanded
-receipt/workflow CAS target passes 94.12% over 170 mutations (160 killed, ten
-surviving, zero uncovered/invalid) at the unchanged 90% gate.
-The bounded BRC-193 client adds 52 unit tests and nine actual local HTTP tests
+receipt/workflow CAS target passes 94.41% over 179 mutations (168 killed, one
+timeout, ten surviving, zero uncovered/invalid) at the unchanged 90% gate.
+The bounded BRC-193 client adds 53 unit tests and nine actual local HTTP tests
 using SDK BRC-103/104 and the existing Express authentication middleware. They
 cover signed snapshot/live/close responses, wrong peers, no authentication
 downgrade, signed selection mismatches, corrupted signed bodies, unpaid errors
@@ -120,8 +120,8 @@ non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
 local refresh generations and SQLite restart.
 
-The expanded SDK authentication mutation target passes 86.36% over 733 mutants
-(579 killed, 54 timeouts, 100 surviving, zero uncovered/invalid) at its unchanged
+The expanded SDK authentication mutation target passes 86.60% over 746 mutants
+(590 killed, 56 timeouts, 100 surviving, zero uncovered/invalid) at its unchanged
 gate. Workflow control storage adds 49 cases across three adapters, including
 multiple connections, lost acknowledgement, SQLite process exit, changed binding,
 corrupt revisions, missing storage, aborted IndexedDB transactions and late opens
@@ -133,6 +133,18 @@ Changed identities now retain the conflicting receipt in bounded quarantine,
 publish a durable source continuity change, and recover through a new snapshot.
 Offline restart reproduces the quarantine without additional verification; other
 providers and already accepted Bitcoin facts remain unaffected.
+
+Sequential driver work is explicit: synchronous adapters preserve immediate ownership
+and CAS checks while returning rejected Promises for failures, and dependent
+journal/transaction operations are pulled one at a time. Seven runtime tests check
+Promise behavior and pull-driven backpressure; four additional focused SDK tests
+check certificate-wait ordering, original error identity and the exact deadline.
+The checkpoint metadata parser now admits valid maximally escaped strings within
+a separate 64 KiB bound, without changing wire response limits. Original captured
+journal fixtures are unchanged. Certificate-wait fixtures observe rejected work
+before assertions and bound unexpected waits; all 13 focused mutations are detected
+without invalid results. The complete SDK mutation target also passes. Exact-head
+hosted CI for the correction remains required.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all three declared browser entries pass. Core browser byte limits remain unchanged;

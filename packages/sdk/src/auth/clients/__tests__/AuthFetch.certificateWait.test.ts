@@ -14,7 +14,7 @@ afterEach(() => jest.restoreAllMocks())
 describe('certificate wait ordering and deadline compatibility', () => {
   it('does not schedule a delay for an already empty queue', async () => {
     const waiter = createWaiter()
-    const wait = jest.spyOn(waiter, 'wait')
+    const wait = jest.spyOn(waiter, 'wait').mockRejectedValue(new Error('Unexpected delay'))
     await expect(
       waiter.waitForPendingCertificateRequests({ pendingCertificateRequests: [] })
     ).resolves.toBeUndefined()
@@ -24,22 +24,37 @@ describe('certificate wait ordering and deadline compatibility', () => {
   it('starts one delay at a time and observes completion before scheduling another', async () => {
     const waiter = createWaiter()
     const peer = { pendingCertificateRequests: [true] }
-    let release!: () => void
-    const wait = jest.spyOn(waiter, 'wait').mockImplementation(
-      () =>
-        new Promise<void>(resolve => {
-          release = resolve
-        })
+    let release: (() => void) | undefined
+    const wait = jest
+      .spyOn(waiter, 'wait')
+      .mockRejectedValue(new Error('Unexpected repeated delay'))
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>(resolve => {
+            release = resolve
+          })
+      )
+    // Observe rejection before assertions so a changed deadline cannot leave a
+    // rejected background promise when an earlier assertion fails.
+    const settled = waiter.waitForPendingCertificateRequests(peer).then(
+      () => ({ completed: true }),
+      error => ({ error })
     )
-    const result = waiter.waitForPendingCertificateRequests(peer)
-    expect(wait).toHaveBeenCalledTimes(1)
-    expect(wait).toHaveBeenCalledWith(100)
-    await Promise.resolve()
-    expect(wait).toHaveBeenCalledTimes(1)
-    peer.pendingCertificateRequests.length = 0
-    release()
-    await result
-    expect(wait).toHaveBeenCalledTimes(1)
+    try {
+      expect(wait).toHaveBeenCalledTimes(1)
+      expect(wait).toHaveBeenCalledWith(100)
+      await Promise.resolve()
+      expect(wait).toHaveBeenCalledTimes(1)
+      peer.pendingCertificateRequests.length = 0
+      expect(release).toBeDefined()
+      release!()
+      await expect(settled).resolves.toEqual({ completed: true })
+      expect(wait).toHaveBeenCalledTimes(1)
+    } finally {
+      peer.pendingCertificateRequests.length = 0
+      release?.()
+      await settled
+    }
   })
 
   it('allows the exact deadline but rejects the next check after it without another delay', async () => {
@@ -47,10 +62,15 @@ describe('certificate wait ordering and deadline compatibility', () => {
     const peer = { pendingCertificateRequests: [true] }
     jest
       .spyOn(Date, 'now')
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(30_000)
-      .mockReturnValue(30_001)
-    const wait = jest.spyOn(waiter, 'wait').mockResolvedValue(undefined)
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(31_000)
+      .mockReturnValue(31_001)
+    // If the production deadline check is removed, a second wait fails clearly
+    // instead of starving timers in an endless loop of fulfilled mock promises.
+    const wait = jest
+      .spyOn(waiter, 'wait')
+      .mockRejectedValue(new Error('Unexpected delay after the deadline'))
+      .mockResolvedValueOnce(undefined)
     await expect(waiter.waitForPendingCertificateRequests(peer)).rejects.toThrow(
       'Timeout waiting for certificate request to complete'
     )
