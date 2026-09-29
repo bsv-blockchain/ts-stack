@@ -32,6 +32,12 @@ attention to changes that materially alter behavior or extend functionality.
   `limit`/`offset` page (limit 10 when omitted). They returned every trusted
   match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`
   still counts every trusted match.
+- `ChaintracksServiceClient`, `BHServiceClient` and `GoChaintracksServiceClient`
+  called `fetch` as a method of the client, which browsers refuse ("Failed to
+  execute 'fetch' on 'Window': Illegal invocation" in Chrome, "Can only call
+  Window.fetch on instances of Window" in WebKit). Any in-page wallet verifying
+  a merkle proof through them failed, for example `internalizeAction` of a BRC-29
+  payment. They now call the default or supplied `fetch` with no receiver.
 
 ## wallet-toolbox 2.14.3
 
