@@ -1,0 +1,443 @@
+import { afterEach, describe, expect, it } from '@jest/globals'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { DatabaseSync } from 'node:sqlite'
+import {
+  canonicalOutputJSON,
+  OutputProtocolError,
+  Utils,
+  type OutputSignedProposal
+} from '@bsv/sdk'
+import {
+  appendProposalWithRecovery,
+  MemoryProposalJournal,
+  proposalChannelKey,
+  proposalCommitKey,
+  ProposalTransitions,
+  ProposalPolicyRegistry,
+  AuthorDocumentPolicy,
+  type ProposalJournalLimits,
+  type ProposalJournalStorage,
+  type ProposalTransition
+} from '../src/proposals/index.js'
+import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
+import { author, recipient, scope, registry, signed, finalize } from './proposal-fixture.js'
+
+const clock = { maxLifetimeSeconds: '100', futureSkewSeconds: '2' }
+const lifecycle = new ProposalTransitions(registry, scope, clock)
+const stores: ProposalJournalStorage[] = []
+const directories: string[] = []
+function path(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'proposal-journal-'))
+  directories.push(directory)
+  return join(directory, 'journal.sqlite')
+}
+function publication(proposal: OutputSignedProposal = signed()): ProposalTransition {
+  return lifecycle.put(undefined, proposal, author, '10')
+}
+function reservation(
+  plan: ProposalTransition,
+  operationId = 'original-operation-id'
+): ProposalTransition {
+  const tx = finalize(plan.next.proposal)
+  return lifecycle.reserve(
+    plan.next,
+    author,
+    {
+      version: 1,
+      operationId,
+      service: scope.service,
+      proposalId: plan.next.proposalId,
+      txid: tx.id('hex'),
+      beef: 'AA=='
+    },
+    Utils.toBase64(tx.toBinary()),
+    '99'
+  )
+}
+function completed(plan: ProposalTransition): ProposalTransition {
+  const job = plan.next.admission!
+  return lifecycle.complete(
+    plan.next,
+    {
+      status: 'admitted',
+      operationId: job.operationId,
+      txid: job.txid,
+      steak: {},
+      assessmentContextId: 'topic-view'
+    },
+    '101'
+  )
+}
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map(store => store.close()))
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+})
+
+describe.each(['memory', 'sqlite'] as const)('%s proposal journal contract', kind => {
+  function open(limits: Partial<ProposalJournalLimits> = {}): ProposalJournalStorage {
+    const store =
+      kind === 'memory'
+        ? new MemoryProposalJournal('proposal-test', author, lifecycle, limits)
+        : new SQLiteProposalJournal(path(), 'proposal-test', author, lifecycle, limits)
+    stores.push(store)
+    return store
+  }
+
+  it('commits record and events together, preserves historical retries and returns owned reads', async () => {
+    const store = open(),
+      first = publication(),
+      key = proposalChannelKey(first.next.proposal.body)
+    expect(store.durability).toBe(kind === 'memory' ? 'volatile' : 'durable')
+    expect(await store.getChannel(key)).toBeUndefined()
+    expect(await store.getProposal(first.next.proposalId)).toBeUndefined()
+    expect(await store.getCommit(proposalCommitKey(first))).toBeUndefined()
+    expect(await store.commit(first)).toEqual({ status: 'committed', revision: '1' })
+    expect((await store.read('0', 1))[0].transition.events).toEqual(first.events)
+    const next = lifecycle.put(
+      first.next,
+      signed({ revision: '1', previous: first.next.proposalId }),
+      author,
+      '11'
+    )
+    expect(await store.commit(next)).toEqual({ status: 'committed', revision: '2' })
+    expect(await store.commit(first)).toEqual({ status: 'replayed', revision: '1' })
+    expect(await store.getProposal(first.next.proposalId)).toEqual({
+      record: first.next,
+      current: false
+    })
+    expect(await store.getProposal(next.next.proposalId)).toEqual({
+      record: next.next,
+      current: true
+    })
+    const current = await store.getChannel(key)
+    expect(current).toEqual(next.next)
+    current!.state.recordedAt = '999'
+    expect((await store.getChannel(key))?.state.recordedAt).toBe('11')
+    const journal = await store.read('0', 256)
+    journal[0].transition.events.length = 0
+    expect((await store.getCommit(proposalCommitKey(first)))?.transition.events).toHaveLength(2)
+    expect((await store.head()).entries).toBe(2)
+    expect((await store.read('1', 1)).map(entry => entry.revision)).toEqual(['2'])
+    expect(await store.read('18446744073709551615', 1)).toEqual([])
+    expect(await store.commit(lifecycle.put(next.next, next.next.proposal, author, '500'))).toEqual(
+      { status: 'replayed', revision: '2' }
+    )
+  })
+
+  it.each([true, false])(
+    'lets exactly one expiry/reservation win a shared token (reserve first: %s)',
+    async reserveFirst => {
+      const store = open(),
+        first = publication(),
+        reserved = reservation(first),
+        expired = lifecycle.expire(first.next, '100')
+      await store.commit(first)
+      const [winner, loser] = reserveFirst ? [reserved, expired] : [expired, reserved]
+      expect(await Promise.all([store.commit(winner), store.commit(loser)])).toEqual([
+        { status: 'committed', revision: '2' },
+        { status: 'conflict', reason: 'Proposal head changed' }
+      ])
+      expect(await store.getChannel(proposalChannelKey(first.next.proposal.body))).toEqual(
+        winner.next
+      )
+      expect(await store.read('1', 256)).toHaveLength(1)
+      expect((await store.head()).entries).toBe(2)
+    }
+  )
+
+  it('binds operation identity across channels and follows its exact terminal record', async () => {
+    const store = open(),
+      first = publication(),
+      second = publication(signed({ channel: 'ff'.repeat(32) }))
+    await store.commit(first)
+    await store.commit(second)
+    const reserved = reservation(first)
+    await store.commit(reserved)
+    expect(await store.getOperation(author, scope.service, 'original-operation-id')).toEqual(
+      reserved.next
+    )
+    const before = await store.head()
+    expect((await store.commit(reservation(second))).status).toBe('conflict')
+    expect(await store.head()).toEqual(before)
+    expect(
+      (await store.getChannel(proposalChannelKey(second.next.proposal.body)))?.state.status
+    ).toBe('active')
+    const done = completed(reserved)
+    await store.commit(done)
+    expect(await store.getOperation(author, scope.service, 'original-operation-id')).toEqual(
+      done.next
+    )
+    expect(
+      await store.getOperation(recipient, scope.service, 'original-operation-id')
+    ).toBeUndefined()
+    expect(await store.getOperation(author, 'other', 'original-operation-id')).toBeUndefined()
+    await expect(store.getOperation(author, scope.service, 'invalid:operation')).rejects.toThrow(
+      'identifier'
+    )
+  })
+
+  it('revalidates complete transition plans and retains terminal channel fences', async () => {
+    const store = open(),
+      first = publication()
+    await store.commit(first)
+    const plan = reservation(first)
+    for (const invalid of [
+      { ...plan, changed: 'yes' },
+      { ...plan, events: [] },
+      { ...plan, events: null },
+      { ...plan, extra: true },
+      { ...plan, next: { ...plan.next, admission: { ...plan.next.admission, requestedAt: '98' } } }
+    ])
+      await expect(store.commit(invalid as ProposalTransition)).rejects.toThrow()
+    expect(
+      (await store.commit({ ...completed(plan), expectedToken: plan.expectedToken })).status
+    ).toBe('conflict')
+    expect((await store.head()).entries).toBe(1)
+    await store.commit(plan)
+    const done = completed(plan)
+    await store.commit(done)
+    const rewritten = { ...done, expectedToken: proposalCommitKey(first), next: first.next }
+    expect((await store.commit(rewritten)).status).toBe('conflict')
+    expect(await store.getChannel(proposalChannelKey(first.next.proposal.body))).toEqual(done.next)
+    expect((await store.head()).entries).toBe(3)
+  })
+
+  it('enforces exact byte, entry and principal capacity without deleting retry or terminal identities', async () => {
+    const first = publication()
+    const size = new TextEncoder().encode(canonicalOutputJSON(first)).length
+    const exact = open({ bytes: size, entryBytes: size })
+    expect((await exact.commit(first)).status).toBe('committed')
+    expect((await exact.head()).bytes).toBe(size)
+    expect((await exact.commit(lifecycle.expire(first.next, '100'))).status).toBe('limited')
+    expect((await exact.commit(first)).status).toBe('replayed')
+    const entries = open({ entries: 1 })
+    await entries.commit(first)
+    expect((await entries.commit(lifecycle.expire(first.next, '100'))).status).toBe('limited')
+    const principals = open({ channelsPerAuthor: 1 })
+    await principals.commit(first)
+    await principals.commit(lifecycle.expire(first.next, '100'))
+    expect(
+      (await principals.commit(publication(signed({ channel: 'ff'.repeat(32) })))).status
+    ).toBe('limited')
+    expect((await principals.head()).channels).toBe(1)
+    const channels = open({ channels: 1, channelsPerAuthor: 1 })
+    await channels.commit(first)
+    expect((await channels.commit(publication(signed({ channel: 'ee'.repeat(32) })))).status).toBe(
+      'limited'
+    )
+    const small = open({ entryBytes: size - 1 })
+    await expect(small.commit(first)).rejects.toThrow('limit')
+    expect((await small.head()).entries).toBe(0)
+  })
+
+  it('persists definitive rejection and refuses a later contradictory admission result', async () => {
+    const store = open(),
+      first = publication(),
+      plan = reservation(first)
+    await store.commit(first)
+    await store.commit(plan)
+    const job = plan.next.admission!
+    const failed = lifecycle.complete(
+      plan.next,
+      {
+        status: 'rejected',
+        operationId: job.operationId,
+        txid: job.txid,
+        reason: 'Configured topic declined'
+      },
+      '101'
+    )
+    expect((await store.commit(failed)).status).toBe('committed')
+    expect((await store.getOperation(author, scope.service, job.operationId))?.state).toEqual(
+      failed.next.state
+    )
+    expect((await store.commit(completed(plan))).status).toBe('conflict')
+    expect((await store.head()).entries).toBe(3)
+  })
+
+  it('recovers a commit-before-response fault using its original plan and never creates another job', async () => {
+    const store = open(),
+      first = publication()
+    let writes = 0
+    const result = await appendProposalWithRecovery(
+      {
+        async commit(plan) {
+          writes++
+          await store.commit(plan)
+          throw new Error('reply lost')
+        },
+        getCommit: key => store.getCommit(key)
+      },
+      first
+    )
+    expect(result).toEqual({ status: 'replayed', revision: '1' })
+    expect(writes).toBe(1)
+    expect((await store.head()).entries).toBe(1)
+    expect(await appendProposalWithRecovery(store, first)).toEqual({
+      status: 'replayed',
+      revision: '1'
+    })
+    let lookups = 0
+    await expect(
+      appendProposalWithRecovery(
+        {
+          async commit() {
+            throw new OutputProtocolError('invalid', 'bad local plan')
+          },
+          async getCommit() {
+            lookups++
+            return undefined
+          }
+        },
+        first
+      )
+    ).rejects.toThrow('bad local plan')
+    expect(lookups).toBe(0)
+    await expect(
+      appendProposalWithRecovery(
+        {
+          async commit() {
+            throw new Error('uncertain write')
+          },
+          async getCommit() {
+            return undefined
+          }
+        },
+        first
+      )
+    ).rejects.toThrow('uncertain write')
+    await expect(
+      appendProposalWithRecovery(
+        {
+          async commit() {
+            throw new Error('uncertain write')
+          },
+          async getCommit() {
+            return {
+              revision: '1',
+              key: proposalCommitKey(first),
+              transition: { ...first, events: [] }
+            }
+          }
+        },
+        first
+      )
+    ).rejects.toThrow('uncertain write')
+  })
+
+  it('bounds reads, rejects invalid configuration and closes idempotently', async () => {
+    for (const limits of [
+      { entries: 0 },
+      { bytes: -1 },
+      { channels: 1025 },
+      { entryBytes: Infinity },
+      { channels: 1 },
+      { bytes: 1 }
+    ])
+      expect(() => open(limits)).toThrow('limit')
+    const store = open()
+    for (const maximum of [0, 257, 0.5])
+      await expect(store.read('0', maximum)).rejects.toThrow('bound')
+    await expect(store.read('01', 1)).rejects.toThrow('U64')
+    await store.close()
+    await store.close()
+    await expect(store.head()).rejects.toThrow('closed')
+    await expect(store.commit(publication())).rejects.toThrow('closed')
+  })
+})
+
+describe('SQLite proposal recovery and identity seal', () => {
+  it('reopens a pending job offline and serializes independently opened writer connections', async () => {
+    const file = path(),
+      first = new SQLiteProposalJournal(file, 'server', author, lifecycle)
+    const second = new SQLiteProposalJournal(file, 'server', author, lifecycle)
+    const other = new SQLiteProposalJournal(file, 'other', recipient, lifecycle)
+    stores.push(first, second, other)
+    const initial = publication(),
+      reserved = reservation(initial)
+    await first.commit(initial)
+    await second.commit(reserved)
+    expect((await first.commit(lifecycle.expire(initial.next, '100'))).status).toBe('conflict')
+    expect((await other.head()).revision).toBe('0')
+    await first.close()
+    await second.close()
+    const recovered = new SQLiteProposalJournal(file, 'server', author, lifecycle)
+    stores.push(recovered)
+    expect(await recovered.getOperation(author, scope.service, 'original-operation-id')).toEqual(
+      reserved.next
+    )
+    await recovered.commit(completed(reserved))
+    expect(
+      (await recovered.getChannel(proposalChannelKey(initial.next.proposal.body)))?.state.status
+    ).toBe('finalized')
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    expect(() => new SQLiteProposalJournal(file, 'server', recipient, lifecycle)).toThrow(
+      'configuration changed'
+    )
+    expect(() => new SQLiteProposalJournal(file, 'new-name', author, lifecycle)).toThrow(
+      'configuration changed'
+    )
+    const changed = new ProposalTransitions(
+      new ProposalPolicyRegistry([
+        { policy: new AuthorDocumentPolicy(), parameters: { maxTextBytes: 16 } }
+      ]),
+      scope,
+      clock
+    )
+    expect(() => new SQLiteProposalJournal(file, 'server', author, changed)).toThrow(
+      'configuration changed'
+    )
+    expect(() => new SQLiteProposalJournal(':memory:', 'server', author, lifecycle)).toThrow(
+      'ordinary file'
+    )
+  })
+
+  it('recovers actual process exit after commit before response or database close', async () => {
+    const file = path(),
+      initial = publication(),
+      reserved = reservation(initial)
+    const root = new URL('../dist/proposals/', import.meta.url).href
+    const script = `import { AuthorDocumentPolicy, ProposalPolicyRegistry, ProposalTransitions } from ${JSON.stringify(root + 'index.js')}; import { SQLiteProposalJournal } from ${JSON.stringify(root + 'SQLiteProposalJournal.js')}; const data = JSON.parse(process.argv[2]); const policies = new ProposalPolicyRegistry([{policy:new AuthorDocumentPolicy(),parameters:{maxTextBytes:32}}]); const lifecycle = new ProposalTransitions(policies,data.scope,data.clock); const journal = new SQLiteProposalJournal(process.argv[1],'crash',data.identity,lifecycle); await journal.commit(data.initial); await journal.commit(data.reserved); process.exit(73);`
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        script,
+        file,
+        JSON.stringify({ scope, clock, identity: author, initial, reserved })
+      ],
+      { encoding: 'utf8' }
+    )
+    expect({ status: child.status, error: child.error?.message }).toEqual({
+      status: 73,
+      error: undefined
+    })
+    const recovered = new SQLiteProposalJournal(file, 'crash', author, lifecycle)
+    stores.push(recovered)
+    expect(await recovered.getOperation(author, scope.service, 'original-operation-id')).toEqual(
+      reserved.next
+    )
+    expect((await recovered.read('0', 256)).map(entry => entry.revision)).toEqual(['1', '2'])
+    expect(await recovered.commit(reserved)).toEqual({ status: 'replayed', revision: '2' })
+  })
+
+  it('rejects incomplete or changed committed prefixes without silently resetting the service', async () => {
+    const file = path(),
+      store = new SQLiteProposalJournal(file, 'corrupt', author, lifecycle)
+    stores.push(store)
+    await store.commit(publication())
+    await store.close()
+    const database = new DatabaseSync(file)
+    database
+      .prepare('UPDATE proposal_journal_meta SET revision=? WHERE namespace=?')
+      .run('0000000000000002', 'corrupt')
+    database.close()
+    expect(() => new SQLiteProposalJournal(file, 'corrupt', author, lifecycle)).toThrow(
+      'Incomplete'
+    )
+  })
+})

@@ -20,7 +20,8 @@
     "LookupOutputSource",
     "DirectDeliverySource",
     "ProposalPolicyRegistry",
-    "AuthorDocumentPolicy"
+    "AuthorDocumentPolicy",
+    "SQLiteProposalJournal"
   ],
   "maximumBytes": {
     "vite": {
@@ -66,9 +67,17 @@
         "proposalChannelKey",
         "validateProposalWindow",
         "ProposalTransitions",
-        "proposalRecordToken"
+        "proposalRecordToken",
+        "MemoryProposalJournal",
+        "proposalCommitKey",
+        "appendProposalWithRecovery"
       ],
-      "prohibitedExports": ["SQLiteJournal", "BitcoinKnowledge", "WalletOutputSource"],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "BitcoinKnowledge",
+        "WalletOutputSource",
+        "SQLiteProposalJournal"
+      ],
       "maximumBytes": {
         "vite": {
           "raw": 550000,

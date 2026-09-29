@@ -431,7 +431,41 @@ separate currentness assessments, not a reversal of the historical admission rec
 The local replay parser rechecks signatures and record/job bindings offline; it is
 not an API for accepting remote provider claims as locally completed admissions.
 
-Durable proposal storage and service integration remain in progress. Transition
+`MemoryProposalJournal` implements the atomic journal port with explicitly volatile
+storage. `SQLiteProposalJournal` is available from
+`@bsv/output-knowledge/proposals/sqlite` and requires Node 22.13 or newer. It uses
+SQLite WAL and `synchronous=FULL`, creates new files owner-only, and commits each
+transition as one immutable row with its revision and retained-byte accounting.
+Channel heads, terminal fences, operation claims and pending jobs are derived from
+that committed prefix. Independent connections take the same SQLite write lock
+before replaying and comparing a head. Reads pin an immutable prefix by revision.
+
+Both journals revalidate plans against the stored lifecycle. They preserve original
+commit keys across retries, reject an operation reused for another proposal, retain
+superseded signed heads for lookup, and expose bounded ordered journal reads.
+`getProposal` explicitly labels whether a retained signed head is still current.
+`appendProposalWithRecovery` looks up the exact original commit after an uncertain
+write; absence surfaces the error and never creates a replacement transaction.
+All storage reads, including event history, contain private data and require host
+authorization before any external serialization.
+
+The reference limits are 64 MiB retained bytes, 4 MiB per transition, 4,096 entries,
+1,024 channels and 128 channels per author. Callers may lower these bounds. Reads
+return at most 256 entries and stop at the configured entry-byte budget. Terminal
+channels continue counting toward capacity. This version retains full history and
+does not compact or delete it; exhaustion is an explicit limit, never permission to
+forget an operation, pending job or terminal fence. Further compaction and contract
+evolution are part of the service integration work.
+
+SQLite seals the provider identity, chain/service, installed policies and clock
+configuration in its namespace. It refuses to reinterpret an existing journal or
+open the same service identity under a fresh namespace in that database. Protect
+the containing directory and backup through SQLite's online backup facility. Do
+not point an existing service identity at an empty replacement database: loss of
+terminal fences requires retiring that identity, while existing finalization and
+recovery obligations still need recovery from the original retained storage.
+
+Authenticated service integration remains in progress. Journals and transition
 plans alone do not qualify a host as a BRC-194 proposal service. Hosts must retain
 the selected capability contract, recheck current read permissions on retries and
 serialization, impose resource/retention limits and implement recovery before

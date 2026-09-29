@@ -280,16 +280,17 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/application/output-knowledge.md](../packages/application/output-knowledge.md)
 - Source: [packages/application/output-knowledge](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge)
-- Release note: Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness, durable expiry and bounded source equivocation quarantine. Adds an optional installed-proposal policy entry with author-document signature, revision and exact finalization relation checks. Adds pure proposal lifecycle plans for durable reservation, expiry and terminal admission outcomes.
+- Release note: Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness, durable expiry and bounded source equivocation quarantine. Adds an optional installed-proposal policy entry with author-document signature, revision and exact finalization relation checks. Adds pure proposal lifecycle plans for durable reservation, expiry and terminal admission outcomes. Adds bounded Memory and SQLite proposal journals with atomic lifecycle events, admission jobs, cross-channel operation claims and crash recovery.
 - Migration: New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes. New journals seal configured currentness rules in local frame v3 with canonical assessment ordering. Existing v1/v2 journals retain their encoding and replay behavior when read or extended. Adopting v3 for an older journal or changing policies requires a new namespace; retain the old journal for audit and recovery.
 
-| Public subpath   | Runtime target(s)                                                      | Declaration target(s)               |
-| ---------------- | ---------------------------------------------------------------------- | ----------------------------------- |
-| `.`              | `./dist/index.js`<br>`./dist/index.js`                                 | `./dist/index.d.ts`                 |
-| `./package.json` | `./package.json`                                                       | —                                   |
-| `./sources`      | `./dist/sources/index.js`<br>`./dist/sources/index.js`                 | `./dist/sources/index.d.ts`         |
-| `./sqlite`       | `./dist/storage/SQLiteJournal.js`<br>`./dist/storage/SQLiteJournal.js` | `./dist/storage/SQLiteJournal.d.ts` |
-| `./proposals`    | `./dist/proposals/index.js`<br>`./dist/proposals/index.js`             | `./dist/proposals/index.d.ts`       |
+| Public subpath       | Runtime target(s)                                                                          | Declaration target(s)                         |
+| -------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `.`                  | `./dist/index.js`<br>`./dist/index.js`                                                     | `./dist/index.d.ts`                           |
+| `./package.json`     | `./package.json`                                                                           | —                                             |
+| `./sources`          | `./dist/sources/index.js`<br>`./dist/sources/index.js`                                     | `./dist/sources/index.d.ts`                   |
+| `./sqlite`           | `./dist/storage/SQLiteJournal.js`<br>`./dist/storage/SQLiteJournal.js`                     | `./dist/storage/SQLiteJournal.d.ts`           |
+| `./proposals`        | `./dist/proposals/index.js`<br>`./dist/proposals/index.js`                                 | `./dist/proposals/index.d.ts`                 |
+| `./proposals/sqlite` | `./dist/proposals/SQLiteProposalJournal.js`<br>`./dist/proposals/SQLiteProposalJournal.js` | `./dist/proposals/SQLiteProposalJournal.d.ts` |
 
 ## @bsv/overlay
 

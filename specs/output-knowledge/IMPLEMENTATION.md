@@ -29,7 +29,9 @@ submission and GASP behavior remains available to applications that do not opt i
 - Explicit installed proposal policies, actual author signatures, canonical
   author-document payloads, exact successor and PRP1 finalization relations.
 - Pure proposal lifecycle plans with whole-record CAS, exact admission jobs,
-  terminal outcomes and serialized expiry/finalization; storage integration remains.
+  terminal outcomes and serialized expiry/finalization.
+- Separate bounded Memory/SQLite proposal journals, immutable service configuration,
+  atomic private events/jobs/operation claims and recovery after actual process exit.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -40,7 +42,8 @@ submission and GASP behavior remains available to applications that do not opt i
 
 ## Remaining checkpoint-two work
 
-- Add durable proposal namespaces, lifecycle storage and finalization/admission bridges.
+- Finish proposal capability retention/configuration evolution, compaction preserving
+  terminal fences, current authorization and finalization/admission bridges.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
   retention, source adapters and consistent Overlay/Overlay Express storage hooks.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
@@ -64,7 +67,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,638 tests across 217 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 252 tests across 21 suites, with more than 95% line and 89% branch
+run passes 273 tests across 22 suites, with more than 95% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.

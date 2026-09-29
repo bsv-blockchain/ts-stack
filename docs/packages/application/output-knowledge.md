@@ -57,6 +57,12 @@ jobs, retain uncertain results and serialize expiry against finalization. Its pl
 require an atomic storage adapter for the head, operation binding and lifecycle
 events before any admission effect. It preserves historical finalized/failed
 outcomes separately from current chain assessments.
+`MemoryProposalJournal` is explicitly volatile; `SQLiteProposalJournal`, from
+`@bsv/output-knowledge/proposals/sqlite`, durably commits the same transitions and
+private events together. It preserves retry bindings, pending jobs and terminal
+fences across process loss. The reference journal seals its service identity and
+configuration and refuses silent resets. Its bounded full-history retention is
+not a completed service compaction or capability-recovery implementation.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current

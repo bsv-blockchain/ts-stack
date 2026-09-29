@@ -2,7 +2,10 @@ import type { OutputChain, OutputJSONObject, OutputProposalBody, Transaction } f
 
 export type ProposalAction = 'put' | 'read' | 'finalize'
 
-/** Locally installed, versioned code. A remote policy identifier never loads code. */
+/**
+ * Locally installed, immutable, deterministic validation code. Methods are pure;
+ * mutable host access policy is a separate port. A remote identifier never loads code.
+ */
 export interface ProposalPolicy {
   readonly id: string
   readonly supportedExtensions?: readonly string[]

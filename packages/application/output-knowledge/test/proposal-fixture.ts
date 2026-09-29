@@ -33,7 +33,7 @@ export function signed(changes: Partial<OutputProposalBody> = {}): OutputSignedP
       revision: '0',
       previous: null,
       author,
-      recipients: [author, recipient].sort(),
+      recipients: [author, recipient].sort((a, b) => a.localeCompare(b)),
       anchors: [],
       issuedAt: '10',
       expiresAt: '100',

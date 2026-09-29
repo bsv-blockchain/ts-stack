@@ -84,6 +84,40 @@ export class ProposalTransitions {
     outputU64(clock.futureSkewSeconds)
   }
 
+  /** Persist this exact local configuration alongside the journal namespace. */
+  configuration(): {
+    scope: ProposalScope
+    clock: ProposalClockPolicy
+    policies: ReturnType<ProposalPolicyRegistry['describe']>
+  } {
+    return structuredClone({
+      scope: this.scope,
+      clock: this.clock,
+      policies: this.policies.describe()
+    })
+  }
+
+  /** Validate a local commit plan against its current stored head before atomic persistence. */
+  check(current: ProposalChannelRecord | undefined, input: unknown): ProposalTransition {
+    const value = parseOutputJSON(canonicalOutputJSON(input))
+    closedOutputObject(value, ['expectedToken', 'next', 'events', 'changed'])
+    if (typeof value.changed !== 'boolean' || !Array.isArray(value.events))
+      throw new OutputProtocolError('invalid', 'Invalid proposal transition plan')
+    if (value.expectedToken !== null) outputHex32(value.expectedToken)
+    const previous = current === undefined ? undefined : this.parse(current)
+    if (value.expectedToken !== (previous ? proposalRecordToken(previous) : null))
+      throw new OutputProtocolError('conflict', 'Proposal head changed')
+    const next = this.parse(value.next)
+    const planned =
+      !value.changed && previous ? unchanged(previous) : this.reconstruct(previous, next)
+    if (canonicalOutputJSON(planned) !== canonicalOutputJSON(value))
+      throw new OutputProtocolError(
+        'invalid',
+        'Proposal transition does not match its lifecycle effects'
+      )
+    return planned
+  }
+
   /** Validate owned local replay material without reinterpreting expiry or consulting a network. */
   parse(input: unknown): ProposalChannelRecord {
     const value = parseOutputJSON(canonicalOutputJSON(input))
@@ -120,6 +154,14 @@ export class ProposalTransitions {
     this.authorize('put', proposal, caller)
     outputU64(now)
     const previous = current === undefined ? undefined : this.parse(current)
+    return this.update(previous, proposal, now)
+  }
+
+  private update(
+    previous: ProposalChannelRecord | undefined,
+    proposal: OutputSignedProposal,
+    now: string
+  ): ProposalTransition {
     const proposalId = outputPacketDigest('proposal', proposal.body)
     if (previous?.proposalId === proposalId) return unchanged(previous)
     validateProposalWindow(proposal.body, now, this.clock)
@@ -139,6 +181,52 @@ export class ProposalTransitions {
       }
     }
     return changed(previous, next, true)
+  }
+
+  private reconstruct(
+    previous: ProposalChannelRecord | undefined,
+    next: ProposalChannelRecord
+  ): ProposalTransition {
+    if (!previous || previous.proposalId !== next.proposalId)
+      return this.update(previous, next.proposal, next.state.recordedAt)
+    if (next.state.status === 'expired') return this.expire(previous, next.state.recordedAt)
+    if (next.state.status === 'finalizing' && next.admission) {
+      const job = next.admission
+      return this.reserve(
+        previous,
+        job.caller,
+        {
+          version: 1,
+          service: next.proposal.body.service,
+          proposalId: next.proposalId,
+          operationId: job.operationId,
+          txid: job.txid,
+          beef: job.beef
+        },
+        job.rawTransaction,
+        next.state.recordedAt
+      )
+    }
+    if (next.state.status === 'finalized' || next.state.status === 'finalization-failed') {
+      const state = next.state
+      const result: ProposalAdmissionOutcome =
+        state.status === 'finalized'
+          ? {
+              status: 'admitted',
+              operationId: state.operationId,
+              txid: state.txid,
+              steak: state.steak,
+              assessmentContextId: state.assessmentContextId
+            }
+          : {
+              status: 'rejected',
+              operationId: state.operationId,
+              txid: state.txid,
+              reason: state.reason
+            }
+      return this.complete(previous, result, state.recordedAt)
+    }
+    return unchanged(previous)
   }
 
   /** Timer expiry is serialized with update/withdraw/reserve, never cancellation of a reserved job. */
@@ -212,8 +300,7 @@ export class ProposalTransitions {
     const previous = this.parse(current)
     outputU64(now)
     if (
-      !previous.admission ||
-      previous.admission.operationId !== outcome.operationId ||
+      previous.admission?.operationId !== outcome.operationId ||
       previous.admission.txid !== outcome.txid
     )
       throw new OutputProtocolError(
