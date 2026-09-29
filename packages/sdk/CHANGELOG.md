@@ -226,6 +226,10 @@ All notable changes to this project will be documented in this file. The format 
 - Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
 - Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
 
+### Fixed (2.8.11 candidate)
+
+- `WalletClient` and the binary BRC-100 wire no longer reject every `acquireCertificate` issuance. Result validation required the returned `fields` to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted, so a valid issuance always failed with `Invalid acquireCertificate result certificate.fields: expected the requested certificate fields`. An issuance result is now bound to exactly the requested field names; a direct acquisition, whose request already carries the encrypted values, is still bound to them exactly. No API, wire or wallet-data migration is required.
+
 ### Fixed (2.8.9 candidate)
 
 - AuthFetch bounds general payloads in binary bytes using its HTTP request and configured response budgets instead of charging each byte against the generic JSON authentication envelope budget. Complete 4 MiB CHIRP chunks now reach the transport; HTTP request/response bounds, authentication checks, certificate limits and redirect rejection remain enforced. No API, wire or wallet-data migration is required.

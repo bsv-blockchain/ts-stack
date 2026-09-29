@@ -4,6 +4,45 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.4
+
+- `discoverByIdentityKey` and `discoverByAttributes` keep each certificate's
+  `certifierInfo.description` within BRC-100's 5-50 UTF-8 bytes. The default
+  SocialCert (56 bytes) and Metanet Trust Services (55 bytes) descriptions
+  exceeded it, so `@bsv/sdk` 2.8.8+ rejected every discovery result from one of
+  them with `Invalid discoverByAttributes result
+  certificates[n].certifierInfo.description: expected 5–50 UTF-8 bytes`, which
+  broke `IdentityClient.resolveByAttributes` and `resolveByIdentityKey`. Both
+  defaults are shortened. Trust settings still accept descriptions of up to 500
+  bytes so stored settings stay readable; a longer one is cut at a code point
+  boundary when the result is built, and one under 5 bytes becomes
+  `Trusted certifier`.
+- A non-admin `createAction` with `noSend` that `WalletPermissionsManager`
+  signs internally returned `noSendChange` outpoints on the unsigned txid next
+  to the signed `txid`, so `@bsv/sdk` 2.8.8+ rejected it with `Invalid
+  createAction result noSendChange[0]: expected an outpoint of the returned
+  transaction`. The outpoints now name the signed transaction (vouts are
+  unchanged by signing).
+- That same no-send action could not be released: the caller only gets its
+  `txid`, and `abortAction` from a non-admin originator accepted only references
+  the manager had issued, which it drops once it signs. The originator that
+  created a no-send action can now abort it by that `txid`; other originators
+  still cannot, and a broadcast action is never abortable this way. The same
+  applies when the caller signs a `signAndProcess: false` no-send action itself
+  with `signAction`: it can then abort it by the `reference` it signed or by the
+  signed `txid`, where before `abortAction` failed with `The action reference
+  was not issued by this permissions manager.`
+- `discoverByIdentityKey` and `discoverByAttributes` return the requested
+  `limit`/`offset` page (limit 10 when omitted). They returned every trusted
+  match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`
+  still counts every trusted match.
+- `ChaintracksServiceClient`, `BHServiceClient` and `GoChaintracksServiceClient`
+  called `fetch` as a method of the client, which browsers refuse ("Failed to
+  execute 'fetch' on 'Window': Illegal invocation" in Chrome, "Can only call
+  Window.fetch on instances of Window" in WebKit). Any in-page wallet verifying
+  a merkle proof through them failed, for example `internalizeAction` of a BRC-29
+  payment. They now call the default or supplied `fetch` with no receiver.
+
 ## wallet-toolbox 2.14.3
 
 - Surplus change shaping no longer splits change into outputs below the dust

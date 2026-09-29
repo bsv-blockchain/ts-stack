@@ -49,7 +49,9 @@ export class BHServiceClient implements ChaintracksClientApi {
     }
     this.serviceUrl = this.normalizeServiceUrl(url)
     this.options = { ...ChaintracksServiceClient.createChaintracksServiceClientOptions(), ...options }
-    this.fetcher = this.options.fetch ?? fetch
+    const fetchImpl = this.options.fetch ?? fetch
+    // Call fetch with no receiver: browsers refuse it on anything but the window.
+    this.fetcher = async (input, init) => await fetchImpl(input, init)
     this.requestTimeoutMsecs = this.positiveInteger(
       this.options.requestTimeoutMsecs ?? 30_000,
       'requestTimeoutMsecs',

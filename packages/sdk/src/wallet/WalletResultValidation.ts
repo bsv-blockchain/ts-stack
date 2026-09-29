@@ -1780,11 +1780,29 @@ function sameStringRecord(actual: unknown, expected: unknown): boolean {
   return true
 }
 
+function sameRecordKeys(actual: unknown, expected: unknown): boolean {
+  const actualRecord = requestRecord(actual)
+  const expectedRecord = requestRecord(expected)
+  if (actualRecord == null || expectedRecord == null) return false
+  const actualKeys = intrinsicObjectKeys(actualRecord)
+  const expectedKeys = intrinsicObjectKeys(expectedRecord)
+  if (actualKeys.length !== expectedKeys.length) return false
+  // Indexed rather than for-of, like the rest of this file: iterating would
+  // call Array.prototype[Symbol.iterator], which a caller can replace.
+  let index = 0
+  while (index < expectedKeys.length) {
+    if (!hasOwn(actualRecord, expectedKeys[index])) return false
+    index++
+  }
+  return true
+}
+
 function bindCertificateToPartialRequest(
   certificate: UnknownRecord,
   request: unknown,
   call: string,
-  field: string
+  field: string,
+  bindFieldValues = true
 ): void {
   const expected = requestRecord(request)
   if (expected == null) return
@@ -1813,7 +1831,12 @@ function bindCertificateToPartialRequest(
   ) {
     invalid(call, `${field}.revocationOutpoint`, 'the requested certificate revocation outpoint')
   }
-  if (expected.fields !== undefined && !sameStringRecord(certificate.fields, expected.fields)) {
+  if (
+    expected.fields !== undefined &&
+    !(bindFieldValues
+      ? sameStringRecord(certificate.fields, expected.fields)
+      : sameRecordKeys(certificate.fields, expected.fields))
+  ) {
     invalid(call, `${field}.fields`, 'the requested certificate fields')
   }
 }
@@ -2295,7 +2318,16 @@ export function validateWalletResult<T>(call: CallType, value: T, request?: unkn
       // Both direct and issuance requests carry caller-authorized fields.
       // Bind every field present on the request while allowing the issuer to
       // supply fields (serial, signature, revocation outpoint) that were not.
-      bindCertificateToPartialRequest(result, requestArgs, call, 'certificate')
+      // Issuance sends plaintext field values and the certificate comes back
+      // with each one encrypted, so only its field names can be bound; a
+      // direct request already carries the certificate's encrypted values.
+      bindCertificateToPartialRequest(
+        result,
+        requestArgs,
+        call,
+        'certificate',
+        requestArgs?.acquisitionProtocol !== 'issuance'
+      )
       break
     case 'proveCertificate':
       {

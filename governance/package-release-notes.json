@@ -168,7 +168,7 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
       "releaseType": "minor",
-      "summary": "Adds opt-in BRC-192\u2013199 protocol representations, exact encodings, capability selection, live lookup boundaries and closed proposal endpoint codecs while preserving all existing overlay APIs. Adds bounded local capability retention and original-contract revalidation for recovery. Adds bounded common service error envelopes and exact BRC-193 status mappings. Adds explicit AuthFetch automatic-payment opt-out, required mutual authentication and expected server identity controls while preserving existing defaults. Adds a bounded retained-contract BRC-193 HTTP client with authenticated selection binding, cancellation, unpaid errors and caller-owned durable cursor progression.",
+      "summary": "Adds opt-in BRC-192\u2013199 protocol representations, exact encodings, capability selection, live lookup boundaries and closed proposal endpoint codecs while preserving all existing overlay APIs. Adds bounded local capability retention and original-contract revalidation for recovery. Adds bounded common service error envelopes and exact BRC-193 status mappings. Adds explicit AuthFetch automatic-payment opt-out, required mutual authentication and expected server identity controls while preserving existing defaults. Adds a bounded retained-contract BRC-193 HTTP client with authenticated selection binding, cancellation, unpaid errors and caller-owned durable cursor progression. WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly.",
       "migration": "Existing exports, endpoints and lookup defaults remain unchanged. Select the new versioned profiles explicitly; the accompanying output-knowledge runtime provides durable application state above the SDK. Retained capability records are local replay material: persist them atomically with operations and independently enforce current authorization and operation deadlines. Use allowPayments: false for unpaid authenticated requests. Select requireMutualAuth to disable ordinary HTTP fallback, or expectedIdentityKey to additionally pin the canonical provider key before application dispatch; verify capability/profile bindings separately. Use HTTPS for confidentiality. Omitted controls preserve existing behavior. OutputLookupTransport is opt-in: persist the original opening before dispatch, and atomically commit each batch with its cursor before reading further. Full durable service/runtime integration is separate; no default legacy behavior changes."
     },
     {
@@ -215,24 +215,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.2",
+      "publishedVersion": "2.14.3",
       "releaseType": "patch",
-      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
-      "migration": "No consumer, wire, or database migration is required."
+      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
+      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
     },
     {
       "name": "create-bsv-app",
