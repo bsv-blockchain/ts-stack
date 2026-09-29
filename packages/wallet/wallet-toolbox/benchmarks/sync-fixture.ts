@@ -1,3 +1,4 @@
+import { runInSeries } from '../src/utility/runInSeries'
 import { Script, Transaction, MerklePath } from '@bsv/sdk'
 import type { StorageProvider } from '../src/storage/StorageProvider'
 
@@ -22,8 +23,8 @@ export async function seedSyncBenchmark(
   const timestamp = new Date(1_700_000_000_000)
   await storage.transaction(async trx => {
     // Seed in order on one transaction without queuing thousands of pending writes.
-    for await (const i of fixtureIndexes(labels))
-      await storage.insertTxLabel(
+    await runInSeries(fixtureIndexes(labels), i =>
+      storage.insertTxLabel(
         {
           txLabelId: 0,
           userId: user.userId,
@@ -34,7 +35,8 @@ export async function seedSyncBenchmark(
         },
         trx
       )
-    for await (const i of fixtureIndexes(proofCount)) {
+    )
+    await runInSeries(fixtureIndexes(proofCount), async i => {
       const tx = new Transaction()
       tx.addOutput({ satoshis: i + 1, lockingScript: Script.fromASM(`OP_FALSE OP_RETURN ${'01'.repeat(proofBytes)}`) })
       const txid = tx.id('hex')
@@ -70,7 +72,7 @@ export async function seedSyncBenchmark(
         },
         trx
       )
-    }
+    })
   })
   return user
 }

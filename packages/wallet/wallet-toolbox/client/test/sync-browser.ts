@@ -26,6 +26,12 @@ async function close(storage: StorageIdb) {
   await storage.dropAllData()
 }
 
+async function* destinationModes() {
+  for (const mode of ['exclusive', 'paged'] as const) {
+    yield open().then(destination => ({ mode, destination }))
+  }
+}
+
 async function benchmark() {
   const source = await open()
   const identityKey = PrivateKey.fromRandom().toPublicKey().toString()
@@ -47,8 +53,7 @@ async function benchmark() {
   }
   try {
     // Modes share a source fixture and must be measured without competing workloads.
-    for await (const mode of ['exclusive', 'paged'] as const) {
-      const destination = await open()
+    for await (const { mode, destination } of destinationModes()) {
       const capabilities = destination.getCapabilities.bind(destination)
       if (mode === 'exclusive')
         destination.getCapabilities = async () => ({ ...(await capabilities()), storageAccess: undefined })

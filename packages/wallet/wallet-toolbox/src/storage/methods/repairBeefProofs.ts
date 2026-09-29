@@ -1,3 +1,4 @@
+import { runInSeries } from '../../utility/runInSeries'
 import { findProofRecords, mapProofWork } from './proofWork'
 import { Beef, MerklePath } from '@bsv/sdk'
 import { WERR_INVALID_MERKLE_ROOT } from '../../sdk/WERR_errors'
@@ -87,9 +88,9 @@ export async function repairBeefProofs(storage: StorageProvider, beef: Beef, trx
     await storage.transaction(async trx => {
       let changed = false
       // Preserve transaction write order and finish each compare-and-set before the next.
-      for await (const { proof, expected } of replacements) {
+      await runInSeries(replacements, async ({ proof, expected }) => {
         if (expected != null) changed = (await storage.compareAndSetProvenTxProof(expected, proof, trx)) || changed
-      }
+      })
       const extension = storage as StorageProvider & { invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number> }
       if (changed) await extension.invalidatePreparedBeefs?.(trx)
     }, trx)

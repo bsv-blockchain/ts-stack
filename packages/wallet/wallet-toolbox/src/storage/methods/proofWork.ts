@@ -1,3 +1,4 @@
+import { runInSeries } from '../../utility/runInSeries'
 import type { StorageProvider } from '../StorageProvider'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import type { TableProvenTx } from '../schema/tables'
@@ -15,9 +16,9 @@ export async function findProofRecords(
   const unique = [...new Set(txids)]
   const records: TableProvenTx[] = []
   // Consume one SQL batch at a time; callers may share a transaction connection.
-  for await (const batch of proofBatches(unique)) {
+  await runInSeries(proofBatches(unique), async batch => {
     records.push(...(await storage.findProvenTxs({ partial: {}, txids: batch, trx })))
-  }
+  })
   return records
 }
 
@@ -31,16 +32,15 @@ export async function mapProofWork<T, R>(items: T[], work: (item: T) => Promise<
   }
   const workers = Array.from({ length: Math.min(items.length, 8) }, async () => {
     // Each worker consumes serially; all eight share the same admission cursor.
-    for await (const index of pendingIndexes()) {
-      // A peer may fail while the iterator hands this worker its next index.
-      if (failed) break
+    await runInSeries(pendingIndexes(), async index => {
+      if (failed) return
       try {
         results[index] = await work(items[index])
       } catch (error) {
         failed = true
         throw error
       }
-    }
+    })
   })
   const settled = await Promise.allSettled(workers)
   for (const result of settled) if (result.status === 'rejected') throw result.reason

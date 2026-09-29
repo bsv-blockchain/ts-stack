@@ -45,6 +45,10 @@ async function listen(server) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   return `http://127.0.0.1:${server.address().port}`
 }
+async function* receivers(cases) {
+  for (const item of cases) yield receiver(item).then(target => ({ item, target }))
+}
+
 async function receiver({ multipart = true, exposeTransport = true } = {}) {
   const app = express()
   const wallet = new ProtoWallet(new PrivateKey(23))
@@ -134,8 +138,7 @@ try {
     { contentType: 'text/plain', body: [], ancestorBytes: 0, multipart: false }
   ]
   // Reuse the page only after the preceding wallet scenario has settled.
-  for await (const item of cases) {
-    const target = await receiver(item)
+  for await (const { item, target } of receivers(cases)) {
     const result = await page.evaluate(async args => await globalThis.pay(args), {
       ...item,
       origin: target.origin
@@ -182,8 +185,10 @@ try {
     assert.equal(manifest.version, '2.8.0')
     legacyBundle = await build({ ...bundleOptions, alias: { '@bsv/sdk': legacyModule } })
     await page.addScriptTag({ url: `${pageOrigin}/legacy.js`, type: 'module' })
-    for await (const multipart of [true, false]) {
-      const target = await receiver({ multipart })
+    for await (const {
+      item: { multipart },
+      target
+    } of receivers([{ multipart: true }, { multipart: false }])) {
       const item = {
         origin: target.origin,
         ancestorBytes: 0,

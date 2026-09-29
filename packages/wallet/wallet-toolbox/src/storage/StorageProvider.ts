@@ -1,3 +1,4 @@
+import { runInSeries } from '../utility/runInSeries'
 import { findProofRecords, mapProofWork } from './methods/proofWork'
 import { snapshotSyncPage } from './sync/snapshotSyncPage'
 import {
@@ -1463,14 +1464,17 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     // in IndexedDB) and makes the page checkpoint atomic with its data changes.
     return await this.transaction(async trx => {
       // Serial sorted reads retain deterministic lock ordering on the shared transaction.
-      for await (const [, previous] of [...expected.values()]
-        .sort((left, right) => left.txid.localeCompare(right.txid))
-        .entries()) {
-        const current = verifyOneOrNone(await this.findProvenTxs({ partial: { txid: previous.txid }, trx }))
-        if (current == null || !sameSyncProof(current, previous)) {
-          throw new WERR_INVALID_OPERATION('Proof changed during sync preparation; resume from the durable checkpoint.')
+      await runInSeries(
+        [...expected.values()].sort((left, right) => left.txid.localeCompare(right.txid)),
+        async previous => {
+          const current = verifyOneOrNone(await this.findProvenTxs({ partial: { txid: previous.txid }, trx }))
+          if (current == null || !sameSyncProof(current, previous)) {
+            throw new WERR_INVALID_OPERATION(
+              'Proof changed during sync preparation; resume from the durable checkpoint.'
+            )
+          }
         }
-      }
+      )
       const user = verifyTruthy(
         verifyOneOrNone(await this.findUsers({ partial: { identityKey: args.identityKey }, trx }))
       )

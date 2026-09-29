@@ -1,3 +1,4 @@
+import { runInSeries } from '../utility/runInSeries'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
@@ -196,11 +197,11 @@ export class WalletStorageManager implements sdk.WalletStorage {
   private async preflightManagedNetworks(peer?: TableSettings): Promise<void> {
     let reference = peer
     // The first available store establishes the network for each later store.
-    for await (const store of this._stores) {
+    await runInSeries(this._stores, async store => {
       store.settings ??= await store.storage.makeAvailable()
       if (reference != null) assertSyncNetwork(reference, store.settings)
       reference ??= store.settings
-    }
+    })
   }
 
   private selectActiveFromStore(store: ManagedStorage, backups: ManagedStorage[]): void {
@@ -691,7 +692,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
       if (ptxs.length === 0) return
       await active.transaction(async trx => {
         // Keep proof writes and their result log in source order within this transaction.
-        for await (const [index, ptx] of ptxs.entries()) {
+        await runInSeries(ptxs.entries(), async ([index, ptx]) => {
           const { result: proof, replacement } = prepared[index]
           result.log += proof.log
           if (replacement !== undefined && proof.updated !== undefined) {
@@ -704,7 +705,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
             }
           } else if (proof.unchanged) result.unchanged.push(ptx)
           else result.unavailable.push(ptx)
-        }
+        })
         // Even unavailable replacements invalidate material built from the
         // orphaned header. Proof rows and the prepared epoch commit atomically.
         await invalidatePreparedBeefs(active, trx)
