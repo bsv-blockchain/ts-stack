@@ -73,7 +73,8 @@ export interface ProposalServiceOptions {
   lifecycle: ProposalTransitions
   storage: ProposalJournalStorage
   trust: ProposalCapabilityTrust
-  manifest(): unknown | Promise<unknown>
+  /** May return a promise; the resolved value is validated as a signed capability. */
+  manifest(): unknown
   now(): string
   access(
     action: ProposalAction,
@@ -237,7 +238,7 @@ export class ProposalService {
   /** Trusted worker entry: finish only previously reserved work, independently of caller read access. */
   async reconcile(proposalId: string): Promise<void> {
     const entry = await this.storage.getProposalEntry(outputHex32(proposalId))
-    if (!entry || entry.transition.next.state.status !== 'finalizing') return
+    if (entry?.transition.next.state.status !== 'finalizing') return
     const record = entry.transition.next
     const local = this.local(entry)
     const selection = this.contracts.restore(local.admission)

@@ -81,7 +81,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,666 tests across 220 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 319 tests across 27 suites, with more than 95% line and 90% branch
+run passes 320 tests across 27 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,

@@ -50,14 +50,15 @@ export function proposalRetentionDeadline(
   selection: OutputCapabilitySelection,
   previous = '0'
 ): string {
-  const expiry = outputU64(record.proposal.body.expiresAt)
+  let basis = outputU64(record.proposal.body.expiresAt)
   const recorded = outputU64(record.state.recordedAt)
-  const deadline =
-    (expiry > recorded ? expiry : recorded) +
-    outputU64(selection.profile.parameters.retentionSeconds)
+  // Exact U64 seconds require BigInt; Math.max cannot represent this domain.
+  if (recorded > basis) basis = recorded
+  const deadline = basis + outputU64(selection.profile.parameters.retentionSeconds)
   // Detect overflow before making a retention promise or starting admission.
   outputU64(deadline.toString())
-  return (deadline > outputU64(previous) ? deadline : outputU64(previous)).toString()
+  if (outputU64(previous) >= deadline) return previous
+  return deadline.toString()
 }
 
 /**

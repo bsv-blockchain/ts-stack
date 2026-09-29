@@ -543,3 +543,35 @@ it('serializes timer races across SQLite writers and surfaces unavailable expiry
   })
   expect((await failed.storage.head()).entries).toBe(1)
 })
+
+it('retains exact U64 deadlines above safe integers and rejects overflow before making a promise', async () => {
+  for (const issued of [9007199254740993n, 18446744073709551515n]) {
+    const f = fixture()
+    const proposal = signed({ issuedAt: issued.toString(), expiresAt: (issued + 100n).toString() })
+    const manifest = signOutputPacket(
+      'capabilities',
+      {
+        ...f.manifest.body,
+        issuedAt: proposal.body.issuedAt,
+        expiresAt: proposal.body.expiresAt
+      },
+      authorKey
+    )
+    f.options.manifest = () => manifest
+    f.time(issued.toString())
+    const caller = {
+      ...f.caller,
+      capabilityDigest: outputPacketDigest('capabilities', manifest.body)
+    }
+    const pending = f.make().put({ version: 1, proposal }, caller)
+    if (issued === 9007199254740993n) {
+      const result = await pending
+      expect((await f.storage.getProposalEntry(result.proposalId))?.local?.retainUntil).toBe(
+        '9007199254742093'
+      )
+    } else {
+      await expect(pending).rejects.toMatchObject({ code: 'invalid' })
+      expect((await f.storage.head()).entries).toBe(0)
+    }
+  }
+})
