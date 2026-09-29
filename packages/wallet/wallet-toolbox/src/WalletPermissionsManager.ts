@@ -4338,11 +4338,7 @@ export class WalletPermissionsManager implements WalletInterface {
     // data. This ensures malformed BEEF is still aborted and cannot leave an
     // untracked action that may later be signed under another originator.
     const reference = createResult.signableTransaction.reference
-    if (this.pendingActionOriginators.has(reference)) {
-      throw new WERR_UNAUTHORIZED('The action reference is already pending.')
-    }
-    this.pendingActionOriginators.set(reference, originator ?? '')
-    if (vargs.isNoSend) this.pendingNoSendReferences.add(reference)
+    this.bindPendingAction(reference, originator, vargs.isNoSend)
 
     // 7a) Parse the signable tx to determine net spend, then gate on spending
     // authorization. SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
@@ -4790,6 +4786,14 @@ export class WalletPermissionsManager implements WalletInterface {
     if (expected !== (originator ?? '')) {
       throw new WERR_UNAUTHORIZED('The action reference belongs to a different originator.')
     }
+  }
+
+  private bindPendingAction(reference: string, originator: string | undefined, noSend: boolean): void {
+    if (this.pendingActionOriginators.has(reference)) {
+      throw new WERR_UNAUTHORIZED('The action reference is already pending.')
+    }
+    this.pendingActionOriginators.set(reference, originator ?? '')
+    if (noSend) this.pendingNoSendReferences.add(reference)
   }
 
   private clearPendingAction(reference: string): void {
