@@ -3,8 +3,8 @@ id: wallet-data-portability
 title: 'BRC-38/39 Wallet Data Portability'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, interoperability, brc38, brc39]
@@ -49,6 +49,22 @@ The export does not contain root keys, unrelated manager snapshots, other
 profiles, storage-global monitor events, or product data held outside these
 tables. Inventory contacts, permissions, external files and custom signing
 dependencies in your product before describing its backup coverage.
+
+This exclusion also applies to application-owned tables in the **same database**:
+reports, sessions and other custom tables are not discovered or copied by the
+portable helpers. Preserving an output does not preserve its application meaning
+when that meaning exists only in a custom table. Use standard baskets, tags,
+labels and their relationships where their semantics fit; otherwise provide a
+separately versioned application export/import and test its links to restored
+outpoints. Distinguish durable user content from disposable sessions, caches and
+credentials, which must not be copied indiscriminately. A successful wallet
+import must disclose any missing application context.
+
+For an older source wallet, check its installed exports and schema before
+planning a drill. If the required helpers are absent, preserve the original and
+qualify an isolated copy through the supported migration/export path. Record
+both versions; importing a file on the candidate does not prove that an older
+wallet can produce that file unchanged.
 
 The current helpers read multiple tables and materialize the complete document
 and encrypted file in memory. They do not take a database-wide snapshot,

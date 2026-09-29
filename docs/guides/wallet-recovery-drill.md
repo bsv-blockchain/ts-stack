@@ -3,8 +3,8 @@ id: wallet-recovery-drill
 title: 'Wallet Recovery Drill and Acceptance Checklist'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 status: stable
 tags: [wallet, recovery, backup, testing, interoperability]
@@ -101,6 +101,9 @@ which product data is excluded and how it is restored separately.
 | Concurrent source writes                                | Export uses the documented consistency procedure; no claim that sequential reads form a database snapshot                             |
 | Low-memory device and large file                        | Enforced product limits, measured peak memory/time and usable failure/progress UI; no weakened cryptography                           |
 | Browser eviction, app uninstall, device loss            | Recovery succeeds through independent copies, or the exact unsupported case is clearly disclosed                                      |
+| Two reinstalls; newest device empty or incomplete       | Older complete records remain recoverable; source selection and validation finish before the new device starts backup writes          |
+| Records split across device histories                   | The host's supported replay preserves the expected union and conflict semantics, or clearly reports the unsupported recovery path     |
+| Custom tables beside wallet tables                      | Standard wallet records recover; excluded application context is disclosed and its separate restoration is tested where supported     |
 | Vendor A export → vendor B import                       | Same identity/network and compatible row semantics; unsupported product extensions disclosed; test the reverse direction when claimed |
 | Key/share or passphrase dependency unavailable          | Document the supported combinations and actual failure behavior; no circular recovery assumption                                      |
 
@@ -110,6 +113,24 @@ external data and secret-store access, and measure actual recovery time/data
 loss. Keep monitor/background jobs disabled until their side effects and
 replay state have been reviewed. Replicas, backups and service health are
 separate evidence.
+
+### Prove restored derivation without broadcasting
+
+For a synthetic BRC-29 fixture, retain the expected source outpoint, locking
+script, sender identity and derivation metadata independently of the archive.
+After import, use the recovered wallet to prepare and sign a spend with
+`noSend: true`, then verify the unlocking script against that original output
+locally. A matching balance, identity or returned txid alone does not prove that
+the output's derivation metadata survived. Record the actual no-send capability
+and exact package versions; do not assume an older wallet exposes current APIs.
+
+Keep the restored copy's monitor, network broadcasting and provider writes
+disabled through tested host controls. Release the test action with the
+supported `abortAction` path and verify the isolated target's inputs are
+available again. This rehearsal uses synthetic data; it is not permission to
+sign against a user's live funds or proof that a physical wallet reinstall
+succeeded. Product-owned context and custom signing modules need their own
+acceptance evidence even when this signature check passes.
 
 ## Diagnose failures without destroying evidence
 
@@ -137,11 +158,13 @@ Runtime / device / network / backend / schema version:
 Synthetic fixture ID / profile count / data classes covered:
 Key recovery method / unavailable factors tested (no secret values):
 Data recovery method / consistent recovery point / archive digest:
+Backup source device / generation / completion evidence / alternatives retained:
 Product data included / excluded / separate restoration method:
 Source device/provider dependencies removed for the drill:
 Restore or merge target and authority decision:
 Expected vs actual inventory / relationships / binary-data verification:
 Identity / read / controlled spend / restart / retry outcomes:
+BRC-29 no-send signature verification / action cleanup / broadcast isolation:
 Negative, resource-limit and cross-wallet scenarios with results:
 Observed data-loss interval / restore duration vs declared objectives:
 Unresolved gaps / user-visible limitations / remediation owner:
