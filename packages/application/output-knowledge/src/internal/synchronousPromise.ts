@@ -4,5 +4,9 @@
  * Promise.resolve().then(work) would move ownership/CAS checks to a later turn.
  */
 export function synchronousPromise<T>(work: () => T): Promise<T> {
-  return new Promise<T>(resolve => resolve(work()))
+  try {
+    return Promise.resolve(work())
+  } catch (error) {
+    return Promise.reject(error)
+  }
 }

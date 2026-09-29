@@ -95,7 +95,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,751 tests across 223 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 385 tests across 30 suites, with more than 96% line and 91% branch
+run passes 389 tests across 31 suites, with more than 96% line and 91% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
@@ -106,8 +106,8 @@ original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, 
 write acknowledgements and receipt capacity checked before admission. The concrete
 evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
 The original journal-append target killed all 26 generated mutations. The expanded
-receipt/workflow CAS target passes 94.41% over 179 mutations (168 killed, one
-timeout, ten surviving, zero uncovered/invalid) at the unchanged 90% gate.
+receipt/workflow CAS target passes 93.87% over 212 mutations (197 killed, two
+timeouts, thirteen surviving, zero uncovered/invalid) at the unchanged 90% gate.
 The bounded BRC-193 client adds 53 unit tests and nine actual local HTTP tests
 using SDK BRC-103/104 and the existing Express authentication middleware. They
 cover signed snapshot/live/close responses, wrong peers, no authentication
@@ -120,8 +120,8 @@ non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
 local refresh generations and SQLite restart.
 
-The expanded SDK authentication mutation target passes 86.60% over 746 mutants
-(590 killed, 56 timeouts, 100 surviving, zero uncovered/invalid) at its unchanged
+The expanded SDK authentication mutation target passes 86.57% over 752 mutants
+(594 killed, 57 timeouts, 101 surviving, zero uncovered/invalid) at its unchanged
 gate. Workflow control storage adds 49 cases across three adapters, including
 multiple connections, lost acknowledgement, SQLite process exit, changed binding,
 corrupt revisions, missing storage, aborted IndexedDB transactions and late opens
@@ -136,18 +136,22 @@ providers and already accepted Bitcoin facts remain unaffected.
 
 Sequential driver work is explicit: synchronous adapters preserve immediate ownership
 and CAS checks while returning rejected Promises for failures, and dependent
-journal/transaction operations are pulled one at a time. Seven runtime tests check
-Promise behavior and pull-driven backpressure; four additional focused SDK tests
+journal/transaction operations are pulled one at a time. Eleven runtime tests check
+Promise behavior, pull-driven backpressure, iterator closure and non-assimilation
+of host values; four additional focused SDK tests
 check certificate-wait ordering, original error identity and the exact deadline.
 The checkpoint metadata parser now admits valid maximally escaped strings within
 a separate 64 KiB bound, without changing wire response limits. Original captured
 journal fixtures are unchanged. Certificate-wait fixtures observe rejected work
-before assertions and bound unexpected waits; all 13 focused mutations are detected
-without invalid results. The complete SDK mutation target also passes. Exact-head
+before assertions and bound unexpected waits. The complete SDK and runtime
+mutation targets pass without uncovered or invalid results. Explicit asynchronous
+iterators preserve dependent write order without scheduling transaction writes
+concurrently. Node-only Mongo iteration uses bounded object-mode streams; browser
+code retains a portable iterator contract. No analyzer suppression or gate is changed. Exact-head
 hosted CI for the correction remains required.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
-and all three declared browser entries pass. Core browser byte limits remain unchanged;
+and all declared browser entries pass. Core browser byte limits remain unchanged;
 the optional adapter entry is independently measured and enforced. IndexedDB unit
 tests use fake-indexeddb, so actual-browser qualification is still required. The
 journal-backed trace binding is documented alongside the unchanged approved

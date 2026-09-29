@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -312,7 +313,7 @@ function consumerEntry(specifier, budget) {
 async function collectBundle(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true })
   const files = []
-  for await (const entry of entries) {
+  for await (const entry of Readable.from(entries)) {
     const absolutePath = path.join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await collectBundle(absolutePath)).files)
     else files.push(absolutePath)
@@ -325,7 +326,7 @@ async function collectBundle(directory) {
   }
 
   const code = Buffer.concat(await Promise.all(javascriptFiles.map(file => fs.readFile(file))))
-  for await (const file of mapFiles) {
+  for await (const file of Readable.from(mapFiles)) {
     const sourceMap = JSON.parse(await fs.readFile(file, 'utf8'))
     const sourcesWithoutContent = Array.isArray(sourceMap.sources)
       ? sourceMap.sources.filter(
@@ -528,7 +529,7 @@ export async function checkBrowserPackage(packageDirectory, { enforceBudget = tr
       [...workspacePackages].map(([name, project]) => [name, project.manifest])
     )
     const dependencyTarballs = []
-    for await (const name of workspaceRuntimeClosure(manifest, manifestsByName)) {
+    for await (const name of Readable.from(workspaceRuntimeClosure(manifest, manifestsByName))) {
       const dependency = workspacePackages.get(name)
       dependencyTarballs.push(
         await packPackage(dependency.directory, dependency.manifest.name, packDirectory)
@@ -537,7 +538,7 @@ export async function checkBrowserPackage(packageDirectory, { enforceBudget = tr
     consumerDirectory = await installConsumer([tarballPath, ...dependencyTarballs])
     const contracts = [budget, ...(budget.additionalEntries ?? [])]
     const measurements = []
-    for await (const contract of contracts) {
+    for await (const contract of Readable.from(contracts)) {
       // Reuse the same installed tarballs while producing independent entry graphs.
       await Promise.all(
         ['vite-dist', 'esbuild-dist'].map(directory =>

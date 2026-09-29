@@ -1,3 +1,4 @@
+import { asyncValues } from './internal/asyncValues.js'
 import { pendingWork } from './internal/pendingWork.js'
 import {
   canonicalOutputJSON,
@@ -83,7 +84,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
   ): Promise<BitcoinKnowledgeState> {
     const state = new BitcoinKnowledgeState(this.options),
       deadline = this.now() + runtimeLimits(this.options.limits).deadlineMs
-    for await (const [index, entry] of entries.entries()) {
+    for await (const [index, entry] of asyncValues(entries.entries())) {
       if (index > 0 && index % 8 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0))
       this.ready(signal)
       if (this.now() >= deadline)
@@ -157,7 +158,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
   ): Promise<{ work: VerifiedWork; exhausted: boolean }> {
     const proof = proofReference(support),
       work: VerifiedWork = { proof, checks: [] }
-    for await (const [index, frontier] of state.frontiers.entries()) {
+    for await (const [index, frontier] of asyncValues(state.frontiers.entries())) {
       this.ready(signal)
       const next = state.frontiers[index + 1]
       if (next && BigInt(support.availableAt) >= BigInt(next.at)) continue

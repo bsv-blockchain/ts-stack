@@ -1138,15 +1138,20 @@ export class AuthFetch {
     }
   }
 
-  private *pendingCertificateWaits(peer: AuthPeer): Generator<Promise<void>> {
+  private pendingCertificateWaits(peer: AuthPeer): AsyncIterable<void> {
     const timeoutMs = 30000
     const checkIntervalMs = 100
     const startedAt = Date.now()
-    while (peer.pendingCertificateRequests.length > 0) {
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error('Timeout waiting for certificate request to complete')
-      }
-      yield this.wait(checkIntervalMs)
+    return {
+      [Symbol.asyncIterator]: () => ({
+        next: async (): Promise<IteratorResult<void>> => {
+          if (peer.pendingCertificateRequests.length === 0) return { done: true, value: undefined }
+          if (Date.now() - startedAt > timeoutMs)
+            throw new Error('Timeout waiting for certificate request to complete')
+          await this.wait(checkIntervalMs)
+          return { done: false, value: undefined }
+        }
+      })
     }
   }
 

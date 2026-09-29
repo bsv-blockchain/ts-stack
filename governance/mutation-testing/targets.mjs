@@ -75,6 +75,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/operations/MemoryOperationStateStore.ts',
         'src/internal/synchronousPromise.ts',
         'src/internal/pendingWork.ts',
+        'src/internal/asyncValues.ts',
         ...['SQLiteOperationStateStore', 'IndexedDBOperationStateStore'].map(name =>
           sourceLineRange(
             repositoryRoot,
@@ -92,7 +93,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/journal.test.ts',
           '<rootDir>/test/operation-state.test.ts',
           '<rootDir>/test/synchronous-promise.test.ts',
-          '<rootDir>/test/pending-work.test.ts'
+          '<rootDir>/test/pending-work.test.ts',
+          '<rootDir>/test/async-values.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
       )

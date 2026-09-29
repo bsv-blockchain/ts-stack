@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream'
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Collection, Db, Document } from 'mongodb'
@@ -47,6 +48,11 @@ import {
   type MongoTransactionOptions
 } from './MongoTransactionRunner.js'
 import { encodeMongoAdmissionReceipt } from './MongoAdmissionReceipt.js'
+
+/** Keep typed iteration and bounded buffering; transaction writes stay in the consumer. */
+function orderedValues<T>(values: Iterable<T>): AsyncIterable<T> {
+  return Readable.from(values, { objectMode: true, highWaterMark: 1 })
+}
 
 function isMongoWriteConflict(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
@@ -421,13 +427,14 @@ export class MongoAdmissionStorage implements AdmissionStorage {
   }
 
   private async prepareReadGuards(plan: AdmissionCommit): Promise<void> {
-    for (const decision of plan.decisions) {
-      for await (const read of decision.reads) await this.guards.initialize(this.scope, read.key)
+    for await (const decision of orderedValues(plan.decisions)) {
+      for await (const read of orderedValues(decision.reads))
+        await this.guards.initialize(this.scope, read.key)
     }
   }
 
   private async publishHistoryUpdatePayloads(plan: AdmissionCommit): Promise<void> {
-    for await (const decision of plan.decisions) {
+    for await (const decision of orderedValues(plan.decisions)) {
       if (decision.historyUpdate === undefined) continue
       const bytes = Buffer.from(JSON.stringify(this.historyUpdateRecord(decision)), 'utf8')
       const digest = createHash('sha256').update(bytes).digest('hex')
@@ -435,9 +442,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
         kind: 'outbox-data',
         digest,
         byteLength: String(bytes.byteLength),
-        bytes: (async function* () {
-          yield Promise.resolve(bytes)
-        })()
+        bytes: Readable.from([bytes])
       })
     }
   }
@@ -457,20 +462,22 @@ export class MongoAdmissionStorage implements AdmissionStorage {
 
   private async applyPlan(context: MongoTransactionContext, plan: AdmissionCommit): Promise<void> {
     await this.assertReadyPayloads(context, plan)
-    for await (const decision of plan.decisions) {
+    for await (const decision of orderedValues(plan.decisions)) {
       await this.checkReads(context, decision)
       await this.checkHistory(context, decision)
       await this.assertAppliedAvailable(context, plan, decision)
     }
-    for await (const intent of plan.outbox) await this.assertOutboxAvailable(context, intent)
-    for await (const decision of plan.decisions) {
-      for await (const spend of decision.spends)
+    for await (const intent of orderedValues(plan.outbox))
+      await this.assertOutboxAvailable(context, intent)
+    for await (const decision of orderedValues(plan.decisions)) {
+      for await (const spend of orderedValues(decision.spends))
         await this.applySpend(context, decision.topic, spend)
-      for await (const eviction of decision.evictions)
+      for await (const eviction of orderedValues(decision.evictions))
         await this.applyEviction(context, decision.topic, eviction)
-      for await (const output of decision.outputs)
+      for await (const output of orderedValues(decision.outputs))
         await this.insertOutput(context, decision, output)
-      for await (const edge of decision.edges) await this.insertEdge(context, decision.topic, edge)
+      for await (const edge of orderedValues(decision.edges))
+        await this.insertEdge(context, decision.topic, edge)
       await this.insertApplied(context, plan, decision)
       await this.applyHistoryUpdate(
         context,
@@ -479,17 +486,18 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       )
     }
     await this.upsertTransaction(context, plan)
-    for await (const ref of admissionPlanPayloads(plan)) {
+    for await (const ref of orderedValues(admissionPlanPayloads(plan))) {
       await this.pin(context, ref, 'transaction', plan.identity.txid, `${ref.kind}:${ref.digest}`)
     }
-    for await (const intent of lookupOutboxIntents(plan))
+    for await (const intent of orderedValues(lookupOutboxIntents(plan)))
       await this.insertOutbox(context, 'lookup', intent)
-    for await (const intent of propagationOutboxIntents(plan)) {
+    for await (const intent of orderedValues(propagationOutboxIntents(plan))) {
       await this.insertOutbox(context, 'propagation', intent)
     }
     // Iterate entry tuples so a host index with its own `then` method remains
     // an index object, rather than being assimilated as a promise by for-await.
-    for await (const [, index] of this.enlisted.entries()) await index.apply(context, plan)
+    for await (const [, index] of orderedValues(this.enlisted.entries()))
+      await index.apply(context, plan)
   }
 
   private async assertReadyPayloads(
@@ -497,7 +505,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     plan: AdmissionCommit
   ): Promise<void> {
     const seen = new Set<string>()
-    for await (const ref of admissionPlanPayloads(plan)) {
+    for await (const ref of orderedValues(admissionPlanPayloads(plan))) {
       const id = this.payloadId(ref)
       if (seen.has(id)) continue
       seen.add(id)
@@ -514,7 +522,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     context: MongoTransactionContext,
     decision: AdmissionTopicDecision
   ): Promise<void> {
-    for await (const read of decision.reads) {
+    for await (const read of orderedValues(decision.reads)) {
       const options = context.options()
       await this.guards.check(
         options.session,
@@ -956,7 +964,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       if (duplicateKey(error)) rejectAdmission('invalid-plan')
       throw error
     }
-    for await (const [index, payload] of intent.payloads.entries()) {
+    for await (const [index, payload] of orderedValues(intent.payloads.entries())) {
       await this.pin(context, payload, `${kind}-outbox`, intent.eventId, String(index))
     }
   }
