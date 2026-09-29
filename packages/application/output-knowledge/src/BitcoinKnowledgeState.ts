@@ -11,7 +11,8 @@ import {
   type OutputJSONObject,
   type OutputObservation
 } from '@bsv/sdk'
-import { SourceCurrentness, type SourceCurrentnessRule } from './SourceCurrentness.js'
+import { SourceCurrentness } from './SourceCurrentness.js'
+import type { SourceCurrentnessRule } from './SourceCurrentnessPolicy.js'
 import { EvidencePool, type EvidenceReceipt } from './EvidencePool.js'
 import { factFromAssembly } from './EvidenceAssembler.js'
 import {

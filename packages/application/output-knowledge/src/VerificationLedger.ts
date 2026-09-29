@@ -10,7 +10,10 @@ import {
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
-import { parseSourceCurrentnessRules, type SourceCurrentnessRule } from './SourceCurrentness.js'
+import {
+  parseSourceCurrentnessRules,
+  type SourceCurrentnessRule
+} from './SourceCurrentnessPolicy.js'
 import { EvidencePool, type EvidenceSupport } from './EvidencePool.js'
 import { factFromAssembly } from './EvidenceAssembler.js'
 import { parseVerificationContext } from './validation.js'
