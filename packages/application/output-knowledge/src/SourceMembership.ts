@@ -66,13 +66,18 @@ const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 export class SourceMembershipLedger {
   private readonly families = new Map<string, Family>()
   private readonly generations = new Map<string, Generation>()
+  // Observation identities belong to the complete source scope (including its
+  // epoch), not a local refresh generation. Preserve them when retiring a seed.
+  private readonly observationIdentities = new Map<string, Map<string, string>>()
 
   receive(input: SourceBatch, received: string): void {
     outputU64(received)
     const batch = copy(input),
       { scope, generation } = batch.provenance
     const familyKey = outputSourceIdentity(scope),
-      family = this.families.get(familyKey)
+      family = this.families.get(familyKey),
+      scopeKey = canonicalOutputJSON(scope),
+      identities = new Map(this.observationIdentities.get(scopeKey))
     let active: Generation
     if (!family || outputU64(generation) > outputU64(family.highest.generation)) {
       if (batch.coverage.phase === 'live')
@@ -169,7 +174,15 @@ export class SourceMembershipLedger {
             'equivocation',
             'Observation belongs to another source group'
           )
-        active.observations.set(observation.id, canonicalOutputJSON(observation))
+        const encoded = canonicalOutputJSON(observation),
+          previous = identities.get(observation.id)
+        if (previous !== undefined && previous !== encoded)
+          throw new OutputProtocolError(
+            'equivocation',
+            'Observation identity changed within the source epoch'
+          )
+        identities.set(observation.id, encoded)
+        active.observations.set(observation.id, encoded)
       }
       const row: ReceivedSourceGroup = {
         scope,
@@ -202,6 +215,7 @@ export class SourceMembershipLedger {
         ? active
         : family?.visible
     this.generations.set(canonicalOutputJSON({ scope, generation }), active)
+    this.observationIdentities.set(scopeKey, identities)
     this.families.set(familyKey, { highest: active, ...(visible ? { visible } : {}) })
     this.publishCompleted(familyKey)
   }

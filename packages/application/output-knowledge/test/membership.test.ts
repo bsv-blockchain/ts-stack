@@ -178,6 +178,44 @@ describe('whole-group source membership ordering', () => {
     expect(ledger.memberships()[0].sequence).toBe('11')
   })
 
+  it('preserves immutable observation identities across refreshes within an epoch', () => {
+    const ledger = new SourceMembershipLedger()
+    accepted(ledger, batch('seed', '10', [observation('stable')]), '1')
+    accepted(ledger, batch('refresh', '20', [observation('stable')], 'snapshot', '1'), '2')
+    expect(ledger.memberships()[0]).toMatchObject({ generation: '1', present: true })
+    expect(() =>
+      ledger.receive(batch('changed', '30', [observation('stable', true)], 'snapshot', '2'), '3')
+    ).toThrow('identity changed within the source epoch')
+    expect(ledger.memberships()[0]).toMatchObject({ generation: '1', present: true })
+    expect(ledger.groups()).toHaveLength(2)
+    const next = { ...scope, epoch: 'epoch-1' }
+    accepted(
+      ledger,
+      batch('new-epoch', '30', [observation('stable', true, next)], 'snapshot', '2', true, next),
+      '3'
+    )
+    expect(ledger.memberships()[0]).toMatchObject({ generation: '2', present: false, scope: next })
+    // Changing back to a previously used epoch does not release its identities.
+    expect(() =>
+      ledger.receive(batch('old-epoch', '40', [observation('stable', true)], 'snapshot', '3'), '4')
+    ).toThrow('identity changed within the source epoch')
+  })
+
+  it('does not reserve observation identities or retire a generation on rejected intake', () => {
+    const ledger = new SourceMembershipLedger()
+    accepted(ledger, batch('seed', '10', [observation('stable')]), '1')
+    expect(() =>
+      ledger.receive(
+        batch('rejected', '20', [observation('new'), observation('stable', true)], 'snapshot', '1'),
+        '2'
+      )
+    ).toThrow('identity changed within the source epoch')
+    accepted(ledger, batch('withdraw', '11', [observation('live', true)], 'live'), '2')
+    expect(ledger.memberships()[0]).toMatchObject({ generation: '0', present: false })
+    accepted(ledger, batch('valid', '20', [observation('new', true)], 'snapshot', '1'), '3')
+    expect(ledger.memberships()[0]).toMatchObject({ generation: '1', observationId: 'new' })
+  })
+
   it('enforces trusted local provenance and bounded closed batch schemas', () => {
     const input = batch('seed'),
       expected = input.provenance
