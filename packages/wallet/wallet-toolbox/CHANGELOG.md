@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.4
 
+- `WalletPermissionsManager` retires no-send transaction ownership and reference
+  aliases when `createAction` or `signAction` reports them as `sending` or
+  `unproven`, including sendWith-only calls and successful members of an
+  undelayed batch's review error. Failed or unreported actions retain their
+  originator binding for retry or abort. Cleanup visits only the retired
+  transaction's references instead of scanning the session's history.
 - `discoverByIdentityKey` and `discoverByAttributes` keep each certificate's
   `certifierInfo.description` within BRC-100's 5-50 UTF-8 bytes. The default
   SocialCert (56 bytes) and Metanet Trust Services (55 bytes) descriptions
