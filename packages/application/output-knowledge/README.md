@@ -457,6 +457,12 @@ contents. Hosts must validate that context before writing and again during
 recovery. Existing body-only entries keep their bytes and transition commit keys.
 An identical retry recovers the original context; a different supplied context
 fails rather than replacing it. A body-only commit cannot acquire context later.
+The SDK's `retainOutputCapability` and `restoreOutputCapability` helpers capture
+and revalidate a signed selection at its original time. A host can include that
+bounded local record in the journal context; it still must bind the selected
+proposal policy to its installed lifecycle, retain the operation's actual deadline
+and recheck current authorization. A remote caller cannot supply trusted local
+recovery context.
 
 The `completionReservation` capability holds one maximum-sized entry and its byte
 budget for every newly accepted finalizing job. Other writes cannot consume that

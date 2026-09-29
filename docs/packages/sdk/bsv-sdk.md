@@ -28,6 +28,15 @@ constraints, including predecessor shape and selected critical extensions. Signa
 installed-policy, current authorization and evidence verification remain required
 before any storage, admission or application effect.
 
+`retainOutputCapability` captures a verified selection as bounded local replay
+material to persist atomically with an operation. `restoreOutputCapability`
+revalidates that signed manifest at its original selection time and requires the
+same endpoint, provider identity, chain, service/profile and installed rules.
+Recovery can outlive manifest expiry, but current authorization and the operation's
+recovery deadline still govern access. Never accept this local record from a remote
+caller or use it to initiate a new operation with an expired manifest. These pure
+helpers do not persist, fetch, pay or submit anything.
+
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may
 contain up to 64 owned data properties, matching the existing header-list

@@ -342,6 +342,23 @@ wallet-derived locking key, and field signature before reading or spending it.
   separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
   Existing lookup and submission interfaces keep their current behavior.
 
+  `retainOutputCapability(manifest, request)` validates a new selection and returns
+  `{ record, selection }` as independent owned copies. Atomically persist `record`
+  with the operation before any effect. `restoreOutputCapability(record, trust)`
+  verifies the saved signed manifest at its original selection time, with the
+  original freshness policy and caller-supplied endpoint, provider identity, chain,
+  service, profile and installed rule validators. Manifest expiry alone therefore
+  does not abandon an existing recovery obligation. It never substitutes today's
+  discovery contract or grants permission to start a new operation.
+
+  The `output-capability-retention/1` record is bounded local replay material, not
+  a network request or authorization token. Storage integrity protects its local
+  time and policy; the provider signature covers the manifest itself. Never accept
+  a caller-supplied record as saved host state. Recheck current caller access and
+  the operation's recovery/session deadline before disclosing data or performing
+  work. Endpoint/key migration needs separately verified authority. Neither helper
+  makes network requests, runs remote code, persists data or calls a wallet.
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation

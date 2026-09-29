@@ -168,8 +168,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
       "releaseType": "minor",
-      "summary": "Adds opt-in BRC-192–199 protocol representations, exact encodings, capability selection, live lookup boundaries and closed proposal endpoint codecs while preserving all existing overlay APIs.",
-      "migration": "Existing exports, endpoints and lookup defaults remain unchanged. Select the new versioned profiles explicitly; the accompanying output-knowledge runtime provides durable application state above the SDK."
+      "summary": "Adds opt-in BRC-192–199 protocol representations, exact encodings, capability selection, live lookup boundaries and closed proposal endpoint codecs while preserving all existing overlay APIs. Adds bounded local capability retention and original-contract revalidation for recovery.",
+      "migration": "Existing exports, endpoints and lookup defaults remain unchanged. Select the new versioned profiles explicitly; the accompanying output-knowledge runtime provides durable application state above the SDK. Retained capability records are local replay material: persist them atomically with operations and independently enforce current authorization and operation deadlines."
     },
     {
       "name": "@bsv/simple",

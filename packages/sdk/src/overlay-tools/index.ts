@@ -21,6 +21,7 @@ export * from './OutputLookupProtocol.js'
 export * from './OutputProposalProtocol.js'
 export * from './OutputEndpoint.js'
 export * from './OutputCapabilities.js'
+export * from './OutputCapabilityRetention.js'
 export {
   default as OverlayAdminTokenTemplate,
   type OverlayDiscoveryAdvertisement,
