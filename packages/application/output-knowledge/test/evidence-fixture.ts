@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../src/internal/synchronousPromise.js'
 import { readFileSync } from 'node:fs'
 import { Transaction, Hash, Utils, Beef } from '@bsv/sdk'
 import type { ChainViewResolver, EvidenceCandidate, VerificationContext } from '../src/index.js'
@@ -83,21 +84,27 @@ export function context(id = 'base'): VerificationContext {
   }
 }
 export const resolver: ChainViewResolver = {
-  async resolve(view) {
-    const branch = ancestry(view.id)
-    return {
-      view,
-      tracker: {
-        currentHeight: async () => branch[0].height,
-        isValidRootForHeight: async (root, height) =>
-          branch.some(row => row.height === height && row.merkleRoot === root)
-      },
-      async header(height) {
-        const row = branch.find(header => header.height === height)
-        if (!row) throw new Error('Historical fixture header unavailable')
-        return { hash: row.hash, merkleRoot: row.merkleRoot }
+  resolve(view) {
+    return synchronousPromise(() => {
+      const branch = ancestry(view.id)
+      return {
+        view,
+        tracker: {
+          currentHeight: () => synchronousPromise(() => branch[0].height),
+          isValidRootForHeight: (root, height) =>
+            synchronousPromise(() =>
+              branch.some(row => row.height === height && row.merkleRoot === root)
+            )
+        },
+        header(height) {
+          return synchronousPromise(() => {
+            const row = branch.find(header => header.height === height)
+            if (!row) throw new Error('Historical fixture header unavailable')
+            return { hash: row.hash, merkleRoot: row.merkleRoot }
+          })
+        }
       }
-    }
+    })
   }
 }
 export function candidate(

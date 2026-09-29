@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
 import {
   type OperationStateLimits,
@@ -30,20 +31,23 @@ export class MemoryOperationStateStore implements OperationStateStore {
   get configuration(): OperationStateStore['configuration'] {
     return this.codec.configurationValue()
   }
-  async read(): Promise<OperationStateSnapshot> {
-    this.ready()
-    return this.codec.snapshot(this.row)
+  read(): Promise<OperationStateSnapshot> {
+    return synchronousPromise(() => {
+      this.ready()
+      return this.codec.snapshot(this.row)
+    })
   }
-  async compareAndSwap(
-    expectedRevision: string,
-    value: OutputJSONObject
-  ): Promise<OperationStateResult> {
-    this.ready()
-    const { result, next } = this.codec.plan(this.row, expectedRevision, this.codec.encode(value))
-    if (next) this.row = next
-    return result
+  compareAndSwap(expectedRevision: string, value: OutputJSONObject): Promise<OperationStateResult> {
+    return synchronousPromise(() => {
+      this.ready()
+      const { result, next } = this.codec.plan(this.row, expectedRevision, this.codec.encode(value))
+      if (next) this.row = next
+      return result
+    })
   }
-  async close(): Promise<void> {
-    this.closed = true
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      this.closed = true
+    })
   }
 }

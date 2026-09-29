@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { OutputProtocolError, outputString, type OutputJSONObject } from '@bsv/sdk'
 import {
   type OperationStateLimits,
@@ -228,8 +229,10 @@ export class IndexedDBOperationStateStore implements OperationStateStore {
       }
     })
   }
-  async close(): Promise<void> {
-    this.database.close()
-    this.closed = true
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      this.database.close()
+      this.closed = true
+    })
   }
 }

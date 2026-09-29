@@ -324,7 +324,7 @@ describe('operation storage integrity and process recovery', () => {
     }
     const database = await idbResult(request)
     expect(oldVersion).toBe(0)
-    expect(database.objectStoreNames.length).toBe(0)
+    expect(database.objectStoreNames).toHaveLength(0)
     database.close()
   })
 

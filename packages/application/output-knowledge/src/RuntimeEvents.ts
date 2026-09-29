@@ -1,3 +1,4 @@
+import { synchronousPromise } from './internal/synchronousPromise.js'
 import { OutputProtocolError } from '@bsv/sdk'
 import type { RuntimeEvent } from './ports.js'
 
@@ -72,8 +73,10 @@ export class RuntimeEvents implements AsyncIterable<RuntimeEvent>, AsyncIterator
       this.waiting = { resolve, reject }
     })
   }
-  async return(): Promise<IteratorResult<RuntimeEvent>> {
-    this.close()
-    return { done: true, value: undefined }
+  return(): Promise<IteratorResult<RuntimeEvent>> {
+    return synchronousPromise(() => {
+      this.close()
+      return { done: true, value: undefined }
+    })
   }
 }

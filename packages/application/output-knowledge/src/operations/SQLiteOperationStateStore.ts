@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
@@ -132,30 +133,33 @@ export class SQLiteOperationStateStore implements OperationStateStore {
       throw error
     }
   }
-  async read(): Promise<OperationStateSnapshot> {
-    return this.codec.snapshot(this.stored())
-  }
-  async compareAndSwap(
-    expectedRevision: string,
-    value: OutputJSONObject
-  ): Promise<OperationStateResult> {
-    this.ready()
-    const encoded = this.codec.encode(value)
-    return this.transaction(() => {
-      const { result, next } = this.codec.plan(this.stored(), expectedRevision, encoded)
-      if (next)
-        this.database
-          .prepare(
-            'UPDATE output_operation_state SET revision = ?, state = ?, state_digest = ?, checksum = ? WHERE namespace = ?'
-          )
-          .run(next.revision, next.text, next.digest, next.checksum, this.namespace)
-      return result
+  read(): Promise<OperationStateSnapshot> {
+    return synchronousPromise(() => {
+      return this.codec.snapshot(this.stored())
     })
   }
-  async close(): Promise<void> {
-    if (!this.closed) {
-      this.database.close()
-      this.closed = true
-    }
+  compareAndSwap(expectedRevision: string, value: OutputJSONObject): Promise<OperationStateResult> {
+    return synchronousPromise(() => {
+      this.ready()
+      const encoded = this.codec.encode(value)
+      return this.transaction(() => {
+        const { result, next } = this.codec.plan(this.stored(), expectedRevision, encoded)
+        if (next)
+          this.database
+            .prepare(
+              'UPDATE output_operation_state SET revision = ?, state = ?, state_digest = ?, checksum = ? WHERE namespace = ?'
+            )
+            .run(next.revision, next.text, next.digest, next.checksum, this.namespace)
+        return result
+      })
+    })
+  }
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      if (!this.closed) {
+        this.database.close()
+        this.closed = true
+      }
+    })
   }
 }

@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { outputString, OutputProtocolError, type OutputJSONObject } from '@bsv/sdk'
 import { ProposalJournalState } from './ProposalJournalState.js'
 import type {
@@ -31,52 +32,71 @@ export class MemoryProposalJournal implements ProposalJournalStorage {
     this.state = new ProposalJournalState(lifecycle, identity, limits)
   }
 
-  async head(): Promise<ProposalJournalHead> {
-    return this.ready().head()
+  head(): Promise<ProposalJournalHead> {
+    return synchronousPromise(() => {
+      return this.ready().head()
+    })
   }
-  async getLimits(): Promise<ProposalJournalLimits> {
-    return { ...this.ready().limits }
+  getLimits(): Promise<ProposalJournalLimits> {
+    return synchronousPromise(() => {
+      return { ...this.ready().limits }
+    })
   }
-  async getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
-    return this.ready().channelEntry(key)
+  getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.ready().channelEntry(key)
+    })
   }
-  async getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
-    return this.ready().channel(key)
+  getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
+    return synchronousPromise(() => {
+      return this.ready().channel(key)
+    })
   }
-  async getProposal(
+  getProposal(
     id: string
   ): Promise<{ record: ProposalChannelRecord; current: boolean } | undefined> {
-    return this.ready().proposal(id)
+    return synchronousPromise(() => {
+      return this.ready().proposal(id)
+    })
   }
-  async getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
-    return this.ready().proposalEntry(id)
+  getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.ready().proposalEntry(id)
+    })
   }
-  async getOperation(
+  getOperation(
     caller: string,
     service: string,
     operationId: string
   ): Promise<ProposalChannelRecord | undefined> {
-    return this.ready().operation(caller, service, operationId)
+    return synchronousPromise(() => {
+      return this.ready().operation(caller, service, operationId)
+    })
   }
-  async getCommit(key: string): Promise<ProposalJournalEntry | undefined> {
-    return this.ready().commit(key)
+  getCommit(key: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.ready().commit(key)
+    })
   }
-  async read(after: string, maximum: number): Promise<ProposalJournalEntry[]> {
-    return this.ready().read(after, maximum)
+  read(after: string, maximum: number): Promise<ProposalJournalEntry[]> {
+    return synchronousPromise(() => {
+      return this.ready().read(after, maximum)
+    })
   }
-  async close(): Promise<void> {
-    this.closed = true
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      this.closed = true
+    })
   }
 
-  async commit(
-    transition: ProposalTransition,
-    local?: OutputJSONObject
-  ): Promise<ProposalCommitResult> {
-    const state = this.ready(),
-      prepared = state.prepare(transition, local),
-      result = state.plan(prepared)
-    if (result.status === 'committed') state.apply(prepared, result.revision)
-    return result
+  commit(transition: ProposalTransition, local?: OutputJSONObject): Promise<ProposalCommitResult> {
+    return synchronousPromise(() => {
+      const state = this.ready(),
+        prepared = state.prepare(transition, local),
+        result = state.plan(prepared)
+      if (result.status === 'committed') state.apply(prepared, result.revision)
+      return result
+    })
   }
 
   private ready(): ProposalJournalState {

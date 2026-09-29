@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { OutputProtocolError, outputString, outputU64, type OutputJSONObject } from '@bsv/sdk'
 import type { CommitResult, Mutation } from '../ports.js'
 import {
@@ -307,10 +308,12 @@ export class IndexedDBJournal implements JournalStorage {
       }
     })
   }
-  async close(): Promise<void> {
-    if (!this.closed) {
-      this.database.close()
-      this.closed = true
-    }
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      if (!this.closed) {
+        this.database.close()
+        this.closed = true
+      }
+    })
   }
 }

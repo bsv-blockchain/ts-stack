@@ -17,7 +17,7 @@ const escapeCell = value =>
 
 const markdownFiles = async directory => {
   const files = []
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  for await (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await markdownFiles(path)))
     else if (entry.isFile() && entry.name.endsWith('.md')) files.push(path)
@@ -128,7 +128,7 @@ export async function loadPackageDocumentation(root = ROOT) {
     .filter(project => project.release === 'npm-oidc')
     .sort((a, b) => a.name.localeCompare(b.name))
   const docsByName = new Map()
-  for (const path of await markdownFiles(join(root, 'docs/packages'))) {
+  for await (const path of await markdownFiles(join(root, 'docs/packages'))) {
     const document = await readFile(path, 'utf8')
     const name = frontmatterValue(document, 'title')
     if (name) docsByName.set(name, relative(root, path))
@@ -147,7 +147,7 @@ export async function loadPackageDocumentation(root = ROOT) {
     errors.push('package-release-notes must exactly cover the public-package inventory')
   }
   const packages = []
-  for (const project of publicProjects) {
+  for await (const project of publicProjects) {
     const manifest = await readJson(root, `${project.path}/package.json`)
     const entry = entriesByName.get(project.name)
     if (entry === undefined) continue

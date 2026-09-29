@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import {
@@ -101,82 +102,107 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
     }
   }
 
-  async head(): Promise<ProposalJournalHead> {
-    return this.readState().head()
+  head(): Promise<ProposalJournalHead> {
+    return synchronousPromise(() => {
+      return this.readState().head()
+    })
   }
-  async getLimits(): Promise<ProposalJournalLimits> {
-    return { ...this.readState().limits }
+  getLimits(): Promise<ProposalJournalLimits> {
+    return synchronousPromise(() => {
+      return { ...this.readState().limits }
+    })
   }
-  async getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
-    return this.readState().channelEntry(key)
+  getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.readState().channelEntry(key)
+    })
   }
-  async getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
-    return this.readState().channel(key)
+  getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
+    return synchronousPromise(() => {
+      return this.readState().channel(key)
+    })
   }
-  async getProposal(
+  getProposal(
     id: string
   ): Promise<{ record: ProposalChannelRecord; current: boolean } | undefined> {
-    return this.readState().proposal(id)
+    return synchronousPromise(() => {
+      return this.readState().proposal(id)
+    })
   }
-  async getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
-    return this.readState().proposalEntry(id)
+  getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.readState().proposalEntry(id)
+    })
   }
-  async getOperation(
+  getOperation(
     caller: string,
     service: string,
     operationId: string
   ): Promise<ProposalChannelRecord | undefined> {
-    return this.readState().operation(caller, service, operationId)
+    return synchronousPromise(() => {
+      return this.readState().operation(caller, service, operationId)
+    })
   }
-  async getCommit(key: string): Promise<ProposalJournalEntry | undefined> {
-    return this.readState().commit(key)
+  getCommit(key: string): Promise<ProposalJournalEntry | undefined> {
+    return synchronousPromise(() => {
+      return this.readState().commit(key)
+    })
   }
-  async read(after: string, maximum: number): Promise<ProposalJournalEntry[]> {
-    return this.readState().read(after, maximum)
+  read(after: string, maximum: number): Promise<ProposalJournalEntry[]> {
+    return synchronousPromise(() => {
+      return this.readState().read(after, maximum)
+    })
   }
 
-  async commit(
-    transition: ProposalTransition,
-    local?: OutputJSONObject
-  ): Promise<ProposalCommitResult> {
-    this.ready()
-    const prepared = this.state.prepare(transition, local)
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      this.refresh()
-      const result = this.state.plan(prepared)
-      if (result.status !== 'committed') {
-        this.database.exec('ROLLBACK')
+  commit(transition: ProposalTransition, local?: OutputJSONObject): Promise<ProposalCommitResult> {
+    return synchronousPromise(() => {
+      this.ready()
+      const prepared = this.state.prepare(transition, local)
+      this.database.exec('BEGIN IMMEDIATE')
+      try {
+        this.refresh()
+        const result = this.state.plan(prepared)
+        if (result.status !== 'committed') {
+          this.database.exec('ROLLBACK')
+          return result
+        }
+        const head = this.state.head()
+        this.database
+          .prepare('INSERT INTO proposal_journal_entries VALUES (?, ?, ?, ?, ?)')
+          .run(
+            this.namespace,
+            position(result.revision),
+            prepared.key,
+            prepared.text,
+            prepared.bytes
+          )
+        this.database
+          .prepare(
+            'UPDATE proposal_journal_meta SET revision=?, retained_bytes=?, entries=? WHERE namespace=?'
+          )
+          .run(
+            position(result.revision),
+            head.bytes + prepared.bytes,
+            head.entries + 1,
+            this.namespace
+          )
+        this.database.exec('COMMIT')
+        this.state.apply(prepared, result.revision)
         return result
+      } catch (error) {
+        this.rollback()
+        throw error
       }
-      const head = this.state.head()
-      this.database
-        .prepare('INSERT INTO proposal_journal_entries VALUES (?, ?, ?, ?, ?)')
-        .run(this.namespace, position(result.revision), prepared.key, prepared.text, prepared.bytes)
-      this.database
-        .prepare(
-          'UPDATE proposal_journal_meta SET revision=?, retained_bytes=?, entries=? WHERE namespace=?'
-        )
-        .run(
-          position(result.revision),
-          head.bytes + prepared.bytes,
-          head.entries + 1,
-          this.namespace
-        )
-      this.database.exec('COMMIT')
-      this.state.apply(prepared, result.revision)
-      return result
-    } catch (error) {
-      this.rollback()
-      throw error
-    }
+    })
   }
 
-  async close(): Promise<void> {
-    if (!this.closed) {
-      this.database.close()
-      this.closed = true
-    }
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      if (!this.closed) {
+        this.database.close()
+        this.closed = true
+      }
+    })
   }
 
   private readState(): ProposalJournalState {

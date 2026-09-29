@@ -377,12 +377,11 @@ async function npmView(name, fields) {
 
 async function mapWithConcurrency(items, limit, operation) {
   const results = Array.from({ length: items.length })
-  let next = 0
+  // Share a lazy queue: each worker claims one index, then awaits its result
+  // before claiming another. The concurrency limit never starts all work at once.
+  const queue = items.entries()
   async function worker() {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await operation(items[index])
-    }
+    for await (const [index, item] of queue) results[index] = await operation(item)
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, worker))
   return results

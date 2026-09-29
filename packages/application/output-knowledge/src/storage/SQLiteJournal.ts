@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { DatabaseSync } from 'node:sqlite'
 import { closeSync, openSync } from 'node:fs'
 import {
@@ -118,87 +119,97 @@ export class SQLiteJournal implements JournalStorage {
       revision: { received: decimal(row.received), accepted: decimal(row.accepted) }
     }
   }
-  async head(): Promise<JournalHead> {
-    this.ready()
-    return this.currentHead()
+  head(): Promise<JournalHead> {
+    return synchronousPromise(() => {
+      this.ready()
+      return this.currentHead()
+    })
   }
-  async getMutation(key: string): Promise<MutationLookup> {
-    this.ready()
-    const row = this.database
-      .prepare('SELECT * FROM output_journal_entries WHERE namespace=? AND mutation_key=?')
-      .get(this.namespace, key) as Row | undefined
-    return row ? { status: 'committed', entry: this.entry(row) } : { status: 'absent' }
+  getMutation(key: string): Promise<MutationLookup> {
+    return synchronousPromise(() => {
+      this.ready()
+      const row = this.database
+        .prepare('SELECT * FROM output_journal_entries WHERE namespace=? AND mutation_key=?')
+        .get(this.namespace, key) as Row | undefined
+      return row ? { status: 'committed', entry: this.entry(row) } : { status: 'absent' }
+    })
   }
-  async append(
+  append(
     expectedReceived: string,
     mutation: Mutation,
     local?: OutputJSONObject
   ): Promise<CommitResult> {
-    this.ready()
-    const body = journalPayload(mutation, this.limits, local)
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const saved = this.database
-        .prepare('SELECT * FROM output_journal_entries WHERE namespace=? AND mutation_key=?')
-        .get(this.namespace, mutation.key) as Row | undefined
-      if (saved) {
-        const result: CommitResult =
-          canonicalOutputJSON(this.entry(saved).body) === body.bodyText
-            ? { status: 'replayed', revision: this.entry(saved).revision }
-            : { status: 'equivocation', reason: 'Mutation key reused with different body' }
-        this.database.exec('ROLLBACK')
-        return result
-      }
-      const head = this.currentHead()
-      const result = planAppend(head, expectedReceived, mutation, body.bytes, this.limits)
-      if (result.status !== 'committed') {
-        this.database.exec('ROLLBACK')
-        return result
-      }
-      const received = position(result.revision.received),
-        accepted = position(result.revision.accepted)
-      this.database
-        .prepare('INSERT INTO output_journal_entries VALUES (?, ?, ?, ?, ?, ?)')
-        .run(this.namespace, received, accepted, mutation.key, body.text, body.bytes)
-      this.database
-        .prepare(
-          'UPDATE output_journal_meta SET received=?, accepted=?, retained_bytes=?, entries=? WHERE namespace=?'
-        )
-        .run(received, accepted, head.bytes + body.bytes, head.entries + 1, this.namespace)
-      this.database.exec('COMMIT')
-      return result
-    } catch (error) {
-      // COMMIT may have succeeded before an I/O error was surfaced. The caller
-      // resolves uncertainty by getMutation, never by assuming this rollback won.
+    return synchronousPromise(() => {
+      this.ready()
+      const body = journalPayload(mutation, this.limits, local)
+      this.database.exec('BEGIN IMMEDIATE')
       try {
-        this.database.exec('ROLLBACK')
-      } catch {
-        /* transaction may already be committed */
+        const saved = this.database
+          .prepare('SELECT * FROM output_journal_entries WHERE namespace=? AND mutation_key=?')
+          .get(this.namespace, mutation.key) as Row | undefined
+        if (saved) {
+          const result: CommitResult =
+            canonicalOutputJSON(this.entry(saved).body) === body.bodyText
+              ? { status: 'replayed', revision: this.entry(saved).revision }
+              : { status: 'equivocation', reason: 'Mutation key reused with different body' }
+          this.database.exec('ROLLBACK')
+          return result
+        }
+        const head = this.currentHead()
+        const result = planAppend(head, expectedReceived, mutation, body.bytes, this.limits)
+        if (result.status !== 'committed') {
+          this.database.exec('ROLLBACK')
+          return result
+        }
+        const received = position(result.revision.received),
+          accepted = position(result.revision.accepted)
+        this.database
+          .prepare('INSERT INTO output_journal_entries VALUES (?, ?, ?, ?, ?, ?)')
+          .run(this.namespace, received, accepted, mutation.key, body.text, body.bytes)
+        this.database
+          .prepare(
+            'UPDATE output_journal_meta SET received=?, accepted=?, retained_bytes=?, entries=? WHERE namespace=?'
+          )
+          .run(received, accepted, head.bytes + body.bytes, head.entries + 1, this.namespace)
+        this.database.exec('COMMIT')
+        return result
+      } catch (error) {
+        // COMMIT may have succeeded before an I/O error was surfaced. The caller
+        // resolves uncertainty by getMutation, never by assuming this rollback won.
+        try {
+          this.database.exec('ROLLBACK')
+        } catch {
+          /* transaction may already be committed */
+        }
+        throw error
       }
-      throw error
-    }
+    })
   }
-  async read(afterReceived: string, maximumEntries: number): Promise<JournalEntry[]> {
-    this.ready()
-    checkJournalRead(afterReceived, maximumEntries)
-    const rows = this.database
-      .prepare(
-        'SELECT * FROM output_journal_entries WHERE namespace=? AND received>? ORDER BY received LIMIT ?'
-      )
-      .iterate(this.namespace, position(afterReceived), maximumEntries)
-    const result: JournalEntry[] = []
-    let bytes = 0
-    for (const row of rows) {
-      if (result.length > 0 && bytes + Number(row.body_bytes) > this.limits.entryBytes) break
-      bytes += Number(row.body_bytes)
-      result.push(this.entry(row))
-    }
-    return result
+  read(afterReceived: string, maximumEntries: number): Promise<JournalEntry[]> {
+    return synchronousPromise(() => {
+      this.ready()
+      checkJournalRead(afterReceived, maximumEntries)
+      const rows = this.database
+        .prepare(
+          'SELECT * FROM output_journal_entries WHERE namespace=? AND received>? ORDER BY received LIMIT ?'
+        )
+        .iterate(this.namespace, position(afterReceived), maximumEntries)
+      const result: JournalEntry[] = []
+      let bytes = 0
+      for (const row of rows) {
+        if (result.length > 0 && bytes + Number(row.body_bytes) > this.limits.entryBytes) break
+        bytes += Number(row.body_bytes)
+        result.push(this.entry(row))
+      }
+      return result
+    })
   }
-  async close(): Promise<void> {
-    if (!this.closed) {
-      this.database.close()
-      this.closed = true
-    }
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      if (!this.closed) {
+        this.database.close()
+        this.closed = true
+      }
+    })
   }
 }

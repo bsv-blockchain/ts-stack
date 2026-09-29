@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { OutputProtocolError, outputString, outputU64, type OutputJSONObject } from '@bsv/sdk'
 import type { CommitResult, Mutation } from '../ports.js'
 import {
@@ -33,66 +34,76 @@ export class MemoryJournal implements JournalStorage {
   private ready(): void {
     if (this.closed) throw new OutputProtocolError('unavailable', 'Journal is closed')
   }
-  async head(): Promise<JournalHead> {
-    this.ready()
-    return { ...this.current }
+  head(): Promise<JournalHead> {
+    return synchronousPromise(() => {
+      this.ready()
+      return { ...this.current }
+    })
   }
-  async getMutation(key: string): Promise<MutationLookup> {
-    this.ready()
-    const saved = this.keys.get(key)
-    return saved === undefined
-      ? { status: 'absent' }
-      : { status: 'committed', entry: cloneEntry(saved.entry) }
+  getMutation(key: string): Promise<MutationLookup> {
+    return synchronousPromise(() => {
+      this.ready()
+      const saved = this.keys.get(key)
+      return saved === undefined
+        ? { status: 'absent' }
+        : { status: 'committed', entry: cloneEntry(saved.entry) }
+    })
   }
-  async append(
+  append(
     expectedReceived: string,
     mutation: Mutation,
     local?: OutputJSONObject
   ): Promise<CommitResult> {
-    this.ready()
-    const body = journalPayload(mutation, this.limits, local)
-    const previous = this.keys.get(mutation.key)
-    if (previous !== undefined)
-      return previous.text === body.bodyText
-        ? { status: 'replayed', revision: { ...previous.entry.revision } }
-        : { status: 'equivocation', reason: 'Mutation key reused with different body' }
-    const result = planAppend(this.current, expectedReceived, mutation, body.bytes, this.limits)
-    if (result.status !== 'committed') return result
-    const entry: JournalEntry = {
-      key: mutation.key,
-      ...parseJournalPayload(body.text, this.limits.entryBytes),
-      revision: { ...result.revision }
-    }
-    // There is no await between CAS and all writes: one synchronous commit.
-    this.entries.push(entry)
-    this.keys.set(entry.key, { entry, text: body.bodyText, bytes: body.bytes })
-    this.current = {
-      ...entry.revision,
-      bytes: this.current.bytes + body.bytes,
-      entries: this.current.entries + 1
-    }
-    return { status: 'committed', revision: { ...entry.revision } }
+    return synchronousPromise(() => {
+      this.ready()
+      const body = journalPayload(mutation, this.limits, local)
+      const previous = this.keys.get(mutation.key)
+      if (previous !== undefined)
+        return previous.text === body.bodyText
+          ? { status: 'replayed', revision: { ...previous.entry.revision } }
+          : { status: 'equivocation', reason: 'Mutation key reused with different body' }
+      const result = planAppend(this.current, expectedReceived, mutation, body.bytes, this.limits)
+      if (result.status !== 'committed') return result
+      const entry: JournalEntry = {
+        key: mutation.key,
+        ...parseJournalPayload(body.text, this.limits.entryBytes),
+        revision: { ...result.revision }
+      }
+      // There is no await between CAS and all writes: one synchronous commit.
+      this.entries.push(entry)
+      this.keys.set(entry.key, { entry, text: body.bodyText, bytes: body.bytes })
+      this.current = {
+        ...entry.revision,
+        bytes: this.current.bytes + body.bytes,
+        entries: this.current.entries + 1
+      }
+      return { status: 'committed', revision: { ...entry.revision } }
+    })
   }
-  async read(afterReceived: string, maximumEntries: number): Promise<JournalEntry[]> {
-    this.ready()
-    checkJournalRead(afterReceived, maximumEntries)
-    const after = outputU64(afterReceived)
-    const result: JournalEntry[] = []
-    let bytes = 0
-    for (const entry of this.entries) {
-      if (outputU64(entry.revision.received) <= after) continue
-      const length = this.keys.get(entry.key)!.bytes
-      if (
-        result.length >= maximumEntries ||
-        (result.length > 0 && bytes + length > this.limits.entryBytes)
-      )
-        break
-      bytes += length
-      result.push(cloneEntry(entry))
-    }
-    return result
+  read(afterReceived: string, maximumEntries: number): Promise<JournalEntry[]> {
+    return synchronousPromise(() => {
+      this.ready()
+      checkJournalRead(afterReceived, maximumEntries)
+      const after = outputU64(afterReceived)
+      const result: JournalEntry[] = []
+      let bytes = 0
+      for (const entry of this.entries) {
+        if (outputU64(entry.revision.received) <= after) continue
+        const length = this.keys.get(entry.key)!.bytes
+        if (
+          result.length >= maximumEntries ||
+          (result.length > 0 && bytes + length > this.limits.entryBytes)
+        )
+          break
+        bytes += length
+        result.push(cloneEntry(entry))
+      }
+      return result
+    })
   }
-  async close(): Promise<void> {
-    this.closed = true
+  close(): Promise<void> {
+    return synchronousPromise(() => {
+      this.closed = true
+    })
   }
 }

@@ -1,4 +1,5 @@
 import { canonicalOutputJSON, outputString, OutputProtocolError } from '@bsv/sdk'
+import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { SourceSession, type SourceBinding } from './SourceSession.js'
 import type { OutputObservation, Source, SourceBatch, SourceRequest } from '../ports.js'
 
@@ -94,19 +95,21 @@ export class DirectDeliverySource implements Source {
           active.waiting = { resolve, reject }
         })
       },
-      return: async () => {
-        this.finish(active)
-        return { done: true, value: undefined }
-      },
-      throw: async (error: unknown) => {
-        this.finish(
-          active,
-          error instanceof Error
-            ? error
-            : new OutputProtocolError('unavailable', 'Delivery consumer failed')
-        )
-        throw active.failure
-      }
+      return: () =>
+        synchronousPromise(() => {
+          this.finish(active)
+          return { done: true, value: undefined }
+        }),
+      throw: (error: unknown) =>
+        synchronousPromise(() => {
+          this.finish(
+            active,
+            error instanceof Error
+              ? error
+              : new OutputProtocolError('unavailable', 'Delivery consumer failed')
+          )
+          throw active.failure
+        })
     }
     return iterator
   }

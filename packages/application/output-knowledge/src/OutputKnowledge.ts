@@ -1,3 +1,4 @@
+import { pendingWork } from './internal/pendingWork.js'
 import {
   canonicalOutputJSON,
   outputHex32,
@@ -286,10 +287,15 @@ export class OutputKnowledge {
     void this.work.catch(() => {})
   }
   private async drain(): Promise<void> {
-    while (this.dirty && !this.abort.signal.aborted) {
-      this.dirty = false
-      await this.operation(signal => this.options.worker.advance(this.options.store, signal))
-      const input = await this.options.store.read(undefined, this.abort.signal)
+    const inputs = pendingWork(
+      () => this.dirty && !this.abort.signal.aborted,
+      async () => {
+        this.dirty = false
+        await this.operation(signal => this.options.worker.advance(this.options.store, signal))
+        return this.options.store.read(undefined, this.abort.signal)
+      }
+    )
+    for await (const input of inputs) {
       this.emit({ kind: 'knowledge', input })
       this.armExpiry(input)
       if (!this.options.projector) continue
@@ -354,7 +360,12 @@ export class OutputKnowledge {
     this.ready()
     await this.ingest
     if (!this.work) this.schedule()
-    while (this.work) await this.work
+    for await (const _ of pendingWork(
+      () => this.work !== undefined,
+      () => this.work!
+    )) {
+      // Each settled pass can schedule another; pull it only after settlement.
+    }
   }
   async readProjection(): Promise<Projection | undefined> {
     this.ready()

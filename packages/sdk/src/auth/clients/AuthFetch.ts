@@ -1133,6 +1133,12 @@ export class AuthFetch {
   }
 
   private async waitForPendingCertificateRequests(peer: AuthPeer): Promise<void> {
+    for await (const _ of this.pendingCertificateWaits(peer)) {
+      // The next pull rechecks completion and the original deadline after this wait.
+    }
+  }
+
+  private *pendingCertificateWaits(peer: AuthPeer): Generator<Promise<void>> {
     const timeoutMs = 30000
     const checkIntervalMs = 100
     const startedAt = Date.now()
@@ -1140,7 +1146,7 @@ export class AuthFetch {
       if (Date.now() - startedAt > timeoutMs) {
         throw new Error('Timeout waiting for certificate request to complete')
       }
-      await this.wait(checkIntervalMs)
+      yield this.wait(checkIntervalMs)
     }
   }
 

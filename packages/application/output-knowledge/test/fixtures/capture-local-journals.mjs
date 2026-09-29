@@ -26,7 +26,7 @@ const scope = {
 }
 const { epoch: _epoch, ...source } = scope
 const cases = []
-for (const version of [1, 2]) {
+for await (const version of [1, 2]) {
   const rules = version === 1 ? [] : [{ source, maximumAgeSeconds: '600' }]
   const storage = new MemoryJournal(`legacy-v${version}`)
   const worker = new BitcoinKnowledge({

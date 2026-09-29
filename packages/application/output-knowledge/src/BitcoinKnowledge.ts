@@ -1,3 +1,4 @@
+import { pendingWork } from './internal/pendingWork.js'
 import {
   canonicalOutputJSON,
   incrementOutputU64,
@@ -82,12 +83,12 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
   ): Promise<BitcoinKnowledgeState> {
     const state = new BitcoinKnowledgeState(this.options),
       deadline = this.now() + runtimeLimits(this.options.limits).deadlineMs
-    for (let index = 0; index < entries.length; index++) {
+    for await (const [index, entry] of entries.entries()) {
       if (index > 0 && index % 8 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0))
       this.ready(signal)
       if (this.now() >= deadline)
         throw new OutputProtocolError('limited', 'Bitcoin journal replay deadline exhausted', true)
-      state.apply(entries[index])
+      state.apply(entry)
     }
     return state
   }
@@ -156,10 +157,9 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
   ): Promise<{ work: VerifiedWork; exhausted: boolean }> {
     const proof = proofReference(support),
       work: VerifiedWork = { proof, checks: [] }
-    for (let index = 0; index < state.frontiers.length; index++) {
+    for await (const [index, frontier] of state.frontiers.entries()) {
       this.ready(signal)
-      const frontier = state.frontiers[index],
-        next = state.frontiers[index + 1]
+      const next = state.frontiers[index + 1]
       if (next && BigInt(support.availableAt) >= BigInt(next.at)) continue
       const previous = state.ledger.get(proof, frontier.context.id)
       if (previous?.status === 'verified' || previous?.status === 'invalid') continue
@@ -268,41 +268,13 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     }
     // Each source group changes membership as one atomic accepted revision. This
     // loop performs no new crypto work and never pulls unbounded source input.
-    for (let count = 0; count < 4096; count++) {
-      this.ready(signal)
-      const latest = await store.inspect(signal),
-        current = await this.replay(latest.entries, signal),
-        group = current.membership
-          .groups()
-          .find(
-            value =>
-              value.status === 'pending' &&
-              current.membership.isCurrent(value.scope, value.generation) &&
-              current.groupDecision(value)
-          )
-      if (!group) break
-      if (this.now() >= deadline)
-        throw new OutputProtocolError(
-          'limited',
-          'Group acceptance work retained for another bounded pass',
-          true
-        )
-      const revision = {
-          received: incrementOutputU64(latest.revision.received),
-          accepted: incrementOutputU64(latest.revision.accepted)
-        },
-        mutation = knowledgeMutation(current.transition(revision, group))
-      this.staged.set(mutation.key, {
-        parent: this.parent(latest.entries),
-        local: this.localFrame(current, [])
-      })
-      try {
-        const result = await store.commit(latest.revision.received, mutation, signal)
-        if ('reason' in result)
-          throw new OutputProtocolError(result.status, result.reason, result.status === 'conflict')
-      } finally {
-        this.staged.delete(mutation.key)
-      }
+    let remaining = 4096
+    const groups = pendingWork(
+      () => remaining-- > 0,
+      () => this.acceptNextGroup(store, signal, deadline)
+    )
+    for await (const accepted of groups) {
+      if (!accepted) break
     }
     await this.expireAssessments(store, signal)
     if (work.exhausted)
@@ -311,6 +283,48 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
         'Evidence work retained; another bounded pass is required',
         true
       )
+  }
+  /** One ordered membership commit; the next pull observes its durable result. */
+  private async acceptNextGroup(
+    store: KnowledgeStore,
+    signal: AbortSignal,
+    deadline: number
+  ): Promise<boolean> {
+    this.ready(signal)
+    const latest = await store.inspect(signal),
+      current = await this.replay(latest.entries, signal),
+      group = current.membership
+        .groups()
+        .find(
+          value =>
+            value.status === 'pending' &&
+            current.membership.isCurrent(value.scope, value.generation) &&
+            current.groupDecision(value)
+        )
+    if (!group) return false
+    if (this.now() >= deadline)
+      throw new OutputProtocolError(
+        'limited',
+        'Group acceptance work retained for another bounded pass',
+        true
+      )
+    const revision = {
+        received: incrementOutputU64(latest.revision.received),
+        accepted: incrementOutputU64(latest.revision.accepted)
+      },
+      mutation = knowledgeMutation(current.transition(revision, group))
+    this.staged.set(mutation.key, {
+      parent: this.parent(latest.entries),
+      local: this.localFrame(current, [])
+    })
+    try {
+      const result = await store.commit(latest.revision.received, mutation, signal)
+      if ('reason' in result)
+        throw new OutputProtocolError(result.status, result.reason, result.status === 'conflict')
+    } finally {
+      this.staged.delete(mutation.key)
+    }
+    return true
   }
   private async expireAssessments(store: KnowledgeStore, signal: AbortSignal): Promise<void> {
     if (!this.options.sourceCurrentness?.length) return

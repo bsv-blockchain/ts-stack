@@ -1,3 +1,4 @@
+import { pendingWork } from './internal/pendingWork.js'
 import {
   canonicalOutputJSON,
   incrementOutputU64,
@@ -172,11 +173,14 @@ export class KnowledgeStore {
       bytes: 0,
       keys: new Set()
     }
-    while (outputU64(history.received) < outputU64(head.received)) {
-      this.ready(signal)
-      const page = await this.storage.read(history.received, Math.min(128, this.maximumEntries))
-      this.replayPage(history, page, head.received, signal)
-    }
+    const pages = pendingWork(
+      () => outputU64(history.received) < outputU64(head.received),
+      () => {
+        this.ready(signal)
+        return this.storage.read(history.received, Math.min(128, this.maximumEntries))
+      }
+    )
+    for await (const page of pages) this.replayPage(history, page, head.received, signal)
     if (
       history.accepted !== head.accepted ||
       history.entries.length !== head.entries ||
@@ -386,9 +390,14 @@ export class KnowledgeStore {
     this.watchers++
     let after = afterRevision
     try {
-      while (true) {
-        this.ready(signal)
-        const head = await this.bounded(async () => this.storage.head(), signal)
+      const heads = pendingWork(
+        () => true,
+        () => {
+          this.ready(signal)
+          return this.bounded(() => this.storage.head(), signal)
+        }
+      )
+      for await (const head of heads) {
         if (outputU64(head.accepted) < outputU64(after))
           throw new OutputProtocolError('reset-required', 'Watch revision is no longer available')
         if (head.accepted !== after) {

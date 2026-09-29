@@ -1,3 +1,4 @@
+import { synchronousPromise } from './internal/synchronousPromise.js'
 import {
   TransactionEvidenceCoordinator,
   TransactionEvidenceError,
@@ -215,7 +216,7 @@ export class SDKEvidenceVerifier implements EvidenceVerifier {
       },
       getVerificationContextToken:
         view.tracker.getVerificationContextToken === undefined
-          ? async () => canonicalOutputJSON(context.view)
+          ? () => synchronousPromise(() => canonicalOutputJSON(context.view))
           : querySignal =>
               chainCall(async () => await view.tracker.getVerificationContextToken!(querySignal))
     }

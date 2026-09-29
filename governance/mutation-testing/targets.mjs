@@ -67,19 +67,21 @@ export function buildMutationTargets(repositoryRoot) {
           repositoryRoot,
           'packages/application/output-knowledge',
           'src/storage/MemoryJournal.ts',
-          '  async append(',
-          '  async read('
+          '  append(',
+          '  read('
         ),
         'src/operations/OperationStateStore.ts',
         'src/operations/OperationStateCodec.ts',
         'src/operations/MemoryOperationStateStore.ts',
+        'src/internal/synchronousPromise.ts',
+        'src/internal/pendingWork.ts',
         ...['SQLiteOperationStateStore', 'IndexedDBOperationStateStore'].map(name =>
           sourceLineRange(
             repositoryRoot,
             'packages/application/output-knowledge',
             `src/operations/${name}.ts`,
-            '  async compareAndSwap(',
-            '  async close('
+            name === 'SQLiteOperationStateStore' ? '  compareAndSwap(' : '  async compareAndSwap(',
+            '  close('
           )
         )
       ],
@@ -88,7 +90,9 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/test/journal.property.test.ts',
           '<rootDir>/test/journal.test.ts',
-          '<rootDir>/test/operation-state.test.ts'
+          '<rootDir>/test/operation-state.test.ts',
+          '<rootDir>/test/synchronous-promise.test.ts',
+          '<rootDir>/test/pending-work.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
       )
@@ -230,6 +234,11 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/clients/AuthFetch.ts',
+          'private async waitForPendingCertificateRequests(',
+          'private composePaymentLogDetails('
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
           'private isStaleSessionError(',
           'private parseAuthenticatedResponse('
         ],
@@ -265,6 +274,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
+          '<rootDir>/src/auth/clients/__tests__/AuthFetch.certificateWait.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.authenticationPolicy.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.paymentPolicy.test.ts',
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts',
