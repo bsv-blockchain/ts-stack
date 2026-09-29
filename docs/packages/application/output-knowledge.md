@@ -44,6 +44,15 @@ Node 22.13 or newer. The browser root never imports SQLite. All three adapters u
 idempotent mutations and compare-and-swap revisions; SQLite and IndexedDB atomically
 retain receipt, checkpoint and local verification material.
 
+The optional `@bsv/output-knowledge/proposals` entry installs immutable policy
+descriptions and validates actual author signatures, selected chain/service,
+policy-specific payloads, signed revision relations and exact finalization bytes.
+`AuthorDocumentPolicy` implements BRC-194's concrete canonical document example,
+including fixed recipients/anchor and its one-satoshi PRP1 finalization output.
+Policy authorization must still intersect with the host's current access policy.
+These pure checks do not persist a channel, verify Bitcoin evidence, authorize a
+wallet action or perform topic admission; the durable service layer is separate.
+
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current
 qualification boundary. Exact exports and declarations are listed in the

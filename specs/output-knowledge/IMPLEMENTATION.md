@@ -26,6 +26,8 @@ submission and GASP behavior remains available to applications that do not opt i
   source continuity invalidation, accepted reconciliation and snapshot recovery.
 - Canonical assessment presentation in new version-3 journals with fixture-based
   offline replay and continuation compatibility for existing version-1/2 records.
+- Explicit installed proposal policies, actual author signatures, canonical
+  author-document payloads, exact successor and PRP1 finalization relations.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -36,7 +38,7 @@ submission and GASP behavior remains available to applications that do not opt i
 
 ## Remaining checkpoint-two work
 
-- Add proposal namespaces, validation policies and finalization/admission bridges.
+- Add durable proposal namespaces, lifecycle storage and finalization/admission bridges.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
   retention, source adapters and consistent Overlay/Overlay Express storage hooks.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
@@ -60,7 +62,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,638 tests across 217 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 229 tests across 19 suites, with more than 95% line and 89% branch
+run passes 242 tests across 20 suites, with more than 95% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
@@ -74,7 +76,7 @@ Offline restart reproduces the quarantine without additional verification; other
 providers and already accepted Bitcoin facts remain unaffected.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
-and both declared browser entries pass. Core browser byte limits remain unchanged;
+and all three declared browser entries pass. Core browser byte limits remain unchanged;
 the optional adapter entry is independently measured and enforced. IndexedDB unit
 tests use fake-indexeddb, so actual-browser qualification is still required. The
 journal-backed trace binding is documented alongside the unchanged approved

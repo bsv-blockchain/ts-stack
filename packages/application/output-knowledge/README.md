@@ -357,6 +357,58 @@ partial finite coverage, never an exhaustive collection or a replay cursor. The
 adapter does not discover peers, decrypt participant data, or grant transport
 authentication to a sender's own payload.
 
+## Installed proposal policies
+
+`@bsv/output-knowledge/proposals` is an optional entry for BRC-194 policy validation.
+`ProposalPolicyRegistry` accepts only explicitly installed local validators and
+their exact parameters. Its descriptions carry the registered policy digest for
+capability negotiation. An unrecognized identifier or different parameter digest
+fails closed; the registry never downloads executable policy code.
+
+```typescript
+import { AuthorDocumentPolicy, ProposalPolicyRegistry } from '@bsv/output-knowledge/proposals'
+
+const policies = new ProposalPolicyRegistry([
+  { policy: new AuthorDocumentPolicy(), parameters: { maxTextBytes: 4096 } }
+])
+const proposal = policies.validate(receivedEnvelope, { chain: configuredChain, service: topic })
+```
+
+`validate` checks closed envelope fields, the selected service and chain, critical
+extensions supported by that specific policy, canonical policy payload and the
+author's actual BRC-77 signature. It returns an owned copy. `permits` checks policy
+authority for put, read or finalize; it is only one part of authorization. The host
+must authenticate the caller and intersect this permission with current access at
+each mutation, retry, read and response serialization. The registry has no wallet,
+network, admission or storage effects.
+
+The concrete `author-document-v1` policy permits canonical UTF-8 JSON `{text:string}`,
+including empty text, bounded by 1–4096 text bytes. It requires 1–32 sorted recipients
+including the author, zero or one chain-bound anchor, and no embedded transaction.
+Revisions retain the author, recipient set and anchor. Only the author may update,
+withdraw or finalize. Recipients may read only while the host still authorizes them.
+Signing does not encrypt the document; private transport and storage remain required.
+
+`successor` verifies the exact signed predecessor digest and next revision within
+the complete channel namespace. This pure check does not reserve a revision: the
+host must still serialize changes against its durable active head. `validateProposalWindow`
+uses exact U64 seconds, finite maximum lifetime, bounded future-clock skew and
+exclusive signed expiry. Hosts apply it to new mutations, and separately enforce
+current-head expiry and terminal fences. It must not cancel or reject recovery of
+an already committed finalization merely because the proposal has since expired.
+
+`finalization` validates bounded, completely consumed raw transaction bytes and the
+claimed txid. For author-document, output zero must contain exactly one satoshi and
+`OP_FALSE OP_RETURN`, a minimal four-byte push of ASCII `PRP1`, then a minimal push
+of the 32-byte proposal digest. An anchor additionally requires input zero to spend
+that exact outpoint. The check adds no unrelated sequence or lock-time restriction.
+It is a relation check, not evidence verification: the service must independently
+verify complete BEEF and configured topic admission before reporting success.
+Recording or validating a document never consumes an input or releases a secret.
+
+The durable proposal lifecycle and service integration remain in progress. Policy
+validation alone does not qualify a host as a BRC-194 proposal service.
+
 ## Compatibility boundary
 
 The new protocols require explicit capability selection. Existing `/lookup`,

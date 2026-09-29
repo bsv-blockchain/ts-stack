@@ -21,6 +21,9 @@
       ],
       "sources": [
         "dist/sources/index.d.ts"
+      ],
+      "proposals": [
+        "dist/proposals/index.d.ts"
       ]
     }
   },
@@ -40,6 +43,11 @@
       "types": "./dist/storage/SQLiteJournal.d.ts",
       "import": "./dist/storage/SQLiteJournal.js",
       "default": "./dist/storage/SQLiteJournal.js"
+    },
+    "./proposals": {
+      "types": "./dist/proposals/index.d.ts",
+      "import": "./dist/proposals/index.js",
+      "default": "./dist/proposals/index.js"
     }
   },
   "files": [
@@ -57,7 +65,7 @@
     "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow\"",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {

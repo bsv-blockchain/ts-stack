@@ -18,7 +18,9 @@
     "SQLiteJournal",
     "WalletOutputSource",
     "LookupOutputSource",
-    "DirectDeliverySource"
+    "DirectDeliverySource",
+    "ProposalPolicyRegistry",
+    "AuthorDocumentPolicy"
   ],
   "maximumBytes": {
     "vite": {
@@ -53,6 +55,28 @@
           "raw": 460000,
           "gzip": 145000,
           "brotli": 120000
+        }
+      }
+    },
+    {
+      "entry": "./proposals",
+      "requiredExports": [
+        "ProposalPolicyRegistry",
+        "AuthorDocumentPolicy",
+        "proposalChannelKey",
+        "validateProposalWindow"
+      ],
+      "prohibitedExports": ["SQLiteJournal", "BitcoinKnowledge", "WalletOutputSource"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 550000,
+          "gzip": 140000,
+          "brotli": 120000
+        },
+        "esbuild": {
+          "raw": 410000,
+          "gzip": 130000,
+          "brotli": 110000
         }
       }
     }
