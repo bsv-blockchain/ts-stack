@@ -174,7 +174,7 @@ describe('default Bitcoin knowledge journal and worker', () => {
     expect(result.reconciled.memberships).toHaveLength(2)
   })
 
-  it('recovers epoch observation identities across SQLite restart and rejects changed refresh bytes before commit', async () => {
+  it('recovers epoch identities across SQLite restart and durably quarantines changed refresh bytes', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bitcoin-identities-'))
     dirs.push(dir)
     const path = join(dir, 'knowledge.sqlite'),
@@ -208,8 +208,21 @@ describe('default Bitcoin knowledge journal and worker', () => {
           '2'
         )
       )
-    ).rejects.toMatchObject({ code: 'equivocation' })
-    expect(await restored.store.read()).toEqual(accepted)
+    ).resolves.toMatchObject({ status: 'committed' })
+    await restored.worker.advance(restored.store, signal())
+    const quarantined = await restored.store.read()
+    expect(quarantined.facts).toEqual(accepted.facts)
+    expect(quarantined.reconciled.memberships).toEqual(accepted.reconciled.memberships)
+    expect(quarantined.pendingGroups).toEqual([
+      {
+        scope,
+        groupId: 'changed',
+        reason: 'Source equivocation quarantined; generation reset required'
+      }
+    ])
+    expect(BigInt(quarantined.revision.accepted)).toBe(BigInt(accepted.revision.accepted) + 1n)
+    await restored.store.close()
+    expect(await open(new SQLiteJournal(path, 'journal')).store.read()).toEqual(quarantined)
   })
 
   it('quarantines a source group with a malformed sibling while retaining independent valid evidence', async () => {

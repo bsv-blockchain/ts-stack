@@ -21,6 +21,8 @@ submission and GASP behavior remains available to applications that do not opt i
   fences and projection publication independent of authorized wallet actions.
 - Explicit source currentness policy, provider/epoch isolation, immutable first
   receipt lifetimes, durable timer-driven expiry and scoped remote invalidation.
+- Bounded, durable equivocation quarantine with immutable original identities,
+  source continuity invalidation, accepted reconciliation and snapshot recovery.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -32,8 +34,6 @@ submission and GASP behavior remains available to applications that do not opt i
 ## Remaining checkpoint-two work
 
 - Add proposal namespaces, validation policies and finalization/admission bridges.
-- Complete bounded equivocation quarantine and source continuity recovery, beyond
-  the current rejection of changed observation identities before commit.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
   retention, source adapters and consistent Overlay/Overlay Express storage hooks.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
@@ -47,6 +47,8 @@ submission and GASP behavior remains available to applications that do not opt i
   fences, restoration and multi-host consistency demonstrations.
 - Complete a working reference application, actual-browser persistence/restart,
   multi-host demonstrations and an application consuming live lookup updates.
+- Complete versioned replay compatibility for canonical assessment presentation
+  order, preserving historical version-1 decisions while qualifying new journals.
 - Finish API guides, operator guidance, conformance, property/mutation evidence,
   mobile/browser/packed-consumer checks and all exact-head remote quality gates.
 
@@ -56,7 +58,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 ## Validation evidence and limits
 
 The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
-run passes 216 tests across 17 suites, with more than 94% line and 89% branch
+run passes 224 tests across 18 suites, with more than 94% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
@@ -64,6 +66,10 @@ The source tests include a held SQLite append, storage failure, finite paginatio
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
 local refresh generations and SQLite restart.
+Changed identities now retain the conflicting receipt in bounded quarantine,
+publish a durable source continuity change, and recover through a new snapshot.
+Offline restart reproduces the quarantine without additional verification; other
+providers and already accepted Bitcoin facts remain unaffected.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and both declared browser entries pass. Core browser byte limits remain unchanged;

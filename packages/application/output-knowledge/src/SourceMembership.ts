@@ -7,6 +7,8 @@ import {
   type OutputSourceGroup
 } from '@bsv/sdk'
 import type { Coverage, SourceBatch, SourceMembership } from './ports.js'
+import { SourceQuarantine, type SourceQuarantineLimits } from './SourceQuarantine.js'
+export type { QuarantinedSourceReceipt, SourceQuarantineLimits } from './SourceQuarantine.js'
 
 export function compareKnowledgeText(a: string, b: string): number {
   const x = new TextEncoder().encode(a),
@@ -89,6 +91,62 @@ export class SourceMembershipLedger {
   // Observation identities belong to the complete source scope (including its
   // epoch), not a local refresh generation. Preserve them when retiring a seed.
   private readonly observationIdentities = new Map<string, Map<string, string>>()
+  private readonly quarantine: SourceQuarantine
+  private continuityPending = false
+
+  constructor(quarantineLimits: SourceQuarantineLimits = {}) {
+    this.quarantine = new SourceQuarantine(quarantineLimits)
+  }
+
+  /** Caller validates the entire authenticated batch before retaining a conflicting claim. */
+  receiveRetainingEquivocation(input: SourceBatch, received: string): 'received' | 'quarantined' {
+    try {
+      this.receive(input, received)
+      return 'received'
+    } catch (error) {
+      if (!(error instanceof OutputProtocolError) || error.code !== 'equivocation') throw error
+      this.retainEquivocation(input, received, error.message)
+      return 'quarantined'
+    }
+  }
+
+  private retainEquivocation(input: SourceBatch, received: string, reason: string): void {
+    const batch = copy(input),
+      { scope, generation } = batch.provenance,
+      key = outputSourceIdentity(scope),
+      family = this.families.get(key),
+      active = this.stageGeneration(scope, generation, batch.coverage.phase, family)
+    // A capacity failure leaves identities, membership and generation fences unchanged.
+    this.quarantine.retain(batch, received, reason)
+    active.unavailable = true
+    active.groups = active.groups.map(row =>
+      row.status === 'pending' ? { ...row, status: 'quarantined' } : row
+    )
+    active.byId = new Map(active.groups.map(row => [row.group.id, row]))
+    const replacing = family !== undefined && active.generation !== family.highest.generation
+    if (replacing) family.highest.retired = true
+    const visible =
+      family !== undefined && family.visible === family.highest && !replacing
+        ? active
+        : family?.visible
+    this.generations.set(canonicalOutputJSON({ scope, generation }), active)
+    this.families.set(key, { highest: active, ...(visible ? { visible } : {}) })
+    this.continuityPending = true
+  }
+
+  quarantines(): ReturnType<SourceQuarantine['entries']> {
+    return this.quarantine.entries()
+  }
+  quarantineBytes(): number {
+    return this.quarantine.bytes
+  }
+  hasPendingContinuity(): boolean {
+    return this.continuityPending
+  }
+  /** A local accepted revision has published the retained source continuity change. */
+  acceptContinuity(): void {
+    this.continuityPending = false
+  }
 
   receive(input: SourceBatch, received: string): void {
     outputU64(received)
@@ -112,6 +170,7 @@ export class SourceMembershipLedger {
     this.generations.set(canonicalOutputJSON({ scope, generation }), active)
     this.observationIdentities.set(scopeKey, identities)
     this.families.set(familyKey, { highest: active, ...(visible ? { visible } : {}) })
+    if (batch.coverage.status === 'reset-required') this.continuityPending = true
     this.publishCompleted(familyKey)
   }
 
@@ -405,6 +464,25 @@ export class SourceMembershipLedger {
       canonicalOutputJSON(active.scope) === canonicalOutputJSON(scope)
     )
   }
+  canAccept(scope: OutputScope, generation: string): boolean {
+    return (
+      this.isCurrent(scope, generation) &&
+      !this.families.get(outputSourceIdentity(scope))!.highest.unavailable
+    )
+  }
+  private resetDiagnostics(
+    existing: { scope: OutputScope }[]
+  ): { scope: OutputScope; groupId: string; reason: string }[] {
+    const scopes = new Set(existing.map(row => canonicalOutputJSON(row.scope)))
+    return [...this.families.values()]
+      .map(family => family.highest)
+      .filter(active => active.unavailable && !scopes.has(canonicalOutputJSON(active.scope)))
+      .map(active => ({
+        scope: active.scope,
+        groupId: `continuity-reset:${active.generation}`,
+        reason: 'Source continuity unavailable; generation reset required'
+      }))
+  }
   pending(): { scope: OutputScope; groupId: string; reason: string }[] {
     const result: { scope: OutputScope; groupId: string; reason: string }[] = []
     for (const { highest } of this.families.values())
@@ -419,6 +497,18 @@ export class SourceMembershipLedger {
                 : 'Whole-group verification pending'
           })
       }
+    const key = (row: { scope: OutputScope; groupId: string }): string =>
+      canonicalOutputJSON({ scope: row.scope, groupId: row.groupId })
+    const seen = new Set(result.map(key))
+    for (const row of this.quarantine.pending((scope, generation) =>
+      this.isCurrent(scope, generation)
+    )) {
+      const id = key(row)
+      if (seen.has(id)) continue
+      seen.add(id)
+      result.push(row)
+    }
+    result.push(...this.resetDiagnostics(result))
     return copy(result)
   }
 }

@@ -58,6 +58,13 @@ complete them. A source withdrawal changes only that source's membership. It doe
 not spend an output or erase a verified transaction. An empty replacement snapshot
 also requires an accepted boundary before it clears previous membership.
 
+Conflicting source identities are retained in a bounded quarantine after complete
+trusted-session validation. The failed generation requires a fresh snapshot;
+original identities, independent facts and other providers remain intact. A local
+reconciliation publishes the continuity change, including after restart. Local
+journal inspection retains the full claim; public knowledge diagnostics omit its
+private contents. Capacity exhaustion is explicit and never silently drops claims.
+
 The worker persists enough locally validated material to reconstruct accepted
 history without contacting the verifier again. New contexts invalidate current
 selection until evidence qualifies in that view; historical replacements and facts

@@ -158,6 +158,43 @@ snapshots, fences retired generations, and applies live membership in source ord
 replacement rules and current-view dependency closure. Membership is not a spend
 edge, and a newly reported output cannot undo a known spend.
 
+## Source equivocation and recovery
+
+After the entire batch passes schema and trusted-session checks, `BitcoinKnowledge`
+retains a changed observation identity, reused group identity or inconsistent
+watermark as a quarantined **receipt**. The journal preserves the exact claim and
+trusted provenance under its mutation key; its successful commit acknowledges
+storage, not acceptance. No sibling in that receipt supplies new evidence,
+membership, private context or currentness. The original observation remains
+immutable. Independently accepted transaction facts and other providers survive.
+
+Quarantine closes the affected source generation. Existing membership stays visible
+as historical membership, with a generic reset diagnostic in `pendingGroups`;
+configured currentness from that source becomes stale. The worker journals a local
+reconciliation so watchers receive an accepted revision even when there is no new
+proof work. Restart completes that pending reconciliation from retained local
+material. Diagnostics never include the rejected private payload. The original
+receipt remains accessible only through the partition's local journal inspection.
+For a coverage-only reset without a group, the diagnostic uses a local
+`continuity-reset:<generation>` identifier; a group-free equivocating claim uses
+`quarantine:<mutation-key>`. These are diagnostic references, not remote group IDs.
+
+Recovery uses a higher local source generation and a fresh snapshot. Publication
+swaps only after that complete seed qualifies. Late work from the old generation
+cannot publish, and changing generations does not permit rewriting an observation
+identity in the same provider epoch. Other providers keep their own continuity.
+Malformed or foreign-scope batches are rejected before receipt and cannot close a
+trusted source's generation. An ordinary transient outage is not equivocation.
+
+Quarantine retains at most 64 receipts and at most the configured `pendingBytes`
+(16 MiB by default), also subject to the journal's overall retention limits. A
+capacity failure returns `limited` before partial mutation; it never deletes a
+claim, advances a cursor or calls evidence invalid. Recovery after exhaustion needs
+an explicit new journal namespace with the old journal retained for audit. Custom
+reducers may use `SourceMembershipLedger.receiveRetainingEquivocation` and its
+bounded `quarantines()` diagnostics; the lower-level `receive` method retains its
+strict rejection behavior. Both require already schema-checked, locally bound input.
+
 ## Scoped source currentness
 
 An `output` observation means collection membership. To interpret a particular

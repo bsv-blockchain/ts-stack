@@ -280,7 +280,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/application/output-knowledge.md](../packages/application/output-knowledge.md)
 - Source: [packages/application/output-knowledge](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge)
-- Release note: Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness and durable expiry.
+- Release note: Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness, durable expiry and bounded source equivocation quarantine.
 - Migration: New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes. Currentness rules are explicitly configured and sealed in local frame v2; legacy empty-policy v1 journals remain readable, while changing policies requires a new journal namespace.
 
 | Public subpath   | Runtime target(s)                                                      | Declaration target(s)               |

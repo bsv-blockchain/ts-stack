@@ -241,7 +241,12 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
           state.membership.isCurrent(group.scope, group.generation) &&
           state.groupDecision(group)
       )
-    if (work.additions.length || row || state.membership.hasPendingCompletion()) {
+    if (
+      work.additions.length ||
+      row ||
+      state.membership.hasPendingCompletion() ||
+      state.membership.hasPendingContinuity()
+    ) {
       const revision = {
           received: incrementOutputU64(history.revision.received),
           accepted: incrementOutputU64(history.revision.accepted)

@@ -69,7 +69,7 @@ const groupKey = (row: ReceivedSourceGroup): string =>
 /** Private deterministic protocol state, reconstructed exclusively from the local journal. */
 export class BitcoinKnowledgeState {
   readonly pool: EvidencePool
-  readonly membership = new SourceMembershipLedger()
+  readonly membership: SourceMembershipLedger
   readonly ledger: VerificationLedger
   readonly sourceCurrentness: SourceCurrentness
   readonly contexts = new Map<string, VerificationContext>()
@@ -85,6 +85,7 @@ export class BitcoinKnowledgeState {
   constructor(readonly options: BitcoinKnowledgeStateOptions) {
     this.partition = parsePartition(options.partition)
     this.limits = runtimeLimits(options.limits)
+    this.membership = new SourceMembershipLedger({ bytes: this.limits.pendingBytes })
     this.pool = new EvidencePool(options.journalId, {
       retainedBytes: this.limits.pendingBytes,
       dependencies: this.limits.dependencies
@@ -208,6 +209,7 @@ export class BitcoinKnowledgeState {
         throw new OutputProtocolError('context-changed', 'Reconciliation generation changed')
       this.membership.acceptCompletions()
     }
+    this.membership.acceptContinuity()
     this.changed()
     const expected = this.snapshot()
     if (
@@ -251,7 +253,12 @@ export class BitcoinKnowledgeState {
     )
     if (!equal(batch.provenance.scope.chain, this.context.view.chain))
       throw new OutputProtocolError('context-changed', 'Source changed the configured chain')
-    this.membership.receive(batch, received)
+    if (this.membership.receiveRetainingEquivocation(batch, received) === 'quarantined') {
+      // Retain the complete receipt for recovery, but none of its siblings can
+      // introduce evidence, memberships, private context or freshness claims.
+      this.pool.receive(received, [])
+      return
+    }
     this.sourceCurrentness.receive(batch, received, this.context.id)
     const additions: EvidenceReceipt[] = []
     for (const group of batch.groups) {
@@ -324,7 +331,8 @@ export class BitcoinKnowledgeState {
   groupDecision(
     row: ReceivedSourceGroup
   ): { verdict: 'accepted' | 'quarantined'; results: VerificationResult[] } | undefined {
-    if (row.status !== 'pending') return undefined
+    if (row.status !== 'pending' || !this.membership.canAccept(row.scope, row.generation))
+      return undefined
     const id = groupKey(row),
       slots = [...this.slots.values()].filter(slot => slot.receipt.group === id),
       context = this.context,
@@ -385,6 +393,7 @@ export class BitcoinKnowledgeState {
     this.revision = { ...revision }
     if (row) this.membership.decide(row.scope, row.generation, row.group.id, decision!.verdict)
     else this.membership.acceptCompletions()
+    this.membership.acceptContinuity()
     this.changed()
     const snapshot = this.snapshot()
     return row
@@ -624,9 +633,12 @@ export class BitcoinKnowledgeState {
   }
 
   pendingBytes(): number {
-    return new TextEncoder().encode(
-      canonicalOutputJSON(this.membership.groups().filter(row => row.status === 'pending'))
-    ).length
+    return (
+      this.membership.quarantineBytes() +
+      new TextEncoder().encode(
+        canonicalOutputJSON(this.membership.groups().filter(row => row.status === 'pending'))
+      ).length
+    )
   }
 }
 
