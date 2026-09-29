@@ -123,6 +123,11 @@ export class OutputKnowledge {
   attach(source: Source, input: SourceRequest): SourceSubscription {
     this.ready()
     const sourceId = outputString(source.id)
+    if (source.requiredDurability === 'durable' && this.options.store.durability !== 'durable')
+      throw new OutputProtocolError(
+        'unsupported',
+        'Source acknowledgement requires durable storage'
+      )
     if (this.sources.has(sourceId))
       throw new OutputProtocolError('conflict', 'Source adapter is already attached')
     if (this.sources.size >= this.maximumSources)

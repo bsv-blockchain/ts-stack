@@ -9,7 +9,8 @@ explicit application workflows.
 This implementation branch is in progress. Shared SDK wire types, the journal
 adapters, evidence verification and dependency planning, spend selection, source
 membership reduction, the default Bitcoin protocol worker and runtime orchestration
-are implemented. Service integrations, scoped source-currentness policy, proposal
+are implemented, together with wallet, finite per-host lookup and direct-delivery
+adapters. Service integrations, scoped source-currentness policy, proposal
 processing and complete qualification evidence are still being connected before
 checkpoint-two review. The package version does not
 indicate a published or production-qualified release.
@@ -155,6 +156,96 @@ snapshots, fences retired generations, and applies live membership in source ord
 `reconcileOutputSpends` applies actual transaction input edges, historical non-final
 replacement rules and current-view dependency closure. Membership is not a spend
 edge, and a newly reported output cannot undo a known spend.
+
+## Source adapters
+
+Import optional adapters from `@bsv/output-knowledge/sources`. The core entry
+does not import wallet result validation or the legacy lookup transport on behalf
+of applications using different sources. Both browser entries are independently
+checked from the same packed artifacts against their declared size budgets.
+
+Every adapter binds an application-configured scope before opening transport. The
+scope includes chain, provider, service, query and rules digests, access and epoch.
+The caller supplies the account partition and monotonically increasing refresh
+generation. Reusing a completed finite generation for changed data is an error;
+retry identical observations or start a new generation. Finite adapters reject
+durable replay cursors instead of pretending to resume a BRC-193 session.
+
+`WalletOutputSource` requests BRC-100 `listOutputs` with `include: 'entire
+transactions'`. `walletOutputQueryDigest(service, query)` computes the scope's
+query binding. The adapter validates the response through the existing SDK wallet
+validator, retains each row's explicit txid and output index, and carries the
+aggregate BEEF as received. It never selects an arbitrary last transaction from
+that bundle. `WALLET_OUTPUT_CONTEXT_SCHEMA` identifies UTF-8 JSON containing the
+original wallet output row, including requested tags and custom instructions.
+That metadata stays inside the account/access partition and is not executable
+authority or evidence of Bitcoin validity.
+
+Wallet pages are pulled after the preceding page's receipt commits. Page count,
+page size, total bytes and the whole invocation's deadline are bounded. Offset
+pagination is not an atomic snapshot: concurrent wallet changes may duplicate or
+omit rows. Reconcile again in a new generation as needed. A complete finite scan
+means only that invocation reached its end. An empty later scan removes that
+source's membership after its accepted boundary; it does not establish a spend.
+Wallet calls without cancellation support retain their occupied adapter capacity
+until they actually settle, even after the subscriber cancels or times out.
+
+`LookupOutputSource` wraps the existing `LookupResolver.query$` and its pre-union
+`onEvidence` receipts, with exactly one configured host per source. Use
+`lookupOutputQueryDigest(question)` and set `scope.provider` to the canonical host
+base, including any path prefix. Attach several instances concurrently within the
+runtime's source capacity to obtain progressive federated results:
+
+```typescript
+import { LookupOutputSource } from '@bsv/output-knowledge/sources'
+
+const subscriptions = configuredHosts.map(({ host, scope, generation }) => {
+  const source = new LookupOutputSource({
+    id: `catalogue:${host}`,
+    host,
+    scope,
+    question
+  })
+  return runtime.attach(source, {
+    partition,
+    generation,
+    scope,
+    limits: runtime.limits
+  })
+})
+await Promise.all(subscriptions.map(subscription => subscription.done))
+await runtime.flush()
+```
+
+Host selection/discovery is trusted application configuration for this adapter;
+it does not silently follow new endpoints or claim BRC-193 continuity. Each host
+keeps its own membership and provenance even when another supplies the same
+outpoint. A successful empty result, failed request, freeform response, deadline
+and truncated intake have distinct outcomes. Legacy context is retained as opaque
+JSON under `LEGACY_LOOKUP_CONTEXT_SCHEMA`, without becoming a new protocol field.
+An explicit txid hint remains the asserted target; absent hints use the existing
+BRC-24 final-entry target convention. Actual evidence verification remains the
+worker's responsibility. Ordinary lookup, submission and resolver semantics are
+unchanged.
+
+`DirectDeliverySource` is a bounded bridge for an application-owned authenticated
+transport such as MessageBox, NFC or peer exchange. Configure one source per peer
+and access scope, attach it, then call `deliver({ id, observations })` with stable
+sender-scoped identities. A transport may acknowledge its sender only after that
+promise resolves. The runtime advances the source iterator only after receipt
+commits; evidence verification can still be pending or later fail. Returning or
+cancelling the iterator before the next pull rejects the unconfirmed
+acknowledgement. A caller consuming the source manually must honor that same
+commit-before-next contract.
+
+Direct delivery requires a durable store by default. Tests or explicitly volatile
+applications can select `allowVolatileReceipts: true`; this does not promise restart
+recovery. Queue overflow fails the bridge with `limited`, rejects unacknowledged
+deliveries and requires reconciliation/retry with the original identities. It
+never silently drops a receipt while acknowledging it. Direct delivery supplies
+partial finite coverage, never an exhaustive collection or a replay cursor. The
+adapter does not discover peers, decrypt participant data, or grant transport
+authentication to a sender's own payload.
 
 ## Compatibility boundary
 

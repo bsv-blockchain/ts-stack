@@ -129,7 +129,7 @@
       "path": "packages/application/output-knowledge",
       "budget": "packages/application/output-knowledge/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser root contains protocol orchestration, the default durable Bitcoin worker, bounded Script/SPV evidence verification, reconciliation and IndexedDB persistence. SQLite is isolated in the explicitly Node-only ./sqlite subpath and prohibited from the root export. The foundation exact-tarball check is one chunk: Vite 494915/131494/110025 raw/gzip/Brotli bytes across 80 modules and two packages; esbuild 378090/119873/103006 across 217 modules. The initial byte limits remain unchanged. Service-adapter and complete protocol qualification are still required before release; the final PR records the final composition."
+      "splittingDisposition": "The browser root contains protocol orchestration, durable Bitcoin replay, Script/SPV evidence verification, reconciliation and IndexedDB. SQLite remains isolated in ./sqlite. Optional wallet, finite per-host lookup and direct-delivery adapters are isolated in ./sources, whose separate declared browser contract is checked from the same tarballs. The core measures Vite 495282/131597/110218 and esbuild 378418/119971/103048 raw/gzip/Brotli bytes; its original limits remain unchanged. The optional source entry measures Vite 565632/151022/125072 and esbuild 433287/137233/116584, retaining the existing SDK wallet-result and lookup validation. Each is one chunk with two first-party packages. Complete protocol qualification remains required before release."
     }
   ]
 }

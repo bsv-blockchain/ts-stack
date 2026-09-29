@@ -225,6 +225,8 @@ export interface SourceRequest {
 }
 export interface Source {
   readonly id: string
+  /** A transport acknowledgement can require durable receipt instead of volatile intake. */
+  readonly requiredDurability?: 'durable'
   open(request: SourceRequest, signal: AbortSignal): AsyncIterable<SourceBatch>
 }
 export interface EvidenceVerifier {

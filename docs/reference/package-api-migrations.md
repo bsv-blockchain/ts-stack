@@ -287,6 +287,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 | ---------------- | ---------------------------------------------------------------------- | ----------------------------------- |
 | `.`              | `./dist/index.js`<br>`./dist/index.js`                                 | `./dist/index.d.ts`                 |
 | `./package.json` | `./package.json`                                                       | —                                   |
+| `./sources`      | `./dist/sources/index.js`<br>`./dist/sources/index.js`                 | `./dist/sources/index.d.ts`         |
 | `./sqlite`       | `./dist/storage/SQLiteJournal.js`<br>`./dist/storage/SQLiteJournal.js` | `./dist/storage/SQLiteJournal.d.ts` |
 
 ## @bsv/overlay

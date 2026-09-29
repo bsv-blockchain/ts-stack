@@ -14,9 +14,47 @@
     "SourceMembershipLedger",
     "reconcileOutputSpends"
   ],
-  "prohibitedExports": ["SQLiteJournal"],
+  "prohibitedExports": [
+    "SQLiteJournal",
+    "WalletOutputSource",
+    "LookupOutputSource",
+    "DirectDeliverySource"
+  ],
   "maximumBytes": {
-    "vite": { "raw": 550000, "gzip": 140000, "brotli": 120000 },
-    "esbuild": { "raw": 410000, "gzip": 130000, "brotli": 110000 }
-  }
+    "vite": {
+      "raw": 550000,
+      "gzip": 140000,
+      "brotli": 120000
+    },
+    "esbuild": {
+      "raw": 410000,
+      "gzip": 130000,
+      "brotli": 110000
+    }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./sources",
+      "requiredExports": [
+        "WalletOutputSource",
+        "LookupOutputSource",
+        "DirectDeliverySource",
+        "walletOutputQueryDigest",
+        "lookupOutputQueryDigest"
+      ],
+      "prohibitedExports": ["SQLiteJournal", "BitcoinKnowledge"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 600000,
+          "gzip": 160000,
+          "brotli": 140000
+        },
+        "esbuild": {
+          "raw": 460000,
+          "gzip": 145000,
+          "brotli": 120000
+        }
+      }
+    }
+  ]
 }

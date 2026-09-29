@@ -18,6 +18,9 @@
     "*": {
       "sqlite": [
         "dist/storage/SQLiteJournal.d.ts"
+      ],
+      "sources": [
+        "dist/sources/index.d.ts"
       ]
     }
   },
@@ -28,6 +31,11 @@
       "default": "./dist/index.js"
     },
     "./package.json": "./package.json",
+    "./sources": {
+      "types": "./dist/sources/index.d.ts",
+      "import": "./dist/sources/index.js",
+      "default": "./dist/sources/index.js"
+    },
     "./sqlite": {
       "types": "./dist/storage/SQLiteJournal.d.ts",
       "import": "./dist/storage/SQLiteJournal.js",

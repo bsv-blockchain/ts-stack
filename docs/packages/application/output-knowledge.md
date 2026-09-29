@@ -30,6 +30,14 @@ projector. `SDKEvidenceVerifier` checks exact-target BEEF using an application-o
 immutable header view. The caller explicitly selects whether non-final candidates
 participate in reconciliation.
 
+The optional `@bsv/output-knowledge/sources` entry contains the source adapters.
+`WalletOutputSource` ingests bounded BRC-100 basket pages with explicit aggregate
+BEEF targets. `LookupOutputSource` preserves each configured host's receipts before
+resolver deduplication; concurrent sources provide progressive federated results.
+`DirectDeliverySource` bridges a configured peer transport to durable receipt
+acknowledgement, with explicit opt-in for volatile storage. These finite adapters
+do not claim atomic wallet snapshots or resumable BRC-193 live continuity.
+
 `MemoryJournal` is volatile. `IndexedDBJournal` is browser compatible.
 `SQLiteJournal` is available only from `@bsv/output-knowledge/sqlite` and requires
 Node 22.13 or newer. The browser root never imports SQLite. All three adapters use
