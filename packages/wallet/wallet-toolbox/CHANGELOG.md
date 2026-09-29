@@ -4,6 +4,18 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.3
+
+- Surplus change shaping no longer splits change into outputs below the dust
+  floor. Baskets still on the legacy 32-sat `minimumDesiredUTXOValue` produced
+  split outputs that were later folded away, leaving a fee sized for the larger
+  transaction and failing with `generateChangeSdk error: required fee error`.
+  Each split output now gets at least `max(dustFloor, changeInitialSatoshis)`.
+- `WalletPermissionsManager.abortAction` lets the admin originator abort any of
+  the wallet's actions, including signed `noSend` actions and actions from an
+  earlier session, which the in-memory pending-reference map no longer holds.
+  Other originators still need a reference this manager issued to them.
+
 ## wallet-toolbox 2.14.2
 
 - Match complete English text tokens and default stopwords consistently with SDK 2.8.7; preserve quoted and excluded phrases. Scan ordered literal tokens without a combined wildcard expression. Direct filtering ignores inherited attributes and rejects non-string requested values without coercion.

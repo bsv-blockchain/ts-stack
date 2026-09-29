@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
+
 ### 2.7.2 candidate — outbound and deployment hardening
 
 - Serialize GASP route errors through the configured logger as one escaped field; HTTP error responses, public APIs and wire behavior are unchanged.

@@ -1,4 +1,4 @@
-import { Transaction, Utils, type LockingScript, type WalletOutput } from '@bsv/sdk'
+import { Beef, Utils, type LockingScript, type WalletOutput } from '@bsv/sdk'
 import { getWallet } from './walletSingleton'
 import {
   requireAdvertisementTags,
@@ -46,7 +46,7 @@ export async function listVerifiedAdvertisements(options: {
   objectIdentifier?: string
   limit: number
   offset: number
-}): Promise<{ advertisements: VerifiedStoredAdvertisement[]; BEEF?: number[] | Uint8Array }> {
+}): Promise<{ advertisements: VerifiedStoredAdvertisement[]; BEEF?: number[] | Uint8Array; nextOffset?: number; legacyAdvertisementsPending: number }> {
   if (
     !Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 10_000 ||
     !Number.isSafeInteger(options.offset) || options.offset < 0
@@ -67,7 +67,13 @@ export async function listVerifiedAdvertisements(options: {
     result.outputs.length > 10_000 || !Number.isSafeInteger(result.totalOutputs) ||
     result.totalOutputs < result.outputs.length
   ) throw new Error('Wallet returned a malformed UHRP output list')
-  if (result.outputs.length === 0) return { advertisements: [] }
+  const nextOffset = options.offset + result.outputs.length < result.totalOutputs
+    ? options.offset + result.outputs.length
+    : undefined
+  if (result.outputs.length === 0) return { advertisements: [], legacyAdvertisementsPending: 0 }
+  // Parse the page once, rather than reparsing all dependencies for each output.
+  const transactions = Beef.fromBinary(beef(result.BEEF))
+  let legacyAdvertisementsPending = 0
   const inputBeef = beef(result.BEEF)
   const advertisements: VerifiedStoredAdvertisement[] = []
   const seen = new Set<string>()
@@ -81,7 +87,14 @@ export async function listVerifiedAdvertisements(options: {
       walletOutput.spendable !== true || !Number.isSafeInteger(walletOutput.satoshis) ||
       walletOutput.satoshis < 0 || walletOutput.satoshis > 21e14
     ) throw new Error('Wallet returned invalid UHRP output metadata')
-    const transaction = Transaction.fromBEEF(inputBeef, parsed.txid)
+    // An unsigned legacy row cannot establish ownership. Keep it out of
+    // management results, but do not let it block verified rows on this page.
+    if (walletOutput.customInstructions == null) {
+      legacyAdvertisementsPending++
+      continue
+    }
+    const transaction = transactions.findTxid(parsed.txid)?.tx
+    if (transaction == null) throw new Error('UHRP wallet BEEF does not contain the listed transaction')
     if (transaction.id('hex').toLowerCase() !== parsed.txid) throw new Error('UHRP wallet BEEF does not contain the listed transaction')
     const sourceOutput = transaction.outputs[parsed.outputIndex]
     if (sourceOutput == null || sourceOutput.satoshis !== walletOutput.satoshis) {
@@ -104,5 +117,5 @@ export async function listVerifiedAdvertisements(options: {
       metadata, walletOutput
     })
   }
-  return { advertisements, BEEF: inputBeef }
+  return { advertisements, BEEF: inputBeef, nextOffset, legacyAdvertisementsPending }
 }

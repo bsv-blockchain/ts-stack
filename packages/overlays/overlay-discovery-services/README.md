@@ -11,6 +11,8 @@ This package ships:
 - `SLAPTopicManager` / `SLAPLookupService` — admission and querying for SLAP advertisement tokens
 - `WalletAdvertiser` — a turnkey `Advertiser` implementation that creates, finds, and revokes SHIP/SLAP advertisements using a BRC-100 wallet
 
+Discovery pagination orders equal creation timestamps by MongoDB `_id`, preserving stable bounded pages for engine overflow probes.
+
 ## Install
 
 ```bash

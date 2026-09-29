@@ -251,7 +251,8 @@
           "ARC_API_KEY",
           "ARC_CALLBACK_TOKEN",
           "CHAINTRACKS_URL",
-          "GASP_ENABLED"
+          "GASP_ENABLED",
+          "DISCOVERY_ROOT"
         ],
         "secrets": [
           "ADMIN_TOKEN",
@@ -280,7 +281,8 @@
         "submit and propagate a transaction without creating local-only state",
         "query each enabled lookup service",
         "ingest and classify provider callbacks",
-        "reconcile GASP/BASM state across a reorganization"
+        "reconcile GASP/BASM state across a reorganization",
+        "discover SHIP/SLAP services through default SDK network presets when operating as a discovery root"
       ],
       "alerts": [
         "readiness dependency checks fail or provider callback processing errors repeat",

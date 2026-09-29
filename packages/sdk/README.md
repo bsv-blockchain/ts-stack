@@ -34,6 +34,20 @@ the most recent 1,000 entries. Simplified authenticated HTTP frames, bodies,
 headers, signatures, request IDs, and certificate-request headers have fixed
 size/count limits and redirects are rejected.
 
+SDK 2.8.10 accepts full WhatsOnChain block headers with up to 64 own data
+properties, matching the existing header-list response bound. Normal provider
+metadata no longer causes valid mainnet Merkle proofs to fail a 16-property
+limit. Merkle-root matching, hash and height checks, HTTP limits, and rejection
+of accessors, symbols and inherited objects remain enforced. No API, wire,
+proof or wallet-data migration is required.
+
+SDK 2.8.9 gives AuthFetch a finite binary payload budget matching its
+existing HTTP request and configured response capacity. A full 4 MiB CHIRP chunk no longer consumes the
+generic authentication envelope's JSON expansion budget before HTTP dispatch.
+Request framing remains capped at 16 MiB, configured response body limits remain
+enforced, and handshake, certificate, signature, nonce and redirect checks are
+unchanged. No API, wire or wallet-data migration is required.
+
 For signature payloads of at least 64 KiB, `ProtoWallet` uses asynchronous
 platform SHA-256 when Web Crypto is available, avoiding long synchronous
 hashing on browser UI threads. Unsupported or failed native hashing falls back
@@ -188,6 +202,20 @@ await tx.broadcast()
 ```
 
 For a more detailed tutorial and advanced examples, check our [Documentation](#documentation).
+
+### Script verification
+
+`Spend` accepts explicit `verifyFlags` for applications that know the spending
+block's flags and the source output's era. The default JavaScript interpreter
+does not know either height, so its version-based behavior is not a substitute
+for node consensus validation. `Transaction.verify()` uses that default when no
+optional verification backend is selected.
+
+`OP_NUM2BIN` sizes above the node's signed 32-bit limit are invalid. There is
+no default local allocation cap. Callers evaluating untrusted scripts can pass
+an optional finite `memoryLimit` to bound local work before allocation.
+`ScriptResourceLimitError` means the local evaluator did not complete, rather
+than that the script is invalid.
 
 ## Features & Deliverables
 

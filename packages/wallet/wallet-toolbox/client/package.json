@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.14.2",
+  "version": "2.14.3",
   "type": "module",
   "sideEffects": false,
   "engines": {

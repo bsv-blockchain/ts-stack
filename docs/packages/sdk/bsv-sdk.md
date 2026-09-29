@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.7'
+version: '2.8.10'
 npm: '@bsv/sdk'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-27'
+last_verified: '2026-09-27'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -19,6 +19,24 @@ For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
 lookups, BRC-based inclusion requests, publisher choice and the boundary between
 display metadata and wallet permissions.
+
+Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
+for block headers containing the provider's full metadata. Header objects may
+contain up to 64 owned data properties, matching the existing header-list
+bound. Merkle-root equality, response size limits, and rejection of accessors,
+symbols, and inherited properties remain unchanged. No API, wire, proof, or
+wallet-data migration is required. Protected release
+[36324548797](https://github.com/bsv-blockchain/ts-stack/actions/runs/36324548797)
+verified the exact registry bytes, source provenance and CycloneDX SBOM for
+source `5a4053223692b020372f5a8e20f59bf9c82cc968`.
+
+The 2.8.8 source candidate aligns explicit script verification flags with
+spending-era rules, historical signature hashing, locktime operations, and
+bounded numeric allocations. The default JavaScript interpreter still lacks
+the block and coin heights needed for exact node consensus validation.
+There is no default local allocation cap. Callers evaluating untrusted scripts
+may supply a finite `memoryLimit`; a resource limit does not prove that a script
+is invalid. This candidate is not yet published.
 
 The 2.8.6 source candidate fixes BRC-29 payment acceptance.
 `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own

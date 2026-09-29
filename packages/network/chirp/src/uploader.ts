@@ -558,9 +558,9 @@ export class CHIRPUploader {
     const response = await this.request(url, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Encoding': 'identity',
-        'Content-Length': String(bytes.byteLength)
+        // AuthFetch signs application headers. The HTTP transport derives
+        // Content-Length from these owned bytes; absent encoding is identity.
+        'Content-Type': 'application/octet-stream'
       },
       body: bytes as BodyInit,
       signal

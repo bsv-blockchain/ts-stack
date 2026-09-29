@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
+
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
 - Adds `storageHasAdmission` for the optional `Storage.admission` field.
 - Adds an opt-in MongoDB schema, payload-publication, reference-guard, and

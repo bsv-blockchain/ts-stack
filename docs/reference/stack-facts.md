@@ -55,22 +55,22 @@ authorized release action.
 | middleware | `@bsv/auth` | `0.1.5` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth) |
 | middleware | `@bsv/auth-express-middleware` | `2.2.8` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware) |
 | middleware | `@bsv/payment-express-middleware` | `2.1.8` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/payment-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware) |
-| network | `@bsv/chirp` | `0.1.2` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp) |
+| network | `@bsv/chirp` | `0.1.3` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp) |
 | network | `@bsv/teranode-listener` | `1.1.6` | node-library | node-esm | node | `>=22` | [packages/network/ts-p2p](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p) |
 | overlays | `@bsv/gasp` | `1.3.7` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/overlays/gasp-core](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core) |
-| overlays | `@bsv/overlay` | `2.6.1` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay) |
-| overlays | `@bsv/overlay-discovery-services` | `2.2.5` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services) |
-| overlays | `@bsv/overlay-express` | `2.7.2` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express) |
-| overlays | `@bsv/overlay-topics` | `1.9.0` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
-| sdk | `@bsv/sdk` | `2.8.7` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
+| overlays | `@bsv/overlay` | `2.6.2` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay) |
+| overlays | `@bsv/overlay-discovery-services` | `2.2.6` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services) |
+| overlays | `@bsv/overlay-express` | `2.7.3` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express) |
+| overlays | `@bsv/overlay-topics` | `1.9.1` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
+| sdk | `@bsv/sdk` | `2.8.10` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
 | sdk | `@bsv/verifast` | `0.3.6` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
 | wallet | `@bsv/btms` | `1.2.3` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.2.1` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
 | wallet | `@bsv/ecpm-permission-module` | `0.1.1` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/ecpm-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm-permission-module) |
 | wallet | `@bsv/wallet-relay` | `0.5.1` | cli-library | browser-bundler, browser-esm, cli, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/ts-wallet-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay) |
-| wallet | `@bsv/wallet-toolbox` | `2.14.2` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
-| wallet | `@bsv/wallet-toolbox-client` | `2.14.2` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
-| wallet | `@bsv/wallet-toolbox-mobile` | `2.14.2` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
+| wallet | `@bsv/wallet-toolbox` | `2.14.3` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
+| wallet | `@bsv/wallet-toolbox-client` | `2.14.3` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
+| wallet | `@bsv/wallet-toolbox-mobile` | `2.14.3` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
 
 ## Standalone infrastructure manifests
 
@@ -79,13 +79,13 @@ the separately released and verified image digest.
 
 | Service | Package | Manifest version | Node engine | Runtime targets | Release | Source |
 | --- | --- | --- | --- | --- | --- | --- |
-| BSV Chaintracks Server | `chaintracks-server` | `1.1.23` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
-| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.46` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
-| BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.41` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
-| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.42` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
-| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.43` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
-| Wallet Authentication Backend | `@bsv/wab-server` | `1.8.6` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
-| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.45` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV Chaintracks Server | `chaintracks-server` | `1.1.24` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
+| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.47` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
+| BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.44` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
+| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.45` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
+| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.49` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
+| Wallet Authentication Backend | `@bsv/wab-server` | `1.8.7` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
+| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.47` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
 
 ## Governed project and release inventory
 

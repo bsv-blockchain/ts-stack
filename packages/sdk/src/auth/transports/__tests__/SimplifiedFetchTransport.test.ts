@@ -53,6 +53,19 @@ afterEach(() => {
 })
 
 describe('SimplifiedFetchTransport send', () => {
+  test('rejects a framed request above 16 MiB before any HTTP dispatch', async () => {
+    const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
+    const transport = new SimplifiedFetchTransport('https://api.example.com', fetchMock)
+    await transport.onData(async () => {})
+    // Declared length suffices: the transport rejects before reading or allocating bytes.
+    const payload: number[] = []
+    payload.length = 16 * 1024 * 1024 + 1
+    await expect(transport.send(createGeneralMessage({ payload }))).rejects.toThrow(
+      'Authenticated request payload exceeds the configured limit'
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   test('wraps network failures with context', async () => {
     const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
     fetchMock.mockRejectedValue(new Error('network down'))

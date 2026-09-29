@@ -83,6 +83,26 @@ const outputRow = {
 }
 
 describe('KnexStorage security and bounded-query behavior', () => {
+  it('maps SQL null confirmation heights to absent metadata on every output read', async () => {
+    const { knex } = mockKnex({ outputs: [outputRow, [outputRow], [outputRow], [outputRow]] })
+    const storage = new KnexStorage(knex)
+    const single = await storage.findOutput(txid, 0)
+    const batch = await storage.findOutputsByOutpoints([{ txid, outputIndex: 0 }])
+    const transaction = await storage.findOutputsForTransaction(txid)
+    const topicOutputs = await storage.findUTXOsForTopic(topic)
+    for (const output of [single, ...batch, ...transaction, ...topicOutputs]) {
+      expect(output?.blockHeight).toBeUndefined()
+      expect(output?.satoshis).toBe(1)
+    }
+    expect(outputRow.blockHeight).toBeNull()
+  })
+
+  it.each([0, 123, -1, '123'])('does not coerce non-null height %p', async height => {
+    const { knex } = mockKnex({ outputs: [{ ...outputRow, blockHeight: height }] })
+    const output = await new KnexStorage(knex).findOutput(txid, 0)
+    expect(output?.blockHeight).toBe(height)
+  })
+
   it('atomically marks an unspent topical output with the spending transaction', async () => {
     const { knex, queries } = mockKnex({ outputs: [1] })
     const storage = new KnexStorage(knex)

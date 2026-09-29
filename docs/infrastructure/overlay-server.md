@@ -2,9 +2,9 @@
 id: infra-overlay-server
 title: 'Overlay Server'
 kind: infra
-version: '2.1.6'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+version: '2.1.44'
+last_updated: '2026-09-27'
+last_verified: '2026-09-27'
 review_cadence_days: 30
 status: stable
 tags: [overlay, topic-manager, lookup-service, transaction-routing]
@@ -75,38 +75,39 @@ None (HTTP-only OverlayExpress endpoints).
 
 ## Configuration (env vars)
 
-| Variable                         | Required      | Description                                                                                                                               |
-| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| NODE_NAME                        | Yes           | One-word, lowercase overlay service node identifier                                                                                       |
-| SERVER_PRIVATE_KEY               | Yes           | 32-byte hex root private key for server wallet                                                                                            |
-| HOSTING_URL                      | Yes           | Public URL where the node is reachable                                                                                                    |
-| ADMIN_TOKEN                      | Yes           | Independent random secret of at least 32 characters for admin API access                                                                  |
-| WALLET_STORAGE_URL               | Yes           | BSV wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`)                                                                        |
-| NETWORK                          | Yes           | `main` or `test` (BSV blockchain network)                                                                                                 |
-| ARC_API_KEY                      | Conditionally | Arc key for fallback transaction broadcasting. Required only when `ARCADE_URL` is unset.                                                  |
-| ARC_CALLBACK_TOKEN               | No            | Independent random secret of at least 32 characters expected on `/arc-ingest` callbacks                                                   |
-| ARCADE_URL                       | Conditionally | Arcade endpoint used as the first-choice broadcaster and proof lookup provider. Required only when `ARC_API_KEY` is unset.                |
-| ARCADE_API_KEY                   | No            | Arcade API key, when the deployment requires one.                                                                                         |
-| ARCADE_DEPLOYMENT_ID             | No            | Stable Arcade deployment identifier used for callback/proof routing.                                                                      |
-| CHAINTRACKS_URL                  | No            | Explicit go-chaintracks compatible endpoint for headers and reorg SSE. If unset, Arcade can be reused when `USE_ARCADE_CHAINTRACKS=true`. |
-| CHAINTRACKS_API_PREFIX           | No            | Chaintracks API prefix. Defaults to `/chaintracks/v2` for Arcade-mounted Chaintracks.                                                     |
-| USE_ARCADE_CHAINTRACKS           | No            | Reuse `ARCADE_URL` for Chaintracks when `CHAINTRACKS_URL` is unset. Defaults to true when `ARCADE_URL` is set.                            |
-| THROW_ON_BROADCAST_FAIL          | No            | Reject overlay admission if no broadcast provider accepts the transaction. Defaults to `true`.                                            |
-| MONGO_URL                        | Yes           | MongoDB connection string                                                                                                                 |
-| KNEX_URL                         | Yes           | MySQL connection string for Knex                                                                                                          |
-| GASP_ENABLED                     | No            | `true` or `false` (Graph Aware Sync Protocol for overlay sync)                                                                            |
-| MANDALA_ENABLED                  | No            | Enable the regulated Mandala topic. Defaults to `false`; see the production restriction below.                                            |
-| MANDALA_VERIFIER_PRIVATE_KEY     | When enabled  | Dedicated 32-byte linkage-verifier root, distinct from the node and Mandala admin roots.                                                  |
-| MANDALA_ADMIN_PRIVATE_KEY        | When enabled  | Dedicated 32-byte administrative root, distinct from the node and verifier roots.                                                         |
-| MANDALA_STATIC_DENYLIST_JSON     | When enabled  | Explicit bounded JSON array of compressed identity keys for reference/local screening only.                                               |
-| BASM_ENABLED                     | No            | Enable BRC-136 BASM synchronization. Defaults to `false`.                                                                                 |
-| BASM_REORG_STREAM_ENABLED        | No            | Subscribe to Chaintracks reorg SSE when Chaintracks is configured. Defaults to `true`.                                                    |
-| BASM_REORG_SCAN_DEPTH            | No            | Number of recent blocks to revalidate on reorg reconnect/poll.                                                                            |
-| BASM_BLOCK_POLL_INTERVAL_MS      | No            | Interval for BASM anchor/header polling. Set to `0` to disable periodic polling.                                                          |
-| UNPROVEN_EVICTION_BLOCKS         | No            | Block-age threshold for unproven transaction eviction.                                                                                    |
-| UNPROVEN_MAINTENANCE_INTERVAL_MS | No            | Periodic refresh-then-evict cadence for unproven transactions. `0` disables periodic maintenance.                                         |
-| LOG_LEVEL                        | No            | pino log level. Defaults to `info`.                                                                                                       |
-| OTEL_*                           | No            | OpenTelemetry exporter/resource configuration. See `infra/OBSERVABILITY.md`.                                                              |
+| Variable                         | Required      | Description                                                                                                                                                 |
+| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NODE_NAME                        | Yes           | One-word, lowercase overlay service node identifier                                                                                                         |
+| SERVER_PRIVATE_KEY               | Yes           | 32-byte hex root private key for server wallet                                                                                                              |
+| HOSTING_URL                      | Yes           | Public URL where the node is reachable                                                                                                                      |
+| ADMIN_TOKEN                      | Yes           | Independent random secret of at least 32 characters for admin API access                                                                                    |
+| WALLET_STORAGE_URL               | Yes           | BSV wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`)                                                                                          |
+| NETWORK                          | Yes           | `main`, `test` or `ttn` (BSV blockchain network)                                                                                                            |
+| ARC_API_KEY                      | Conditionally | Arc key for fallback transaction broadcasting. Required only when `ARCADE_URL` is unset.                                                                    |
+| ARC_CALLBACK_TOKEN               | No            | Independent random secret of at least 32 characters expected on `/arc-ingest` callbacks                                                                     |
+| ARCADE_URL                       | Conditionally | Arcade endpoint used as the first-choice broadcaster and proof lookup provider. Required only when `ARC_API_KEY` is unset.                                  |
+| ARCADE_API_KEY                   | No            | Arcade API key, when the deployment requires one.                                                                                                           |
+| ARCADE_DEPLOYMENT_ID             | No            | Stable Arcade deployment identifier used for callback/proof routing.                                                                                        |
+| CHAINTRACKS_URL                  | No            | Explicit go-chaintracks compatible endpoint for headers and reorg SSE. If unset, Arcade can be reused when `USE_ARCADE_CHAINTRACKS=true`.                   |
+| CHAINTRACKS_API_PREFIX           | No            | Chaintracks API prefix. Defaults to `/chaintracks/v2` for Arcade-mounted Chaintracks.                                                                       |
+| USE_ARCADE_CHAINTRACKS           | No            | Reuse `ARCADE_URL` for Chaintracks when `CHAINTRACKS_URL` is unset. Defaults to true when `ARCADE_URL` is set.                                              |
+| THROW_ON_BROADCAST_FAIL          | No            | Reject overlay admission if no broadcast provider accepts the transaction. Defaults to `true`.                                                              |
+| MONGO_URL                        | Yes           | MongoDB connection string                                                                                                                                   |
+| KNEX_URL                         | Yes           | MySQL connection string for Knex                                                                                                                            |
+| GASP_ENABLED                     | No            | `true` or `false` (Graph Aware Sync Protocol for overlay sync)                                                                                              |
+| DISCOVERY_ROOT                   | No            | Opt in to public SHIP/SLAP root registration and self-origin advertisement bootstrap. Defaults to `false`; requires a credential-free HTTPS hosting origin. |
+| MANDALA_ENABLED                  | No            | Enable the regulated Mandala topic. Defaults to `false`; see the production restriction below.                                                              |
+| MANDALA_VERIFIER_PRIVATE_KEY     | When enabled  | Dedicated 32-byte linkage-verifier root, distinct from the node and Mandala admin roots.                                                                    |
+| MANDALA_ADMIN_PRIVATE_KEY        | When enabled  | Dedicated 32-byte administrative root, distinct from the node and verifier roots.                                                                           |
+| MANDALA_STATIC_DENYLIST_JSON     | When enabled  | Explicit bounded JSON array of compressed identity keys for reference/local screening only.                                                                 |
+| BASM_ENABLED                     | No            | Enable BRC-136 BASM synchronization. Defaults to `false`.                                                                                                   |
+| BASM_REORG_STREAM_ENABLED        | No            | Subscribe to Chaintracks reorg SSE when Chaintracks is configured. Defaults to `true`.                                                                      |
+| BASM_REORG_SCAN_DEPTH            | No            | Number of recent blocks to revalidate on reorg reconnect/poll.                                                                                              |
+| BASM_BLOCK_POLL_INTERVAL_MS      | No            | Interval for BASM anchor/header polling. Set to `0` to disable periodic polling.                                                                            |
+| UNPROVEN_EVICTION_BLOCKS         | No            | Block-age threshold for unproven transaction eviction.                                                                                                      |
+| UNPROVEN_MAINTENANCE_INTERVAL_MS | No            | Periodic refresh-then-evict cadence for unproven transactions. `0` disables periodic maintenance.                                                           |
+| LOG_LEVEL                        | No            | pino log level. Defaults to `info`.                                                                                                                         |
+| OTEL_*                           | No            | OpenTelemetry exporter/resource configuration. See `infra/OBSERVABILITY.md`.                                                                                |
 
 At least one transaction propagation provider must be configured:
 `ARCADE_URL` or `ARC_API_KEY`. Production deployments should prefer
@@ -253,3 +254,14 @@ counts.
 
 - [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server)
 - [npm package](https://npmjs.com/package/@bsv/overlay-express)
+
+### Discovery-root bootstrap
+
+Set `DISCOVERY_ROOT=true` only for an operator-designated public root. This keeps
+the default discovery topics/services in advertisement synchronization and points
+the advertiser's SHIP/SLAP lookups at the node's own HTTPS origin. It allows a root
+with no existing `ls_ship` discovery registration to create that registration.
+Normal clients keep their network presets, and ordinary deployments keep their
+existing defaults. Validate both direct and default SDK SHIP/SLAP discovery,
+transaction propagation and signed UHRP admission before completing promotion.
+No schema or wire migration is required.

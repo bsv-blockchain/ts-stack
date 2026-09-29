@@ -51,6 +51,12 @@ and access-control policy.
 `CHIRPUploader` uses the same BRC-103/104 `WalletInterface` and `AuthFetch`
 boundary as `StorageUploader`. Existing UHRP upload APIs are unchanged.
 
+Object uploads sign their `Content-Type` and send the verified bytes unchanged.
+The HTTP transport supplies `Content-Length` from the byte body; omitting
+`Content-Encoding` means identity encoding. These transport headers are not
+passed through `AuthFetch` as signed application headers. Custom authenticated
+transports must retain the exact bytes and ordinary HTTP framing.
+
 ```ts
 import { CHIRPUploader } from '@bsv/chirp'
 

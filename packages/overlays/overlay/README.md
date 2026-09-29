@@ -9,6 +9,8 @@ standard HTTP server, operational endpoints, edge policy, and health checks.
 Use this package directly when you are embedding the engine in another runtime
 or implementing a custom transport.
 
+Knex storage maps SQL `NULL` block heights to absent confirmation metadata. It never invents a confirmed height; malformed non-null values still fail engine validation.
+
 ## Requirements
 
 - Node.js 22 or newer

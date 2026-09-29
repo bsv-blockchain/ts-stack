@@ -1216,6 +1216,33 @@ describe('generateChange tests', () => {
     expectTransactionSize(params, r)
   })
 
+  test.each([100_165, 100_180, 100_200, 100_230, 100_260])(
+    '10b2 surplus shaping keeps split outputs above the dust floor for legacy 32-sat baskets (%d)',
+    async coin => {
+      const params: GenerateChangeSdkParams = {
+        ...defParams,
+        fixedOutputs: [{ satoshis: 100_000, lockingScriptLength: 25 }],
+        feeModel: { model: 'sat/kb', value: 100 },
+        changeFirstSatoshis: 32,
+        changeInitialSatoshis: 32,
+        targetNetCount: 8,
+        maxChangeOutputs: 8,
+        surplusPoolShaping: true,
+        maxMigrationInputs: 4
+      }
+      const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([
+        { satoshis: coin, outputId: 1 }
+      ])
+
+      const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+      const dustFloor = Math.max(1, Math.ceil((192 / 1000) * 100) * 2)
+      for (const o of r.changeOutputs) expect(o.satoshis).toBeGreaterThanOrEqual(dustFloor)
+      expect(r.fee).toBe(Math.ceil((r.size / 1000) * 100))
+      expectTransactionSize(params, r)
+    }
+  )
+
   test('10c surplus shaping never gathers inputs merely to reach the pool target', async () => {
     const params: GenerateChangeSdkParams = {
       ...defParams,

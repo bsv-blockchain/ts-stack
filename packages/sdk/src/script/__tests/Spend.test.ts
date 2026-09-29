@@ -15,6 +15,7 @@ import BigNumber from '../../primitives/BigNumber'
 import ScriptChunk from '../../script/ScriptChunk'
 import OP from '../../script/OP'
 import ScriptResourceLimitError from '../../script/ScriptResourceLimitError'
+import ScriptEvaluationError from '../../script/ScriptEvaluationError'
 import { type SignatureHashCache } from '../../primitives/TransactionSignature'
 
 export class MockChain implements ChainTracker {
@@ -110,7 +111,11 @@ const pushChunkFromBytes = (bytes: number[]): ScriptChunk => {
 const createUnlockingScriptFromPushes = (pushes: number[][]): UnlockingScript =>
   new UnlockingScript(pushes.map(pushChunkFromBytes))
 
-const createSpendWithPushes = (lockingAsm: string, unlockingPushes: number[][]): Spend =>
+const createSpendWithPushes = (
+  lockingAsm: string,
+  unlockingPushes: number[][],
+  memoryLimit?: number
+): Spend =>
   new Spend({
     sourceTXID: ZERO_TXID,
     sourceOutputIndex: 0,
@@ -122,7 +127,8 @@ const createSpendWithPushes = (lockingAsm: string, unlockingPushes: number[][]):
     inputIndex: 0,
     unlockingScript: createUnlockingScriptFromPushes(unlockingPushes),
     inputSequence: 0xffffffff,
-    lockTime: 0
+    lockTime: 0,
+    memoryLimit
   })
 
 const scriptNumBytes = (value: bigint): number[] => new BigNumber(value).toScriptNum()
@@ -575,15 +581,31 @@ describe('Spend', () => {
       )
     })
 
-    it('OP_NUM2BIN reports an unrepresentable local allocation as resource exhaustion', () => {
+    it('OP_NUM2BIN rejects a size above the node int32 limit before allocation', () => {
       const spend = createSpendWithPushes('OP_NUM2BIN', [[0x01], scriptNumBytes(1n << 60n)])
+      expect(() => spend.validate()).toThrow(ScriptEvaluationError)
+      expect(() => spend.validate()).toThrow('OP_NUM2BIN size exceeds the node int32 push limit.')
+    })
+
+    it('OP_NUM2BIN permits a node-representable allocation above 1 MiB without a caller budget', () => {
+      const size = BigInt(1024 * 1024 + 1)
+      const spend = createSpendWithPushes('OP_NUM2BIN', [[0x01], scriptNumBytes(size)])
+      expect(spend.hasExplicitMemoryLimit).toBe(false)
+      expect(spend.memoryLimit).toBe(Number.POSITIVE_INFINITY)
+      expect(spend.validate()).toBe(true)
+    })
+
+    it('OP_NUM2BIN checks an explicit local allocation budget before allocating', () => {
+      const size = BigInt(1024 * 1024 + 1)
+      const spend = createSpendWithPushes('OP_NUM2BIN', [[0x01], scriptNumBytes(size)], 1024)
       expect(() => spend.validate()).toThrow(ScriptResourceLimitError)
       try {
         spend.validate()
       } catch (error) {
         const resourceError = error as ScriptResourceLimitError
         expect(resourceError.resource).toBe('element-size')
-        expect(resourceError.attempted).toBe(1n << 60n)
+        expect(resourceError.limit).toBe(1024)
+        expect(resourceError.attempted).toBe(size)
       }
     })
 

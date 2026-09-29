@@ -1,6 +1,6 @@
 import { SHIPStorage } from '../SHIP/SHIPStorage.js'
 import { SLAPStorage } from '../SLAP/SLAPStorage.js'
-import { MongoClient, type Db } from 'mongodb'
+import { MongoClient, ObjectId, type Db } from 'mongodb'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 
 const shipFilter = {
@@ -183,6 +183,22 @@ describe('discovery storage MongoDB invariants', () => {
 
   beforeEach(async () => {
     await db.dropDatabase()
+  })
+
+  it.each(['shipRecords', 'slapRecords'])('uses a unique tie breaker across equal-time %s pages', async collectionName => {
+    const isShip = collectionName === 'shipRecords'
+    const records = db.collection(collectionName)
+    const seed = [3, 1, 2].map(index => ({
+      _id: new ObjectId(index.toString(16).padStart(24, '0')),
+      ...(isShip ? shipFilter : slapFilter),
+      domain: `https://host-${index}.example`, txid: `tx-${index}`, outputIndex: index,
+      createdAt: new Date('2026-09-26T00:00:00Z')
+    }))
+    await records.insertMany(seed)
+    const storage = isShip ? new SHIPStorage(db) : new SLAPStorage(db)
+    expect(await storage.findAll(2, 0, 'asc')).toEqual([{ txid: 'tx-1', outputIndex: 1 }, { txid: 'tx-2', outputIndex: 2 }])
+    expect(await storage.findAll(2, 2, 'asc')).toEqual([{ txid: 'tx-3', outputIndex: 3 }])
+    expect(await storage.findAll(2, 0, 'desc')).toEqual([{ txid: 'tx-3', outputIndex: 3 }, { txid: 'tx-2', outputIndex: 2 }])
   })
 
   it('migrates SHIP duplicates, retaining newest before accepting a refresh', async () => {

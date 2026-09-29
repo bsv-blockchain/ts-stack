@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: 'UHRP Server (Cloud Bucket)'
 kind: infra
-version: '0.2.36'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '0.2.49'
+last_updated: '2026-09-27'
+last_verified: '2026-09-27'
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -14,9 +14,12 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 
 > A production-grade UHRP host server backed by Google Cloud Storage. Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
 
-The 0.2.36 image refreshes its Alpine OpenSSL runtime libraries to 3.5.8-r0
-to remediate CVE-2026-14456. Service APIs, bucket layouts, CHIRP behavior, and
-deployment configuration are unchanged from 0.2.35.
+The 0.2.49 source candidate fixes CHIRP renewal pricing by reading the verified
+root from `chirp/v1/objects/<root>` rather than looking for a duplicate CDN copy.
+Ordinary advertisements retain their `cdn/<object>` path. Signed ownership,
+provider size checks, pricing, and renewal behavior remain unchanged. No object,
+advertisement, wallet, or lease migration is required. Publication and deployment
+remain separate operator actions through the protected image workflow.
 
 ## What it does
 
@@ -32,8 +35,14 @@ The on-chain token authenticates host, hash, HTTPS location, expiry, and size;
 uploader ownership and the GCS object name are intentionally local metadata,
 not wire fields. Private owner routes require a server-signed metadata envelope
 bound to the exact wallet/BEEF output and current GCS size. Unsigned legacy
-metadata must be re-advertised before owner list/find/renew operations. Public
-UHRP lookup and retrieval remain wire-compatible.
+rows are omitted from owner-management results and counted per page in
+`legacyAdvertisementsPending`; clients continue with `nextOffset`. Recover
+valid active legacy objects using the dry-run-first operator command documented
+in the [service README](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/uhrp-server-cloud-bucket/README.md#recover-legacy-ownership-without-replacing-transactions).
+It verifies provider ownership and streamed content against the host-signed
+token, then merges signed metadata into the existing wallet output without
+spending or rebroadcasting. Invalid or changed records require private review.
+Public UHRP lookup and retrieval remain wire-compatible.
 
 ## When to deploy this
 

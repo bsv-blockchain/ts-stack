@@ -123,7 +123,7 @@ export class UHRPLookupService implements LookupService {
       )
     }
 
-    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const limit = readInteger(query, 'limit', 50, 1, 200)
     const offset = readInteger(query, 'offset', 0, 0, 100000)
     const filter: Partial<Pick<UHRPRecord, 'uhrpUrl' | 'expiryTime' | 'hostIdentityKey'>> = {}
     if (uhrpUrl !== undefined) filter.uhrpUrl = uhrpUrl
@@ -132,6 +132,7 @@ export class UHRPLookupService implements LookupService {
     const result = await this.records
       .find(filter)
       .project<UHRPRecord>({ txid: 1, outputIndex: 1 })
+      .sort({ txid: 1, outputIndex: 1 })
       .skip(offset)
       .limit(limit)
       .toArray()

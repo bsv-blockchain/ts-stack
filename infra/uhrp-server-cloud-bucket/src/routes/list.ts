@@ -19,6 +19,8 @@ interface ListResponse {
     uhrpUrl: string
     expiryTime: number
   }>
+  nextOffset?: number
+  legacyAdvertisementsPending?: number
   code?: string
   description?: string
 }
@@ -39,7 +41,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
       req.body?.offset ?? req.query.offset
     )
 
-    const { advertisements } = await listVerifiedAdvertisements({
+    const { advertisements, nextOffset, legacyAdvertisementsPending } = await listVerifiedAdvertisements({
       uploaderIdentityKey: identityKey,
       limit,
       offset
@@ -57,7 +59,9 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
 
     return res.status(200).json({
       status: 'success',
-      uploads: result
+      uploads: result,
+      ...(nextOffset === undefined ? {} : { nextOffset }),
+      legacyAdvertisementsPending
     })
   } catch (error) {
     if (error instanceof RangeError) {

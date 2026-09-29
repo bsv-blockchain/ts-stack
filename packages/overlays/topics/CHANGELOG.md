@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Accept SDK-compatible 200-row UHRP lookup pages with deterministic outpoint ordering and unchanged selector/signature validation.
+
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Advances the packed overlay dependency candidate for BASM validation hardening.
   Package runtime behavior is unchanged; no consumer migration is required.

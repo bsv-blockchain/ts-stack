@@ -239,7 +239,7 @@ export class SLAPStorage {
       .find(mongoQuery)
       .project<UTXOReference>({ txid: 1, outputIndex: 1, createdAt: 1 })
 
-    cursor.sort({ createdAt: pagination.sortOrder })
+    cursor.sort({ createdAt: pagination.sortOrder, _id: pagination.sortOrder })
 
     // Apply pagination if provided
     if (pagination.skip > 0) {
@@ -271,7 +271,7 @@ export class SLAPStorage {
       .project<UTXOReference>({ txid: 1, outputIndex: 1, createdAt: 1 })
 
     // Apply pagination if provided
-    cursor.sort({ createdAt: pagination.sortOrder })
+    cursor.sort({ createdAt: pagination.sortOrder, _id: pagination.sortOrder })
 
     if (pagination.skip > 0) {
       cursor = cursor.skip(pagination.skip)

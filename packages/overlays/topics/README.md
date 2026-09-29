@@ -5,6 +5,8 @@
 
 Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, DIDs, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
 
+UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
+
 ## Install
 
 ```bash

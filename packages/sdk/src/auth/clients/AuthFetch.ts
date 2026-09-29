@@ -95,6 +95,8 @@ const MAX_AUTH_RESPONSE_HEADER_KEY_BYTES = 1024
 const MAX_AUTH_RESPONSE_HEADER_VALUE_BYTES = 32 * 1024
 const MAX_AUTH_RESPONSE_HEADER_BYTES = 256 * 1024
 const MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES = 512 * 1024
+// Matches SimplifiedFetchTransport's fixed complete-request frame ceiling.
+const MAX_AUTH_HTTP_REQUEST_FRAME_BYTES = 16 * 1024 * 1024
 const MAX_PAYMENT_TRANSACTION_BYTES = 16 * 1024 * 1024
 const REDACTED_LOG_VALUE = '[redacted]'
 
@@ -347,7 +349,18 @@ export class AuthFetch {
       this.requestedCertificates,
       this.sessionManager,
       undefined,
-      this.originator
+      this.originator,
+      // Budget binary bytes separately from the generic JSON envelope,
+      // retaining a finite bound before Peer snapshots either HTTP frame.
+      {
+        maxGeneralPayloadBytes: Math.max(
+          MAX_AUTH_HTTP_REQUEST_FRAME_BYTES,
+          Math.min(
+            Number.MAX_SAFE_INTEGER,
+            this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES
+          )
+        )
+      }
     )
     await newPeer.ready
     const peerState: AuthPeer = {

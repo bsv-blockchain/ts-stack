@@ -74,6 +74,7 @@ class FakeFile {
       metadata: {
         ...options.metadata,
         generation: String(generation),
+        metageneration: '1',
         size: String(data.byteLength)
       }
     })
@@ -110,10 +111,11 @@ class FakeFile {
     this.bucket.records.delete(this.name)
   }
 
-  async setMetadata(metadata) {
+  async setMetadata(metadata, options = {}) {
     const record = this.bucket.records.get(this.name)
     if (record == null) throw cloudError(404)
-    record.metadata = { ...record.metadata, ...metadata }
+    if (options.ifMetagenerationMatch != null && String(options.ifMetagenerationMatch) !== record.metadata.metageneration) throw cloudError(412)
+    record.metadata = { ...record.metadata, ...metadata, metageneration: String(Number(record.metadata.metageneration) + 1) }
     return [record.metadata]
   }
 }

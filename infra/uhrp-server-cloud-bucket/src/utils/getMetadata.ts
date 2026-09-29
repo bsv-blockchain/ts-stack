@@ -1,10 +1,10 @@
 // /utils/getMetadata.ts
-import { Storage } from '@google-cloud/storage'
+import { createGoogleCloudStorage } from './googleCloudStorage'
 import { PublicKey, StorageUtils } from '@bsv/sdk'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { listVerifiedAdvertisements } from './storedAdvertisements'
 
-const storage = new Storage()
+const storage = createGoogleCloudStorage()
 const { GCP_BUCKET_NAME } = process.env
 
 interface FileMetadata {
@@ -47,7 +47,11 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
     throw new Error(`Advertisement for uhrpUrl: ${canonicalUrl} has expired`)
   }
 
-  const file = storage.bucket(GCP_BUCKET_NAME!).file(`cdn/${selected.metadata.objectIdentifier}`)
+  const identifier = selected.metadata.objectIdentifier
+  const isChirpRoot = new URL(selected.metadata.hostedFileLocation).pathname ===
+    `/chirp/v1/${identifier}/objects/${identifier}`
+  const objectName = `${isChirpRoot ? 'chirp/v1/objects' : 'cdn'}/${identifier}`
+  const file = storage.bucket(GCP_BUCKET_NAME!).file(objectName)
   const [gcsMetadata] = await file.getMetadata()
   const gcsSize = typeof gcsMetadata.size === 'string' ? Number(gcsMetadata.size) : gcsMetadata.size
   if (!Number.isSafeInteger(gcsSize) || gcsSize !== selected.metadata.fileSize) {
@@ -56,7 +60,7 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
 
   return {
     objectIdentifier: selected.metadata.objectIdentifier,
-    name: gcsMetadata.name ?? `cdn/${selected.metadata.objectIdentifier}`,
+    name: gcsMetadata.name ?? objectName,
     size: String(selected.metadata.fileSize),
     contentType: selected.metadata.contentType,
     expiryTime: selected.metadata.expiryTime

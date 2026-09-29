@@ -73,9 +73,12 @@ function validate(value: unknown): AdvertisementMetadata {
   PublicKey.fromString(uploaderIdentityKey)
   const hostedFileLocation = text(input.hostedFileLocation, 'UHRP hosted file location', 2048)
   const location = new URL(hostedFileLocation)
+  const isChirpRoot = objectIdentifier === uhrpUrl &&
+    location.pathname === `/chirp/v1/${objectIdentifier}/objects/${objectIdentifier}`
   if (
     location.protocol !== 'https:' || location.username !== '' || location.password !== '' ||
-    location.hash !== '' || location.search !== '' || location.pathname !== `/cdn/${objectIdentifier}`
+    location.hash !== '' || location.search !== '' ||
+    (location.pathname !== `/cdn/${objectIdentifier}` && !isChirpRoot)
   ) throw new Error('UHRP hosted file location is invalid')
   const contentType = text(input.contentType, 'UHRP content type', 200)
   return {
@@ -161,7 +164,22 @@ export function requireAdvertisementTags(tags: unknown, metadata: AdvertisementM
     }
     actual.add(tag)
   }
-  for (const expected of advertisementTags(metadata)) {
+  // The four lookup tags are selectors and must match signed ownership.
+  // Older insertions lack descriptive tags; those fields remain authenticated
+  // by the signed envelope and token, and any present descriptive tag must match.
+  for (const expected of advertisementTags(metadata).slice(0, 4)) {
     if (!actual.has(expected)) throw new Error('UHRP advertisement tags do not match signed metadata')
+  }
+  requireDescriptiveTags(actual, metadata)
+}
+
+function requireDescriptiveTags(tags: Set<string>, metadata: AdvertisementMetadata): void {
+  for (const prefix of ['content_type_', 'size_']) {
+    const expected = prefix === 'size_' ? `size_${metadata.fileSize}` : `content_type_${metadata.contentType}`
+    for (const tag of tags) {
+      if (tag.startsWith(prefix) && tag !== expected) {
+        throw new Error('UHRP advertisement tags do not match signed metadata')
+      }
+    }
   }
 }

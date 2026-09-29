@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-25",
+  "lastReviewed": "2026-09-27",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -75,10 +75,10 @@
     },
     {
       "name": "@bsv/chirp",
-      "publishedVersion": "0.1.2",
+      "publishedVersion": "0.1.3",
       "releaseType": "none",
-      "summary": "Hardens the BRC-167 CHIRP reference implementation across canonical codecs and identifiers, verified cache and sink ownership, progressive multi-host publication, bounded interleaved resolution, asynchronous cancellation, non-cooperative transport timeouts, authenticated host/retention validation, resumable capability persistence, and atomic retrieval output. Adds strict runtime option/configuration snapshots, an AuthFetch-preserving fetchClient transport hook, exact control-response schemas, and adversarial coverage for mutation, accessor, path, stream, and filesystem boundaries. Standardizes first-party author metadata on the current BSV Association name.",
-      "migration": "Valid BRC-167 objects, CHIRP/UHRP locators, host endpoints, and ordinary typed calls retain their wire and API behavior. Runtime configuration/options and number-array bytes must use plain own data properties and exact documented types; malformed, accessor-backed, oversized, expired, or non-canonical values now fail closed. Use fetchClient to customize network transport while retaining AuthFetch; the legacy fetch callback replaces the full authenticated request path and should be limited to tests or a caller-supplied authenticated client. Custom caches and sinks receive owned bytes and cannot mutate returned verified results. Pass signal to build, publish, download, stream, or closure validation when external adapters must be cancellable. CLI resume files are bounded, non-symlink, atomic mode-0600 capabilities, and retrieval refuses to follow or replace an existing output path. Existing @bsv/sdk storage and UHRP routes remain unchanged; BRC-167 remains authoritative."
+      "summary": "Fixes authenticated CHIRP object uploads: omit explicit Content-Length and Content-Encoding application headers that AuthFetch rejects, while HTTP transport generates the correct length and absent encoding preserves identity bytes. Adds a real mutually authenticated client/server regression that verifies raw object bytes, automatic HTTP framing, object identifiers, caller identity, and successful commit.",
+      "migration": "No API, codec, object identifier, service schema, or wire-format migration. Use @bsv/chirp 0.1.3 with SDK 2.8.9 or later and Cloud Bucket 0.2.48 or Lite 0.1.45 for authenticated binary uploads, including full 4 MiB chunks. Custom authenticated transports must send the supplied owned byte body unchanged and supply ordinary HTTP framing; Content-Type remains signed through AuthFetch. Earlier service entrypoints do not parse staged binary bytes before authentication and require this service patch. Existing stored objects, sessions, advertisements and leases remain unchanged."
     },
     {
       "name": "@bsv/lch",
@@ -124,31 +124,31 @@
     },
     {
       "name": "@bsv/overlay",
-      "publishedVersion": "2.6.1",
+      "publishedVersion": "2.6.2",
       "releaseType": "none",
-      "summary": "Hardens overlay persistence and network boundaries with topical-output uniqueness, spent-by tracking, conditional unspent updates, serialized submission, canonical reorganization checks, authenticated discovery advertisements, and bounded DNS-pinned GASP, BASM, SHIP, and related outbound processing.",
-      "migration": "Stop writes and take coordinated SQL and lookup-store backups before running every new Knex migration. Preflight and reconcile exact duplicate (txid, outputIndex, topic) output keys and (txid, topic) applied-transaction keys from transaction, topic, and lookup evidence; the uniqueness migration intentionally fails rather than deleting security state. Apply topical uniqueness before the additive spentBy column and verify both before serving writes. Prefer roll-forward: older versions do not know these migration names, so an image-only rollback can fail migration-list validation. To restore an older version, keep writes stopped and either use the new migration source to reverse spentBy and topical uniqueness in reverse order after exporting and reconciling every spent/spentBy association, or restore coordinated pre-migration SQL and lookup-store backups. Configure canonical header resolution and public HTTPS endpoints for production network paths; custom storage, topic, discovery, and transport adapters must satisfy the new validation and resource bounds. External topic indexes are not made globally atomic by SQL submission serialization, so retain idempotent compensation for side effects outside the overlay database. Valid canonical overlay wire shapes remain supported."
+      "summary": "Maps SQL NULL output block heights to absent confirmation metadata without inventing a height or changing stored state. Strict engine height validation remains unchanged.",
+      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
     },
     {
       "name": "@bsv/overlay-discovery-services",
-      "publishedVersion": "2.2.5",
+      "publishedVersion": "2.2.6",
       "releaseType": "none",
-      "summary": "Authenticates and bounds SHIP and SLAP advertisement discovery with canonical PushDrop, signature, identity, token, URI, BEEF, query, pagination, result, and final-wallet-transaction validation. findAllAdvertisements now returns only advertisements authenticated as owned by the calling wallet identity.",
-      "migration": "Valid canonical advertisements and bounded queries remain compatible. Code that used findAllAdvertisements to enumerate advertisements owned by other identities must use the appropriate public lookup service instead; the wallet helper is now an authenticated owner view. Private-network or plaintext production URIs, malformed tokens, unbounded query shapes, and wallet results that mutate inspected actions now fail closed."
+      "summary": "Adds the unique MongoDB _id tie breaker to discovery pagination so bounded overflow probes preserve stable ordering.",
+      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
     },
     {
       "name": "@bsv/overlay-express",
-      "publishedVersion": "2.7.2",
+      "publishedVersion": "2.7.3",
       "releaseType": "none",
-      "summary": "Adds direct constructor configuration and hardens public overlay services with DNS-pinned public-HTTPS outbound requests, no redirects, finite deadlines and body limits, canonical reorganization checks, bounded health, search, and monitor routes, sanitized no-store administration pages, and token-gated ARC callbacks. Serializes GASP request failures into one escaped field through the configured logger, including errors containing line separators or throwing serialization hooks.",
-      "migration": "Set an ARC callback token of at least 32 bytes before enabling the ARC ingestion route and update the sender to present it. Private-network or plaintext outbound destinations require the explicit allowPrivateHosts development policy; production endpoints must use public HTTPS. Detailed health data is opt-in. Existing canonical public overlay requests and default credential-free CORS remain supported, but operators must roll out callback credentials and egress policy together across every replica."
+      "summary": "Pages built-in discovery overflow probes within the discovery service 1000-row query bound, retaining the configured engine ceiling and explicit overflow failure.",
+      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
     },
     {
       "name": "@bsv/overlay-topics",
-      "publishedVersion": "1.8.4",
-      "releaseType": "minor",
-      "summary": "Exports the Mandala admin-state reducer (foldAction, defaultAssetState) and its AssetAdminState, FoldContext and FrozenRef types from the package entry point so consumers can replay admin history with the exact reducer the lookup service uses, for example to rebuild an asset state while excluding an evicted transaction.",
-      "migration": "None. Existing exports, topic and lookup identifiers, wire encodings and the exports map are unchanged; the new names are additive."
+      "publishedVersion": "1.9.1",
+      "releaseType": "none",
+      "summary": "Accepts SDK StorageDownloader UHRP pages up to 200 rows with deterministic outpoint ordering. Retains selector allowlists and authenticated advertisement admission.",
+      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
     },
     {
       "name": "@bsv/paymail",
@@ -166,10 +166,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.8.7",
+      "publishedVersion": "2.8.10",
       "releaseType": "none",
-      "summary": "Fixes WalletClient and binary BRC-100 result validation rejecting valid discoverByAttributes results for the identity overlay any search and fuzzy named-field matches; results remain bound to the query they answered. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
-      "migration": "None. No API, BRC100 call, wire or wallet-data migration. Apps calling discoverByAttributes through WalletClient need @bsv/sdk 2.8.7 together with a wallet on @bsv/wallet-toolbox 2.14.2."
+      "summary": "Accepts normal full WhatsOnChain block-header metadata within the existing 64-property header-response boundary instead of rejecting valid mainnet Merkle proofs at 16 properties. Exact Merkle-root equality, hash/height validation, finite HTTP limits, plain-data checks and accessor/symbol rejection remain enforced.",
+      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Published 2.8.10 is verified against protected release 36324548797, source 5a4053223692b020372f5a8e20f59bf9c82cc968, exact registry bytes, source provenance and CycloneDX SBOM."
     },
     {
       "name": "@bsv/simple",
@@ -216,22 +216,22 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.14.2",
-      "releaseType": "none",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
+      "releaseType": "patch",
+      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.14.2",
-      "releaseType": "none",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
+      "releaseType": "patch",
+      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.14.2",
-      "releaseType": "none",
-      "summary": "Fixes discoverByAttributes dropping every overlay result for the all-fields any search; certificates are still re-bound to the query they answered, and named attributes mirror the overlay fuzzy matching. Follow-up matching uses complete English tokens and stopwords, preserves quoted and excluded phrases, and scans ordered literal tokens without a combined wildcard expression; language-specific stemming remains unsupported.",
+      "releaseType": "patch",
+      "summary": "Surplus change shaping no longer splits change into outputs below the dust floor: baskets still on the legacy 32-satoshi minimumDesiredUTXOValue produced split outputs that were later folded away, leaving a fee sized for the larger transaction and failing with a generateChangeSdk required fee error; each split output now starts at the larger of the dust floor and changeInitialSatoshis. WalletPermissionsManager.abortAction lets the admin originator abort any of the wallet's actions, including signed noSend actions and actions from an earlier session that the in-memory pending-reference map no longer holds; other originators still need a reference this manager issued to them, and signAction is unchanged.",
       "migration": "No consumer, wire, or database migration is required."
     },
     {
