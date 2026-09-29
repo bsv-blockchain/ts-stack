@@ -332,17 +332,147 @@ rewritten or interpreted under different presentation rules.
 
 ## Source adapters
 
-Import optional adapters from `@bsv/output-knowledge/sources`. The core entry
+Import finite and direct adapters from `@bsv/output-knowledge/sources`, and the
+durable live adapter from `@bsv/output-knowledge/sources/live-lookup`. The core entry
 does not import wallet result validation or the legacy lookup transport on behalf
-of applications using different sources. Both browser entries are independently
+of applications using different sources. These browser entries are independently
 checked from the same packed artifacts against their declared size budgets.
 
-Every adapter binds an application-configured scope before opening transport. The
+Finite and direct adapters bind an application-configured scope before opening transport. The
 scope includes chain, provider, service, query and rules digests, access and epoch.
 The caller supplies the account partition and monotonically increasing refresh
 generation. Reusing a completed finite generation for changed data is an error;
 retry identical observations or start a new generation. Finite adapters reject
 durable replay cursors instead of pretending to resume a BRC-193 session.
+
+### Durable progressive and live lookup
+
+`LiveLookupSource` composes the SDK's retained-contract BRC-193 HTTP client with a
+durable workflow cell and the same durable `KnowledgeStore` used by the runtime.
+It yields snapshot pages progressively, then reads live groups with awaited
+backpressure. It preserves complete groups and original receipt times. A local
+workflow capture happens before delivery; the core's atomic `receive` stores the
+groups, provenance and successful cursor together. Pulling the next item only
+advances workflow state after finding that exact core receipt. Verification and
+application projection remain independent, and ingestion cannot authorize a wallet
+payment or spend. The selected live lookup profile is unpaid.
+
+The application configures the chain, endpoint/identity, service, query digest,
+rules digest, account partition, journal identity and source refresh generation.
+The provider assigns access and epoch in the first validated response. `connect()`
+captures or reloads that response and returns the complete `SourceRequest` for
+`runtime.attach`. Pass that returned request unchanged; an arbitrary saved cursor
+cannot be supplied as continuation authority. Source refresh generation and local
+verification-context generation are separate counters.
+
+First establish a verification context in the core journal. For a **new** local
+workflow identity, validate a freshly discovered signed capability and persist the
+prepared opening before any HTTP request:
+
+```ts
+import {
+  LiveLookupSource,
+  prepareLiveLookupSource,
+  liveLookupSourceBinding
+} from '@bsv/output-knowledge/sources/live-lookup'
+import { SQLiteOperationStateStore } from '@bsv/output-knowledge/operations/sqlite'
+
+// configuration, selection, manifest and query come from the host's installed
+// endpoint, chain and service-rules policy. core and runtime share one journal.
+const prepared = prepareLiveLookupSource({
+  configuration,
+  namespace: workflowId,
+  manifest,
+  selection,
+  query,
+  limits: { maxBytes: 1024 * 1024, maxObservations: 256, waitMs: 20000 },
+  minimumReceived: (await core.revision()).received
+})
+const control = SQLiteOperationStateStore.create(
+  controlDatabasePath,
+  prepared.namespace,
+  prepared.binding,
+  prepared.initial,
+  prepared.limits
+)
+const source = new LiveLookupSource({
+  configuration,
+  control,
+  core,
+  trust: selection,
+  wallet // Required only when the selected profile uses BRC-103 authentication.
+})
+const request = await source.connect()
+const subscription = runtime.attach(source, request)
+void subscription.done.catch(onSourceFailure)
+```
+
+On restart, recover the original control cell using the application-retained
+workflow identity and trusted configuration. Use `SQLiteOperationStateStore.open`
+with `liveLookupSourceBinding(configuration)` and the same control limits. In a
+browser, use the corresponding explicit `IndexedDBOperationStateStore.create/open`
+operations with a dedicated database. Both the control cell and core journal must
+be durable. The memory adapters deliberately fail this requirement. Missing
+storage, a lower core revision, or loss of the exact receipt behind a saved cursor
+is an explicit reset condition, even if some unrelated history has the same head
+revision. Browser eviction and clearing site data do not create a new opening
+implicitly.
+
+Do not call `prepareLiveLookupSource` again to recover an uncertain operation. The
+saved cell retains the original signed capability, exact normalized Open and its
+256-bit request ID. Retry and recovery validate that original selection under
+installed local trust rules; manifest expiry does not silently replace an already
+started operation. Session deadlines and current server authorization still apply.
+Treat private control data, opening IDs and cursors according to the account's
+storage/access policy; they are not telemetry fields.
+
+Keep the same `LiveLookupSource` instance across cancelled or uncertain connection
+attempts. Its transport continues occupying capacity until an earlier physical
+request settles, even if an injected wallet, fetch or storage port ignores abort.
+`connect()` and an active subscription are mutually exclusive; a subscription
+allows one pending pull. Closing it cancels local work and does not close a remote
+session shared with another worker. Await its `done` settlement before closing its
+storage. If an injected storage port ignores cancellation, also wait for its
+physical calls to settle; `done` reports subscription closure, not completion of
+noncancellable external work. An uncertain CAS result is recovered by reading the saved cell, never by
+assuming that cancellation rolled it back. Independent workers may share a cell:
+CAS chooses one capture, and late results cannot overwrite an advanced job. The
+host must bound the number of worker/source instances independently of the runtime's
+attached-source limit.
+
+The adapter preflights complete canonical source and control envelopes, including
+worst-case escaping of provider-assigned identifiers. It reserves response space
+before persisting the Open; it never lowers that saved allowance during recovery.
+Limits, owned bindings, total step deadlines and eight-attempt contention bounds
+apply to control reads, receipt checks, HTTP and capture. Defaults are a 30-second
+operation deadline and 250 milliseconds between polls at the live head. Configure
+`waitMs + minimumPollMs` below `operationTimeoutMs`, leaving time for authentication,
+network and storage. Snapshot pages are not delayed by live-head pacing; every
+continuation still yields to the event loop so immediate custom transports cannot
+starve cancellation, expiry or another source. Contention,
+quota, timeouts and cancellation are explicit failures; none is an empty successful
+batch or evidence of a spend.
+
+A previously captured historical batch remains ingestible after session expiry.
+After its receipt is durable, local expiry or a selected service's terminal
+continuity/authorization error produces a separately captured, empty
+`reset-required` coverage batch. This is the adapter's local continuity report:
+it carries no new successful cursor, observation or Bitcoin spend claim. The core
+receives it durably, invalidates source continuity and publishes stale currentness
+through its normal worker. The source then fails with `reset-required`. Restart
+can replay exactly that reset but cannot resume the retired continuity. Begin an
+explicit new source generation and new workflow only after choosing to reconcile;
+other providers' evidence and historical facts remain intact. Transient transport
+failures do not fabricate authenticated service errors or erase the saved cursor.
+Configured source-currentness expiry continues to bound freshness while offline.
+
+The control format is `output-live-lookup-source/1`. It retains the current job,
+original contract/Open, minimum core revision, previous compact checkpoint and
+its exact receipt key/position, and at most one captured batch. It never compacts
+core receipt history. Preserve all receipts required by resumable source lifetimes;
+generation reset and core compaction follow the separate runtime retention contract.
+This adapter implements the base lookup profile; critical extensions require an
+explicit compatible adapter. Existing finite lookup defaults are unchanged.
 
 `WalletOutputSource` requests BRC-100 `listOutputs` with `include: 'entire
 transactions'`. `walletOutputQueryDigest(service, query)` computes the scope's
@@ -711,8 +841,17 @@ Run `pnpm --filter @bsv/sdk build:ts`, then this package's `build`, `typecheck`,
 parallel compare-and-swap, equivocation, replay, retention, independent partitions
 and commit-before-reply recovery. The SQLite test exits an actual child process
 immediately after commit and recovers that receipt after reopening the database.
-Browser adapter unit tests use fake-indexeddb; actual browser qualification is a
-separate required checkpoint test and is not implied by those unit tests.
+Browser adapter unit tests use fake-indexeddb. `test:browser` also runs an actual
+Chrome/Chromium consumer installed from the exact SDK and runtime tarballs. It
+checks native IndexedDB under a strict CSP, page and browser restarts without
+application close hooks, replay of captured batches without another Open, exact
+receipt-before-cursor ordering, cross-tab CAS and missing-store recovery. Run
+`test:browser:runtime` to exercise that harness independently of bundle budgets.
+The harness requires Chrome or Chromium in a documented default installation
+location; it fails if unavailable. The fixture transport and empty batches isolate
+native storage and recovery. It does not qualify authenticated HTTP, a durable
+provider, mobile operating systems or Safari. Those require their separate
+integration and application checks. Browser quota/eviction guarantees still apply.
 
 The concrete reconciliation fixtures exercise the selection function using actual
 Script and inclusion checks. The knowledge-store and runtime orchestration tests
@@ -724,9 +863,16 @@ withdrawals, source re-entry after spending, partial verification, and historica
 replacement preservation during context changes. The full 32-scenario BRC trace corpus also runs through the default worker and
 SQLite, including delayed verification, generation fencing, snapshot page order
 and offline restart. The binding is described in `test/fixtures/README.md`.
-Actual-browser recovery, authenticated service transport and application
-demonstrations remain required before checkpoint-two approval. Test sources are in-process
-fixtures; they are not evidence of a deployed BRC-193 transport.
+The live lookup adapter additionally runs through actual loopback HTTP with SDK
+BEEF verification and SQLite: snapshot pages arrive progressively, a disconnected
+client reopens its original operation, and a missed live group is received with
+its cursor atomically. Five child-process exits cover opening, capture, receipt,
+advance and live capture. Separate cases cover lost CAS acknowledgements, late
+workers, exact predecessor receipts and durable continuity reset/replay. These
+fixtures qualify the client; they do not constitute a durable provider or a
+deployed service. Complete authenticated service composition, the provider's
+durable log, mobile qualification and application demonstrations remain required
+before checkpoint-two approval.
 
 ## License
 

@@ -27,7 +27,10 @@
     "SDKProposalEvidence",
     "MemoryOperationStateStore",
     "IndexedDBOperationStateStore",
-    "SQLiteOperationStateStore"
+    "SQLiteOperationStateStore",
+    "LiveLookupSource",
+    "prepareLiveLookupSource",
+    "liveLookupSourceBinding"
   ],
   "maximumBytes": {
     "vite": {
@@ -123,6 +126,28 @@
           "raw": 80000,
           "gzip": 27000,
           "brotli": 23000
+        }
+      }
+    },
+    {
+      "entry": "./sources/live-lookup",
+      "requiredExports": ["LiveLookupSource", "prepareLiveLookupSource", "liveLookupSourceBinding"],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "SQLiteOperationStateStore",
+        "BitcoinKnowledge",
+        "WalletOutputSource"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 400000,
+          "gzip": 110000,
+          "brotli": 95000
+        },
+        "esbuild": {
+          "raw": 320000,
+          "gzip": 105000,
+          "brotli": 90000
         }
       }
     }

@@ -472,6 +472,18 @@
           "A stale new mutation cannot advance either journal revision.",
           "Every committed distinct mutation occupies exactly one contiguous receipt position."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-framing.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Retained lookup identity, bounded capture, exact durable cursor receipt, source generation and local continuity reset across concurrent workers and restart",
+        "target": "Canonical receipt framing preserves whole groups and checkpoint scope under escaped provider metadata",
+        "invariants": [
+          "Every valid snapshot or live batch preserves its complete groups and exact continuity metadata.",
+          "Complete source framing fits within its reserved wire-plus-envelope budget for escaped identifiers.",
+          "Local resets contain no observations or successful cursor and retain the exact predecessor scope."
+        ]
       }
     ],
     "exclusions": [

@@ -22,6 +22,9 @@
       "sources": [
         "dist/sources/index.d.ts"
       ],
+      "sources/live-lookup": [
+        "dist/sources/live-lookup.d.ts"
+      ],
       "proposals": [
         "dist/proposals/index.d.ts"
       ],
@@ -47,6 +50,11 @@
       "types": "./dist/sources/index.d.ts",
       "import": "./dist/sources/index.js",
       "default": "./dist/sources/index.js"
+    },
+    "./sources/live-lookup": {
+      "types": "./dist/sources/live-lookup.d.ts",
+      "import": "./dist/sources/live-lookup.js",
+      "default": "./dist/sources/live-lookup.js"
     },
     "./sqlite": {
       "types": "./dist/storage/SQLiteJournal.d.ts",
@@ -83,13 +91,14 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "format:check": "pnpm --workspace-root exec prettier --check \"packages/application/output-knowledge/**/*.{json,md,ts}\"",
-    "lint": "oxlint src test --deny-warnings",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/application/output-knowledge/**/*.{json,md,ts,mjs,html}\"",
+    "lint": "oxlint src test browser --deny-warnings",
     "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
-    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts",
-    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts test/lookup-framing.test.ts",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs . && node browser/test.mjs",
+    "test:browser:runtime": "pnpm build && node browser/test.mjs",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|ProposalCapabilityContracts|ProposalService|SDKProposalEvidence|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal;./operations=MemoryOperationStateStore|IndexedDBOperationStateStore|DEFAULT_OPERATION_STATE_LIMITS;./operations/sqlite=SQLiteOperationStateStore\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|ProposalCapabilityContracts|ProposalService|SDKProposalEvidence|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal;./operations=MemoryOperationStateStore|IndexedDBOperationStateStore|DEFAULT_OPERATION_STATE_LIMITS;./operations/sqlite=SQLiteOperationStateStore;./sources/live-lookup=LiveLookupSource|prepareLiveLookupSource|liveLookupSourceBinding\"",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
@@ -106,7 +115,9 @@
     "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "fake-indexeddb": "^6.2.5"
+    "fake-indexeddb": "^6.2.5",
+    "puppeteer-core": "^25.4.0",
+    "vite": "^8.1.5"
   },
   "repository": {
     "type": "git",

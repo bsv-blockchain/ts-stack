@@ -28,8 +28,14 @@ submission and GASP behavior remains available to applications that do not opt i
   exact U64 revisions, compare-and-swap and recovery after an uncertain append.
 - Separate optional workflow control storage with immutable configuration, whole-state
   CAS, exact immediate-write recovery and Memory/SQLite/IndexedDB adapters. Recovery
-  never silently initializes lost storage. This is a local primitive, not yet the
-  BRC-193 source state machine or a replacement for atomic receipt/checkpoint commits.
+  never silently initializes lost storage. These cells remain separate from atomic
+  receipt/checkpoint commits in the core journal.
+- Optional BRC-193 live source composing retained HTTP with durable capture and
+  exact core receipt gates. Original opening identity, receipt time, whole groups
+  and predecessor receipts survive restart. Separate generation, account and chain
+  fences reject stale workers; fixed expiry and selected terminal service errors
+  persist cursor-free continuity resets. The source never pays or opens a new
+  generation automatically. Its separate browser entry preserves existing budgets.
 - Exact-target BEEF assembly, alternative cross-source evidence, actual SDK
   Script/SPV verification, historical readiness and deterministic spend selection.
 - Whole-group acceptance, source membership order, generation replacement, context
@@ -71,9 +77,9 @@ submission and GASP behavior remains available to applications that do not opt i
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
   fences, concrete durable admission bridges and restart-aware expiry scheduling.
-- Complete BRC-193 durable snapshot/replay/long-poll services, retention, client
-  source adapters and consistent Overlay/Overlay Express storage hooks, using
-  the bounded client transport now implemented.
+- Complete BRC-193 durable snapshot/replay/long-poll services, retention, full
+  client/provider composition and consistent Overlay/Overlay Express storage hooks,
+  using the bounded transport and durable live source now implemented.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
   non-final profiles while preserving finite legacy defaults.
 - Exercise existing private off-chain values and lookup context, then implement
@@ -95,7 +101,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,751 tests across 223 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 389 tests across 31 suites, with more than 96% line and 91% branch
+run passes 474 tests across 38 suites, with more than 96% line and 92% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
@@ -113,8 +119,13 @@ using SDK BRC-103/104 and the existing Express authentication middleware. They
 cover signed snapshot/live/close responses, wrong peers, no authentication
 downgrade, signed selection mismatches, corrupted signed bodies, unpaid errors
 and cancelled-poll recovery. The complete middleware suite passes 217 tests.
-These fixtures intentionally do not claim durable provider or client-store
-qualification; source integration and the required live application remain open.
+These transport fixtures intentionally do not claim durable provider qualification.
+The additional live source integration exercises actual loopback HTTP, SDK BEEF
+verification and SQLite, including progressive pages and a missed live group
+recovered after disconnect/reopen. Its 85 focused cases also cover five actual
+process-exit stages, exact receipt substitution, reset persistence, physical
+cancellation ownership, authenticated binding, timing and storage capacity.
+The complete provider and required live application remain open.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
@@ -126,8 +137,11 @@ gate. Workflow control storage adds 49 cases across three adapters, including
 multiple connections, lost acknowledgement, SQLite process exit, changed binding,
 corrupt revisions, missing storage, aborted IndexedDB transactions and late opens
 after timeout. A 300-run property checks concurrent CAS winners and stale retries.
-The IndexedDB cases use a test implementation; actual-browser restart remains part
-of the full application qualification. Its optional browser entry is separately
+IndexedDB unit cases use a test implementation. A separate exact-tarball Chrome
+consumer exercises native IndexedDB, strict CSP, page/browser restart, captured
+batch replay, receipt-before-cursor ordering, cross-tab CAS and missing recovery
+stores. Its empty-batch fixture isolates client storage; it is not authenticated
+service, mobile or full application qualification. Its optional browser entry is separately
 measured and bounded; no existing entry budget is raised.
 Changed identities now retain the conflicting receipt in bounded quarantine,
 publish a durable source continuity change, and recover through a new snapshot.
@@ -147,13 +161,16 @@ before assertions and bound unexpected waits. The complete SDK and runtime
 mutation targets pass without uncovered or invalid results. Explicit asynchronous
 iterators preserve dependent write order without scheduling transaction writes
 concurrently. Node-only Mongo iteration uses bounded object-mode streams; browser
-code retains a portable iterator contract. No analyzer suppression or gate is changed. Exact-head
-hosted CI for the correction remains required.
+code retains a portable iterator contract. No analyzer suppression or gate is changed.
+Published head `c4f5655f9` passes all 43 applicable hosted checks, with two expected
+scope skips accepted by merge-gate. The live-source increment needs its own final
+mutation and exact-head CI evidence before qualification.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all declared browser entries pass. Core browser byte limits remain unchanged;
 the optional adapter entry is independently measured and enforced. IndexedDB unit
-tests use fake-indexeddb, so actual-browser qualification is still required. The
+tests use fake-indexeddb; the separate Chrome consumer qualifies native storage
+and recovery. Full provider, application and mobile qualification remain required. The
 journal-backed trace binding is documented alongside the unchanged approved
 fixtures; selection-function tests remain an independent layer.
 
