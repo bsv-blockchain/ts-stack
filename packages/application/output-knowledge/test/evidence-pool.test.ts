@@ -142,4 +142,60 @@ describe('cross-source evidence dependency planning', () => {
       'group-with-two-members'
     ])
   })
+  it('rejects malformed pool limits and duplicate receipt identities before retaining anything', () => {
+    expect(() => new EvidencePool('')).toThrow('identity')
+    expect(() => new EvidencePool('journal', { receipts: 0 })).toThrow('limit')
+    expect(() => new EvidencePool('journal', { searchStates: 257 })).toThrow('limit')
+    const pool = new EvidencePool('journal')
+    expect(() => pool.receive('1', [receipt('same', '1', 'A'), receipt('same', '1', 'B')])).toThrow(
+      'identity'
+    )
+    expect(pool.entries()).toEqual([])
+    expect(() => pool.receive('1', [receipt('wrong-position', '2', 'A')])).toThrow('identity')
+    pool.receive('1', [receipt('accepted', '1', 'A')])
+    expect(pool.alternatives('accepted').complete).toBe(true)
+  })
+
+  it('reports absent support and bounded reconstruction without inventing a negative validity verdict', () => {
+    const pool = new EvidencePool('journal')
+    pool.receive('1', [receipt('child', '1', 'QC', true)])
+    expect(() => pool.alternatives('absent')).toThrow('Unknown evidence receipt')
+    expect(pool.alternatives('child', { through: '0' })).toMatchObject({
+      complete: false,
+      limited: false,
+      supports: []
+    })
+    expect(pool.alternatives('child', { allowedGroups: new Set() })).toMatchObject({
+      complete: false,
+      limited: false,
+      supports: []
+    })
+    expect(() => pool.materialize('child', ['child', 'missing'])).toThrow(
+      'Supporting receipt is unavailable'
+    )
+    expect(() => pool.materialize('child', ['child'])).toThrow('incomplete')
+    expect(() =>
+      pool.materialize('child', ['child'], { txid: 'ff'.repeat(32), outputIndex: 0 })
+    ).toThrow('cannot be reconstructed')
+    const bounded = new EvidencePool('bounded', { supportReceipts: 1 })
+    bounded.receive('1', [receipt('child', '1', 'QC', true)])
+    bounded.receive('2', [receipt('parent', '2', 'Q')])
+    expect(bounded.alternatives('child')).toMatchObject({ complete: false, limited: true })
+    expect(() => bounded.materialize('child', ['child', 'parent'])).toThrow('receipt set')
+  })
+
+  it('orders alternative dependency sets by first availability then stable receipt identity', () => {
+    const pool = new EvidencePool('journal')
+    pool.receive('1', [receipt('child', '1', 'QC', true)])
+    pool.receive('2', [receipt('z-early', '2', 'Q'), receipt('a-early', '2', 'Q')])
+    pool.receive('3', [receipt('a-late', '3', 'Q')])
+    const supports = pool.alternatives('child').supports
+    expect(supports.map(row => row.receipts)).toEqual([
+      ['a-early', 'child'],
+      ['child', 'z-early'],
+      ['a-late', 'child']
+    ])
+    expect(supports.map(row => row.availableAt)).toEqual(['2', '2', '3'])
+    expect(pool.alternatives('child', { through: '2' }).supports).toHaveLength(2)
+  })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals'
-import { Utils } from '@bsv/sdk'
+import { Utils, OutputProtocolError } from '@bsv/sdk'
 import {
   OutputKnowledge,
   KnowledgeStore,
@@ -325,5 +325,149 @@ describe('runtime orchestration and publication ports', () => {
     const pending = waiting.next()
     await waiting.return()
     expect(await pending).toEqual({ done: true, value: undefined })
+  })
+  it('delivers owned knowledge and projection events and reports a source error without private details', async () => {
+    const { runtime } = await open(noWork, {
+      policyDigest: 'ab'.repeat(32),
+      project: async input => projection(input)
+    })
+    const events = runtime.events()[Symbol.asyncIterator]()
+    await runtime.flush()
+    const knowledge = await events.next(),
+      projected = await events.next()
+    expect(knowledge.value?.kind).toBe('knowledge')
+    expect(projected.value?.kind).toBe('projection')
+    if (projected.value?.kind !== 'projection') throw new Error('Projection event missing')
+    projected.value.projection.records[0].value = 'AQ=='
+    expect((await runtime.readProjection())?.records[0].value).not.toBe('AQ==')
+    const failed: Source = {
+      id: 'source',
+      open() {
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                throw new Error('private transport diagnostics')
+              }
+            }
+          }
+        }
+      }
+    }
+    await expect(runtime.attach(failed, request()).done).rejects.toThrow(
+      'private transport diagnostics'
+    )
+    expect((await events.next()).value).toEqual({
+      kind: 'error',
+      source: 'source',
+      code: 'unavailable',
+      message: 'Output runtime unavailable',
+      retryable: true
+    })
+    await events.return?.()
+    await runtime.close()
+  })
+
+  it('rejects duplicate source attachments, excessive requested bounds and policy changes', async () => {
+    const release = deferred(),
+      entered = deferred()
+    let policy = 'ab'.repeat(32)
+    const projector: DomainProjector = {
+      get policyDigest() {
+        return policy
+      },
+      project: async input => projection(input)
+    }
+    const { runtime } = await open(noWork, projector, { observations: 1 })
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        entered.resolve()
+        await release.promise
+        yield batch()
+      }
+    }
+    expect(() => runtime.attach(source, request())).toThrow('exceeds runtime')
+    const selected = { ...request(), limits: { ...runtime.limits } }
+    const attached = runtime.attach(source, selected)
+    await entered.promise
+    expect(() => runtime.attach(source, selected)).toThrow('already attached')
+    attached.close()
+    release.resolve()
+    await attached.done
+    policy = 'cd'.repeat(32)
+    expect(await runtime.readProjection()).toBeUndefined()
+    await expect(runtime.flush()).rejects.toMatchObject({ code: 'context-changed' })
+    await expect(
+      runtime.setContext({ ...context(), partition: { ...partition, access: 'private' } })
+    ).rejects.toMatchObject({ code: 'unauthorized' })
+    await runtime.close()
+  })
+
+  it('rejects a projector checkpoint change and reports protocol errors with their retry policy', async () => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: noWork,
+      projector: {
+        policyDigest: 'ab'.repeat(32),
+        project: async input => ({ ...projection(input), acceptedRevision: '999' })
+      }
+    })
+    await runtime.setContext(context())
+    await expect(runtime.flush()).rejects.toMatchObject({ code: 'invalid' })
+    expect(await runtime.readProjection()).toBeUndefined()
+    const events = runtime.events()[Symbol.asyncIterator]()
+    const source: Source = {
+      id: 'source',
+      open() {
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                throw new OutputProtocolError('unauthorized', 'private access data')
+              }
+            }
+          }
+        }
+      }
+    }
+    await expect(runtime.attach(source, request()).done).rejects.toMatchObject({
+      code: 'unauthorized'
+    })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'error',
+      code: 'unauthorized',
+      retryable: false,
+      message: 'Output runtime unauthorized'
+    })
+    await runtime.close()
+  })
+
+  it('serializes observer reads, delivers pending events, and disposes cancellation once', async () => {
+    const abort = new AbortController()
+    let disposed = 0
+    const queue = new RuntimeEvents(abort.signal, () => {
+      disposed++
+    })
+    expect(queue[Symbol.asyncIterator]()).toBe(queue)
+    const waiting = queue.next()
+    await expect(queue.next()).rejects.toMatchObject({ code: 'conflict' })
+    const event = { kind: 'error', code: 'unavailable', message: 'offline', retryable: true }
+    queue.push(JSON.stringify(event))
+    expect(await waiting).toEqual({ done: false, value: event })
+    const next = queue.next()
+    abort.abort()
+    await expect(next).rejects.toMatchObject({ code: 'cancelled' })
+    queue.push(JSON.stringify(event))
+    queue.close()
+    expect(disposed).toBe(1)
+    const closed = new RuntimeEvents(new AbortController().signal, () => {})
+    await closed.return()
+    expect(await closed.next()).toEqual({ done: true, value: undefined })
+    const already = new AbortController()
+    already.abort()
+    const cancelled = new RuntimeEvents(already.signal, () => {})
+    await expect(cancelled.next()).rejects.toMatchObject({ code: 'cancelled' })
   })
 })

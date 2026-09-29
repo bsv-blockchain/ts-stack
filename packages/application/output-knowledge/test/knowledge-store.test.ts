@@ -253,4 +253,73 @@ describe('knowledge store journal port', () => {
     expect((await store.read()).revision.received).toBe('1')
     await store.close()
   })
+  it('requires complete contiguous pages and a head matching every retained byte and revision', async () => {
+    const storage = new MemoryJournal('test')
+    await storage.append('0', initial())
+    const head = await storage.head()
+    const overrides: Partial<JournalStorage>[] = [
+      { read: async () => [] },
+      { head: async () => ({ ...head, accepted: '0' }) },
+      { head: async () => ({ ...head, entries: 2 }) },
+      { head: async () => ({ ...head, bytes: head.bytes + 1 }) },
+      {
+        read: async () =>
+          (await storage.read('0', 1)).map(row => ({
+            ...row,
+            revision: { received: '2', accepted: '1' }
+          }))
+      }
+    ]
+    for (const override of overrides) {
+      const store = new KnowledgeStore(
+        wrapper(storage, { ...override, close: async () => {} }),
+        reducer(),
+        { partition }
+      )
+      await expect(store.inspect()).rejects.toMatchObject({ code: 'reset-required' })
+      await store.close()
+    }
+    await storage.close()
+  })
+
+  it('replays one coherent head while ignoring a later concurrently appended page entry', async () => {
+    const storage = new MemoryJournal('test')
+    await storage.append('0', initial())
+    const head = await storage.head()
+    await storage.append('1', invalidation())
+    const store = new KnowledgeStore(wrapper(storage, { head: async () => head }), reducer(), {
+      partition
+    })
+    expect((await store.inspect()).revision).toEqual({ received: '1', accepted: '1' })
+    expect((await store.read()).revision).toEqual({ received: '1', accepted: '1' })
+    await store.close()
+  })
+
+  it('rejects lost checkpoints and replay growth exceeding configured entries or bytes', async () => {
+    const storage = new MemoryJournal('test')
+    await storage.append('0', initial())
+    await storage.append('1', invalidation())
+    const controls = [{ maximumEntries: 1 }, { maximumBytes: 1 }, { minimumReceived: '3' }]
+    for (const control of controls) {
+      const store = new KnowledgeStore(wrapper(storage, { close: async () => {} }), reducer(), {
+        partition,
+        ...control
+      })
+      await expect(store.inspect()).rejects.toMatchObject({
+        code: 'minimumReceived' in control ? 'reset-required' : 'limited'
+      })
+      if ('minimumReceived' in control)
+        await expect(store.revision()).rejects.toMatchObject({ code: 'reset-required' })
+      await store.close()
+    }
+    const head = await storage.head()
+    const underreported = new KnowledgeStore(
+      wrapper(storage, { head: async () => ({ ...head, bytes: 1 }), close: async () => {} }),
+      reducer(),
+      { partition, maximumBytes: 2 }
+    )
+    await expect(underreported.inspect()).rejects.toMatchObject({ code: 'limited' })
+    await underreported.close()
+    await storage.close()
+  })
 })

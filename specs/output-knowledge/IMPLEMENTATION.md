@@ -53,8 +53,10 @@ publication, deployment or merge is authorized by this implementation checklist.
 ## Validation evidence and limits
 
 The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
-run passes 180 tests across 15 suites, with more than 91% line and 85% branch
-coverage. Journal append mutation testing kills all 26 generated mutations.
+run passes 205 tests across 16 suites, with more than 94% line and 89% branch
+coverage. Boundary tests cover durable assessment invalidation, exact replay
+checkpoints, immutable source/context identities, partial storage histories and
+projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across

@@ -465,4 +465,132 @@ describe('default Bitcoin knowledge journal and worker', () => {
     expect(result.facts.some(row => row.txid === tx('A'))).toBe(true)
     await runtime.close()
   })
+  it('durably invalidates an assessment while preserving Bitcoin facts and source membership', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bitcoin-invalidation-'))
+    dirs.push(dir)
+    const path = join(dir, 'knowledge.sqlite'),
+      { store, worker } = open(new SQLiteJournal(path, 'journal'))
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await worker.advance(store, signal())
+    const before = await store.read(),
+      assessment = before.assessments.find(row => row.outpoint.txid === tx('A'))!
+    expect(assessment.state).toBe('unknown')
+    await store.commit(
+      before.revision.received,
+      knowledgeMutation({
+        kind: 'invalidate',
+        generation: '0',
+        assessmentIds: [assessment.id],
+        reason: 'Application trust policy expired'
+      })
+    )
+    const invalidated = await store.read()
+    expect(invalidated.assessments.find(row => row.outpoint.txid === tx('A'))).toMatchObject({
+      state: 'stale'
+    })
+    expect(invalidated.facts).toEqual(before.facts)
+    expect(invalidated.reconciled.memberships).toEqual(before.reconciled.memberships)
+    expect(BigInt(invalidated.revision.accepted)).toBe(BigInt(before.revision.accepted) + 1n)
+    await store.close()
+    const recovered = open(new SQLiteJournal(path, 'journal'), {
+      async verify() {
+        throw new Error('Offline recovery must retain invalidation')
+      }
+    })
+    expect(await recovered.store.read()).toEqual(invalidated)
+  })
+
+  it('rejects unknown, duplicated and foreign-generation invalidations without committing a prefix', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await worker.advance(store, signal())
+    const before = await store.read(),
+      id = before.assessments[0].id
+    for (const change of [
+      { generation: '0', assessmentIds: ['ff'.repeat(32)], reason: 'Unknown identity' },
+      { generation: '0', assessmentIds: [id, id], reason: 'Duplicated identity' },
+      { generation: '1', assessmentIds: [id], reason: 'Wrong generation' },
+      { generation: '0', assessmentIds: [id], reason: '' }
+    ]) {
+      await expect(
+        store.commit(before.revision.received, knowledgeMutation({ kind: 'invalidate', ...change }))
+      ).rejects.toMatchObject({ code: change.generation === '1' ? 'context-changed' : 'invalid' })
+      expect(await store.read()).toEqual(before)
+    }
+  })
+
+  it('fences receipts before initialization and immutable context identities across generations', async () => {
+    const { store } = open()
+    await expect(receive(store, batch('early', [output('A')]))).rejects.toMatchObject({
+      code: 'revision-unavailable'
+    })
+    expect(await store.revision()).toEqual({ received: '0', accepted: '0' })
+    const initial = context()
+    initial.generation = '2'
+    await store.commit('0', knowledgeMutation({ kind: 'context', context: initial }))
+    const before = await store.read()
+    const reused = { ...initial, generation: '3' }
+    await expect(
+      store.commit(
+        before.revision.received,
+        knowledgeMutation({ kind: 'context', context: reused })
+      )
+    ).rejects.toMatchObject({ code: 'equivocation' })
+    const reversed = { ...initial, id: 'reversed', generation: '1' }
+    await expect(
+      store.commit(
+        before.revision.received,
+        knowledgeMutation({ kind: 'context', context: reversed })
+      )
+    ).rejects.toMatchObject({ code: 'context-changed' })
+    const changedChain = {
+      ...initial,
+      id: 'foreign-chain',
+      view: { ...initial.view, chain: { ...chain, network: 'foreign' } }
+    }
+    await expect(
+      store.commit(
+        before.revision.received,
+        knowledgeMutation({ kind: 'context', context: changedChain })
+      )
+    ).rejects.toMatchObject({ code: 'context-changed' })
+    expect(await store.read()).toEqual(before)
+  })
+
+  it('rejects acceptance referring to another context, generation or unavailable group', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await worker.advance(store, signal())
+    const before = await store.read()
+    const accepted = (await store.inspect()).entries.find(
+      entry => entry.body.kind === 'accept'
+    )!.body
+    if (accepted.kind !== 'accept') throw new Error('Expected actual worker acceptance')
+    for (const altered of [
+      { ...accepted, contextId: 'unknown' },
+      { ...accepted, generation: '1' },
+      { ...accepted, groupId: 'missing' },
+      { ...accepted, results: [] }
+    ]) {
+      await expect(
+        store.commit(before.revision.received, knowledgeMutation(altered))
+      ).rejects.toBeDefined()
+      expect(await store.read()).toEqual(before)
+    }
+    await expect(
+      store.commit(
+        before.revision.received,
+        knowledgeMutation({
+          kind: 'reconcile',
+          generation: '1',
+          contextId: before.context.id,
+          reconciled: before.reconciled,
+          assessments: before.assessments
+        })
+      )
+    ).rejects.toMatchObject({ code: 'context-changed' })
+  })
 })

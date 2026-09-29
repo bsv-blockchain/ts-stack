@@ -663,6 +663,7 @@ class SpendSelection {
       if (eligible) row.eligible = { ...eligible }
       if (previous) row.replaces = previous
     }
+    this.components.sort((a, b) => compareText(a[0], b[0]))
     return {
       profile: 'https://bsv.brc.dev/apps/0192#bitcoin-spend-reconciliation-v1',
       nonFinal: this.request.nonFinal,
@@ -672,9 +673,10 @@ class SpendSelection {
       transactions: [...this.rows.values()].sort((a, b) => compareText(a.txid, b.txid)),
       memberships: structuredClone(this.request.memberships),
       replacements: this.replacements,
-      pendingComponents: this.components
-        .sort((a, b) => compareText(a[0], b[0]))
-        .map(txids => ({ txids, reason: 'Complete evidence verification pending' }))
+      pendingComponents: this.components.map(txids => ({
+        txids,
+        reason: 'Complete evidence verification pending'
+      }))
     }
   }
 }
