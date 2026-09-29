@@ -1787,8 +1787,12 @@ function sameRecordKeys(actual: unknown, expected: unknown): boolean {
   const actualKeys = intrinsicObjectKeys(actualRecord)
   const expectedKeys = intrinsicObjectKeys(expectedRecord)
   if (actualKeys.length !== expectedKeys.length) return false
-  for (let index = 0; index < expectedKeys.length; index++) {
+  // Indexed rather than for-of, like the rest of this file: iterating would
+  // call Array.prototype[Symbol.iterator], which a caller can replace.
+  let index = 0
+  while (index < expectedKeys.length) {
     if (!hasOwn(actualRecord, expectedKeys[index])) return false
+    index++
   }
   return true
 }
