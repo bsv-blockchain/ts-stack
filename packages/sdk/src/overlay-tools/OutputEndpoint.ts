@@ -13,12 +13,10 @@ export function canonicalOutputBase(input: string, allowLocalHTTP = false): stri
   )
   canonicalOutputJSON(input)
   outputAssert(
-    !Array.from(input).some(
-      character =>
-        character.codePointAt(0)! <= 32 ||
-        character.codePointAt(0)! === 127 ||
-        String.raw`\?#`.includes(character)
-    ),
+    !Array.from(input).some(character => {
+      const point = character.codePointAt(0)!
+      return point <= 32 || point === 127 || String.raw`\?#`.includes(character)
+    }),
     'Invalid overlay base characters'
   )
   const parts = /^(https?):\/\/([^/]+)(\/.*)?$/i.exec(input)

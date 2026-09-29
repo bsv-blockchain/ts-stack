@@ -108,112 +108,131 @@ export class BitcoinKnowledgeState {
   /** Apply one committed prefix or one already prepared prospective transition. */
   apply(entry: JournalEntry, local = entry.local): void {
     const { body, revision } = entry
-    if (body.kind === 'context') {
-      if (local === undefined)
-        throw new OutputProtocolError(
-          'reset-required',
-          'Bitcoin journal context is missing its retained spend policy'
-        )
-      closedOutputObject(body, ['kind', 'context'])
-      const context = parseVerificationContext(body.context),
-        previous = this.frontiers.at(-1)?.context
-      if (!equal(context.partition, this.partition))
-        throw new OutputProtocolError('unauthorized', 'Context changed account partition')
-      if (
-        previous &&
-        (!equal(context.view.chain, previous.view.chain) ||
-          outputU64(context.generation) < outputU64(previous.generation))
-      )
-        throw new OutputProtocolError(
-          'context-changed',
-          'Configured chain changed or generation reversed'
-        )
-      if (this.contexts.has(context.id))
-        throw new OutputProtocolError('equivocation', 'Verification context identity was reused')
-      this.contexts.set(context.id, context)
-      this.frontiers.push({ at: previous ? revision.received : '0', context })
-    } else {
-      // Any source may contribute facts only after the local partition/chain has been established.
-      void this.context
-      if (body.kind === 'receive') this.receive(body, revision.received)
-      else if (body.kind === 'invalidate') {
-        closedOutputObject(body, ['kind', 'generation', 'assessmentIds', 'reason'])
-        if (body.generation !== this.context.generation)
-          throw new OutputProtocolError('context-changed', 'Invalidation generation changed')
-        if (!Array.isArray(body.assessmentIds) || !body.reason || typeof body.reason !== 'string')
-          throw new OutputProtocolError('invalid', 'Invalid assessment invalidation')
-        const existing = new Set(this.snapshot().assessments.map(row => row.id)),
-          seen = new Set<string>()
-        for (const id of body.assessmentIds) {
-          outputHex32(id)
-          if (!existing.has(id) || seen.has(id))
-            throw new OutputProtocolError(
-              'invalid',
-              'Unknown or duplicated assessment invalidation'
-            )
-          seen.add(id)
-          this.invalidated.add(id)
-        }
-      } else if (body.kind !== 'accept' && body.kind !== 'reconcile') {
-        throw new OutputProtocolError('unsupported', 'Unknown knowledge mutation kind')
-      }
-    }
+    if (body.kind === 'context') this.applyContext(body, revision, local)
+    else this.applyEstablished(body, revision.received, this.context)
     this.revision = { ...revision }
     this.changed()
     if (local !== undefined) this.applyLocal(local)
-    if (body.kind === 'accept' || body.kind === 'reconcile') {
-      closedOutputObject(
-        body,
-        body.kind === 'accept'
-          ? [
-              'kind',
-              'scope',
-              'groupId',
-              'generation',
-              'contextId',
-              'results',
-              'assessments',
-              'reconciled'
-            ]
-          : ['kind', 'generation', 'contextId', 'reconciled', 'assessments']
+    if (body.kind === 'accept' || body.kind === 'reconcile') this.applyAcceptance(body)
+  }
+
+  private applyContext(
+    body: Extract<Mutation['body'], { kind: 'context' }>,
+    revision: StoreRevision,
+    local?: OutputJSONObject
+  ): void {
+    if (local === undefined)
+      throw new OutputProtocolError(
+        'reset-required',
+        'Bitcoin journal context is missing its retained spend policy'
       )
-      if (body.contextId !== this.context.id)
-        throw new OutputProtocolError('context-changed', 'Acceptance context changed')
-      if (body.kind === 'accept') {
-        const row = this.membership
-          .groups()
-          .find(
-            group =>
-              group.group.id === body.groupId &&
-              group.generation === body.generation &&
-              equal(group.scope, body.scope)
-          )
-        if (!row || !this.membership.isCurrent(row.scope, row.generation))
-          throw new OutputProtocolError('context-changed', 'Source group is unavailable or retired')
-        const decision = this.groupDecision(row)
-        if (!decision || !equal(decision.results, body.results))
-          throw new OutputProtocolError(
-            'invalid',
-            'Acceptance differs from verified whole-group result'
-          )
-        this.membership.decide(row.scope, row.generation, row.group.id, decision.verdict)
-        this.changed()
-      } else {
-        if (body.generation !== this.context.generation)
-          throw new OutputProtocolError('context-changed', 'Reconciliation generation changed')
-        this.membership.acceptCompletions()
-        this.changed()
-      }
-      const expected = this.snapshot()
-      if (
-        !equal(body.reconciled, expected.reconciled) ||
-        !equal(body.assessments, expected.assessments)
+    closedOutputObject(body, ['kind', 'context'])
+    const context = parseVerificationContext(body.context),
+      previous = this.frontiers.at(-1)?.context
+    if (!equal(context.partition, this.partition))
+      throw new OutputProtocolError('unauthorized', 'Context changed account partition')
+    if (
+      previous &&
+      (!equal(context.view.chain, previous.view.chain) ||
+        outputU64(context.generation) < outputU64(previous.generation))
+    )
+      throw new OutputProtocolError(
+        'context-changed',
+        'Configured chain changed or generation reversed'
       )
-        throw new OutputProtocolError(
-          'invalid',
-          'Mutation differs from deterministic protocol reconciliation'
-        )
+    if (this.contexts.has(context.id))
+      throw new OutputProtocolError('equivocation', 'Verification context identity was reused')
+    this.contexts.set(context.id, context)
+    this.frontiers.push({ at: previous ? revision.received : '0', context })
+  }
+
+  private applyEstablished(
+    body: Exclude<Mutation['body'], { kind: 'context' }>,
+    received: string,
+    context: VerificationContext
+  ): void {
+    // Evaluation of this.context at dispatch establishes the local partition and
+    // chain before any source or acceptance operation can contribute state.
+    if (body.kind === 'receive') this.receive(body, received)
+    else if (body.kind === 'invalidate') this.applyInvalidation(body, context)
+    else if (body.kind !== 'accept' && body.kind !== 'reconcile')
+      throw new OutputProtocolError('unsupported', 'Unknown knowledge mutation kind')
+  }
+
+  private applyInvalidation(
+    body: Extract<Mutation['body'], { kind: 'invalidate' }>,
+    context: VerificationContext
+  ): void {
+    closedOutputObject(body, ['kind', 'generation', 'assessmentIds', 'reason'])
+    if (body.generation !== context.generation)
+      throw new OutputProtocolError('context-changed', 'Invalidation generation changed')
+    if (!Array.isArray(body.assessmentIds) || !body.reason || typeof body.reason !== 'string')
+      throw new OutputProtocolError('invalid', 'Invalid assessment invalidation')
+    const existing = new Set(this.snapshot().assessments.map(row => row.id)),
+      seen = new Set<string>()
+    for (const id of body.assessmentIds) {
+      outputHex32(id)
+      if (!existing.has(id) || seen.has(id))
+        throw new OutputProtocolError('invalid', 'Unknown or duplicated assessment invalidation')
+      seen.add(id)
+      this.invalidated.add(id)
     }
+  }
+
+  private applyAcceptance(body: Extract<Mutation['body'], { kind: 'accept' | 'reconcile' }>): void {
+    closedOutputObject(
+      body,
+      body.kind === 'accept'
+        ? [
+            'kind',
+            'scope',
+            'groupId',
+            'generation',
+            'contextId',
+            'results',
+            'assessments',
+            'reconciled'
+          ]
+        : ['kind', 'generation', 'contextId', 'reconciled', 'assessments']
+    )
+    if (body.contextId !== this.context.id)
+      throw new OutputProtocolError('context-changed', 'Acceptance context changed')
+    if (body.kind === 'accept') this.acceptGroup(body)
+    else {
+      if (body.generation !== this.context.generation)
+        throw new OutputProtocolError('context-changed', 'Reconciliation generation changed')
+      this.membership.acceptCompletions()
+    }
+    this.changed()
+    const expected = this.snapshot()
+    if (
+      !equal(body.reconciled, expected.reconciled) ||
+      !equal(body.assessments, expected.assessments)
+    )
+      throw new OutputProtocolError(
+        'invalid',
+        'Mutation differs from deterministic protocol reconciliation'
+      )
+  }
+
+  private acceptGroup(body: Extract<Mutation['body'], { kind: 'accept' }>): void {
+    const row = this.membership
+      .groups()
+      .find(
+        group =>
+          group.group.id === body.groupId &&
+          group.generation === body.generation &&
+          equal(group.scope, body.scope)
+      )
+    if (!row || !this.membership.isCurrent(row.scope, row.generation))
+      throw new OutputProtocolError('context-changed', 'Source group is unavailable or retired')
+    const decision = this.groupDecision(row)
+    if (!decision || !equal(decision.results, body.results))
+      throw new OutputProtocolError(
+        'invalid',
+        'Acceptance differs from verified whole-group result'
+      )
+    this.membership.decide(row.scope, row.generation, row.group.id, decision.verdict)
   }
 
   private receive(body: Extract<Mutation['body'], { kind: 'receive' }>, received: string): void {
@@ -249,14 +268,17 @@ export class BitcoinKnowledgeState {
     }
     const rejected = this.pool.receive(received, additions).rejected
     for (const { id, code } of rejected) this.slots.get(id)!.fault = code
+    this.checkSpendClaims()
+  }
+
+  private checkSpendClaims(): void {
     for (const { receipt, plan } of this.pool.entries()) {
-      const slot = this.slots.get(receipt.id)!
+      const slot = this.slots.get(receipt.id)!,
+        observation = slot.observation
       if (
-        slot.observation.kind === 'spend' &&
+        observation.kind === 'spend' &&
         plan.target &&
-        !plan.target.inputs.some(input =>
-          equal(input, slot.observation.kind === 'spend' ? slot.observation.payload.previous : null)
-        )
+        !plan.target.inputs.some(input => equal(input, observation.payload.previous))
       )
         slot.fault = 'invalid'
     }
@@ -406,13 +428,11 @@ export class BitcoinKnowledgeState {
         const placed = usable
           .map(bundle => this.ledger.get(proofReference(bundle.support), context.id))
           .find(check => check?.placement)?.placement
+        let validation = candidate.validation
+        if (validation === 'verified' && !usable.length) validation = 'unresolved'
         return {
           ...retained,
-          validation: usable.length
-            ? candidate.validation
-            : candidate.validation === 'verified'
-              ? 'unresolved'
-              : candidate.validation,
+          validation,
           pendingSupport:
             candidate.pendingSupport || (candidate.validation === 'verified' && !usable.length),
           ...(placed ? { placement: { contextId: context.id, ...placed } } : {})
@@ -434,66 +454,35 @@ export class BitcoinKnowledgeState {
       )
       .map(([, candidate]) => factFromAssembly(context.view.chain, candidate.raw))
       .sort((a, b) => compareKnowledgeText(a.txid, b.txid))
-    const observed = new Map<string, OutputOutpoint>()
-    for (const row of this.membership.groups())
-      if (row.status === 'accepted')
-        for (const observation of row.group.observations) {
-          const outpoint =
-            observation.kind === 'output'
-              ? {
-                  chain: observation.scope.chain,
-                  txid: observation.payload.evidence.txid,
-                  outputIndex: observation.payload.evidence.outputIndex
-                }
-              : observation.kind === 'spend'
-                ? observation.payload.previous
-                : undefined
-          if (outpoint) observed.set(canonicalOutputJSON(outpoint), outpoint)
-        }
-    const assessments = [...observed]
-      .sort(([a], [b]) => compareKnowledgeText(a, b))
-      .map(([, outpoint]): Currentness => {
-        const spends = reconciled.transactions.filter(
-            row =>
-              row.dependencies.some(input => equal(input, outpoint)) &&
-              (row.status === 'included' || row.status === 'selected-final')
-          ),
-          origin = reconciled.transactions.find(row => row.txid === outpoint.txid)
-        const state: Currentness['state'] = spends.length
-          ? 'spent'
-          : origin?.status === 'conflicting' || origin?.status === 'dependent-conflict'
-            ? 'conflicted'
-            : origin?.status === 'unresolved' ||
-                origin?.status === 'limited' ||
-                reconciled.transactions.some(
-                  row =>
-                    row.status === 'unresolved' &&
-                    row.dependencies.some(input => equal(input, outpoint))
-                )
-              ? 'stale'
-              : 'unknown'
-        const body: Omit<Currentness, 'id'> = {
-          outpoint,
-          state,
-          contextId: context.id,
-          generation: context.generation,
-          policyDigest: context.policyDigest,
-          origin: { kind: 'local' },
-          evidenceIds: [
-            ...new Set(
-              spends.flatMap(row =>
-                qualifies(row.txid, context.id).map(bundle => bundle.support.candidate.variantId)
-              )
+    const assessments = this.observedOutpoints().map((outpoint): Currentness => {
+      const spends = reconciled.transactions.filter(
+        row =>
+          row.dependencies.some(input => equal(input, outpoint)) &&
+          (row.status === 'included' || row.status === 'selected-final')
+      )
+      const state = assessmentState(outpoint, reconciled, spends.length > 0)
+      const body: Omit<Currentness, 'id'> = {
+        outpoint,
+        state,
+        contextId: context.id,
+        generation: context.generation,
+        policyDigest: context.policyDigest,
+        origin: { kind: 'local' },
+        evidenceIds: [
+          ...new Set(
+            spends.flatMap(row =>
+              qualifies(row.txid, context.id).map(bundle => bundle.support.candidate.variantId)
             )
-          ].sort()
-        }
-        let id = outputPacketDigest('assessment', body)
-        if (this.invalidated.has(id)) {
-          body.state = 'stale'
-          id = outputPacketDigest('assessment', body)
-        }
-        return { id, ...body }
-      })
+          )
+        ].sort(compareKnowledgeText)
+      }
+      let id = outputPacketDigest('assessment', body)
+      if (this.invalidated.has(id)) {
+        body.state = 'stale'
+        id = outputPacketDigest('assessment', body)
+      }
+      return { id, ...body }
+    })
     return {
       partition: this.partition,
       generation: context.generation,
@@ -506,33 +495,49 @@ export class BitcoinKnowledgeState {
       pendingGroups: this.membership.pending()
     }
   }
+  private observedOutpoints(): OutputOutpoint[] {
+    const observed = new Map<string, OutputOutpoint>()
+    for (const row of this.membership.groups()) {
+      if (row.status !== 'accepted') continue
+      for (const observation of row.group.observations) {
+        const outpoint = observedOutpoint(observation)
+        if (outpoint) observed.set(canonicalOutputJSON(outpoint), outpoint)
+      }
+    }
+    return [...observed]
+      .sort(([a], [b]) => compareKnowledgeText(a, b))
+      .map(([, outpoint]) => outpoint)
+  }
+
   private holdIncompleteAnchorClosures(candidates: ReconciliationCandidate[]): void {
     const byId = new Map(candidates.map(candidate => [candidate.txid, candidate]))
     for (const candidate of candidates) {
-      if (!candidate.placement) continue
-      const seen = new Set<string>(),
-        pending = [candidate.txid]
-      let complete = true,
-        work = 0
-      while (pending.length) {
-        if (++work > 16384)
-          throw new OutputProtocolError('limited', 'Chain ancestor publication bound')
-        const txid = pending.pop()!
-        if (seen.has(txid)) continue
-        seen.add(txid)
-        const known = byId.get(txid)
-        if (!known) continue
-        if (known.validation !== 'verified') {
-          complete = false
-          break
-        }
-        for (const input of this.plan().candidates.get(txid)!.raw.inputs) pending.push(input.txid)
-      }
-      if (!complete) {
+      if (candidate.placement && !this.anchorClosureComplete(candidate.txid, byId)) {
         delete candidate.placement
         candidate.pendingSupport = true
       }
     }
+  }
+
+  private anchorClosureComplete(
+    start: string,
+    byId: ReadonlyMap<string, ReconciliationCandidate>
+  ): boolean {
+    const seen = new Set<string>(),
+      pending = [start]
+    let work = 0
+    while (pending.length) {
+      if (++work > 16384)
+        throw new OutputProtocolError('limited', 'Chain ancestor publication bound')
+      const txid = pending.pop()!
+      if (seen.has(txid)) continue
+      seen.add(txid)
+      const known = byId.get(txid)
+      if (!known) continue
+      if (known.validation !== 'verified') return false
+      for (const input of this.plan().candidates.get(txid)!.raw.inputs) pending.push(input.txid)
+    }
+    return true
   }
 
   pendingBytes(): number {
@@ -540,4 +545,35 @@ export class BitcoinKnowledgeState {
       canonicalOutputJSON(this.membership.groups().filter(row => row.status === 'pending'))
     ).length
   }
+}
+
+function observedOutpoint(observation: OutputObservation): OutputOutpoint | undefined {
+  if (observation.kind === 'output')
+    return {
+      chain: observation.scope.chain,
+      txid: observation.payload.evidence.txid,
+      outputIndex: observation.payload.evidence.outputIndex
+    }
+  if (observation.kind === 'spend') return observation.payload.previous
+  return undefined
+}
+
+function assessmentState(
+  outpoint: OutputOutpoint,
+  reconciled: AcceptedInput['reconciled'],
+  spent: boolean
+): Currentness['state'] {
+  if (spent) return 'spent'
+  const origin = reconciled.transactions.find(row => row.txid === outpoint.txid)
+  if (origin?.status === 'conflicting' || origin?.status === 'dependent-conflict')
+    return 'conflicted'
+  if (
+    origin?.status === 'unresolved' ||
+    origin?.status === 'limited' ||
+    reconciled.transactions.some(
+      row => row.status === 'unresolved' && row.dependencies.some(input => equal(input, outpoint))
+    )
+  )
+    return 'stale'
+  return 'unknown'
 }

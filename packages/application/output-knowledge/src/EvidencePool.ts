@@ -64,7 +64,33 @@ interface Search {
   bytes: number[]
   rows: Row[]
 }
+interface SearchProgress {
+  queue: Search[]
+  seen: Set<string>
+  supports: EvidenceSupport[]
+  supportBodies: Set<string>
+  missing: Map<string, import('@bsv/sdk').OutputOutpoint>
+  limited: boolean
+}
 const clone = <T>(value: T): T => structuredClone(value)
+const receivedThrough = (rows: readonly Row[]): bigint => {
+  let maximum = 0n
+  for (const row of rows) {
+    const received = outputU64(row.receipt.received)
+    if (received > maximum) maximum = received
+  }
+  return maximum
+}
+const compareSearch = (a: Search, b: Search): number => {
+  const left = receivedThrough(a.rows),
+    right = receivedThrough(b.rows)
+  if (left < right) return -1
+  if (left > right) return 1
+  return compareKnowledgeText(
+    JSON.stringify(a.rows.map(row => row.receipt.id)),
+    JSON.stringify(b.rows.map(row => row.receipt.id))
+  )
+}
 
 /**
  * Bounded cross-receipt dependency planning. Every alternative is still untrusted
@@ -103,6 +129,41 @@ export class EvidencePool {
   ): { rejected: { id: string; code: string }[] } {
     if (outputU64(received) <= outputU64(this.lastReceived))
       throw new OutputProtocolError('invalid', 'Evidence receipts must replay in journal order')
+    const { added, rejected, fingerprints, bytes } = this.stageReceipts(received, receipts)
+    if (
+      this.fingerprints.size + fingerprints.size > this.limits.receipts ||
+      this.retained + bytes > this.limits.retainedBytes
+    )
+      throw new OutputProtocolError('limited', 'Evidence pool retention exhausted')
+    const first = new Map<string, string>()
+    for (const row of added)
+      for (const tx of row.plan.transactions) {
+        const key = canonicalOutputJSON({ chain: row.receipt.chain, txid: tx.txid })
+        if (!this.first.has(key)) first.set(key, tx.txid)
+      }
+    const sorted = [...first].sort(
+      (a, b) => compareKnowledgeText(a[1], b[1]) || compareKnowledgeText(a[0], b[0])
+    )
+    sorted.forEach(([key], index) => {
+      if (!this.first.has(key))
+        this.first.set(key, { journalId: this.journalId, position: received, index })
+    })
+    for (const row of added) this.rows.set(row.receipt.id, row)
+    for (const [id, fingerprint] of fingerprints) this.fingerprints.set(id, fingerprint)
+    this.retained += bytes
+    this.lastReceived = received
+    return { rejected }
+  }
+
+  private stageReceipts(
+    received: string,
+    receipts: readonly EvidenceReceipt[]
+  ): {
+    added: Row[]
+    rejected: { id: string; code: string }[]
+    fingerprints: Map<string, string>
+    bytes: number
+  } {
     const added: Row[] = [],
       rejected: { id: string; code: string }[] = []
     let bytes = 0
@@ -137,29 +198,7 @@ export class EvidencePool {
         })
       }
     }
-    if (
-      this.fingerprints.size + fingerprints.size > this.limits.receipts ||
-      this.retained + bytes > this.limits.retainedBytes
-    )
-      throw new OutputProtocolError('limited', 'Evidence pool retention exhausted')
-    const first = new Map<string, string>()
-    for (const row of added)
-      for (const tx of row.plan.transactions) {
-        const key = canonicalOutputJSON({ chain: row.receipt.chain, txid: tx.txid })
-        if (!this.first.has(key)) first.set(key, tx.txid)
-      }
-    const sorted = [...first].sort((a, b) =>
-      a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1
-    )
-    sorted.forEach(([key], index) => {
-      if (!this.first.has(key))
-        this.first.set(key, { journalId: this.journalId, position: received, index })
-    })
-    for (const row of added) this.rows.set(row.receipt.id, row)
-    for (const [id, fingerprint] of fingerprints) this.fingerprints.set(id, fingerprint)
-    this.retained += bytes
-    this.lastReceived = received
-    return { rejected }
+    return { added, rejected, fingerprints, bytes }
   }
 
   private assemblyLimits(): EvidenceAssemblyLimits {
@@ -197,107 +236,101 @@ export class EvidencePool {
     const candidates = [...this.rows.values()].filter(
       row => allowed(row) && canonicalOutputJSON(row.receipt.chain) === chain
     )
-    const maximum = (rows: Row[]): bigint =>
-      rows.reduce(
-        (value, row) =>
-          outputU64(row.receipt.received) > value ? outputU64(row.receipt.received) : value,
-        0n
-      )
-    const queue: Search[] = [{ plan: initial.plan, bytes: initial.bytes, rows: [initial] }],
-      supports: EvidenceSupport[] = []
-    const seen = new Set<string>([JSON.stringify([initial.receipt.id])]),
-      supportBodies = new Set<string>()
-    const missing = new Map<string, import('@bsv/sdk').OutputOutpoint>()
-    let work = 0,
-      limited = false
-    while (queue.length) {
+    const progress: SearchProgress = {
+      queue: [{ plan: initial.plan, bytes: initial.bytes, rows: [initial] }],
+      supports: [],
+      seen: new Set([JSON.stringify([initial.receipt.id])]),
+      supportBodies: new Set(),
+      missing: new Map(),
+      limited: false
+    }
+    let work = 0
+    while (progress.queue.length) {
       if (++work > this.limits.searchStates) {
-        limited = true
+        progress.limited = true
         break
       }
-      queue.sort((a, b) =>
-        maximum(a.rows) < maximum(b.rows)
-          ? -1
-          : maximum(a.rows) > maximum(b.rows)
-            ? 1
-            : compareKnowledgeText(
-                JSON.stringify(a.rows.map(row => row.receipt.id)),
-                JSON.stringify(b.rows.map(row => row.receipt.id))
-              )
-      )
-      const current = queue.shift()!
-      if (current.plan.atomicBeef) {
-        // Preserve the original variant when it is already independently complete.
-        const binary = current.rows.length === 1 ? initial.bytes : current.plan.atomicBeef
-        const variantId = Utils.toHex(Hash.sha256(binary)),
-          receipts = current.rows.map(row => row.receipt.id).sort(compareKnowledgeText)
-        const key = JSON.stringify({ variantId, receipts })
-        if (!supportBodies.has(key)) {
-          supportBodies.add(key)
-          supports.push({
-            basis: initial.receipt.id,
-            candidate: {
-              chain: clone(initial.receipt.chain),
-              evidence: { ...initial.receipt.evidence, beef: Utils.toBase64(binary) },
-              variantId
-            },
-            receipts,
-            groups: [...new Set(current.rows.map(row => row.receipt.group))].sort(
-              compareKnowledgeText
-            ),
-            availableAt: String(maximum(current.rows)),
-            plan: clone(current.plan)
-          })
-        }
-        continue
-      }
-      const needed = current.plan.missing[0]
-      if (!needed) continue
-      missing.set(canonicalOutputJSON(needed), needed)
-      if (current.rows.length >= this.limits.supportReceipts) {
-        limited = true
-        continue
-      }
-      for (const next of candidates) {
-        if (
-          current.rows.includes(next) ||
-          !next.plan.transactions.some(tx => tx.txid === needed.txid)
-        )
-          continue
-        const rows = [...current.rows, next].sort((a, b) =>
-          compareKnowledgeText(a.receipt.id, b.receipt.id)
-        )
-        const key = JSON.stringify(rows.map(row => row.receipt.id))
-        if (seen.has(key)) continue
-        if (seen.size >= this.limits.searchStates) {
-          limited = true
-          break
-        }
-        seen.add(key)
-        try {
-          const combined = Beef.fromBinaryStrict(initial.bytes)
-          for (const dependency of rows)
-            if (dependency !== initial) combined.mergeBeef(dependency.bytes)
-          const bytes = combined.toBinary()
-          const evidence = { ...initial.receipt.evidence, beef: Utils.toBase64(bytes) }
-          const plan = assembleOutputEvidence(
-            evidence,
-            initial.receipt.chain,
-            this.assemblyLimits()
-          )
-          queue.push({ plan, bytes, rows })
-        } catch (error) {
-          // An incompatible proof affects only this alternative. Retention/work
-          // limits remain observable; they cannot turn into a negative verdict.
-          if (error instanceof OutputProtocolError && error.code === 'limited') limited = true
-        }
-      }
+      progress.queue.sort(compareSearch)
+      const current = progress.queue.shift()!
+      if (current.plan.atomicBeef) this.retainSupport(initial, current, progress)
+      else this.expandSearch(initial, current, candidates, progress)
     }
     return {
-      supports,
-      missing: supports.length ? [] : [...missing.values()],
-      complete: supports.length > 0,
-      limited
+      supports: progress.supports,
+      missing: progress.supports.length ? [] : [...progress.missing.values()],
+      complete: progress.supports.length > 0,
+      limited: progress.limited
+    }
+  }
+
+  private retainSupport(initial: Row, current: Search, progress: SearchProgress): void {
+    // Preserve the original variant when it is already independently complete.
+    const binary = current.rows.length === 1 ? initial.bytes : current.plan.atomicBeef!
+    const variantId = Utils.toHex(Hash.sha256(binary)),
+      receipts = current.rows.map(row => row.receipt.id).sort(compareKnowledgeText)
+    const key = JSON.stringify({ variantId, receipts })
+    if (progress.supportBodies.has(key)) return
+    progress.supportBodies.add(key)
+    progress.supports.push({
+      basis: initial.receipt.id,
+      candidate: {
+        chain: clone(initial.receipt.chain),
+        evidence: { ...initial.receipt.evidence, beef: Utils.toBase64(binary) },
+        variantId
+      },
+      receipts,
+      groups: [...new Set(current.rows.map(row => row.receipt.group))].sort(compareKnowledgeText),
+      availableAt: String(receivedThrough(current.rows)),
+      plan: clone(current.plan)
+    })
+  }
+
+  private expandSearch(
+    initial: Row,
+    current: Search,
+    candidates: Row[],
+    progress: SearchProgress
+  ): void {
+    const needed = current.plan.missing[0]
+    if (!needed) return
+    progress.missing.set(canonicalOutputJSON(needed), needed)
+    if (current.rows.length >= this.limits.supportReceipts) {
+      progress.limited = true
+      return
+    }
+    for (const next of candidates) {
+      if (
+        current.rows.includes(next) ||
+        !next.plan.transactions.some(tx => tx.txid === needed.txid)
+      )
+        continue
+      const rows = [...current.rows, next].sort((a, b) =>
+        compareKnowledgeText(a.receipt.id, b.receipt.id)
+      )
+      const key = JSON.stringify(rows.map(row => row.receipt.id))
+      if (progress.seen.has(key)) continue
+      if (progress.seen.size >= this.limits.searchStates) {
+        progress.limited = true
+        break
+      }
+      progress.seen.add(key)
+      this.mergeAlternative(initial, rows, progress)
+    }
+  }
+
+  private mergeAlternative(initial: Row, rows: Row[], progress: SearchProgress): void {
+    try {
+      const combined = Beef.fromBinaryStrict(initial.bytes)
+      for (const dependency of rows)
+        if (dependency !== initial) combined.mergeBeef(dependency.bytes)
+      const bytes = combined.toBinary()
+      const evidence = { ...initial.receipt.evidence, beef: Utils.toBase64(bytes) }
+      const plan = assembleOutputEvidence(evidence, initial.receipt.chain, this.assemblyLimits())
+      progress.queue.push({ plan, bytes, rows })
+    } catch (error) {
+      // An incompatible proof affects only this alternative. Retention/work
+      // limits remain observable; they cannot turn into a negative verdict.
+      if (error instanceof OutputProtocolError && error.code === 'limited') progress.limited = true
     }
   }
 
@@ -317,15 +350,7 @@ export class EvidencePool {
     )
       throw new OutputProtocolError('invalid', 'Invalid proof receipt set')
     const receipts = [...receiptIds].sort(compareKnowledgeText),
-      rows: Row[] = []
-    const chain = canonicalOutputJSON(initial.receipt.chain)
-    for (const id of receipts) {
-      const row = this.rows.get(id)
-      if (!row) throw new OutputProtocolError('reset-required', 'Supporting receipt is unavailable')
-      if (canonicalOutputJSON(row.receipt.chain) !== chain)
-        throw new OutputProtocolError('invalid', 'Proof receipts cross configured chains')
-      rows.push(row)
-    }
+      rows = this.supportRows(initial, receipts)
     const selected = target ?? initial.receipt.evidence
     const sameSubject = selected.txid === initial.receipt.evidence.txid
     let binary = initial.bytes
@@ -350,13 +375,7 @@ export class EvidencePool {
       basis,
       receipts,
       groups: [...new Set(rows.map(row => row.receipt.group))].sort(compareKnowledgeText),
-      availableAt: String(
-        rows.reduce(
-          (at, row) =>
-            outputU64(row.receipt.received) > at ? outputU64(row.receipt.received) : at,
-          0n
-        )
-      ),
+      availableAt: String(receivedThrough(rows)),
       candidate: {
         chain: clone(initial.receipt.chain),
         evidence,
@@ -364,5 +383,15 @@ export class EvidencePool {
       },
       plan
     }
+  }
+  private supportRows(initial: Row, receipts: readonly string[]): Row[] {
+    const chain = canonicalOutputJSON(initial.receipt.chain)
+    return receipts.map(id => {
+      const row = this.rows.get(id)
+      if (!row) throw new OutputProtocolError('reset-required', 'Supporting receipt is unavailable')
+      if (canonicalOutputJSON(row.receipt.chain) !== chain)
+        throw new OutputProtocolError('invalid', 'Proof receipts cross configured chains')
+      return row
+    })
   }
 }

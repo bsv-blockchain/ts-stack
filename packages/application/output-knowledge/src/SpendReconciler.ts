@@ -7,6 +7,7 @@ import {
   OutputProtocolError,
   canonicalOutputJSON
 } from '@bsv/sdk'
+import { compareKnowledgeText } from './SourceMembership.js'
 import type {
   CandidateOrder,
   ChainView,
@@ -66,9 +67,14 @@ interface Eligible {
   contextId: string
 }
 type Replacement = ReconciledState['replacements'][number]
-const compareInteger = (a: string, b: string): number =>
-  outputU64(a) < outputU64(b) ? -1 : outputU64(a) > outputU64(b) ? 1 : 0
-const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+const compareInteger = (a: string, b: string): number => {
+  const left = outputU64(a),
+    right = outputU64(b)
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+const compareText = compareKnowledgeText
 
 /** Pinned post-Genesis strict locktime boundary, not wall-clock freshness. */
 export function isOutputTransactionFinal(
@@ -114,7 +120,9 @@ export function canReplaceOutputTransaction(
 function compareOrder(a: Node, b: Node): number {
   const x = a.candidate.order,
     y = b.candidate.order
-  if (!x || !y) return x ? -1 : y ? 1 : compareText(a.candidate.txid, b.candidate.txid)
+  if (!x && !y) return compareText(a.candidate.txid, b.candidate.txid)
+  if (!x) return 1
+  if (!y) return -1
   return (
     compareInteger(x.readyAt, y.readyAt) ||
     x.depth - y.depth ||
@@ -289,7 +297,7 @@ class SpendSelection {
     this.nodes.set(candidate.txid, node)
     this.rows.set(candidate.txid, {
       txid: candidate.txid,
-      evidenceIds: [...new Set(candidate.evidenceIds)].sort(),
+      evidenceIds: [...new Set(candidate.evidenceIds)].sort(compareText),
       firstRaw: { ...candidate.firstRaw },
       ...(candidate.order
         ? { order: { ...candidate.order, firstRaw: { ...candidate.firstRaw } } }
@@ -305,9 +313,9 @@ class SpendSelection {
     })
   }
 
-  private findPendingComponents(): void {
-    const edges = new Map<string, Set<string>>()
-    const spenders = new Map<string, string[]>()
+  private dependencyEdges(): Map<string, Set<string>> {
+    const edges = new Map<string, Set<string>>(),
+      spenders = new Map<string, string[]>()
     const connect = (a: string, b: string): void => {
       edges.get(a)!.add(b)
       edges.get(b)!.add(a)
@@ -327,32 +335,45 @@ class SpendSelection {
         } else spenders.set(input, [id])
       }
     }
-    const visited = new Set<string>()
+    return edges
+  }
+
+  private findPendingComponents(): void {
+    const edges = this.dependencyEdges(),
+      visited = new Set<string>()
     for (const id of this.nodes.keys()) {
       if (visited.has(id)) continue
-      const component: string[] = [],
-        queue = [id]
-      let unfinished = false
-      while (queue.length) {
-        const next = queue.pop()!
-        if (visited.has(next)) continue
-        visited.add(next)
-        component.push(next)
-        unfinished ||= this.nodes.get(next)!.candidate.pendingSupport
-        for (const neighbor of edges.get(next)!) {
-          this.charge()
-          if (!visited.has(neighbor)) queue.push(neighbor)
-        }
-      }
-      if (unfinished) {
-        component.sort()
-        this.components.push(component)
-        for (const item of component) {
-          this.pending.add(item)
-          this.componentByTx.set(item, component)
-        }
+      const { component, unfinished } = this.connectedComponent(id, edges, visited)
+      if (!unfinished) continue
+      component.sort(compareText)
+      this.components.push(component)
+      for (const item of component) {
+        this.pending.add(item)
+        this.componentByTx.set(item, component)
       }
     }
+  }
+
+  private connectedComponent(
+    id: string,
+    edges: Map<string, Set<string>>,
+    visited: Set<string>
+  ): { component: string[]; unfinished: boolean } {
+    const component: string[] = [],
+      queue = [id]
+    let unfinished = false
+    while (queue.length) {
+      const next = queue.pop()!
+      if (visited.has(next)) continue
+      visited.add(next)
+      component.push(next)
+      unfinished ||= this.nodes.get(next)!.candidate.pendingSupport
+      for (const neighbor of edges.get(next)!) {
+        this.charge()
+        if (!visited.has(neighbor)) queue.push(neighbor)
+      }
+    }
+    return { component, unfinished }
   }
 
   private reserveAnchors(): void {
@@ -409,7 +430,7 @@ class SpendSelection {
           .map(input => this.reservations.get(input))
           .filter((id): id is string => id !== undefined)
       )
-    ].sort()
+    ].sort(compareText)
   }
   private select(node: Node): void {
     this.selected.add(node.candidate.txid)
@@ -449,47 +470,50 @@ class SpendSelection {
     ].sort(compareInteger)
     for (const at of frontiers) {
       const context = this.contextAt(at)
-      for (const node of this.sorted) {
-        this.charge()
-        const id = node.candidate.txid
-        if (
-          this.forced.has(id) ||
-          this.selected.has(id) ||
-          this.historicalConflicts.has(id) ||
-          this.replaced.has(id) ||
-          !this.usable(node, context, at)
-        )
-          continue
-        if (
-          compareInteger(node.candidate.order!.readyAt, at) > 0 ||
-          !this.parentsUsable(node, context, at)
-        )
-          continue
-        if (!this.request.nonFinal && !isOutputTransactionFinal(node.transaction, context.view))
-          continue
-        if (!this.eligible.has(id)) this.eligible.set(id, { at, contextId: context.id })
-        const competitors = this.competing(node)
-        const prior = competitors.length === 1 ? this.nodes.get(competitors[0]) : undefined
-        if (
-          competitors.length &&
-          (!prior ||
-            this.forced.has(prior.candidate.txid) ||
-            !canReplaceOutputTransaction(prior.transaction, node.transaction, context.view))
-        ) {
-          this.historicalConflicts.add(id)
-          continue
-        }
-        if (prior) {
-          const previous = prior.candidate.txid
-          this.selected.delete(previous)
-          this.replaced.add(previous)
-          this.previous.set(id, previous)
-          this.replacements.push({ previous, replacement: id, at, contextId: context.id })
-          for (const input of prior.inputs) this.reservations.delete(input)
-        }
-        this.select(node)
-      }
+      for (const node of this.sorted) this.replayNode(node, context, at)
     }
+  }
+
+  private replayNode(node: Node, context: ReconciliationContext, at: string): void {
+    this.charge()
+    const id = node.candidate.txid
+    if (
+      this.forced.has(id) ||
+      this.selected.has(id) ||
+      this.historicalConflicts.has(id) ||
+      this.replaced.has(id) ||
+      !this.usable(node, context, at)
+    )
+      return
+    if (
+      compareInteger(node.candidate.order!.readyAt, at) > 0 ||
+      !this.parentsUsable(node, context, at)
+    )
+      return
+    if (!this.request.nonFinal && !isOutputTransactionFinal(node.transaction, context.view)) return
+    if (!this.eligible.has(id)) this.eligible.set(id, { at, contextId: context.id })
+    const competitors = this.competing(node)
+    const prior = competitors.length === 1 ? this.nodes.get(competitors[0]) : undefined
+    if (
+      competitors.length &&
+      (!prior ||
+        this.forced.has(prior.candidate.txid) ||
+        !canReplaceOutputTransaction(prior.transaction, node.transaction, context.view))
+    ) {
+      this.historicalConflicts.add(id)
+      return
+    }
+    if (prior) this.replace(prior, id, at, context.id)
+    this.select(node)
+  }
+
+  private replace(prior: Node, id: string, at: string, contextId: string): void {
+    const previous = prior.candidate.txid
+    this.selected.delete(previous)
+    this.replaced.add(previous)
+    this.previous.set(id, previous)
+    this.replacements.push({ previous, replacement: id, at, contextId })
+    for (const input of prior.inputs) this.reservations.delete(input)
   }
 
   private root(id: string): string {
@@ -529,6 +553,10 @@ class SpendSelection {
         compareOrder(a, b)
       )
     })
+    for (const node of this.topologicalOrder(sorted)) this.rebuildNode(node)
+  }
+
+  private topologicalOrder(sorted: Node[]): Node[] {
     // Stable topological ordering preserves reservation priority among available
     // nodes while ensuring changed current-view eligibility cannot put a child
     // ahead of its parent. Unknown parents remain unresolved in parentsUsable.
@@ -547,80 +575,82 @@ class SpendSelection {
       remaining.delete(next.candidate.txid)
       ordered.push(next)
     }
-    for (const node of ordered) {
-      this.charge()
-      const id = node.candidate.txid
-      if (this.forced.has(id)) {
-        this.status(
-          node,
-          'included',
-          node.anchor
-            ? 'Verified inclusion in selected chain'
-            : 'Validated ancestor of selected-chain transaction'
-        )
-        continue
-      }
-      if (this.pending.has(id)) {
-        this.status(node, 'unresolved', 'Earlier complete support is still being verified')
-        continue
-      }
-      if (node.candidate.validation !== 'verified') {
-        this.status(node, node.candidate.validation, 'Evidence has not qualified for selection')
-        continue
-      }
-      if (!node.candidate.order) {
-        this.status(node, 'unresolved', 'Earliest sufficient evidence is unavailable')
-        continue
-      }
-      if (this.replaced.has(id)) {
-        this.status(
-          node,
-          'conflicting',
-          'Replaced at a retained non-final frontier',
-          this.replacements
-            .filter(row => row.previous === id)
-            .map(row => row.replacement)
-            .sort()
-        )
-        continue
-      }
-      if (!this.parentsUsable(node, this.request.context)) {
-        this.status(
-          node,
-          'dependent-conflict',
-          'Parent is missing, unselected or currently non-final',
-          node.parents.filter(parent => !this.selected.has(parent)).sort()
-        )
-        continue
-      }
-      if (
-        !this.request.nonFinal &&
-        !isOutputTransactionFinal(node.transaction, this.request.context.view)
-      ) {
-        this.status(node, 'unsupported', 'Non-final selection is disabled')
-        continue
-      }
-      if (!this.eligible.has(id))
-        this.eligible.set(id, { at: this.request.through, contextId: this.request.context.id })
-      const competitors = this.competing(node)
-      if (competitors.length) {
-        this.status(
-          node,
-          'conflicting',
-          'Input already reserved by an eligible selection',
-          competitors
-        )
-        continue
-      }
-      this.select(node)
+    return ordered
+  }
+
+  private rebuildNode(node: Node): void {
+    this.charge()
+    const id = node.candidate.txid
+    if (this.forced.has(id)) {
       this.status(
         node,
-        isOutputTransactionFinal(node.transaction, this.request.context.view)
-          ? 'selected-final'
-          : 'selected-non-final',
-        'Selected by durable local eligibility order'
+        'included',
+        node.anchor
+          ? 'Verified inclusion in selected chain'
+          : 'Validated ancestor of selected-chain transaction'
       )
+      return
     }
+    if (this.pending.has(id)) {
+      this.status(node, 'unresolved', 'Earlier complete support is still being verified')
+      return
+    }
+    if (node.candidate.validation !== 'verified') {
+      this.status(node, node.candidate.validation, 'Evidence has not qualified for selection')
+      return
+    }
+    if (!node.candidate.order) {
+      this.status(node, 'unresolved', 'Earliest sufficient evidence is unavailable')
+      return
+    }
+    if (this.replaced.has(id)) {
+      this.status(
+        node,
+        'conflicting',
+        'Replaced at a retained non-final frontier',
+        this.replacements
+          .filter(row => row.previous === id)
+          .map(row => row.replacement)
+          .sort(compareText)
+      )
+      return
+    }
+    if (!this.parentsUsable(node, this.request.context)) {
+      this.status(
+        node,
+        'dependent-conflict',
+        'Parent is missing, unselected or currently non-final',
+        node.parents.filter(parent => !this.selected.has(parent)).sort(compareText)
+      )
+      return
+    }
+    if (
+      !this.request.nonFinal &&
+      !isOutputTransactionFinal(node.transaction, this.request.context.view)
+    ) {
+      this.status(node, 'unsupported', 'Non-final selection is disabled')
+      return
+    }
+    if (!this.eligible.has(id))
+      this.eligible.set(id, { at: this.request.through, contextId: this.request.context.id })
+    const competitors = this.competing(node)
+    if (competitors.length) {
+      this.status(
+        node,
+        'conflicting',
+        'Input already reserved by an eligible selection',
+        competitors
+      )
+      return
+    }
+    this.select(node)
+    this.status(
+      node,
+      isOutputTransactionFinal(node.transaction, this.request.context.view)
+        ? 'selected-final'
+        : 'selected-non-final',
+      'Selected by durable local eligibility order'
+    )
   }
 
   run(): ReconciledState {
@@ -640,7 +670,7 @@ class SpendSelection {
       through: this.request.through,
       contextId: this.request.context.id,
       transactions: [...this.rows.values()].sort((a, b) => compareText(a.txid, b.txid)),
-      memberships: JSON.parse(JSON.stringify(this.request.memberships)) as SourceMembership[],
+      memberships: structuredClone(this.request.memberships),
       replacements: this.replacements,
       pendingComponents: this.components
         .sort((a, b) => compareText(a[0], b[0]))

@@ -52,6 +52,13 @@ export interface KnowledgeStoreOptions {
   pollMs?: number
   now?: () => number
 }
+interface ReplayHistory {
+  entries: JournalEntry[]
+  received: string
+  accepted: string
+  bytes: number
+  keys: Set<string>
+}
 const clone = <T>(value: T): T => structuredClone(value)
 
 /** CAS journal port with bounded replay, exact-key recovery and ordered watches. */
@@ -158,50 +165,72 @@ export class KnowledgeStore {
       throw new OutputProtocolError('reset-required', 'Journal precedes retained resume checkpoint')
     if (head.entries > this.maximumEntries || head.bytes > this.maximumBytes)
       throw new OutputProtocolError('limited', 'Knowledge replay retention bound')
-    const entries: JournalEntry[] = []
-    let received = '0',
-      accepted = '0',
-      bytes = 0
-    const keys = new Set<string>()
-    while (outputU64(received) < outputU64(head.received)) {
-      this.ready(signal)
-      const page = await this.storage.read(received, Math.min(128, this.maximumEntries))
-      if (!page.length)
-        throw new OutputProtocolError('reset-required', 'Journal history is incomplete')
-      const before = received
-      for (const input of page) {
-        this.ready(signal)
-        if (outputU64(input.revision.received) > outputU64(head.received)) break
-        const entry = cloneEntry(input)
-        outputHex32(entry.key)
-        if (
-          keys.has(entry.key) ||
-          outputPacketDigest('knowledge-mutation', entry.body) !== entry.key ||
-          entry.revision.received !== incrementOutputU64(received) ||
-          entry.revision.accepted !==
-            (entry.body.kind === 'receive' ? accepted : incrementOutputU64(accepted))
-        )
-          throw new OutputProtocolError(
-            'reset-required',
-            'Journal integrity or revision continuity failed'
-          )
-        keys.add(entry.key)
-        bytes += journalEntryBytes(entry)
-        if (entries.length >= this.maximumEntries || bytes > this.maximumBytes)
-          throw new OutputProtocolError('limited', 'Knowledge replay retention bound')
-        entries.push(entry)
-        received = entry.revision.received
-        accepted = entry.revision.accepted
-      }
-      if (before === received)
-        throw new OutputProtocolError('reset-required', 'Journal page made no contiguous progress')
+    const history: ReplayHistory = {
+      entries: [],
+      received: '0',
+      accepted: '0',
+      bytes: 0,
+      keys: new Set()
     }
-    if (accepted !== head.accepted || entries.length !== head.entries || bytes !== head.bytes)
+    while (outputU64(history.received) < outputU64(head.received)) {
+      this.ready(signal)
+      const page = await this.storage.read(history.received, Math.min(128, this.maximumEntries))
+      this.replayPage(history, page, head.received, signal)
+    }
+    if (
+      history.accepted !== head.accepted ||
+      history.entries.length !== head.entries ||
+      history.bytes !== head.bytes
+    )
       throw new OutputProtocolError(
         'reset-required',
         'Journal head does not match retained history'
       )
-    return { entries, revision: { received, accepted } }
+    return {
+      entries: history.entries,
+      revision: { received: history.received, accepted: history.accepted }
+    }
+  }
+
+  private replayPage(
+    history: ReplayHistory,
+    page: JournalEntry[],
+    through: string,
+    signal: AbortSignal
+  ): void {
+    if (!page.length)
+      throw new OutputProtocolError('reset-required', 'Journal history is incomplete')
+    const before = history.received
+    for (const input of page) {
+      this.ready(signal)
+      if (outputU64(input.revision.received) > outputU64(through)) break
+      this.replayEntry(history, input)
+    }
+    if (before === history.received)
+      throw new OutputProtocolError('reset-required', 'Journal page made no contiguous progress')
+  }
+
+  private replayEntry(history: ReplayHistory, input: JournalEntry): void {
+    const entry = cloneEntry(input)
+    outputHex32(entry.key)
+    if (
+      history.keys.has(entry.key) ||
+      outputPacketDigest('knowledge-mutation', entry.body) !== entry.key ||
+      entry.revision.received !== incrementOutputU64(history.received) ||
+      entry.revision.accepted !==
+        (entry.body.kind === 'receive' ? history.accepted : incrementOutputU64(history.accepted))
+    )
+      throw new OutputProtocolError(
+        'reset-required',
+        'Journal integrity or revision continuity failed'
+      )
+    history.keys.add(entry.key)
+    history.bytes += journalEntryBytes(entry)
+    if (history.entries.length >= this.maximumEntries || history.bytes > this.maximumBytes)
+      throw new OutputProtocolError('limited', 'Knowledge replay retention bound')
+    history.entries.push(entry)
+    history.received = entry.revision.received
+    history.accepted = entry.revision.accepted
   }
 
   private async reduce(entries: JournalEntry[], signal: AbortSignal): Promise<AcceptedInput> {

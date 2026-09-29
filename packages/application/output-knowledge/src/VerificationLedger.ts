@@ -173,36 +173,31 @@ export class VerificationLedger {
       const key = proofReferenceKey(addition.proof),
         previous = next.get(key)
       const checks = new Map(previous?.checks.map(check => [check.contextId, check]) ?? [])
-      for (const check of addition.checks) {
-        const context = contexts.get(check.contextId)
-        if (!context)
-          throw new OutputProtocolError(
-            'reset-required',
-            'Historical verification context is unavailable'
-          )
-        if (
-          canonicalOutputJSON(context.view.chain) !== canonicalOutputJSON(support.candidate.chain)
-        )
-          throw new OutputProtocolError('invalid', 'Proof check changed configured chain')
-        if (
-          check.placement &&
-          outputU64(check.placement.height) > outputU64(context.view.tipHeight)
-        )
-          throw new OutputProtocolError('invalid', 'Proof placement is beyond the selected view')
-        const prior = checks.get(check.contextId)
-        if (
-          prior?.status === 'verified' &&
-          canonicalOutputJSON(prior) !== canonicalOutputJSON(check)
-        )
-          throw new OutputProtocolError(
-            'context-changed',
-            'A verified immutable proof context changed'
-          )
-        checks.set(check.contextId, check)
-      }
+      for (const check of addition.checks) this.applyCheck(check, support, contexts, checks)
       next.set(key, { proof: addition.proof, checks: [...checks.values()] })
     }
     this.work = next
+  }
+  private applyCheck(
+    check: ProofCheck,
+    support: EvidenceSupport,
+    contexts: ReadonlyMap<string, VerificationContext>,
+    checks: Map<string, ProofCheck>
+  ): void {
+    const context = contexts.get(check.contextId)
+    if (!context)
+      throw new OutputProtocolError(
+        'reset-required',
+        'Historical verification context is unavailable'
+      )
+    if (canonicalOutputJSON(context.view.chain) !== canonicalOutputJSON(support.candidate.chain))
+      throw new OutputProtocolError('invalid', 'Proof check changed configured chain')
+    if (check.placement && outputU64(check.placement.height) > outputU64(context.view.tipHeight))
+      throw new OutputProtocolError('invalid', 'Proof placement is beyond the selected view')
+    const prior = checks.get(check.contextId)
+    if (prior?.status === 'verified' && canonicalOutputJSON(prior) !== canonicalOutputJSON(check))
+      throw new OutputProtocolError('context-changed', 'A verified immutable proof context changed')
+    checks.set(check.contextId, check)
   }
   entries(): VerifiedWork[] {
     return structuredClone([...this.work.values()])

@@ -19,6 +19,7 @@ import type { KnowledgeReducer, KnowledgeStore } from './KnowledgeStore.js'
 import type { OutputKnowledgeWorker } from './OutputKnowledge.js'
 import type { AcceptedInput, EvidenceVerifier } from './ports.js'
 import { runtimeLimits } from './validation.js'
+import type { EvidenceSupport } from './EvidencePool.js'
 
 export interface BitcoinKnowledgeOptions extends BitcoinKnowledgeStateOptions {
   verifier: EvidenceVerifier
@@ -59,7 +60,8 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
       supportedExtensions: [...(options.supportedExtensions ?? [])]
     }
     // Validate immutable configuration before opening sources or a journal mutation.
-    new BitcoinKnowledgeState(this.options)
+    const initial = new BitcoinKnowledgeState(this.options)
+    this.options.partition = initial.partition
   }
   private ready(signal: AbortSignal): void {
     if (signal.aborted)
@@ -106,7 +108,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     if (entry.body.kind === 'context') local = knowledgeLocalFrame(this.options.nonFinal, [])
     if (entry.body.kind === 'accept' || entry.body.kind === 'reconcile') {
       const staged = this.staged.get(entry.key)
-      if (staged && staged.parent === this.parent(prior)) local = staged.local
+      if (staged?.parent === this.parent(prior)) local = staged.local
       else {
         const work = await this.collect(state, signal)
         local = knowledgeLocalFrame(this.options.nonFinal, work.additions)
@@ -124,41 +126,52 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
   ): Promise<{ additions: VerifiedWork[]; exhausted: boolean }> {
     const additions: VerifiedWork[] = [],
       plan = state.plan(),
-      deadline = Math.min(until, this.now() + state.limits.deadlineMs)
-    let checks = 0,
-      limited = false
-    for (const support of plan.proofs.values()) {
-      const proof = proofReference(support),
-        work: VerifiedWork = { proof, checks: [] }
-      for (let index = 0; index < state.frontiers.length; index++) {
-        this.ready(signal)
-        const frontier = state.frontiers[index],
-          next = state.frontiers[index + 1]
-        if (next && BigInt(support.availableAt) >= BigInt(next.at)) continue
-        const previous = state.ledger.get(proof, frontier.context.id)
-        if (previous?.status === 'verified' || previous?.status === 'invalid') continue
-        if (checks >= this.maximumChecks || this.now() >= deadline) {
-          if (work.checks.length) additions.push(work)
-          return { additions, exhausted: true }
-        }
-        checks++
-        const check = await checkRetainedProof(
-          this.options.verifier,
-          support,
-          frontier.context,
-          signal,
-          {
-            now: this.now,
-            deadlineMs: Math.max(1, Math.floor(deadline - this.now()))
-          }
-        )
-        limited ||= check.status === 'limited'
-        if (canonicalOutputJSON(check) !== (previous ? canonicalOutputJSON(previous) : 'absent'))
-          work.checks.push(check)
+      budget = {
+        checks: 0,
+        limited: false,
+        deadline: Math.min(until, this.now() + state.limits.deadlineMs)
       }
-      if (work.checks.length) additions.push(work)
+    for (const support of plan.proofs.values()) {
+      const result = await this.collectProof(state, support, signal, budget)
+      if (result.work.checks.length) additions.push(result.work)
+      if (result.exhausted) return { additions, exhausted: true }
     }
-    return { additions, exhausted: plan.limited || limited }
+    return { additions, exhausted: plan.limited || budget.limited }
+  }
+
+  private async collectProof(
+    state: BitcoinKnowledgeState,
+    support: EvidenceSupport,
+    signal: AbortSignal,
+    budget: { checks: number; limited: boolean; deadline: number }
+  ): Promise<{ work: VerifiedWork; exhausted: boolean }> {
+    const proof = proofReference(support),
+      work: VerifiedWork = { proof, checks: [] }
+    for (let index = 0; index < state.frontiers.length; index++) {
+      this.ready(signal)
+      const frontier = state.frontiers[index],
+        next = state.frontiers[index + 1]
+      if (next && BigInt(support.availableAt) >= BigInt(next.at)) continue
+      const previous = state.ledger.get(proof, frontier.context.id)
+      if (previous?.status === 'verified' || previous?.status === 'invalid') continue
+      if (budget.checks >= this.maximumChecks || this.now() >= budget.deadline)
+        return { work, exhausted: true }
+      budget.checks++
+      const check = await checkRetainedProof(
+        this.options.verifier,
+        support,
+        frontier.context,
+        signal,
+        {
+          now: this.now,
+          deadlineMs: Math.max(1, Math.floor(budget.deadline - this.now()))
+        }
+      )
+      budget.limited ||= check.status === 'limited'
+      if (canonicalOutputJSON(check) !== (previous ? canonicalOutputJSON(previous) : 'absent'))
+        work.checks.push(check)
+    }
+    return { work, exhausted: false }
   }
 
   async pendingBytes(store: KnowledgeStore, signal: AbortSignal): Promise<number> {

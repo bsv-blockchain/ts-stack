@@ -9,7 +9,7 @@ import {
   type ChainTracker,
   type TransactionEvidenceLimits
 } from '@bsv/sdk'
-import { assembleOutputEvidence, factFromAssembly } from './EvidenceAssembler.js'
+import { assembleOutputEvidence, factFromAssembly, type EvidencePlan } from './EvidenceAssembler.js'
 import { parseVerificationContext } from './validation.js'
 import type {
   ChainView,
@@ -36,6 +36,24 @@ function negative(
   status: Exclude<VerificationResult['status'], 'verified'>
 ): VerificationResult {
   return { status, ...identity, reason: `Evidence verification ${status}`, dependencies: [] }
+}
+
+type ChainCall = <T>(operation: () => Promise<T>) => Promise<T>
+function failureStatus(
+  error: unknown,
+  signal: AbortSignal,
+  dependencyUnavailable: boolean
+): Exclude<VerificationResult['status'], 'verified'> {
+  const code =
+    error instanceof TransactionEvidenceError || error instanceof OutputProtocolError
+      ? error.code
+      : 'invalid'
+  if (signal.aborted || code === 'cancelled' || code === 'disposed') return 'cancelled'
+  if (dependencyUnavailable) return 'limited'
+  if (code === 'context-changed') return 'context-changed'
+  if (['limited', 'limit', 'timeout', 'unavailable', 'reset-required'].includes(code))
+    return 'limited'
+  return 'invalid'
 }
 
 /**
@@ -119,7 +137,6 @@ export class SDKEvidenceVerifier implements EvidenceVerifier {
     signal: AbortSignal
   ): Promise<VerificationResult> {
     const identity = { contextId: context.id, variantId: candidate.variantId }
-    let coordinator: TransactionEvidenceCoordinator | undefined
     let dependencyUnavailable = false
     const chainCall = async <T>(operation: () => Promise<T>): Promise<T> => {
       try {
@@ -159,77 +176,101 @@ export class SDKEvidenceVerifier implements EvidenceVerifier {
       const expectedHeight = outputU64(context.view.tipHeight)
       if (expectedHeight > BigInt(Number.MAX_SAFE_INTEGER))
         throw new OutputProtocolError('limited', 'SDK chain height representation limit')
-      const tracker: ChainTracker = {
-        currentHeight: async querySignal => {
-          const height = await chainCall(async () => await view.tracker.currentHeight(querySignal))
-          if (height !== Number(expectedHeight))
-            throw new TransactionEvidenceError('context-changed')
-          return height
-        },
-        isValidRootForHeight: async (root, height, querySignal) => {
-          if (height > Number(expectedHeight)) return false
-          const header = await chainCall(
-            async () => await view.header(height, querySignal ?? signal)
-          )
-          return (
-            header.merkleRoot === root &&
-            (await chainCall(
-              async () => await view.tracker.isValidRootForHeight(root, height, querySignal)
-            ))
-          )
-        },
-        getVerificationContextToken:
-          view.tracker.getVerificationContextToken === undefined
-            ? async () => canonicalOutputJSON(context.view)
-            : querySignal =>
-                chainCall(async () => await view.tracker.getVerificationContextToken!(querySignal))
-      }
-      coordinator = new TransactionEvidenceCoordinator({
-        chainTracker: tracker,
-        chainNamespace: canonicalOutputJSON(context.view.chain),
-        policyId: context.policyDigest,
-        limits
-      })
+      return await this.verifyPlan(
+        plan,
+        context,
+        signal,
+        limits,
+        view,
+        Number(expectedHeight),
+        chainCall
+      )
+    } catch (error) {
+      return negative(identity, failureStatus(error, signal, dependencyUnavailable))
+    }
+  }
+
+  private tracker(
+    view: ImmutableChainView,
+    context: VerificationContext,
+    expectedHeight: number,
+    signal: AbortSignal,
+    chainCall: ChainCall
+  ): ChainTracker {
+    return {
+      currentHeight: async querySignal => {
+        const height = await chainCall(async () => await view.tracker.currentHeight(querySignal))
+        if (height !== expectedHeight) throw new TransactionEvidenceError('context-changed')
+        return height
+      },
+      isValidRootForHeight: async (root, height, querySignal) => {
+        if (height > expectedHeight) return false
+        const header = await chainCall(async () => await view.header(height, querySignal ?? signal))
+        return (
+          header.merkleRoot === root &&
+          (await chainCall(
+            async () => await view.tracker.isValidRootForHeight(root, height, querySignal)
+          ))
+        )
+      },
+      getVerificationContextToken:
+        view.tracker.getVerificationContextToken === undefined
+          ? async () => canonicalOutputJSON(context.view)
+          : querySignal =>
+              chainCall(async () => await view.tracker.getVerificationContextToken!(querySignal))
+    }
+  }
+
+  private async verifyPlan(
+    plan: EvidencePlan,
+    context: VerificationContext,
+    signal: AbortSignal,
+    limits: TransactionEvidenceLimits,
+    view: ImmutableChainView,
+    expectedHeight: number,
+    chainCall: ChainCall
+  ): Promise<VerificationResult> {
+    const identity = { contextId: context.id, variantId: plan.variantId }
+    const coordinator = new TransactionEvidenceCoordinator({
+      chainTracker: this.tracker(view, context, expectedHeight, signal, chainCall),
+      chainNamespace: canonicalOutputJSON(context.view.chain),
+      policyId: context.policyDigest,
+      limits
+    })
+    try {
       await coordinator.verify(
-        { beef: plan.atomicBeef, txid: plan.target.txid, outputIndex: plan.evidence.outputIndex },
+        { beef: plan.atomicBeef!, txid: plan.target!.txid, outputIndex: plan.evidence.outputIndex },
         { signal }
       )
       if (signal.aborted) return negative(identity, 'cancelled')
-      let placement: { blockHash: string; height: string } | undefined
-      if (plan.target.blockHeight !== undefined) {
-        const header = await chainCall(
-          async () => await view.header(plan.target!.blockHeight!, signal)
-        )
-        outputHex32(header.hash)
-        if (header.merkleRoot !== plan.target.merkleRoot)
-          throw new OutputProtocolError('context-changed', 'Placement header changed')
-        placement = { blockHash: header.hash, height: String(plan.target.blockHeight) }
-      }
+      const placement = await this.placement(plan, view, signal, chainCall)
       if (signal.aborted) return negative(identity, 'cancelled')
       return {
         status: 'verified',
         ...identity,
-        fact: factFromAssembly(plan.chain, plan.target),
+        fact: factFromAssembly(plan.chain, plan.target!),
         ...(placement ? { placement } : {})
       }
-    } catch (error) {
-      const code =
-        error instanceof TransactionEvidenceError || error instanceof OutputProtocolError
-          ? error.code
-          : 'invalid'
-      const status =
-        signal.aborted || code === 'cancelled' || code === 'disposed'
-          ? 'cancelled'
-          : dependencyUnavailable
-            ? 'limited'
-            : code === 'context-changed'
-              ? 'context-changed'
-              : ['limited', 'limit', 'timeout', 'unavailable', 'reset-required'].includes(code)
-                ? 'limited'
-                : 'invalid'
-      return negative(identity, status)
     } finally {
-      coordinator?.dispose()
+      coordinator.dispose()
     }
+  }
+  private async placement(
+    plan: EvidencePlan,
+    view: ImmutableChainView,
+    signal: AbortSignal,
+    chainCall: ChainCall
+  ): Promise<{ blockHash: string; height: string } | undefined> {
+    let placement: { blockHash: string; height: string } | undefined
+    if (plan.target!.blockHeight !== undefined) {
+      const header = await chainCall(
+        async () => await view.header(plan.target!.blockHeight!, signal)
+      )
+      outputHex32(header.hash)
+      if (header.merkleRoot !== plan.target!.merkleRoot)
+        throw new OutputProtocolError('context-changed', 'Placement header changed')
+      placement = { blockHash: header.hash, height: String(plan.target!.blockHeight) }
+    }
+    return placement
   }
 }
