@@ -22,7 +22,9 @@
     "ProposalPolicyRegistry",
     "AuthorDocumentPolicy",
     "SQLiteProposalJournal",
-    "ProposalCapabilityContracts"
+    "ProposalCapabilityContracts",
+    "ProposalService",
+    "SDKProposalEvidence"
   ],
   "maximumBytes": {
     "vite": {
@@ -72,7 +74,9 @@
         "MemoryProposalJournal",
         "proposalCommitKey",
         "appendProposalWithRecovery",
-        "ProposalCapabilityContracts"
+        "ProposalCapabilityContracts",
+        "ProposalService",
+        "SDKProposalEvidence"
       ],
       "prohibitedExports": [
         "SQLiteJournal",

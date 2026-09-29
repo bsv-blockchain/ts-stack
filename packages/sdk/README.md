@@ -359,6 +359,23 @@ wallet-derived locking key, and field signature before reading or spending it.
   work. Endpoint/key migration needs separately verified authority. Neither helper
   makes network requests, runs remote code, persists data or calls a wallet.
 
+  `parseOutputServiceError` validates the common packet-service error envelope and
+  its separate 4,096-byte budget; `outputServiceErrorHTTPStatus` supplies the exact
+  BRC-193 status mapping. Capacity details are accepted only for `limited`, with
+  positive minimums bounded by the profile's hard maxima. Errors contain no
+  successful cursor. Verify selected response authentication before acting on an
+  error, and never interpret an unknown response or HTTP 402 as empty data or an
+  instruction to pay. Local cancellation and local `revision-unavailable` remain
+  local failures; a service reports lost replay continuity as `reset-required`.
+
+  For an unpaid authenticated request, pass `allowPayments: false` to
+  `AuthFetch.fetch`. It returns an authenticated 402 without creating a payment,
+  and retains the explicit opt-out across authentication recovery even if the
+  caller later changes its options. The default remains automatic BRC-105 payment
+  under the configured wallet's authorization policy. Ordinary HTTP fallback
+  failures retain their existing error behavior. This option controls payment;
+  it does not itself establish the required provider identity or profile selection.
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation

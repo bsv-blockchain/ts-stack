@@ -17,7 +17,7 @@ import {
   type OutputProposalState,
   type OutputSignedProposal
 } from '@bsv/sdk'
-import type { ProposalClockPolicy, ProposalScope } from './ProposalPolicy.js'
+import type { ProposalAction, ProposalClockPolicy, ProposalScope } from './ProposalPolicy.js'
 import { ProposalPolicyRegistry, validateProposalWindow } from './ProposalPolicyRegistry.js'
 
 /** Persist this job in the same transaction that reserves the proposal head. */
@@ -95,6 +95,16 @@ export class ProposalTransitions {
       clock: this.clock,
       policies: this.policies.describe()
     })
+  }
+
+  /** Signature and installed domain policy only; no clock, storage or host access effects. */
+  validate(input: unknown): OutputSignedProposal {
+    return this.policies.validate(input, this.scope)
+  }
+
+  /** The host must also apply its current access policy, including immediately before serialization. */
+  permits(action: ProposalAction, proposal: OutputSignedProposal, caller: string): boolean {
+    return this.policies.permits(action, this.validate(proposal), caller)
   }
 
   /** Validate a local commit plan against its current stored head before atomic persistence. */

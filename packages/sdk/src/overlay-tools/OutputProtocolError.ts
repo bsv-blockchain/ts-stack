@@ -3,6 +3,7 @@ export type OutputProtocolErrorCode =
   | 'invalid'
   | 'unsupported'
   | 'unauthorized'
+  | 'not-found'
   | 'conflict'
   | 'equivocation'
   | 'limited'

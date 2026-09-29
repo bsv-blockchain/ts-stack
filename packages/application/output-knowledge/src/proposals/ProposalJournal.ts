@@ -47,7 +47,11 @@ export interface ProposalJournalStorage {
   /** New reservations hold one maximum-sized terminal entry before any external admission. */
   readonly completionReservation?: 'proposal-journal-completion/1'
   head(): Promise<ProposalJournalHead>
+  /** Owned, sealed capacity bounds for preflighting a future terminal receipt. */
+  getLimits?(): Promise<ProposalJournalLimits>
   getChannel(channelKey: string): Promise<ProposalChannelRecord | undefined>
+  /** Atomic current channel head, events and local recovery context. */
+  getChannelEntry?(channelKey: string): Promise<ProposalJournalEntry | undefined>
   /** The latest retained state of this signed head, which may have been superseded. */
   getProposal(
     proposalId: string

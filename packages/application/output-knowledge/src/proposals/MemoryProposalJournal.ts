@@ -34,6 +34,12 @@ export class MemoryProposalJournal implements ProposalJournalStorage {
   async head(): Promise<ProposalJournalHead> {
     return this.ready().head()
   }
+  async getLimits(): Promise<ProposalJournalLimits> {
+    return { ...this.ready().limits }
+  }
+  async getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
+    return this.ready().channelEntry(key)
+  }
   async getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
     return this.ready().channel(key)
   }

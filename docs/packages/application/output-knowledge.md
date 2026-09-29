@@ -72,6 +72,15 @@ journal's pending jobs are preserved but do not gain a retroactive capacity prom
 parameters and lifetime limits. An installed policy omitted from the selected
 manifest remains disabled for that operation. The optional `getProposalEntry`
 storage read retrieves a proposal's latest atomic record and context together.
+`ProposalService` adds durable publication, current authorization, expiry,
+finalization reservation and exact-operation recovery. It retains original
+publication/admission contracts and preflights terminal receipt and response
+capacity. Authenticated transport and durable admission remain explicit integration ports.
+`SDKProposalEvidence` performs complete target BEEF/Script verification against
+a pinned immutable chain view. A signed PRP1 fixture with synthetic header ancestry
+exercises that adapter before SQLite reservation; ordinary admission remains
+unresolved in that test. Full HTTP/topic qualification remains in progress.
+The package guide describes each port's required behavior.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current

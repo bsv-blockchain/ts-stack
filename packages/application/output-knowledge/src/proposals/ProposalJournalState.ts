@@ -97,6 +97,11 @@ export class ProposalJournalState {
     return record && structuredClone(record)
   }
 
+  channelEntry(key: string): ProposalJournalEntry | undefined {
+    const current = this.channels.get(key)
+    return current && structuredClone(this.entries[Number(current.revision) - 1])
+  }
+
   proposal(id: string): { record: ProposalChannelRecord; current: boolean } | undefined {
     outputHex32(id)
     const record = this.proposals.get(id)?.transition.next

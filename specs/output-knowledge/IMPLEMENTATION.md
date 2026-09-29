@@ -14,6 +14,10 @@ submission and GASP behavior remains available to applications that do not opt i
 - Additive SDK wire codecs, canonical encodings, digest domains, signed capability
   profiles, observation schemas and bounded BRC-193 request/response schemas,
   plus closed BRC-194 put/get/finalize endpoint codecs.
+- Bounded common service errors, explicit capacity minimums and the specified
+  BRC-193 HTTP status mapping, separate from local cancellation/storage failures.
+- An additive AuthFetch automatic-payment opt-out for unpaid authenticated requests,
+  preserved across authentication recovery without changing existing defaults.
 - Reusable SDK capability retention/revalidation at the original selection time,
   independent of current authorization, operation deadlines and discovery changes.
 - Memory, SQLite and IndexedDB receipt journals with atomic local replay material,
@@ -38,6 +42,10 @@ submission and GASP behavior remains available to applications that do not opt i
   reservations and a shared SQLite capacity seal across independent writers.
 - Retained proposal contract binding to exact installed policy parameters/lifetimes,
   explicit per-contract policy enablement and indexed atomic record/context reads.
+- Durable proposal service orchestration, current access checks before serialization,
+  original publication/admission contract recovery and preflight receipt capacity.
+- Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
+  against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -48,8 +56,8 @@ submission and GASP behavior remains available to applications that do not opt i
 
 ## Remaining checkpoint-two work
 
-- Finish proposal capability retention/configuration evolution, compaction preserving
-  terminal fences, current authorization and finalization/admission bridges.
+- Finish proposal contract configuration evolution, compaction preserving terminal
+  fences, concrete durable admission bridges and restart-aware expiry scheduling.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
   retention, source adapters and consistent Overlay/Overlay Express storage hooks.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
@@ -71,15 +79,19 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,643 tests across 218 suites, including all proposal endpoint
+The SDK run passes 7,666 tests across 220 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 300 tests across 25 suites, with more than 95% line and 90% branch
+run passes 319 tests across 27 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
 concurrent-writer limit sealing, immutable local context and malformed SQLite
 metadata/encodings. A signed capability and pending job recover together after
-SQLite restart and manifest expiry. Journal append mutation testing kills all 26 generated mutations.
+SQLite restart and manifest expiry. Service tests include current-access revocation,
+original-selector recovery, proof-equivalent retries, concurrent SQLite expiry, lost
+write acknowledgements and receipt capacity checked before admission. The concrete
+evidence adapter runs actual SDK Script/Merkle checks on a signed PRP1 transaction.
+Journal append mutation testing kills all 26 generated mutations.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
@@ -100,7 +112,8 @@ Installed-policy head `332cfd9f5` passed all 41 applicable
 hosted checks; two infrastructure/dependent-test skips were accepted by merge-gate.
 This includes CodeQL, zero new Sonar findings, external Codecov and the repository
 coverage gate. Storage/context head `671d079ee` also passed every applicable
-hosted check, including external patch coverage at 90.24%. Subsequent
+hosted check, including external patch coverage at 90.24%. Installed contract head
+`e24e96bd2` passed all 41 applicable checks, with two expected scope skips. Subsequent
 implementation increments require their own validation.
 
 These are intermediate results. The PR remains draft until the entire

@@ -512,11 +512,93 @@ not point an existing service identity at an empty replacement database: loss of
 terminal fences requires retiring that identity, while existing finalization and
 recovery obligations still need recovery from the original retained storage.
 
-Authenticated service integration remains in progress. Journals and transition
-plans alone do not qualify a host as a BRC-194 proposal service. Hosts must retain
-the selected capability contract, recheck current read permissions on retries and
-serialization, impose resource/retention limits and implement recovery before
-advertising the profile.
+### Durable proposal service composition
+
+`ProposalService` composes the lifecycle and durable journal behind an authenticated
+transport. Its `put`, `get` and `finalize` methods accept the BRC-194 bodies and an
+already verified caller identity and capability digest. Those two values must come
+from the BRC-103/104 transport's verified request, including the authenticated
+selection headers. Copying identity or selection fields from an unverified body is
+not authentication. The service does not implement HTTP or enable a legacy route.
+
+```ts
+import { ProposalService } from '@bsv/output-knowledge/proposals'
+
+const service = new ProposalService({
+  lifecycle,
+  storage: durableProposalJournal,
+  trust: configuredProviderTrust,
+  manifest: () => signedCurrentCapabilities,
+  now: () => Math.floor(Date.now() / 1000).toString(),
+  access: currentHostAccessPolicy,
+  evidence: completeTransactionEvidenceVerifier,
+  admission: durableOrdinaryTopicAdmission
+})
+```
+
+The constructor requires durable storage with atomic context retention, terminal
+capacity reservations, `getLimits`, `getChannelEntry` and `getProposalEntry`.
+The reference SQLite journal implements these ports; the Memory journal remains a
+volatile test adapter and cannot be used by this service. Capacity reads and
+current-channel reads return owned snapshots. Existing journal consumers do not
+need the newly optional methods.
+
+An installed policy and current host access must both authorize a request. Reads
+hide missing and unauthorized records behind the same `not-found` error, and
+permissions are checked again immediately before returning data. Recording a
+proposal performs neither evidence verification nor admission. Expiry is a
+durable channel transition; call `expire(channelKey)` from a bounded host timer,
+including after restart. Reads also apply due expiry. Timers never cancel a
+previously reserved finalization.
+
+Finalization verifies complete transaction evidence and the policy's exact raw-byte
+relation before durably reserving the job. The evidence port must perform actual
+BEEF, Script and chain verification; the lifecycle's transaction parsing alone is
+insufficient. `SDKProposalEvidence` implements that port using `SDKEvidenceVerifier`,
+an installed immutable `ChainViewResolver`, a synchronous verification-context
+provider and bounded SDK work limits. It verifies the exact target transaction
+and returns its raw bytes only after success. It rejects incomplete dependencies,
+invalid Script and mismatched views; it does not assert unspentness or replace the
+proposal policy's relation and ordinary topic rules. Output zero selects the
+target transaction for verification, not a claim about its application meaning.
+The admission port's `recover` must idempotently admit or reconcile
+the exact stored job, including concurrent callers and restart. Its success must
+refer to durable ordinary topic processing. A legacy early callback or an empty
+duplicate STEAK does not independently prove that processing committed. An
+uncertain result retains `finalizing`; a definitive local rejection records
+`finalization-failed` with globally unknown outcome.
+
+The admission port declares `maximumOutcomeBytes` and must enforce that bound
+before committing effects. The service reserves room for the complete terminal
+journal entry and checks both selected contracts' response capacities before
+starting admission. It checks the actual outcome again before linkage. A port
+that commits an oversized result has violated its contract; rejection at linkage
+does not undo that external effect. Request limits include transmitted whitespace.
+
+The original signed publication contract and, when present, the signed admission
+contract are retained together. Either original selector can recover the resulting
+head; unrelated new discovery does not replace them. Exact persisted evidence can
+recover offline after manifest expiry. An alternative BEEF encoding is equivalent
+only after verification of the same raw transaction. Reusing an operation ID for
+different bytes or another proposal conflicts. A different authorized operation
+for an already bound proposal returns the original binding without starting work
+or claiming the new ID.
+
+`reconcile(proposalId)` is a trusted recovery-worker entry for previously reserved
+jobs. It may complete that committed work after caller access is revoked, while
+reads and responses still apply current access. Pending jobs remain recoverable;
+terminal results retain the longer of the existing deadline and each original
+contract's interval after expiry or completion. Full retained history and terminal
+fences remain in this bounded reference journal; reaching capacity never resets
+the namespace.
+
+Authenticated HTTP, concrete ordinary-admission adapters, scheduling and end-to-end
+qualification are still being connected. Service orchestration tests use explicit
+injected port outcomes. Separate evidence integration tests run actual SDK Script
+and Merkle checks on a signed PRP1 transaction against pinned synthetic header
+ancestry, then reserve its verified raw bytes in SQLite. They deliberately leave
+ordinary admission unresolved and do not substitute for HTTP or topic integration.
+Do not advertise the complete BRC-194 profile based on these components alone.
 
 ## Compatibility boundary
 

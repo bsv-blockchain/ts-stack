@@ -37,6 +37,19 @@ recovery deadline still govern access. Never accept this local record from a rem
 caller or use it to initiate a new operation with an expired manifest. These pure
 helpers do not persist, fetch, pay or submit anything.
 
+`parseOutputServiceError` validates bounded common error bodies, including capacity
+details within the BRC-193 hard maxima. `outputServiceErrorHTTPStatus` provides the
+specified status mapping. Verify authenticated errors before changing trusted
+state; errors never contain a successful cursor or authorize automatic payment.
+The independent 4,096-byte error allowance still applies when a requested page
+budget is too small for a successful response.
+
+Unpaid authenticated requests can set `AuthFetch.fetch`'s `allowPayments: false`.
+Authenticated 402 responses then reach the caller without creating payment; the
+decision survives authentication recovery and later caller option changes. Existing
+calls still allow automatic BRC-105 handling, and ordinary HTTP fallback failures
+keep their previous behavior. Profile/identity verification remains separate.
+
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may
 contain up to 64 owned data properties, matching the existing header-list

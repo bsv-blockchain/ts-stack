@@ -38,6 +38,13 @@ interface SimplifiedFetchRequestOptions {
   paymentContext?: PaymentRetryContext
   paymentRetryAttempts?: number
   /**
+   * False returns an authenticated 402 without creating or retrying a BRC-105 payment.
+   * Ordinary HTTP fallback error handling is unchanged.
+   * Omission/true preserves automatic payment. An explicit false is retained
+   * across authentication recovery even if the caller later changes its options.
+   */
+  allowPayments?: boolean
+  /**
    * Optional wallet action labels applied to BRC-105 payment transactions
    * created for 402 responses. Use these to find payments later via
    * listActions (e.g. app-specific categories). AuthFetch always also
@@ -215,7 +222,7 @@ export class AuthFetch {
    * Mutually authenticates and sends a HTTP request to a server.
    *
    * 1) Attempt the request.
-   * 2) If 402 Payment Required, ask the wallet to authorize, create, and send payment.
+   * 2) If 402 Payment Required and payments are allowed, ask the wallet to authorize, create, and send payment.
    * 3) Return the final response.
    *
    * @param url - The URL to send the request to.
@@ -226,6 +233,12 @@ export class AuthFetch {
    * @throws Will throw an error if unsupported headers are used or other validation fails.
    */
   async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> {
+    const allowPayments = config.allowPayments
+    if (allowPayments !== undefined && typeof allowPayments !== 'boolean')
+      throw new TypeError('allowPayments must be a boolean.')
+    // Keep this explicit denial in the options passed to authentication retries.
+    // Default callers retain the existing options/retry-counter behavior.
+    if (allowPayments === false) config = { ...config, allowPayments: false }
     if (typeof config.retryCounter === 'number') {
       if (config.retryCounter <= 0) {
         throw new Error('Request failed after maximum number of retries.')
@@ -331,7 +344,7 @@ export class AuthFetch {
       })()
     })
     // Check if server requires payment to access the requested route
-    if (response.status === 402) {
+    if (response.status === 402 && allowPayments !== false) {
       // Create and attach a payment, then retry
       return await this.handlePaymentAndRetry(url, config, response)
     }

@@ -104,6 +104,12 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
   async head(): Promise<ProposalJournalHead> {
     return this.readState().head()
   }
+  async getLimits(): Promise<ProposalJournalLimits> {
+    return { ...this.readState().limits }
+  }
+  async getChannelEntry(key: string): Promise<ProposalJournalEntry | undefined> {
+    return this.readState().channelEntry(key)
+  }
   async getChannel(key: string): Promise<ProposalChannelRecord | undefined> {
     return this.readState().channel(key)
   }
