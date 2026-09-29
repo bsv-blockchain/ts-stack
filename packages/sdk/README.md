@@ -331,6 +331,14 @@ wallet-derived locking key, and field signature before reading or spending it.
 
 - **Overlay Tools**: Advanced tools for overlay network management and optimization.
 
+  The proposed BRC-192–194 extensions add explicitly selected output observations,
+  progressive lookup representations, canonical protocol JSON, signed capability
+  validation and endpoint construction. Parsing a packet checks its representation;
+  it does not by itself authorize a source, validate a transaction or establish
+  unspentness. Stateful orchestration and durable storage are implemented in the
+  separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
+  Existing lookup and submission interfaces keep their current behavior.
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation

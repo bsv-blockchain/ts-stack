@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUTPUT = join(ROOT, 'docs/reference/package-api-migrations.md')
-const RELEASE_TYPES = new Set(['none', 'patch', 'minor', 'major'])
+const RELEASE_TYPES = new Set(['none', 'patch', 'minor', 'major', 'initial'])
 
 const readJson = async (root, path) => JSON.parse(await readFile(join(root, path), 'utf8'))
 const escapeCell = value =>
@@ -39,6 +39,7 @@ const parseVersion = version => {
 const releaseTypeBetween = (published, source) => {
   const from = parseVersion(published)
   const to = parseVersion(source)
+  if (published === null && to !== undefined) return 'initial'
   if (from === undefined || to === undefined) return undefined
   if (from.every((part, index) => part === to[index])) return 'none'
   if (to[0] !== from[0]) return 'major'
@@ -181,7 +182,7 @@ export function renderPackageDocumentation({ lastReviewed, packages }) {
   const summaryRows = packages
     .map(
       pkg =>
-        `| \`${escapeCell(pkg.name)}\` | \`${pkg.publishedVersion}\` | ` +
+        `| \`${escapeCell(pkg.name)}\` | ${pkg.publishedVersion === null ? 'Unpublished' : `\`${pkg.publishedVersion}\``} | ` +
         `\`${pkg.sourceVersion}\` | ${pkg.releaseType} | ` +
         `[API and usage](${docsLink(pkg.docsPath)}) | ${escapeCell(pkg.migration)} |`
     )
@@ -235,7 +236,9 @@ and clean-consumer tests remain the executable type authority.
 ${summaryRows}
 
 \`none\` means the source manifest matches the recorded npm baseline. Any other
-value is an unpublished candidate. Publication, tags, releases, registry
+value is an unpublished candidate. \`initial\` with a null published baseline
+identifies a new package with no recorded published baseline; it does not invent an npm
+version or waive publication checks. Publication, tags, releases, registry
 reconciliation, and infrastructure dependency synchronization remain separate,
 explicitly authorized operations.
 

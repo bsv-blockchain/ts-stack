@@ -807,6 +807,17 @@
       "criticality": "tier-1",
       "runtimeTargets": ["react-native"],
       "release": "npm-oidc"
+    },
+    {
+      "path": "packages/application/output-knowledge",
+      "name": "@bsv/output-knowledge",
+      "owner": "ts-stack-maintainers",
+      "area": "application",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
     }
   ]
 }

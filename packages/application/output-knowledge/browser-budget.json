@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": ".",
+  "requiredExports": [
+    "OutputKnowledge",
+    "BitcoinKnowledge",
+    "KnowledgeStore",
+    "IndexedDBJournal",
+    "MemoryJournal",
+    "SDKEvidenceVerifier",
+    "EvidencePool",
+    "SourceMembershipLedger",
+    "reconcileOutputSpends"
+  ],
+  "prohibitedExports": ["SQLiteJournal"],
+  "maximumBytes": {
+    "vite": { "raw": 550000, "gzip": 140000, "brotli": 120000 },
+    "esbuild": { "raw": 410000, "gzip": 130000, "brotli": 110000 }
+  }
+}

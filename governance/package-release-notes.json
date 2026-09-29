@@ -167,9 +167,9 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
-      "releaseType": "none",
-      "summary": "Accepts normal full WhatsOnChain block-header metadata within the existing 64-property header-response boundary instead of rejecting valid mainnet Merkle proofs at 16 properties. Exact Merkle-root equality, hash/height validation, finite HTTP limits, plain-data checks and accessor/symbol rejection remain enforced.",
-      "migration": "Update applications using WhatsOnChain SPV verification to SDK 2.8.10 when their provider returns a full block header. No API, wire, proof, or wallet-data migration is required. Published 2.8.10 is verified against protected release 36324548797, source 5a4053223692b020372f5a8e20f59bf9c82cc968, exact registry bytes, source provenance and CycloneDX SBOM."
+      "releaseType": "minor",
+      "summary": "Adds opt-in BRC-192–199 protocol representations, exact encodings, capability selection and live lookup boundaries while preserving all existing overlay APIs.",
+      "migration": "Existing exports, endpoints and lookup defaults remain unchanged. Select the new versioned profiles explicitly; the accompanying output-knowledge runtime provides durable application state above the SDK."
     },
     {
       "name": "@bsv/simple",
@@ -240,6 +240,13 @@
       "releaseType": "none",
       "summary": "Advances the scaffold release metadata so generated applications consume the compatibility-preserving security hardening in this release train.",
       "migration": "Existing CLI flags, network choices, and generated project structure are unchanged. Regenerate or update dependencies after the patched packages are published. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "publishedVersion": null,
+      "releaseType": "initial",
+      "summary": "Initial application output knowledge reference runtime and interchangeable durable journal adapters.",
+      "migration": "New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes."
     }
   ]
 }

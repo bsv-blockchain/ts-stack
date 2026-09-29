@@ -346,6 +346,16 @@
       "minimumScore": 80,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-journal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/journal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable receipt identities and compare-and-swap ordering across duplicate and stale commit attempts",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

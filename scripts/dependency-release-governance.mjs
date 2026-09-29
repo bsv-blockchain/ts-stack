@@ -465,15 +465,81 @@ export async function createDirectLatestInventory(now = new Date()) {
 function publishedBaselines(notes) {
   const result = new Map()
   for (const entry of notes.entries ?? []) {
-    result.set(entry.name, entry.publishedVersion ?? entry.published ?? entry.baselineVersion)
+    result.set(
+      entry.name,
+      entry.publishedVersion !== undefined
+        ? entry.publishedVersion
+        : (entry.published ?? entry.baselineVersion)
+    )
   }
   return result
 }
 
 function publishedStatus(source, latest, baseline) {
+  if (baseline === null) return 'diverged'
   if (source === latest) return 'current'
   if (baseline === latest) return 'first-party-release-held'
   return 'diverged'
+}
+
+/** Only an explicit registry E404 can establish an initial candidate's absence. */
+export async function readPublishedPackage(
+  project,
+  source,
+  baseline,
+  releaseType,
+  query = npmView
+) {
+  let metadata
+  try {
+    metadata = await query(project.name, [
+      'name',
+      'version',
+      'dist.integrity',
+      'dist.attestations',
+      'gitHead'
+    ])
+  } catch (error) {
+    let packageMissing = false
+    try {
+      const report = JSON.parse(error.stdout).error
+      const endpoint = /^Not Found - GET (\S+)/.exec(report?.summary ?? '')?.[1]
+      if (report?.code === 'E404' && endpoint) {
+        const url = new URL(endpoint)
+        packageMissing =
+          url.origin === 'https://registry.npmjs.org' &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash &&
+          decodeURIComponent(url.pathname.slice(1)) === project.name
+      }
+    } catch {
+      /* Preserve the original registry failure below. */
+    }
+    if (baseline === null && releaseType === 'initial' && packageMissing) {
+      return {
+        name: project.name,
+        sourceVersion: source,
+        publishedLatest: null,
+        recordedPublishedBaseline: null,
+        status: 'unpublished-initial-candidate'
+      }
+    }
+    throw error
+  }
+  return {
+    name: project.name,
+    sourceVersion: source,
+    publishedLatest: metadata.version,
+    recordedPublishedBaseline: baseline,
+    status: publishedStatus(source, metadata.version, baseline),
+    integrity: metadata['dist.integrity'],
+    provenance:
+      metadata['dist.attestations']?.provenance?.predicateType === 'https://slsa.dev/provenance/v1',
+    provenanceUrl: metadata['dist.attestations']?.url,
+    gitHead: metadata.gitHead
+  }
 }
 
 export async function verifyPublishedPackages() {
@@ -484,32 +550,18 @@ export async function verifyPublishedPackages() {
   const baselines = publishedBaselines(notes)
   const packages = await mapWithConcurrency(projects, 8, async project => {
     const manifest = readJson(path.join(ROOT, project.path, 'package.json'))
-    const metadata = await npmView(project.name, [
-      'name',
-      'version',
-      'dist.integrity',
-      'dist.attestations',
-      'gitHead'
-    ])
-    const latest = metadata.version
     const source = manifest.version
     const baseline = baselines.get(project.name)
-    return {
-      name: project.name,
-      sourceVersion: source,
-      publishedLatest: latest,
-      recordedPublishedBaseline: baseline,
-      status: publishedStatus(source, latest, baseline),
-      integrity: metadata['dist.integrity'],
-      provenance:
-        metadata['dist.attestations']?.provenance?.predicateType ===
-        'https://slsa.dev/provenance/v1',
-      provenanceUrl: metadata['dist.attestations']?.url,
-      gitHead: metadata.gitHead
-    }
+    return readPublishedPackage(
+      project,
+      source,
+      baseline,
+      notes.entries.find(entry => entry.name === project.name)?.releaseType
+    )
   })
   const errors = []
   for (const item of packages) {
+    if (item.status === 'unpublished-initial-candidate') continue
     if (item.status === 'diverged') {
       errors.push(
         `${item.name} source ${item.sourceVersion}, npm latest ${item.publishedLatest}, and recorded baseline ${item.recordedPublishedBaseline} diverge`
@@ -526,7 +578,9 @@ export async function verifyPublishedPackages() {
     generatedAt: new Date().toISOString(),
     packages,
     heldCandidates: packages
-      .filter(item => item.status === 'first-party-release-held')
+      .filter(item =>
+        ['first-party-release-held', 'unpublished-initial-candidate'].includes(item.status)
+      )
       .map(item => `${item.name}@${item.sourceVersion}`),
     errors
   }

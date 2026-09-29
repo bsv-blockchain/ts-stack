@@ -1,0 +1,430 @@
+import { afterEach, describe, expect, it } from '@jest/globals'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { Beef, Utils } from '@bsv/sdk'
+import { BitcoinKnowledge } from '../src/BitcoinKnowledge.js'
+import { KnowledgeStore } from '../src/KnowledgeStore.js'
+import { MemoryJournal } from '../src/storage/MemoryJournal.js'
+import { SQLiteJournal } from '../src/storage/SQLiteJournal.js'
+import { knowledgeMutation, type JournalStorage } from '../src/storage/Journal.js'
+import { SDKEvidenceVerifier } from '../src/SDKEvidenceVerifier.js'
+import { OutputKnowledge } from '../src/OutputKnowledge.js'
+import type { EvidenceVerifier, OutputObservation, OutputScope, SourceBatch } from '../src/ports.js'
+import { candidate, chain, context, corpus, partition, resolver } from './evidence-fixture.js'
+
+const scope: OutputScope = {
+  chain,
+  provider: 'local-source',
+  service: 'records',
+  queryDigest: '03'.repeat(32),
+  rulesDigest: '04'.repeat(32),
+  access: 'public',
+  epoch: 'initial'
+}
+function output(name: string, id = name, partial = false): OutputObservation {
+  const evidence = candidate(name).evidence
+  if (partial) {
+    const beef = new Beef()
+    beef.mergeRawTx(Utils.toArray(corpus.transactions[name].raw, 'hex'))
+    evidence.beef = Utils.toBase64(beef.toBinary())
+  }
+  return { id, scope, kind: 'output', payload: { evidence } }
+}
+function batch(
+  id: string,
+  observations: OutputObservation[],
+  sequence = '0',
+  generation = '0',
+  phase: SourceBatch['coverage']['phase'] = 'finite'
+): SourceBatch {
+  return {
+    provenance: {
+      partition,
+      generation,
+      adapter: 'fixture',
+      scope,
+      authentication: 'configured-transport',
+      peer: scope.provider,
+      receivedAt: '1'
+    },
+    groups: [{ id, sequence, observations }],
+    coverage: {
+      scope,
+      phase,
+      status: 'complete',
+      ...(phase === 'finite' ? {} : { through: sequence, highWater: sequence })
+    }
+  }
+}
+const signal = () => new AbortController().signal
+const stores: KnowledgeStore[] = [],
+  dirs: string[] = []
+afterEach(async () => {
+  for (const store of stores.splice(0)) await store.close()
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+function open(
+  storage: JournalStorage = new MemoryJournal('journal'),
+  verifier: EvidenceVerifier = new SDKEvidenceVerifier(resolver),
+  maximumChecks?: number
+) {
+  const worker = new BitcoinKnowledge({
+      journalId: storage.namespace,
+      partition,
+      nonFinal: true,
+      verifier,
+      maximumChecks
+    }),
+    store = new KnowledgeStore(storage, worker, { partition })
+  stores.push(store)
+  return { worker, store }
+}
+async function initialize(store: KnowledgeStore) {
+  await store.commit('0', knowledgeMutation({ kind: 'context', context: context() }))
+}
+async function receive(store: KnowledgeStore, value: SourceBatch) {
+  const revision = await store.revision()
+  return store.commit(revision.received, knowledgeMutation({ kind: 'receive', batch: value }))
+}
+const tx = (name: string) => corpus.transactions[name].txid
+
+describe('default Bitcoin knowledge journal and worker', () => {
+  it('requires a retained spend policy and rejects reopening it with a different policy', async () => {
+    const unsealed = new MemoryJournal('journal')
+    await unsealed.append('0', knowledgeMutation({ kind: 'context', context: context() }))
+    await expect(open(unsealed).store.read()).rejects.toMatchObject({ code: 'reset-required' })
+    const storage = new MemoryJournal('sealed'),
+      first = open(storage)
+    await initialize(first.store)
+    const changed = new KnowledgeStore(
+      storage,
+      new BitcoinKnowledge({
+        journalId: storage.namespace,
+        partition,
+        nonFinal: false,
+        verifier: new SDKEvidenceVerifier(resolver)
+      }),
+      { partition }
+    )
+    stores.push(changed)
+    await expect(changed.read()).rejects.toMatchObject({ code: 'reset-required' })
+  })
+
+  it('persists receipt before actual SDK verification and recovers accepted facts and selection without network access', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bitcoin-knowledge-'))
+    dirs.push(dir)
+    const path = join(dir, 'knowledge.sqlite'),
+      { store, worker } = open(new SQLiteJournal(path, 'journal'))
+    await initialize(store)
+    await receive(store, batch('initial', [output('A'), output('B')]))
+    const pending = await store.read()
+    expect(pending.revision).toEqual({ received: '2', accepted: '1' })
+    expect(pending.facts).toEqual([])
+    expect(pending.pendingGroups).toHaveLength(1)
+    await worker.advance(store, signal())
+    const accepted = await store.read()
+    expect(
+      accepted.reconciled.transactions.find(row => row.txid === tx('A'))?.status ===
+        'selected-final' ||
+        accepted.reconciled.transactions.find(row => row.txid === tx('B'))?.status ===
+          'selected-final'
+    ).toBe(true)
+    expect(
+      accepted.reconciled.transactions.filter(row => row.status === 'conflicting')
+    ).toHaveLength(1)
+    expect(accepted.reconciled.memberships).toHaveLength(2)
+    expect(accepted.pendingGroups).toEqual([])
+    expect((await store.inspect()).entries.at(-1)?.local).toBeDefined()
+    await store.close()
+    const reopened = open(new SQLiteJournal(path, 'journal'), {
+      async verify() {
+        throw new Error('Replay must not call the network')
+      }
+    })
+    expect(await reopened.store.read()).toEqual(accepted)
+    await reopened.worker.advance(reopened.store, signal())
+    expect(await reopened.store.read()).toEqual(accepted)
+  })
+
+  it('joins a successor received before its predecessor across two authenticated source scopes', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('child', [output('QC', 'child', true)]))
+    await worker.advance(store, signal())
+    expect(
+      (await store.read()).reconciled.transactions.find(row => row.txid === tx('QC'))?.order
+    ).toBeUndefined()
+    const parent = batch('parent', [output('Q')])
+    parent.provenance.scope = { ...scope, provider: 'other-source' }
+    parent.provenance.peer = 'other-source'
+    parent.coverage.scope = parent.provenance.scope
+    parent.groups[0].observations[0].scope = parent.provenance.scope
+    await receive(store, parent)
+    await worker.advance(store, signal())
+    const result = await store.read(),
+      child = result.reconciled.transactions.find(row => row.txid === tx('QC'))!
+    expect(child).toMatchObject({
+      status: 'selected-final',
+      firstRaw: { position: '2' },
+      order: { readyAt: '3', depth: 1 }
+    })
+    expect(result.assessments.find(row => row.outpoint.txid === tx('Q'))?.state).toBe('spent')
+    expect(result.assessments.find(row => row.outpoint.txid === tx('QC'))?.state).toBe('unknown')
+    expect(result.reconciled.memberships).toHaveLength(2)
+  })
+
+  it('quarantines a source group with a malformed sibling while retaining independent valid evidence', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    const malformed = output('Q', 'malformed')
+    if (malformed.kind === 'output') malformed.payload.evidence.beef = 'AA=='
+    await receive(store, batch('bad', [output('A'), malformed]))
+    await worker.advance(store, signal())
+    const bad = await store.read()
+    expect(bad.reconciled.memberships).toEqual([])
+    expect(bad.pendingGroups[0].reason).toContain('quarantined')
+    const replacement = batch('replacement', [output('A', 'good')], '0', '1')
+    await receive(store, replacement)
+    await worker.advance(store, signal())
+    const good = await store.read()
+    expect(good.reconciled.transactions.find(row => row.txid === tx('A'))).toMatchObject({
+      status: 'selected-final',
+      firstRaw: { position: '2' },
+      order: { readyAt: '4' }
+    })
+    expect(good.reconciled.memberships[0].generation).toBe('1')
+  })
+
+  it('rejects fabricated acceptance or generation/partition transitions before storage mutation', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await worker.advance(store, signal())
+    const snapshot = await store.read(),
+      before = await store.revision()
+    const falseState = {
+      ...snapshot.reconciled,
+      through: String(BigInt(before.received) + 1n),
+      transactions: []
+    }
+    await expect(
+      store.commit(
+        before.received,
+        knowledgeMutation({
+          kind: 'reconcile',
+          generation: '0',
+          contextId: snapshot.context.id,
+          reconciled: falseState,
+          assessments: []
+        })
+      )
+    ).rejects.toThrow('deterministic')
+    const foreign = context()
+    foreign.partition = { ...partition, account: 'another-account' }
+    foreign.id = 'other-context'
+    await expect(
+      store.commit(before.received, knowledgeMutation({ kind: 'context', context: foreign }))
+    ).rejects.toThrow('partition')
+    expect(await store.revision()).toEqual(before)
+  })
+
+  it('retains a bounded verification pass and resumes without changing transaction arrival order', async () => {
+    const { store, worker } = open(undefined, undefined, 1)
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await expect(worker.advance(store, signal())).rejects.toMatchObject({ code: 'limited' })
+    const partial = await store.read()
+    expect(partial.pendingGroups).toHaveLength(1)
+    expect(
+      partial.reconciled.transactions.find(row => row.txid === tx('A'))?.firstRaw.position
+    ).toBe('2')
+    await worker.advance(store, signal())
+    const ready = await store.read()
+    expect(ready.pendingGroups).toEqual([])
+    expect(ready.reconciled.transactions.find(row => row.txid === tx('A'))?.order?.readyAt).toBe(
+      '2'
+    )
+  })
+
+  it('preserves the historical non-final replacement journal while revalidating a new context', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('n', [output('N')], '10', '0', 'snapshot'))
+    await worker.advance(store, signal())
+    await receive(store, batch('r', [output('R')], '11', '0', 'live'))
+    await worker.advance(store, signal())
+    const before = await store.read()
+    expect(before.reconciled.replacements).toHaveLength(1)
+    expect(before.reconciled.replacements[0]).toMatchObject({
+      previous: tx('N'),
+      replacement: tx('R')
+    })
+    await store.commit(
+      (await store.revision()).received,
+      knowledgeMutation({ kind: 'context', context: context('mature') })
+    )
+    const pending = await store.read()
+    expect(pending.reconciled.replacements).toEqual(before.reconciled.replacements)
+    expect(pending.facts).toEqual(before.facts)
+    expect(pending.reconciled.transactions.find(row => row.txid === tx('R'))?.status).toBe(
+      'unresolved'
+    )
+    await worker.advance(store, signal())
+    const after = await store.read()
+    expect(after.reconciled.replacements).toEqual(before.reconciled.replacements)
+    expect(after.reconciled.transactions.find(row => row.txid === tx('N'))?.status).toBe(
+      'conflicting'
+    )
+    expect(after.reconciled.transactions.find(row => row.txid === tx('R'))?.status).toBe(
+      'selected-final'
+    )
+  })
+
+  it('requires a spend observation to identify an actual consumed input', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(
+      store,
+      batch('false-spend', [
+        {
+          id: 'assertion',
+          kind: 'spend',
+          scope,
+          payload: {
+            previous: { chain, txid: tx('Q'), outputIndex: 0 },
+            spendingTxid: tx('A'),
+            beef: candidate('A').evidence.beef
+          }
+        }
+      ])
+    )
+    await worker.advance(store, signal())
+    const result = await store.read()
+    expect(result.pendingGroups[0].reason).toContain('quarantined')
+    expect(result.facts).toEqual([])
+    expect(result.assessments).toEqual([])
+  })
+
+  it('retains a consumed output as spent when a live source reports it again', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('p', [output('P')], '10', '0', 'snapshot'))
+    await worker.advance(store, signal())
+    await receive(store, batch('a', [output('A')], '11', '0', 'live'))
+    await worker.advance(store, signal())
+    await receive(store, batch('p-again', [output('P', 'new-report')], '12', '0', 'live'))
+    await worker.advance(store, signal())
+    const result = await store.read()
+    expect(result.reconciled.memberships.find(row => row.outpoint.txid === tx('P'))).toMatchObject({
+      present: true,
+      sequence: '12'
+    })
+    expect(result.assessments.find(row => row.outpoint.txid === tx('P'))?.state).toBe('spent')
+  })
+
+  it('holds a newly verified chain override while a known ancestor still needs current-context evidence', async () => {
+    const actual = new SDKEvidenceVerifier(resolver)
+    let postpone = false
+    const verifier: EvidenceVerifier = {
+      async verify(input, selected, abort) {
+        if (postpone && input.evidence.txid === tx('P') && selected.view.id === 'included')
+          return {
+            status: 'limited',
+            contextId: selected.id,
+            variantId: input.variantId,
+            reason: 'Ancestry backend temporarily unavailable',
+            dependencies: []
+          }
+        return actual.verify(input, selected, abort)
+      }
+    }
+    const { store, worker } = open(undefined, verifier)
+    await initialize(store)
+    await receive(store, batch('a', [output('A')], '10', '0', 'snapshot'))
+    await worker.advance(store, signal())
+    await store.commit(
+      (await store.revision()).received,
+      knowledgeMutation({ kind: 'context', context: context('included') })
+    )
+    const included = output('B')
+    if (included.kind === 'output') included.payload.evidence.beef = corpus.inclusion.beef
+    await receive(store, batch('b', [included], '11', '0', 'live'))
+    postpone = true
+    await expect(worker.advance(store, signal())).rejects.toMatchObject({ code: 'limited' })
+    const waiting = await store.read()
+    expect(waiting.reconciled.transactions.find(row => row.txid === tx('B'))?.status).toBe(
+      'unresolved'
+    )
+    postpone = false
+    await worker.advance(store, signal())
+    const result = await store.read()
+    expect(result.reconciled.transactions.find(row => row.txid === tx('B'))?.status).toBe(
+      'included'
+    )
+    expect(result.reconciled.transactions.find(row => row.txid === tx('A'))?.status).toBe(
+      'conflicting'
+    )
+  })
+
+  it('commits an empty replacement snapshot as a separate accepted boundary', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    await receive(store, batch('initial', [output('A')]))
+    await worker.advance(store, signal())
+    const initial = await store.read(),
+      empty = batch('unused', [], '0', '1')
+    empty.groups = []
+    await receive(store, empty)
+    const received = await store.read()
+    expect(received.revision.accepted).toBe(initial.revision.accepted)
+    expect(received.reconciled.memberships).toEqual(initial.reconciled.memberships)
+    await worker.advance(store, signal())
+    const accepted = await store.read()
+    expect(BigInt(accepted.revision.accepted)).toBe(BigInt(initial.revision.accepted) + 1n)
+    expect(accepted.reconciled.memberships).toEqual([])
+    expect(accepted.facts).toEqual(initial.facts)
+    expect(accepted.assessments[0].state).toBe('unknown')
+  })
+
+  it('uses the public runtime for snapshot and live withdrawal without confusing membership with a Bitcoin spend', async () => {
+    const { store, worker } = open(),
+      runtime = new OutputKnowledge({ store, worker })
+    await runtime.setContext(context())
+    const first = batch('snapshot', [output('A')], '7', '0', 'snapshot'),
+      removed = batch(
+        'removed',
+        [
+          {
+            kind: 'withdraw',
+            id: 'withdraw-a',
+            scope,
+            payload: {
+              outpoint: { chain, txid: tx('A'), outputIndex: 0 },
+              reason: 'Catalogue removal'
+            }
+          }
+        ],
+        '8',
+        '0',
+        'live'
+      )
+    const subscription = runtime.attach(
+      {
+        id: 'fixture',
+        async *open() {
+          yield first
+          yield removed
+        }
+      },
+      { partition, generation: '0', scope, limits: runtime.limits }
+    )
+    await subscription.done
+    await runtime.flush()
+    const result = await store.read()
+    expect(result.reconciled.memberships[0]).toMatchObject({ present: false, sequence: '8' })
+    expect(result.assessments[0].state).toBe('unknown')
+    expect(result.facts.some(row => row.txid === tx('A'))).toBe(true)
+    await runtime.close()
+  })
+})

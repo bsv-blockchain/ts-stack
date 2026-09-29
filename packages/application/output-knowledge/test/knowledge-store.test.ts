@@ -1,0 +1,256 @@
+import { describe, expect, it } from '@jest/globals'
+import { OutputProtocolError } from '@bsv/sdk'
+import { KnowledgeStore, type KnowledgeReducer } from '../src/KnowledgeStore.js'
+import {
+  MemoryJournal,
+  knowledgeMutation,
+  type AcceptedInput,
+  type Currentness,
+  type JournalStorage
+} from '../src/index.js'
+import { context, partition } from './evidence-fixture.js'
+
+import { emptyReducer as reducer } from './empty-reducer.js'
+
+const initial = () => knowledgeMutation({ kind: 'context', context: context() })
+const invalidation = (reason = 'local expiry') =>
+  knowledgeMutation({ kind: 'invalidate', generation: '0', assessmentIds: [], reason })
+function wrapper(storage: JournalStorage, overrides: Partial<JournalStorage>): JournalStorage {
+  return {
+    namespace: storage.namespace,
+    durability: storage.durability,
+    head: storage.head.bind(storage),
+    read: storage.read.bind(storage),
+    getMutation: storage.getMutation.bind(storage),
+    append: storage.append.bind(storage),
+    close: storage.close.bind(storage),
+    ...overrides
+  }
+}
+
+describe('knowledge store journal port', () => {
+  it('persists protocol-generated validation material with its mutation and reconstructs it after reopening the store port', async () => {
+    const storage = new MemoryJournal('test'),
+      simple = reducer()
+    let prepared = 0
+    const validating: KnowledgeReducer = {
+      reduce: simple.reduce,
+      async prepare(entries, signal) {
+        prepared++
+        return {
+          input: await simple.reduce(entries, signal),
+          local: {
+            profile: 'urn:example:local-verification',
+            version: 1,
+            evidence: ['receipt-one']
+          }
+        }
+      }
+    }
+    const first = new KnowledgeStore(storage, validating, { partition }),
+      initialMutation = initial()
+    expect((await first.commit('0', initialMutation)).status).toBe('committed')
+    expect(prepared).toBe(1)
+    const recovered = new KnowledgeStore(
+      storage,
+      {
+        async reduce(entries, signal) {
+          expect(entries[0].local?.evidence).toEqual(['receipt-one'])
+          return simple.reduce(entries, signal)
+        }
+      },
+      { partition, minimumReceived: '1' }
+    )
+    expect((await recovered.read()).revision.received).toBe('1')
+    expect((await recovered.inspect()).entries[0].local?.profile).toBe(
+      'urn:example:local-verification'
+    )
+    expect((await recovered.commit('0', initialMutation)).status).toBe('replayed')
+    expect(prepared).toBe(1)
+    await first.close()
+    await recovered.close()
+  })
+  it('validates prospective state before commit and resolves duplicate keys before CAS or reducer replay', async () => {
+    let count = 0
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(
+        storage,
+        reducer({
+          before: async entries => {
+            count++
+            if (entries.at(-1)!.body.kind === 'invalidate')
+              throw new OutputProtocolError('invalid', 'Rejected transition')
+          }
+        }),
+        { partition }
+      )
+    const first = initial()
+    expect((await store.commit('0', first)).status).toBe('committed')
+    expect((await store.commit('999', first)).status).toBe('replayed')
+    expect(count).toBe(1)
+    await expect(store.commit('1', invalidation())).rejects.toThrow('Rejected transition')
+    expect((await storage.head()).received).toBe('1')
+    expect((await store.read()).revision).toEqual({ received: '1', accepted: '1' })
+    await expect(store.read('2')).rejects.toMatchObject({ code: 'revision-unavailable' })
+    const changed = { key: first.key, body: invalidation().body }
+    expect((await store.commit('1', changed)).status).toBe('equivocation')
+    await store.close()
+  })
+
+  it('admits one of two racing CAS commits and never publishes the losing prospective state', async () => {
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(storage, reducer(), { partition })
+    await store.commit('0', initial())
+    const results = await Promise.all([
+      store.commit('1', invalidation('one')),
+      store.commit('1', invalidation('two'))
+    ])
+    expect(results.map(result => result.status).sort()).toEqual(['committed', 'conflict'])
+    expect((await store.read()).revision).toEqual({ received: '2', accepted: '2' })
+    await store.close()
+  })
+
+  it('recovers an uncertain commit by exact key without rerunning the reducer', async () => {
+    const storage = new MemoryJournal('test')
+    let count = 0
+    const uncertain = wrapper(storage, {
+      async append(expected, mutation) {
+        await storage.append(expected, mutation)
+        throw new Error('connection lost after commit')
+      }
+    })
+    const store = new KnowledgeStore(
+      uncertain,
+      reducer({
+        before: async () => {
+          count++
+        }
+      }),
+      { partition }
+    )
+    expect((await store.commit('0', initial())).status).toBe('replayed')
+    expect(count).toBe(1)
+    expect((await store.read()).revision.received).toBe('1')
+    await store.close()
+  })
+
+  it('rejects a lost namespace, altered journal bytes, and revision gaps', async () => {
+    const empty = new KnowledgeStore(new MemoryJournal('test'), reducer(), {
+      partition,
+      minimumReceived: '1'
+    })
+    await expect(empty.read()).rejects.toMatchObject({ code: 'reset-required' })
+    await empty.close()
+    const storage = new MemoryJournal('test')
+    await storage.append('0', initial())
+    const corrupt = new KnowledgeStore(
+      wrapper(storage, {
+        async read(after, maximum) {
+          const entries = await storage.read(after, maximum)
+          entries[0].body = invalidation().body
+          return entries
+        }
+      }),
+      reducer(),
+      { partition }
+    )
+    await expect(corrupt.read()).rejects.toMatchObject({ code: 'reset-required' })
+    const gap = new KnowledgeStore(
+      wrapper(storage, {
+        async read(after, maximum) {
+          const entries = await storage.read(after, maximum)
+          entries[0].revision.received = '2'
+          return entries
+        }
+      }),
+      reducer(),
+      { partition }
+    )
+    await expect(gap.read()).rejects.toMatchObject({ code: 'reset-required' })
+    await corrupt.close()
+    await gap.close()
+  })
+
+  it('watches every accepted revision and wakes across independent store instances', async () => {
+    const storage = new MemoryJournal('test'),
+      first = new KnowledgeStore(storage, reducer(), { partition, pollMs: 5 }),
+      second = new KnowledgeStore(storage, reducer(), { partition })
+    await first.commit('0', initial())
+    const abort = new AbortController(),
+      iterator = first.watch('0', abort.signal)[Symbol.asyncIterator]()
+    expect((await iterator.next()).value?.revision.accepted).toBe('1')
+    const waiting = iterator.next()
+    await second.commit('1', invalidation())
+    expect((await waiting).value?.revision.accepted).toBe('2')
+    const cancelled = iterator.next()
+    abort.abort()
+    await expect(cancelled).rejects.toMatchObject({ code: 'cancelled' })
+    await first.close()
+    await second.close()
+  })
+
+  it('closes pending watches, refuses cross-partition state, and bounds retention', async () => {
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(storage, reducer(), { partition, maximumEntries: 1 })
+    await store.commit('0', initial())
+    expect((await store.commit('1', invalidation())).status).toBe('limited')
+    const watch = store.watch('1')[Symbol.asyncIterator]().next()
+    await store.close()
+    await expect(watch).rejects.toMatchObject({ code: 'cancelled' })
+    const other = new KnowledgeStore(new MemoryJournal('test'), reducer(), {
+      partition: { ...partition, account: 'bob' }
+    })
+    await expect(other.commit('0', initial())).rejects.toThrow('inconsistent')
+    await other.close()
+  })
+
+  it('bounds non-abortable reducer work and prevents a late preparation from committing', async () => {
+    let release!: () => void
+    const blocked = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(
+        storage,
+        reducer({
+          before: async () => {
+            await blocked
+          }
+        }),
+        { partition, deadlineMs: 10, maximumReaders: 1 }
+      )
+    await expect(store.commit('0', initial())).rejects.toMatchObject({ code: 'limited' })
+    await expect(store.commit('0', initial())).rejects.toMatchObject({ code: 'limited' })
+    release()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect((await storage.head()).received).toBe('0')
+    await store.close()
+  })
+
+  it('does not expose expired assessments when an expiry timer is delayed', async () => {
+    const assessment = {
+      id: '01'.repeat(32),
+      state: 'reported-unspent',
+      expiresAt: '1'
+    } as Currentness
+    const store = new KnowledgeStore(
+      new MemoryJournal('test'),
+      reducer({ assessments: [assessment] }),
+      { partition, now: () => 2000 }
+    )
+    await store.commit('0', initial())
+    await expect(store.read()).rejects.toMatchObject({ code: 'expired' })
+    await store.close()
+  })
+
+  it('returns owned coherent snapshots even when callers change their copy', async () => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), reducer(), { partition })
+    await store.commit('0', initial())
+    const snapshot: AcceptedInput = await store.read()
+    snapshot.context.partition.account = 'changed'
+    snapshot.revision.received = '999'
+    expect((await store.read()).context.partition).toEqual(partition)
+    expect((await store.read()).revision.received).toBe('1')
+    await store.close()
+  })
+})

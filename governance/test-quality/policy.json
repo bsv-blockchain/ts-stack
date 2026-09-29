@@ -43,7 +43,8 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/network/chirp/package.json",
-      "packages/content/lch/package.json"
+      "packages/content/lch/package.json",
+      "packages/application/output-knowledge/package.json"
     ],
     "suites": [
       {
@@ -458,6 +459,18 @@
         "invariants": [
           "Every supported value round-trips to the identical deterministic byte sequence.",
           "Text and map keys remain normalized and canonical across independent encode and decode passes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/journal.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable receipt identities and compare-and-swap ordering across duplicate and stale commit attempts",
+        "target": "Idempotent replay and exact contiguous journal revisions under arbitrary bounded retry schedules",
+        "invariants": [
+          "A repeated mutation returns its original committed revision even when the expected revision is stale.",
+          "A stale new mutation cannot advance either journal revision.",
+          "Every committed distinct mutation occupies exactly one contiguous receipt position."
         ]
       }
     ],

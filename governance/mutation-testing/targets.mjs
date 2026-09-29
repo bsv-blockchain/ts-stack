@@ -17,10 +17,15 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
   return `${filePath}:${startIndex + 1}-${endIndex}`
 }
 
-function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
+function jestTarget(
+  configFile,
+  testMatch,
+  { esm = false, config = {}, findRelated = false, buildCommand } = {}
+) {
   return {
     testRunner: 'jest',
     runnerOptions: {
+      ...(buildCommand ? { buildCommand } : {}),
       jest: {
         projectType: 'custom',
         configFile,
@@ -53,6 +58,25 @@ function vitestTarget(configFile) {
 
 export function buildMutationTargets(repositoryRoot) {
   return {
+    'output-knowledge-journal': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/journal.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/application/output-knowledge',
+          'src/storage/MemoryJournal.ts',
+          '  async append(',
+          '  async read('
+        )
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/journal.property.test.ts', '<rootDir>/test/journal.test.ts'],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'sdk-codecs': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

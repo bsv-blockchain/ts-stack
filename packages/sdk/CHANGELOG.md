@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added (2.9.0 candidate)
+
+- Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.
+
 ### Fixed (2.8.9 candidate)
 
 - AuthFetch bounds general payloads in binary bytes using its HTTP request and configured response budgets instead of charging each byte against the generic JSON authentication envelope budget. Complete 4 MiB CHIRP chunks now reach the transport; HTTP request/response bounds, authentication checks, certificate limits and redirect rejection remain enforced. No API, wire or wallet-data migration is required.

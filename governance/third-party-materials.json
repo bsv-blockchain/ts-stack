@@ -611,7 +611,7 @@
       "version": "c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf",
       "licenseExpression": "MIT",
       "licenseText": "runar-MIT",
-      "copyright": ["Copyright (c) 2025 Rúnar Contributors"],
+      "copyright": ["Copyright (c) 2025 R\u00fanar Contributors"],
       "source": "https://github.com/icellan/runar/blob/c4ed1ab6c593e0d0a5f57c0db1267c16e362d9cf/examples/ts/r1-k1-wallet/R1K1Wallet.runar.ts",
       "incorporation": "compiled locking script artifact, gzip-compressed and base64-encoded",
       "paths": ["packages/helpers/ts-templates/src/R1K1Wallet.artifact.ts"]
@@ -971,6 +971,12 @@
       "path": "infra/wallet-infra",
       "materials": "all",
       "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "packages/application/output-knowledge",
+      "packageName": "@bsv/output-knowledge",
+      "materials": [],
+      "reason": "New first-party implementation with peer dependencies but no incorporated third-party source; retain an explicit scoped notice."
     }
   ],
   "clearances": [

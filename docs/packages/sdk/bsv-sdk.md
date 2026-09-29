@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.10'
+version: '2.9.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-27'
-last_verified: '2026-09-27'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 2.9.0 source candidate adds explicitly selected BRC-192–194 output observation,
+lookup and signed capability representations, bounded protocol JSON and packet
+verification. Existing lookup, submit and wallet interfaces retain their behavior.
+Stateful orchestration is provided by the separate
+[output-knowledge package](../application/output-knowledge.md). The candidate is
+not a package publication.
 
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may
