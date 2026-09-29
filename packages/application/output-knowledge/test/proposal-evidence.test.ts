@@ -53,7 +53,13 @@ async function verifiedFinalization() {
 
 it('checks a real signed PRP1 transaction and its complete anchored ancestry before durable reservation', async () => {
   const { proposal, transaction, request } = await verifiedFinalization()
-  const evidence = new SDKProposalEvidence(resolver, () => context())
+  const originalContext = context()
+  const evidence = new SDKProposalEvidence(resolver, () => originalContext)
+  const detailed = await evidence.verifyWithContext(request, proposal)
+  expect(detailed.verificationContext).toEqual(originalContext)
+  expect(detailed.rawTransaction).toBe(Utils.toBase64(transaction.toBinary()))
+  detailed.verificationContext.view.id = 'changed-by-consumer'
+  expect(originalContext.view.id).toBe('base')
   expect(await evidence.verify(request, proposal)).toBe(Utils.toBase64(transaction.toBinary()))
   const directory = mkdtempSync(join(tmpdir(), 'proposal-verified-'))
   const lifecycle = new ProposalTransitions(
@@ -81,7 +87,14 @@ it('checks a real signed PRP1 transaction and its complete anchored ancestry bef
     // Script/SPV success is not a substitute for the separate admission adapter.
     admission: {
       maximumOutcomeBytes: 4096,
-      recover: async job => ({ status: 'unresolved', operationId: job.operationId, txid: job.txid })
+      requiresVerificationContext: true,
+      recover: async (job, _proposal, _selection, verificationContext) => {
+        expect(verificationContext).toEqual(originalContext)
+        const saved = (await storage.getProposalEntry(request.proposalId))!.local!
+        expect(saved.format).toBe('proposal-service/2')
+        expect(saved.verificationContext).toEqual(originalContext)
+        return { status: 'unresolved', operationId: job.operationId, txid: job.txid }
+      }
     }
   })
   try {

@@ -10,13 +10,17 @@ import {
 } from '@bsv/sdk'
 import type { ProposalCapabilityContracts } from './ProposalCapabilityContracts.js'
 import type { ProposalChannelRecord, ProposalTransition } from './ProposalTransitions.js'
+import type { VerificationContext } from '../ports.js'
+import { parseVerificationContext } from '../validation.js'
 
-export interface ProposalServiceContext {
-  format: 'proposal-service/1'
+export type ProposalServiceContext = {
   publication: OutputRetainedCapability
   admission?: OutputRetainedCapability
   retainUntil: string
-}
+} & (
+  | { format: 'proposal-service/1'; verificationContext?: never }
+  | { format: 'proposal-service/2'; verificationContext: VerificationContext }
+)
 
 export function proposalServiceLocal(context: ProposalServiceContext): OutputJSONObject {
   return parseOutputJSON(canonicalOutputJSON(context)) as OutputJSONObject
@@ -30,9 +34,23 @@ export function restoreProposalServiceContext(
 ): ProposalServiceContext {
   if (local === undefined)
     throw new OutputProtocolError('unavailable', 'Proposal service recovery context is missing')
-  closedOutputObject(local, ['format', 'publication', 'retainUntil'], ['admission'])
-  if (local.format !== 'proposal-service/1')
+  closedOutputObject(
+    local,
+    ['format', 'publication', 'retainUntil'],
+    ['admission', 'verificationContext']
+  )
+  if (local.format !== 'proposal-service/1' && local.format !== 'proposal-service/2')
     throw new OutputProtocolError('unsupported', 'Unknown proposal service context')
+  if (local.format === 'proposal-service/1' && local.verificationContext !== undefined)
+    throw new OutputProtocolError(
+      'invalid',
+      'Legacy proposal context cannot contain verification context'
+    )
+  if (local.format === 'proposal-service/2') {
+    if (record.admission === undefined)
+      throw new OutputProtocolError('invalid', 'Verification context requires an admission job')
+    proposalVerificationContext(local.verificationContext, record)
+  }
   outputU64(local.retainUntil)
   contracts.requirePolicy(local.publication, record.proposal.body.policy)
   if ((local.admission !== undefined) !== (record.admission !== undefined))
@@ -43,6 +61,17 @@ export function restoreProposalServiceContext(
   if (local.admission !== undefined)
     contracts.requirePolicy(local.admission, record.proposal.body.policy)
   return JSON.parse(canonicalOutputJSON(local)) as ProposalServiceContext
+}
+
+/** Validate and own local verification material without asserting present-day currentness. */
+export function proposalVerificationContext(
+  input: unknown,
+  record: Pick<ProposalChannelRecord, 'proposal'>
+): VerificationContext {
+  const context = parseVerificationContext(input)
+  if (canonicalOutputJSON(context.view.chain) !== canonicalOutputJSON(record.proposal.body.chain))
+    throw new OutputProtocolError('context-changed', 'Proposal verification chain differs')
+  return context
 }
 
 export function proposalRetentionDeadline(

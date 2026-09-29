@@ -80,6 +80,12 @@ capacity. Authenticated transport and durable admission remain explicit integrat
 a pinned immutable chain view. A signed PRP1 fixture with synthetic header ancestry
 exercises that adapter before SQLite reservation; ordinary admission remains
 unresolved in that test. Full HTTP/topic qualification remains in progress.
+Its optional richer evidence method retains the original verification context
+atomically with the reservation in local `proposal-service/2` records. Recovery
+passes that saved context to admission without adopting a new view or policy;
+adapters can require it explicitly. Original v1 records and string-returning
+ports remain supported, but missing context is never synthesized for an adapter
+that requires it. Upgrade readers before writing v2; no wire migration is needed.
 The package guide describes each port's required behavior.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)

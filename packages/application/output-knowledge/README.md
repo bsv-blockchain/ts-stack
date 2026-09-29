@@ -561,6 +561,38 @@ and returns its raw bytes only after success. It rejects incomplete dependencies
 invalid Script and mismatched views; it does not assert unspentness or replace the
 proposal policy's relation and ordinary topic rules. Output zero selects the
 target transaction for verification, not a claim about its application meaning.
+`SDKProposalEvidence.verifyWithContext` additionally returns the owned original
+`VerificationContext`; its existing `verify` method still returns raw bytes.
+`ProposalService` selects the richer method when installed and saves the exact
+context with the reservation in local `proposal-service/2` material, covered by
+the same atomic journal commit, integrity digest and completion-capacity budget.
+The context includes the original chain view, policy digest, generation, partition
+and verification bounds. Its chain must match the proposal. It describes the
+completed verification; replay does not turn an expired verification deadline
+into fresh proof of unspentness.
+
+Admission adapters receive that saved context as an optional fourth `recover`
+argument. The reservation's evidence check and the durable topic assessment are
+separate: a recovered receipt may predate the reservation. The admitted result's
+`assessmentContextId` must name that actual topic assessment, not be relabeled
+with the supplied verification context's ID. The concrete admission adapter must
+validate this receipt binding; the generic service cannot infer it from raw bytes.
+Set `requiresVerificationContext: true` when the adapter needs this material.
+A missing rich evidence port is then rejected before work; a legacy reserved job
+without original context cannot be recovered through that adapter by inventing
+one or rerunning discovery. The worker passes owned copies, so neither the
+original evidence provider nor the admission adapter can mutate saved material.
+An alternative BEEF retry can establish exact raw-byte equivalence but cannot
+replace the reservation's original context.
+
+Legacy string-returning evidence ports retain `proposal-service/1` bytes and the
+three-argument admission call. Existing v1 records remain readable and recoverable
+through a compatible adapter. V2 records require a valid verification context and
+an admission job; missing, misplaced, foreign-chain and unknown-version material
+fails closed. Older readers must be upgraded before opening a namespace that has
+written v2 records. No wire format changes or rewriting of existing records are
+required.
+
 The admission port's `recover` must idempotently admit or reconcile
 the exact stored job, including concurrent callers and restart. Its success must
 refer to durable ordinary topic processing. A legacy early callback or an empty

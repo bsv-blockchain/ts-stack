@@ -13,7 +13,7 @@ import {
 import { SDKEvidenceVerifier, type ChainViewResolver } from '../SDKEvidenceVerifier.js'
 import type { VerificationContext } from '../ports.js'
 import { parseVerificationContext } from '../validation.js'
-import type { ProposalServiceEvidence } from './ProposalService.js'
+import type { ProposalServiceEvidence, ProposalVerifiedEvidence } from './ProposalService.js'
 
 /**
  * Complete exact-transaction evidence adapter. The host supplies an immutable,
@@ -36,6 +36,15 @@ export class SDKProposalEvidence implements ProposalServiceEvidence {
     proposal: OutputSignedProposal,
     signal: AbortSignal = new AbortController().signal
   ): Promise<string> {
+    return (await this.verifyWithContext(input, proposal, signal)).rawTransaction
+  }
+
+  /** Return the owned original context for durable reservation and later admission recovery. */
+  async verifyWithContext(
+    input: OutputProposalFinalize,
+    proposal: OutputSignedProposal,
+    signal: AbortSignal = new AbortController().signal
+  ): Promise<ProposalVerifiedEvidence> {
     const request = parseOutputProposalFinalize(input)
     const owned = JSON.parse(canonicalOutputJSON(proposal)) as OutputSignedProposal
     if (
@@ -62,6 +71,6 @@ export class SDKProposalEvidence implements ProposalServiceEvidence {
         ['unavailable', 'limited', 'cancelled', 'context-changed'].includes(code)
       )
     }
-    return result.fact.rawTransaction
+    return { rawTransaction: result.fact.rawTransaction, verificationContext: snapshot }
   }
 }

@@ -32,6 +32,7 @@ import {
   proposalRetentionDeadline,
   proposalServiceLocal,
   proposalTerminalResponseBytes,
+  proposalVerificationContext,
   restoreProposalServiceContext,
   type ProposalServiceContext
 } from './ProposalServiceContext.js'
@@ -42,6 +43,7 @@ import type {
   ProposalTransition,
   ProposalTransitions
 } from './ProposalTransitions.js'
+import type { VerificationContext } from '../ports.js'
 
 /** Supplied by the authenticated transport, never copied from an unverified request body. */
 export interface ProposalServiceCaller {
@@ -52,20 +54,37 @@ export interface ProposalServiceCaller {
 export interface ProposalServiceEvidence {
   /** Complete BEEF/Script/chain verification. Return the exact verified raw transaction bytes. */
   verify(request: OutputProposalFinalize, proposal: OutputSignedProposal): Promise<string>
+  /** Optional richer result, retained atomically before admission. Never supplied by a remote caller. */
+  verifyWithContext?(
+    request: OutputProposalFinalize,
+    proposal: OutputSignedProposal
+  ): Promise<ProposalVerifiedEvidence>
+}
+
+export interface ProposalVerifiedEvidence {
+  rawTransaction: string
+  verificationContext: VerificationContext
 }
 
 export interface ProposalServiceAdmission {
   /** Bound every canonical outcome before effects; oversized results must never be committed. */
   readonly maximumOutcomeBytes: number
+  /** Require the original verification context; missing legacy material cannot be synthesized. */
+  readonly requiresVerificationContext?: boolean
   /**
    * Idempotently admit or reconcile this exact durable job. Concurrent calls and
    * restart must join the same operation; absence alone never establishes rollback.
-   * Only a durable ordinary topic receipt may return admitted. No wallet effects.
+   * Only a durable ordinary topic receipt may return admitted. The optional
+   * context describes the reservation's evidence verification, not current
+   * unspentness. assessmentContextId names the actual durable topic assessment,
+   * which may predate this reservation; never relabel a recovered receipt with
+   * the supplied verification context. No wallet effects.
    */
   recover(
     job: ProposalAdmissionJob,
     proposal: OutputSignedProposal,
-    selection: OutputCapabilitySelection
+    selection: OutputCapabilitySelection,
+    verificationContext?: VerificationContext
   ): Promise<ProposalAdmissionOutcome>
 }
 
@@ -98,6 +117,7 @@ export class ProposalService {
   private readonly contracts: ProposalCapabilityContracts
   private readonly scope: ReturnType<ProposalTransitions['configuration']>['scope']
   private readonly maximumOutcomeBytes: number
+  private readonly requiresVerificationContext: boolean
 
   constructor(private readonly options: ProposalServiceOptions) {
     const { storage, lifecycle, trust, admission } = options
@@ -119,6 +139,20 @@ export class ProposalService {
         'Proposal storage and provider identity differ'
       )
     this.maximumOutcomeBytes = admission.maximumOutcomeBytes
+    if (
+      admission.requiresVerificationContext !== undefined &&
+      typeof admission.requiresVerificationContext !== 'boolean'
+    )
+      throw new OutputProtocolError('invalid', 'Invalid verification context requirement')
+    this.requiresVerificationContext = admission.requiresVerificationContext === true
+    if (
+      this.requiresVerificationContext &&
+      typeof options.evidence.verifyWithContext !== 'function'
+    )
+      throw new OutputProtocolError(
+        'unsupported',
+        'Admission requires a context-retaining evidence port'
+      )
     if (
       !Number.isSafeInteger(this.maximumOutcomeBytes) ||
       this.maximumOutcomeBytes < 128 ||
@@ -242,11 +276,22 @@ export class ProposalService {
     const record = entry.transition.next
     const local = this.local(entry)
     const selection = this.contracts.restore(local.admission)
-    const outcome = await this.options.admission.recover(
-      structuredClone(record.admission!),
-      structuredClone(record.proposal),
-      selection
-    )
+    if (this.requiresVerificationContext && local.verificationContext === undefined)
+      throw new OutputProtocolError(
+        'unavailable',
+        'Original proposal verification context is missing'
+      )
+    const job = structuredClone(record.admission!)
+    const proposal = structuredClone(record.proposal)
+    const outcome =
+      local.verificationContext === undefined
+        ? await this.options.admission.recover(job, proposal, selection)
+        : await this.options.admission.recover(
+            job,
+            proposal,
+            selection,
+            structuredClone(local.verificationContext)
+          )
     canonicalOutputJSON(outcome, { bytes: this.maximumOutcomeBytes })
     const plan = this.options.lifecycle.complete(record, outcome, this.now())
     if (!plan.changed) return
@@ -272,21 +317,25 @@ export class ProposalService {
     caller: ProposalServiceCaller
   ): Promise<void> {
     const record = entry.transition.next
-    const local = this.local(entry)
+    let local = this.local(entry)
     if (record.state.status !== 'active')
       throw new OutputProtocolError('conflict', 'Proposal is no longer active')
     if (outputU64(this.now()) >= outputU64(record.proposal.body.expiresAt))
       throw new OutputProtocolError('expired', 'Proposal has expired')
     const selected = await this.select(caller, record.proposal)
     this.boundRequest(requestBytes, selected.selection)
-    const raw = await this.options.evidence.verify(
-      structuredClone(request),
-      structuredClone(record.proposal)
-    )
+    const verified = await this.verifyForReservation(request, record)
+    const raw = verified.rawTransaction
     await this.authorize('finalize', record.proposal, caller.caller)
     this.fresh(selected.record)
     const plan = this.options.lifecycle.reserve(record, caller.caller, request, raw, this.now())
     local.admission = selected.record
+    if (verified.verificationContext !== undefined)
+      local = {
+        ...local,
+        format: 'proposal-service/2',
+        verificationContext: verified.verificationContext
+      }
     local.retainUntil = proposalRetentionDeadline(plan.next, selected.selection, local.retainUntil)
     const maximumResponseBytes = Math.min(
       selected.selection.profile.maxResponseBytes,
@@ -308,6 +357,35 @@ export class ProposalService {
     // Recheck clock after asynchronous access/storage calls before reserving.
     const latest = this.options.lifecycle.reserve(record, caller.caller, request, raw, this.now())
     await this.commit(latest, local)
+  }
+
+  private async verifyForReservation(
+    request: OutputProposalFinalize,
+    record: ProposalChannelRecord
+  ) {
+    const evidence = this.options.evidence
+    if (evidence.verifyWithContext === undefined) {
+      if (this.requiresVerificationContext)
+        throw new OutputProtocolError(
+          'unsupported',
+          'Admission requires a context-retaining evidence port'
+        )
+      return {
+        rawTransaction: await evidence.verify(
+          structuredClone(request),
+          structuredClone(record.proposal)
+        )
+      }
+    }
+    const verified = await evidence.verifyWithContext(
+      structuredClone(request),
+      structuredClone(record.proposal)
+    )
+    closedOutputObject(verified, ['rawTransaction', 'verificationContext'])
+    return {
+      rawTransaction: verified.rawTransaction,
+      verificationContext: proposalVerificationContext(verified.verificationContext, record)
+    }
   }
 
   private async checkRetry(

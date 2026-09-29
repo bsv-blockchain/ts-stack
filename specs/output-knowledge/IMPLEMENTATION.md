@@ -44,6 +44,8 @@ submission and GASP behavior remains available to applications that do not opt i
   explicit per-contract policy enablement and indexed atomic record/context reads.
 - Durable proposal service orchestration, current access checks before serialization,
   original publication/admission contract recovery and preflight receipt capacity.
+- Optional owned verification-context retention in versioned proposal reservations,
+  compatible legacy replay and original-context admission recovery after restart.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions

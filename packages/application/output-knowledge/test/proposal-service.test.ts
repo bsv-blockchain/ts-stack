@@ -575,3 +575,272 @@ it('retains exact U64 deadlines above safe integers and rejects overflow before 
     }
   }
 })
+
+// Structurally valid local context for injected evidence-port tests; actual
+// SDK Script/chain checks are exercised separately in proposal-evidence.test.ts.
+function retainedVerificationContext() {
+  return {
+    id: 'original-verification-context',
+    partition: { application: 'host', account: 'service', access: 'private' },
+    generation: '7',
+    view: {
+      id: 'original-chain-view',
+      chain: scope.chain,
+      tipHash: '31'.repeat(32),
+      tipHeight: '42',
+      medianTimePast: '10',
+      chainPolicyDigest: '32'.repeat(32)
+    },
+    policyDigest: '33'.repeat(32),
+    now: '11',
+    limits: { bytes: 4194304, transactions: 4096, dependencies: 16384, deadline: '20' }
+  }
+}
+
+it('retains owned verification context atomically and recovers the original after SQLite reopen and expiry', async () => {
+  const f = fixture()
+  const context = retainedVerificationContext(),
+    original = structuredClone(context)
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: context
+  }))
+  f.options.admission = { ...f.options.admission, requiresVerificationContext: true }
+  f.options.admission.recover = jest.fn<ProposalServiceOptions['admission']['recover']>(
+    async (job, _proposal, _selection, verification) => {
+      expect(verification).toEqual(original)
+      // An adapter must not be able to mutate the saved context by reference.
+      verification!.view.tipHeight = '999'
+      return { status: 'unresolved', operationId: job.operationId, txid: job.txid }
+    }
+  )
+  const service = f.make()
+  await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  expect((await service.finalize(f.request, f.caller)).state.status).toBe('finalizing')
+  expect(f.options.evidence.verify).not.toHaveBeenCalled()
+  const saved = (await f.storage.getProposalEntry(f.request.proposalId))!.local!
+  expect(saved.format).toBe('proposal-service/2')
+  expect(saved.verificationContext).toEqual(original)
+  context.view.id = 'changed-view'
+  await f.storage.close()
+  f.options.storage = f.open()
+  f.options.manifest = () => {
+    throw new Error('discovery is offline')
+  }
+  f.options.evidence.verifyWithContext = jest.fn(async () => {
+    throw new Error('verification is offline')
+  })
+  f.time('1001')
+  f.options.admission.recover = jest.fn<ProposalServiceOptions['admission']['recover']>(
+    async (job, _proposal, _selection, verification) => {
+      expect(verification).toEqual(original)
+      return { ...f.admitted(job), assessmentContextId: original.id }
+    }
+  )
+  expect((await f.make().finalize(f.request, f.caller)).state).toMatchObject({
+    status: 'finalized',
+    assessmentContextId: original.id
+  })
+  expect(f.options.evidence.verifyWithContext).not.toHaveBeenCalled()
+  expect(
+    (await f.options.storage.getProposalEntry!(f.request.proposalId))!.local!.verificationContext
+  ).toEqual(original)
+})
+
+it('preserves legacy context bytes and three-argument admission while refusing to invent missing verification', async () => {
+  const f = fixture()
+  f.options.admission.recover = jest.fn<ProposalServiceOptions['admission']['recover']>(
+    async job => ({
+      status: 'unresolved',
+      operationId: job.operationId,
+      txid: job.txid
+    })
+  )
+  const service = f.make()
+  await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  await service.finalize(f.request, f.caller)
+  const saved = (await f.storage.getProposalEntry(f.request.proposalId))!.local!
+  expect(saved.format).toBe('proposal-service/1')
+  expect(Object.hasOwn(saved, 'verificationContext')).toBe(false)
+  expect(jest.mocked(f.options.admission.recover).mock.calls[0]).toHaveLength(3)
+  f.options.admission = { ...f.options.admission, requiresVerificationContext: true }
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: retainedVerificationContext()
+  }))
+  jest.mocked(f.options.admission.recover).mockClear()
+  await expect(f.make().reconcile(f.request.proposalId)).rejects.toMatchObject({
+    code: 'unavailable'
+  })
+  expect(f.options.admission.recover).not.toHaveBeenCalled()
+  expect(f.options.evidence.verifyWithContext).not.toHaveBeenCalled()
+  expect((await f.storage.getProposalEntry(f.request.proposalId))!.local).toEqual(saved)
+})
+
+it('rejects malformed and foreign verification results before claiming an operation or admitting', async () => {
+  for (const corruption of ['missing', 'foreign', 'extra', 'raw', 'deadline']) {
+    const f = fixture()
+    const verification = {
+      rawTransaction: f.raw,
+      verificationContext: retainedVerificationContext()
+    }
+    if (corruption === 'missing') Reflect.deleteProperty(verification, 'verificationContext')
+    if (corruption === 'foreign')
+      verification.verificationContext.view.chain = { ...scope.chain, network: 'other' }
+    if (corruption === 'extra') Reflect.set(verification, 'unrecognized', true)
+    if (corruption === 'raw') verification.rawTransaction = 'AA=='
+    if (corruption === 'deadline') verification.verificationContext.limits.deadline = '10'
+    f.options.evidence.verifyWithContext = jest.fn(async () => verification)
+    const service = f.make()
+    await service.put({ version: 1, proposal: f.proposal }, f.caller)
+    await expect(service.finalize(f.request, f.caller)).rejects.toThrow()
+    expect(
+      await f.storage.getOperation(author, scope.service, f.request.operationId)
+    ).toBeUndefined()
+    expect(f.options.admission.recover).not.toHaveBeenCalled()
+    expect((await f.storage.head()).entries).toBe(1)
+  }
+})
+
+it('rejects missing required evidence ports, invalid requirements and removal after construction', async () => {
+  const f = fixture()
+  f.options.admission = { ...f.options.admission, requiresVerificationContext: true }
+  expect(() => f.make()).toThrow('context-retaining evidence port')
+  Reflect.set(f.options.admission, 'requiresVerificationContext', 'yes')
+  expect(() => f.make()).toThrow('Invalid verification context requirement')
+  f.options.admission = { ...f.options.admission, requiresVerificationContext: true }
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: retainedVerificationContext()
+  }))
+  const service = f.make()
+  await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  delete f.options.evidence.verifyWithContext
+  await expect(service.finalize(f.request, f.caller)).rejects.toMatchObject({ code: 'unsupported' })
+  expect(f.options.evidence.verify).not.toHaveBeenCalled()
+  expect(f.options.admission.recover).not.toHaveBeenCalled()
+})
+
+it('preserves a distinct durable topic assessment without relabeling it as reservation verification', async () => {
+  const f = fixture()
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: retainedVerificationContext()
+  }))
+  const service = f.make()
+  await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  expect((await service.finalize(f.request, f.caller)).state).toMatchObject({
+    status: 'finalized',
+    assessmentContextId: 'verified-context-1'
+  })
+  expect(
+    (await f.storage.getProposalEntry(f.request.proposalId))!.local!.verificationContext
+  ).toEqual(retainedVerificationContext())
+  expect((await f.storage.head()).entries).toBe(3)
+})
+
+it('does not replace a reservation context when an alternate BEEF is reverified', async () => {
+  const f = fixture(),
+    original = retainedVerificationContext()
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: original
+  }))
+  f.options.admission.recover = jest.fn<ProposalServiceOptions['admission']['recover']>(
+    async job => ({
+      status: 'unresolved',
+      operationId: job.operationId,
+      txid: job.txid
+    })
+  )
+  const service = f.make()
+  await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  await service.finalize(f.request, f.caller)
+  const local = (await f.storage.getProposalEntry(f.request.proposalId))!.local!
+  f.options.evidence.verifyWithContext = jest.fn(async () => ({
+    rawTransaction: f.raw,
+    verificationContext: { ...original, id: 'new-context' }
+  }))
+  await service.finalize({ ...f.request, beef: 'AQ==' }, f.caller)
+  expect(f.options.evidence.verify).toHaveBeenCalledTimes(1)
+  expect(f.options.evidence.verifyWithContext).not.toHaveBeenCalled()
+  expect((await f.storage.getProposalEntry(f.request.proposalId))!.local).toEqual(local)
+})
+
+it('rejects malformed or misplaced versioned verification records before recovery effects', async () => {
+  for (const corruption of ['missing', 'misplaced', 'foreign', 'legacy', 'unknown']) {
+    const f = fixture()
+    const service = f.make()
+    const retained = retainOutputCapability(f.manifest, {
+      ...proposalCapabilityFixture().request,
+      now: '11'
+    }).record
+    const publication = f.lifecycle.put(undefined, f.proposal, author, '11')
+    const verification = retainedVerificationContext()
+    if (corruption === 'foreign') verification.view.chain = { ...scope.chain, network: 'other' }
+    const local = {
+      format:
+        corruption === 'legacy'
+          ? 'proposal-service/1'
+          : corruption === 'unknown'
+            ? 'proposal-service/3'
+            : 'proposal-service/2',
+      publication: retained,
+      retainUntil: '1100',
+      ...(corruption === 'missing' ? {} : { verificationContext: verification }),
+      ...(corruption === 'misplaced' ? {} : { admission: retained })
+    }
+    if (corruption === 'misplaced')
+      await f.storage.commit(publication, parseOutputJSON(canonicalOutputJSON(local)) as never)
+    else {
+      await service.put({ version: 1, proposal: f.proposal }, f.caller)
+      const current = (await f.storage.getProposal(f.request.proposalId))!.record
+      const reservation = f.lifecycle.reserve(current, author, f.request, f.raw, '11')
+      await f.storage.commit(reservation, parseOutputJSON(canonicalOutputJSON(local)) as never)
+    }
+    await expect(service.get(f.query, f.caller)).rejects.toMatchObject({
+      code:
+        corruption === 'foreign'
+          ? 'context-changed'
+          : corruption === 'unknown'
+            ? 'unsupported'
+            : 'invalid'
+    })
+    if (corruption !== 'misplaced')
+      await expect(service.reconcile(f.request.proposalId)).rejects.toThrow()
+    expect(f.options.admission.recover).not.toHaveBeenCalled()
+  }
+})
+
+it('charges retained verification material against completion capacity before admission', async () => {
+  for (const rich of [false, true]) {
+    const f = fixture({ entryBytes: 16000 })
+    if (rich) {
+      const verification = retainedVerificationContext()
+      verification.id = 'i'.repeat(1024)
+      verification.view.id = 'v'.repeat(1024)
+      verification.partition = {
+        application: 'a'.repeat(1024),
+        account: 'b'.repeat(1024),
+        access: 'c'.repeat(1024)
+      }
+      f.options.evidence.verifyWithContext = jest.fn(async () => ({
+        rawTransaction: f.raw,
+        verificationContext: verification
+      }))
+    }
+    const service = f.make()
+    await service.put({ version: 1, proposal: f.proposal }, f.caller)
+    if (rich) {
+      await expect(service.finalize(f.request, f.caller)).rejects.toMatchObject({ code: 'limited' })
+      expect(f.options.admission.recover).not.toHaveBeenCalled()
+      expect(
+        await f.storage.getOperation(author, scope.service, f.request.operationId)
+      ).toBeUndefined()
+      expect((await f.storage.head()).entries).toBe(1)
+    } else {
+      expect((await service.finalize(f.request, f.caller)).state.status).toBe('finalized')
+      expect(f.options.admission.recover).toHaveBeenCalledTimes(1)
+    }
+  }
+})
