@@ -52,6 +52,8 @@ export interface ProposalJournalStorage {
   getProposal(
     proposalId: string
   ): Promise<{ record: ProposalChannelRecord; current: boolean } | undefined>
+  /** Optional indexed read of that proposal's latest atomic record, events and local context. */
+  getProposalEntry?(proposalId: string): Promise<ProposalJournalEntry | undefined>
   getOperation(
     caller: string,
     service: string,

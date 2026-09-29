@@ -45,7 +45,7 @@ export class ProposalJournalState {
   private readonly entries: ProposalJournalEntry[] = []
   private readonly commits = new Map<string, ProposalJournalEntry>()
   private readonly channels = new Map<string, { record: ProposalChannelRecord; revision: string }>()
-  private readonly proposals = new Map<string, ProposalChannelRecord>()
+  private readonly proposals = new Map<string, ProposalJournalEntry>()
   private readonly operations = new Map<string, string>()
   private readonly authors = new Map<string, number>()
   private retainedBytes = 0
@@ -99,7 +99,7 @@ export class ProposalJournalState {
 
   proposal(id: string): { record: ProposalChannelRecord; current: boolean } | undefined {
     outputHex32(id)
-    const record = this.proposals.get(id)
+    const record = this.proposals.get(id)?.transition.next
     return (
       record && {
         record: structuredClone(record),
@@ -107,6 +107,12 @@ export class ProposalJournalState {
           this.channels.get(proposalChannelKey(record.proposal.body))?.record.proposalId === id
       }
     )
+  }
+
+  proposalEntry(id: string): ProposalJournalEntry | undefined {
+    outputHex32(id)
+    const entry = this.proposals.get(id)
+    return entry && structuredClone(entry)
   }
 
   operation(
@@ -184,7 +190,7 @@ export class ProposalJournalState {
     this.entries.push(entry)
     this.commits.set(entry.key, entry)
     this.channels.set(key, { record, revision })
-    this.proposals.set(record.proposalId, record)
+    this.proposals.set(record.proposalId, entry)
     if (record.admission)
       this.operations.set(
         operationKey(

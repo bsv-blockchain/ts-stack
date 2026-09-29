@@ -73,7 +73,7 @@
     "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalPolicyRegistry|ProposalCapabilityContracts|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal\"",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {

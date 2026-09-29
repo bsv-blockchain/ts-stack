@@ -42,6 +42,9 @@ export class MemoryProposalJournal implements ProposalJournalStorage {
   ): Promise<{ record: ProposalChannelRecord; current: boolean } | undefined> {
     return this.ready().proposal(id)
   }
+  async getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
+    return this.ready().proposalEntry(id)
+  }
   async getOperation(
     caller: string,
     service: string,

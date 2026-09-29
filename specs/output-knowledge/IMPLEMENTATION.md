@@ -36,6 +36,8 @@ submission and GASP behavior remains available to applications that do not opt i
   atomic private events/jobs/operation claims and recovery after actual process exit.
 - Atomic bounded local context, compatible body-only replay, terminal receipt capacity
   reservations and a shared SQLite capacity seal across independent writers.
+- Retained proposal contract binding to exact installed policy parameters/lifetimes,
+  explicit per-contract policy enablement and indexed atomic record/context reads.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -71,7 +73,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK run passes 7,643 tests across 218 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 296 tests across 24 suites, with more than 95% line and 90% branch
+run passes 300 tests across 25 suites, with more than 95% line and 90% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
@@ -97,7 +99,9 @@ fixtures; selection-function tests remain an independent layer.
 Installed-policy head `332cfd9f5` passed all 41 applicable
 hosted checks; two infrastructure/dependent-test skips were accepted by merge-gate.
 This includes CodeQL, zero new Sonar findings, external Codecov and the repository
-coverage gate. Subsequent implementation increments require their own validation.
+coverage gate. Storage/context head `671d079ee` also passed every applicable
+hosted check, including external patch coverage at 90.24%. Subsequent
+implementation increments require their own validation.
 
 These are intermediate results. The PR remains draft until the entire
 checkpoint and all required checks succeed on its exact final head. Remote CI,

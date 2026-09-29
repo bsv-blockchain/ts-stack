@@ -68,6 +68,10 @@ changing older entry encodings or retry keys. New admission jobs reserve capacit
 for a bounded terminal receipt; concurrent writers share sealed capacity limits.
 Hosts must validate retained context and bound receipts before admission. An older
 journal's pending jobs are preserved but do not gain a retroactive capacity promise.
+`ProposalCapabilityContracts` binds saved selections to exact installed policy
+parameters and lifetime limits. An installed policy omitted from the selected
+manifest remains disabled for that operation. The optional `getProposalEntry`
+storage read retrieves a proposal's latest atomic record and context together.
 
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current

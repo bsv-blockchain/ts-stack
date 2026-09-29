@@ -112,6 +112,9 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
   ): Promise<{ record: ProposalChannelRecord; current: boolean } | undefined> {
     return this.readState().proposal(id)
   }
+  async getProposalEntry(id: string): Promise<ProposalJournalEntry | undefined> {
+    return this.readState().proposalEntry(id)
+  }
   async getOperation(
     caller: string,
     service: string,

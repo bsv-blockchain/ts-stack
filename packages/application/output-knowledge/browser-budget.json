@@ -21,7 +21,8 @@
     "DirectDeliverySource",
     "ProposalPolicyRegistry",
     "AuthorDocumentPolicy",
-    "SQLiteProposalJournal"
+    "SQLiteProposalJournal",
+    "ProposalCapabilityContracts"
   ],
   "maximumBytes": {
     "vite": {
@@ -70,7 +71,8 @@
         "proposalRecordToken",
         "MemoryProposalJournal",
         "proposalCommitKey",
-        "appendProposalWithRecovery"
+        "appendProposalWithRecovery",
+        "ProposalCapabilityContracts"
       ],
       "prohibitedExports": [
         "SQLiteJournal",

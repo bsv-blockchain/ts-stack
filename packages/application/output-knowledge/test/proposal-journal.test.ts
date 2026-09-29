@@ -94,6 +94,7 @@ describe.each(['memory', 'sqlite'] as const)('%s proposal journal contract', kin
     expect(store.durability).toBe(kind === 'memory' ? 'volatile' : 'durable')
     expect(await store.getChannel(key)).toBeUndefined()
     expect(await store.getProposal(first.next.proposalId)).toBeUndefined()
+    expect(await store.getProposalEntry!(first.next.proposalId)).toBeUndefined()
     expect(await store.getCommit(proposalCommitKey(first))).toBeUndefined()
     expect(await store.commit(first)).toEqual({ status: 'committed', revision: '1' })
     expect((await store.read('0', 1))[0].transition.events).toEqual(first.events)
@@ -113,6 +114,8 @@ describe.each(['memory', 'sqlite'] as const)('%s proposal journal contract', kin
       record: next.next,
       current: true
     })
+    expect((await store.getProposalEntry!(first.next.proposalId))?.revision).toBe('1')
+    expect((await store.getProposalEntry!(next.next.proposalId))?.revision).toBe('2')
     const current = await store.getChannel(key)
     expect(current).toEqual(next.next)
     current!.state.recordedAt = '999'
@@ -345,6 +348,10 @@ describe.each(['memory', 'sqlite'] as const)('%s proposal journal contract', kin
     local.contract.digest = 'ff'.repeat(32)
     const record = await store.getCommit(proposalCommitKey(reserved))
     expect(record?.local).toEqual(saved)
+    const indexed = await store.getProposalEntry!(reserved.next.proposalId)
+    expect(indexed).toEqual(record)
+    indexed!.local!.version = 9
+    expect((await store.getProposalEntry!(reserved.next.proposalId))?.local).toEqual(saved)
     expect(record?.localDigest).toMatch(/^[0-9a-f]{64}$/)
     expect((await store.read('0', 10))[0].local).toBeUndefined()
     expect((await store.read('0', 10))[1].local).toEqual(saved)

@@ -464,6 +464,24 @@ proposal policy to its installed lifecycle, retain the operation's actual deadli
 and recheck current authorization. A remote caller cannot supply trusted local
 recovery context.
 
+`ProposalCapabilityContracts` binds SDK selection and retention to an installed
+`ProposalTransitions` configuration. It requires a confidential topic proposal
+profile for the configured endpoint, identity, chain and service. Every advertised
+policy must match an installed identifier, digest and parameter object exactly;
+the advertised maximum lifetime must match the installed lifecycle. A host may
+advertise a subset of its installed policies, but `requirePolicy` rejects a signed
+head's policy when that particular retained selection omitted it. This check must
+precede committing the lifecycle plan. It does not replace the plan's signature
+and policy validation, current caller access, deadlines or complete-BEEF checks.
+
+Both reference journals implement the optional `getProposalEntry` indexed read.
+It returns one owned copy of that proposal's latest committed transition, events
+and local context together, including for a superseded signed head. A host need
+not scan private history or combine a record with context from a different
+revision. Hosts must carry the required original contract forward in each new
+transition's context; an absent context is an operational recovery failure, never
+permission to substitute today's discovery result.
+
 The `completionReservation` capability holds one maximum-sized entry and its byte
 budget for every newly accepted finalizing job. Other writes cannot consume that
 space. A terminal receipt releases the reservation. Hosts must bound the complete
