@@ -19,6 +19,18 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
+## Optional registry descriptions
+
+ProtoMap, BasketMap and CertMap supply descriptive metadata, not permission grants.
+Wallets adopting the proposed registry framework must keep a usable normal
+authorization flow when metadata is absent, disputed or unavailable, and must not
+use listing status as a protocol gate. Existing permission, spending, validation
+and supported-module checks remain separate. See [registry metadata](../../guides/registry-metadata.md)
+for builder submissions, source selection and a wallet adoption checklist. Shared
+`trustedCertifiers` settings in some consumers need care: trusting descriptions
+and trusting certificate issuers are different decisions. This guide does not
+claim a new registry-only settings API or universal UI conformance.
+
 ## Backup and recovery
 
 **Recoverable root key material and wallet records are both required.** A seed
