@@ -14,11 +14,15 @@ import {
   runtimeComparisonAvailable
 } from './patch-coverage.mjs'
 
-test('only compiler-erased declarations and pure star bindings lack instrumentable statements', () => {
+test('only compiler-erased declarations and pure re-export bindings lack instrumentable statements', () => {
   for (const source of [
     'export interface Scope { id: string }; export type Generation = string',
     "import type { Context } from './context.js'; export type Scope = Context",
     "export * from './worker.js'; export type { Context } from './context.js'",
+    "export { Worker, type Context } from './worker.js'",
+    "export { Worker as PublicWorker } from './worker.js'; export { start } from './start.js'",
+    "export { default as Worker } from './worker.js'; export * from './other.js'",
+    "import { Worker as Internal } from './worker.js'; export { Internal as Worker }",
     'export {}',
     '/** Documentation without runtime code. */'
   ])
@@ -26,6 +30,11 @@ test('only compiler-erased declarations and pure star bindings lack instrumentab
   for (const source of [
     "export * from './worker.js'; startService()",
     "import './startup.js'; export * from './worker.js'",
+    "export { Worker } from './worker.js'; startService()",
+    "import './startup.js'; export { Worker } from './worker.js'",
+    "import { Worker } from './worker.js'; export const worker = new Worker()",
+    "import { Worker } from './worker.js'; export default Worker",
+    "import * as workers from './worker.js'; export { workers }",
     'export const value = 1',
     'export const run = () => process.exit(1)',
     'export class Worker { start() {} }',
@@ -44,7 +53,7 @@ test('statement classification retains executable code regardless of a barrel-li
     changed = new Map([declaration, barrel, executable].map(file => [file, new Set([1])]))
   const sources = new Map([
     [declaration, 'export interface Context { epoch: string }'],
-    [barrel, "export * from './worker.js'"],
+    [barrel, "export { Worker, type Context } from './worker.js'"],
     [executable, "export * from './worker.js'; registerPlugin()"]
   ])
   omitUninstrumentedModules(changed, file => sources.get(file))

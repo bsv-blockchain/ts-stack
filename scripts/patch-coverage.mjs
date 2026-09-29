@@ -144,7 +144,7 @@ export function hasRuntimeChange(before, after) {
   }
 }
 
-// Istanbul does not emit LCOV rows for erased declarations or star-re-export
+// Istanbul does not emit LCOV rows for erased declarations or pure re-export
 // bindings. Inspect the locked compiler's complete output rather than granting
 // an exemption by filename: adding any executable statement keeps a module in
 // the coverage boundary. These modules still undergo type/artifact/API checks.
@@ -159,18 +159,42 @@ export function isUninstrumentedModule(source) {
       target: 'esnext',
       legalComments: 'none'
     })
-    return code.split('\n').every(line => {
-      const statement = line.trim()
-      return (
-        statement === '' ||
-        statement === ';' ||
-        statement === 'export {};' ||
-        /^export \* from "(?:[^"\\]|\\.)*";$/.test(statement)
-      )
-    })
+    return onlyReexportBindings(code)
   } catch {
     return false
   }
+}
+
+// Inspect only the locked compiler's normalized ESM, never arbitrary source
+// text. Named re-exports are emitted as named imports followed by an export
+// list. Accept those exact binding forms; a side-effect import, declaration,
+// initializer, namespace import or any other statement stays in the gate.
+function onlyReexportBindings(code) {
+  const name = '[$A-Z_a-z][$\\w]*'
+  const binding = `${name}(?: as ${name})?`
+  const list = `(${binding}(?:,\\s*${binding})*,?)`
+  const moduleName = '"(?:[^"\\\\]|\\\\.)*"'
+  const imported = new RegExp(`^import \\{\\s*${list}\\s*\\} from ${moduleName};`)
+  const exported = new RegExp(`^export \\{\\s*${list}\\s*\\};`)
+  const star = new RegExp(`^export \\* from ${moduleName};`)
+  const imports = new Set()
+  const exports = new Set()
+  let remaining = code.trim()
+  while (remaining !== '') {
+    const simple = /^(?:;|export \{\};)/.exec(remaining) ?? star.exec(remaining)
+    const input = simple === null ? imported.exec(remaining) : null
+    const output = simple === null && input === null ? exported.exec(remaining) : null
+    const match = simple ?? input ?? output
+    if (match === null) return false
+    if (input !== null)
+      for (const item of input[1].split(',').filter(Boolean))
+        imports.add(item.trim().split(' as ').at(-1))
+    if (output !== null)
+      for (const item of output[1].split(',').filter(Boolean))
+        exports.add(item.trim().split(' as ')[0])
+    remaining = remaining.slice(match[0].length).trimStart()
+  }
+  return imports.size === exports.size && [...exports].every(name => imports.has(name))
 }
 
 export function omitUninstrumentedModules(changed, readSource) {

@@ -5,9 +5,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
 import { createServer } from 'vite'
-import { createCommandRunner } from '../../../../scripts/lib/command-runner.mjs'
+import { createCommandRunner } from '../../../../../scripts/lib/command-runner.mjs'
 
-const packageDirectory = fileURLToPath(new URL('../', import.meta.url))
+const packageDirectory = fileURLToPath(new URL('../../', import.meta.url))
 const repositoryRoot = path.resolve(packageDirectory, '../../..')
 const run = createCommandRunner({
   timeoutMs: 240000,
@@ -66,7 +66,7 @@ async function createConsumer(root) {
   await mkdir(path.join(directory, 'browser'))
   await Promise.all(
     ['index.html', 'main.ts'].map(file =>
-      cp(path.join(packageDirectory, 'browser', file), path.join(directory, 'browser', file))
+      cp(path.join(packageDirectory, 'test/browser', file), path.join(directory, 'browser', file))
     )
   )
   return directory
