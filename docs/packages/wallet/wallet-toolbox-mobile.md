@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
 version: '2.15.0'
-last_updated: '2026-09-28'
-last_verified: '2026-09-28'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'

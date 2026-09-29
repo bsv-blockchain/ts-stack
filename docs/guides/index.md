@@ -76,6 +76,14 @@ receiver-first negotiation and preparation before broadcast.
 
 **Time:** ~25 minutes | **Level:** Advanced
 
+### 8. [Understand and Contribute Registry Metadata](./registry-metadata.md)
+
+Document protocols through the BRC process, request accurate optional descriptions,
+and keep registry stewardship separate from wallet permissions. Includes exact
+lookup identities, publisher choice, updates and wallet fallback expectations.
+
+**Level:** Beginner to Intermediate
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions

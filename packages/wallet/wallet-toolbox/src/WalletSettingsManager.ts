@@ -163,14 +163,14 @@ export const DEFAULT_SETTINGS = {
     trustedCertifiers: [
       {
         name: 'Metanet Trust Services',
-        description: 'Registry for protocols, baskets, and certificates types',
+        description: 'Registry of protocols, baskets, certificate types',
         iconUrl: 'https://bsvblockchain.org/favicon.ico',
         identityKey: '03daf815fe38f83da0ad83b5bedc520aa488aef5cbc93a93c67a7fe60406cbffe8',
         trust: 4
       },
       {
         name: 'SocialCert',
-        description: 'Certifies social media handles, phone numbers and emails',
+        description: 'Certifies social media handles, phones and emails',
         iconUrl: 'https://socialcert.net/favicon.ico',
         trust: 3,
         identityKey: '02cf6cdf466951d8dfc9e7c9367511d0007ed6fba35ed42d425cc412fd6cfd4a17'
