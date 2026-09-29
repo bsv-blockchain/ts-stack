@@ -1,10 +1,15 @@
 import { jest } from '@jest/globals'
-import { AuthFetch } from '../AuthFetch.js'
-import { Peer } from '../../Peer.js'
 import { PrivateKey, Utils } from '../../../primitives/index.js'
 
+// Register for both the ordinary Jest transform and native ESM mutation runner.
 jest.mock('../../Peer.js', () => ({ Peer: jest.fn() }))
-const PeerMock = Peer as unknown as jest.Mock
+jest.unstable_mockModule('../../Peer.js', () => ({ Peer: jest.fn() }))
+let AuthFetch: typeof import('../AuthFetch.js').AuthFetch
+let PeerMock: jest.Mock
+beforeAll(async () => {
+  ;({ AuthFetch } = await import('../AuthFetch.js'))
+  PeerMock = (await import('../../Peer.js')).Peer as unknown as jest.Mock
+})
 const url = 'https://service.example/overlay/v1/lookup/read'
 const identity = new PrivateKey(43).toPublicKey().toString()
 

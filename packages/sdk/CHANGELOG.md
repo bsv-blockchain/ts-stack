@@ -216,6 +216,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (2.9.0 candidate)
 
+- Add per-request `requireMutualAuth` and `expectedIdentityKey` to AuthFetch. Required authentication disables ordinary HTTP fallback; a canonical peer pin authenticates the handshake before application dispatch and checks matched response senders. Restrictions survive stale-session recovery and caller option changes. Existing defaults, wire formats and payment behavior remain unchanged.
+
 - Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.
 - Add closed BRC-194 proposal put/get/finalize request and response codecs. Author signature and policy checks, authenticated provider state, Bitcoin evidence and topical admission remain separate responsibilities; parsing never authorizes an action.
 - Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.

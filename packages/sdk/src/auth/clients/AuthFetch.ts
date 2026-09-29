@@ -28,7 +28,7 @@ import { RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/getVerifiableCertificates.js'
-import { copyAuthByteArray } from '../AuthMessageValidation.js'
+import { assertAuthIdentityKey, copyAuthByteArray } from '../AuthMessageValidation.js'
 
 interface SimplifiedFetchRequestOptions {
   method?: string
@@ -44,6 +44,19 @@ interface SimplifiedFetchRequestOptions {
    * across authentication recovery even if the caller later changes its options.
    */
   allowPayments?: boolean
+  /**
+   * True requires BRC-103/104 authentication and disables ordinary HTTP fallback.
+   * Omission/false preserves existing fallback behavior. This does not select
+   * a particular peer; use expectedIdentityKey when the service identity is known.
+   */
+  requireMutualAuth?: boolean
+  /**
+   * Canonical compressed public key of the expected server. Implies
+   * requireMutualAuth, pins the handshake before application data is sent, and
+   * checks the authenticated response sender. A different cached identity is
+   * rejected rather than silently rebound. The pin survives session recovery.
+   */
+  expectedIdentityKey?: string
   /**
    * Optional wallet action labels applied to BRC-105 payment transactions
    * created for 402 responses. Use these to find payments later via
@@ -236,9 +249,16 @@ export class AuthFetch {
     const allowPayments = config.allowPayments
     if (allowPayments !== undefined && typeof allowPayments !== 'boolean')
       throw new TypeError('allowPayments must be a boolean.')
-    // Keep this explicit denial in the options passed to authentication retries.
+    const expectedIdentityKey = config.expectedIdentityKey
+    if (expectedIdentityKey !== undefined) assertAuthIdentityKey(expectedIdentityKey)
+    const requestedMutualAuth = config.requireMutualAuth
+    if (requestedMutualAuth !== undefined && typeof requestedMutualAuth !== 'boolean')
+      throw new TypeError('requireMutualAuth must be a boolean.')
+    const requireMutualAuth = requestedMutualAuth === true || expectedIdentityKey !== undefined
+    // Own explicit restrictions before any await, including authentication retries.
     // Default callers retain the existing options/retry-counter behavior.
-    if (allowPayments === false) config = { ...config, allowPayments: false }
+    if (allowPayments === false || requireMutualAuth)
+      config = { ...config, allowPayments, requireMutualAuth, expectedIdentityKey }
     if (typeof config.retryCounter === 'number') {
       if (config.retryCounter <= 0) {
         throw new Error('Request failed after maximum number of retries.')
@@ -256,7 +276,15 @@ export class AuthFetch {
           const baseURL = parsedUrl.origin
 
           const peerToUse = await this.#getOrCreatePeer(baseURL)
+          if (
+            expectedIdentityKey !== undefined &&
+            peerToUse.identityKey !== undefined &&
+            peerToUse.identityKey !== expectedIdentityKey
+          ) {
+            throw new Error('Cached peer identity does not match expectedIdentityKey.')
+          }
           if (peerToUse.supportsMutualAuth === false) {
+            if (requireMutualAuth) throw new Error('Mutual authentication is required.')
             resolve(await this.handleFetchAndValidate(url, config, peerToUse))
             return
           }
@@ -299,13 +327,18 @@ export class AuthFetch {
           this.pendingRequestNonces.add(requestNonceAsBase64)
           listenerId = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
-              const responseValue = this.parseAuthenticatedResponse(
-                baseURL,
-                requestNonceAsBase64,
-                senderPublicKey,
-                payload
-              )
-              if (responseValue !== undefined) resolveRequest(responseValue)
+              try {
+                const responseValue = this.parseAuthenticatedResponse(
+                  baseURL,
+                  requestNonceAsBase64,
+                  senderPublicKey,
+                  payload,
+                  expectedIdentityKey
+                )
+                if (responseValue !== undefined) resolveRequest(responseValue)
+              } catch (error) {
+                rejectRequest(error)
+              }
             }
           )
           responseTimeout = setTimeout(() => {
@@ -324,7 +357,10 @@ export class AuthFetch {
             // A certificate prompt can outlive the request deadline. Never
             // dispatch a request after its caller has already seen a timeout.
             if (cleaned) return
-            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
+            await peerToUse.peer.toPeer(
+              writer.toArray(),
+              expectedIdentityKey ?? peerToUse.identityKey
+            )
           } catch (error) {
             // Late transport/session failures must not start recovery that
             // replays a request after its response deadline has expired.
@@ -410,12 +446,16 @@ export class AuthFetch {
     return peerState
   }
 
-  private isStaleSessionError(error: unknown, peerToUse: AuthPeer): boolean {
+  private isStaleSessionError(
+    error: unknown,
+    peerToUse: AuthPeer,
+    expectedIdentityKey?: string
+  ): boolean {
     return (
       error instanceof Error &&
       (error.message.includes('Session not found for nonce') ||
         (error.message.includes('without valid BSV authentication') &&
-          peerToUse.identityKey != null &&
+          (peerToUse.identityKey != null || expectedIdentityKey !== undefined) &&
           (error as any).details?.status === 401))
     )
   }
@@ -427,12 +467,23 @@ export class AuthFetch {
     config: SimplifiedFetchRequestOptions,
     peerToUse: AuthPeer
   ): Promise<Response> {
-    if (this.isStaleSessionError(error, peerToUse)) {
+    if (this.isStaleSessionError(error, peerToUse, config.expectedIdentityKey)) {
+      if (config.expectedIdentityKey !== undefined) {
+        // A new Peer still shares this store. Discard the selected stale session
+        // so its explicit identity target cannot immediately reuse it. Preserve
+        // other identities and await durable/async stores before retrying.
+        const session = await this.sessionManager.getSession(config.expectedIdentityKey)
+        if (session != null) await this.sessionManager.removeSession(session)
+      }
       delete this.peers[baseURL]
       config.retryCounter ??= 3
       return await this.fetch(url, config)
     }
-    if (error instanceof Error && error.message.includes('HTTP server failed to authenticate')) {
+    if (
+      config.requireMutualAuth !== true &&
+      error instanceof Error &&
+      error.message.includes('HTTP server failed to authenticate')
+    ) {
       return await this.handleFetchAndValidate(url, config, peerToUse)
     }
     throw error
@@ -442,7 +493,8 @@ export class AuthFetch {
     baseURL: string,
     requestNonceAsBase64: string,
     senderPublicKey: string,
-    payload: number[]
+    payload: number[],
+    expectedIdentityKey?: string
   ): Response | undefined {
     if (payload.length > this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES) {
       throw new Error('Authenticated response frame exceeds the configured limit.')
@@ -450,6 +502,9 @@ export class AuthFetch {
     const responseReader = new StrictResponseReader(payload)
     const responseNonceAsBase64 = toBase64(responseReader.readExact(32, 'response nonce'))
     if (responseNonceAsBase64 !== requestNonceAsBase64) return undefined
+    if (expectedIdentityKey !== undefined && senderPublicKey !== expectedIdentityKey) {
+      throw new Error('Authenticated response identity does not match expectedIdentityKey.')
+    }
 
     const peerState = this.peers[baseURL]
     if (peerState !== undefined) {

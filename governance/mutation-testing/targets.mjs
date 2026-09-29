@@ -136,6 +136,21 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
       mutate: [
         [
+          'src/auth/clients/AuthFetch.ts',
+          'const allowPayments = config.allowPayments',
+          "if (typeof config.retryCounter === 'number')"
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'const peerToUse = await this.#getOrCreatePeer(baseURL)',
+          '// Serialize the simplified fetch request.'
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          '// Check if server requires payment to access the requested route',
+          'async #getOrCreatePeer('
+        ],
+        [
           'src/auth/AuthMessageValidation.ts',
           'const separatePayload =',
           'const lengthDescriptor ='
@@ -227,6 +242,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
+          '<rootDir>/src/auth/clients/__tests__/AuthFetch.authenticationPolicy.test.ts',
+          '<rootDir>/src/auth/clients/__tests__/AuthFetch.paymentPolicy.test.ts',
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts'
         ],
         { esm: true }

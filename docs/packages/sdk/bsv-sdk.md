@@ -48,7 +48,18 @@ Unpaid authenticated requests can set `AuthFetch.fetch`'s `allowPayments: false`
 Authenticated 402 responses then reach the caller without creating payment; the
 decision survives authentication recovery and later caller option changes. Existing
 calls still allow automatic BRC-105 handling, and ordinary HTTP fallback failures
-keep their previous behavior. Profile/identity verification remains separate.
+keep their previous behavior.
+
+Set `requireMutualAuth: true` to disable ordinary HTTP fallback. An
+`expectedIdentityKey` (a canonical compressed public key) implies this requirement,
+pins the BRC-103 handshake before dispatching application data, and checks the
+matched request's authenticated response sender. A conflicting cached identity is
+rejected without replacing it. These restrictions are captured before asynchronous
+work and survive session recovery and subsequent caller option changes. Combine
+the pin with `allowPayments: false` for private, unpaid service requests. Omitted
+options preserve existing behavior. Use HTTPS for confidentiality; BRC-103/104
+mutual authentication does not encrypt the body. Applications must separately
+verify selected capability/profile bindings and authorize operations.
 
 Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may

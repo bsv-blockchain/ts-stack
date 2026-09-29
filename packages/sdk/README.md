@@ -376,6 +376,26 @@ wallet-derived locking key, and field signature before reading or spending it.
   failures retain their existing error behavior. This option controls payment;
   it does not itself establish the required provider identity or profile selection.
 
+  For private requests, set `requireMutualAuth: true` to disable ordinary HTTP
+  fallback. When the provider is known, set `expectedIdentityKey` to its canonical
+  compressed public key; this implies required authentication, pins the handshake
+  before application data is sent, and checks the authenticated response sender.
+  A conflicting cached identity is rejected without silently rebinding the origin.
+  These restrictions survive session recovery and later caller option changes.
+  Omitted options preserve existing behavior. Mutual authentication does not
+  encrypt application data: use HTTPS in production. Pinning authenticates the
+  peer, not the application capability/profile; verify those bindings separately.
+
+  ```ts
+  const response = await authFetch.fetch(serviceUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(query),
+    expectedIdentityKey: selectedProviderIdentity,
+    allowPayments: false
+  })
+  ```
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation
