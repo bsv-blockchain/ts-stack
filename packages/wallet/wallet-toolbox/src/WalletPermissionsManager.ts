@@ -677,11 +677,16 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly pendingActionTemplates: Map<string, Transaction> = new Map()
   /** References that failed authorization and could not be conclusively aborted. */
   private readonly blockedActionReferences: Set<string> = new Set()
+  /** Pending references whose action was created with `noSend`. */
+  private readonly pendingNoSendReferences: Set<string> = new Set()
   /**
-   * Originator binding for no-send actions this manager signed itself. The
-   * caller only gets their txid back, so that is what it aborts them by.
+   * Originator binding for signed no-send actions, keyed by lowercase txid.
+   * Signing drops the pending reference, so without this a non-admin caller
+   * could not release the action it created.
    */
   private readonly noSendActionOriginators: Map<string, string> = new Map()
+  /** Reference a caller signed a no-send action under, to that action's txid key. */
+  private readonly noSendActionReferences: Map<string, string> = new Map()
   private permissionTokenLockingKeyPromise?: Promise<string>
 
   /**
@@ -4337,6 +4342,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new WERR_UNAUTHORIZED('The action reference is already pending.')
     }
     this.pendingActionOriginators.set(reference, originator ?? '')
+    if (vargs.isNoSend) this.pendingNoSendReferences.add(reference)
 
     // 7a) Parse the signable tx to determine net spend, then gate on spending
     // authorization. SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
@@ -4405,7 +4411,7 @@ export class WalletPermissionsManager implements WalletInterface {
       this.assertAuthorizedSignResult(reference, {}, signResult)
       this.clearPendingAction(reference)
       if (vargs.isNoSend && signResult.txid != null) {
-        this.noSendActionOriginators.set(signResult.txid.toLowerCase(), originator ?? '')
+        this.recordNoSendAction(signResult.txid, originator)
       }
       return {
         ...createResult,
@@ -4790,6 +4796,21 @@ export class WalletPermissionsManager implements WalletInterface {
     this.pendingActionOriginators.delete(reference)
     this.pendingActionTemplates.delete(reference)
     this.blockedActionReferences.delete(reference)
+    this.pendingNoSendReferences.delete(reference)
+  }
+
+  /** Lets the originator that created a signed no-send action, and only it, abort it. */
+  private recordNoSendAction(txid: string, originator: string | undefined, reference?: string): void {
+    const key = txid.toLowerCase()
+    this.noSendActionOriginators.set(key, originator ?? '')
+    if (reference !== undefined) this.noSendActionReferences.set(reference, key)
+  }
+
+  private forgetNoSendAction(key: string): void {
+    this.noSendActionOriginators.delete(key)
+    for (const [reference, txidKey] of this.noSendActionReferences) {
+      if (txidKey === key) this.noSendActionReferences.delete(reference)
+    }
   }
 
   public async signAction(
@@ -4797,6 +4818,8 @@ export class WalletPermissionsManager implements WalletInterface {
   ): ReturnType<WalletInterface['signAction']> {
     const [requestArgs, originator] = args
     this.assertPendingActionOriginator(requestArgs.reference, originator, false)
+    // The wallet takes noSend from signAction's options, else from createAction's.
+    const noSend = (requestArgs.options?.noSend ?? this.pendingNoSendReferences.has(requestArgs.reference)) === true
     try {
       const result = await this.underlying.signAction(
         {
@@ -4807,6 +4830,9 @@ export class WalletPermissionsManager implements WalletInterface {
       )
       this.assertAuthorizedSignResult(requestArgs.reference, requestArgs.spends, result)
       this.clearPendingAction(requestArgs.reference)
+      if (noSend && result.txid != null) {
+        this.recordNoSendAction(result.txid, originator, requestArgs.reference)
+      }
       return result
     } catch (error) {
       await this.blockAndAbortAction(requestArgs.reference)
@@ -4820,7 +4846,11 @@ export class WalletPermissionsManager implements WalletInterface {
     const [requestArgs, originator] = args
     // Pending references live in memory only. The admin may abort any of the
     // wallet's actions, including signed noSend actions and earlier sessions'.
-    const noSendKey = typeof requestArgs.reference === 'string' ? requestArgs.reference.toLowerCase() : ''
+    // A signed no-send action is found by the reference it was signed under or by its txid.
+    const noSendKey =
+      typeof requestArgs.reference === 'string'
+        ? (this.noSendActionReferences.get(requestArgs.reference) ?? requestArgs.reference.toLowerCase())
+        : ''
     const noSendOriginator = this.noSendActionOriginators.get(noSendKey)
     if (originator === undefined || !this.isAdminOriginator(originator)) {
       if (noSendOriginator === undefined) {
@@ -4832,7 +4862,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const result = await this.underlying.abortAction(...args)
     if (result.aborted === true) {
       this.clearPendingAction(requestArgs.reference)
-      this.noSendActionOriginators.delete(noSendKey)
+      this.forgetNoSendAction(noSendKey)
     }
     return result
   }

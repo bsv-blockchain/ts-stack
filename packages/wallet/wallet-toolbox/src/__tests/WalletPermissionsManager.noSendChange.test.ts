@@ -166,6 +166,65 @@ describe('permission-managed noSend createAction', () => {
     expect(underlying.abortAction).toHaveBeenCalledTimes(2)
   })
 
+  // signAndProcess: false hands the caller the signable reference. Once it
+  // signs a no-send action with signAction, the manager drops that reference
+  // as pending, but the action is still unsent and the caller still holds the
+  // reference (and now the txid) to release it by.
+  function signableNoSendManager(created: { noSend?: boolean } = { noSend: true }) {
+    const { manager, underlying } = noSendManager()
+    const reference = 'bm8tb3JpZ2luYXRvcg=='
+    const args: CreateActionArgs = {
+      description: 'Conformance sign probe',
+      outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'Probe output' }],
+      options: { signAndProcess: false, ...created }
+    }
+    return { manager, underlying, args, reference }
+  }
+
+  test('lets the originator abort a no-send action it signed, by reference or txid, and nobody else', async () => {
+    const { manager, underlying, args, reference } = signableNoSendManager()
+    const created = await manager.createAction(args, 'app.example')
+    expect(created.signableTransaction?.reference).toBe(reference)
+    const { txid } = await manager.signAction({ reference, spends: {}, options: { noSend: true } }, 'app.example')
+
+    await expect(manager.abortAction({ reference }, 'other.example')).rejects.toThrow('different originator')
+    await expect(manager.abortAction({ reference: txid! }, 'other.example')).rejects.toThrow('different originator')
+    await expect(manager.abortAction({ reference }, 'app.example')).resolves.toEqual({ aborted: true })
+    expect(underlying.abortAction).toHaveBeenCalledWith({ reference }, 'app.example')
+    // Released once, under either name.
+    await expect(manager.abortAction({ reference }, 'app.example')).rejects.toThrow('not issued')
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).rejects.toThrow('not issued')
+  })
+
+  test('takes noSend from the created action when signAction does not set it', async () => {
+    const { manager, underlying, args, reference } = signableNoSendManager()
+    await manager.createAction(args, 'app.example')
+    const { txid } = await manager.signAction({ reference, spends: {} }, 'app.example')
+
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).resolves.toEqual({ aborted: true })
+    await expect(manager.abortAction({ reference }, 'app.example')).rejects.toThrow('not issued')
+    expect(underlying.abortAction).toHaveBeenCalledTimes(1)
+  })
+
+  test('does not make a signed action abortable when signAction broadcasts it', async () => {
+    const { manager, underlying, args, reference } = signableNoSendManager()
+    await manager.createAction(args, 'app.example')
+    const { txid } = await manager.signAction({ reference, spends: {}, options: { noSend: false } }, 'app.example')
+
+    await expect(manager.abortAction({ reference }, 'app.example')).rejects.toThrow('not issued')
+    await expect(manager.abortAction({ reference: txid! }, 'app.example')).rejects.toThrow('not issued')
+    expect(underlying.abortAction).not.toHaveBeenCalled()
+  })
+
+  test('does not make a signed action abortable when it was created to broadcast', async () => {
+    const { manager, underlying, args, reference } = signableNoSendManager({})
+    await manager.createAction(args, 'app.example')
+    await manager.signAction({ reference, spends: {} }, 'app.example')
+
+    await expect(manager.abortAction({ reference }, 'app.example')).rejects.toThrow('not issued')
+    expect(underlying.abortAction).not.toHaveBeenCalled()
+  })
+
   test('treats a non-string abort reference as one the manager did not issue', async () => {
     const { manager, underlying } = noSendManager()
     await expect(manager.abortAction({ reference: 42 as unknown as string }, 'app.example')).rejects.toThrow(

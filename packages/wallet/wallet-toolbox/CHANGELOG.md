@@ -27,7 +27,11 @@ attention to changes that materially alter behavior or extend functionality.
   `txid`, and `abortAction` from a non-admin originator accepted only references
   the manager had issued, which it drops once it signs. The originator that
   created a no-send action can now abort it by that `txid`; other originators
-  still cannot, and a broadcast action is never abortable this way.
+  still cannot, and a broadcast action is never abortable this way. The same
+  applies when the caller signs a `signAndProcess: false` no-send action itself
+  with `signAction`: it can then abort it by the `reference` it signed or by the
+  signed `txid`, where before `abortAction` failed with `The action reference
+  was not issued by this permissions manager.`
 - `discoverByIdentityKey` and `discoverByAttributes` return the requested
   `limit`/`offset` page (limit 10 when omitted). They returned every trusted
   match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`
