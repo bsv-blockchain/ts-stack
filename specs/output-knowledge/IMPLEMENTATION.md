@@ -99,7 +99,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,751 tests across 223 suites, including all proposal endpoint
+The SDK run passes 7,753 tests across 223 suites, including all proposal endpoint
 variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
 run passes 474 tests across 38 suites, with more than 96% line and 92% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
@@ -125,7 +125,9 @@ verification and SQLite, including progressive pages and a missed live group
 recovered after disconnect/reopen. Its 85 focused cases also cover five actual
 process-exit stages, exact receipt substitution, reset persistence, physical
 cancellation ownership, authenticated binding, timing and storage capacity.
-The complete provider and required live application remain open.
+The complete live-source mutation target passes 91.32% over 945 mutations
+(754 killed, 109 timeouts, 82 surviving, zero uncovered or invalid) at the
+unchanged 90% gate. The complete provider and required live application remain open.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
@@ -163,8 +165,8 @@ iterators preserve dependent write order without scheduling transaction writes
 concurrently. Node-only Mongo iteration uses bounded object-mode streams; browser
 code retains a portable iterator contract. No analyzer suppression or gate is changed.
 Published head `c4f5655f9` passes all 43 applicable hosted checks, with two expected
-scope skips accepted by merge-gate. The live-source increment needs its own final
-mutation and exact-head CI evidence before qualification.
+scope skips accepted by merge-gate. The live-source increment passes local
+mutation qualification and still requires its own exact-head hosted CI evidence.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all declared browser entries pass. Core browser byte limits remain unchanged;
