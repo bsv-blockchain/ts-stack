@@ -20,6 +20,8 @@ import {
   GetPublicKeyArgs,
   CreateActionArgs,
   CreateActionResult,
+  SendWithResult,
+  WERR_REVIEW_ACTIONS as SDK_WERR_REVIEW_ACTIONS,
   ListOutputsResult,
   ListActionsArgs,
   ListActionsResult,
@@ -40,7 +42,7 @@ import {
   setExactActionSpend,
   type ExactActionSpendCarrier
 } from './utility/exactActionSpend'
-import { WERR_UNAUTHORIZED } from './sdk/WERR_errors'
+import { WERR_REVIEW_ACTIONS, WERR_UNAUTHORIZED } from './sdk/WERR_errors'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
 // module graph) to avoid an unrelated circular-import edge from this file.
@@ -684,7 +686,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * Signing drops the pending reference, so without this a non-admin caller
    * could not release the action it created.
    */
-  private readonly noSendActionOriginators: Map<string, string> = new Map()
+  private readonly noSendActions: Map<string, { originator: string; references: Set<string> }> = new Map()
   /** Reference a caller signed a no-send action under, to that action's txid key. */
   private readonly noSendActionReferences: Map<string, string> = new Map()
   private permissionTokenLockingKeyPromise?: Promise<string>
@@ -4330,7 +4332,14 @@ export class WalletPermissionsManager implements WalletInterface {
       options: modifiedOptions,
       labels: [...(args.labels || []), `admin originator ${originator}`, `admin month ${this.getCurrentMonthYearUTC()}`]
     }
-    let createResult = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator)
+    let createResult: CreateActionResult
+    try {
+      createResult = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator)
+    } catch (error) {
+      this.forgetSentNoSendActionsInError(error)
+      throw error
+    }
+    this.forgetSentNoSendActions(createResult.sendWithResults)
 
     if (createResult.signableTransaction == null) return createResult
 
@@ -4409,6 +4418,7 @@ export class WalletPermissionsManager implements WalletInterface {
       if (vargs.isNoSend && signResult.txid != null) {
         this.recordNoSendAction(signResult.txid, originator)
       }
+      this.forgetSentNoSendActions(signResult.sendWithResults)
       return {
         ...createResult,
         ...signResult,
@@ -4416,6 +4426,7 @@ export class WalletPermissionsManager implements WalletInterface {
         signableTransaction: undefined
       }
     } catch (error) {
+      this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(reference)
       throw error
     }
@@ -4806,14 +4817,37 @@ export class WalletPermissionsManager implements WalletInterface {
   /** Lets the originator that created a signed no-send action, and only it, abort it. */
   private recordNoSendAction(txid: string, originator: string | undefined, reference?: string): void {
     const key = txid.toLowerCase()
-    this.noSendActionOriginators.set(key, originator ?? '')
-    if (reference !== undefined) this.noSendActionReferences.set(reference, key)
+    const references = this.noSendActions.get(key)?.references ?? new Set<string>()
+    this.noSendActions.set(key, { originator: originator ?? '', references })
+    if (reference !== undefined) {
+      references.add(reference)
+      this.noSendActionReferences.set(reference, key)
+    }
   }
 
   private forgetNoSendAction(key: string): void {
-    this.noSendActionOriginators.delete(key)
-    for (const [reference, txidKey] of this.noSendActionReferences) {
-      if (txidKey === key) this.noSendActionReferences.delete(reference)
+    const action = this.noSendActions.get(key)
+    if (action == null) return
+    for (const reference of action.references) {
+      if (this.noSendActionReferences.get(reference) === key) this.noSendActionReferences.delete(reference)
+    }
+    this.noSendActions.delete(key)
+  }
+
+  /** Positive broadcast/queue results retire ownership; failures remain retryable. */
+  private forgetSentNoSendActions(results: SendWithResult[] | undefined): void {
+    for (const result of results ?? []) {
+      if (result.status === 'sending' || result.status === 'unproven') {
+        this.forgetNoSendAction(result.txid.toLowerCase())
+      }
+    }
+  }
+
+  private forgetSentNoSendActionsInError(error: unknown): void {
+    // Undelayed mixed batches report successful members alongside failures in
+    // this error. Preserve the error and every member without positive evidence.
+    if (error instanceof WERR_REVIEW_ACTIONS || error instanceof SDK_WERR_REVIEW_ACTIONS) {
+      this.forgetSentNoSendActions(error.sendWithResults)
     }
   }
 
@@ -4837,8 +4871,10 @@ export class WalletPermissionsManager implements WalletInterface {
       if (noSend && result.txid != null) {
         this.recordNoSendAction(result.txid, originator, requestArgs.reference)
       }
+      this.forgetSentNoSendActions(result.sendWithResults)
       return result
     } catch (error) {
+      this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(requestArgs.reference)
       throw error
     }
@@ -4855,7 +4891,7 @@ export class WalletPermissionsManager implements WalletInterface {
       typeof requestArgs.reference === 'string'
         ? (this.noSendActionReferences.get(requestArgs.reference) ?? requestArgs.reference.toLowerCase())
         : ''
-    const noSendOriginator = this.noSendActionOriginators.get(noSendKey)
+    const noSendOriginator = this.noSendActions.get(noSendKey)?.originator
     if (originator === undefined || !this.isAdminOriginator(originator)) {
       if (noSendOriginator === undefined) {
         this.assertPendingActionOriginator(requestArgs.reference, originator, true)

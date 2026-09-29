@@ -4,6 +4,15 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.5
+
+- `WalletPermissionsManager` retires no-send transaction ownership and reference
+  aliases when `createAction` or `signAction` reports them as `sending` or
+  `unproven`, including sendWith-only calls and successful members of an
+  undelayed batch's review error. Failed or unreported actions retain their
+  originator binding for retry or abort. Cleanup visits only the retired
+  transaction's references instead of scanning the session's history.
+
 ## wallet-toolbox 2.14.4
 
 - `discoverByIdentityKey` and `discoverByAttributes` keep each certificate's
@@ -11,7 +20,7 @@ attention to changes that materially alter behavior or extend functionality.
   SocialCert (56 bytes) and Metanet Trust Services (55 bytes) descriptions
   exceeded it, so `@bsv/sdk` 2.8.8+ rejected every discovery result from one of
   them with `Invalid discoverByAttributes result
-  certificates[n].certifierInfo.description: expected 5–50 UTF-8 bytes`, which
+certificates[n].certifierInfo.description: expected 5–50 UTF-8 bytes`, which
   broke `IdentityClient.resolveByAttributes` and `resolveByIdentityKey`. Both
   defaults are shortened. Trust settings still accept descriptions of up to 500
   bytes so stored settings stay readable; a longer one is cut at a code point
@@ -20,8 +29,8 @@ attention to changes that materially alter behavior or extend functionality.
 - A non-admin `createAction` with `noSend` that `WalletPermissionsManager`
   signs internally returned `noSendChange` outpoints on the unsigned txid next
   to the signed `txid`, so `@bsv/sdk` 2.8.8+ rejected it with `Invalid
-  createAction result noSendChange[0]: expected an outpoint of the returned
-  transaction`. The outpoints now name the signed transaction (vouts are
+createAction result noSendChange[0]: expected an outpoint of the returned
+transaction`. The outpoints now name the signed transaction (vouts are
   unchanged by signing).
 - That same no-send action could not be released: the caller only gets its
   `txid`, and `abortAction` from a non-admin originator accepted only references
@@ -31,7 +40,7 @@ attention to changes that materially alter behavior or extend functionality.
   applies when the caller signs a `signAndProcess: false` no-send action itself
   with `signAction`: it can then abort it by the `reference` it signed or by the
   signed `txid`, where before `abortAction` failed with `The action reference
-  was not issued by this permissions manager.`
+was not issued by this permissions manager.`
 - `discoverByIdentityKey` and `discoverByAttributes` return the requested
   `limit`/`offset` page (limit 10 when omitted). They returned every trusted
   match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`

@@ -215,24 +215,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.3",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
-      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.3",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
-      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.3",
+      "publishedVersion": "2.14.4",
       "releaseType": "patch",
-      "summary": "discoverByIdentityKey and discoverByAttributes keep each certificate's certifierInfo.description within BRC-100's 5-50 UTF-8 bytes. The default SocialCert and Metanet Trust Services descriptions exceeded it, so @bsv/sdk 2.8.8 and later rejected every discovery result from one of them and IdentityClient.resolveByAttributes and resolveByIdentityKey failed; both defaults are shortened, and a stored description outside the bound is cut at a code point boundary or replaced with 'Trusted certifier' when the result is built. Trust settings still accept descriptions of up to 500 bytes, so stored settings stay readable.",
-      "migration": "No consumer, wire, or database migration is required. Stored trust settings are unchanged; the new default descriptions apply to wallets still on the defaults."
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "create-bsv-app",

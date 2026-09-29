@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.4'
-last_updated: '2026-09-25'
-last_verified: '2026-09-25'
+version: '2.14.5'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -77,7 +77,6 @@ Use the [recovery guide](../../guides/wallet-backup-recovery.md),
 [BRC-38/39 integration](../../guides/wallet-data-portability.md) and
 [recovery drill](../../guides/wallet-recovery-drill.md). The portable helpers
 require a concrete provider and a tested consistency/resource-limit strategy.
-
 
 ## Install
 
