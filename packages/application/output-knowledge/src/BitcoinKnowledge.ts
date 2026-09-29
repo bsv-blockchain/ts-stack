@@ -62,6 +62,10 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     // Validate immutable configuration before opening sources or a journal mutation.
     const initial = new BitcoinKnowledgeState(this.options)
     this.options.partition = initial.partition
+    this.options.sourceCurrentness = initial.sourceCurrentness.rules
+  }
+  private localFrame(work: VerifiedWork[]): OutputJSONObject {
+    return knowledgeLocalFrame(this.options.nonFinal, work, this.options.sourceCurrentness)
   }
   private ready(signal: AbortSignal): void {
     if (signal.aborted)
@@ -105,13 +109,13 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     const prior = entries.slice(0, -1),
       state = await this.replay(prior, signal)
     let local: OutputJSONObject | undefined
-    if (entry.body.kind === 'context') local = knowledgeLocalFrame(this.options.nonFinal, [])
+    if (entry.body.kind === 'context') local = this.localFrame([])
     if (entry.body.kind === 'accept' || entry.body.kind === 'reconcile') {
       const staged = this.staged.get(entry.key)
       if (staged?.parent === this.parent(prior)) local = staged.local
       else {
         const work = await this.collect(state, signal)
-        local = knowledgeLocalFrame(this.options.nonFinal, work.additions)
+        local = this.localFrame(work.additions)
       }
     }
     this.ready(signal)
@@ -223,10 +227,11 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     }
   }
   private async pass(store: KnowledgeStore, signal: AbortSignal, deadline: number): Promise<void> {
+    await this.expireAssessments(store, signal)
     const history = await store.inspect(signal),
       state = await this.replay(history.entries, signal),
       work = await this.collect(state, signal, deadline),
-      local = knowledgeLocalFrame(this.options.nonFinal, work.additions)
+      local = this.localFrame(work.additions)
     state.applyLocal(local)
     const row = state.membership
       .groups()
@@ -279,7 +284,7 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
         mutation = knowledgeMutation(current.transition(revision, group))
       this.staged.set(mutation.key, {
         parent: this.parent(latest.entries),
-        local: knowledgeLocalFrame(this.options.nonFinal, [])
+        local: this.localFrame([])
       })
       try {
         const result = await store.commit(latest.revision.received, mutation, signal)
@@ -289,11 +294,39 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
         this.staged.delete(mutation.key)
       }
     }
+    await this.expireAssessments(store, signal)
     if (work.exhausted)
       throw new OutputProtocolError(
         'limited',
         'Evidence work retained; another bounded pass is required',
         true
       )
+  }
+  private async expireAssessments(store: KnowledgeStore, signal: AbortSignal): Promise<void> {
+    if (!this.options.sourceCurrentness?.length) return
+    // Replay is clock-independent. Expiry is a separate durable accepted event,
+    // so a sleeping browser or restart cannot renew a provider report.
+    const history = await store.inspect(signal),
+      state = await this.replay(history.entries, signal),
+      snapshot = state.snapshot(),
+      milliseconds = this.now()
+    if (!Number.isSafeInteger(milliseconds) || milliseconds < 0)
+      throw new OutputProtocolError('invalid', 'Invalid currentness clock')
+    const now = BigInt(Math.floor(milliseconds / 1000))
+    const assessmentIds = snapshot.assessments
+      .filter(
+        row => row.state !== 'stale' && row.expiresAt !== undefined && BigInt(row.expiresAt) <= now
+      )
+      .map(row => row.id)
+    if (!assessmentIds.length) return
+    const mutation = knowledgeMutation({
+      kind: 'invalidate',
+      generation: snapshot.generation,
+      assessmentIds,
+      reason: 'Currentness lifetime expired'
+    })
+    const result = await store.commit(history.revision.received, mutation, signal)
+    if ('reason' in result)
+      throw new OutputProtocolError(result.status, result.reason, result.status === 'conflict')
   }
 }

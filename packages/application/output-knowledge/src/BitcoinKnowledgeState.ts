@@ -11,6 +11,7 @@ import {
   type OutputJSONObject,
   type OutputObservation
 } from '@bsv/sdk'
+import { SourceCurrentness, type SourceCurrentnessRule } from './SourceCurrentness.js'
 import { EvidencePool, type EvidenceReceipt } from './EvidencePool.js'
 import { factFromAssembly } from './EvidenceAssembler.js'
 import {
@@ -53,6 +54,7 @@ export interface BitcoinKnowledgeStateOptions {
   nonFinal: boolean
   limits?: Partial<RuntimeLimits>
   supportedExtensions?: readonly string[]
+  sourceCurrentness?: readonly SourceCurrentnessRule[]
 }
 interface Slot {
   receipt: EvidenceReceipt
@@ -68,6 +70,7 @@ export class BitcoinKnowledgeState {
   readonly pool: EvidencePool
   readonly membership = new SourceMembershipLedger()
   readonly ledger: VerificationLedger
+  readonly sourceCurrentness: SourceCurrentness
   readonly contexts = new Map<string, VerificationContext>()
   readonly frontiers: EvidenceContextFrontier[] = []
   readonly partition: OutputPartition
@@ -85,7 +88,8 @@ export class BitcoinKnowledgeState {
       retainedBytes: this.limits.pendingBytes,
       dependencies: this.limits.dependencies
     })
-    this.ledger = new VerificationLedger(options.nonFinal)
+    this.sourceCurrentness = new SourceCurrentness(options.sourceCurrentness)
+    this.ledger = new VerificationLedger(options.nonFinal, this.sourceCurrentness.rules)
   }
   get context(): VerificationContext {
     const selected = this.frontiers.at(-1)?.context
@@ -247,6 +251,7 @@ export class BitcoinKnowledgeState {
     if (!equal(batch.provenance.scope.chain, this.context.view.chain))
       throw new OutputProtocolError('context-changed', 'Source changed the configured chain')
     this.membership.receive(batch, received)
+    this.sourceCurrentness.receive(batch, received, this.context.id)
     const additions: EvidenceReceipt[] = []
     for (const group of batch.groups) {
       const groupId = outputGroupIdentity(origin.scope, origin.generation, group.id)
@@ -476,13 +481,9 @@ export class BitcoinKnowledgeState {
           )
         ].sort(compareKnowledgeText)
       }
-      let id = outputPacketDigest('assessment', body)
-      if (this.invalidated.has(id)) {
-        body.state = 'stale'
-        id = outputPacketDigest('assessment', body)
-      }
-      return { id, ...body }
+      return this.assessment(body)
     })
+    this.appendSourceAssessments(assessments, reconciled, context, accepted)
     return {
       partition: this.partition,
       generation: context.generation,
@@ -495,6 +496,87 @@ export class BitcoinKnowledgeState {
       pendingGroups: this.membership.pending()
     }
   }
+  private appendSourceAssessments(
+    assessments: Currentness[],
+    reconciled: AcceptedInput['reconciled'],
+    context: VerificationContext,
+    accepted: ReadonlySet<string>
+  ): void {
+    if (this.sourceCurrentness.rules.length) {
+      const sourceEvidence = this.sourceEvidence(context.id, accepted)
+      const usableTransactions = new Set(
+        reconciled.transactions
+          .filter(
+            row =>
+              row.status === 'included' ||
+              row.status === 'selected-final' ||
+              row.status === 'selected-non-final'
+          )
+          .map(row => row.txid)
+      )
+      const provisionalSpends = new Set(
+        reconciled.transactions
+          .filter(row => row.status === 'selected-non-final')
+          .flatMap(row => row.dependencies.map(input => canonicalOutputJSON(input)))
+      )
+      assessments.push(
+        ...this.sourceCurrentness
+          .assessments({
+            context,
+            local: assessments,
+            memberships: reconciled.memberships,
+            groups: this.membership.publishedGroups(),
+            continuous: (scope, generation) => this.membership.isContinuous(scope, generation),
+            blocked: outpoint =>
+              !usableTransactions.has(outpoint.txid) ||
+              provisionalSpends.has(canonicalOutputJSON(outpoint)),
+            evidence: (scope, generation, observationId) =>
+              sourceEvidence.get(canonicalOutputJSON({ scope, generation, observationId })) ?? []
+          })
+          .map(({ id: _id, ...body }) => this.assessment(body))
+      )
+      assessments.sort((a, b) => compareKnowledgeText(a.id, b.id))
+    }
+  }
+
+  private sourceEvidence(contextId: string, accepted: ReadonlySet<string>): Map<string, string[]> {
+    const result = new Map<string, string[]>()
+    for (const row of this.membership.publishedGroups())
+      for (const observation of row.group.observations) {
+        if (observation.kind !== 'output') continue
+        const id = canonicalOutputJSON({ group: groupKey(row), observation: observation.id })
+        const variants = (this.plan().slots.get(id) ?? [])
+          .filter(
+            bundle =>
+              bundle.support.groups.every(group => accepted.has(group)) &&
+              bundle.proofs.every(
+                key =>
+                  this.ledger.get(proofReference(this.plan().proofs.get(key)!), contextId)
+                    ?.status === 'verified'
+              )
+          )
+          .map(bundle => bundle.support.candidate.variantId)
+        result.set(
+          canonicalOutputJSON({
+            scope: row.scope,
+            generation: row.generation,
+            observationId: observation.id
+          }),
+          variants
+        )
+      }
+    return result
+  }
+
+  private assessment(body: Omit<Currentness, 'id'>): Currentness {
+    let id = outputPacketDigest('assessment', body)
+    if (this.invalidated.has(id)) {
+      body.state = 'stale'
+      id = outputPacketDigest('assessment', body)
+    }
+    return { id, ...body }
+  }
+
   private observedOutpoints(): OutputOutpoint[] {
     const observed = new Map<string, OutputOutpoint>()
     for (const row of this.membership.groups()) {

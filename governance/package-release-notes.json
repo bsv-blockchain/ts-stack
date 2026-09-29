@@ -245,8 +245,8 @@
       "name": "@bsv/output-knowledge",
       "publishedVersion": null,
       "releaseType": "initial",
-      "summary": "Initial application output knowledge reference runtime and interchangeable durable journal adapters.",
-      "migration": "New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes."
+      "summary": "Initial application output knowledge reference runtime, interchangeable durable journals, scoped provider currentness and durable expiry.",
+      "migration": "New opt-in package above the SDK. Preserve wallet custody and explicit action authorization; do not infer spending from source membership changes. Currentness rules are explicitly configured and sealed in local frame v2; legacy empty-policy v1 journals remain readable, while changing policies requires a new journal namespace."
     }
   ]
 }

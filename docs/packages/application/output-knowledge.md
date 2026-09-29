@@ -64,8 +64,15 @@ selection until evidence qualifies in that view; historical replacements and fac
 remain retained. The default currentness policy reports unknown, spent, conflicted
 or stale. Creation evidence alone never becomes a claim of global unspentness.
 
-Proposal admission, scoped source-unspent policies, authenticated BRC-193 service
-transport, private acquisition and full application demonstrations are separate
+Optional `sourceCurrentness` rules bind provider reports to exact configured
+source identities, retain each actual epoch, and expire from the original trusted
+receipt. Expiry is journaled even without new source traffic; reads refuse an
+expired assessment while a delayed timer catches up. A source invalidation cannot
+change local Bitcoin facts or another provider's report. Enabling these rules uses
+local frame version 2 and requires a new namespace when changing an existing policy;
+empty-policy version-1 journals remain readable without migration.
+
+Proposal admission, authenticated BRC-193 service transport, private acquisition and full application demonstrations are separate
 parts of the active implementation program. Existing finite lookup and submission
 interfaces remain unchanged.
 

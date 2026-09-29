@@ -19,6 +19,8 @@ submission and GASP behavior remains available to applications that do not opt i
   Script/SPV verification, historical readiness and deterministic spend selection.
 - Whole-group acceptance, source membership order, generation replacement, context
   fences and projection publication independent of authorized wallet actions.
+- Explicit source currentness policy, provider/epoch isolation, immutable first
+  receipt lifetimes, durable timer-driven expiry and scoped remote invalidation.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
   without network access and explicit sealing of the journal's non-final policy.
 - All 32 approved reconciliation traces through the default worker and SQLite,
@@ -29,8 +31,9 @@ submission and GASP behavior remains available to applications that do not opt i
 
 ## Remaining checkpoint-two work
 
-- Add explicit scoped source-currentness policy, durable freshness invalidation,
-  proposal namespaces, validation policies and finalization/admission bridges.
+- Add proposal namespaces, validation policies and finalization/admission bridges.
+- Complete bounded equivocation quarantine and source continuity recovery, beyond
+  the current rejection of changed observation identities before commit.
 - Implement authenticated BRC-193 snapshot/replay/long-poll transports, cancellation,
   retention, source adapters and consistent Overlay/Overlay Express storage hooks.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
@@ -53,7 +56,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 ## Validation evidence and limits
 
 The foundation SDK run passes 7,627 tests across 216 suites. The output-knowledge
-run passes 205 tests across 16 suites, with more than 94% line and 89% branch
+run passes 216 tests across 17 suites, with more than 94% line and 89% branch
 coverage. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Journal append mutation testing kills all 26 generated mutations.
@@ -69,6 +72,11 @@ tests use fake-indexeddb, so actual-browser qualification is still required. The
 journal-backed trace binding is documented alongside the unchanged approved
 fixtures; selection-function tests remain an independent layer.
 
-These are local, intermediate results. The PR remains draft until the entire
+Foundation head `7c1899d7f66415c7d77ac1c6a1a1a442b8c2a2db` passed all 40 applicable
+hosted checks; two infrastructure/dependent-test skips were accepted by merge-gate.
+This includes CodeQL, zero new Sonar findings, external Codecov and the repository
+coverage gate. Subsequent implementation increments require their own validation.
+
+These are intermediate results. The PR remains draft until the entire
 checkpoint and all required checks succeed on its exact final head. Remote CI,
 CodeQL and Sonar evidence must be recorded in the PR before review.

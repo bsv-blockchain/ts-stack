@@ -10,8 +10,8 @@ This implementation branch is in progress. Shared SDK wire types, the journal
 adapters, evidence verification and dependency planning, spend selection, source
 membership reduction, the default Bitcoin protocol worker and runtime orchestration
 are implemented, together with wallet, finite per-host lookup and direct-delivery
-adapters. Service integrations, scoped source-currentness policy, proposal
-processing and complete qualification evidence are still being connected before
+adapters and optional scoped source currentness with durable expiry. Service
+integrations, proposal processing and complete qualification evidence are still being connected before
 checkpoint-two review. The package version does not
 indicate a published or production-qualified release.
 
@@ -84,8 +84,9 @@ explicit `nonFinal` policy, then pass it to both `KnowledgeStore` and
 `OutputKnowledge`. It validates assertions against actual transaction inputs,
 retains proof checks atomically, and reconstructs committed decisions without
 network access. Source groups publish only after all their required evidence
-qualifies. The default currently produces local unknown/spent/conflicted/stale
-assessments; no source receives implicit authority to assert unspentness.
+qualifies. The default produces local unknown/spent/conflicted/stale assessments. An explicit
+`sourceCurrentness` policy can additionally retain scoped provider reports; no
+source receives implicit authority to assert unspentness.
 
 ```typescript
 import {
@@ -156,6 +157,68 @@ snapshots, fences retired generations, and applies live membership in source ord
 `reconcileOutputSpends` applies actual transaction input edges, historical non-final
 replacement rules and current-view dependency closure. Membership is not a spend
 edge, and a newly reported output cannot undo a known spend.
+
+## Scoped source currentness
+
+An `output` observation means collection membership. To interpret a particular
+source's named rules as an unspent report, explicitly configure `sourceCurrentness`
+on `BitcoinKnowledge`. Select the chain, provider, service, query digest, rules
+digest and access partition from trusted application configuration. The source's
+rules must actually define that meaning; ordinary catalogue membership is not
+sufficient. A different provider, query, rule digest or access partition receives
+no authority from that selection.
+
+```typescript
+const { epoch, ...sourceIdentity } = configuredScope
+const worker = new BitcoinKnowledge({
+  journalId: journal.namespace,
+  partition,
+  nonFinal: false,
+  verifier,
+  sourceCurrentness: [
+    {
+      source: sourceIdentity,
+      maximumAgeSeconds: '60'
+    }
+  ]
+})
+```
+
+The configured identity spans provider epochs, but every assessment retains its
+complete actual scope, including epoch. The currentness rule is local application
+policy, not a new wire field or provider-selected option. Configuration is bounded
+to 64 distinct rules and 4,096 retained observation identities from selected
+sources. Exhaustion is an explicit limit requiring a new journal generation;
+receipts and expiry decisions are never silently dropped.
+
+A report requires accepted whole-group creation evidence under the active context,
+visible membership and intact source continuity. Pending groups, quarantine,
+replacement-generation staging, a changed chain context or a local conflicting or
+spent assessment make that source report stale. Provisional selected spends also
+prevent a usable unspent report. The independent local transaction assessment is
+retained, so source data cannot reverse Bitcoin consumption. Two providers remain
+two source assessments even when they report the same output.
+
+Expiry is exclusive and starts at the observation's **first trusted receipt**.
+Worker completion, duplicate delivery, local refresh and restart do not extend it.
+A new observation identity can provide a new report. A source's accepted
+`assessment-invalidated` observation affects only earlier reports in the same
+complete scope and named context; it cannot invalidate local facts or another
+source. A subsequent new report can qualify independently. Withdrawal removes that
+source's report without inventing a spend.
+
+`OutputKnowledge` schedules expiry even without incoming data. The worker journals
+an `invalidate` mutation before publishing the next coherent snapshot, including
+after restart. `KnowledgeStore.read` independently checks wall time and returns
+`expired` if a delayed timer has not yet committed the invalidation. Resuming the
+runtime or calling `flush` performs that durable work. Replay reconstructs the
+recorded outcome without contacting the verifier and never grants a new lifetime.
+
+A nonempty currentness policy uses local verification frame version 2, sealing
+its normalized rules alongside the non-final setting. Existing empty-policy
+version-1 journals keep their encoding and replay behavior. Enabling, disabling or
+changing the policy requires an explicit new journal namespace, with the old
+journal retained for audit/recovery. No existing journal is silently reinterpreted.
 
 ## Source adapters
 

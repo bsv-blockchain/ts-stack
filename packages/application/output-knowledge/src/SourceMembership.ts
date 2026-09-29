@@ -377,6 +377,24 @@ export class SourceMembershipLedger {
     return copy(result)
   }
 
+  publishedGroups(): ReceivedSourceGroup[] {
+    return copy(
+      [...this.families.values()].flatMap(({ visible }) =>
+        visible ? this.publishedRows(visible) : []
+      )
+    )
+  }
+  isContinuous(scope: OutputScope, generation: string): boolean {
+    const family = this.families.get(outputSourceIdentity(scope))
+    return (
+      family !== undefined &&
+      family.visible === family.highest &&
+      this.isCurrent(scope, generation) &&
+      !family.highest.unavailable &&
+      family.highest.groups.every(row => row.status === 'accepted')
+    )
+  }
+
   groups(): ReceivedSourceGroup[] {
     return copy([...this.generations.values()].flatMap(active => active.groups))
   }

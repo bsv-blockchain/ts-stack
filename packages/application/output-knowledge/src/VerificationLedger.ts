@@ -10,6 +10,7 @@ import {
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
+import { parseSourceCurrentnessRules, type SourceCurrentnessRule } from './SourceCurrentness.js'
 import { EvidencePool, type EvidenceSupport } from './EvidencePool.js'
 import { factFromAssembly } from './EvidenceAssembler.js'
 import { parseVerificationContext } from './validation.js'
@@ -33,12 +34,22 @@ export interface VerifiedWork {
   proof: ProofReference
   checks: ProofCheck[]
 }
-export interface KnowledgeLocalFrame {
+interface LegacyKnowledgeLocalFrame {
   profile: 'urn:bsv:output-knowledge:local-verification:1'
   version: 1
   nonFinal: boolean
   work: VerifiedWork[]
 }
+export type KnowledgeLocalFrame =
+  | LegacyKnowledgeLocalFrame
+  | {
+      profile: 'urn:bsv:output-knowledge:local-verification:2'
+      version: 2
+      nonFinal: boolean
+      currentnessRules: SourceCurrentnessRule[]
+      work: VerifiedWork[]
+    }
+const currentnessProfile = 'urn:bsv:output-knowledge:local-verification:2' as const
 const profile = 'urn:bsv:output-knowledge:local-verification:1' as const
 const statuses = new Set([
   'verified',
@@ -75,9 +86,16 @@ export function proofReferenceKey(proof: ProofReference): string {
 
 export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
   const value: unknown = JSON.parse(canonicalOutputJSON(input))
-  closedOutputObject(value, ['profile', 'version', 'nonFinal', 'work'])
-  if (value.profile !== profile || value.version !== 1)
+  closedOutputObject(value, ['profile', 'version', 'nonFinal', 'work'], ['currentnessRules'])
+  const legacy = value.profile === profile && value.version === 1
+  const currentness = value.profile === currentnessProfile && value.version === 2
+  if (!legacy && !currentness)
     throw new OutputProtocolError('unsupported', 'Unknown local verification storage profile')
+  assertLocal(
+    legacy === (value.currentnessRules === undefined),
+    'Invalid currentness frame configuration'
+  )
+  const currentnessRules = currentness ? parseSourceCurrentnessRules(value.currentnessRules) : []
   assertLocal(
     typeof value.nonFinal === 'boolean' && Array.isArray(value.work),
     'Invalid local verification frame'
@@ -136,19 +154,38 @@ export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
     })
     return { proof, checks }
   })
-  return { profile, version: 1, nonFinal: value.nonFinal, work }
+  if (legacy) return { profile, version: 1, nonFinal: value.nonFinal, work }
+  return {
+    profile: currentnessProfile,
+    version: 2,
+    nonFinal: value.nonFinal,
+    currentnessRules,
+    work
+  }
 }
 
-export function knowledgeLocalFrame(nonFinal: boolean, work: VerifiedWork[]): OutputJSONObject {
-  return JSON.parse(
-    canonicalOutputJSON(parseKnowledgeLocalFrame({ profile, version: 1, nonFinal, work }))
-  ) as OutputJSONObject
+export function knowledgeLocalFrame(
+  nonFinal: boolean,
+  work: VerifiedWork[],
+  rules: readonly SourceCurrentnessRule[] = []
+): OutputJSONObject {
+  const currentnessRules = parseSourceCurrentnessRules(rules)
+  const frame = currentnessRules.length
+    ? { profile: currentnessProfile, version: 2, nonFinal, currentnessRules, work }
+    : { profile, version: 1, nonFinal, work }
+  return JSON.parse(canonicalOutputJSON(parseKnowledgeLocalFrame(frame))) as OutputJSONObject
 }
 
 /** Replayable local proof decisions; a remote source cannot insert these checks. */
 export class VerificationLedger {
   private work = new Map<string, VerifiedWork>()
-  constructor(readonly nonFinal: boolean) {}
+  private readonly currentnessRules: SourceCurrentnessRule[]
+  constructor(
+    readonly nonFinal: boolean,
+    currentnessRules: readonly SourceCurrentnessRule[] = []
+  ) {
+    this.currentnessRules = parseSourceCurrentnessRules(currentnessRules)
+  }
 
   apply(
     input: unknown,
@@ -160,6 +197,12 @@ export class VerificationLedger {
       throw new OutputProtocolError(
         'reset-required',
         'Spend policy changed without an explicit journal generation reset'
+      )
+    const rules = frame.version === 2 ? frame.currentnessRules : []
+    if (canonicalOutputJSON(rules) !== canonicalOutputJSON(this.currentnessRules))
+      throw new OutputProtocolError(
+        'reset-required',
+        'Source currentness policy changed without a journal generation reset'
       )
     const next = new Map(this.work)
     for (const addition of frame.work) {
