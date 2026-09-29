@@ -220,7 +220,7 @@ async function createNewTx(
  *
  * Returns: AtomicBEEF with each declared ancestor reduced to a txid-only entry.
  */
-function serializeResultBeef(beef: Beef, txid: TXIDHexString, knownTxids?: string[]): AtomicBEEF {
+export function serializeResultBeef(beef: Beef, txid: TXIDHexString, knownTxids?: string[]): AtomicBEEF {
   const known = knownTxids ?? []
   if (known.length === 0) return beef.toBinaryAtomic(txid)
 
