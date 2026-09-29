@@ -80,7 +80,6 @@ Use the [recovery guide](../../guides/wallet-backup-recovery.md),
 [recovery drill](../../guides/wallet-recovery-drill.md). The portable helpers
 require a concrete provider and a tested consistency/resource-limit strategy.
 
-
 ## Install
 
 ```bash

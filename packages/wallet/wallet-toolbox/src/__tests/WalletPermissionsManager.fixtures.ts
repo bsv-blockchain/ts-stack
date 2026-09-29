@@ -1,4 +1,4 @@
-const { Telemetry, Validation } = jest.requireActual('@bsv/sdk')
+const { Telemetry, Validation, WERR_REVIEW_ACTIONS } = jest.requireActual('@bsv/sdk')
 
 const existingFetch = (globalThis as any).fetch
 if (existingFetch?._isMockFunction == null) {
@@ -294,6 +294,7 @@ export const MockedBsvSdk = {
   Certificate: null,
   Telemetry,
   Validation,
+  WERR_REVIEW_ACTIONS,
   completeBoundAction: mockCompleteBoundAction,
   createPublicHTTPSFetch: jest.fn(() => globalThis.fetch),
   decodeCanonicalPushDrop: mockDecodeCanonicalPushDrop,
