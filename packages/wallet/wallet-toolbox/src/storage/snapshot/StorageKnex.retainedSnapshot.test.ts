@@ -169,6 +169,7 @@ test('provider destruction closes its idle retained view before destroying the p
 test('IndexedDB retains its scoped snapshot support but explicitly refuses an idle retained transaction', async () => {
   const source = new StorageIdb(StorageProvider.createStorageBaseOptions('test'))
   expect(source.supportsReadSnapshot()).toBe(true)
+  expect(source.getSnapshotSync()).toBeUndefined()
   expect(source.supportsRetainedReadSnapshot()).toBe(false)
   await expect(source.openReadSnapshot()).rejects.toThrow('Retained read snapshots are not supported')
 })

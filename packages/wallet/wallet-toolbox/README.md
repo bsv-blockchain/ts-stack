@@ -426,15 +426,16 @@ session before its next write. Concurrent copies of the same source cannot both
 commit the same checkpoint. Progress observers receive independent checkpoint
 copies and run outside page ownership in paged mode.
 
-Missing capabilities, remote destinations, self-copies, existing whole-copy
-methods and primary reconciliation retain exclusive execution. A failed
-capability lookup falls back to serialization. Page ceilings are rough encoded
+Missing capabilities, remote destinations, self-copies and primary reconciliation
+retain exclusive execution. Supported ordinary local SQL copies use the durable
+snapshot path described below. The legacy atomic-page capability probe retains
+its serialized fallback; snapshot validation and I/O failures reject. Page ceilings are rough encoded
 size hints; the existing negotiated per-record transfer bounds still apply to
 large records. One page is in flight, and progress does not accumulate wallet
-records or per-record logs. Source pagination retains the existing eventual
-replication contract: this API is **not a coherent source snapshot**. Source
-snapshot handles and streaming portable archives require their separate
-consistency and format contracts.
+records or per-record logs. Legacy source pagination retains the existing eventual
+replication contract. Supported local SQL sources use one coherent retained view;
+the destination remains a merged replica. Remote snapshot handles and streaming
+portable archives require their separate consistency and format contracts.
 The existing timestamp boundary is inclusive: an unchanged copy can reread rows
 sharing the final timestamp, including an entire same-timestamp import. Those
 rows are not rewritten. This protects late same-time arrivals; a coherent source
@@ -1230,7 +1231,24 @@ all thirteen standard tables share one retained read view. `readPage(table,
 cursor, { maxRows, maxBytes })` uses stable storage keys and checks payload size
 before loading rows; binary columns remain `Uint8Array`. Always close the view.
 Cursors expire with the view and cannot resume after process loss. Oversized rows
-explicitly refuse pending large-value streaming; no schema/index or legacy sync
-change is introduced. IndexedDB and RPC do not expose this capability. See the
+explicitly refuse pending large-value streaming. IndexedDB and RPC do not expose
+this capability; the page primitive preserves existing indexes and legacy cursors. See the
 [page contract and limits](../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
 The full #544 program remains incomplete.
+
+### Durable local SQL backup integration (2.15 candidate)
+
+Supported ordinary push, pull and backup calls now consume those pages outside
+manager ownership and commit each destination page, ID mapping and cursor
+atomically. `syncToWriterResumable` joins `syncFromReaderResumable` for progress and
+cancellation. A dedicated reader preserves foreground pool capacity. SQLite
+requires file-backed WAL; MySQL requires a static database connection. Unsupported
+providers, oversized rows and retention limits use the serialized fallback.
+
+Apply migration `2026-09-30-001 add durable snapshot sync` through `migrate()`.
+It adds auxiliary session/mapping/primary-epoch tables and a primary-change trigger;
+legacy checkpoint JSON and standard-table indexes are preserved. Use
+`snapshotSync: false` for forward rollback on a current binary while keeping the
+schema. See [durability, limits and downgrade guidance](../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).
+Primary reconciliation, remote/IDB retained views, large-value streaming and
+staged archive restore remain part of the incomplete #544 program.

@@ -49,7 +49,8 @@ commit acknowledgement. It does not abort a database transaction after its
 outcome becomes uncertain or undo acknowledged data. Invoke the API again to
 resume; do not use UI counters as a checkpoint. A lost acknowledgement rejects
 without automatically replaying a write, and the next session loads the durable
-destination checkpoint.
+destination state. The retained local SQL path distinguishes resuming a still-live
+view from restarting a replacement view, as described below.
 
 Only one page is in flight. The new API defaults to 1,000 rows and 262,144 rough
 encoded bytes (256 KiB). Options must be positive safe integers, no greater than
@@ -75,7 +76,8 @@ Switching/destroying the destination fences late replies before mutation. The
 page commit rechecks the durable checkpoint and any proof rows inspected during
 preparation, preventing concurrent sessions or monitor repairs from overwriting
 newer state. Input pages and checkpoint values are detached before asynchronous
-validation. No new persisted schema or archive envelope is introduced.
+validation. Legacy checkpoints retain their schema; the durable local SQL path
+below adds auxiliary persistence. No archive envelope changes.
 
 The queue permits at most eight concurrent readers on providers advertising safe
 reads. Writers remain exclusive. Foreground work has priority, with bounded
@@ -114,7 +116,7 @@ was repaired.
 
 ## Timestamp boundaries and snapshot scope
 
-This API preserves BRC-40's inclusive `since` boundary and existing entity order,
+The legacy timestamp/offset path preserves BRC-40's inclusive `since` boundary and existing entity order,
 ID mapping, tombstones and merge rules. Records arriving later with the same
 last timestamp must remain discoverable. Consequently, a large imported batch
 sharing one timestamp can require a complete boundary reread even when it has
@@ -157,9 +159,9 @@ The lifetime limits retention time, not the bytes accumulated in database WAL or
 undo history while other writers continue; database storage limits remain separate.
 
 The primitive itself does not provide a durable cursor,
-remote handle, concurrent IndexedDB snapshot, or streaming archive. Ordinary
-push/backup loops still require the scheduling and checkpoint work below. No
-persisted schema, legacy index order or wire encoding changes in this checkpoint.
+remote handle, concurrent IndexedDB snapshot, or streaming archive. The local
+sync integration below adds destination persistence and scheduling separately;
+the retained-view primitive itself does not change legacy index order or wire bytes.
 
 ### Profile-bound local SQL pages
 
@@ -216,10 +218,85 @@ not the canonical BRC-38 array order. No OFFSET, full-table count, new index or
 persistence migration is introduced. Existing legacy sync checkpoints and query
 plans are unchanged. SQLite query-plan tests verify range seeks for numeric and
 composite keys. Identity/update-key indexing, commit-order incremental high-water
-positions, remote handles, IDB retention, streaming and resumable push/backup
-remain part of the active program; this page API does not enable them by itself.
+positions, remote handles, IDB retention and streaming remain part of the active
+program. The local sync integration below consumes these pages.
 
-## Next-stage design checkpoint (not implemented)
+## Durable local SQL sync and ordinary backup
+
+With the version-one migration applied, supported local SQL providers use these
+pages for ordinary `syncFromReader`, `syncToWriter` and `updateBackups` calls.
+`syncFromReaderResumable` and the additive `syncToWriterResumable(auth, writer,
+options)` expose cancellation and page progress. Source reading and proof
+preparation run outside manager ownership; only destination admission and each
+atomic page commit enter the fair background queue. Foreground reads and writes
+can proceed between those commits. Existing `progLog` callbacks receive each
+committed page and the completion summary, including during serialized fallback;
+their returned text remains part of the ordinary result log. Primary reconciliation still uses its existing
+exclusive path and remains required work in the full program.
+
+The source gets a dedicated one-connection pool, preserving the original pool's
+foreground capacity and telemetry configuration. SQLite requires a file-backed
+WAL database. MySQL requires a static connection configuration with a database;
+dynamic connection factories, externally shared pools and unsupported providers
+retain the existing serialized path. Each provider admits one opening/live sync
+source until physical cleanup completes. The default five-minute retention limit
+includes opening; `snapshotLifetimeMs` accepts 1–3,600,000 milliseconds. Driver
+query deadlines and WAL/undo disk limits remain separate.
+
+Migration `2026-09-30-001 add durable snapshot sync` adds three auxiliary tables:
+`snapshot_sync_sessions`, `snapshot_sync_ids` and
+`snapshot_sync_primary_epochs`. A database trigger increments the primary epoch
+on every primary change, including an independent writer changing away and back.
+It does not change standard-table key order or legacy `sync_states.syncMap` JSON.
+SQLite commits the migration atomically. MySQL's idempotent table, foreign-key
+and trigger installation can resume after partially committed DDL. Apply
+migrations using the normal provider migration entry point before enabling the
+capability; merely opening storage does not upgrade its schema. MySQL migration
+credentials need permission to create the auxiliary tables, foreign keys and
+trigger; the ordinary runtime connection does not install them implicitly.
+
+A session binds the wallet identity, source/destination storage identities,
+network, source view, selected primary and its epoch. Rows, normalized ID mappings
+and the destination cursor commit together. Source user metadata joins the first
+page commit; cancellation before that commit leaves the selected primary intact.
+A prepared page is single-use and stale checkpoints reject. If an acknowledgement
+is lost while the same source view remains alive, read the destination checkpoint
+and resume it. When the source view is lost, open a new view and restart traversal
+from the first table; committed mappings and entity merge semantics prevent
+repeated inserts. Manager calls own and close their source view, so calling a
+manager sync method again starts a replacement view. Advanced callers retaining
+the same local capability handle can resume its acknowledged cursor. No source
+cursor survives source process loss. Returned acknowledgements must match the
+session bindings, next sequence, table position, completion flag and page cursor;
+a mismatch rejects before another read or progress count is accepted.
+
+One packed page is in flight. The resumable APIs default to at most 1,000 rows
+and 262,144 charged bytes; configurable ceilings are 1,000 rows and 10,000,000
+bytes. Ordinary push, pull and backup retain their 1,000-row/10,000,000-byte
+ceilings; the adaptive controller may request smaller pages. Per-page mapping
+work is limited to 4,096 distinct IDs, queried and persisted in batches of 128.
+An oversized row, reference limit or retention expiry closes the source and uses
+the established serialized fallback, preserving progress counts. Malformed rows,
+profile/network mismatches, stale sessions and I/O failures reject. Fallback can
+hold manager ownership for the remaining copy; bounded large-value streaming is
+still required. The result/progress `mode` reports the selected behavior.
+
+`snapshotCheckpoint` is separate from the legacy `checkpoint` field. It records
+this destination's durable position, not transferable authorization. The local
+`getSnapshotSync()` capability is excluded from RPC, and its types do not imply
+an IndexedDB, remote or native adapter. The twelve replica tables preserve the
+existing merge policy; original source sync-state history remains an archive
+concern. BRC-38/39 bytes are unchanged.
+
+For forward rollback, construct `StorageKnex` with `snapshotSync: false` on both
+sides and retain the additive schema. Existing sync APIs then use their established
+paths. Stop all new sessions before any binary downgrade; older migration code
+may refuse a database containing newer journal entries, so disabling this feature
+on a current binary is the supported operational rollback. Do not drop auxiliary
+mapping/session state while work is active. No package is published or provider
+upgraded by this source change.
+
+## Next-stage remote design checkpoint (not implemented)
 
 A future source-snapshot capability should negotiate a versioned contract
 separately from ordinary sync and bounded transfer. A snapshot must bind the

@@ -1,3 +1,4 @@
+import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
 import { Random, Utils } from '@bsv/sdk'
 import type { Knex } from 'knex'
 import type { StorageKnex } from '../StorageKnex'
@@ -219,7 +220,7 @@ function boundedPrefix(
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new WERR_INVALID_OPERATION('Invalid snapshot row size')
     if (payloadBytes + bytes > maxBytes) {
       if (count === 0)
-        throw new WERR_INVALID_OPERATION('Snapshot row exceeds maxBytes; large-value streaming is required')
+        throw new SnapshotResourceLimitError('Snapshot row exceeds maxBytes; large-value streaming is required')
       break
     }
     payloadBytes += bytes

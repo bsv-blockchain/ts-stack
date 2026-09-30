@@ -1,3 +1,4 @@
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
 import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
 import { runInSeries } from '../utility/runInSeries'
@@ -552,6 +553,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   openWalletReadSnapshot(_identityKey: string, _options: WalletReadSnapshotOptions = {}): Promise<WalletReadSnapshot> {
     return Promise.reject(new WERR_NOT_IMPLEMENTED('Wallet read snapshot pages are not supported by this provider'))
+  }
+
+  /** Local versioned snapshot merge capability; older providers keep serialized sync. */
+  getSnapshotSync(): SnapshotSyncStorage | undefined {
+    return undefined
   }
 
   protected supportsActionBatchPersistence(): boolean {
@@ -1446,7 +1452,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     })
   }
 
-  private async prepareSyncProofs(chunk: SyncChunk): Promise<Map<string, TableProvenTx>> {
+  protected async prepareSyncProofs(chunk: SyncChunk): Promise<Map<string, TableProvenTx>> {
     const expected = new Map<string, TableProvenTx>()
     // Canonicalize before text-key lookup in every sync mode. Direct
     // backup/conflict sync retains its established trust for new proof rows,

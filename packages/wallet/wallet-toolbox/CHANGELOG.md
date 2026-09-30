@@ -6,12 +6,23 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Integrate coherent SQL pages into ordinary local push, pull and backup, with
+  a dedicated source reader and short, fair destination commits. Add resumable
+  push progress/cancellation. Commit rows, normalized ID maps and durable cursors
+  together; reject stale sessions and independent primary ABA transitions.
+  Add the version-one auxiliary schema migration and primary-epoch trigger.
+  Existing legacy checkpoint JSON is preserved. Unsupported configurations and
+  explicit row/reference/retention limits retain serialized fallback; genuine
+  validation and I/O errors reject. `snapshotSync: false` is the supported forward
+  rollback with schema retained. Primary reconciliation, remote/IDB retained
+  views, streaming and staged restore remain required work.
+
 - Add local profile-bound SQL keyset pages over retained views. All thirteen
   standard tables preserve tombstones and original source records; binary values
   stay packed. SQL preflights bounded keys and payload sizes before fetching a
   page. Oversized individual rows explicitly refuse pending large-value streaming.
   Cursors belong only to their live view and table; expiry/process loss requires
-  restart. Existing indexes, schemas, OFFSET checkpoints and RPC remain unchanged.
+  restart. The page primitive preserves existing indexes, OFFSET checkpoints and RPC.
   This is a prerequisite for the active streaming/resumable-backup program.
 
 - Add local retained SQLite/MySQL views with explicit lifetime, cancellation and
@@ -22,7 +33,8 @@ attention to changes that materially alter behavior or extend functionality.
   before its opening consumer resumes; callers still receive the original errors.
   Driver/query deadlines remain separate. Each view occupies a pool connection;
   IndexedDB and RPC explicitly remain unsupported for retention. This is a paging
-  prerequisite, without changing ordinary backup locks, schemas or wire formats.
+  prerequisite; the separate sync integration above changes scheduling and adds
+  auxiliary persistence without changing wire formats.
 
 - Capture BRC-38 source metadata and every table from one provider read view.
   Custom providers opt in with `supportsReadSnapshot` and `readSnapshot`. The

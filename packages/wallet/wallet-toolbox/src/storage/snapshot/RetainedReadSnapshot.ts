@@ -1,3 +1,4 @@
+import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
@@ -88,7 +89,7 @@ export function retainReadSnapshot(
   const abort = (): void => stop(new WERR_INVALID_OPERATION('Retained read snapshot was cancelled'))
   const checkDeadline = (): void => {
     if (Date.now() >= expiresAt || performance.now() - startedAt >= lifetimeMs) {
-      stop(new WERR_INVALID_OPERATION('Retained read snapshot expired'))
+      stop(new SnapshotResourceLimitError('Retained read snapshot expired'))
     }
   }
   const assertOpen = (): void => {
@@ -162,7 +163,7 @@ export function retainReadSnapshot(
   signal?.addEventListener('abort', abort, { once: true })
   if (signal?.aborted === true) abort()
   if (stopReason === undefined) {
-    timer = setTimeout(() => stop(new WERR_INVALID_OPERATION('Retained read snapshot expired')), lifetimeMs)
+    timer = setTimeout(() => stop(new SnapshotResourceLimitError('Retained read snapshot expired')), lifetimeMs)
   }
   // Let the provider reserve its capacity slot before any acquisition hook can re-enter.
   void Promise.resolve().then(finish)

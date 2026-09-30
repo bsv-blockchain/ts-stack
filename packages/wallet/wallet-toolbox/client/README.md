@@ -233,3 +233,11 @@ packed-row types. The base provider explicitly refuses unsupported local pages;
 only `StorageKnex` currently implements them. Type availability does not imply an
 IndexedDB, native mobile or remote snapshot implementation. Existing sync and
 archive APIs retain their behavior. See the [SQL paging contract](../../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
+
+The candidate also exports `snapshotSyncTables` and the version-one
+`SnapshotSyncSource`, `SnapshotSyncCheckpoint`, `SnapshotSyncCommit`,
+`SnapshotSyncStorage` and `SnapshotSyncTable` types. `syncToWriterResumable` adds
+push progress/cancellation with an explicit exclusive fallback. These exports
+support adapter integration; they do not enable SQL retention or the auxiliary
+SQL migration in this browser/mobile entry point. Current IndexedDB and remote
+paths retain their documented behavior. See the [local SQL integration and remaining limits](../../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).

@@ -1,3 +1,4 @@
+import type { SnapshotSyncCheckpoint } from '../snapshot/SnapshotSync'
 import type {
   ProcessSyncChunkResult,
   RequestSyncChunkArgs,
@@ -14,6 +15,8 @@ import { assertSyncProgress, throwSyncResultError } from './syncFailure'
 export interface SyncSessionOptions {
   /** Cancellation waits for an in-flight commit acknowledgement; it never rolls back an acknowledged page. */
   signal?: AbortSignal
+  /** Local snapshot retention, default five minutes and at most one hour. Expiry requires a new view. */
+  snapshotLifetimeMs?: number
   /** Additional page ceilings; defaults are 1,000 rows and 262,144 rough encoded bytes. */
   maxItems?: number
   maxRoughSize?: number
@@ -27,6 +30,8 @@ export interface SyncSessionProgress {
   pages: number
   inserts: number
   updates: number
+  /** Present for negotiated local snapshot sync; legacy offsets remain separate. */
+  snapshotCheckpoint?: SnapshotSyncCheckpoint
   checkpoint?: SyncCheckpoint
   readMs?: number
   prepareMs?: number
@@ -40,6 +45,8 @@ export interface SyncSessionResult {
   pages: number
   inserts: number
   updates: number
+  /** Present for negotiated local snapshot sync; legacy offsets remain separate. */
+  snapshotCheckpoint?: SnapshotSyncCheckpoint
   checkpoint?: SyncCheckpoint
 }
 

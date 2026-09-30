@@ -161,3 +161,22 @@ test('exhausts providers once without accepting an invalid proof or partially ch
   expect(page).toEqual(before)
   expect(() => assertSyncProofReplacementAuthorized(page[0])).toThrow()
 })
+
+test('validates packed proof bytes without expanding or changing them', async () => {
+  const f = fixture()
+  const rawTx = new Uint8Array(f.candidate.rawTx)
+  const merklePath = new Uint8Array(f.currentPath.toBinary())
+  const candidate = {
+    ...f.candidate,
+    height: 101,
+    rawTx: rawTx as unknown as number[],
+    merklePath: merklePath as unknown as number[],
+    merkleRoot: f.currentRoot,
+    blockHash: asString(doubleSha256BE(f.currentHeader)),
+    index: 0
+  }
+  await validateSyncProof(f.storage, candidate)
+  expect(candidate.rawTx).toBe(rawTx)
+  expect(candidate.merklePath).toBe(merklePath)
+  expect(() => assertSyncProofReplacementAuthorized(candidate)).not.toThrow()
+})

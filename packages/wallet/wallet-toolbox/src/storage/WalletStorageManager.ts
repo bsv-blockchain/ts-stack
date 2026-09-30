@@ -1,3 +1,7 @@
+import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
+import { runSnapshotSyncSession } from './snapshot/runSnapshotSyncSession'
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
+import type { WalletReadSnapshot } from './snapshot/WalletReadSnapshot'
 import { runInSeries } from '../utility/runInSeries'
 import {
   type ValidCreateActionArgs,
@@ -11,7 +15,12 @@ import {
 } from '@bsv/sdk/wallet/validationHelpers'
 import { SyncPageBudget } from './sync/SyncPageBudget'
 import { StorageAccessQueue } from './sync/StorageAccessQueue'
-import { runPullSession, type SyncSessionOptions, type SyncSessionResult } from './sync/syncSession'
+import {
+  runPullSession,
+  type SyncSessionOptions,
+  type SyncSessionProgress,
+  type SyncSessionResult
+} from './sync/syncSession'
 import { validateSyncCheckpoint } from './sync/syncCheckpoint'
 import { assertSyncNetwork, assertSyncProgress, throwSyncResultError } from './sync/syncFailure'
 import {
@@ -771,6 +780,145 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return ss.makeRequestSyncChunkArgs(auth.identityKey, toStorageIdentityKey)
   }
 
+  private async runSnapshotCopy(
+    view: WalletReadSnapshot,
+    destination: SnapshotSyncStorage,
+    options: SyncSessionOptions,
+    generation: number,
+    active: sdk.WalletStorageProvider
+  ): Promise<SyncSessionResult> {
+    if (view.user.identityKey !== this._authId.identityKey) throw new WERR_UNAUTHORIZED()
+    return await runSnapshotSyncSession(
+      {
+        view,
+        destination,
+        activeStorage: this.getActiveUser().activeStorage,
+        commit: operation =>
+          this.withAccess(
+            () => {
+              if (generation !== this.generation || active !== this.getActive()) {
+                throw new WERR_INVALID_OPERATION(
+                  'Snapshot sync primary generation changed; resume on the selected storage'
+                )
+              }
+              return operation()
+            },
+            false,
+            true
+          )
+      },
+      options
+    )
+  }
+
+  private committedPageLog(progress: SyncSessionProgress, logger: (message: string) => string): string {
+    if (progress.state !== 'committed') return ''
+    return logger(
+      `chunk ${progress.pages - 1} committed: ${progress.inserts} total inserts, ${progress.updates} total updates\n`
+    )
+  }
+
+  private async runLegacySnapshotFallback(
+    reader: sdk.WalletStorageSyncReader,
+    writer: sdk.WalletStorageProvider,
+    options: SyncSessionOptions,
+    selected: { generation: number; active: sdk.WalletStorageProvider }
+  ): Promise<SyncSessionResult> {
+    const readerSettings = await reader.makeAvailable()
+    const writerSettings = await writer.makeAvailable()
+    assertSyncNetwork(readerSettings, writerSettings)
+    return await this.runAsSync(() => {
+      if (selected.generation !== this.generation || selected.active !== this.getActive()) {
+        throw new WERR_INVALID_OPERATION('Snapshot sync primary generation changed; resume on the selected storage')
+      }
+      return runPullSession(
+        {
+          reader,
+          writer,
+          mode: 'exclusive',
+          atomicCheckpoint: false,
+          activeStorage: this.getActiveUser().activeStorage,
+          loadRequest: () =>
+            this.loadSyncRequest(this._authId, writer, readerSettings, writerSettings.storageIdentityKey),
+          commit: operation => operation()
+        },
+        options
+      )
+    })
+  }
+
+  private async trySnapshotCopy(
+    reader: sdk.WalletStorageSyncReader,
+    writer: sdk.WalletStorageProvider,
+    options: SyncSessionOptions = {},
+    selected = { generation: this.generation, active: this.getActive() }
+  ): Promise<SyncSessionResult | undefined> {
+    const source = reader instanceof StorageProvider ? reader.getSnapshotSync() : undefined
+    const destination = writer instanceof StorageProvider ? writer.getSnapshotSync() : undefined
+    if (source === undefined || destination === undefined || reader === writer) return undefined
+    if (!(await destination.supportsDestination())) return undefined
+    if (options.signal?.aborted === true)
+      return { status: 'cancelled', mode: 'paged', pages: 0, inserts: 0, updates: 0 }
+    let view: WalletReadSnapshot | undefined
+    let partial = { pages: 0, inserts: 0, updates: 0 }
+    try {
+      view = await source.openSource(this._authId.identityKey, { lifetimeMs: options.snapshotLifetimeMs })
+      if (view === undefined) return undefined
+      let failed = false
+      try {
+        return await this.runSnapshotCopy(
+          view,
+          destination,
+          {
+            ...options,
+            onProgress: progress => {
+              partial = { pages: progress.pages, inserts: progress.inserts, updates: progress.updates }
+              options.onProgress?.(progress)
+            }
+          },
+          selected.generation,
+          selected.active
+        )
+      } catch (error) {
+        failed = true
+        throw error
+      } finally {
+        await view.close().catch(error => {
+          // A simultaneous expiry must not replace a malformed-row/session error.
+          // A physical cleanup failure, however, cannot be hidden by fallback.
+          if (!failed || !(error instanceof SnapshotResourceLimitError)) throw error
+        })
+      }
+    } catch (error) {
+      // Existing ordinary backups must continue to accept large records and long
+      // copies. Only explicit resource limits select the established serialized
+      // fallback; corrupt rows, changed sessions and I/O failures still reject.
+      if (!(error instanceof SnapshotResourceLimitError)) throw error
+    }
+    const result = await this.runLegacySnapshotFallback(
+      reader,
+      writer,
+      {
+        ...options,
+        onProgress: progress => {
+          options.onProgress?.({
+            ...progress,
+            pages: partial.pages + progress.pages,
+            inserts: partial.inserts + progress.inserts,
+            updates: partial.updates + progress.updates
+          })
+        }
+      },
+      selected
+    )
+    return {
+      ...result,
+      pages: partial.pages + result.pages,
+      inserts: partial.inserts + result.inserts,
+      updates: partial.updates + result.updates
+    }
+  }
+
   async syncFromReader(
     identityKey: string,
     reader: sdk.WalletStorageSyncReader,
@@ -782,6 +930,17 @@ export class WalletStorageManager implements sdk.WalletStorage {
     await this.preflightManagedNetworks(readerSettings)
     if (activeSync != null) assertSyncNetwork(readerSettings, activeSync.getSettings())
     const auth = await this.getAuth()
+
+    if (activeSync == null) {
+      const snapshot = await this.trySnapshotCopy(reader, this.getActive(), { maxRoughSize: 10000000 })
+      if (snapshot !== undefined)
+        return {
+          inserts: snapshot.inserts,
+          updates: snapshot.updates,
+          log:
+            log + `syncFromReader ${snapshot.mode} complete: ${snapshot.inserts} inserts, ${snapshot.updates} updates\n`
+        }
+    }
 
     let inserts = 0
     let updates = 0
@@ -836,7 +995,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * Resumable pull with cancellation and per-page progress. Local providers
    * advertising atomic checkpoints yield ownership during source I/O. Older
    * and remote destinations keep the safe exclusive path. This is an eventual
-   * replica merge, not a point-in-time source snapshot or primary activation.
+   * replica merge with a coherent source view when local SQL capabilities permit;
+   * it does not activate a primary or provide an archive snapshot of the destination.
    */
   async syncFromReaderResumable(
     identityKey: string,
@@ -850,6 +1010,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const writer = this.getActive()
     const writerSettings = writer.getSettings()
     assertSyncNetwork(readerSettings, writerSettings)
+    const snapshot = await this.trySnapshotCopy(reader, writer, options)
+    if (snapshot !== undefined) return snapshot
     const generation = this.generation
     const activeStorage = this.getActiveUser().activeStorage
     const atomicCheckpoint = this._active?.access?.atomicSyncPages === true
@@ -900,6 +1062,36 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
+  /** Bounded push on negotiated local snapshots, with the legacy serialized fallback. */
+  async syncToWriterResumable(
+    auth: sdk.AuthId,
+    writer: sdk.WalletStorageProvider,
+    options: SyncSessionOptions = {}
+  ): Promise<SyncSessionResult> {
+    if (auth.identityKey !== this._authId.identityKey) throw new WERR_UNAUTHORIZED()
+    const writerSettings = await writer.makeAvailable()
+    await this.preflightManagedNetworks(writerSettings)
+    await this.getAuth()
+    const snapshot = await this.trySnapshotCopy(this.getActive(), writer, options)
+    if (snapshot !== undefined) return snapshot
+    return await this.runAsSync(async reader => {
+      const settings = reader.getSettings()
+      assertSyncNetwork(settings, writerSettings)
+      return await runPullSession(
+        {
+          reader,
+          writer,
+          activeStorage: this.getActiveUser().activeStorage,
+          atomicCheckpoint: false,
+          mode: 'exclusive',
+          loadRequest: () => this.loadSyncRequest(auth, writer, settings, writerSettings.storageIdentityKey),
+          commit: operation => operation()
+        },
+        options
+      )
+    })
+  }
+
   async syncToWriter(
     auth: sdk.AuthId,
     writer: sdk.WalletStorageProvider,
@@ -907,11 +1099,32 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log: string = '',
     progLog?: (s: string) => string
   ): Promise<{ inserts: number; updates: number; log: string }> {
+    if (auth.identityKey !== this._authId.identityKey) throw new WERR_UNAUTHORIZED()
     progLog ||= s => s
 
     const writerSettings = await writer.makeAvailable()
     await this.preflightManagedNetworks(writerSettings)
     if (activeSync != null) assertSyncNetwork(activeSync.getSettings(), writerSettings)
+
+    if (activeSync == null) {
+      await this.getAuth()
+      const snapshot = await this.trySnapshotCopy(this.getActive(), writer, {
+        maxRoughSize: 10000000,
+        onProgress: progress => {
+          log += this.committedPageLog(progress, progLog)
+        }
+      })
+      if (snapshot !== undefined)
+        return {
+          inserts: snapshot.inserts,
+          updates: snapshot.updates,
+          log:
+            log +
+            progLog(
+              `syncToWriter ${snapshot.mode} complete: ${snapshot.inserts} inserts, ${snapshot.updates} updates\n`
+            )
+        }
+    }
 
     let inserts = 0
     let updates = 0
@@ -962,6 +1175,26 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async updateBackups(activeSync?: sdk.WalletStorageSync, progLog?: (s: string) => string): Promise<string> {
     progLog ||= s => s
     const auth = await this.getAuth(true)
+    if (activeSync == null) {
+      const selected = { generation: this.generation, active: this.getActive() }
+      const backups = [...(this._backups as ManagedStorage[])]
+      let log = progLog(`BACKUP CURRENT ACTIVE TO ${backups.length} STORES\n`)
+      for (const backup of backups) {
+        const options: SyncSessionOptions = {
+          maxRoughSize: 10000000,
+          onProgress: progress => {
+            log += this.committedPageLog(progress, progLog)
+          }
+        }
+        const result =
+          (await this.trySnapshotCopy(selected.active, backup.storage, options, selected)) ??
+          (await this.runLegacySnapshotFallback(selected.active, backup.storage, options, selected))
+        log += progLog(
+          `${result.mode === 'paged' ? 'snapshot' : 'serialized'} complete: ${result.inserts} inserts, ${result.updates} updates\n`
+        )
+      }
+      return log
+    }
     return await this.runAsSync(async sync => {
       let log = progLog(`BACKUP CURRENT ACTIVE TO ${(this._backups as ManagedStorage[]).length} STORES\n`)
       for (const backup of this._backups as ManagedStorage[]) {

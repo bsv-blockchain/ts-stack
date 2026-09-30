@@ -22,3 +22,12 @@ export type {
   WalletSnapshotTable,
   WalletSnapshotTables
 } from './snapshot/WalletReadSnapshot'
+
+export { snapshotSyncTables } from './snapshot/SnapshotSync'
+export type {
+  SnapshotSyncSource,
+  SnapshotSyncCheckpoint,
+  SnapshotSyncCommit,
+  SnapshotSyncStorage,
+  SnapshotSyncTable
+} from './snapshot/SnapshotSync'

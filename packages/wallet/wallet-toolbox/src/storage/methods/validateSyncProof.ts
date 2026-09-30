@@ -114,10 +114,13 @@ export async function validateSyncProof(storage: SyncProofValidationStorage, can
   if (!Number.isSafeInteger(candidate.index) || candidate.index < 0) {
     invalidSyncProof('index must be a non-negative safe integer')
   }
-  if (!Array.isArray(candidate.rawTx) || candidate.rawTx.length === 0) {
+  if (!(candidate.rawTx instanceof Uint8Array || Array.isArray(candidate.rawTx)) || candidate.rawTx.length === 0) {
     invalidSyncProof('raw transaction is required')
   }
-  if (!Array.isArray(candidate.merklePath) || candidate.merklePath.length === 0) {
+  if (
+    !(candidate.merklePath instanceof Uint8Array || Array.isArray(candidate.merklePath)) ||
+    candidate.merklePath.length === 0
+  ) {
     invalidSyncProof('Merkle path is required')
   }
 

@@ -92,14 +92,24 @@ Existing unique keys avoid changing legacy OFFSET traversal. Composite storage
 order is explicit and differs from canonical archive order. This provides
 bounded local pages, with explicit oversized-row refusal pending streaming.
 
-These checkpoints are only part of S2/P1/S4. They do not yet implement indexed
-identity/update predicates and commit-order high-water positions, authenticated
-remote views, durable source-view checkpoints,
-streaming, bounded push/backup work or staged restore.
-IndexedDB writers wait during capture and the legacy helpers still materialize
-the document. A local MySQL 8.4.11 fixture confirms repeatable-read capture under
-an independent writer, read-only enforcement, unchanged session defaults and
-failure cleanup. Deployed MySQL/PXC behavior is not qualified by that fixture.
+The durable local integration checkpoint connects supported ordinary push, pull
+and backup calls to those pages. A dedicated SQLite-WAL/static-MySQL reader leaves
+foreground pool capacity available. The destination commits entity rows,
+normalized bounded ID mappings and its cursor atomically. An additive auxiliary
+migration and database-owned primary epoch fence stale pages, including independent
+away-and-back changes. Same-view lost acknowledgements resume the destination
+checkpoint; replacement source views restart traversal with retained mappings.
+Tests terminate the destination process before a row, before checkpoint update,
+before transaction commit and after commit/before acknowledgement, then recover
+and finish without duplicate rows or partial checkpoints.
+
+These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
+reconciliation, indexed identity/update predicates and commit-order high-water
+positions, authenticated remote views, durable source views, streaming or staged
+restore. Large-row/reference/retention limits still use serialized fallback.
+IndexedDB writers wait during capture and legacy archive helpers still materialize
+the document. Local MySQL fixtures qualify their isolated version/configuration;
+they do not qualify deployed MySQL/PXC behavior or physical mobile execution.
 
 For every checkpoint record the exact source revision, commands, fixture and
 platform, measured result, compatibility result and remaining limitation. Link

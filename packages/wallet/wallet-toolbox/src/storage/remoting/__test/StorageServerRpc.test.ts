@@ -415,6 +415,7 @@ describe('StorageServer JSON-RPC boundary', () => {
     'openReadSnapshot',
     'supportsRetainedReadSnapshot',
     'openWalletReadSnapshot',
+    'getSnapshotSync',
     'supportsWalletReadSnapshot'
   ])(
     'keeps local snapshot method %s outside the authenticated RPC surface',

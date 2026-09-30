@@ -110,6 +110,19 @@
         ]
       },
       {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable profile-bound snapshot merges, normalized ID mappings, acknowledged cursors and primary-generation fencing",
+        "target": "Randomized bounded SQL page, stale preparation, acknowledgement loss and source-view replacement schedules with an independent profile/content oracle",
+        "invariants": [
+          "Only the acknowledged destination cursor advances after each atomic page commit.",
+          "Concurrent prepared pages cannot overwrite a newer checkpoint, and replacing a source view fences its old pages.",
+          "Incoming IDs and parent references are mapped within one wallet profile without duplicating logical records.",
+          "A restart explicitly begins the replacement view at its first table while preserving existing destination data and legacy checkpoints."
+        ]
+      },
+      {
         "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
         "manifest": "packages/overlays/topics/package.json",
         "risk": "critical",
