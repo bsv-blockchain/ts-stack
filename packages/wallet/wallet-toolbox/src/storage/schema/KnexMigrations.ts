@@ -1,3 +1,8 @@
+import {
+  addSnapshotArchiveTables,
+  removeSnapshotArchiveTables,
+  SNAPSHOT_ARCHIVE_MIGRATION
+} from './snapshotArchiveMigration'
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Knex } from 'knex'
 import { addSnapshotSyncTables, removeSnapshotSyncTables, SNAPSHOT_SYNC_MIGRATION } from './snapshotSyncMigration'
@@ -12,6 +17,7 @@ import {
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
 
+export { SNAPSHOT_ARCHIVE_MIGRATION } from './snapshotArchiveMigration'
 export { SNAPSHOT_SYNC_MIGRATION } from './snapshotSyncMigration'
 
 export const SYNC_TRANSFER_MIGRATION = '2026-09-09-001 add bounded sync transfers'
@@ -94,6 +100,12 @@ export class KnexMigrations implements MigrationSource<string> {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
       }
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_MIGRATION] = {
+      config: { transaction: true },
+      up: addSnapshotArchiveTables,
+      down: removeSnapshotArchiveTables
     }
 
     migrations[SNAPSHOT_SYNC_MIGRATION] = {

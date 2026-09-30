@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add shared SQL snapshot staging with profile-bound internal capture ownership,
+  immutable completed pages, exact replay receipts, explicit logical byte/page
+  reservations and resumable bounded cleanup. A second auxiliary migration
+  leaves standard tables, legacy sync checkpoints and wire formats unchanged.
+  This is an internal prerequisite: source capture/closure validation, authenticated
+  remote endpoints and larger-wallet resource policy remain under implementation.
+
 - Integrate coherent SQL pages into ordinary local push, pull and backup, with
   a dedicated source reader and short, fair destination commits. Add resumable
   push progress/cancellation. Commit rows, normalized ID maps and durable cursors

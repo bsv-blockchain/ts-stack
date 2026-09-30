@@ -262,6 +262,24 @@ export function buildMutationTargets(repositoryRoot) {
         }
       })
     },
+    'wallet-snapshot-archive': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts',
+        'src/storage/schema/snapshotArchiveMigration.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/archive/*.test.ts'], {
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      })
+    },
     'wallet-snapshot-sync': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',

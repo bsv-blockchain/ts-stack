@@ -103,6 +103,15 @@ Tests terminate the destination process before a row, before checkpoint update,
 before transaction commit and after commit/before acknowledgement, then recover
 and finish without duplicate rows or partial checkpoints.
 
+The subsequent internal SQL staging component adds shared immutable-page storage
+for remote snapshots. It binds profile/source metadata, reserves bounded logical
+capacity, commits pages and retry receipts atomically, and retains capacity until
+resumable cleanup finishes. Independent-connection SQLite/MySQL and actual SQLite
+process-termination fixtures cover its persistence boundaries. The source capture
+controller, complete semantic closure validation, authenticated client/server
+integration, larger-wallet resource policy and measured physical storage costs
+remain open. The migration does not expose or advertise a remote snapshot API.
+
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water
 positions, authenticated remote views, durable source views, streaming or staged

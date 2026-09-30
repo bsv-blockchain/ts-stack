@@ -48,6 +48,9 @@ release. The [durable local SQL backup integration](#durable-local-sql-backup-in
 below adds bounded pages and uses a dedicated reader to preserve foreground
 capacity. IndexedDB and remote RPC do not expose retained views. See the
 [retained view contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
+The SQL candidate also includes [bounded archive staging](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#shared-sql-snapshot-staging-unpublished-internal-component)
+for the ongoing remote snapshot implementation. This internal component does not
+add an authenticated export endpoint or a browser/mobile database adapter.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

@@ -78,6 +78,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "wallet-snapshot-archive",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet shared snapshot archive staging, immutable page receipts, profile isolation, quotas and physical cleanup accounting",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "overlay-linkage",
       "manifest": "packages/overlays/topics/package.json",
       "propertyTest": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",

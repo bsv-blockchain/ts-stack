@@ -486,6 +486,19 @@
           "Every supported value round-trips to the identical deterministic byte sequence.",
           "Text and map keys remain normalized and canonical across independent encode and decode passes."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet shared snapshot archive staging, immutable page receipts, profile isolation, quotas and physical cleanup accounting",
+        "target": "Persistent bounded archive staging across capture retries, incomplete captures, independent readers and expired/cancelled cleanup",
+        "invariants": [
+          "A partial or expired capture is never readable as a completed archive.",
+          "Exact page retries preserve immutable bytes and the independent hash-chain receipt without double charging.",
+          "The authenticated profile cannot read or release another profile's archive.",
+          "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted."
+        ]
       }
     ],
     "exclusions": [

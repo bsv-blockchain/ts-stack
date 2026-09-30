@@ -336,6 +336,75 @@ relationships, restart at every durable boundary, repeated import, native
 browser/mobile evidence and wallet adoption. No partial archive or optimistic
 activation should be labeled complete while those gates remain outstanding.
 
+## Shared SQL snapshot staging (unpublished internal component)
+
+The `2026-09-30-002 add snapshot archive staging` migration adds three auxiliary
+SQL tables for the remote snapshot implementation in progress. It does not change
+standard wallet tables, their indexes, legacy checkpoints or BRC-38/39 bytes.
+Storage opening still does not run migrations implicitly. The tables do not enter
+portable archives or ordinary synchronization.
+
+`storage/snapshot/archive/KnexSnapshotArchiveStore` is an internal persistence
+component, not an authenticated remote export API. A capture owns an internal
+writer token and records one original source view, schema, network and wallet
+profile. Each bounded page, sequence receipt and quota charge commits atomically.
+An exact retry repeats the receipt; changed bytes or metadata reject. A completed
+capture becomes immutable and readable from another server connection. The
+capture controller must validate complete source closure before sealing it; this
+store alone does not validate wallet records or cryptographic proofs.
+
+The initial policy allows at most eight handles and 128 MiB of logical reserved
+storage globally, one handle and 32 MiB per profile, 1 MiB per page, 1,000 rows per
+page and 4,096 pages. Metadata is at most 64 KiB. A reservation includes encoded
+metadata/payload bytes plus fixed header and page charges; it is not a measured
+bound on SQL file size, transaction logs, temporary disk or process RSS. The
+shared database clock controls expiry (five minutes by default, at most one
+hour). These preliminary limits do not establish acceptance for larger wallets;
+operator resource policy and measured storage costs remain required work.
+
+Partial, closing, expired or differently owned captures are unavailable to
+readers. Cleanup first fences new writes, then deletes at most 32 exact page
+keys per statement. The profile and global reservation remain occupied until all
+pages are removed. Interrupted cleanup is resumable; concurrent closers release
+capacity once. The current component requires its owning controller to invoke
+cleanup/reaping. No unattended worker or public capability is installed by the
+migration.
+
+SQLite tests cover 300 generated capture schedules, independent hash-chain
+receipts, cross-profile reads and cleanup, exact limits, and failures between page
+insertion and checkpoint update. A synthetic process fixture terminates the
+writer at five durable boundaries: before data, after page insertion, after the
+checkpoint write, after transaction commit and after sealing but before the
+acknowledgement. Uncommitted pages roll back; committed pages retain exact retry
+receipts; only sealed captures are readable. Isolated MySQL 8.4.11 also exercises
+1 MiB pages, independent connections racing for one profile, concurrent cleanup,
+rollback and partial DDL recovery. These results apply to those fixtures.
+Deployed PXC, authenticated HTTP, complete source capture and the full #544
+program still require implementation or qualification.
+
+Run the synthetic process-termination fixture from the repository root on macOS
+or Linux (Node 24 and the package build are required):
+
+```sh
+pnpm --filter @bsv/wallet-toolbox test:snapshot-archive-crash
+```
+
+The fixture owns a fresh temporary SQLite database per phase, kills only its own
+child writer, checks recovery through a new connection, and removes those files.
+It prints one result record per phase. This is a storage persistence check; its
+synthetic pages are not a BRC-38 archive or a funded wallet recovery.
+
+The MySQL fixture uses the local Docker Desktop `desktop-linux` context and the
+already available MySQL image
+`mysql@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b193fb8d`.
+It creates a loopback-only disposable container with a 1 GiB memory limit, two
+CPUs, 256 PIDs and a 512 MiB temporary data filesystem, then removes it. The
+launcher neither pulls an image nor accepts an external database connection.
+
+```sh
+pnpm --filter @bsv/wallet-toolbox test:snapshot-archive-mysql
+```
+
 ## Reproducible validation
 
 The fixture uses 10,000 same-timestamp labels (including tombstones), 64 proofs

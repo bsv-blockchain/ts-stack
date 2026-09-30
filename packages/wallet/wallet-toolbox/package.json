@@ -55,7 +55,7 @@
     "test": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --watchman=false",
     "test:watch": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|client/test|mobile/test' --watch",
     "test:coverage": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts src/storage/snapshot/RetainedReadSnapshot.property.test.ts src/storage/snapshot/SnapshotSync.property.test.ts --testPathIgnorePatterns=man.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts src/storage/snapshot/RetainedReadSnapshot.property.test.ts src/storage/snapshot/SnapshotSync.property.test.ts src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts --testPathIgnorePatterns=man.test.ts",
     "test:manual": "pnpm build && node ../../../scripts/run-governed-test.mjs manual",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live",
     "operator:build": "pnpm build && tsc --project operator/tsconfig.json --pretty false",
@@ -72,7 +72,9 @@
     "build": "tsc --build",
     "prepublishOnly": "pnpm build",
     "doc": "ts2md",
-    "sync-versions": "node syncVersions.js"
+    "sync-versions": "node syncVersions.js",
+    "test:snapshot-archive-crash": "pnpm build && node test/storage/snapshotArchiveCrash.cjs",
+    "test:snapshot-archive-mysql": "pnpm build && node test/storage/runSnapshotArchiveMysql.cjs"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
