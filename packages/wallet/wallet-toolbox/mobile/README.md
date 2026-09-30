@@ -46,6 +46,13 @@ Test the independent key and data recovery paths on a replacement device.
 Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
 [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
 [recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+The unpublished candidate exports `RetainedReadSnapshot` and
+`RetainedReadSnapshotOptions` types. They do not add a retained IndexedDB,
+remote, or native mobile implementation. Unsupported local providers report
+`supportsRetainedReadSnapshot() === false` and refuse `openReadSnapshot()`.
+The SQL implementation and its connection/lifetime limits are described in the
+[sync guide](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
+
 Portable helpers require a concrete local `StorageProvider`; a remote client
 is not one. Qualify the local-copy path and device memory limits before adding
 export/import UI.

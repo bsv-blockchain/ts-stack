@@ -3,8 +3,8 @@ id: wallet-data-portability
 title: 'BRC-38/39 Wallet Data Portability'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, interoperability, brc38, brc39]
@@ -58,6 +58,13 @@ Source JSON history omits null/undefined values only for recognized optional
 object properties in a detached copy, retaining false, zero, empty strings and
 every array position. Required values remain subject to validation. A null array
 entry is rejected rather than dropped. The source records are not rewritten.
+
+The candidate also adds a local SQL `openReadSnapshot` lifetime with explicit
+close/cancellation/expiry and one read at a time. It retains a pinned transaction
+across idle periods and occupies a pool connection until physical cleanup.
+IndexedDB and remote clients do not gain this capability. The existing export
+helpers continue to use their scoped capture path; see
+[retained SQL view limits](wallet-sync-reliability.md#retained-local-sql-read-views-unpublished-candidate).
 
 This is an intermediate source candidate, not a released streaming export API.
 The materialized helpers below still allocate the full document/file. Remote

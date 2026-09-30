@@ -3,8 +3,8 @@ id: wallet-sync-reliability
 title: 'Resumable wallet synchronization and proof recovery'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: beta
 tags: [wallet, sync, storage, performance]
@@ -126,6 +126,39 @@ snapshot or authorization to activate a new primary. Existing BRC-38/BRC-39
 export/import contracts are unchanged. Issue #544 remains open for coherent
 remote snapshots, streamed archives and consumer adoption.
 
+## Retained local SQL read views (unpublished candidate)
+
+The 2.15 candidate adds `StorageKnex.openReadSnapshot({ lifetimeMs, signal })`.
+Opening pins a SQLite or MySQL read view before returning. Its `read(callback)`
+method reuses that transaction across idle periods; pass the supplied token to
+**every** query and await every query before returning. Each provider admits one
+retained view and each view admits one read at a time. Concurrent/nested reads
+reject immediately. These local methods are excluded from the storage RPC
+allowlist; the handle is neither an authenticated remote export nor a profile
+boundary.
+
+The lifetime defaults to five minutes, includes acquisition, and accepts integer
+milliseconds from 1 through 3,600,000. Both monotonic and wall clocks enforce
+expiry. Close, cancellation and expiry stop new reads and discard late results.
+Await `close()` or `closed` to observe physical transaction/connection cleanup;
+a read failure invalidates the view and rolls back. Configure database query and
+connection deadlines separately: cancelling the view cannot interrupt a hung
+driver call or user callback. Do not perform writes, peer/file I/O, progress
+callbacks, or await `close()` inside a read callback.
+
+A view occupies one pool connection until cleanup. With a one-connection pool,
+other work must wait; the API does not create an independent writer. SQLite
+concurrent-write qualification uses WAL and a separate connection. MySQL uses a
+read-only repeatable-read transaction without changing pooled session defaults.
+SQLite relies on the trusted callback's read-only contract. `StorageIdb` and
+unsupported providers explicitly refuse retained views; their existing scoped
+snapshot behavior is unchanged. Process exit loses the view.
+
+This primitive does not yet provide a bounded paging API, durable cursor,
+remote handle, concurrent IndexedDB snapshot, or streaming archive. Ordinary
+push/backup loops still require the scheduling and checkpoint work below. No
+persisted schema, legacy index order or wire encoding changes in this checkpoint.
+
 ## Next-stage design checkpoint (not implemented)
 
 A future source-snapshot capability should negotiate a versioned contract
@@ -189,14 +222,14 @@ Foreground latency starts when its timer callback runs. Event-loop delay is
 reported separately so synchronous CPU stalls remain visible. The exclusive
 control has very few completed foreground samples because it holds the queue.
 
-| Backend / mode | Full copy ms | Foreground samples | Foreground p50 / p95 / p99 ms | Event-loop p95 / p99 ms | Pages |
-| --- | ---: | ---: | --- | --- | ---: |
-| Chromium IndexedDB / exclusive | 4027.1 | 1 | 4021.50 / 4021.50 / 4021.50 | 1.30 / 1.60 | 45 |
-| Chromium IndexedDB / paged | 4110.0 | 384 | 0.90 / 25.90 / 132.60 | 1.30 / 1.70 | 45 |
-| sqlite / exclusive | 2368.7 | 1 | 2342.43 / 2342.43 / 2342.43 | 85.12 / 106.86 | 45 |
-| sqlite / paged | 2373.8 | 133 | 0.17 / 0.32 / 0.40 | 84.86 / 109.29 | 45 |
-| http / exclusive | 26184.7 | 5 | 0.25 / 26092.86 / 26092.86 | 250.70 / 271.70 | 47 |
-| http / paged | 26394.8 | 319 | 0.24 / 0.35 / 0.40 | 255.93 / 271.98 | 47 |
+| Backend / mode                 | Full copy ms | Foreground samples | Foreground p50 / p95 / p99 ms | Event-loop p95 / p99 ms | Pages |
+| ------------------------------ | -----------: | -----------------: | ----------------------------- | ----------------------- | ----: |
+| Chromium IndexedDB / exclusive |       4027.1 |                  1 | 4021.50 / 4021.50 / 4021.50   | 1.30 / 1.60             |    45 |
+| Chromium IndexedDB / paged     |       4110.0 |                384 | 0.90 / 25.90 / 132.60         | 1.30 / 1.70             |    45 |
+| sqlite / exclusive             |       2368.7 |                  1 | 2342.43 / 2342.43 / 2342.43   | 85.12 / 106.86          |    45 |
+| sqlite / paged                 |       2373.8 |                133 | 0.17 / 0.32 / 0.40            | 84.86 / 109.29          |    45 |
+| http / exclusive               |      26184.7 |                  5 | 0.25 / 26092.86 / 26092.86    | 250.70 / 271.70         |    47 |
+| http / paged                   |      26394.8 |                319 | 0.24 / 0.35 / 0.40            | 255.93 / 271.98         |    47 |
 
 Native browser peak JS heap was 79.8 MB exclusive and 56.3 MB paged. SQLite
 full-copy CPU was 1.86/1.86 seconds and sampled RSS growth 127.6/60.1 MB.
@@ -230,11 +263,11 @@ MySQL environment and were not executed by the default local invocation.
 After integrating the SDK compatibility repair, repeat measurements with official
 Node 24.18.0 and the same sequential fixture passed the acceptance gates:
 
-| Backend | Full-copy ms, exclusive / paged | Foreground p95 ms, exclusive / paged | Paged event-loop p95 ms |
-| --- | ---: | ---: | ---: |
-| Native Chromium IndexedDB | 3943.6 / 3971.1 | 3938.80 / 24.50 | 1.00 |
-| SQLite | 2270.1 / 2238.5 | 2247.25 / 0.17 | 82.23 |
-| Authenticated HTTP to SQLite | 20982.5 / 21004.3 | 20901.51 / 0.31 | 195.69 |
+| Backend                      | Full-copy ms, exclusive / paged | Foreground p95 ms, exclusive / paged | Paged event-loop p95 ms |
+| ---------------------------- | ------------------------------: | -----------------------------------: | ----------------------: |
+| Native Chromium IndexedDB    |                 3943.6 / 3971.1 |                      3938.80 / 24.50 |                    1.00 |
+| SQLite                       |                 2270.1 / 2238.5 |                       2247.25 / 0.17 |                   82.23 |
+| Authenticated HTTP to SQLite |               20982.5 / 21004.3 |                      20901.51 / 0.31 |                  195.69 |
 
 These runs include shared reader/writer admission with unchanged authorization
 ordering and direct entity normalization. Native peak heap was 79.8 MB exclusive

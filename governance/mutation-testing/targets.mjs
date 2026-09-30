@@ -230,6 +230,37 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-retained-snapshot': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/RetainedReadSnapshot.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override supportsRetainedReadSnapshot(): boolean',
+          'private async readMySQLSnapshot<T>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageProvider.ts',
+          'supportsRetainedReadSnapshot(): boolean',
+          'protected supportsActionBatchPersistence(): boolean'
+        )
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/*.test.ts'], {
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      })
+    },
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',

@@ -409,6 +409,24 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
+  test.each(['readSnapshot', 'supportsReadSnapshot', 'openReadSnapshot', 'supportsRetainedReadSnapshot'])(
+    'keeps local snapshot method %s outside the authenticated RPC surface',
+    async method => {
+      const handler = jest.fn(async () => undefined)
+      const server = makeServer({ [method]: handler })
+      const response = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest({ jsonrpc: '2.0', method, params: [], id: 1 }),
+        response.response
+      )
+      expect(response.statusCode).toBe(400)
+      expect(response.body).toMatchObject({ error: { code: -32601, message: `Method not found: ${method}` } })
+      expect(handler).not.toHaveBeenCalled()
+    }
+  )
+
   test('redacts internal storage failures from JSON-RPC wallet errors', async () => {
     const server = makeServer(
       {

@@ -39,6 +39,14 @@ retain their documented caller-quiesced fallback.
 Recognized optional nullable JSON fields are omitted in a detached archive copy;
 array entries and meaningful falsy values are preserved. The helpers still
 materialize the full document/file, and IndexedDB writers wait during capture.
+SQL providers also expose `supportsRetainedReadSnapshot` / `openReadSnapshot`
+for a local view held across idle reads, with one view per provider, one read at
+a time, and bounded lifetime/cancellation. Await `closed`/`close()` for physical
+cleanup. The view occupies a connection; driver deadlines remain separate and a
+single-connection pool cannot serve other work until release. IndexedDB and
+remote RPC do not expose retained views. This does not yet yield ordinary backup
+work or add a bounded paging API. See the
+[retained view contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

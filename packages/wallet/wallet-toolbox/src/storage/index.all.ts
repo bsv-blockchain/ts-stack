@@ -20,3 +20,5 @@ export * from './schema/tables/index'
 export * from './schema/entities/index'
 export * as sync from './sync'
 export * from './portable'
+
+export type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'

@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add local retained SQLite/MySQL views with explicit lifetime, cancellation and
+  cleanup ownership. Opening pins the transaction before the first consumer read;
+  one view per provider and one read per view prevent unbounded admission. Closing
+  discards late results and awaits physical cleanup, including failed reads.
+  Driver/query deadlines remain separate. Each view occupies a pool connection;
+  IndexedDB and RPC explicitly remain unsupported for retention. This is a paging
+  prerequisite, without changing ordinary backup locks, schemas or wire formats.
+
 - Capture BRC-38 source metadata and every table from one provider read view.
   Custom providers opt in with `supportsReadSnapshot` and `readSnapshot`. The
   additive `requireSnapshot` export option refuses unsupported views; old

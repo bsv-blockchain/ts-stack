@@ -9,3 +9,5 @@ export * from './portable'
 export * from './methods/ListActionsSpecOp'
 export * from './methods/ListOutputsSpecOp'
 export * from './methods/managedChangePolicy'
+
+export type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'

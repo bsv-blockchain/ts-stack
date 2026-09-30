@@ -1,3 +1,4 @@
+import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
 import { runInSeries } from '../utility/runInSeries'
 import { findProofRecords, mapProofWork } from './methods/proofWork'
 import { snapshotSyncPage } from './sync/snapshotSyncPage'
@@ -531,6 +532,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return Promise.reject(
       new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
     )
+  }
+
+  /** Local transaction retention only; no remote/profile export capability is implied. */
+  supportsRetainedReadSnapshot(): boolean {
+    return false
+  }
+
+  /** Older and auto-closing transaction providers must explicitly refuse retention. */
+  openReadSnapshot(_options?: RetainedReadSnapshotOptions): Promise<RetainedReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Retained read snapshots are not supported by this provider'))
   }
 
   protected supportsActionBatchPersistence(): boolean {

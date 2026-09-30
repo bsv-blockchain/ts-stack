@@ -96,6 +96,19 @@
         ]
       },
       {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership",
+        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model",
+        "invariants": [
+          "At most one database read is admitted and concurrent or nested reads do not queue.",
+          "Closing, cancellation and expiry reject later admission and discard late successful results.",
+          "Capacity remains occupied until physical reads and transaction cleanup settle.",
+          "Every completed lifecycle removes its expiry timer and rejects further reads."
+        ]
+      },
+      {
         "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
         "manifest": "packages/overlays/topics/package.json",
         "risk": "critical",

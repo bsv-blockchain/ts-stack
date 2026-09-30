@@ -74,8 +74,19 @@ JSON fields normalize without changing source history; required values and array
 entries cannot be silently dropped. Inconsistent owned label/tag mappings reject
 capture instead of being filtered out of the archive.
 
-This checkpoint is only part of S2/P1. It does not yet implement keysets, immutable
-retained snapshots, streaming, bounded push/backup work or staged restore.
+The next checkpoint adds a bounded local SQL read-view lifetime. Opening pins a
+SQLite/MySQL view before returning, retains it across idle reads, rejects nested
+or concurrent reads, and keeps provider capacity occupied until physical cleanup
+after close, expiry, cancellation or read failure. Tests cover exact lifetime
+boundaries, delayed acquisition/initialization/read/cleanup, independent writers,
+profile-filtered reads and randomized operation schedules. The local methods are
+absent from the RPC allowlist. Each view occupies one pool connection; query
+cancellation/deadlines remain a driver concern. Retention is explicitly
+unsupported on IndexedDB. No persisted schema or index transition is introduced.
+
+These checkpoints are only part of S2/P1. They do not yet implement a bounded
+keyset API, authenticated remote views, durable source-view checkpoints,
+streaming, bounded push/backup work or staged restore.
 IndexedDB writers wait during capture and the legacy helpers still materialize
 the document. A local MySQL 8.4.11 fixture confirms repeatable-read capture under
 an independent writer, read-only enforcement, unchanged session defaults and

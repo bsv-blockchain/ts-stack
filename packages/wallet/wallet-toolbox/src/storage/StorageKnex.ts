@@ -1,3 +1,9 @@
+import {
+  retainReadSnapshot,
+  type RetainedReadSnapshot,
+  type RetainedReadSnapshotLifetime,
+  type RetainedReadSnapshotOptions
+} from './snapshot/RetainedReadSnapshot'
 import { recoveredProofUpdate } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
@@ -61,7 +67,13 @@ import {
   SyncChunkTotals,
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_UNAUTHORIZED
+} from '../sdk/WERR_errors'
 import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
@@ -106,6 +118,8 @@ interface PreparedBeefMetadata {
 
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  private retainedReadSnapshot?: RetainedReadSnapshotLifetime
+  private retainedReadSnapshotsStopped = false
   readonly preparedBeefPolicy: PreparedBeefPolicy
   private readonly preparedBeefCoordinator: PreparedBeefCoordinator
   private readonly preparedBeefReadSuspensions = new Set<number>()
@@ -186,6 +200,43 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       return await this.readMySQLSnapshot(read)
     }
     throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots require SQLite or MySQL isolation')
+  }
+
+  override supportsRetainedReadSnapshot(): boolean {
+    return this.supportsReadSnapshot()
+  }
+
+  /** One retained local transaction per provider; it occupies one pool connection until physical cleanup. */
+  override async openReadSnapshot(options: RetainedReadSnapshotOptions = {}): Promise<RetainedReadSnapshot> {
+    if (this.retainedReadSnapshotsStopped) {
+      throw new WERR_INVALID_OPERATION('Retained read snapshots are unavailable after provider destruction begins')
+    }
+    if (!this.supportsRetainedReadSnapshot()) return await super.openReadSnapshot(options)
+    if (this.retainedReadSnapshot !== undefined) {
+      throw new WERR_INVALID_OPERATION('This provider already has a retained read snapshot opening or active')
+    }
+    const lifetime = retainReadSnapshot(
+      read => this.readSnapshot(read),
+      async trx => {
+        // Pin SQLite's deferred read view before opening resolves. MySQL also
+        // establishes its repeatable-read snapshot on this first data read.
+        await this.readSettings(trx)
+      },
+      options
+    )
+    this.retainedReadSnapshot = lifetime
+    const release = (): void => {
+      if (this.retainedReadSnapshot === lifetime) this.retainedReadSnapshot = undefined
+    }
+    void lifetime.closed.then(release, release)
+    return await lifetime.opened
+  }
+
+  private async stopRetainedReadSnapshots(): Promise<void> {
+    // Fence admission before any asynchronous cleanup can yield. A view whose
+    // close releases the capacity slot must not permit reopening during destroy.
+    this.retainedReadSnapshotsStopped = true
+    await this.retainedReadSnapshot?.close()
   }
 
   private async readMySQLSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
@@ -1670,13 +1721,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async destroy(): Promise<void> {
-    await this.stopPreparedBeefTasks()
-    this.knex.off('query', this.onQuery)
-    this.knex.off('query-response', this.onQueryResponse)
-    this.knex.off('query-error', this.onQueryError)
-    for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
-    this.querySpans.clear()
-    await this.knex?.destroy()
+    try {
+      await this.stopRetainedReadSnapshots()
+    } finally {
+      await this.stopPreparedBeefTasks()
+      this.knex.off('query', this.onQuery)
+      this.knex.off('query-response', this.onQueryResponse)
+      this.knex.off('query-error', this.onQueryError)
+      for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
+      this.querySpans.clear()
+      await this.knex?.destroy()
+    }
   }
 
   override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
