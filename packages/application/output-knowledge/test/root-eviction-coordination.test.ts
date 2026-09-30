@@ -1,13 +1,13 @@
 import { expect, it } from '@jest/globals'
 import { DatabaseSync } from 'node:sqlite'
-import { canonicalOutputJSON } from '@bsv/sdk'
+import { canonicalOutputJSON, outputPacketDigest, signOutputPacket } from '@bsv/sdk'
 import { RootEvictionContracts } from '../src/root-eviction/RootEvictionContracts.js'
 import {
   rootContractManifest,
   rootContractPacket,
   rootContractTrust
 } from './root-contract-fixture.js'
-import { clock, requester, signed } from './root-eviction-fixture.js'
+import { clock, requester, requesterKey, signed } from './root-eviction-fixture.js'
 import {
   coordinatedFixture,
   coordinatedRequest,
@@ -177,6 +177,21 @@ it('binds first intake to the journal root and chain and the clock sampled insid
         coordinationGuard()
       )
     ).rejects.toMatchObject(error('context-changed'))
+    const otherRootTrust = { ...rootContractTrust(), identity: requester }
+    const otherRootManifest = { ...rootContractManifest(), identity: requester }
+    await expect(
+      f.store.retainCoordinated(
+        signed(body),
+        requester,
+        {
+          ...selection,
+          manifest: signOutputPacket('capabilities', otherRootManifest, requesterKey),
+          selector: outputPacketDigest('capabilities', otherRootManifest)
+        },
+        new RootEvictionContracts(otherRootTrust),
+        coordinationGuard()
+      )
+    ).rejects.toMatchObject(error('context-changed'))
     expect(inventory(f.path)).toMatchObject({ requests: 0, contracts: 0 })
   } finally {
     await f.cleanup()
@@ -244,6 +259,19 @@ it('reserves exact original-contract capacity and resolves simultaneous first in
       )
     ).rejects.toMatchObject(error('limited'))
     expect(inventory(f.path)).toEqual({ requests: 1, contracts: 1, bytes })
+    const damaged = new DatabaseSync(f.path)
+    damaged.exec('UPDATE root_contracts SET bytes=-1')
+    damaged.close()
+    await expect(
+      other.retainCoordinated(
+        signed(coordinatedRequest('third_coordinated_request')),
+        requester,
+        selection,
+        contracts,
+        coordinationGuard()
+      )
+    ).rejects.toMatchObject(error('limited'))
+    expect(inventory(f.path)).toEqual({ requests: 1, contracts: 1, bytes: -1 })
   } finally {
     await f.cleanup()
   }
