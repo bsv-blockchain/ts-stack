@@ -442,7 +442,6 @@ mutation campaigns receive a 90-minute hosted job limit after reaching the old
 records/payloads. All other job limits and all test, mutant, worker and quality
 thresholds remain unchanged. Exact-head hosted qualification is still required.
 
-
 The action store's complete 585 mutation sites are now partitioned into
 installation/binding (170), record/accounting (229) and operation transitions
 (186). All partitions retain the complete 160-test selection and independent
