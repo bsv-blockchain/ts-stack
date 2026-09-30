@@ -108,6 +108,18 @@ notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
 audit and CodeQL results, package and consumer tests, bundle/performance
 impact, and affected public versions.
 
+The docs-site Mermaid graph selects DOMPurify 3.4.16 instead of 3.4.13 for
+[GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p).
+The reviewed [3.4.16 release](https://github.com/cure53/DOMPurify/releases/tag/3.4.16)
+fits Mermaid 11.16.1's existing `^3.3.3` range and exceeds the seven-day release
+age. pnpm regenerates only that package resolution, integrity and existing graph
+reference; all importers, manifests and unrelated resolutions remain unchanged.
+The governed bundle inventory records the same version, with its license
+expression and license-file hash unchanged. This private documentation dependency does not change wallet runtime packages,
+public APIs or candidate versions. Frozen installation, root checks, docs tests
+and a built-site browser check qualify the ordinary Mermaid consumer. No service
+or package is deployed by this source change.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
