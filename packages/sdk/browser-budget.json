@@ -59,6 +59,45 @@
           "brotli": 45000
         }
       }
+    },
+    {
+      "entry": "./script/templates/RevenueListingPlan",
+      "requiredExports": [
+        "planRevenueListingSpend",
+        "parseRevenueListingAction",
+        "parseRevenueListingPrevious",
+        "readRevenueListingPrevious"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 400000,
+          "gzip": 115000,
+          "brotli": 94000
+        },
+        "esbuild": {
+          "raw": 310000,
+          "gzip": 104000,
+          "brotli": 88000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingSpend",
+      "requiredExports": ["RevenueListingSpend"],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 410000,
+          "gzip": 118000,
+          "brotli": 97000
+        },
+        "esbuild": {
+          "raw": 315000,
+          "gzip": 106000,
+          "brotli": 89000
+        }
+      }
     }
   ]
 }

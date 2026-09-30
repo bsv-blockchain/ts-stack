@@ -70,11 +70,10 @@ does not establish any of those facts. Similarly, encoding a changed schedule
 does not prove the old recipients consented, and identifying a listing does
 not establish a purchase or permit private fulfillment.
 
-This increment supplies the authenticated codec. Complete spend construction
-for all six routes, bounded lineage verification, BRC-100 two-phase funding and
-consent signing, private fulfillment and application demonstrations remain
-separate tracked parts of the implementation checkpoint. Do not advertise a
-complete purchase or seller administration implementation from this codec alone.
+The separate [spend guide](./revenue-listing-spends.md) covers six-route planning,
+funded transaction binding and raw transaction signatures. Full lineage validation,
+BRC-100 wallet integration, private fulfillment and application demonstrations
+remain separate tracked parts of the implementation checkpoint.
 
 The tests compare exact bytes against the frozen BRC genesis artifact and cover
 descriptor binding, changed executable bytes, state boundaries and owned buffers.

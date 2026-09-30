@@ -216,6 +216,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (2.9.0 candidate)
 
+- Add opt-in `RevenueListingPlan` and `RevenueListingSpend` entries for all six BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
 - Add the separate `@bsv/sdk/script/templates/RevenueListing` codec for the frozen BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
 
 - Add `OutputLookupTransport` for retained-contract BRC-193 HTTP open/read/close, explicit peer and signed contract binding, bounded original response bytes, unpaid error recovery and cancellation. Reads validate scope, limits, fixed deadlines and snapshot/live continuity without automatically persisting or advancing a cursor. Existing SDK defaults and endpoints remain unchanged. Callers must persist opening identity and atomically commit received groups with each checkpoint; this client component does not claim a complete durable service.

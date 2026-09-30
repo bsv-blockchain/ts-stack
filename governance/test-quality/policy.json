@@ -632,6 +632,30 @@
           "Canonical compressed recipients retain byte ordering and exact integer payout quanta.",
           "Unused slots are zero and any nonzero padding is rejected."
         ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 six-route output, revenue conservation and retirement planning",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Mandatory listing, receipt and payout outputs match frozen route transactions.",
+          "Payout quanta retain all indivisible remainders.",
+          "Retirement preserves exact shares with an explicit bounded external top-up."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Every input and output is bound before requesting transaction signatures.",
+          "Seller and all old-recipient signatures authorize their exact listing input.",
+          "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
+        ]
       }
     ],
     "exclusions": [

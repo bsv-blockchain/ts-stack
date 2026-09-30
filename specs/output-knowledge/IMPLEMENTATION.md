@@ -18,6 +18,11 @@ submission and GASP behavior remains available to applications that do not opt i
   executable identity, canonical schedules and full descriptor binding. Its separate
   browser entry adds no program artifact to root imports. Recognition remains
   separate from lineage, transaction validation, consent and private fulfillment.
+- Separate SDK six-route economic planning and funded transaction construction,
+  exact mandatory outputs and unlocking ABI, explicit retirement top-up, per-input
+  seller and all-old-recipient transaction signatures, owned preparation snapshots
+  and final-layout checks. These low-level interfaces do not establish lineage,
+  chain validity, wallet support or private entitlement.
 - Bounded common service errors, explicit capacity minimums and the specified
   BRC-193 HTTP status mapping, separate from local cancellation/storage failures.
 - An additive AuthFetch automatic-payment opt-out for unpaid authenticated requests,
@@ -101,8 +106,9 @@ submission and GASP behavior remains available to applications that do not opt i
   non-final profiles while preserving finite legacy defaults.
 - Exercise existing private off-chain values and lookup context, then implement
   acquisition, funding/recovery, STEAK/POTATOES readiness and secret release.
-- Implement and qualify the exact BRC-197 Script template, lineage validation,
-  purchase, split, merge, payout, unanimous recipient-change and retirement routes.
+- Finish BRC-197 bounded lineage validation and BRC-100 wallet integration for
+  purchase, split, merge, payout, unanimous recipient-change and retirement.
+  Low-level construction and final-layout checks do not establish those guarantees.
 - Integrate BRC-198 LCH acquisition and playback without changing BRC-170 behavior.
 - Implement BRC-199 root-host output eviction, all serving/replay/admission/GASP
   fences, restoration and multi-host consistency demonstrations.
@@ -116,7 +122,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK foundation run passes 7,810 tests across 225 suites, including all proposal
+The SDK foundation run passes 7,983 tests across 230 suites, including all proposal
 endpoint variants and closed-envelope, canonical encoding and intrinsic-policy checks.
 The provider increment's full output-knowledge run passes 836 tests across 54 suites,
 with 97.46% line and 94.16% branch coverage. This includes the statement boundary,
@@ -181,7 +187,7 @@ tests across 19 suites. Root lint/format and affected type checks pass. Exact pa
 runtime and Express exports and clean consumers pass, including the legacy Express
 root with registry SDK 2.8.9 in ESM/CJS and strict .mts/.cts TypeScript consumers.
 The optional lookup feature requires SDK 2.9.0. Browser composition passes without
-SQLite, and all ten public-interface documentation examples compile against 22 exact
+SQLite, and all eleven public-interface documentation examples compile against 22 exact
 tarballs. The [provider guide](../../docs/guides/durable-live-lookup.md) covers initialization,
 recovery, privacy writers, mounting, retention and operational limits.
 
@@ -236,13 +242,28 @@ unchanged 90% gate. Exact ESM/CJS and strict TypeScript consumers and the separa
 bounded Vite/esbuild entry pass. This is codec qualification, not completed spend,
 lineage, consent, wallet or application qualification.
 
+The next route-construction increment passes 54 planner tests, 87 signing tests,
+30 independent frozen rejection cases and two properties with at least 300 cases
+each. All twelve accepted frozen transactions rebuild byte for byte and every
+input executes under the SDK interpreter. Tests include eight-recipient consent,
+maximum input/output dimensions, complete signature authority, value conservation,
+owned snapshots and both prepared/completed byte limits. Planner mutation passes
+98.08% over 260 mutants (255 killed, five surviving, zero uncovered/invalid).
+Funded-construction mutation passes 93.80% over 387 mutants (363 killed, 24
+surviving, zero uncovered/invalid), including the completed-byte bound and expanded
+tests. The campaign finished in 13m53s at the unchanged 90% gate.
+Root health/lint/format/types, complete
+SDK coverage and exact packed consumers pass. Eleven compiled examples pass
+against 22 exact tarballs. These results do not establish full lineage, wallet,
+private fulfillment or application qualification.
+
 Compatible dependency remediation advances the existing brace-expansion
 substitution and affected lock resolutions without adding an override or relaxing
 release-age policy. Workspace, four standalone service and codegen audits report
 zero vulnerabilities. The four service suites pass 641 tests; affected wallet
 rate-limit, CHIRP and AuthSocket checks pass 4, 150 and 50 tests. All affected builds,
 frozen installs and deterministic codegen checks pass. The latest documentation
-build validates 137 HTML routes and ten examples against 22 exact tarballs.
+build validates 138 HTML routes and eleven examples against 22 exact tarballs.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all declared browser entries pass. Core browser byte limits remain unchanged;

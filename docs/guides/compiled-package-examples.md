@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-08'
-last_verified: '2026-09-08'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -272,3 +272,32 @@ export function recognizeListing(
   }
 }
 ```
+
+## Revenue listing funded signing boundary
+
+```typescript compile
+// example-id: revenue-listing-spend
+import { RevenueListing as ListingCodec } from '@bsv/sdk/script/templates/RevenueListing'
+import {
+  RevenueListingSpend,
+  type RevenueListingSigningRequest
+} from '@bsv/sdk/script/templates/RevenueListingSpend'
+import type { Transaction as FundedTransaction } from '@bsv/sdk'
+
+export function bindListingFunding(
+  codec: ListingCodec,
+  descriptor: unknown,
+  previous: unknown,
+  action: unknown,
+  funded: FundedTransaction
+) {
+  const spend = new RevenueListingSpend(codec, descriptor, previous, action)
+  const prepared = spend.prepare(funded)
+  const requests: RevenueListingSigningRequest[] = prepared.signingRequests()
+  return { plan: spend.plan(), requests, prepared }
+}
+```
+
+The caller establishes lineage first and obtains transaction signatures from an
+explicit authority. Final layout validation remains separate from full transaction
+and Script verification, private fulfillment and wallet operation recovery.

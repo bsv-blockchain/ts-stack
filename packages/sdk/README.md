@@ -619,4 +619,8 @@ separate portable entry point. Supply the frozen BRC-197 program bytes explicitl
 the codec authenticates the executable and exact descriptor/revenue-state layout.
 Recognition does not establish lineage, currentness, valid spending or fulfillment.
 See the [codec guide](../../docs/guides/revenue-listing-codec.md) for its boundary
-and the remaining complete-family integration work. Existing root imports remain unchanged.
+and the remaining complete-family integration work. The separate
+`RevenueListingPlan` and `RevenueListingSpend` entries provide all six route plans,
+funded-layout checks and exact unlocking scripts with externally supplied seller
+and recipient signatures. See the [spend guide](../../docs/guides/revenue-listing-spends.md).
+Lineage, wallet integration and fulfillment are separate. Existing root imports remain unchanged.
