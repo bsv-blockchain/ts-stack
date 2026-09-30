@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.0'
-last_updated: '2026-09-25'
-last_verified: '2026-09-25'
+version: '1.3.1'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -46,15 +46,42 @@ setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
 package-composition reports without rebuilding the workspace. The cheap
 repository-health, scope, and dependency-review gates complete before
-dependency installation. Exact-head Sonar analysis runs concurrently and remains
-mandatory in the final merge gate. Package artifact checks and documentation
-consumers run beside the tests after the shared build, with their own required
+dependency installation. Exact-head Sonar analysis runs concurrently with the
+shared build and remains mandatory in the final merge gate. Expensive PR mutation waits for both a
+successful shared build and successful exact-head Sonar analysis. Main and
+manual full campaigns allow only the intentional skip of the PR-only analyzer
+gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
+normal mutation launch; suppressed selected mutation is not qualified evidence.
+Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
 result. Matrix siblings finish after a failure so acceptance
 evidence includes every selected shard. Within a regression or coverage shard,
 packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+## Explicit mutation diagnostics
+
+For a PR, apply the `ci:mutation-diagnostics` label before the next ordinary CI
+trigger (opening, reopening or pushing the PR). Adding or removing the label
+alone does not start a campaign; normal qualification resumes on the next run
+without the label. This opt-in permits collecting mutation results after a
+failed or unavailable analyzer prerequisite. It does not waive required Sonar,
+CodeQL, coverage, audit or merge gates, and it does not qualify a failed PR.
+
+For a manual full-tree campaign, select the boolean `mutation-diagnostics`
+workflow input explicitly (default `false`). The normal manual run already
+permits the intentional PR-only Sonar skip; the diagnostic input is only an
+eligibility override if that analyzer prerequisite has another result. A manual
+campaign is not a replacement for the exact-head PR analyzer and merge gate.
+
+Both diagnostic routes still require the successful audited shared build, a
+nonempty selected target set and an uncancelled workflow. They preserve every
+selected source, test, threshold, worker and timeout. Mutation reports remain
+retained on failure. A successful diagnostic mutation result never turns a
+failed prerequisite into successful qualification. Existing mutation siblings
+finish to collect evidence after a mutation failure; this opt-in changes the
+preliminary analyzer eligibility, not matrix failure handling.
 
 To refresh the evidence without changing the baseline:
 

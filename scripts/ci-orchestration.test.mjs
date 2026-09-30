@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -145,9 +146,12 @@ test('specialized workflows are bounded and required conformance checks always r
 test('all selected execution jobs survive skipped ancestors and expose a strict final gate', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = workflowJobBlocks(workflow)
-  const selected = jobs.filter(job => /^    needs: (?:prepare|infra-scope)$/m.test(job.source))
+  const selected = jobs.filter(
+    job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
+  )
   assert.equal(selected.length, 14)
   for (const job of selected) {
+    if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
     assert.match(
       job.source,
       /^    if: always\(\) && !cancelled\(\) && needs\.(?:prepare|infra-scope)\.result == 'success'(?: && |$)/m,
@@ -179,11 +183,13 @@ test('fork PRs retain advisory Codecov reports without a privileged workflow', (
   assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
 })
 
-test('slow analysis and external coverage reporting do not serialize required execution', () => {
+test('analysis gates mutation without serializing the shared build or external reporting', () => {
   const jobs = Object.fromEntries(
     workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
   )
   assert.doesNotMatch(jobs['early-gates'], /sonar-zero-findings|SONAR_RESULT/)
+  assert.doesNotMatch(jobs.prepare, /      - sonar-zero-findings/)
+  assert.match(jobs['mutation-tests'], /      - sonar-zero-findings/)
   assert.match(jobs['merge-gate'], /      - sonar-zero-findings/)
   assert.match(jobs['merge-gate'], /      - package-artifacts/)
   assert.doesNotMatch(jobs.prepare, /name: Verify changed package artifacts/)
@@ -196,6 +202,116 @@ test('slow analysis and external coverage reporting do not serialize required ex
   assert.doesNotMatch(jobs['coverage-upload'], /Wait for Codecov/)
   assert.match(jobs['coverage-report'], /continue-on-error: true/)
   assert.doesNotMatch(jobs['merge-gate'], /      - coverage-report/)
+})
+
+function mutationEligibility(options = {}) {
+  const { event, prepare, sonar, targets, labels, diagnosticInput, workflowCancelled } = {
+    event: 'pull_request',
+    prepare: 'success',
+    sonar: 'success',
+    targets: '["selected"]',
+    labels: [],
+    diagnosticInput: false,
+    workflowCancelled: false,
+    ...options
+  }
+  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    candidate => candidate.name === 'mutation-tests'
+  ).source
+  const folded = /^    if: >-\n((?:      .*\n)+)/m.exec(job)
+  const source = folded
+    ? folded[1]
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .join(' ')
+    : /^    if: (.*)$/m.exec(job)[1]
+  // Evaluate the actual authored job expression, not a second copy of the policy.
+  const expression = source
+    .replaceAll(
+      'needs.prepare.outputs.mutation-targets',
+      'needs.prepare.outputs["mutation-targets"]'
+    )
+    .replaceAll('needs.sonar-zero-findings.result', 'needs["sonar-zero-findings"].result')
+    .replaceAll('github.event.pull_request.labels.*.name', 'labels')
+    .replaceAll('inputs.mutation-diagnostics', 'inputs["mutation-diagnostics"]')
+  const evaluate = new Function(
+    'needs',
+    'github',
+    'inputs',
+    'labels',
+    'always',
+    'cancelled',
+    'contains',
+    `return Boolean(${expression})`
+  )
+  return evaluate(
+    {
+      prepare: { result: prepare, outputs: { 'mutation-targets': targets } },
+      'sonar-zero-findings': { result: sonar }
+    },
+    { event_name: event },
+    { 'mutation-diagnostics': diagnosticInput },
+    labels,
+    () => true,
+    () => workflowCancelled,
+    (values, value) => values.includes(value)
+  )
+}
+
+test('mutation defaults to successful exact-head PR analysis and a successful shared build', () => {
+  assert.equal(mutationEligibility(), true)
+  for (const sonar of ['failure', 'cancelled', 'skipped', 'in_progress', undefined, '']) {
+    assert.equal(mutationEligibility({ sonar }), false, `PR analysis: ${sonar}`)
+  }
+  for (const prepare of ['failure', 'cancelled', 'skipped', undefined]) {
+    assert.equal(mutationEligibility({ prepare, labels: ['ci:mutation-diagnostics'] }), false)
+  }
+  for (const targets of ['[]', '', undefined]) {
+    assert.equal(mutationEligibility({ targets }), false)
+  }
+  assert.equal(mutationEligibility({ workflowCancelled: true }), false)
+})
+
+test('main and full manual mutation survive only the intentional PR analysis skip', () => {
+  for (const event of ['push', 'workflow_dispatch']) {
+    assert.equal(mutationEligibility({ event, sonar: 'skipped' }), true)
+    for (const sonar of ['failure', 'cancelled', undefined]) {
+      assert.equal(mutationEligibility({ event, sonar }), false)
+    }
+  }
+})
+
+test('explicit diagnostics collect analyzer failures without bypassing build or cancellation', () => {
+  for (const sonar of ['failure', 'cancelled', 'skipped', undefined]) {
+    assert.equal(mutationEligibility({ sonar, labels: ['ci:mutation-diagnostics'] }), true)
+    assert.equal(mutationEligibility({ sonar, diagnosticInput: true }), false)
+    assert.equal(
+      mutationEligibility({ event: 'workflow_dispatch', sonar, diagnosticInput: true }),
+      true
+    )
+  }
+  assert.equal(mutationEligibility({ sonar: 'failure', labels: ['unrelated'] }), false)
+  assert.equal(
+    mutationEligibility({
+      sonar: 'failure',
+      labels: ['ci:mutation-diagnostics'],
+      workflowCancelled: true
+    }),
+    false
+  )
+  assert.equal(
+    mutationEligibility({ event: 'workflow_dispatch', prepare: 'failure', diagnosticInput: true }),
+    false
+  )
+  assert.equal(
+    mutationEligibility({ event: 'workflow_dispatch', targets: '[]', diagnosticInput: true }),
+    false
+  )
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  assert.match(workflow, /^      mutation-diagnostics:\n/m)
+  assert.match(workflow, /mutation-diagnostics:[\s\S]*?type: boolean\n        default: false/)
+  assert.doesNotMatch(workflow, /pull_request_target/)
 })
 
 test('every HTTP latency scenario retains its own required coverage execution', () => {
@@ -226,4 +342,31 @@ test('every HTTP latency scenario retains its own required coverage execution', 
   assert.match(wallet, /args=\(--coverage --coverageDirectory=coverage\/\$\{\{ matrix\.id \}\}\)/)
   assert.match(wallet, /name: coverage-wallet-\$\{\{ matrix\.id \}\}/)
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
+})
+
+test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
+  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    candidate => candidate.name === 'mutation-quality'
+  ).source
+  assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
+  const script = /        run: \|\n([\s\S]*)$/
+    .exec(job)[1]
+    .split('\n')
+    .map(line => line.replace(/^          /, ''))
+    .join('\n')
+  for (const targets of ['[]', '["selected"]', '']) {
+    for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
+      const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
+        env: { PREPARE_RESULT: 'success', MUTATION_TARGETS: targets, MUTATION_RESULT: result },
+        encoding: 'utf8'
+      })
+      assert.equal(execution.error, undefined)
+      const permitted = result === 'success' || (result === 'skipped' && targets === '[]')
+      assert.equal(execution.status === 0, permitted, `${targets}: ${result}`)
+    }
+  }
+  const failedBuild = spawnSync('/bin/bash', ['-e', '-c', script], {
+    env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
+  })
+  assert.notEqual(failedBuild.status, 0)
 })

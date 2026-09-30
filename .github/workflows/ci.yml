@@ -7,6 +7,12 @@ on:
     branches: [main]
   # Release acceptance must be able to exercise the complete current tree.
   workflow_dispatch:
+    inputs:
+      mutation-diagnostics:
+        description: Collect mutation diagnostics despite analyzer failure; never bypass qualification
+        type: boolean
+        default: false
+        required: false
 
 permissions: {}
 
@@ -457,8 +463,18 @@ jobs:
 
   mutation-tests:
     name: Mutation / ${{ matrix.target }}
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
-    needs: prepare
+    # Analyzer failures stop expensive qualification; explicit diagnostics only
+    # collect evidence and never waive the required final analyzer/merge gates.
+    if: >-
+      always() && !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.mutation-targets && needs.prepare.outputs.mutation-targets != '[]' &&
+      (needs.sonar-zero-findings.result == 'success' ||
+       (github.event_name != 'pull_request' && needs.sonar-zero-findings.result == 'skipped') ||
+       contains(github.event.pull_request.labels.*.name, 'ci:mutation-diagnostics') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mutation-diagnostics))
+    needs:
+      - prepare
+      - sonar-zero-findings
     runs-on: ubuntu-latest
     # The governed air-gap codec target currently instruments 352 mutants and
     # legitimately exceeds 20 minutes on a hosted runner.
@@ -510,9 +526,11 @@ jobs:
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           MUTATION_RESULT: ${{ needs.mutation-tests.result }}
+          MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
-                ( "$MUTATION_RESULT" != "success" && "$MUTATION_RESULT" != "skipped" ) ]]; then
+                ( "$MUTATION_RESULT" != "success" &&
+                  ( "$MUTATION_RESULT" != "skipped" || "$MUTATION_TARGETS" != "[]" ) ) ]]; then
             echo "::error::Mutation quality failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
             exit 1
           fi
