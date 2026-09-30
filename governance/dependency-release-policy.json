@@ -153,8 +153,8 @@
   "overrideRegistry": [
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "brace-expansion@<5.0.9",
-      "value": "5.0.9",
+      "selector": "brace-expansion@<5.0.12",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -200,7 +200,7 @@
       "source": "tools/codegen/node/package.json",
       "selector": "minimatch@10.2.5",
       "value": {
-        "brace-expansion": "5.0.9"
+        "brace-expansion": "5.0.12"
       },
       "exceptionId": "openapi-typescript-redocly-overrides"
     },
@@ -213,7 +213,7 @@
     {
       "source": "infra/message-box-server/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -237,7 +237,7 @@
     {
       "source": "infra/uhrp-server-basic/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -249,7 +249,7 @@
     {
       "source": "infra/uhrp-server-cloud-bucket/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -279,7 +279,7 @@
     {
       "source": "infra/wab/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {

@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.2'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -136,12 +136,28 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
+The September 30 audit refresh also selects compatible transitive releases within
+existing ranges: `engine.io` 6.6.10 in the workspace and Message Box server;
+`ip-address` 10.7.1 in Message Box, both UHRP servers and WAB; `fast-uri` 3.1.8 in
+Message Box; and `undici` 6.28.1 in WAB. These generated lock changes add no
+manifest ranges or overrides. All selected versions exceed the seven-day release
+age. Upstream releases preserve their module and Node contracts; service suites,
+AuthSocket coverage and frozen-install audits qualify the affected consumers.
+The relevant upstream releases are [Engine.IO](https://github.com/socketio/socket.io/releases/tag/engine.io%406.6.10),
+[ip-address](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.1),
+[fast-uri](https://github.com/fastify/fast-uri/releases/tag/v3.1.8) and
+[Undici](https://github.com/nodejs/undici/releases/tag/v6.28.1).
+Source reconciliation does not release packages or deploy service images.
+
 The root workspace carries six narrow audited dependency overrides:
 
 - Jest 30.4.2 still constrains parts of its reporting and coverage graph to
   minimatch releases with older `brace-expansion` ranges. The follow-up
-  GHSA-rgw5-rvv9-x895 requires `brace-expansion` 5.0.9, so the workspace
-  substitutes 5.0.9 until every supported path resolves it natively.
+  advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
+  GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
+  and existing standalone substitutions select 5.0.12 until every supported
+  path resolves it natively. The release preserves the existing module exports,
+  types and Node engine range.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass
