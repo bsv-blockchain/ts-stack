@@ -39,6 +39,14 @@ export const family = new RevenueListing(genesisTx.outputs[0].lockingScript.toBi
 const initialTime = new DataView(
   Uint8Array.from(Utils.toArray(manifest.chainCheckpoint.header, 'hex')).buffer
 ).getUint32(68, true)
+function mineHeader(raw: Uint8Array): void {
+  let nonce = 0
+  for (;;) {
+    new DataView(raw.buffer).setUint32(76, nonce++, true)
+    const hash = Utils.toHex(Hash.hash256(Array.from(raw)).reverse())
+    if (BigInt('0x' + hash) <= 0x7fffffn << 232n) return
+  }
+}
 function makeHeaders(mined?: string): { hash: string; merkleRoot: string }[] {
   const selected: { hash: string; merkleRoot: string }[] = []
   let raw = Uint8Array.from(Utils.toArray(manifest.chainCheckpoint.header, 'hex'))
@@ -48,12 +56,7 @@ function makeHeaders(mined?: string): { hash: string; merkleRoot: string }[] {
       if (height === 1 && mined !== undefined) raw.set(Utils.toArray(mined, 'hex').reverse(), 36)
       raw.set(Utils.toArray(selected[height - 1].hash, 'hex').reverse(), 4)
       new DataView(raw.buffer).setUint32(68, initialTime + height * 600, true)
-      let nonce = 0
-      for (;;) {
-        new DataView(raw.buffer).setUint32(76, nonce++, true)
-        const hash = Utils.toHex(Hash.hash256(Array.from(raw)).reverse())
-        if (BigInt('0x' + hash) <= 0x7fffffn << 232n) break
-      }
+      mineHeader(raw)
     }
     const hash = Utils.toHex(Hash.hash256(Array.from(raw)).reverse())
     if (BigInt('0x' + hash) > 0x7fffffn << 232n) throw new Error('Invalid fixture work')
@@ -85,17 +88,19 @@ export function context(selected = headers): VerificationContext {
 }
 function resolver(selected = headers): ChainViewResolver {
   return {
-    resolve: async view => ({
-      view,
-      tracker: {
-        currentHeight: async () => 101,
-        isValidRootForHeight: async (root, height) => selected[height]?.merkleRoot === root
-      },
-      header: async height => {
-        if (!selected[height]) throw new Error('Missing fixture header')
-        return selected[height]
-      }
-    })
+    resolve: view =>
+      Promise.resolve({
+        view,
+        tracker: {
+          currentHeight: () => Promise.resolve(101),
+          isValidRootForHeight: (root, height) =>
+            Promise.resolve(selected[height]?.merkleRoot === root)
+        },
+        header: height =>
+          selected[height]
+            ? Promise.resolve(selected[height])
+            : Promise.reject(new Error('Missing fixture header'))
+      })
   }
 }
 export const chains = resolver()

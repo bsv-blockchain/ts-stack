@@ -38,7 +38,7 @@ WORKDIR /app
 # fixed OpenSSL runtime packages after removing the disposable toolchain.
 COPY --chown=root:root --chmod=0444 package*.json ./
 RUN apk add --no-cache --virtual .build-deps g++ make python3 \
- && apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+ && apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3 \
  && apk del .build-deps \

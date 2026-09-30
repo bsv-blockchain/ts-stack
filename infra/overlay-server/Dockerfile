@@ -27,8 +27,8 @@ LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY
 
 # The service starts directly with Node, so the runtime image does not retain
 # npm or its unrelated dependency graph. The pinned base contains OpenSSL
-# 3.5.7-r0; retain the reviewed 3.5.8-r0 fix for CVE-2026-14456.
-RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+# 3.5.7-r0; retain the reviewed 3.5.9-r0 fix for CVE-2026-14456.
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
