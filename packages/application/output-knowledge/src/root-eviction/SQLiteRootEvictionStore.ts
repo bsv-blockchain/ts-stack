@@ -17,6 +17,12 @@ import {
 } from './RootEvictionCommitContext.js'
 import { synchronousPromise } from '../internal/synchronousPromise.js'
 import { rootDecimal, rootPosition, rootTarget } from './RootEvictionCodec.js'
+import { RootEvictionContractRecords } from './RootEvictionContractRecords.js'
+import type { RootEvictionContracts } from './RootEvictionContracts.js'
+import type {
+  RootEvictionCoordinatedRequest,
+  RootEvictionCoordinatedStorage
+} from './RootEvictionCoordinatedStorage.js'
 import { RootEvictionRequests } from './RootEvictionRequests.js'
 import { RootEvictionServingRecords } from './RootEvictionServingRecords.js'
 import { SQLiteRootEvictionDatabase } from './SQLiteRootEvictionDatabase.js'
@@ -39,16 +45,25 @@ import type {
  * installed-service responsibilities. The journal provides atomic decisions,
  * immutable retry fences and a shared final synchronous enqueue gate.
  */
-export class SQLiteRootEvictionStore implements RootEvictionStorage, RootEvictionCheckedStorage {
+export class SQLiteRootEvictionStore
+  implements RootEvictionStorage, RootEvictionCheckedStorage, RootEvictionCoordinatedStorage
+{
   readonly durability = 'durable' as const
   private readonly database: SQLiteRootEvictionDatabase
   private readonly requests: RootEvictionRequests
   private readonly views: RootEvictionServingRecords
+  private readonly contracts: RootEvictionContractRecords
 
-  private constructor(path: string, configuration: RootEvictionConfiguration, policy?: string) {
-    this.database = new SQLiteRootEvictionDatabase(path, configuration, policy)
+  private constructor(
+    path: string,
+    configuration: RootEvictionConfiguration,
+    policy?: string,
+    upgradeCoordination = false
+  ) {
+    this.database = new SQLiteRootEvictionDatabase(path, configuration, policy, upgradeCoordination)
     this.requests = new RootEvictionRequests(this.database)
     this.views = new RootEvictionServingRecords(this.database)
+    this.contracts = new RootEvictionContractRecords(this.database, this.requests)
   }
   static create(
     path: string,
@@ -59,6 +74,13 @@ export class SQLiteRootEvictionStore implements RootEvictionStorage, RootEvictio
   }
   static open(path: string, configuration: RootEvictionConfiguration): SQLiteRootEvictionStore {
     return new SQLiteRootEvictionStore(path, configuration)
+  }
+  /** Existing format1 only, or an exact retry of the same completed upgrade. */
+  static upgradeCoordination(
+    path: string,
+    configuration: RootEvictionConfiguration
+  ): SQLiteRootEvictionStore {
+    return new SQLiteRootEvictionStore(path, configuration, undefined, true)
   }
   private work<T>(body: () => T): Promise<T> {
     return synchronousPromise(() => this.database.transaction(body))
@@ -71,6 +93,36 @@ export class SQLiteRootEvictionStore implements RootEvictionStorage, RootEvictio
       const observedAt = rootCommitContext(this.database.head(), guard)
       const value = body(observedAt)
       return { value, head: this.database.head(), observedAt }
+    })
+  }
+  retainCoordinated(
+    request: unknown,
+    requester: string,
+    selection: { manifest: unknown; selector: string; futureClockSeconds: string },
+    contracts: RootEvictionContracts,
+    guard: RootEvictionCommitGuard
+  ): Promise<RootEvictionObservation<RootEvictionCoordinatedRequest>> {
+    return this.checked(guard, now =>
+      this.contracts.retain(request, requester, selection, contracts, now)
+    )
+  }
+  resultCoordinated(
+    requester: string,
+    requestId: string,
+    selector: string,
+    contracts: RootEvictionContracts,
+    guard: RootEvictionCommitGuard
+  ): Promise<
+    RootEvictionObservation<{
+      retained: RootEvictionCoordinatedRequest
+      result: OutputRootEvictionResult
+    }>
+  > {
+    return this.checked(guard, now => {
+      const record = this.requests.get(requester, requestId)
+      outputAssert(record, 'Root request is not retained', 'not-found')
+      const retained = this.contracts.restore(record, selector, contracts)
+      return { retained, result: this.resultWithinGate(requester, requestId, now) }
     })
   }
   retainChecked(

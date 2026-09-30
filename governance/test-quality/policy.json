@@ -1014,6 +1014,18 @@
           "A new operation requires a currently valid signed manifest and an installed rule contract.",
           "Advertised limits can narrow but never expand the fixed BRC-199 bounds."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic original root capability/request retention, bounded selected obligations and explicit storage migration",
+        "target": "At least 300 generated capacity, original-selector and restart histories",
+        "invariants": [
+          "An operation atomically retains both its original contract and request, or neither record.",
+          "Original selectors and terminal actions survive expiry, retry and restart without current-discovery substitution.",
+          "Explicit format migration preserves history and fences already-open connections with older enforcement formats."
+        ]
       }
     ],
     "exclusions": [

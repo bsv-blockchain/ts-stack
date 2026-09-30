@@ -24,3 +24,8 @@ export type {
   RootEvictionContractLimits,
   RootEvictionSelectedContract
 } from './RootEvictionContracts.js'
+
+export type {
+  RootEvictionCoordinatedRequest,
+  RootEvictionCoordinatedStorage
+} from './RootEvictionCoordinatedStorage.js'

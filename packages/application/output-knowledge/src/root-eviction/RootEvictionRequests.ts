@@ -71,7 +71,8 @@ export class RootEvictionRequests {
   retain(
     input: unknown,
     requester: string,
-    clock: { now: string; maximumLifetimeSeconds: string; futureClockSeconds: string }
+    clock: { now: string; maximumLifetimeSeconds: string; futureClockSeconds: string },
+    responseLimit = 1048576
   ): RootEvictionRetainedRequest {
     const packet = parseOutputRootEvictionRequest(input)
     // Authenticate before looking up the retained key. A changed recipient in an
@@ -99,7 +100,7 @@ export class RootEvictionRequests {
     })
     validateOutputRootEvictionWindow(packet, clock)
     const head = this.database.head()
-    reserveRootResult(packet, head.policyDigest, configuration.capacity.blockers)
+    reserveRootResult(packet, head.policyDigest, configuration.capacity.blockers, responseLimit)
     const text = canonicalOutputJSON(packet),
       bytes = rootBytes(text)
     const totals = this.database.get(

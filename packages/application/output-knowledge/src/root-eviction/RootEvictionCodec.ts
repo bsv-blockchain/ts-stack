@@ -38,10 +38,11 @@ export function rootConfiguration(input: RootEvictionConfiguration): {
   root: string
   chain: RootEvictionConfiguration['chain']
   capacity: Readonly<RootEvictionCapacity>
+  coordination?: Readonly<{ contractBytes: number }>
   seal: string
 } {
   outputAssert(
-    Object.keys(input).every(key => ['root', 'chain', 'capacity'].includes(key)) &&
+    Object.keys(input).every(key => ['root', 'chain', 'capacity', 'coordination'].includes(key)) &&
       Object.keys(input.chain).length === 2,
     'Invalid root storage configuration'
   )
@@ -59,11 +60,27 @@ export function rootConfiguration(input: RootEvictionConfiguration): {
         capacity[key] <= maximums[key],
       'Invalid root storage capacity'
     )
+  let coordination: Readonly<{ contractBytes: number }> | undefined
+  if (input.coordination !== undefined) {
+    const contractBytes = input.coordination.contractBytes ?? 67108864
+    outputAssert(
+      Object.keys(input.coordination).every(key => key === 'contractBytes') &&
+        Number.isSafeInteger(contractBytes) &&
+        contractBytes > 0 &&
+        contractBytes <= 67108864,
+      'Invalid root contract capacity'
+    )
+    coordination = Object.freeze({ contractBytes })
+  }
+  const original = { format: 'root-eviction/1', root, chain, capacity }
   return {
     root,
     chain,
     capacity: Object.freeze(capacity),
-    seal: canonicalOutputJSON({ format: 'root-eviction/1', root, chain, capacity })
+    ...(coordination ? { coordination } : {}),
+    seal: canonicalOutputJSON(
+      coordination ? { ...original, format: 'root-eviction/2', coordination } : original
+    )
   }
 }
 
@@ -96,7 +113,8 @@ export function rootTargetKey(input: RootEvictionServingTarget): string {
 export function reserveRootResult(
   packet: OutputSignedRootEvictionRequest,
   policyDigest: string,
-  blockerLimit: number
+  blockerLimit: number,
+  responseLimit = 1048576
 ): void {
   const blockers = Array.from({ length: blockerLimit }, (_, index) => ({
     decisionId: index.toString(16).padStart(64, '0'),
@@ -122,5 +140,5 @@ export function reserveRootResult(
   }
   // 174 raw signature bytes is the wire parser's conservative maximum, not a
   // promise that the signing adapter uses all of them.
-  canonicalOutputJSON({ body, signature: 's'.repeat(232) }, { bytes: 1048576 })
+  canonicalOutputJSON({ body, signature: 's'.repeat(232) }, { bytes: responseLimit })
 }

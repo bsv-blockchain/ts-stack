@@ -50,10 +50,62 @@ replace it. Keep original rule validators and authenticated recovery identity
 available while obligations remain. Caller/auditor authorization and request expiry
 are separate current checks; restoring a contract alone does not authorize effects.
 
-The helper performs no persistence or network calls. The current primitive root
-journal does not yet store this capability record atomically with intake; the
-contract-aware coordinator/storage integration remains required before advertising
-the full profile. Never fill a missing historical selection from today's manifest.
+The helper performs no persistence or network calls. The optional coordinated
+journal below supplies atomic request/contract persistence. The complete service,
+its scheduler and all serving adapters remain required before advertising the
+full profile. Never fill a missing historical selection from today's manifest.
+
+## Atomic original-contract storage
+
+`RootEvictionCoordinatedStorage` is an optional companion to the checked journal
+port. `SQLiteRootEvictionStore` implements it when configured with
+`coordination: { contractBytes: 67108864 }`; an empty coordination object selects
+that default. The sealed total may be narrowed to any positive integer up to
+64 MiB. Every original retention record is separately bounded to 512 KiB of
+canonical UTF-8 JSON. This budget is independent of the existing signed-request
+budget, and is a logical data bound rather than the SQLite file size.
+
+`retainCoordinated(request, authenticatedRequester, selection, contracts, guard)`
+checks current access, clock, installed policy and external context inside the
+shared gate. `selection` contains the current signed `manifest`, exact `selector`
+and `futureClockSeconds`. `contracts` is the trusted local `RootEvictionContracts`
+instance, never a callback or saved record supplied by a remote caller. A new
+request authenticates its signature and journal identity, selects the original
+contract, checks target count, canonical request bytes and lifetime, and reserves
+a complete future result under the selected response bound. It commits the
+request, frozen evaluation policy and original selection in one SQLite transaction.
+If either capacity or persistence fails, neither record is accepted.
+
+Exact retries authenticate the request and compare its immutable body before
+recovering the saved contract. They ignore a replacement discovery manifest and
+still require the original selector. `resultCoordinated(requester, requestId,
+selector, contracts, guard)` returns the owned retained request/contract and current
+result with the sampled time and observed head. Request expiry can terminate
+pending actions without erasing the original selection or changing completed
+actions. Current access still applies, including to any installed auditor role.
+These methods neither grant automatic suppression nor evaluate topic evidence.
+The HTTP adapter must additionally bound the actual transmitted body, including
+whitespace, and sign and queue its response under the final durable fence.
+
+Existing configurations retain the exact `root-eviction/1` seal and behavior.
+Explicit coordination configuration creates new files as `root-eviction/2`.
+`open` never upgrades a file. For an existing format1 file, preserve a consistent
+backup and explicitly call `SQLiteRootEvictionStore.upgradeCoordination(path,
+configuration)` with the same root, chain and old capacities plus the coordination
+budget. Creation of the contract table, validation of retained inventory and the
+seal change commit together. An exact retry validates the already-upgraded file;
+a missing format2 table is an error, not permission to create empty replacement
+state. Failed migration rolls back the new table and seal.
+
+Every operation checks the configuration inside the transaction, so already-open
+format1 connections reject subsequent reads, writes and response queueing after
+upgrade. Update all instances before resuming service. The migration preserves
+request fences, decisions, bases, assessments, projections and revision values.
+Legacy raw requests remain available to the deterministic local methods; they
+cannot become protocol operations by attaching a newly discovered contract.
+A missing original selection is reported as unavailable. Reverting only the seal,
+dropping the contract table or silently rolling back to a stale database is not a
+supported downgrade. Broader local-policy enforcement remains a separate layer.
 
 ## Validate before evaluating
 

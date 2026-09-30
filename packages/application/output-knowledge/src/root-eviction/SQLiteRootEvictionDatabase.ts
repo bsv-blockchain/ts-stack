@@ -17,8 +17,18 @@ export class SQLiteRootEvictionDatabase {
   private closed = false
   private active = false
 
-  constructor(path: string, configuration: RootEvictionConfiguration, policy: string | undefined) {
+  constructor(
+    path: string,
+    configuration: RootEvictionConfiguration,
+    policy: string | undefined,
+    upgradeCoordination = false
+  ) {
     this.configuration = rootConfiguration(configuration)
+    outputAssert(
+      !upgradeCoordination ||
+        (policy === undefined && this.configuration.coordination !== undefined),
+      'Root coordination upgrade requires an existing journal and explicit configuration'
+    )
     outputAssert(
       path.length > 0 && path !== ':memory:' && !path.startsWith('file:'),
       'Root journal requires a file'
@@ -37,6 +47,7 @@ export class SQLiteRootEvictionDatabase {
         'PRAGMA busy_timeout=1000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;'
       )
       if (policy !== undefined) this.initialize(policy)
+      if (upgradeCoordination) this.upgradeCoordination()
       this.transaction(() => {
         this.head()
         this.inventory()
@@ -85,12 +96,49 @@ export class SQLiteRootEvictionDatabase {
         policy TEXT NOT NULL, revision TEXT NOT NULL
       ) STRICT;
     `)
+    if (this.configuration.coordination) this.createContracts()
     // The constructor owns cleanup. Closing the connection rolls back any
     // incomplete initialization, including failures while creating the schema.
     this.database
       .prepare('INSERT INTO root_meta VALUES (1,?,?,?)')
       .run(this.configuration.seal, policy, rootPosition('0'))
     this.database.exec('COMMIT')
+  }
+
+  private createContracts(): void {
+    this.database.exec(`CREATE TABLE root_contracts (
+      request_digest TEXT PRIMARY KEY REFERENCES root_requests(digest),
+      selector TEXT NOT NULL, record TEXT NOT NULL, bytes INTEGER NOT NULL
+    ) STRICT`)
+  }
+
+  /** Explicit, transactional format migration. Ordinary open never creates missing tables. */
+  private upgradeCoordination(): void {
+    const { root, chain, capacity } = this.configuration
+    const original = rootConfiguration({ root, chain, capacity }).seal
+    this.database.exec('BEGIN IMMEDIATE')
+    this.active = true
+    try {
+      const row = this.get('SELECT configuration FROM root_meta WHERE id=1')
+      outputAssert(
+        row?.configuration === original || row?.configuration === this.configuration.seal,
+        'Root coordination upgrade differs from the original journal configuration',
+        'context-changed'
+      )
+      if (row.configuration === original) {
+        this.createContracts()
+        this.run('UPDATE root_meta SET configuration=? WHERE id=1', this.configuration.seal)
+      }
+      this.completionRevisions()
+      this.inventory()
+      this.database.exec('COMMIT')
+    } catch (error) {
+      // Constructor cleanup closes the connection and rolls back any still-open transaction.
+      this.database.exec('ROLLBACK')
+      throw error
+    } finally {
+      this.active = false
+    }
   }
 
   /** Call only from within transaction; SQL text is authored here, never provided by a peer. */
@@ -175,6 +223,28 @@ export class SQLiteRootEvictionDatabase {
         capacity.blockers
       ),
       'Root journal blocker capacity failed',
+      'unavailable'
+    )
+    if (this.configuration.coordination) this.contractInventory()
+  }
+
+  private contractInventory(): void {
+    const row = this.get(
+      'SELECT count(*) AS records,coalesce(sum(bytes),0) AS bytes FROM root_contracts'
+    )!
+    outputAssert(
+      Number.isSafeInteger(row.records) &&
+        Number(row.records) <= this.configuration.capacity.requests &&
+        Number.isSafeInteger(row.bytes) &&
+        Number(row.bytes) >= 0 &&
+        Number(row.bytes) <= this.configuration.coordination!.contractBytes,
+      'Root original-contract capacity failed',
+      'unavailable'
+    )
+    outputAssert(
+      !this.get(`SELECT 1 FROM root_contracts WHERE bytes<1 OR bytes>524288
+        OR bytes!=length(CAST(record AS BLOB)) OR length(selector)!=64 LIMIT 1`),
+      'Root original-contract accounting failed',
       'unavailable'
     )
   }

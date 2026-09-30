@@ -696,3 +696,54 @@ export async function verifySelectedAdvertisement(
   return verifier.verify(signedRequest, targetIndex, installedContext, signal)
 }
 ```
+
+## Atomic root coordination intake
+
+The host supplies an authenticated requester and selection, installed capability
+rules and trusted synchronous commit guards. This example only records and reads
+the request. Installed evidence policy decides any subsequent suppression.
+
+```typescript compile
+// example-id: atomic-root-coordination
+import type {
+  RootEvictionContracts as IntakeContracts,
+  RootEvictionCommitGuard as IntakeCommitGuard,
+  RootEvictionCoordinatedStorage,
+  RootEvictionConfiguration
+} from '@bsv/output-knowledge/root-eviction'
+import { SQLiteRootEvictionStore as CoordinatedRootJournal } from '@bsv/output-knowledge/root-eviction/sqlite'
+
+export function explicitlyUpgradeRoot(
+  path: string,
+  existingConfiguration: RootEvictionConfiguration
+): RootEvictionCoordinatedStorage {
+  return CoordinatedRootJournal.upgradeCoordination(path, {
+    ...existingConfiguration,
+    coordination: { contractBytes: 16 * 1024 * 1024 }
+  })
+}
+
+export async function recordSelectedRootRequest(
+  store: RootEvictionCoordinatedStorage,
+  request: unknown,
+  authenticatedRequester: string,
+  selection: { manifest: unknown; selector: string; futureClockSeconds: string },
+  contracts: IntakeContracts,
+  guard: IntakeCommitGuard
+) {
+  const retained = await store.retainCoordinated(
+    request,
+    authenticatedRequester,
+    selection,
+    contracts,
+    guard
+  )
+  return store.resultCoordinated(
+    authenticatedRequester,
+    retained.value.request.body.requestId,
+    selection.selector,
+    contracts,
+    guard
+  )
+}
+```

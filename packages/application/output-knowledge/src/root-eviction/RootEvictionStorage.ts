@@ -18,6 +18,8 @@ export interface RootEvictionConfiguration {
   root: string
   chain: OutputChain
   capacity?: Partial<RootEvictionCapacity>
+  /** Opt in to sealed original-contract storage; ordinary format1 remains unchanged. */
+  coordination?: { contractBytes?: number }
 }
 export interface RootEvictionHead {
   revision: string

@@ -942,3 +942,12 @@ recheck access, installed policy and external context inside the shared commit
 gate. Their observations include the exact current head for later signing and
 final enqueue. Existing deterministic methods and the local stored format remain
 unchanged. See the root coordination guide for callback and service obligations.
+
+The optional `RootEvictionCoordinatedStorage` companion atomically retains each
+request with its original signed capability selection and reserves its narrower
+advertised result limit. Explicit coordination configuration uses the sealed
+`root-eviction/2` format. Existing default format1 behavior remains unchanged;
+`upgradeCoordination` is an explicit transactional migration that preserves history
+and fences older open connections. Missing legacy selections are never filled
+from current discovery. See the root coordination guide for storage budgets,
+recovery, migration and the remaining complete-service obligations.

@@ -32,6 +32,11 @@ request identity, frozen evaluation policy, immutable action outcomes, independe
 suppression bases and current serving assessments. Suppression and index-removal
 intent commit together; restoration stays fenced until projection acknowledgement.
 All instances sharing the database use the same final synchronous enqueue gate.
+The optional `RootEvictionCoordinatedStorage` companion additionally retains the
+original capability and request atomically with selected result capacity. Explicit
+format2 configuration and `upgradeCoordination` preserve default format1 behavior,
+retain old history and fence older open connections. Legacy missing selections
+remain unavailable rather than adopting current discovery.
 The service must separately install access/evidence authority and actual serving
 adapters. See [root coordination](../../guides/root-eviction-coordination.md) for
 bounds, creation/recovery, currentness, policy changes and remaining integration work.

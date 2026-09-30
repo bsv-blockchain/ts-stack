@@ -685,3 +685,26 @@ regression; source/test selections, workers, per-test deadlines and pass gates
 remain unchanged. Their next exact-head hosted reports are still required. None of
 these corrections completes atomic root contract/request storage, the full root
 service or the remaining checkpoint-two integration work.
+
+## Atomic root coordination storage in qualification
+
+The opt-in coordinated journal binds original capability records to signed request
+fences in one transaction, enforces all selected limits and reserves future result
+capacity. Default format1 behavior is unchanged. Explicit format2 creation and
+transactional `upgradeCoordination` preserve history; every operation fences
+already-open older connections after upgrade. Legacy raw requests never acquire
+invented initiation contracts.
+
+The 16 focused cases pass, including generated capacity/retry/restart histories
+and actual process kills before contract insertion and after the combined commit.
+The complete runtime passes 1,179 cases across 83 suites, with 97.75% line and
+94.74% branch coverage. The new contract records and changed root codec, database,
+request records and store reach 100% line and branch coverage. Packed consumers,
+all 22 compiled examples against 22 exact tarballs, browser artifact contracts,
+all 579 Overlay Express cases, repository checks and 145 HTML pages pass.
+
+Mutation qualification of the complete new and changed root sources and fresh
+hosted evidence remain required. The registries contain 82 property suites and
+82 critical mutation targets, preserving all previous targets, source/test unions,
+worker limits and quality gates. This is not the complete coordinator, scheduler,
+broader-ban layer or serving-path integration.
