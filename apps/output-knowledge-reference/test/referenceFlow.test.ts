@@ -31,13 +31,13 @@ it('bounds work before authentication and preserves no-store headers on rejectio
   cleanups.push(() => server.close())
   for (let batch = 0; batch < 20; batch++) {
     const responses = await Promise.all(
-      new Array(30).fill(null).map(async () => {
+      Array.from({ length: 30 }, async () => {
         const response = await fetch(server.origin + '/demo/config')
         await response.text()
         return response.status
       })
     )
-    expect(responses).toEqual(new Array(30).fill(200))
+    expect(responses).toEqual(Array.from({ length: 30 }, () => 200))
   }
   const response = await fetch(server.origin + '/demo/command', {
     method: 'POST',

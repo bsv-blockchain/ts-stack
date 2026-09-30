@@ -448,8 +448,12 @@ installation/binding (170), record/accounting (229) and operation transitions
 (186). All partitions retain the complete 160-test selection and independent
 90%/zero-uncovered/zero-invalid gates. Two additional generated properties each
 run at least 300 cases; a regression enforces contiguous, non-overlapping source
-coverage and identical runner/test configuration. The whole-file source already
-passes 96.24%; independent partition campaigns remain in progress.
+coverage and identical runner/test configuration. The whole-file source passes
+96.24%; independent partitions pass 98.82%/170, 95.63%/229 and 94.62%/186,
+respectively, with zero uncovered/invalid mutants. Each report's source matches
+the committed file. The installation campaign retried one crashed V8 worker;
+its completed report contains no invalid mutant. Shared-host durations are not
+controlled performance measurements or hosted CI qualification.
 
 Core/client/mobile Wallet 2.15.0 artifacts pass their packed exports and strict
 consumer checks. Core's permanent SDK 2.8.11 root/deep compatibility regression
