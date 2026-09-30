@@ -17,7 +17,7 @@ import type {
   LookupSessionOpening,
   LookupSessionHeader
 } from './LookupSessionCodec.js'
-import { bytes, decimal, position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, bytes, decimal, position } from './SQLiteLookupEncoding.js'
 
 export interface LookupEpochRecord {
   epoch: string
@@ -73,13 +73,12 @@ export class SQLiteLookupSessionRecords {
   }
 
   metadata(): LookupSessionInventory {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT CASE WHEN length(CAST(configuration AS BLOB))<=65536 THEN configuration END AS configuration,
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT CASE WHEN length(CAST(configuration AS BLOB))<=65536 THEN configuration END AS configuration,
         CASE WHEN length(clock)=16 THEN clock END AS clock,
         epochs,guards,fences,sessions,payload_bytes FROM output_lookup_session_meta WHERE namespace=?`
-      )
-      .get(this.bridge.namespace)
+    ).get(this.bridge.namespace)
     if (!row) throw new OutputProtocolError('reset-required', 'Lookup session namespace is missing')
     if (row.configuration !== this.configuration)
       throw new OutputProtocolError('context-changed', 'Lookup session configuration changed')
@@ -111,17 +110,17 @@ export class SQLiteLookupSessionRecords {
     ] as const
     for (const [table, expected] of counts) {
       // Table names are a fixed local list, never request data.
-      const row = database
-        .prepare(`SELECT count(*) AS count FROM ${table} WHERE namespace=?`)
-        .get(namespace)!
+      const row = prepareLookupStatement(
+        database,
+        `SELECT count(*) AS count FROM ${table} WHERE namespace=?`
+      ).get(namespace)!
       if (row.count !== expected)
         throw new OutputProtocolError('reset-required', 'Lookup session inventory is incomplete')
     }
-    const payload = database
-      .prepare(
-        'SELECT coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_sessions WHERE namespace=?'
-      )
-      .get(namespace)!
+    const payload = prepareLookupStatement(
+      database,
+      'SELECT coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_sessions WHERE namespace=?'
+    ).get(namespace)!
     if (payload.bytes !== meta.bytes)
       throw new OutputProtocolError(
         'reset-required',
@@ -131,14 +130,13 @@ export class SQLiteLookupSessionRecords {
 
   epoch(id: string): LookupEpochRecord {
     outputHex32(id)
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(secret)=64 THEN secret END AS secret, accepts_new,
       CASE WHEN length(digest)=64 THEN digest END AS digest
       FROM output_lookup_epochs WHERE namespace=? AND epoch=?`
-      )
-      .get(this.bridge.namespace, id)
+    ).get(this.bridge.namespace, id)
     if (
       !row ||
       typeof row.secret !== 'string' ||
@@ -153,27 +151,29 @@ export class SQLiteLookupSessionRecords {
   createEpoch(): string {
     if (this.metadata().epochs >= this.capacity.epochs)
       throw new OutputProtocolError('limited', 'Lookup serving epoch capacity is full')
-    const active = this.bridge.database
-      .prepare('SELECT epoch FROM output_lookup_epochs WHERE namespace=? AND accepts_new=1')
-      .all(this.bridge.namespace)
+    const active = prepareLookupStatement(
+      this.bridge.database,
+      'SELECT epoch FROM output_lookup_epochs WHERE namespace=? AND accepts_new=1'
+    ).all(this.bridge.namespace)
     for (const row of active) this.retireEpoch(this.epoch(retainedHex(row.epoch)))
     const epoch = randomBytes(32).toString('hex'),
       secret = randomBytes(32).toString('hex')
-    this.bridge.database
-      .prepare('INSERT INTO output_lookup_epochs VALUES (?,?,?,?,?)')
-      .run(this.bridge.namespace, epoch, secret, 1, this.digest('epoch', epoch, secret, '1'))
-    this.bridge.database
-      .prepare('UPDATE output_lookup_session_meta SET epochs=epochs+1 WHERE namespace=?')
-      .run(this.bridge.namespace)
+    prepareLookupStatement(
+      this.bridge.database,
+      'INSERT INTO output_lookup_epochs VALUES (?,?,?,?,?)'
+    ).run(this.bridge.namespace, epoch, secret, 1, this.digest('epoch', epoch, secret, '1'))
+    prepareLookupStatement(
+      this.bridge.database,
+      'UPDATE output_lookup_session_meta SET epochs=epochs+1 WHERE namespace=?'
+    ).run(this.bridge.namespace)
     return epoch
   }
 
   retireEpoch(epoch: LookupEpochRecord): void {
-    this.bridge.database
-      .prepare(
-        'UPDATE output_lookup_epochs SET accepts_new=0,digest=? WHERE namespace=? AND epoch=?'
-      )
-      .run(this.digest('epoch', epoch.epoch, epoch.secret, '0'), this.bridge.namespace, epoch.epoch)
+    prepareLookupStatement(
+      this.bridge.database,
+      'UPDATE output_lookup_epochs SET accepts_new=0,digest=? WHERE namespace=? AND epoch=?'
+    ).run(this.digest('epoch', epoch.epoch, epoch.secret, '0'), this.bridge.namespace, epoch.epoch)
   }
 
   collectEpoch(
@@ -187,39 +187,38 @@ export class SQLiteLookupSessionRecords {
         'An accepted lookup epoch cannot lose its opening fences'
       )
     const { database, namespace } = this.bridge
-    const promised = database
-      .prepare(
-        `SELECT 1 FROM output_lookup_openings AS opening
+    const promised = prepareLookupStatement(
+      database,
+      `SELECT 1 FROM output_lookup_openings AS opening
       LEFT JOIN output_lookup_sessions AS session ON session.namespace=opening.namespace AND session.session=opening.session
       WHERE opening.namespace=? AND opening.epoch=? AND (opening.replay_until>? OR session.session IS NOT NULL) LIMIT 1`
-      )
-      .get(namespace, epoch.epoch, position(now))
+    ).get(namespace, epoch.epoch, position(now))
     if (promised)
       throw new OutputProtocolError(
         'unavailable',
         'Retired lookup epoch still retains replay promises or payloads'
       )
     const removed = Number(
-      database
-        .prepare(
-          `DELETE FROM output_lookup_openings
+      prepareLookupStatement(
+        database,
+        `DELETE FROM output_lookup_openings
       WHERE namespace=? AND epoch=? AND opening_key IN (
         SELECT opening_key FROM output_lookup_openings WHERE namespace=? AND epoch=? ORDER BY opening_key LIMIT ?)`
-        )
-        .run(namespace, epoch.epoch, namespace, epoch.epoch, maximum).changes
+      ).run(namespace, epoch.epoch, namespace, epoch.epoch, maximum).changes
     )
-    const complete = !database
-      .prepare('SELECT 1 FROM output_lookup_openings WHERE namespace=? AND epoch=? LIMIT 1')
-      .get(namespace, epoch.epoch)
+    const complete = !prepareLookupStatement(
+      database,
+      'SELECT 1 FROM output_lookup_openings WHERE namespace=? AND epoch=? LIMIT 1'
+    ).get(namespace, epoch.epoch)
     if (complete)
-      database
-        .prepare('DELETE FROM output_lookup_epochs WHERE namespace=? AND epoch=?')
-        .run(namespace, epoch.epoch)
-    database
-      .prepare(
-        'UPDATE output_lookup_session_meta SET fences=fences-?,epochs=epochs-? WHERE namespace=?'
-      )
-      .run(removed, complete ? 1 : 0, namespace)
+      prepareLookupStatement(
+        database,
+        'DELETE FROM output_lookup_epochs WHERE namespace=? AND epoch=?'
+      ).run(namespace, epoch.epoch)
+    prepareLookupStatement(
+      database,
+      'UPDATE output_lookup_session_meta SET fences=fences-?,epochs=epochs-? WHERE namespace=?'
+    ).run(removed, complete ? 1 : 0, namespace)
     return { removed, complete }
   }
 
@@ -233,9 +232,10 @@ export class SQLiteLookupSessionRecords {
 
   originalEpoch(request: LookupOriginalRequest): LookupEpochRecord | null {
     this.verifyInventory()
-    const rows = this.bridge.database
-      .prepare('SELECT epoch FROM output_lookup_epochs WHERE namespace=? ORDER BY epoch')
-      .all(this.bridge.namespace)
+    const rows = prepareLookupStatement(
+      this.bridge.database,
+      'SELECT epoch FROM output_lookup_epochs WHERE namespace=? ORDER BY epoch'
+    ).all(this.bridge.namespace)
     for (const row of rows) {
       const epoch = this.epoch(retainedHex(row.epoch))
       const key = this.openingKey(epoch, { ...request, epoch: epoch.epoch })
@@ -256,9 +256,9 @@ export class SQLiteLookupSessionRecords {
   }
 
   fence(epoch: LookupEpochRecord, key: string): LookupOpeningFence | null {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(request_digest)=64 THEN request_digest END AS request_digest,
       CASE WHEN length(manifest_digest)=64 THEN manifest_digest END AS manifest_digest,
       CASE WHEN length(principal_key)=64 THEN principal_key END AS principal_key,
@@ -268,8 +268,7 @@ export class SQLiteLookupSessionRecords {
       CASE WHEN length(state)<=7 THEN state END AS state,
       CASE WHEN length(digest)=64 THEN digest END AS digest
       FROM output_lookup_openings WHERE namespace=? AND epoch=? AND opening_key=?`
-      )
-      .get(this.bridge.namespace, epoch.epoch, key)
+    ).get(this.bridge.namespace, epoch.epoch, key)
     if (!row) return null
     if (row.state !== 'open' && row.state !== 'closed' && row.state !== 'expired')
       throw new OutputProtocolError('reset-required', 'Invalid lookup opening fence')
@@ -290,41 +289,39 @@ export class SQLiteLookupSessionRecords {
   }
 
   bySession(session: string): { epoch: LookupEpochRecord; fence: LookupOpeningFence } | null {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(epoch)=64 THEN epoch END AS epoch,
       CASE WHEN length(opening_key)=64 THEN opening_key END AS opening_key
       FROM output_lookup_openings WHERE namespace=? AND session=?`
-      )
-      .get(this.bridge.namespace, session)
+    ).get(this.bridge.namespace, session)
     if (!row) return null
     const epoch = this.epoch(retainedHex(row.epoch))
     const fence = this.fence(epoch, retainedHex(row.opening_key))
-    if (!fence || fence.session !== session)
+    if (fence?.session !== session)
       throw new OutputProtocolError('reset-required', 'Lookup session identity is incomplete')
     return { epoch, fence }
   }
 
   saveFence(epoch: LookupEpochRecord, fence: LookupOpeningFence): void {
-    this.bridge.database
-      .prepare(
-        `INSERT INTO output_lookup_openings VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    prepareLookupStatement(
+      this.bridge.database,
+      `INSERT INTO output_lookup_openings VALUES (?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(namespace,epoch,opening_key) DO UPDATE SET state=excluded.state,digest=excluded.digest`
-      )
-      .run(
-        this.bridge.namespace,
-        fence.epoch,
-        fence.key,
-        fence.requestDigest,
-        fence.manifestDigest,
-        fence.principalKey,
-        fence.session,
-        position(fence.expiresAt),
-        position(fence.replayUntil),
-        fence.state,
-        this.keyed(epoch, 'fence', fence)
-      )
+    ).run(
+      this.bridge.namespace,
+      fence.epoch,
+      fence.key,
+      fence.requestDigest,
+      fence.manifestDigest,
+      fence.principalKey,
+      fence.session,
+      position(fence.expiresAt),
+      position(fence.replayUntil),
+      fence.state,
+      this.keyed(epoch, 'fence', fence)
+    )
   }
 
   saveOpening(epoch: LookupEpochRecord, value: LookupSessionOpening): void {
@@ -337,13 +334,12 @@ export class SQLiteLookupSessionRecords {
     )
     const meta = this.metadata()
     const principalKey = this.principalKey(value.principal)
-    const principal = this.bridge.database
-      .prepare(
-        `SELECT count(*) AS count FROM output_lookup_openings AS opening
+    const principal = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT count(*) AS count FROM output_lookup_openings AS opening
       INNER JOIN output_lookup_sessions AS session ON session.namespace=opening.namespace AND session.session=opening.session
       WHERE opening.namespace=? AND opening.principal_key=?`
-      )
-      .get(this.bridge.namespace, principalKey)!
+    ).get(this.bridge.namespace, principalKey)!
     if (
       meta.fences >= this.capacity.fences ||
       meta.sessions >= this.capacity.sessions ||
@@ -370,46 +366,45 @@ export class SQLiteLookupSessionRecords {
       state: 'open'
     }
     this.saveFence(epoch, fence)
-    this.bridge.database
-      .prepare('INSERT INTO output_lookup_sessions VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      .run(
-        this.bridge.namespace,
+    prepareLookupStatement(
+      this.bridge.database,
+      'INSERT INTO output_lookup_sessions VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(
+      this.bridge.namespace,
+      value.session,
+      position(fence.replayUntil),
+      columns.metadata,
+      columns.open,
+      columns.contract,
+      columns.first,
+      headerJSON,
+      this.keyed(epoch, 'header', headerJSON),
+      total,
+      this.digest(
+        'opening',
         value.session,
-        position(fence.replayUntil),
         columns.metadata,
         columns.open,
         columns.contract,
         columns.first,
-        headerJSON,
-        this.keyed(epoch, 'header', headerJSON),
-        total,
-        this.digest(
-          'opening',
-          value.session,
-          columns.metadata,
-          columns.open,
-          columns.contract,
-          columns.first,
-          headerJSON
-        )
+        headerJSON
       )
-    this.bridge.database
-      .prepare(
-        `UPDATE output_lookup_session_meta
+    )
+    prepareLookupStatement(
+      this.bridge.database,
+      `UPDATE output_lookup_session_meta
       SET fences=fences+1,sessions=sessions+1,payload_bytes=payload_bytes+? WHERE namespace=?`
-      )
-      .run(total, this.bridge.namespace)
+    ).run(total, this.bridge.namespace)
   }
 
   header(epoch: LookupEpochRecord, fence: LookupOpeningFence): LookupSessionHeader {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(CAST(header AS BLOB))<=131072 THEN header END AS header,
       CASE WHEN length(header_digest)=64 THEN header_digest END AS header_digest
       FROM output_lookup_sessions WHERE namespace=? AND session=?`
-      )
-      .get(this.bridge.namespace, fence.session)
+    ).get(this.bridge.namespace, fence.session)
     if (!row || typeof row.header !== 'string')
       throw new OutputProtocolError('reset-required', 'Lookup retained header is unavailable')
     if (row.header_digest !== this.keyed(epoch, 'header', row.header))
@@ -429,9 +424,9 @@ export class SQLiteLookupSessionRecords {
   }
 
   opening(epoch: LookupEpochRecord, fence: LookupOpeningFence): LookupSessionOpening {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(CAST(metadata AS BLOB))<=65536 THEN metadata END AS metadata,
       CASE WHEN length(CAST(original_open AS BLOB))<=1048576 THEN original_open END AS original_open,
       CASE WHEN length(CAST(contract AS BLOB))<=524288 THEN contract END AS contract,
@@ -440,8 +435,7 @@ export class SQLiteLookupSessionRecords {
       CASE WHEN length(replay_until)=16 THEN replay_until END AS replay_until,
       payload_bytes, CASE WHEN length(digest)=64 THEN digest END AS digest
       FROM output_lookup_sessions WHERE namespace=? AND session=?`
-      )
-      .get(this.bridge.namespace, fence.session)
+    ).get(this.bridge.namespace, fence.session)
     if (
       !row ||
       typeof row.metadata !== 'string' ||
@@ -488,12 +482,9 @@ export class SQLiteLookupSessionRecords {
       open: opening.open,
       manifestDigest: fence.manifestDigest
     }
+    // The authenticated header comparison above already binds epoch, session,
+    // deadlines and principal. These parameters are outside that small header.
     if (
-      opening.epoch !== epoch.epoch ||
-      opening.session !== fence.session ||
-      opening.first.expiresAt !== fence.expiresAt ||
-      opening.first.replayUntil !== fence.replayUntil ||
-      this.principalKey(opening.principal) !== fence.principalKey ||
       this.openingKey(epoch, identity) !== fence.key ||
       this.requestDigest(epoch, opening.open) !== fence.requestDigest ||
       outputPacketDigest('capabilities', opening.contract.manifest.body) !== fence.manifestDigest

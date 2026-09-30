@@ -114,9 +114,10 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 The SDK foundation run passes 7,753 tests across 223 suites, including all proposal
 endpoint variants and closed-envelope, canonical encoding and intrinsic-policy checks.
-The provider increment's full output-knowledge run passes 829 tests across 53 suites,
-with 97.45% line and 94.16% branch coverage. Subsequent focused session-record cases
-also pass; final exact-head qualification remains required. Boundary tests cover durable assessment invalidation, exact replay
+The provider increment's full output-knowledge run passes 836 tests across 54 suites,
+with 97.46% line and 94.16% branch coverage. This includes the statement boundary,
+independent retained-opening bindings and exact retained-byte quota cases;
+final exact-head qualification remains required. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
 concurrent-writer limit sealing, immutable local context and malformed SQLite
@@ -159,23 +160,24 @@ two independent writers and move the clock while another process holds the datab
 lock. These fixtures exercise membership/framing and provider recovery; they are not
 claims of application-level Bitcoin spend acceptance or production deployment.
 
-Nine new mutation campaigns pass the unchanged 90% minimum with zero uncovered or
-invalid mutants: codecs 94.44%, query mapping 96.41%, batch/wait composition 91.37%,
-provider service/work 96.31%, session codec/disclosure 92.80%, index 91.12%, index
-records 96.94%, session response gates 92.70%, and HTTP transport 90.13%. The session
-record/schema and retained-payload campaigns remain in progress. The initial combined
-record campaign ran for 40m07 and failed its mutation gate. Added independent
-record-integrity and capacity cases address the gaps. Its complete source is now
-partitioned at the `saveOpening` responsibility boundary to leave CI headroom;
-both jobs keep every previous regression and the 300-case provider property. A
-new 300-case SQLite record rollback/identity property participates in both as well.
-Governance checks require a contiguous complete source union and identical test
-selection; no operator, source or threshold is excluded. The complete Express suite passes 559
+Eleven new mutation campaigns pass the unchanged 90% minimum with zero uncovered or
+invalid mutants: codecs 94.44%, query mapping 96.43%, batch/wait composition 91.48%,
+provider service/work 96.31%, session codec/disclosure 93.04%, index 91.38%, index
+records 97.04%, session record/schema 93.42%, retained payloads 97.28%, session
+response gates 92.54%, and HTTP transport 90.23%. Together these exercise 3,822
+mutants. Independent cases cover authenticated headers, original request and
+manifest bindings, exact retained-byte capacity, and the native statement boundary.
+The complete session-record source is partitioned at the `saveOpening` responsibility
+boundary to leave CI headroom. Both jobs keep every previous regression, the
+300-case provider property and the 300-case SQLite record rollback/identity property.
+The record/schema and payload runs finished in 27m41s and 26m40s. Governance checks
+require a contiguous complete source union and identical test selection; no operator,
+source or threshold is excluded. The complete Express suite passes 559
 tests across 19 suites. Root lint/format and affected type checks pass. Exact packed
 runtime and Express exports and clean consumers pass, including the legacy Express
 root with registry SDK 2.8.9 in ESM/CJS and strict .mts/.cts TypeScript consumers.
 The optional lookup feature requires SDK 2.9.0. Browser composition passes without
-SQLite, and two public-interface documentation examples compile against ten exact
+SQLite, and all nine public-interface documentation examples compile against 22 exact
 tarballs. The [provider guide](../../docs/guides/durable-live-lookup.md) covers initialization,
 recovery, privacy writers, mounting, retention and operational limits.
 

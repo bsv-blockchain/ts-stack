@@ -1,3 +1,4 @@
+import { asyncValues } from '../src/internal/asyncValues.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -212,7 +213,7 @@ export async function providerFixture(
       }
     },
     async cleanup() {
-      for (const store of stores) await store.close()
+      for await (const store of asyncValues(stores)) await store.close()
       await rm(directory, { recursive: true, force: true })
     }
   }

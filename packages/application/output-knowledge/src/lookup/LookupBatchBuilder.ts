@@ -243,7 +243,8 @@ export class LookupBatchBuilder {
     group: OutputSourceGroup | null,
     maximums: OutputLookupLimits
   ): boolean {
-    const extra = group === null ? 0 : byteLength(group) + (state.batch.groups.length === 0 ? 0 : 1)
+    const separator = state.batch.groups.length === 0 ? 0 : 1
+    const extra = group === null ? 0 : byteLength(group) + separator
     const observations = state.observations + (group?.observations.length ?? 0)
     if (
       byteLength(candidate) + state.groupBytes + extra > candidate.limits.maxBytes ||

@@ -1,7 +1,7 @@
 import { canonicalOutputJSON, OutputProtocolError } from '@bsv/sdk'
 import type { SQLiteLookupBridge } from './SQLiteLookupBridge.js'
 import type { LookupSessionCapacity } from './LookupSessionStorage.js'
-import { position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, position } from './SQLiteLookupEncoding.js'
 
 const maxima: Readonly<LookupSessionCapacity> = Object.freeze({
   epochs: 64,
@@ -75,11 +75,15 @@ export function initializeLookupSessions(bridge: SQLiteLookupBridge, configurati
         ON output_lookup_sessions(namespace,replay_until,session);
     `)
     if (
-      database.prepare('SELECT 1 FROM output_lookup_session_meta WHERE namespace=?').get(namespace)
+      prepareLookupStatement(
+        database,
+        'SELECT 1 FROM output_lookup_session_meta WHERE namespace=?'
+      ).get(namespace)
     )
       throw new OutputProtocolError('conflict', 'Lookup session namespace already exists')
-    database
-      .prepare('INSERT INTO output_lookup_session_meta VALUES (?,?,?,0,0,0,0,0)')
-      .run(namespace, configuration, position('0'))
+    prepareLookupStatement(
+      database,
+      'INSERT INTO output_lookup_session_meta VALUES (?,?,?,0,0,0,0,0)'
+    ).run(namespace, configuration, position('0'))
   })
 }

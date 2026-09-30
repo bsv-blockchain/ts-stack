@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from 'yaml'
 import { createCommandRunner } from './lib/command-runner.mjs'
 import { governedWorkspacePackages, workspaceRuntimeClosure } from './lib/workspace-packages.mjs'
 
@@ -20,6 +21,7 @@ const run = (command, args, cwd) =>
   })
 
 try {
+  const workspace = parse(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8'))
   const packages = await governedWorkspacePackages(root)
   const project = packages.get('@bsv/overlay-express')
   const sdk = packages.get('@bsv/sdk')
@@ -37,7 +39,7 @@ try {
     '@bsv/sdk': LEGACY_SDK,
     '@types/node': sdk.manifest.devDependencies['@types/node']
   }
-  for (const name of names) {
+  for await (const name of names) {
     const { stdout } = await run(
       'pnpm',
       ['pack', '--json', '--pack-destination', tarballs],
@@ -54,7 +56,13 @@ try {
   )
   await writeFile(
     join(consumer, 'pnpm-workspace.yaml'),
-    JSON.stringify({ overrides: dependencies })
+    JSON.stringify({
+      // Preserve the repository's reviewed first-party release-age policy in
+      // this isolated consumer, including CI's inherited age constraint.
+      minimumReleaseAge: workspace.minimumReleaseAge,
+      minimumReleaseAgeExclude: workspace.minimumReleaseAgeExclude,
+      overrides: dependencies
+    })
   )
   await run('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile'], consumer)
   await run(

@@ -429,7 +429,7 @@ describe('query compatibility and exact group boundaries', () => {
     expect(remaining).toBeGreaterThan(0)
     padding = 'x'.repeat(remaining)
     const exact = view.live(group)!
-    expect(new TextEncoder().encode(canonicalOutputJSON(exact, { bytes: 4194304 })).length).toBe(
+    expect(new TextEncoder().encode(canonicalOutputJSON(exact, { bytes: 4194304 }))).toHaveLength(
       4194304
     )
     padding += 'x'

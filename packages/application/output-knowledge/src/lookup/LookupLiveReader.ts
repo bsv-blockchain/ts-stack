@@ -1,3 +1,4 @@
+import { pendingWork } from '../internal/pendingWork.js'
 import {
   negotiateOutputLookupLimits,
   outputU64,
@@ -73,7 +74,7 @@ export class LookupLiveReader {
     let remaining = this.budgets.maximumScans
     let expirations = this.budgets.maximumExpirations
     let incoming = cursor
-    for (;;) {
+    const scan = async (): Promise<{ batch: OutputLookupBatch; complete: boolean }> => {
       checkLookupWork(signal)
       // A notification during the read remains latched until wait(). The next
       // iteration installs another watch before rechecking the persisted index.
@@ -104,23 +105,29 @@ export class LookupLiveReader {
         // an unbounded poll loop while no rows or log groups advance.
         remaining -= Math.max(1, result.scanned)
         const batch = result.batch
-        if (
+        const complete =
           batch.phase === 'snapshot' ||
           batch.groups.length > 0 ||
           remaining <= 0 ||
           expirations <= 0 ||
           performance.now() >= deadline
-        )
-          return batch
-        incoming = batch.cursor
-        const expiryMs = Number(outputU64(boundary.expiresAt) - time) * 1000
-        await watch.wait(
-          Math.max(0, Math.min(this.budgets.pollMs, deadline - performance.now(), expiryMs)),
-          signal
-        )
+        if (!complete) {
+          incoming = batch.cursor
+          const expiryMs = Number(outputU64(boundary.expiresAt) - time) * 1000
+          await watch.wait(
+            Math.max(0, Math.min(this.budgets.pollMs, deadline - performance.now(), expiryMs)),
+            signal
+          )
+        }
+        return { batch, complete }
       } finally {
         watch.close()
       }
     }
+    let result = await scan()
+    // Each pull finishes the read and its wait before scheduling another scan.
+    // Every scan consumes at least one unit, including an empty notification.
+    for await (const next of pendingWork(() => !result.complete, scan)) result = next
+    return result.batch
   }
 }

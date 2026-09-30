@@ -39,7 +39,7 @@ import {
   type LookupOpeningFence
 } from './SQLiteLookupSessionRecords.js'
 import { SQLiteLookupDisclosure } from './SQLiteLookupDisclosure.js'
-import { decimal, position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, decimal, position } from './SQLiteLookupEncoding.js'
 import { LookupCursorCodec } from './LookupCursorCodec.js'
 
 function principal(value: unknown): string | null {
@@ -142,9 +142,10 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
         this.bridge.database.exec('ROLLBACK TO lookup_session_work; RELEASE lookup_session_work')
         outcome = { ok: false, error }
       }
-      this.bridge.database
-        .prepare('UPDATE output_lookup_session_meta SET clock=? WHERE namespace=?')
-        .run(position(latest), this.bridge.namespace)
+      prepareLookupStatement(
+        this.bridge.database,
+        'UPDATE output_lookup_session_meta SET clock=? WHERE namespace=?'
+      ).run(position(latest), this.bridge.namespace)
       return outcome
     })
     if (!result.ok) throw result.error
@@ -302,18 +303,16 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
   private requirePin(
     opening: Pick<LookupSessionHeader, 'epoch' | 'session' | 'watermark' | 'first'>
   ): void {
-    const row = this.bridge.database
-      .prepare(
-        `SELECT
+    const row = prepareLookupStatement(
+      this.bridge.database,
+      `SELECT
       CASE WHEN length(watermark)=16 THEN watermark END AS watermark,
       CASE WHEN length(replay_until)=16 THEN replay_until END AS replay_until
       FROM output_lookup_pins WHERE namespace=? AND pin_key=?`
-      )
-      .get(this.bridge.namespace, this.pinKey(opening))
+    ).get(this.bridge.namespace, this.pinKey(opening))
     const head = this.bridge.head()
     if (
-      !row ||
-      row.watermark !== position(opening.watermark) ||
+      row?.watermark !== position(opening.watermark) ||
       row.replay_until !== position(opening.first.replayUntil) ||
       outputU64(head.retention.floor) > outputU64(opening.watermark)
     )
@@ -322,7 +321,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
 
   private readSession(id: string, who: string | null, now: string): LookupSessionOpening {
     const saved = this.records.bySession(id)
-    if (!saved || saved.fence.principalKey !== this.records.principalKey(who))
+    if (saved?.fence.principalKey !== this.records.principalKey(who))
       throw new OutputProtocolError('reset-required', 'Lookup session is unavailable')
     this.live(saved.fence, now, 'reset-required')
     const opening = this.records.opening(saved.epoch, saved.fence)
@@ -332,7 +331,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
   }
   private readHeader(id: string, who: string | null, now: string): LookupSessionHeader {
     const saved = this.records.bySession(id)
-    if (!saved || saved.fence.principalKey !== this.records.principalKey(who))
+    if (saved?.fence.principalKey !== this.records.principalKey(who))
       throw new OutputProtocolError('reset-required', 'Lookup session is unavailable')
     this.live(saved.fence, now, 'reset-required')
     const header = this.records.header(saved.epoch, saved.fence)
@@ -463,12 +462,11 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
       workBound(maximumSessions)
       return this.run(now => {
         this.records.verifyInventory()
-        const rows = this.bridge.database
-          .prepare(
-            `SELECT session,payload_bytes,replay_until FROM output_lookup_sessions
+        const rows = prepareLookupStatement(
+          this.bridge.database,
+          `SELECT session,payload_bytes,replay_until FROM output_lookup_sessions
           WHERE namespace=? AND replay_until<=? ORDER BY replay_until,session LIMIT ?`
-          )
-          .all(this.bridge.namespace, position(now), maximumSessions)
+        ).all(this.bridge.namespace, position(now), maximumSessions)
         for (const row of rows)
           this.compactSession(
             outputHex32(row.session),
@@ -484,8 +482,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
   private compactSession(id: string, replayUntil: string, size: number, now: string): void {
     const saved = this.records.bySession(id)
     if (
-      !saved ||
-      replayUntil !== saved.fence.replayUntil ||
+      replayUntil !== saved?.fence.replayUntil ||
       outputU64(now) < outputU64(saved.fence.replayUntil) ||
       !Number.isSafeInteger(size) ||
       size < 1
@@ -495,13 +492,13 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
         'Lookup session compaction lost its original fence'
       )
     this.records.saveFence(saved.epoch, { ...saved.fence, state: 'expired' })
-    this.bridge.database
-      .prepare('DELETE FROM output_lookup_sessions WHERE namespace=? AND session=?')
-      .run(this.bridge.namespace, id)
-    this.bridge.database
-      .prepare(
-        'UPDATE output_lookup_session_meta SET sessions=sessions-1,payload_bytes=payload_bytes-? WHERE namespace=?'
-      )
-      .run(size, this.bridge.namespace)
+    prepareLookupStatement(
+      this.bridge.database,
+      'DELETE FROM output_lookup_sessions WHERE namespace=? AND session=?'
+    ).run(this.bridge.namespace, id)
+    prepareLookupStatement(
+      this.bridge.database,
+      'UPDATE output_lookup_session_meta SET sessions=sessions-1,payload_bytes=payload_bytes-? WHERE namespace=?'
+    ).run(size, this.bridge.namespace)
   }
 }

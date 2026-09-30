@@ -8,7 +8,7 @@ import {
   Utils
 } from '@bsv/sdk'
 import type { LookupIndexCodec, LookupIndexGroup, LookupIndexRow } from './LookupIndexCodec.js'
-import { bytes, decimal, position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, bytes, decimal, position } from './SQLiteLookupEncoding.js'
 
 interface StoredKey {
   first: string
@@ -31,16 +31,15 @@ export class SQLiteLookupRecords {
   ) {}
 
   private key(key: string, head: string): StoredKey | undefined {
-    const record = this.database
-      .prepare(
-        `SELECT
+    const record = prepareLookupStatement(
+      this.database,
+      `SELECT
       CASE WHEN length(first_sequence)=16 THEN first_sequence END AS first_sequence,
       CASE WHEN length(current_sequence)=16 THEN current_sequence END AS current_sequence,
       CASE WHEN expires_at IS NULL OR length(expires_at)=16 THEN expires_at ELSE '' END AS expires_at,
       CASE WHEN length(head_digest)=64 THEN head_digest END AS head_digest
       FROM output_lookup_keys WHERE namespace=? AND row_key=?`
-      )
-      .get(this.namespace, key)
+    ).get(this.namespace, key)
     if (record === undefined) return undefined
     const result: StoredKey = {
       first: decimal(record.first_sequence),
@@ -60,16 +59,15 @@ export class SQLiteLookupRecords {
   row(key: string, at: string, head: string): LookupIndexRow | null {
     const known = this.key(key, head)
     if (known === undefined || outputU64(known.first) > outputU64(at)) return null
-    const record = this.database
-      .prepare(
-        `SELECT CASE WHEN length(sequence)=16 THEN sequence END AS sequence,
+    const record = prepareLookupStatement(
+      this.database,
+      `SELECT CASE WHEN length(sequence)=16 THEN sequence END AS sequence,
       CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload END AS payload,payload_bytes,
       CASE WHEN length(digest)=64 THEN digest END AS digest,
       CASE WHEN next_sequence IS NULL OR length(next_sequence)=16 THEN next_sequence ELSE '' END AS next_sequence,
       CASE WHEN length(link_digest)=64 THEN link_digest END AS link_digest
       FROM output_lookup_versions WHERE namespace=? AND row_key=? AND sequence<=? ORDER BY sequence DESC LIMIT 1`
-      )
-      .get(this.codec.limits.rowBytes, this.namespace, key, position(at))
+    ).get(this.codec.limits.rowBytes, this.namespace, key, position(at))
     if (record === undefined)
       throw new OutputProtocolError('reset-required', 'Lookup row lost its retained version')
     const revision = decimal(record.sequence)
@@ -121,17 +119,18 @@ export class SQLiteLookupRecords {
   write(sequence: string, versions: readonly SQLiteLookupVersion[]): void {
     for (const version of versions) {
       this.writeHead(sequence, version)
-      this.database
-        .prepare('INSERT INTO output_lookup_versions VALUES (?,?,?,?,?,?,NULL,?)')
-        .run(
-          this.namespace,
-          version.key,
-          position(sequence),
-          version.payload,
-          bytes(version.payload),
-          this.digest('row', version.key + ':' + sequence, version.payload),
-          this.digest('link', version.key + ':' + sequence, 'null')
-        )
+      prepareLookupStatement(
+        this.database,
+        'INSERT INTO output_lookup_versions VALUES (?,?,?,?,?,?,NULL,?)'
+      ).run(
+        this.namespace,
+        version.key,
+        position(sequence),
+        version.payload,
+        bytes(version.payload),
+        this.digest('row', version.key + ':' + sequence, version.payload),
+        this.digest('link', version.key + ':' + sequence, 'null')
+      )
     }
   }
 
@@ -144,34 +143,33 @@ export class SQLiteLookupRecords {
     const digest = this.digest('key', version.key, canonicalOutputJSON(head))
     const expiry = version.expiresAt === null ? null : position(version.expiresAt)
     if (version.previous === undefined) {
-      this.database
-        .prepare('INSERT INTO output_lookup_keys VALUES (?,?,?,?,?,?)')
-        .run(this.namespace, version.key, position(head.first), position(sequence), expiry, digest)
+      prepareLookupStatement(
+        this.database,
+        'INSERT INTO output_lookup_keys VALUES (?,?,?,?,?,?)'
+      ).run(this.namespace, version.key, position(head.first), position(sequence), expiry, digest)
       return
     }
-    const linked = this.database
-      .prepare(
-        `UPDATE output_lookup_versions SET next_sequence=?,link_digest=?
+    const linked = prepareLookupStatement(
+      this.database,
+      `UPDATE output_lookup_versions SET next_sequence=?,link_digest=?
       WHERE namespace=? AND row_key=? AND sequence=? AND next_sequence IS NULL`
-      )
-      .run(
-        position(sequence),
-        this.digest(
-          'link',
-          version.key + ':' + version.previous.current,
-          canonicalOutputJSON(sequence)
-        ),
-        this.namespace,
-        version.key,
-        position(version.previous.current)
-      )
+    ).run(
+      position(sequence),
+      this.digest(
+        'link',
+        version.key + ':' + version.previous.current,
+        canonicalOutputJSON(sequence)
+      ),
+      this.namespace,
+      version.key,
+      position(version.previous.current)
+    )
     if (linked.changes !== 1)
       throw new OutputProtocolError('reset-required', 'Lookup write lost its current version link')
-    this.database
-      .prepare(
-        'UPDATE output_lookup_keys SET current_sequence=?,expires_at=?,head_digest=? WHERE namespace=? AND row_key=?'
-      )
-      .run(position(sequence), expiry, digest, this.namespace, version.key)
+    prepareLookupStatement(
+      this.database,
+      'UPDATE output_lookup_keys SET current_sequence=?,expires_at=?,head_digest=? WHERE namespace=? AND row_key=?'
+    ).run(position(sequence), expiry, digest, this.namespace, version.key)
   }
   digest(kind: string, identity: string, payload: string): string {
     return Utils.toHex(
@@ -206,14 +204,13 @@ export class SQLiteLookupRecords {
   }
 
   group(sequence: string): { group: LookupIndexGroup; key: string } {
-    const record = this.database
-      .prepare(
-        `SELECT CASE WHEN length(mutation_key)=64 THEN mutation_key END AS mutation_key,
+    const record = prepareLookupStatement(
+      this.database,
+      `SELECT CASE WHEN length(mutation_key)=64 THEN mutation_key END AS mutation_key,
       CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload END AS payload,payload_bytes,
       CASE WHEN length(digest)=64 THEN digest END AS digest
       FROM output_lookup_groups WHERE namespace=? AND sequence=?`
-      )
-      .get(this.codec.limits.groupBytes, this.namespace, position(sequence))
+    ).get(this.codec.limits.groupBytes, this.namespace, position(sequence))
     if (record === undefined)
       throw new OutputProtocolError('reset-required', 'Lookup group lost its retained history')
     const group = this.codec.group(

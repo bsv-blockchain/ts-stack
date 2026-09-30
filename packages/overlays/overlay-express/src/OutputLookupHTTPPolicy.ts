@@ -46,7 +46,10 @@ export function lookupHTTPError(error: unknown): OutputServiceError {
   if (error instanceof Error) {
     const properties = Object.getOwnPropertyDescriptors(error)
     const candidate: unknown = properties.code?.value
-    if (typeof candidate === 'string' && codes.some(value => value === candidate)) {
+    if (
+      typeof candidate === 'string' &&
+      codes.includes(candidate as OutputServiceError['error']['code'])
+    ) {
       code = candidate as OutputServiceError['error']['code']
       retryable = properties.retryable?.value === true
       if (code === 'limited') limit = properties.limit?.value

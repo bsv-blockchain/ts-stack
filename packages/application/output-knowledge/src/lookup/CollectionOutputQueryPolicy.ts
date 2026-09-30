@@ -31,7 +31,7 @@ function audience(value: unknown): 'public' | string[] {
       'invalid',
       'Collection audience must be public or at most 256 identities'
     )
-  const result = value.map(outputIdentity)
+  const result = value.map(value => outputIdentity(value))
   for (let index = 1; index < result.length; index++)
     if (result[index - 1] >= result[index])
       throw new OutputProtocolError('invalid', 'Collection audience must be sorted and unique')

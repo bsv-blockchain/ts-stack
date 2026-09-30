@@ -13,7 +13,7 @@ import type {
   LookupDisclosureState
 } from './LookupSessionStorage.js'
 import type { SQLiteLookupSessionRecords } from './SQLiteLookupSessionRecords.js'
-import { decimal, position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, decimal, position } from './SQLiteLookupEncoding.js'
 
 /** All callers execute inside the session owner's serialization transaction. */
 export class SQLiteLookupDisclosure {
@@ -29,14 +29,13 @@ export class SQLiteLookupDisclosure {
   state(id: string): LookupDisclosureState {
     outputString(id)
     const { database, namespace } = this.records.bridge
-    const row = database
-      .prepare(
-        `SELECT CASE WHEN length(revision)=16 THEN revision END AS revision,
+    const row = prepareLookupStatement(
+      database,
+      `SELECT CASE WHEN length(revision)=16 THEN revision END AS revision,
       blocked, CASE WHEN operation IS NULL OR length(operation)=64 THEN operation ELSE 'invalid' END AS operation,
       CASE WHEN length(digest)=64 THEN digest END AS digest FROM output_lookup_guards
       WHERE namespace=? AND guard_id=?`
-      )
-      .get(namespace, id)
+    ).get(namespace, id)
     if (!row) throw new OutputProtocolError('reset-required', 'Lookup disclosure guard is missing')
     if (
       (row.blocked !== 0 && row.blocked !== 1) ||
@@ -59,44 +58,43 @@ export class SQLiteLookupDisclosure {
   }
 
   private save(id: string, state: LookupDisclosureState): void {
-    this.records.bridge.database
-      .prepare(
-        'UPDATE output_lookup_guards SET revision=?,blocked=?,operation=?,digest=? WHERE namespace=? AND guard_id=?'
-      )
-      .run(
-        position(state.revision),
-        state.blocked ? 1 : 0,
-        state.operation,
-        this.digest(id, state),
-        this.records.bridge.namespace,
-        id
-      )
+    prepareLookupStatement(
+      this.records.bridge.database,
+      'UPDATE output_lookup_guards SET revision=?,blocked=?,operation=?,digest=? WHERE namespace=? AND guard_id=?'
+    ).run(
+      position(state.revision),
+      state.blocked ? 1 : 0,
+      state.operation,
+      this.digest(id, state),
+      this.records.bridge.namespace,
+      id
+    )
   }
 
   initialize(id: string): string {
     outputString(id)
     const { database, namespace } = this.records.bridge
     if (
-      database
-        .prepare('SELECT 1 FROM output_lookup_guards WHERE namespace=? AND guard_id=?')
-        .get(namespace, id)
+      prepareLookupStatement(
+        database,
+        'SELECT 1 FROM output_lookup_guards WHERE namespace=? AND guard_id=?'
+      ).get(namespace, id)
     )
       return this.guard(id)
     if (this.records.metadata().guards >= this.capacity.guards)
       throw new OutputProtocolError('limited', 'Lookup disclosure guard capacity is full')
-    database
-      .prepare('INSERT INTO output_lookup_guards VALUES (?,?,?,?,?,?)')
-      .run(
-        namespace,
-        id,
-        position('0'),
-        0,
-        null,
-        this.digest(id, { revision: '0', blocked: false, operation: null })
-      )
-    database
-      .prepare('UPDATE output_lookup_session_meta SET guards=guards+1 WHERE namespace=?')
-      .run(namespace)
+    prepareLookupStatement(database, 'INSERT INTO output_lookup_guards VALUES (?,?,?,?,?,?)').run(
+      namespace,
+      id,
+      position('0'),
+      0,
+      null,
+      this.digest(id, { revision: '0', blocked: false, operation: null })
+    )
+    prepareLookupStatement(
+      database,
+      'UPDATE output_lookup_session_meta SET guards=guards+1 WHERE namespace=?'
+    ).run(namespace)
     return '0'
   }
 
@@ -152,11 +150,7 @@ export class SQLiteLookupDisclosure {
       throw new OutputProtocolError('unauthorized', 'Lookup authorization premises changed')
     for (const original of opening.guards) {
       const current = authorization.guards.find(value => value.id === original.id)
-      if (
-        !current ||
-        current.revision !== original.revision ||
-        current.failure !== original.failure
-      )
+      if (current?.revision !== original.revision || current.failure !== original.failure)
         throw new OutputProtocolError(original.failure, 'Lookup authorization premise changed')
     }
     this.check(opening.guards)

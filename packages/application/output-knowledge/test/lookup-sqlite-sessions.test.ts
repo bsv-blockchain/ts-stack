@@ -396,7 +396,10 @@ describe('durable original lookup sessions', () => {
       sql.exec("UPDATE output_lookup_sessions SET header=json_set(header,'$.access','different')")
       await expect(
         sessions.serialize(value.session, auth(value), value.first)
-      ).rejects.toMatchObject({ code: 'reset-required' })
+      ).rejects.toMatchObject({
+        code: 'reset-required',
+        message: 'Lookup retained header integrity failed'
+      })
       await expect(sessions.closeSession(value.session, auth(value))).rejects.toMatchObject({
         code: 'reset-required'
       })
@@ -1412,4 +1415,76 @@ it('never treats a missing session namespace as an empty initialized store', asy
   } finally {
     sql.close()
   }
+})
+
+it('checks the original key, parameter digest and manifest digest independently of the authenticated header', async () => {
+  const { index, codec, sessions, value } = await fixture()
+  await sessions.commit(value)
+  const records = new SQLiteLookupSessionRecords(
+    index[sqliteLookupBridge](),
+    codec,
+    sessionConfiguration(sessions.capacity),
+    sessions.capacity
+  )
+  const retained = records.bySession(value.session)!
+  for (const field of ['key', 'requestDigest', 'manifestDigest'] as const) {
+    expect(() =>
+      records.opening(retained.epoch, { ...retained.fence, [field]: 'ff'.repeat(32) })
+    ).toThrow(
+      expect.objectContaining({
+        code: 'reset-required',
+        message: 'Lookup opening lost its original binding'
+      })
+    )
+  }
+  expect(records.opening(retained.epoch, retained.fence)).toEqual(value)
+})
+
+it('rejects an over-limit retained header before interpreting its private fields', async () => {
+  const { path, sessions, value } = await fixture()
+  await sessions.commit(value)
+  const sql = new DatabaseSync(path)
+  try {
+    sql.prepare('UPDATE output_lookup_sessions SET header=?').run(' '.repeat(131073))
+    await expect(sessions.serialize(value.session, auth(value), value.first)).rejects.toMatchObject(
+      {
+        code: 'reset-required',
+        message: 'Lookup retained header is unavailable'
+      }
+    )
+  } finally {
+    sql.close()
+  }
+})
+
+it('admits a complete retained record at the exact byte quota and refuses the next record', async () => {
+  const { index, codec, sessions, value } = await fixture()
+  const bridge = index[sqliteLookupBridge]()
+  const configuration = sessionConfiguration(sessions.capacity)
+  const records = new SQLiteLookupSessionRecords(bridge, codec, configuration, sessions.capacity)
+  const epoch = records.epoch(value.epoch)
+  const rollback = new Error('test-owned quota measurement rollback')
+  let exact = 0
+  expect(() =>
+    bridge.transaction(() => {
+      records.saveOpening(epoch, value)
+      exact = records.metadata().bytes
+      throw rollback
+    })
+  ).toThrow(rollback)
+  expect(exact).toBeGreaterThan(0)
+  const bounded = new SQLiteLookupSessionRecords(bridge, codec, configuration, {
+    ...sessions.capacity,
+    bytes: exact
+  })
+  bridge.transaction(() => bounded.saveOpening(epoch, value))
+  expect(bounded.metadata().bytes).toBe(exact)
+  expect(() => bridge.transaction(() => bounded.saveOpening(epoch, another(value)))).toThrow(
+    expect.objectContaining({
+      code: 'limited',
+      message: 'Lookup original opening capacity is full'
+    })
+  )
+  expect(bounded.metadata()).toMatchObject({ bytes: exact, sessions: 1, fences: 1 })
+  expect(bounded.opening(epoch, bounded.bySession(value.session)!.fence)).toEqual(value)
 })

@@ -1,6 +1,6 @@
 import { closeSync, openSync } from 'node:fs'
 import { sqliteLookupBridge, type SQLiteLookupBridge } from './SQLiteLookupBridge.js'
-import { bytes, decimal, position } from './SQLiteLookupEncoding.js'
+import { prepareLookupStatement, bytes, decimal, position } from './SQLiteLookupEncoding.js'
 import { SQLiteLookupRecords } from './SQLiteLookupRecords.js'
 import { DatabaseSync } from 'node:sqlite'
 import {
@@ -194,17 +194,18 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
         ON output_lookup_pins(namespace,replay_until,watermark);
     `)
     this.transaction(() => {
-      this.database
-        .prepare('INSERT OR IGNORE INTO output_lookup_meta VALUES (?,?,?,?,?,?,?,0,0,0,0,0)')
-        .run(
-          this.namespace,
-          this.configurationJSON,
-          position('0'),
-          position('0'),
-          position('0'),
-          position('0'),
-          position('0')
-        )
+      prepareLookupStatement(
+        this.database,
+        'INSERT OR IGNORE INTO output_lookup_meta VALUES (?,?,?,?,?,?,?,0,0,0,0,0)'
+      ).run(
+        this.namespace,
+        this.configurationJSON,
+        position('0'),
+        position('0'),
+        position('0'),
+        position('0'),
+        position('0')
+      )
       this.metadata()
     })
   }
@@ -231,9 +232,9 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
 
   private metadata(): LookupIndexHead {
     this.ready()
-    const record = this.database
-      .prepare(
-        `SELECT
+    const record = prepareLookupStatement(
+      this.database,
+      `SELECT
       CASE WHEN length(CAST(configuration AS BLOB))<=65536 THEN configuration END AS configuration,
       CASE WHEN length(sequence)=16 THEN sequence END AS sequence,
       CASE WHEN length(recorded_at)=16 THEN recorded_at END AS recorded_at,
@@ -241,8 +242,7 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
       CASE WHEN length(retention_floor)=16 THEN retention_floor END AS retention_floor,
       CASE WHEN length(retention_time)=16 THEN retention_time END AS retention_time,
       keys,versions,groups,pins,payload_bytes FROM output_lookup_meta WHERE namespace=?`
-      )
-      .get(this.namespace)
+    ).get(this.namespace)
     if (record === undefined)
       throw new OutputProtocolError('reset-required', 'Lookup index namespace is missing')
     if (record.configuration !== this.configurationJSON)
@@ -286,22 +286,22 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
   private verifyInventory(): void {
     this.transaction(() => {
       const expected = this.metadata().retained
-      const keys = this.database
-        .prepare('SELECT count(*) AS count FROM output_lookup_keys WHERE namespace=?')
-        .get(this.namespace)!
-      const versions = this.database
-        .prepare(
-          'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_versions WHERE namespace=?'
-        )
-        .get(this.namespace)!
-      const groups = this.database
-        .prepare(
-          'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_groups WHERE namespace=?'
-        )
-        .get(this.namespace)!
-      const pins = this.database
-        .prepare('SELECT count(*) AS count FROM output_lookup_pins WHERE namespace=?')
-        .get(this.namespace)!
+      const keys = prepareLookupStatement(
+        this.database,
+        'SELECT count(*) AS count FROM output_lookup_keys WHERE namespace=?'
+      ).get(this.namespace)!
+      const versions = prepareLookupStatement(
+        this.database,
+        'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_versions WHERE namespace=?'
+      ).get(this.namespace)!
+      const groups = prepareLookupStatement(
+        this.database,
+        'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_groups WHERE namespace=?'
+      ).get(this.namespace)!
+      const pins = prepareLookupStatement(
+        this.database,
+        'SELECT count(*) AS count FROM output_lookup_pins WHERE namespace=?'
+      ).get(this.namespace)!
       if (
         keys.count !== expected.keys ||
         versions.count !== expected.versions ||
@@ -381,18 +381,17 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
     }
     if (bytes(canonicalOutputJSON(page)) > limits.bytes)
       throw new OutputProtocolError('limited', 'Lookup snapshot page envelope exceeds its budget')
-    const keys = this.database
-      .prepare(
-        `SELECT CASE WHEN length(row_key)<=256 THEN row_key END AS row_key FROM output_lookup_keys
+    const keys = prepareLookupStatement(
+      this.database,
+      `SELECT CASE WHEN length(row_key)<=256 THEN row_key END AS row_key FROM output_lookup_keys
       WHERE namespace=? AND first_sequence<=? AND row_key>? ORDER BY row_key LIMIT ?`
-      )
-      .all(this.namespace, position(at), after ?? '', limits.records + 1)
+    ).all(this.namespace, position(at), after ?? '', limits.records + 1)
     let rowBytes = 0
     for (const entry of keys.slice(0, limits.records)) {
       const key = lookupIndexKey(entry.row_key)
       const row = this.records.row(key, at, head.sequence)
-      const added =
-        row === null ? 0 : bytes(canonicalOutputJSON(row)) + (page.rows.length > 0 ? 1 : 0)
+      const separator = page.rows.length > 0 ? 1 : 0
+      const added = row === null ? 0 : bytes(canonicalOutputJSON(row)) + separator
       const envelope = { ...page, rows: [], after: key, scanned: page.scanned + 1 }
       if (bytes(canonicalOutputJSON(envelope)) + rowBytes + added > limits.bytes) {
         if (page.scanned === 0)
@@ -517,11 +516,10 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
       throw new OutputProtocolError('revision-unavailable', 'Cannot pin an uncommitted watermark')
     if (outputU64(replayUntil) <= outputU64(head.retention.checkedAt))
       throw new OutputProtocolError('expired', 'Lookup retention promise already expired')
-    const existing = this.database
-      .prepare(
-        'SELECT watermark,replay_until FROM output_lookup_pins WHERE namespace=? AND pin_key=?'
-      )
-      .get(this.namespace, key)
+    const existing = prepareLookupStatement(
+      this.database,
+      'SELECT watermark,replay_until FROM output_lookup_pins WHERE namespace=? AND pin_key=?'
+    ).get(this.namespace, key)
     if (existing !== undefined) {
       if (
         existing.watermark !== position(watermark) ||
@@ -532,12 +530,16 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
     }
     if (head.retained.pins >= this.capacity.pins)
       throw new OutputProtocolError('limited', 'Lookup retention pin capacity is full')
-    this.database
-      .prepare('INSERT INTO output_lookup_pins VALUES (?,?,?,?)')
-      .run(this.namespace, key, position(watermark), position(replayUntil))
-    this.database
-      .prepare('UPDATE output_lookup_meta SET pins=pins+1 WHERE namespace=?')
-      .run(this.namespace)
+    prepareLookupStatement(this.database, 'INSERT INTO output_lookup_pins VALUES (?,?,?,?)').run(
+      this.namespace,
+      key,
+      position(watermark),
+      position(replayUntil)
+    )
+    prepareLookupStatement(
+      this.database,
+      'UPDATE output_lookup_meta SET pins=pins+1 WHERE namespace=?'
+    ).run(this.namespace)
   }
 
   /**
@@ -563,11 +565,10 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
           outputU64(at) < outputU64(head.recordedAt)
         )
           throw new OutputProtocolError('context-changed', 'Lookup retention clock moved backwards')
-        const promise = this.database
-          .prepare(
-            'SELECT count(*) AS count,min(CASE WHEN replay_until>? THEN watermark END) AS watermark FROM output_lookup_pins WHERE namespace=?'
-          )
-          .get(position(at), this.namespace)!
+        const promise = prepareLookupStatement(
+          this.database,
+          'SELECT count(*) AS count,min(CASE WHEN replay_until>? THEN watermark END) AS watermark FROM output_lookup_pins WHERE namespace=?'
+        ).get(position(at), this.namespace)!
         if (promise.count !== head.retained.pins)
           throw new OutputProtocolError(
             'reset-required',
@@ -581,61 +582,61 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
         if (target < previous || target > outputU64(head.sequence))
           throw new OutputProtocolError('reset-required', 'Lookup retention pin lost its history')
         const next = previous + BigInt(limits.groups)
-        const floor = (next < target ? next : target).toString()
-        const groups = this.database
-          .prepare(
-            'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_groups WHERE namespace=? AND sequence<=?'
-          )
-          .get(this.namespace, position(floor))!
+        // Keep sequence arithmetic in bigint, including positions above 2^53.
+        let bounded = target
+        if (next < target) bounded = next
+        const floor = bounded.toString()
+        const groups = prepareLookupStatement(
+          this.database,
+          'SELECT count(*) AS count,coalesce(sum(payload_bytes),0) AS bytes FROM output_lookup_groups WHERE namespace=? AND sequence<=?'
+        ).get(this.namespace, position(floor))!
         if (BigInt(Number(groups.count)) !== outputU64(floor) - previous)
           throw new OutputProtocolError(
             'reset-required',
             'Lookup compaction found a missing log interval'
           )
-        this.database
-          .prepare('DELETE FROM output_lookup_groups WHERE namespace=? AND sequence<=?')
-          .run(this.namespace, position(floor))
+        prepareLookupStatement(
+          this.database,
+          'DELETE FROM output_lookup_groups WHERE namespace=? AND sequence<=?'
+        ).run(this.namespace, position(floor))
         const versions = this.compactVersions(floor, limits.versions)
-        const pins = this.database
-          .prepare(
-            `DELETE FROM output_lookup_pins WHERE namespace=? AND pin_key IN (
+        const pins = prepareLookupStatement(
+          this.database,
+          `DELETE FROM output_lookup_pins WHERE namespace=? AND pin_key IN (
           SELECT pin_key FROM output_lookup_pins WHERE namespace=? AND replay_until<=? ORDER BY replay_until,pin_key LIMIT ?)`
-          )
-          .run(this.namespace, this.namespace, position(at), limits.pins)
+        ).run(this.namespace, this.namespace, position(at), limits.pins)
         const removed = {
           groups: Number(groups.count),
           versions: versions.count,
           pins: Number(pins.changes)
         }
-        this.database
-          .prepare(
-            `UPDATE output_lookup_meta SET retention_floor=?,retention_time=?,
+        prepareLookupStatement(
+          this.database,
+          `UPDATE output_lookup_meta SET retention_floor=?,retention_time=?,
           groups=groups-?,versions=versions-?,pins=pins-?,payload_bytes=payload_bytes-? WHERE namespace=?`
-          )
-          .run(
-            position(floor),
-            position(at),
-            removed.groups,
-            removed.versions,
-            removed.pins,
-            Number(groups.bytes) + versions.bytes,
-            this.namespace
-          )
+        ).run(
+          position(floor),
+          position(at),
+          removed.groups,
+          removed.versions,
+          removed.pins,
+          Number(groups.bytes) + versions.bytes,
+          this.namespace
+        )
         return { head: this.metadata(), removed }
       })
     })
   }
 
   private compactVersions(floor: string, maximum: number): { count: number; bytes: number } {
-    const removable = this.database
-      .prepare(
-        `SELECT older.row_key,older.sequence,older.payload_bytes
+    const removable = prepareLookupStatement(
+      this.database,
+      `SELECT older.row_key,older.sequence,older.payload_bytes
       FROM output_lookup_versions AS older WHERE older.namespace=? AND older.sequence<=? AND EXISTS (
         SELECT 1 FROM output_lookup_versions AS newer WHERE newer.namespace=older.namespace AND
         newer.row_key=older.row_key AND newer.sequence>older.sequence AND newer.sequence<=?)
       ORDER BY older.row_key,older.sequence LIMIT ?`
-      )
-      .all(this.namespace, position(floor), position(floor), maximum)
+    ).all(this.namespace, position(floor), position(floor), maximum)
     let removedBytes = 0
     for (const row of removable) {
       const key = lookupIndexKey(row.row_key)
@@ -647,11 +648,10 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
       )
         throw new OutputProtocolError('reset-required', 'Invalid compacted lookup row size')
       removedBytes += Number(row.payload_bytes)
-      this.database
-        .prepare(
-          'DELETE FROM output_lookup_versions WHERE namespace=? AND row_key=? AND sequence=?'
-        )
-        .run(this.namespace, key, position(sequence))
+      prepareLookupStatement(
+        this.database,
+        'DELETE FROM output_lookup_versions WHERE namespace=? AND row_key=? AND sequence=?'
+      ).run(this.namespace, key, position(sequence))
     }
     return { count: removable.length, bytes: removedBytes }
   }
@@ -666,28 +666,27 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
   }
 
   private setProcessedTime(at: string): void {
-    this.database
-      .prepare('UPDATE output_lookup_meta SET processed_at=? WHERE namespace=?')
-      .run(position(at), this.namespace)
+    prepareLookupStatement(
+      this.database,
+      'UPDATE output_lookup_meta SET processed_at=? WHERE namespace=?'
+    ).run(position(at), this.namespace)
   }
 
   private due(at: string, head: LookupIndexHead): LookupIndexRow | null {
-    const entry = this.database
-      .prepare(
-        `SELECT
+    const entry = prepareLookupStatement(
+      this.database,
+      `SELECT
       CASE WHEN length(row_key)<=256 THEN row_key END AS row_key,
       CASE WHEN length(current_sequence)=16 THEN current_sequence END AS current_sequence,
       CASE WHEN length(expires_at)=16 THEN expires_at END AS expires_at
       FROM output_lookup_keys WHERE namespace=? AND expires_at<=?
       ORDER BY expires_at,row_key LIMIT 1`
-      )
-      .get(this.namespace, position(at))
+    ).get(this.namespace, position(at))
     if (entry === undefined) return null
     const key = lookupIndexKey(entry.row_key)
     const row = this.records.row(key, head.sequence, head.sequence)
     if (
-      row === null ||
-      row.revision !== decimal(entry.current_sequence) ||
+      row?.revision !== decimal(entry.current_sequence) ||
       row.value.expiresAt !== decimal(entry.expires_at)
     )
       throw new OutputProtocolError('reset-required', 'Lookup timer lost its current row binding')
@@ -763,29 +762,29 @@ export class SQLiteLookupIndex implements LookupIndexStorage {
         throw new OutputProtocolError('limited', 'Lookup index retained capacity is full')
     const sequence = position(group.sequence)
     this.records.write(group.sequence, versions)
-    this.database
-      .prepare('INSERT INTO output_lookup_groups VALUES (?,?,?,?,?,?)')
-      .run(
-        this.namespace,
-        sequence,
-        mutationKey,
-        payload,
-        bytes(payload),
-        this.records.digest('group', group.sequence, payload)
-      )
-    this.database
-      .prepare(
-        `UPDATE output_lookup_meta SET sequence=?,recorded_at=?,keys=?,versions=?,groups=?,payload_bytes=? WHERE namespace=?`
-      )
-      .run(
-        sequence,
-        position(group.recordedAt),
-        retained.keys,
-        retained.versions,
-        retained.groups,
-        retained.bytes,
-        this.namespace
-      )
+    prepareLookupStatement(
+      this.database,
+      'INSERT INTO output_lookup_groups VALUES (?,?,?,?,?,?)'
+    ).run(
+      this.namespace,
+      sequence,
+      mutationKey,
+      payload,
+      bytes(payload),
+      this.records.digest('group', group.sequence, payload)
+    )
+    prepareLookupStatement(
+      this.database,
+      `UPDATE output_lookup_meta SET sequence=?,recorded_at=?,keys=?,versions=?,groups=?,payload_bytes=? WHERE namespace=?`
+    ).run(
+      sequence,
+      position(group.recordedAt),
+      retained.keys,
+      retained.versions,
+      retained.groups,
+      retained.bytes,
+      this.namespace
+    )
   }
 
   close(): Promise<void> {

@@ -3,8 +3,13 @@ import { createHash } from 'node:crypto'
 import { sqliteLookupBridge } from '../src/lookup/SQLiteLookupBridge.js'
 import { canonicalOutputJSON } from '@bsv/sdk'
 import { LookupIndexCodec } from '../src/lookup/LookupIndexCodec.js'
-import { decimal, position, bytes } from '../src/lookup/SQLiteLookupEncoding.js'
-import { afterEach, describe, expect, it } from '@jest/globals'
+import {
+  decimal,
+  position,
+  bytes,
+  prepareLookupStatement
+} from '../src/lookup/SQLiteLookupEncoding.js'
+import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -603,4 +608,31 @@ it('validates all compaction keys and rejects a time before the latest domain wr
     code: 'context-changed',
     message: 'Lookup retention clock moved backwards'
   })
+})
+
+it('rejects missing SQL before invoking the native statement compiler and preserves driver errors', () => {
+  const failure = new Error('test-owned driver failure')
+  const prepare = jest.fn((_sql: string): never => {
+    throw failure
+  })
+  for (const sql of ['', ' ', '\n\t']) {
+    expect(() => prepareLookupStatement({ prepare }, sql)).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Lookup SQL statement is empty' })
+    )
+  }
+  expect(prepare).not.toHaveBeenCalled()
+  expect(() => prepareLookupStatement({ prepare }, ' SELECT ? ')).toThrow(failure)
+  expect(prepare).toHaveBeenCalledTimes(1)
+  expect(prepare).toHaveBeenCalledWith(' SELECT ? ')
+})
+
+it('retains the native statement and its parameterized execution unchanged', () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const statement = prepareLookupStatement(database, 'SELECT ? AS value')
+    expect(statement.get('owned-value')).toEqual({ value: 'owned-value' })
+    expect(statement.get(7)).toEqual({ value: 7 })
+  } finally {
+    database.close()
+  }
 })

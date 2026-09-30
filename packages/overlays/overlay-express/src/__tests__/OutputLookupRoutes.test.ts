@@ -603,7 +603,7 @@ describe('HTTP framing, capabilities and lifecycle boundaries', () => {
     reply = { body: ' '.repeat(65536), headers }
     const exact = await requestOpen(f)
     expect(exact.status).toBe(200)
-    expect((await exact.text()).length).toBe(65536)
+    expect(await exact.text()).toHaveLength(65536)
   })
 })
 
