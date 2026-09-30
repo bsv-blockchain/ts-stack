@@ -2,6 +2,7 @@
 
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { Readable } from 'node:stream'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
@@ -39,7 +40,7 @@ try {
     '@bsv/sdk': LEGACY_SDK,
     '@types/node': sdk.manifest.devDependencies['@types/node']
   }
-  for await (const name of names) {
+  for await (const name of Readable.from(names)) {
     const { stdout } = await run(
       'pnpm',
       ['pack', '--json', '--pack-destination', tarballs],

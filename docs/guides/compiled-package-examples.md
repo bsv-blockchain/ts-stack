@@ -240,3 +240,35 @@ void reopenExampleLookupStorage
 void composeExampleLookup
 void configureExampleLookupHost
 ```
+
+## Revenue listing recognition
+
+The executable is supplied from a pinned local artifact. This example checks
+the portable exact-script API; lineage, currentness and spending are separate.
+
+```typescript compile
+// example-id: revenue-listing-codec
+import {
+  RevenueListing,
+  parseRevenueListingDescriptor,
+  revenueListingId,
+  encodeRevenueListingState,
+  decodeRevenueListingState
+} from '@bsv/sdk/script/templates/RevenueListing'
+
+export function recognizeListing(
+  program: Uint8Array,
+  script: Uint8Array,
+  descriptorInput: unknown
+) {
+  const family = new RevenueListing(program)
+  const descriptor = parseRevenueListingDescriptor(descriptorInput)
+  const state = family.decode(script, descriptor)
+  const stateBytes = encodeRevenueListingState(state)
+  return {
+    listingId: revenueListingId(descriptor),
+    state: decodeRevenueListingState(stateBytes),
+    script: family.lock(descriptor, state).toBinary()
+  }
+}
+```

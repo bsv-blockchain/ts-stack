@@ -24,7 +24,7 @@ const allowedHeaders = [
   ...authenticationHeaders,
   ...selectionHeaders
 ]
-const codes: OutputServiceError['error']['code'][] = [
+const codes = new Set<OutputServiceError['error']['code']>([
   'invalid',
   'unauthorized',
   'not-found',
@@ -36,7 +36,7 @@ const codes: OutputServiceError['error']['code'][] = [
   'limited',
   'unsupported',
   'unavailable'
-]
+])
 
 /** Do not expose exception messages, queries, private rows, cursor material or storage paths. */
 export function lookupHTTPError(error: unknown): OutputServiceError {
@@ -48,7 +48,7 @@ export function lookupHTTPError(error: unknown): OutputServiceError {
     const candidate: unknown = properties.code?.value
     if (
       typeof candidate === 'string' &&
-      codes.includes(candidate as OutputServiceError['error']['code'])
+      codes.has(candidate as OutputServiceError['error']['code'])
     ) {
       code = candidate as OutputServiceError['error']['code']
       retryable = properties.retryable?.value === true

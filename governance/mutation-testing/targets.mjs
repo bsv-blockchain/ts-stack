@@ -93,6 +93,16 @@ export function buildMutationTargets(repositoryRoot) {
     sessionRecordTests
   )
   return {
+    'sdk-revenue-listing': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest: 'packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts',
+      mutate: ['src/script/templates/RevenueListing.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/script/templates/__tests/RevenueListing.test.ts',
+        '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
+      ])
+    },
     'overlay-output-lookup-http': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',

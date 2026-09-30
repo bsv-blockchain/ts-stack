@@ -14,6 +14,10 @@ submission and GASP behavior remains available to applications that do not opt i
 - Additive SDK wire codecs, canonical encodings, digest domains, signed capability
   profiles, observation schemas and bounded BRC-193 request/response schemas,
   plus closed BRC-194 put/get/finalize endpoint codecs.
+- Opt-in SDK BRC-197 exact locking-script and revenue-state codec, with pinned
+  executable identity, canonical schedules and full descriptor binding. Its separate
+  browser entry adds no program artifact to root imports. Recognition remains
+  separate from lineage, transaction validation, consent and private fulfillment.
 - Bounded common service errors, explicit capacity minimums and the specified
   BRC-193 HTTP status mapping, separate from local cancellation/storage failures.
 - An additive AuthFetch automatic-payment opt-out for unpaid authenticated requests,
@@ -112,7 +116,7 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK foundation run passes 7,753 tests across 223 suites, including all proposal
+The SDK foundation run passes 7,810 tests across 225 suites, including all proposal
 endpoint variants and closed-envelope, canonical encoding and intrinsic-policy checks.
 The provider increment's full output-knowledge run passes 836 tests across 54 suites,
 with 97.46% line and 94.16% branch coverage. This includes the statement boundary,
@@ -164,7 +168,7 @@ Eleven new mutation campaigns pass the unchanged 90% minimum with zero uncovered
 invalid mutants: codecs 94.44%, query mapping 96.43%, batch/wait composition 91.48%,
 provider service/work 96.31%, session codec/disclosure 93.04%, index 91.38%, index
 records 97.04%, session record/schema 93.42%, retained payloads 97.28%, session
-response gates 92.54%, and HTTP transport 90.23%. Together these exercise 3,822
+response gates 92.54%, and HTTP transport 90.04%. Together these exercise 3,822
 mutants. Independent cases cover authenticated headers, original request and
 manifest bindings, exact retained-byte capacity, and the native statement boundary.
 The complete session-record source is partitioned at the `saveOpening` responsibility
@@ -177,7 +181,7 @@ tests across 19 suites. Root lint/format and affected type checks pass. Exact pa
 runtime and Express exports and clean consumers pass, including the legacy Express
 root with registry SDK 2.8.9 in ESM/CJS and strict .mts/.cts TypeScript consumers.
 The optional lookup feature requires SDK 2.9.0. Browser composition passes without
-SQLite, and all nine public-interface documentation examples compile against 22 exact
+SQLite, and all ten public-interface documentation examples compile against 22 exact
 tarballs. The [provider guide](../../docs/guides/durable-live-lookup.md) covers initialization,
 recovery, privacy writers, mounting, retention and operational limits.
 
@@ -219,7 +223,26 @@ concurrently. Node-only Mongo iteration uses bounded object-mode streams; browse
 code retains a portable iterator contract. No analyzer suppression or gate is changed.
 Published live-source head `74cc115d720e42c3d7364060bdb9b2a12dd76107` passes 76 hosted
 checks with two expected skips, including CodeQL and the exact-head Sonar gate.
-The provider increment is not part of that head and needs its own hosted qualification.
+Provider head `810f41ec06e5167faeaa773bf1692ecf9a1aa4bd` resolved all seventeen
+previous Sonar findings, but its hosted run exposed two further analyzer findings
+and newly reported dependency advisories. The follow-up fixes pass local gates;
+their exact-head hosted qualification remains pending.
+
+The revenue codec adds 56 deterministic cases and one generated property over at
+least 300 schedules, including independently frozen genesis script bytes and
+independent byte-offset assertions. Its full-source mutation campaign passes
+93.51% over 154 mutants (144 killed, ten surviving, zero uncovered/invalid) at the
+unchanged 90% gate. Exact ESM/CJS and strict TypeScript consumers and the separately
+bounded Vite/esbuild entry pass. This is codec qualification, not completed spend,
+lineage, consent, wallet or application qualification.
+
+Compatible dependency remediation advances the existing brace-expansion
+substitution and affected lock resolutions without adding an override or relaxing
+release-age policy. Workspace, four standalone service and codegen audits report
+zero vulnerabilities. The four service suites pass 641 tests; affected wallet
+rate-limit, CHIRP and AuthSocket checks pass 4, 150 and 50 tests. All affected builds,
+frozen installs and deterministic codegen checks pass. The latest documentation
+build validates 137 HTML routes and ten examples against 22 exact tarballs.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all declared browser entries pass. Core browser byte limits remain unchanged;

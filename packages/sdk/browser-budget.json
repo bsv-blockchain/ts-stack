@@ -34,5 +34,31 @@
       "gzip": 270000,
       "brotli": 215000
     }
-  }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./script/templates/RevenueListing",
+      "requiredExports": [
+        "RevenueListing",
+        "parseRevenueListingDescriptor",
+        "parseRevenueListingState",
+        "revenueListingId",
+        "encodeRevenueListingState",
+        "decodeRevenueListingState"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 170000,
+          "gzip": 56000,
+          "brotli": 48000
+        },
+        "esbuild": {
+          "raw": 130000,
+          "gzip": 52000,
+          "brotli": 45000
+        }
+      }
+    }
+  ]
 }

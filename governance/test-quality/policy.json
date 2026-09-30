@@ -620,6 +620,18 @@
           "Fence lookup and session lookup identify the same complete original record.",
           "An aborted record transaction leaves no partial fence, payload or capacity accounting."
         ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 exact descriptor, frozen executable and revenue-state encoding",
+        "target": "At least 300 valid U64 revision and one-to-eight-recipient schedules with independent byte assertions",
+        "invariants": [
+          "The encoded state is exactly 305 bytes with little-endian U64 revision and U32 weights.",
+          "Canonical compressed recipients retain byte ordering and exact integer payout quanta.",
+          "Unused slots are zero and any nonzero padding is rejected."
+        ]
       }
     ],
     "exclusions": [

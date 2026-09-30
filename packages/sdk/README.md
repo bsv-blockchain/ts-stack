@@ -611,3 +611,12 @@ These controls authenticate peers and protect message integrity and freshness;
 they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
+
+## Revenue listing script codec
+
+The 2.9.0 candidate exposes `@bsv/sdk/script/templates/RevenueListing` as a
+separate portable entry point. Supply the frozen BRC-197 program bytes explicitly;
+the codec authenticates the executable and exact descriptor/revenue-state layout.
+Recognition does not establish lineage, currentness, valid spending or fulfillment.
+See the [codec guide](../../docs/guides/revenue-listing-codec.md) for its boundary
+and the remaining complete-family integration work. Existing root imports remain unchanged.
