@@ -1,4 +1,5 @@
 import type { StorageKnex } from '../../src/storage/StorageKnex'
+import { runInSeries } from '../../src/utility/runInSeries'
 
 const identity = '02' + '11'.repeat(32)
 const date = '2026-01-01T00:00:00.000Z'
@@ -7,7 +8,8 @@ const timestamp = { created_at: date, updated_at: date }
 export async function seedArchiveClosure(source: StorageKnex, userId: number, otherId: number): Promise<void> {
   const k = source.knex
   await k('output_baskets').del()
-  for (const id of [1, 2, 3]) {
+  await runInSeries([1, 2, 3], async id => {
+    const profileId = id === 2 ? otherId : userId
     await k('proven_txs').insert({
       ...timestamp,
       provenTxId: id,
@@ -22,7 +24,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('transactions').insert({
       ...timestamp,
       transactionId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       provenTxId: id === 3 ? null : id,
       status: 'completed',
       reference: `tx-${id}`,
@@ -49,14 +51,14 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('output_baskets').insert({
       ...timestamp,
       basketId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       name: `basket-${id}`,
       isDeleted: id === 3
     })
     await k('outputs').insert({
       ...timestamp,
       outputId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       transactionId: id,
       basketId: id,
       spendable: false,
@@ -71,7 +73,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('commissions').insert({
       ...timestamp,
       commissionId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       transactionId: id,
       satoshis: 0,
       keyOffset: 'offset',
@@ -81,7 +83,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('output_tags').insert({
       ...timestamp,
       outputTagId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       tag: `tag-${id}`,
       isDeleted: id === 3
     })
@@ -89,7 +91,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('tx_labels').insert({
       ...timestamp,
       txLabelId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       label: `label-${id}`,
       isDeleted: id === 3
     })
@@ -97,7 +99,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
     await k('certificates').insert({
       ...timestamp,
       certificateId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       serialNumber: `serial-${id}`,
       type: 'type',
       certifier: identity,
@@ -106,19 +108,20 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
       signature: 'signature',
       isDeleted: id === 3
     })
-    for (const fieldName of ['a', 'Z', 'é', '😀'])
+    await runInSeries(['a', 'Z', 'é', '😀'], async fieldName => {
       await k('certificate_fields').insert({
         ...timestamp,
         certificateId: id,
-        userId: id === 2 ? otherId : userId,
+        userId: profileId,
         fieldName,
         fieldValue: `value-${id}`,
         masterKey: 'key'
       })
+    })
     await k('sync_states').insert({
       ...timestamp,
       syncStateId: id,
-      userId: id === 2 ? otherId : userId,
+      userId: profileId,
       storageIdentityKey: `peer-${id}`,
       storageName: `peer-${id}`,
       status: 'unknown',
@@ -127,7 +130,7 @@ export async function seedArchiveClosure(source: StorageKnex, userId: number, ot
       syncMap: '{}',
       when: date
     })
-  }
+  })
   // Composite positions must handle repeated first keys and preserve deleted mappings.
   await k('output_tags_map').insert({ ...timestamp, outputTagId: 1, outputId: 3, isDeleted: true })
   await k('tx_labels_map').insert({ ...timestamp, txLabelId: 1, transactionId: 3, isDeleted: true })

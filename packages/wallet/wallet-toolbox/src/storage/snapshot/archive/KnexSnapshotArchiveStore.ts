@@ -268,8 +268,7 @@ export class KnexSnapshotArchiveStore {
           .where({ archiveId: row.archiveId, sequence: input.sequence })
           .first()
         if (
-          prior === undefined ||
-          prior.digest !== digest ||
+          prior?.digest !== digest ||
           prior.tableName !== input.table ||
           prior.rows !== input.rows ||
           Boolean(prior.done) !== input.done
@@ -358,7 +357,8 @@ export class KnexSnapshotArchiveStore {
     const header = await this.ready(identityKey, archiveId)
     if (sequence >= header.nextSequence) throw unavailable()
     const page: PageRow | undefined = await this.knex('snapshot_archive_pages').where({ archiveId, sequence }).first()
-    if (page === undefined || hash(page.payload) !== page.digest) throw unavailable()
+    if (page === undefined) throw unavailable()
+    if (hash(page.payload) !== page.digest) throw unavailable()
     // Release/expiry during I/O cannot return a newly stale page.
     await this.ready(identityKey, archiveId)
     return {
@@ -385,7 +385,10 @@ export class KnexSnapshotArchiveStore {
     // Bounded exact-key deletes do not hold source wallet locks or release the
     // capacity reservation early. A crash or concurrent closer can resume them.
     let hasPages = true
-    while (hasPages) {
+    function* pendingBatches(): Generator<void> {
+      while (hasPages) yield undefined
+    }
+    await runInSeries(pendingBatches(), async () => {
       const rows: Array<{ sequence: number }> = await this.knex('snapshot_archive_pages')
         .select('sequence')
         .where({ archiveId })
@@ -400,7 +403,7 @@ export class KnexSnapshotArchiveStore {
             rows.map(row => row.sequence)
           )
           .delete()
-    }
+    })
     await this.knex.transaction(async trx => {
       const capacity = await this.capacity(trx)
       const row: ArchiveRow | undefined = await trx('snapshot_archives')

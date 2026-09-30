@@ -2,21 +2,28 @@ const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const { knex } = require('knex')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
+const executable = require('./snapshotArchiveDocker.cjs')
 const container = process.env.TS_STACK_SNAPSHOT_CONTAINER
 const expectedId = process.env.TS_STACK_SNAPSHOT_CONTAINER_ID
-if (!container || !expectedId) throw new Error('Use the bounded local fixture launcher')
-const actual = JSON.parse(execFileSync('docker', ['inspect', container], { encoding: 'utf8' }))[0]
+const secret = process.env.TS_STACK_SNAPSHOT_MYSQL_SECRET
+if (!container || !expectedId || !secret) throw new Error('Use the bounded local fixture launcher')
+const actual = JSON.parse(
+  execFileSync(executable, ['--context', 'desktop-linux', 'inspect', container], { encoding: 'utf8' })
+)[0]
 assert.equal(actual.Id, expectedId)
 assert.equal(actual.Config.Labels['network-ops.fixture'], 'ts-stack-544-durable')
 assert.equal(actual.Config.Image, 'mysql@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b193fb8d')
 const port = Number(
-  execFileSync('docker', ['port', expectedId, '3306/tcp'], { encoding: 'utf8' }).trim().split(':').at(-1)
+  execFileSync(executable, ['--context', 'desktop-linux', 'port', expectedId, '3306/tcp'], { encoding: 'utf8' })
+    .trim()
+    .split(':')
+    .at(-1)
 )
 const connection = {
   host: '127.0.0.1',
   port,
   user: 'root',
-  password: 'synthetic-snapshot-fixture',
+  password: secret,
   database: 'ts569_snapshot',
   timezone: 'Z'
 }

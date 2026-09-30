@@ -511,7 +511,7 @@ test('valid identifier and metadata boundary values remain admitted', async () =
       storageName: 'x'.repeat(65536 - base + binding.sourceStorage.storageName.length)
     }
   }
-  expect(new TextEncoder().encode(JSON.stringify(large)).length).toBe(65536)
+  expect(new TextEncoder().encode(JSON.stringify(large))).toHaveLength(65536)
   const writer = await store.begin(large, { maxBytes: 65536 + 4096 })
   await store.close(identity, writer.archiveId)
 })

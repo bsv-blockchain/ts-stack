@@ -13,12 +13,12 @@ const getJestConfig = async () => {
     // Speed up by restricting to module (source files) extensions used.
     moduleFileExtensions: ['ts', 'js'],
     // excluded source files...
-    modulePathIgnorePatterns: ['out/src', 'out/test', '/dist/cjs/', '<rootDir>/\\.stryker-tmp/'],
+    modulePathIgnorePatterns: ['out/src', 'out/test', '/dist/cjs/', String.raw`<rootDir>/\.stryker-tmp/`],
     // Ignore generated children of this test root. Stryker runs with a sandbox
     // as its root, so an unanchored sandbox pattern would hide its own tests.
     // Module discovery retains the same boundary when package commands replace
     // testPathIgnorePatterns with their governed manual/live test policy.
-    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/\\.stryker-tmp/'],
+    testPathIgnorePatterns: ['/node_modules/', String.raw`<rootDir>/\.stryker-tmp/`],
     // Default is 'node'
     testEnvironment: 'node',
     // default [ '**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)' ]

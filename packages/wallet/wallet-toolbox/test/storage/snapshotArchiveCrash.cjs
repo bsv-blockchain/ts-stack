@@ -78,9 +78,10 @@ async function parent() {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ts569-archive-crash-'))
     let processHandle, database, exited
     try {
-      processHandle = spawn(process.execPath, [__filename, 'child', directory, phase], {
+      processHandle = spawn(process.execPath, [__filename, 'child', phase], {
+        cwd: directory,
         env: process.env,
-        stdio: ['ignore', 'ignore', 'pipe']
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc']
       })
       let error = ''
       processHandle.stderr.on('data', chunk => {
@@ -92,13 +93,16 @@ async function parent() {
       })
       const deadline = Date.now() + 15000
       let reachedBoundary = fs.existsSync(path.join(directory, 'boundary'))
-      while (!reachedBoundary) {
+      function* pendingBoundary() {
+        while (!reachedBoundary) yield undefined
+      }
+      await runInSeries(pendingBoundary(), async () => {
         if (processHandle.exitCode !== null || processHandle.signalCode !== null)
           throw new Error(error || 'Child stopped before boundary')
         assert(Date.now() < deadline, 'Boundary deadline: ' + phase)
         await new Promise(resolve => setTimeout(resolve, 20))
         reachedBoundary = fs.existsSync(path.join(directory, 'boundary'))
-      }
+      })
       assert.equal(fs.readFileSync(path.join(directory, 'boundary'), 'utf8'), phase)
       processHandle.kill('SIGKILL')
       const outcome = await exited
@@ -112,7 +116,9 @@ async function parent() {
         assert.equal((await store.inspect(identity, writer.archiveId)).pages, 13)
         assert.equal((await store.read(identity, writer.archiveId, 12)).table, 'syncStates')
       } else await assert.rejects(store.inspect(identity, writer.archiveId), /unavailable/)
-      const committed = phase === 'after-append-commit' ? 1 : ready ? 13 : 0
+      let committed = 0
+      if (phase === 'after-append-commit') committed = 1
+      else if (ready) committed = 13
       assert.equal(before.nextSequence, committed)
       assert.equal(Number((await database('snapshot_archive_pages').count({ count: '*' }))[0].count), committed)
       if (phase === 'after-append-commit') {
@@ -140,7 +146,7 @@ async function parent() {
         })
       )
     } finally {
-      if (processHandle && processHandle.exitCode === null && processHandle.signalCode === null) {
+      if (processHandle?.exitCode === null && processHandle.signalCode === null) {
         processHandle.kill('SIGKILL')
         await exited
       }
@@ -149,7 +155,13 @@ async function parent() {
     }
   })
 }
-;(process.argv[2] === 'child' ? child(process.argv[3], process.argv[4]) : parent()).catch(error => {
+async function main() {
+  if (process.argv[2] === 'child') {
+    assert.equal(typeof process.send, 'function', 'Child execution requires its fixture parent')
+    await child(process.cwd(), process.argv[3])
+  } else await parent()
+}
+main().catch(error => {
   console.error(error)
   process.exitCode = 1
 })

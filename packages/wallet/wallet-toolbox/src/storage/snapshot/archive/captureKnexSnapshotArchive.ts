@@ -86,7 +86,10 @@ export async function captureKnexSnapshotArchive(
     const captureTable = async (table: WalletSnapshotTable): Promise<void> => {
       let cursor: WalletSnapshotCursor | undefined
       let done = false
-      while (!done) {
+      function* pendingPages(): Generator<void> {
+        while (!done) yield undefined
+      }
+      await runInSeries(pendingPages(), async () => {
         cancelled(signal)
         if (progress.pages >= snapshotArchiveLimits.pages) {
           throw new SnapshotResourceLimitError('Snapshot archive page limit exceeded')
@@ -107,7 +110,7 @@ export async function captureKnexSnapshotArchive(
         cancelled(signal)
         cursor = page.cursor
         done = page.done
-      }
+      })
     }
     await runInSeries(snapshotArchiveTables, captureTable)
     await source.close()

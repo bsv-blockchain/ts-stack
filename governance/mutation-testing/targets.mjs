@@ -181,13 +181,18 @@ function snapshotSyncMutationTargets(repositoryRoot) {
     'wallet-snapshot-sync-destination': [],
     'wallet-snapshot-sync-rows': []
   }
+  const propertyTests = {
+    'wallet-snapshot-sync': complete.propertyTest,
+    'wallet-snapshot-sync-destination':
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts',
+    'wallet-snapshot-sync-rows':
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts'
+  }
   for (const range of complete.mutate) {
     const file = range.replace(/:\d+(?:-\d+)?$/, '')
-    const name = destination.has(file)
-      ? 'wallet-snapshot-sync-destination'
-      : rows.has(file)
-        ? 'wallet-snapshot-sync-rows'
-        : 'wallet-snapshot-sync'
+    let name = 'wallet-snapshot-sync'
+    if (destination.has(file)) name = 'wallet-snapshot-sync-destination'
+    else if (rows.has(file)) name = 'wallet-snapshot-sync-rows'
     groups[name].push(range)
   }
   return Object.fromEntries(
@@ -196,10 +201,7 @@ function snapshotSyncMutationTargets(repositoryRoot) {
       {
         ...complete,
         mutate,
-        propertyTest:
-          name === 'wallet-snapshot-sync'
-            ? complete.propertyTest
-            : `packages/wallet/wallet-toolbox/src/storage/snapshot/${name === 'wallet-snapshot-sync-destination' ? 'SnapshotSyncDestination' : 'SnapshotSyncRows'}.property.test.ts`
+        propertyTest: propertyTests[name]
       }
     ])
   )
