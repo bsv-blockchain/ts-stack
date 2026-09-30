@@ -14,6 +14,7 @@ import { openKnexSnapshotArchiveSource } from './KnexSnapshotArchiveSource'
 import { assertKnexSnapshotArchiveClosure } from './KnexSnapshotArchiveClosure'
 import { captureKnexSnapshotArchive } from './captureKnexSnapshotArchive'
 import { KnexSnapshotArchiveStore, snapshotArchiveTables } from './KnexSnapshotArchiveStore'
+import { verifySnapshotArchiveDirectory, verifySnapshotArchivePage } from './SnapshotArchiveDirectory'
 
 const identity = '02' + '11'.repeat(32)
 const foreign = '03' + '22'.repeat(32)
@@ -77,10 +78,19 @@ test('captures all thirteen tables with original metadata, packed bytes and prof
   expect(manifest.binding.user).toMatchObject({ userId, identityKey: identity })
   expect(manifest.pages).toBe(13)
   const store = new KnexSnapshotArchiveStore(writer.knex)
+  const verified = verifySnapshotArchiveDirectory(await store.directory(identity, manifest.archiveId), {
+    identityKey: identity,
+    chain: 'test',
+    sourceStorageIdentityKey: 'original-source',
+    archiveId: manifest.archiveId,
+    digest: manifest.digest,
+    sourceSchema: SNAPSHOT_ARCHIVE_MIGRATION
+  })
+  expect(verified.manifest).toEqual(manifest)
   const captured: Record<string, Array<Record<string, unknown>>> = {}
   for (const [sequence, table] of snapshotArchiveTables.entries()) {
     const page = await store.read(identity, manifest.archiveId, sequence)
-    const frame = decodeSyncTransfer(page.bytes) as {
+    const frame = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[sequence])) as {
       version: number
       table: string
       rows: Array<Record<string, unknown>>

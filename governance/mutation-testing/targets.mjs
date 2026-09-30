@@ -425,6 +425,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
       mutate: [
         'src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts',
+        'src/storage/snapshot/archive/SnapshotArchive.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveClosure.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveSource.ts',
         'src/storage/snapshot/archive/captureKnexSnapshotArchive.ts',
@@ -438,6 +439,25 @@ export function buildMutationTargets(repositoryRoot) {
           }
         }
       })
+    },
+    'wallet-snapshot-remote-directory': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts',
+      mutate: ['src/storage/snapshot/archive/SnapshotArchiveDirectory.ts'],
+      ...jestTarget(
+        'jest.config.cjs',
+        ['<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
     },
     ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {

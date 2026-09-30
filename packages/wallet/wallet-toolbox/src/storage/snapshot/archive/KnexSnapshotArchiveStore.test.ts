@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { knex, type Knex } from 'knex'
 import { addSnapshotArchiveTables, removeSnapshotArchiveTables } from '../../schema/snapshotArchiveMigration'
+import { verifySnapshotArchiveDirectory, verifySnapshotArchivePage } from './SnapshotArchiveDirectory'
 import {
   KnexSnapshotArchiveStore,
   snapshotArchiveTables,
@@ -116,6 +117,70 @@ test('mainnet source metadata survives sealing and cross-connection reads', asyn
   expect((await secondServer.read(identity, writer.archiveId, 12)).table).toBe('syncStates')
   await secondServer.close(identity, writer.archiveId)
   await expect(store.inspect(identity, writer.archiveId)).rejects.toThrow('unavailable')
+})
+
+test('a replacement server returns verified inclusion metadata without selecting payloads or writer credentials', async () => {
+  const { db, peer, store } = await fixture()
+  const writer = await store.begin(binding)
+  await expect(store.directory(identity, writer.archiveId)).rejects.toThrow('unavailable')
+  const manifest = await complete(store, writer)
+  const second = new KnexSnapshotArchiveStore(peer)
+  const queries: string[] = []
+  const observe = (query: { sql: string }) => queries.push(query.sql)
+  peer.on('query', observe)
+  const directory = await second.directory(identity, writer.archiveId)
+  peer.off('query', observe)
+  const pageQueries = queries.filter(sql => sql.includes('snapshot_archive_pages'))
+  expect(pageQueries).toHaveLength(1)
+  expect(pageQueries[0]).not.toMatch(/payload|\*/)
+  expect(pageQueries[0]).toContain('limit ?')
+  expect(JSON.stringify(directory)).not.toContain(writer.writerToken)
+  expect(directory.bindingJson).toBe((await db('snapshot_archives').first()).binding)
+  const verified = verifySnapshotArchiveDirectory(directory, {
+    identityKey: identity,
+    chain: 'test',
+    sourceStorageIdentityKey: 'source',
+    archiveId: manifest.archiveId,
+    digest: manifest.digest
+  })
+  expect(verified.manifest).toEqual(manifest)
+  expect(verified.tables.syncStates).toEqual({ first: 12, pages: 1, rows: 0 })
+  const last = await second.read(identity, writer.archiveId, verified.tables.syncStates.first)
+  expect(verifySnapshotArchivePage(last, verified.receipts[12])).toEqual(bytes)
+  directory.receipts[0].digest = 'f'.repeat(64)
+  expect((await second.directory(identity, writer.archiveId)).receipts[0].digest).not.toBe('f'.repeat(64))
+  await expect(second.directory(other, writer.archiveId)).rejects.toThrow('unavailable')
+  await store.close(identity, writer.archiveId)
+  await expect(second.directory(identity, writer.archiveId)).rejects.toThrow('unavailable')
+})
+
+test('a directory read refuses a missing staged receipt', async () => {
+  const { db, store } = await fixture()
+  const writer = await store.begin(binding)
+  await complete(store, writer)
+  await db('snapshot_archive_pages').where({ archiveId: writer.archiveId, sequence: 7 }).delete()
+  await expect(store.directory(identity, writer.archiveId)).rejects.toThrow('unavailable')
+})
+
+test.each(['closing', 'expired'])('a directory read rechecks %s after loading receipts', async state => {
+  const { db, peer, store } = await fixture()
+  const writer = await store.begin(binding)
+  await complete(store, writer)
+  const original = db.client.query.bind(db.client)
+  const intercept = jest.spyOn(db.client, 'query').mockImplementation(async (connection, query, ...rest) => {
+    const result = await original(connection, query, ...rest)
+    if (typeof query !== 'string' && query.sql.includes('from `snapshot_archive_pages`')) {
+      await peer('snapshot_archives')
+        .where({ archiveId: writer.archiveId })
+        .update(state === 'closing' ? { state: 'closing' } : { expiresAt: 0 })
+    }
+    return result
+  })
+  try {
+    await expect(store.directory(identity, writer.archiveId)).rejects.toThrow('unavailable')
+  } finally {
+    intercept.mockRestore()
+  }
 })
 
 test('profile and internal capture ownership remain independent authorization boundaries', async () => {

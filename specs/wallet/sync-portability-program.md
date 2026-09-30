@@ -116,6 +116,16 @@ authenticated client/server integration, larger-wallet resource policy and
 measured physical storage costs remain open. The migration and local controller
 do not expose or advertise a remote snapshot API.
 
+The internal directory component now authenticates every page receipt under the
+complete root chain and builds a fixed thirteen-table index. SQL reads select
+only bounded receipt metadata, retain the original binding bytes and recheck
+profile/expiry after I/O. A separate verifier binds expected source/profile/root,
+rejects malformed metadata and checks each detached payload against its verified
+receipt. Independent SHA-256 fixtures, 300 generated directory cases, maximum
+size boundaries and cross-connection SQL capture reads exercise this contract.
+This advances S3 table positioning without adding a remote endpoint, negotiating
+capabilities or establishing portable semantic/proof validation.
+
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water
 positions, authenticated remote views, durable source views, streaming or staged

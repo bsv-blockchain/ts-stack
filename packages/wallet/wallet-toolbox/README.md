@@ -51,6 +51,11 @@ capacity. IndexedDB and remote RPC do not expose retained views. See the
 The SQL candidate also includes [bounded archive staging](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#shared-sql-snapshot-staging-unpublished-internal-component)
 for the ongoing remote snapshot implementation. This internal component does not
 add an authenticated export endpoint or a browser/mobile database adapter.
+Its metadata-only receipt directory binds every page and all thirteen table
+positions to the archive root before arbitrary-table reads; each payload is
+checked against that verified directory. The original binding JSON bytes are
+preserved as the hash preimage. This verifies transport integrity, not the source's
+honesty or portable transaction/proof semantics.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

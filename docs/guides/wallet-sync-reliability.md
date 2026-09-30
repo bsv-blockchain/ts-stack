@@ -370,6 +370,29 @@ fails, the reservation remains available for expiry/reaping recovery. Callers
 must supply independent reader/staging pools and keep schema migrations outside
 active capture windows. No RPC route or advertised capability is added.
 
+The store's internal `directory` read returns bounded receipt metadata without
+selecting payloads or returning writer credentials. It preserves the exact
+original binding JSON bytes used to seed the hash chain. A replacement server
+connection can read the same sealed directory; profile authorization and expiry
+are checked again after loading its receipts.
+
+`verifySnapshotArchiveDirectory` validates the expected profile, network,
+original storage identity and optional resumed root/schema, exact metadata
+fields, lifetime, row totals and the complete ordered receipt chain. All thirteen
+table boundaries must be present. It returns detached receipts and a fixed-size
+table index, so callers can verify arbitrary-table pages without downloading
+earlier payloads. `verifySnapshotArchivePage` copies bounded typed bytes and
+checks their digest and metadata against an already verified receipt. Returned
+dates remain JavaScript Date objects: freezing their containing objects does not
+freeze their internal time values. An eventual adapter must keep its verified
+binding private and give callers fresh metadata copies.
+
+The maximum accepted directory fits below a one-MiB metadata budget. Transport
+integration must separately limit incoming envelope bytes before parsing. These
+checks establish inclusion under the received root, not independent trust in the
+source's data or proof semantics. The wire adapter, durable creation receipts,
+capability negotiation and actual authenticated HTTP lifecycle remain incomplete.
+
 The initial policy allows at most eight handles and 128 MiB of logical reserved
 storage globally, one handle and 32 MiB per profile, 1 MiB per page, 1,000 rows per
 page and 4,096 pages. Metadata is at most 64 KiB. A reservation includes encoded

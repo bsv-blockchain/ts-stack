@@ -522,6 +522,19 @@
           "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted.",
           "A complete SQL capture contains the selected profile\u2019s original rows; cancellation removes all staged pages and reservations without activating wallet data."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet authenticated snapshot receipt directories, original binding bytes, complete table hash chains and page inclusion",
+        "target": "Generated complete table ranges, independent receipt hashes and changed-byte rejection",
+        "invariants": [
+          "Every bounded receipt chain preserves all thirteen table positions and row totals.",
+          "Arbitrary table pages match their previously verified receipt before decoding.",
+          "Changed payload, receipt or previously pinned root bytes reject.",
+          "Caller mutation does not alter verified receipt positions or metadata."
+        ]
       }
     ],
     "exclusions": [

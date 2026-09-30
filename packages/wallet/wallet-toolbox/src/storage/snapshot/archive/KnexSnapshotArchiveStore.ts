@@ -2,73 +2,26 @@ import { Hash, Random, Utils } from '@bsv/sdk'
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
 import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
-import type { TableSettings, TableUser } from '../../schema/tables'
 import type { WalletSnapshotTable } from '../WalletReadSnapshot'
 import { runInSeries } from '../../../utility/runInSeries'
+import { snapshotArchiveEncoding, type SnapshotArchiveDirectory } from './SnapshotArchiveDirectory'
 
-/** Persistent transport staging; these auxiliary records never enter BRC-38. */
-export const snapshotArchiveTables = Object.freeze([
-  'provenTxs',
-  'provenTxReqs',
-  'outputBaskets',
-  'transactions',
-  'commissions',
-  'outputs',
-  'outputTags',
-  'outputTagMaps',
-  'txLabels',
-  'txLabelMaps',
-  'certificates',
-  'certificateFields',
-  'syncStates'
-] as const satisfies readonly WalletSnapshotTable[])
-
-export const snapshotArchiveLimits = Object.freeze({
-  archives: 8,
-  totalBytes: 128 * 1024 * 1024,
-  archiveBytes: 32 * 1024 * 1024,
-  pageBytes: 1024 * 1024,
-  pages: 4096,
-  rowsPerPage: 1000,
-  lifetimeMs: 3600000,
-  bindingBytes: 65536,
-  headerCharge: 4096,
-  pageCharge: 512
-})
-
-export interface SnapshotArchiveBinding {
-  version: 1
-  /** The original retained source view, never a replacement replica checkpoint. */
-  snapshotId: string
-  sourceStorage: TableSettings
-  sourceSchema: string
-  user: TableUser
-}
-
-export interface SnapshotArchiveWriter {
-  archiveId: string
-  /** Internal capture ownership only. Never return this token to an RPC caller. */
-  writerToken: string
-}
-
-export interface SnapshotArchiveManifest {
-  version: 1
-  archiveId: string
-  binding: SnapshotArchiveBinding
-  expiresAt: number
-  pages: number
-  rows: number
-  digest: string
-}
-
-export interface SnapshotArchivePage {
-  sequence: number
-  table: WalletSnapshotTable
-  rows: number
-  done: boolean
-  bytes: Uint8Array
-  digest: string
-}
+import {
+  snapshotArchiveTables,
+  snapshotArchiveLimits,
+  type SnapshotArchiveBinding,
+  type SnapshotArchiveWriter,
+  type SnapshotArchiveManifest,
+  type SnapshotArchivePage
+} from './SnapshotArchive'
+export {
+  snapshotArchiveTables,
+  snapshotArchiveLimits,
+  type SnapshotArchiveBinding,
+  type SnapshotArchiveWriter,
+  type SnapshotArchiveManifest,
+  type SnapshotArchivePage
+} from './SnapshotArchive'
 
 interface ArchiveRow {
   archiveId: string
@@ -350,6 +303,36 @@ export class KnexSnapshotArchiveStore {
 
   async inspect(identityKey: string, archiveId: string): Promise<SnapshotArchiveManifest> {
     return this.manifest(await this.ready(identityKey, archiveId))
+  }
+
+  /** Bounded inclusion metadata, without fetching any staged row payloads. */
+  async directory(identityKey: string, archiveId: string): Promise<SnapshotArchiveDirectory> {
+    const header = await this.ready(identityKey, archiveId)
+    const pages: Array<Omit<PageRow, 'payload' | 'archiveId'>> = await this.knex('snapshot_archive_pages')
+      .select('sequence', 'tableName', 'rows', 'done', 'digest')
+      .where({ archiveId })
+      .orderBy('sequence')
+      .limit(snapshotArchiveLimits.pages)
+    if (pages.length !== header.nextSequence) throw unavailable()
+    // A concurrent close or expiry must not publish a newly stale directory.
+    await this.ready(identityKey, archiveId)
+    return {
+      version: 1,
+      encoding: snapshotArchiveEncoding,
+      archiveId,
+      expiresAt: Number(header.expiresAt),
+      pages: header.nextSequence,
+      rows: Number(header.rows),
+      digest: header.digest,
+      bindingJson: header.binding,
+      receipts: pages.map(page => ({
+        sequence: page.sequence,
+        table: page.tableName,
+        rows: page.rows,
+        done: Boolean(page.done),
+        digest: page.digest
+      }))
+    }
   }
 
   async read(identityKey: string, archiveId: string, sequence: number): Promise<SnapshotArchivePage> {
