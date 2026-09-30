@@ -356,6 +356,55 @@ HTTP/status policy, broader local blocking-decision records, scheduled reassessm
 and every real lookup/cache/snapshot/live/GASP adapter. These remain explicit work
 in the implementation tracker; the journal alone is not a complete BRC-199 service.
 
+## Pending recovery and expiry maintenance
+
+The Node entry also exports `SQLiteRootEvictionMaintenance`. Open it against an
+existing root database with exactly the same configuration as the journal. It
+uses a separate connection to the same cross-process gate, never creates a missing
+file, and never upgrades its format. An already-open old maintenance connection
+is fenced by an explicit coordination upgrade just like every old serving writer.
+The portable optional `RootEvictionMaintenanceStorage` interface does not add
+requirements to existing `RootEvictionStorage` implementations.
+
+`pendingPage({ maximum, after }, guard)` returns at most 64 permanent request
+digests in strictly increasing order. Its optional `next` is an exclusive local
+cursor. It reads bounded references, not proof bodies, and includes requests with
+at least one pending target. Completed requests disappear from subsequent pages.
+This is a changing worker scan, not a signed snapshot or a new BRC wire endpoint.
+When a pass reaches its end, restart without a cursor. New digests before an
+in-progress cursor then appear on the next pass. The journal's permanent finite
+request capacity bounds a complete pass. A lost cursor or notification is safe:
+restart at the beginning and replay idempotently.
+
+`expirePending(digest, guard)` verifies the retained signed request and rejects
+only its still-pending targets when its deadline has arrived or its original
+policy no longer applies. It reports the indices that expired and those still
+pending, with the head and time observed inside that transaction. Completed actions,
+original capability records and request fences remain unchanged. Each changed
+request gets one decision revision; an exact completed retry allocates none.
+A missing retained request is an error, never permission to create a new one.
+
+The maintenance guard supplies a trusted clock and installed root maintenance
+authorization. Both run synchronously after acquiring the actual journal gate;
+access is checked before disclosing pending references or record existence.
+These callbacks cannot sign, await, perform network I/O or reenter the journal.
+Maintenance authority is distinct from a requester's current status access.
+Revoking the requester does not remove the root's obligation to expire pending
+work. Expiry does not need a current chain view: it rejects work and cannot
+establish eligibility, apply suppression or restore membership. A broken or
+missing original capability does not justify replacing it from discovery and
+need not block this separate expiry operation.
+
+A host must run bounded passes on startup and periodically while serving, with
+its own scheduling, cancellation and resource policy. Durable intake precedes
+any wake notification; an ephemeral lost wake cannot be the only recovery path.
+The compiled example performs one bounded page and returns the next cursor to the
+host. This companion does not start an unattended timer, process peer decisions,
+reassess chain currentness, sign results or install the full coordinator. Those
+remain separate integrations. Tests cover generated scan/retry histories, partial
+batch expiry, current maintenance authority, format migration, two real process-kill
+boundaries and clock sampling after another process releases the SQLite gate.
+
 ## Durable service obligations
 
 A complete root implementation must durably retain request fences, independent

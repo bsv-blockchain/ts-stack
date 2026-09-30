@@ -663,8 +663,9 @@ new descriptor property and partition regression bring actual registries to
 81 properties and 81 mutation targets. Encoding passes 91.81% over all 171 sites
 (157 killed,14 surviving), with zero uncovered or invalid mutations; the runner
 recovered one worker crash. Its source matched exactly before removal of one
-trailing blank line; executable code is unchanged. The descriptor campaign and
-fresh hosted reports remain required.
+trailing blank line; executable code is unchanged. The descriptor campaign passes 90.91% over all 264 sites (240 killed,24 surviving),
+with zero uncovered/invalid and an exact production source match. The partition
+preserves the full 164-test dry-run selection. Fresh hosted reports remain required.
 
 The refactor passes 57 focused cases and all 3,278 wallet cases across 307 suites,
 with the existing governed skip. Core, client and mobile packed checks pass,
@@ -708,3 +709,35 @@ hosted evidence remain required. The registries contain 82 property suites and
 82 critical mutation targets, preserving all previous targets, source/test unions,
 worker limits and quality gates. This is not the complete coordinator, scheduler,
 broader-ban layer or serving-path integration.
+
+The strengthened coordination assertions bring the unchanged 77-site source to
+96.10% (74 killed,three surviving), zero uncovered/invalid and an exact source
+match. The rerun selects 184 root tests. Eighteen focused coordination cases now
+pass; the preceding full 1,179-case report predates two additive boundary tests.
+Complete changed storage, journal and records mutation runs remain required.
+
+Upstream PR705 is integrated at local dd94cb850, retaining this branch's artifact
+and bounded root deadline changes. All 21 CI orchestration/result regressions and
+root health/lint/format/types/docs checks pass. This affects mutation launch
+prerequisites only; no selected scope, threshold or failed gate is waived.
+
+## Bounded root maintenance in qualification
+
+The optional Node maintenance companion opens an existing sealed root journal,
+scans bounded pending references and expires verified retained requests under the
+same cross-process gate. It samples time and current maintenance authority inside
+the gate, preserves completed outcomes and original capability records, and never
+authorizes suppression, restoration or requester disclosure. The default APIs and
+both existing storage formats remain unchanged. Hosts still install the bounded
+startup/periodic scheduler and the complete coordinator.
+
+Twelve focused cases pass across three suites, including at least 300 generated
+scan/retry/restart histories, two actual process kills and a separate writer holding
+the gate across the expiry boundary. Complete-source mutation kills all 61 sites (100%), with zero uncovered/invalid
+and an exact source match; its dry run selects all 196 root cases. The full runtime
+passes 1,193 cases across 86 suites with 97.76% line and 94.75% branch coverage;
+the maintenance module has complete line and branch coverage. Packed exports and
+strict consumers pass. Repository health/lint/format/types,
+23 compiled examples against 22 exact tarballs and 145 HTML pages pass. The
+remaining changed journal groups are tracked separately. The append-only registry now contains 83 actual properties
+and critical mutation targets with all prior unions and quality gates preserved.

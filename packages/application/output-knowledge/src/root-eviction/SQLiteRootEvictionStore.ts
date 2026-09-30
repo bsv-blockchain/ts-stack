@@ -423,3 +423,5 @@ export class SQLiteRootEvictionStore
     return synchronousPromise(() => this.database.close())
   }
 }
+
+export { SQLiteRootEvictionMaintenance } from './SQLiteRootEvictionMaintenance.js'

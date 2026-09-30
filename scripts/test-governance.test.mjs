@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 82)
+  assert.equal(result.summary.propertySuites, 83)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 82)
+  assert.equal(result.summary.mutationTargets, 83)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -374,7 +374,8 @@ test('root eviction partitions retain the complete source set, tests and indepen
     'root-eviction-journal',
     'root-eviction-records',
     'root-eviction-storage',
-    'root-eviction-coordination'
+    'root-eviction-coordination',
+    'root-eviction-maintenance'
   ]
   const files = names.flatMap(name => targets[name].mutate)
   assert.equal(new Set(files).size, files.length)
@@ -384,6 +385,8 @@ test('root eviction partitions retain the complete source set, tests and indepen
       'RootEvictionCodec',
       'RootEvictionContractRecords',
       'RootEvictionCoordinatedStorage',
+      'RootEvictionMaintenanceStorage',
+      'SQLiteRootEvictionMaintenance',
       'RootEvictionRequests',
       'RootEvictionServingRecords',
       'RootEvictionStorage',

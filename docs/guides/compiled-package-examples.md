@@ -748,3 +748,35 @@ export async function recordSelectedRootRequest(
   )
 }
 ```
+
+## Bounded root expiry recovery
+
+Call one page from an installed, bounded host worker. Keep its returned cursor
+for the next page; an undefined cursor ends a pass, and the next scheduled pass
+starts without one. The database already exists. This example expires work only;
+it grants no automatic requester authority and does not install a service timer.
+
+```typescript compile
+// example-id: root-expiry-maintenance
+import { SQLiteRootEvictionMaintenance } from '@bsv/output-knowledge/root-eviction/sqlite'
+import type {
+  RootEvictionConfiguration as MaintenanceConfiguration,
+  RootEvictionMaintenanceGuard
+} from '@bsv/output-knowledge/root-eviction'
+
+export async function expireOneRootPage(
+  path: string,
+  configuration: MaintenanceConfiguration,
+  guard: RootEvictionMaintenanceGuard,
+  after?: string
+): Promise<string | undefined> {
+  const worker = SQLiteRootEvictionMaintenance.open(path, configuration)
+  try {
+    const page = await worker.pendingPage({ maximum: 8, after }, guard)
+    for (const digest of page.value.digests) await worker.expirePending(digest, guard)
+    return page.value.next
+  } finally {
+    await worker.close()
+  }
+}
+```

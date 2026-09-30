@@ -836,6 +836,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-maintenance",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-maintenance.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded pending discovery, expiry, restart and immutable completion under root maintenance authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

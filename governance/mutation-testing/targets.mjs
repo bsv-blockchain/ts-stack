@@ -83,7 +83,8 @@ function rootEvictionTarget(property, files) {
       'test/fixtures/root-commit-lock-worker.mjs',
       'test/root-contract-fixture.ts',
       'test/root-eviction-coordination-fixture.ts',
-      'test/fixtures/root-coordination-worker.mjs'
+      'test/fixtures/root-coordination-worker.mjs',
+      'test/fixtures/root-maintenance-worker.mjs'
     ],
     mutate: files.map(name => `src/root-eviction/${name}.ts`),
     ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction*.test.ts'], {
@@ -429,6 +430,10 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'root-eviction-maintenance': rootEvictionTarget('root-eviction-maintenance.property.test.ts', [
+      'SQLiteRootEvictionMaintenance',
+      'RootEvictionMaintenanceStorage'
+    ]),
     'root-eviction-coordination': rootEvictionTarget(
       'root-eviction-coordination.property.test.ts',
       ['RootEvictionContractRecords', 'RootEvictionCoordinatedStorage']

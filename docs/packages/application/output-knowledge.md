@@ -37,8 +37,12 @@ original capability and request atomically with selected result capacity. Explic
 format2 configuration and `upgradeCoordination` preserve default format1 behavior,
 retain old history and fence older open connections. Legacy missing selections
 remain unavailable rather than adopting current discovery.
-The service must separately install access/evidence authority and actual serving
-adapters. See [root coordination](../../guides/root-eviction-coordination.md) for
+The same Node entry exports `SQLiteRootEvictionMaintenance` for bounded local
+pending scans and exact expiry under the journal gate. It opens existing storage
+only, preserves original requests and completed actions, and checks installed
+maintenance authority independently of requester status access. Hosts still
+schedule startup and periodic passes. The service must separately install
+access/evidence authority and actual serving adapters. See [root coordination](../../guides/root-eviction-coordination.md) for
 bounds, creation/recovery, currentness, policy changes and remaining integration work.
 
 ## Public composition

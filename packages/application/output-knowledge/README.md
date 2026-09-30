@@ -951,3 +951,12 @@ advertised result limit. Explicit coordination configuration uses the sealed
 and fences older open connections. Missing legacy selections are never filled
 from current discovery. See the root coordination guide for storage budgets,
 recovery, migration and the remaining complete-service obligations.
+
+The Node root entry also exports `SQLiteRootEvictionMaintenance`, an optional
+trusted local recovery companion. It opens the same existing sealed database,
+scans bounded pending digests and expires work using a clock and maintenance
+authority checked inside the shared gate. It preserves completed actions and
+original selections, requires no requester reconnection, and never grants peer
+authority or changes eligibility. The host still installs a bounded startup and
+periodic scheduling loop; see the root guide and compiled example. No existing
+journal API or storage-format migration is required for this companion.

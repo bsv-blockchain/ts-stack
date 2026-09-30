@@ -1026,6 +1026,18 @@
           "Original selectors and terminal actions survive expiry, retry and restart without current-discovery substitution.",
           "Explicit format migration preserves history and fences already-open connections with older enforcement formats."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-maintenance.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded pending discovery, expiry, restart and immutable completion under root maintenance authority",
+        "target": "At least 300 generated bounded scans, exact expiry, retry and restart histories",
+        "invariants": [
+          "Complete local scan passes eventually visit every retained pending digest; restart can safely begin at the start.",
+          "Only still-pending targets expire, exactly at their deadline, with immutable completed actions and original requests.",
+          "Current maintenance authority is checked under the shared journal gate; expiry never grants peer suppression or serving authority."
+        ]
       }
     ],
     "exclusions": [

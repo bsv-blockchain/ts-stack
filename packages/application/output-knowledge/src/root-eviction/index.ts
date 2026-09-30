@@ -29,3 +29,9 @@ export type {
   RootEvictionCoordinatedRequest,
   RootEvictionCoordinatedStorage
 } from './RootEvictionCoordinatedStorage.js'
+
+export type {
+  RootEvictionMaintenanceGuard,
+  RootEvictionPendingPage,
+  RootEvictionMaintenanceStorage
+} from './RootEvictionMaintenanceStorage.js'
