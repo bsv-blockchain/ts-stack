@@ -371,3 +371,74 @@ it('detects absent, noncanonical, mismatched or oversized original capability re
     }
   }
 })
+
+it('requires explicitly configured original-contract storage without adopting a legacy raw request', async () => {
+  const f = await coordinatedFixture({ coordination: undefined })
+  try {
+    const body = coordinatedRequest(),
+      selection = contractSelection()
+    await expect(
+      f.store.retainCoordinated(
+        signed(body),
+        requester,
+        selection,
+        f.contracts,
+        coordinationGuard()
+      )
+    ).rejects.toMatchObject(error('unavailable'))
+    expect(await f.store.get(requester, body.requestId)).toBeUndefined()
+    const raw = await f.store.retain(signed(body), requester, clock)
+    await expect(
+      f.store.resultCoordinated(
+        requester,
+        body.requestId,
+        selection.selector,
+        f.contracts,
+        coordinationGuard()
+      )
+    ).rejects.toMatchObject(error('unavailable'))
+    expect(await f.store.get(requester, body.requestId)).toEqual(raw)
+  } finally {
+    await f.cleanup()
+  }
+})
+
+it('accepts the exact narrower target, request-byte and lifetime boundaries', async () => {
+  const f = await coordinatedFixture()
+  try {
+    const body = coordinatedRequest(),
+      packet = signed(body),
+      manifest = rootContractManifest()
+    const profile = manifest.services[0].profiles[0]
+    profile.parameters.maxTargets = 1
+    profile.parameters.maxLifetimeSeconds = '100'
+    profile.maxRequestBytes = Buffer.byteLength(canonicalOutputJSON(packet))
+    profile.maxResponseBytes = 20000
+    const cap = rootContractPacket(manifest)
+    const retained = await f.store.retainCoordinated(
+      packet,
+      requester,
+      { manifest: cap.packet, selector: cap.selector, futureClockSeconds: '5' },
+      f.contracts,
+      coordinationGuard()
+    )
+    expect(retained.value.request).toEqual(packet)
+    expect(retained.value.contract.limits).toEqual({
+      maximumTargets: 1,
+      maximumLifetimeSeconds: '100',
+      maximumRequestBytes: profile.maxRequestBytes,
+      maximumResponseBytes: 20000
+    })
+    const result = await f.store.resultCoordinated(
+      requester,
+      body.requestId,
+      cap.selector,
+      f.contracts,
+      coordinationGuard()
+    )
+    expect(result.value.result.outcomes).toHaveLength(1)
+    expect(result.value.result.outcomes[0].actionStatus).toBe('pending')
+  } finally {
+    await f.cleanup()
+  }
+})
