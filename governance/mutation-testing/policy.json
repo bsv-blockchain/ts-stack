@@ -62,7 +62,7 @@
       "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
       "risk": "critical",
-      "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership",
+      "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

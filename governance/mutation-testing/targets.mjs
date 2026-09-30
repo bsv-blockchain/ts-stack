@@ -237,6 +237,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
       mutate: [
         'src/storage/snapshot/RetainedReadSnapshot.ts',
+        'src/storage/snapshot/KnexWalletReadSnapshot.ts',
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',

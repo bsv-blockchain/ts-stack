@@ -84,8 +84,17 @@ absent from the RPC allowlist. Each view occupies one pool connection; query
 cancellation/deadlines remain a driver concern. Retention is explicitly
 unsupported on IndexedDB. No persisted schema or index transition is introduced.
 
-These checkpoints are only part of S2/P1. They do not yet implement a bounded
-keyset API, authenticated remote views, durable source-view checkpoints,
+The subsequent local SQL page contract binds one profile and source metadata to
+the retained view, returns all thirteen standard tables through keyset cursors,
+and preflights payload sizes before fetching rows. Binary fields remain packed.
+Retries within a view repeat pages; a new view rejects its predecessor's cursor.
+Existing unique keys avoid changing legacy OFFSET traversal. Composite storage
+order is explicit and differs from canonical archive order. This provides
+bounded local pages, with explicit oversized-row refusal pending streaming.
+
+These checkpoints are only part of S2/P1/S4. They do not yet implement indexed
+identity/update predicates and commit-order high-water positions, authenticated
+remote views, durable source-view checkpoints,
 streaming, bounded push/backup work or staged restore.
 IndexedDB writers wait during capture and the legacy helpers still materialize
 the document. A local MySQL 8.4.11 fixture confirms repeatable-read capture under

@@ -153,11 +153,71 @@ read-only repeatable-read transaction without changing pooled session defaults.
 SQLite relies on the trusted callback's read-only contract. `StorageIdb` and
 unsupported providers explicitly refuse retained views; their existing scoped
 snapshot behavior is unchanged. Process exit loses the view.
+The lifetime limits retention time, not the bytes accumulated in database WAL or
+undo history while other writers continue; database storage limits remain separate.
 
-This primitive does not yet provide a bounded paging API, durable cursor,
+The primitive itself does not provide a durable cursor,
 remote handle, concurrent IndexedDB snapshot, or streaming archive. Ordinary
 push/backup loops still require the scheduling and checkpoint work below. No
 persisted schema, legacy index order or wire encoding changes in this checkpoint.
+
+### Profile-bound local SQL pages
+
+`StorageKnex.openWalletReadSnapshot(identityKey, { lifetimeMs, signal })` adds a
+version-one typed paging interface over the same retained lifetime. Inspect
+`supportsWalletReadSnapshot()` first; the base provider and IndexedDB explicitly
+refuse it. The API and its capability are excluded from RPC. These are trusted
+local database operations, not remote authentication or complete archive validation.
+
+The returned source settings, user and all thirteen standard tables share one
+view. No primary activation or managed-change policy is applied. Proofs include
+those referenced only through the user's transaction requests. Deleted labels,
+tags, mappings, baskets and certificates remain present. Inconsistent profile
+ownership across mappings or certificate fields rejects the view rather than
+silently omitting a relationship. Binary columns are `Uint8Array`, never expanded
+number arrays; stored scripts remain stored values, without reconstruction.
+
+```ts
+const view = await storage.openWalletReadSnapshot(identityKey, { signal })
+try {
+  let cursor
+  for (;;) {
+    const page = await view.readPage('transactions', cursor, {
+      maxRows: 128,
+      maxBytes: 262144
+    })
+    await consumePackedRows(page.rows)
+    if (page.done) break
+    cursor = page.cursor
+  }
+} finally {
+  await view.close()
+}
+```
+
+Each cursor binds the view and table. Retrying the same position and limits
+repeats a page. Process loss, cancellation, close or expiry invalidates that
+position; a new view cannot accept it. It is not a durable destination checkpoint.
+One read is allowed at a time and each provider retains only one SQL view.
+The existing pool, query-deadline and lifetime limits above still apply.
+
+Pages default to 128 rows and a 262,144-byte payload charge; limits are integer
+values from 1 to 1,000 rows and 1 to 16,777,216 bytes. SQL first returns bounded
+keys and cell lengths. The charge is twice each cell's stored byte length plus
+64 bytes per cell. Only the prefix fitting both limits is fetched. A first row
+over budget explicitly rejects, without loading or skipping that row. This
+charge bounds stored page payload, not encoded wire size or measured process
+RSS; callers must release consumed pages. Large-value streaming remains required
+for records exceeding the maximum budget, and header/schema metadata is separate.
+
+Traversal uses existing unique keys, including label/tag-first mapping keys and
+field-name-first certificate keys, with each database's collation. This order is
+not the canonical BRC-38 array order. No OFFSET, full-table count, new index or
+persistence migration is introduced. Existing legacy sync checkpoints and query
+plans are unchanged. SQLite query-plan tests verify range seeks for numeric and
+composite keys. Identity/update-key indexing, commit-order incremental high-water
+positions, remote handles, IDB retention, streaming and resumable push/backup
+remain part of the active program; this page API does not enable them by itself.
 
 ## Next-stage design checkpoint (not implemented)
 

@@ -263,3 +263,9 @@ This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 mobile build.
+
+The 2.15 candidate also exports version-one `WalletReadSnapshot`, cursor/page and
+packed-row types. The base provider explicitly refuses unsupported local pages;
+only `StorageKnex` currently implements them. Type availability does not imply an
+IndexedDB, native mobile or remote snapshot implementation. Existing sync and
+archive APIs retain their behavior. See the [SQL paging contract](../../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).

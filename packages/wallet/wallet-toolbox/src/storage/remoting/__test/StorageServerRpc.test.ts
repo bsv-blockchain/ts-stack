@@ -409,7 +409,14 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
-  test.each(['readSnapshot', 'supportsReadSnapshot', 'openReadSnapshot', 'supportsRetainedReadSnapshot'])(
+  test.each([
+    'readSnapshot',
+    'supportsReadSnapshot',
+    'openReadSnapshot',
+    'supportsRetainedReadSnapshot',
+    'openWalletReadSnapshot',
+    'supportsWalletReadSnapshot'
+  ])(
     'keeps local snapshot method %s outside the authenticated RPC surface',
     async method => {
       const handler = jest.fn(async () => undefined)

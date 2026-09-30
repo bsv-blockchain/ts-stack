@@ -1,3 +1,4 @@
+import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
 import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
 import { runInSeries } from '../utility/runInSeries'
 import { findProofRecords, mapProofWork } from './methods/proofWork'
@@ -542,6 +543,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   /** Older and auto-closing transaction providers must explicitly refuse retention. */
   openReadSnapshot(_options?: RetainedReadSnapshotOptions): Promise<RetainedReadSnapshot> {
     return Promise.reject(new WERR_NOT_IMPLEMENTED('Retained read snapshots are not supported by this provider'))
+  }
+
+  /** Local, profile-bound packed keyset pages; never implied by ordinary sync support. */
+  supportsWalletReadSnapshot(): boolean {
+    return false
+  }
+
+  openWalletReadSnapshot(_identityKey: string, _options: WalletReadSnapshotOptions = {}): Promise<WalletReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Wallet read snapshot pages are not supported by this provider'))
   }
 
   protected supportsActionBatchPersistence(): boolean {

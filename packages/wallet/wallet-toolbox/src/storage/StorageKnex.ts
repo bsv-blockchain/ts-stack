@@ -1,3 +1,5 @@
+import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
+import { openKnexWalletReadSnapshot } from './snapshot/KnexWalletReadSnapshot'
 import {
   retainReadSnapshot,
   type RetainedReadSnapshot,
@@ -237,6 +239,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // close releases the capacity slot must not permit reopening during destroy.
     this.retainedReadSnapshotsStopped = true
     await this.retainedReadSnapshot?.close()
+  }
+
+  override supportsWalletReadSnapshot(): boolean {
+    return this.supportsRetainedReadSnapshot()
+  }
+
+  override async openWalletReadSnapshot(
+    identityKey: string,
+    options: WalletReadSnapshotOptions = {}
+  ): Promise<WalletReadSnapshot> {
+    if (!this.supportsWalletReadSnapshot()) return await super.openWalletReadSnapshot(identityKey, options)
+    return await openKnexWalletReadSnapshot(this, identityKey, options)
   }
 
   private async readMySQLSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {

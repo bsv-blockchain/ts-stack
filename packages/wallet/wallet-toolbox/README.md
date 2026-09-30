@@ -1221,3 +1221,16 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+### Local packed snapshot pages (2.15 candidate)
+
+SQL providers expose `supportsWalletReadSnapshot()` and
+`openWalletReadSnapshot(identityKey, options)`. Settings, the selected user and
+all thirteen standard tables share one retained read view. `readPage(table,
+cursor, { maxRows, maxBytes })` uses stable storage keys and checks payload size
+before loading rows; binary columns remain `Uint8Array`. Always close the view.
+Cursors expire with the view and cannot resume after process loss. Oversized rows
+explicitly refuse pending large-value streaming; no schema/index or legacy sync
+change is introduced. IndexedDB and RPC do not expose this capability. See the
+[page contract and limits](../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
+The full #544 program remains incomplete.

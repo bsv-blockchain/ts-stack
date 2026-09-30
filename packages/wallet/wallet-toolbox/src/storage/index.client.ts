@@ -13,3 +13,14 @@ export * from './methods/managedChange'
 export * from './methods/managedChangePolicy'
 
 export type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
+
+export type {
+  PackedSnapshotRow,
+  WalletReadSnapshot,
+  WalletReadSnapshotOptions,
+  WalletSnapshotCursor,
+  WalletSnapshotPage,
+  WalletSnapshotPageLimits,
+  WalletSnapshotTable,
+  WalletSnapshotTables
+} from './snapshot/WalletReadSnapshot'

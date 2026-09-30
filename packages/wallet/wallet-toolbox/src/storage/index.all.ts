@@ -22,3 +22,14 @@ export * as sync from './sync'
 export * from './portable'
 
 export type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
+
+export type {
+  PackedSnapshotRow,
+  WalletReadSnapshot,
+  WalletReadSnapshotOptions,
+  WalletSnapshotCursor,
+  WalletSnapshotPage,
+  WalletSnapshotPageLimits,
+  WalletSnapshotTable,
+  WalletSnapshotTables
+} from './snapshot/WalletReadSnapshot'

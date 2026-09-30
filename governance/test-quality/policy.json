@@ -99,13 +99,14 @@
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
-        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership",
-        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model",
+        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
+        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model; randomized source profiles, payload/page limits and independent writes against pinned SQL views",
         "invariants": [
           "At most one database read is admitted and concurrent or nested reads do not queue.",
           "Closing, cancellation and expiry reject later admission and discard late successful results.",
           "Capacity remains occupied until physical reads and transaction cleanup settle.",
-          "Every completed lifecycle removes its expiry timer and rejects further reads."
+          "Every completed lifecycle removes its expiry timer and rejects further reads.",
+          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page."
         ]
       },
       {

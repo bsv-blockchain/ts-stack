@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add local profile-bound SQL keyset pages over retained views. All thirteen
+  standard tables preserve tombstones and original source records; binary values
+  stay packed. SQL preflights bounded keys and payload sizes before fetching a
+  page. Oversized individual rows explicitly refuse pending large-value streaming.
+  Cursors belong only to their live view and table; expiry/process loss requires
+  restart. Existing indexes, schemas, OFFSET checkpoints and RPC remain unchanged.
+  This is a prerequisite for the active streaming/resumable-backup program.
+
 - Add local retained SQLite/MySQL views with explicit lifetime, cancellation and
   cleanup ownership. Opening pins the transaction before the first consumer read;
   one view per provider and one read per view prevent unbounded admission. Closing

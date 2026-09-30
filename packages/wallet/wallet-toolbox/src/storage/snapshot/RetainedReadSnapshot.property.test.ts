@@ -1,4 +1,11 @@
 import fc from 'fast-check'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { knex } from 'knex'
+import { StorageKnex } from '../StorageKnex'
+import { StorageProvider } from '../StorageProvider'
+import type { WalletSnapshotCursor } from './WalletReadSnapshot'
 import { runInSeries } from '../../utility/runInSeries'
 import { retainReadSnapshot } from './RetainedReadSnapshot'
 
@@ -35,6 +42,82 @@ const operations = fc.array(fc.constantFrom('read', 'settle', 'close', 'cancel',
 
 afterEach(() => {
   jest.useRealTimers()
+})
+
+test('random profile rows and page budgets preserve the pinned keyset under independent writes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'wallet-page-property-'))
+  const open = () =>
+    new StorageKnex({
+      ...StorageProvider.createStorageBaseOptions('test'),
+      knex: knex({
+        client: 'better-sqlite3',
+        connection: { filename: join(directory, 'wallet.sqlite') },
+        useNullAsDefault: true,
+        pool: { min: 1, max: 1 }
+      })
+    })
+  const source = open()
+  const writer = open()
+  const identity = '02' + '11'.repeat(32)
+  try {
+    await source.knex.raw('PRAGMA journal_mode = WAL')
+    await source.migrate('property source', 'property-storage')
+    await source.makeAvailable()
+    const { user } = await source.findOrInsertUser(identity)
+    const { user: other } = await source.findOrInsertUser('03' + '22'.repeat(32))
+    await writer.makeAvailable()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.record({ foreign: fc.boolean(), deleted: fc.boolean(), length: fc.integer({ min: 0, max: 80 }) }), {
+          maxLength: 40
+        }),
+        fc.integer({ min: 1, max: 12 }),
+        fc.integer({ min: 1100, max: 8192 }),
+        async (entries, maxRows, maxBytes) => {
+          await source.knex('tx_labels').del()
+          const when = new Date('2026-01-01T00:00:00.000Z')
+          const records = entries.map((entry, index) => ({
+            txLabelId: index + 1,
+            userId: entry.foreign ? other.userId : user.userId,
+            label: `${index}-${'é'.repeat(entry.length)}`,
+            isDeleted: entry.deleted,
+            created_at: when,
+            updated_at: when
+          }))
+          if (records.length > 0)
+            await source
+              .knex('tx_labels')
+              .insert(records.map(row => ({ ...row, created_at: when.toISOString(), updated_at: when.toISOString() })))
+          const expected = records.filter(row => row.userId === user.userId)
+          const view = await source.openWalletReadSnapshot(identity)
+          try {
+            await writer.knex('tx_labels').where({ userId: user.userId }).update({ isDeleted: true })
+            await writer.findOrInsertTxLabel(user.userId, 'post-snapshot insert')
+            const actual: typeof expected = []
+            let cursor: WalletSnapshotCursor | undefined
+            for (let pages = 0; ; pages++) {
+              expect(pages).toBeLessThanOrEqual(expected.length + 1)
+              const page = await view.readPage('txLabels', cursor, { maxRows, maxBytes })
+              expect(page.rows.length).toBeLessThanOrEqual(maxRows)
+              expect(page.payloadBytes).toBeLessThanOrEqual(maxBytes)
+              expect(await view.readPage('txLabels', cursor, { maxRows, maxBytes })).toEqual(page)
+              actual.push(...page.rows)
+              if (page.done) break
+              expect(page.rows.length).toBeGreaterThan(0)
+              cursor = page.cursor
+            }
+            expect(actual).toEqual(expected)
+            expect(new Set(actual.map(row => row.txLabelId)).size).toBe(expected.length)
+          } finally {
+            await view.close()
+          }
+        }
+      )
+    )
+  } finally {
+    await Promise.all([source.destroy(), writer.destroy()])
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('random schedules preserve single-read admission, late-result rejection and physical cleanup ownership', async () => {

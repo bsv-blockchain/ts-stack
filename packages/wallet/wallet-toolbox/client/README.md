@@ -227,3 +227,9 @@ reference, reclaim, commission, and relation lookups avoid repeated full-wallet
 scans during restores. Legacy duplicate transaction IDs remain intact. Clients
 that request an older IndexedDB schema version cannot reopen this database;
 retain a compatible client when using the local backup.
+
+The 2.15 candidate also exports version-one `WalletReadSnapshot`, cursor/page and
+packed-row types. The base provider explicitly refuses unsupported local pages;
+only `StorageKnex` currently implements them. Type availability does not imply an
+IndexedDB, native mobile or remote snapshot implementation. Existing sync and
+archive APIs retain their behavior. See the [SQL paging contract](../../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
