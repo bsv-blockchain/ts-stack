@@ -68,7 +68,9 @@ budget, and is a logical data bound rather than the SQLite file size.
 `retainCoordinated(request, authenticatedRequester, selection, contracts, guard)`
 checks current access, clock, installed policy and external context inside the
 shared gate. `selection` contains the current signed `manifest`, exact `selector`
-and `futureClockSeconds`. `contracts` is the trusted local `RootEvictionContracts`
+and `futureClockSeconds`. The host supplies that finite clock tolerance from its
+own installed policy; it must never copy a client-provided tolerance into this
+argument. `contracts` is the trusted local `RootEvictionContracts`
 instance, never a callback or saved record supplied by a remote caller. A new
 request authenticates its signature and journal identity, selects the original
 contract, checks target count, canonical request bytes and lifetime, and reserves

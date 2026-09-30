@@ -700,7 +700,8 @@ export async function verifySelectedAdvertisement(
 ## Atomic root coordination intake
 
 The host supplies an authenticated requester and selection, installed capability
-rules and trusted synchronous commit guards. This example only records and reads
+rules and trusted synchronous commit guards. It sets `futureClockSeconds` from
+its own finite clock policy, never from an untrusted request body. This example only records and reads
 the request. Installed evidence policy decides any subsequent suppression.
 
 ```typescript compile
