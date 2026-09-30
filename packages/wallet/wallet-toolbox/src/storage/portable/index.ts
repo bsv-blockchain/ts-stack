@@ -7,6 +7,7 @@ import { AESGCM, AESGCMDecrypt } from '@bsv/sdk/primitives/AESGCM'
 import { toArray, toBase64, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { argon2id } from '../../utility/hashWasm'
 import { StorageProvider } from '../StorageProvider'
+import { runInSeries } from '../../utility/runInSeries'
 import {
   TableCertificate,
   TableCertificateField,
@@ -71,7 +72,13 @@ export interface BRC38ImportResult {
   updates: number
 }
 
-export interface BRC39Options {
+export interface BRC38ExportOptions {
+  /** Refuse providers without a coherent source read view. Old custom providers
+   * otherwise retain the caller-quiesced legacy path; built-ins use snapshots. */
+  requireSnapshot?: boolean
+}
+
+export interface BRC39Options extends BRC38ExportOptions {
   iterations?: number
   memoryKiB?: number
   parallelism?: number
@@ -168,38 +175,51 @@ const dateFieldsByKind: Partial<Record<string, string[]>> = {
   syncState: ['created_at', 'updated_at', 'when']
 }
 
-export async function exportBRC38(storage: StorageProvider, identityKey: string): Promise<BRC38WalletData> {
-  const sourceStorage = await storage.makeAvailable()
-  const user = verifyTruthy(await storage.findUserByIdentityKey(identityKey))
+export async function exportBRC38(
+  storage: StorageProvider,
+  identityKey: string,
+  options: BRC38ExportOptions = {}
+): Promise<BRC38WalletData> {
+  await storage.makeAvailable()
+  if (options.requireSnapshot === true || storage.supportsReadSnapshot()) {
+    return await storage.readSnapshot(trx => captureBRC38(storage, identityKey, trx))
+  }
+  return await captureBRC38(storage, identityKey)
+}
+
+async function captureBRC38(
+  storage: StorageProvider,
+  identityKey: string,
+  trx?: sdk.TrxToken
+): Promise<BRC38WalletData> {
+  const sourceStorage = await storage.readSettings(trx)
+  const user = verifyTruthy(await storage.findUserByIdentityKey(identityKey, trx))
   const userId = user.userId
 
-  const transactions = await storage.findTransactions({ partial: { userId } })
-  const transactionIds = new Set(transactions.map(t => t.transactionId))
+  const transactions = await storage.findTransactions({ partial: { userId }, trx })
   const transactionTxids = new Set(transactions.map(t => t.txid).filter((txid): txid is string => txid != null))
 
-  const provenTxReqs = (await storage.getProvenTxReqsForUser({ userId })).filter(r => transactionTxids.has(r.txid))
+  const provenTxReqs = (await storage.getProvenTxReqsForUser({ userId, trx })).filter(r => transactionTxids.has(r.txid))
   const provenTxIds = new Set<number>()
   for (const tx of transactions) if (tx.provenTxId != null) provenTxIds.add(tx.provenTxId)
   for (const req of provenTxReqs) if (req.provenTxId != null) provenTxIds.add(req.provenTxId)
 
   const provenTxs: TableProvenTx[] = []
-  for (const provenTxId of Array.from(provenTxIds).sort(compareNumber)) {
-    const proven = verifyOneOrNone(await storage.findProvenTxs({ partial: { provenTxId } }))
+  await runInSeries(Array.from(provenTxIds).sort(compareNumber), async provenTxId => {
+    const proven = verifyOneOrNone(await storage.findProvenTxs({ partial: { provenTxId }, trx }))
     if (proven != null) provenTxs.push(proven)
-  }
+  })
 
-  const outputBaskets = await storage.findOutputBaskets({ partial: { userId } })
-  const commissions = await storage.findCommissions({ partial: { userId } })
-  const outputs = await storage.findOutputs({ partial: { userId } })
-  const outputTags = await storage.findOutputTags({ partial: { userId } })
-  const outputTagMaps = (await storage.getOutputTagMapsForUser({ userId })).filter(m =>
-    outputs.some(o => o.outputId === m.outputId)
-  )
-  const txLabels = await storage.findTxLabels({ partial: { userId } })
-  const txLabelMaps = (await storage.getTxLabelMapsForUser({ userId })).filter(m => transactionIds.has(m.transactionId))
-  const certificates = await storage.findCertificates({ partial: { userId } })
-  const certificateFields = await storage.findCertificateFields({ partial: { userId } })
-  const syncStates = await storage.findSyncStates({ partial: { userId } })
+  const outputBaskets = await storage.findOutputBaskets({ partial: { userId }, trx })
+  const commissions = await storage.findCommissions({ partial: { userId }, trx })
+  const outputs = await storage.findOutputs({ partial: { userId }, trx })
+  const outputTags = await storage.findOutputTags({ partial: { userId }, trx })
+  const outputTagMaps = await storage.getOutputTagMapsForUser({ userId, trx })
+  const txLabels = await storage.findTxLabels({ partial: { userId }, trx })
+  const txLabelMaps = await storage.getTxLabelMapsForUser({ userId, trx })
+  const certificates = await storage.findCertificates({ partial: { userId }, trx })
+  const certificateFields = await storage.findCertificateFields({ partial: { userId }, trx })
+  const syncStates = await storage.findSyncStates({ partial: { userId }, trx })
 
   const data: BRC38WalletData = {
     brc: 38,
@@ -234,8 +254,12 @@ export async function exportBRC38(storage: StorageProvider, identityKey: string)
   return data
 }
 
-export async function exportBRC38Json(storage: StorageProvider, identityKey: string): Promise<string> {
-  return canonicalize(await exportBRC38(storage, identityKey))
+export async function exportBRC38Json(
+  storage: StorageProvider,
+  identityKey: string,
+  options?: BRC38ExportOptions
+): Promise<string> {
+  return canonicalize(await exportBRC38(storage, identityKey, options))
 }
 
 export function parseBRC38Json(json: string): BRC38WalletData {
@@ -272,7 +296,7 @@ export async function exportBRC39(
   password: string,
   options?: BRC39Options
 ): Promise<number[]> {
-  return await encryptBRC39(await exportBRC38(storage, identityKey), password, options)
+  return await encryptBRC39(await exportBRC38(storage, identityKey, options), password, options)
 }
 
 export async function importBRC39(
@@ -876,7 +900,7 @@ function portableRow(kind: string, row: object): PortableRow {
     if (binaryFields.has(key)) {
       out[key] = toBase64(value as number[])
     } else if (jsonFields.has(key)) {
-      out[key] = typeof value === 'string' ? (JSON.parse(value) as JsonValue) : (value as JsonValue)
+      out[key] = portableJson(typeof value === 'string' ? JSON.parse(value) : value, key)
     } else if (value instanceof Date) {
       out[key] = isoDate(value)
     } else {
@@ -884,6 +908,38 @@ function portableRow(kind: string, row: object): PortableRow {
     }
   }
   return out
+}
+
+/** Legacy JSON objects may store absent optional fields as null. Keep array
+ * positions and meaningful falsy values; never mutate the captured source. */
+function portableJson(value: unknown, field: string, path: Array<string | number> = []): JsonValue {
+  if (Array.isArray(value)) return value.map((child, index) => portableJson(child, field, [...path, index]))
+  if (isObject(value)) {
+    const entries: Array<[string, JsonValue]> = []
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = [...path, key]
+      if (child == null && optionalPortableJsonField(field, childPath)) continue
+      entries.push([key, portableJson(child, field, childPath)])
+    }
+    return Object.fromEntries(entries)
+  }
+  if (typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  throw new Error('BRC-38 JSON arrays and values must not contain null, undefined or non-JSON values')
+}
+
+function optionalPortableJsonField(field: string, path: Array<string | number>): boolean {
+  if (field === 'history') {
+    return (
+      (path.length === 1 && path[0] === 'notes') ||
+      (path.length === 3 && path[0] === 'notes' && typeof path[1] === 'number' && path[2] !== 'what')
+    )
+  }
+  if (field === 'notify') return path.length === 1 && path[0] === 'transactionIds'
+  if (field === 'syncMap') {
+    return path.length === 2 && SYNC_CHUNK_ENTITY_ORDER.includes(String(path[0])) && path[1] === 'maxUpdated_at'
+  }
+  return (field === 'errorLocal' || field === 'errorOther') && path.length === 1 && path[0] === 'stack'
 }
 
 function fromPortableRow<T>(kind: string, row: PortableRow): T {

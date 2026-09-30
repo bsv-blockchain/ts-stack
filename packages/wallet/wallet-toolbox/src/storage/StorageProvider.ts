@@ -516,6 +516,21 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return false
   }
 
+  /** Local provider contract only; this does not advertise a remote export RPC. */
+  supportsReadSnapshot(): boolean {
+    return false
+  }
+
+  /**
+   * Capture related rows from one database read view. The callback must use
+   * this token for every query and must not perform network or file I/O.
+   * Custom providers must implement their actual isolation guarantee rather
+   * than inheriting an ordinary transaction with unknown isolation.
+   */
+  async readSnapshot<T>(_read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
+  }
+
   protected supportsActionBatchPersistence(): boolean {
     return false
   }

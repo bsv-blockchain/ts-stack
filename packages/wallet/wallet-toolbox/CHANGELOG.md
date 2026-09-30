@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Capture BRC-38 source metadata and every table from one provider read view.
+  Custom providers opt in with `supportsReadSnapshot` and `readSnapshot`. The
+  additive `requireSnapshot` export option refuses unsupported views; old
+  custom-provider calls keep their caller-quiesced compatibility path. SQLite,
+  MySQL and IndexedDB implement the local boundary. Recognized optional nullable
+  JSON object fields normalize in a detached copy without
+  dropping array values. Streaming files and the full #544 program remain in
+  implementation; IndexedDB writers still wait during source capture.
 - Add resumable local atomic pages, durable checkpoints, cancellation/progress,
   concurrent read capability checks and fair foreground/background ownership.
 - Separate fixed source/commit latency from marginal row cost and bound upward

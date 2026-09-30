@@ -35,6 +35,34 @@ upgrading. Pending sync work, including
 [#569](https://github.com/bsv-blockchain/ts-stack/pull/569), is not an available
 API contract for this guide.
 
+### Unpublished 2.15 source-capture checkpoint
+
+PR #569 now captures BRC-38 source metadata, user and all standard table reads
+inside one provider read view. SQLite uses one transaction; MySQL explicitly
+requests repeatable-read isolation; IndexedDB uses one readonly transaction
+covering settings and the wallet stores. SQLite WAL permits an independent
+writer during capture. IndexedDB queues overlapping writers until capture ends;
+this checkpoint does not claim bounded foreground write latency for that phase.
+MySQL's configuration is implemented but still requires live qualification.
+
+Pass `{ requireSnapshot: true }` to `exportBRC38`, `exportBRC38Json` or the
+`exportBRC39` options to require a coherent source view. Custom `StorageProvider`
+implementations opt in with `supportsReadSnapshot()` and `readSnapshot(callback)`
+and must honor the token on every query. A required but unsupported snapshot
+is refused before table capture. Without that option, old custom providers retain
+the documented caller-quiesced legacy path; it does not gain a snapshot guarantee.
+The callback is for database capture only, without peer I/O or progress handlers.
+Source JSON history omits null/undefined values only for recognized optional
+object properties in a detached copy, retaining false, zero, empty strings and
+every array position. Required values remain subject to validation. A null array
+entry is rejected rather than dropped. The source records are not rewritten.
+
+This is an intermediate source candidate, not a released streaming export API.
+The materialized helpers below still allocate the full document/file. Remote
+snapshot handles, bounded immutable paging, streaming files, staged recovery and
+the push/backup scheduling changes remain required parts of the
+[full implementation program](https://github.com/bsv-blockchain/ts-stack/blob/codex/wallet-sync-interop-reliability/specs/wallet/sync-portability-program.md).
+
 ## Coverage and limits
 
 The implementation exports one `user`, its `sourceStorage` metadata and 13
@@ -66,7 +94,7 @@ qualify an isolated copy through the supported migration/export path. Record
 both versions; importing a file on the candidate does not prove that an older
 wallet can produce that file unchanged.
 
-The current helpers read multiple tables and materialize the complete document
+The released helpers read multiple tables and materialize the complete document
 and encrypted file in memory. They do not take a database-wide snapshot,
 provide streaming archive I/O, expose an archive progress/cancellation API, or
 promise a coherent view while other writers change the source. Use a stable

@@ -168,6 +168,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   protected override supportsStorageAccessScheduling(): boolean {
     return true
   }
+
+  override supportsReadSnapshot(): boolean {
+    return this.databaseSystem() === 'sqlite' || this.databaseSystem() === 'mysql'
+  }
+
+  override async readSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    await this.makeAvailable()
+    const database = this.databaseSystem()
+    if (database === 'sqlite') {
+      // SQLite establishes its read view on the first query. Do not request
+      // Knex's unsupported SQLite isolation/readOnly options or write settings
+      // into the shared connection. WAL writers may use another connection.
+      return await this.knex.transaction(read)
+    }
+    if (database === 'mysql') {
+      return await this.knex.transaction(read, { isolationLevel: 'repeatable read', readOnly: true })
+    }
+    throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots require SQLite or MySQL isolation')
+  }
+
   protected override supportsNoSendExpiryPersistence(): boolean {
     return true
   }

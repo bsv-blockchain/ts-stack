@@ -28,6 +28,18 @@ These guides cover the recovery design. The measurements below describe
 specific tests and do not establish that every wallet product has complete
 key-and-data disaster recovery.
 
+The unpublished 2.15 candidate captures BRC-38 source settings, wallet identity
+and standard table closure in one local provider read view. SQLite and IndexedDB
+tests cover independent writes during capture; MySQL explicitly requests
+repeatable-read isolation but still needs live qualification. Custom providers
+opt in with `supportsReadSnapshot` and `readSnapshot`. Use the export option
+`requireSnapshot: true` to refuse unsupported capture; old custom-provider calls
+retain their documented caller-quiesced fallback.
+Recognized optional nullable JSON fields are omitted in a detached archive copy;
+array entries and meaningful falsy values are preserved. The helpers still
+materialize the full document/file, and IndexedDB writers wait during capture.
+The complete sync/streaming/restore program remains in progress on #569.
+
 ## Backup and sync: tested results
 
 **Live E2E testing used a large wallet in the native desktop client**, covering
