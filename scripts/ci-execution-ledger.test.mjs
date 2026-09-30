@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 
 import { collectExecutionLedger, measureExecutionAttempt } from './ci-execution-ledger.mjs'
 
@@ -208,4 +209,38 @@ test('window cutoff does not claim exhaustion when older runs are known to remai
   })
   assert.equal(result.window.runCount, 1)
   assert.equal(result.window.exhaustedHistory, false)
+})
+
+test('independent attempts collect concurrently with at most four API requests and stable ordering', async () => {
+  let active = 0
+  let maximumActive = 0
+  const result = await collectExecutionLedger({
+    repository: 'example/repo',
+    workflow: 'ci.yml',
+    request: async url => {
+      if (url.includes('/workflows/')) return { workflow_runs: [run(1, 5), run(2, 5)] }
+      active++
+      maximumActive = Math.max(maximumActive, active)
+      try {
+        await delay(1)
+        const parsed = new URL(url)
+        const [, id, attempt] = /\/runs\/(\d+)\/attempts\/(\d+)/.exec(parsed.pathname).map(Number)
+        return parsed.pathname.endsWith('/jobs')
+          ? { total_count: 1, jobs: [job(id * 10 + attempt, id, attempt)] }
+          : run(id, attempt)
+      } finally {
+        active--
+      }
+    }
+  })
+  assert.equal(maximumActive, 4)
+  assert.equal(active, 0)
+  assert.equal(result.summary.attemptCount, 10)
+  assert.deepEqual(
+    result.attempts.map(item => [item.runId, item.attempt]),
+    [
+      ...Array.from({ length: 5 }, (_, index) => [1, index + 1]),
+      ...Array.from({ length: 5 }, (_, index) => [2, index + 1])
+    ]
+  )
 })

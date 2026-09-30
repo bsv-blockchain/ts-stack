@@ -3,7 +3,7 @@ const PAGE_SIZE = 100
 const MAX_JOB_PAGES = 10
 
 function instant(value) {
-  const parsed = typeof value === 'string' ? Date.parse(value) : NaN
+  const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN
   return Number.isFinite(parsed) ? parsed : null
 }
 
@@ -107,7 +107,7 @@ async function attemptJobs(apiRoot, runId, attempt, request) {
       `${apiRoot}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=${PAGE_SIZE}&page=${page}`
     )
     if (!Array.isArray(data.jobs) || !Number.isSafeInteger(data.total_count)) {
-      throw new Error('Malformed attempt jobs response')
+      throw new TypeError('Malformed attempt jobs response')
     }
     for (const job of data.jobs) {
       const previous = jobs.get(job.id)
@@ -124,6 +124,70 @@ async function attemptJobs(apiRoot, runId, attempt, request) {
   throw new Error('Attempt exceeds the job-page bound; refusing partial evidence')
 }
 
+function rememberRun(candidates, run, maximumRuns) {
+  positiveInteger(run.id, Number.MAX_SAFE_INTEGER, 'run ID')
+  const previous = candidates.get(run.id)
+  if (previous && JSON.stringify(previous) !== JSON.stringify(run)) {
+    throw new Error('Conflicting duplicate execution run evidence')
+  }
+  if (!previous && candidates.size < maximumRuns) candidates.set(run.id, run)
+}
+
+async function collectRunWindow(apiRoot, workflow, maximumRuns, maximumRunPages, request) {
+  const candidates = new Map()
+  let pagesRead = 0
+  let exhaustedHistory = false
+  for (let page = 1; page <= maximumRunPages && candidates.size < maximumRuns; page++) {
+    const data = await request(
+      `${apiRoot}/actions/workflows/${encodeURIComponent(workflow)}/runs?event=pull_request&per_page=${PAGE_SIZE}&page=${page}`
+    )
+    if (!Array.isArray(data.workflow_runs)) throw new TypeError('Malformed execution runs response')
+    pagesRead++
+    for (const run of data.workflow_runs) {
+      rememberRun(candidates, run, maximumRuns)
+    }
+    if (data.workflow_runs.length < PAGE_SIZE) {
+      exhaustedHistory = data.workflow_runs.every(run => candidates.has(run.id))
+      break
+    }
+  }
+  if (candidates.size < maximumRuns && !exhaustedHistory) {
+    throw new Error('Run-page bound reached before the requested ledger window')
+  }
+  return { candidates, pagesRead, exhaustedHistory }
+}
+
+async function collectAttempt(apiRoot, run, attempt, request) {
+  const metadata = await request(`${apiRoot}/actions/runs/${run.id}/attempts/${attempt}`)
+  if (
+    metadata.id !== run.id ||
+    metadata.run_attempt !== attempt ||
+    metadata.head_sha !== run.head_sha
+  ) {
+    throw new Error('Attempt metadata does not match its run/head')
+  }
+  return measureExecutionAttempt(metadata, await attemptJobs(apiRoot, run.id, attempt, request))
+}
+
+async function collectAttemptBatch(apiRoot, descriptors, request, offset = 0) {
+  if (offset >= descriptors.length) return []
+  const batch = descriptors.slice(offset, offset + 4)
+  const measured = await Promise.all(
+    batch.map(({ run, attempt }) => collectAttempt(apiRoot, run, attempt, request))
+  )
+  return [...measured, ...(await collectAttemptBatch(apiRoot, descriptors, request, offset + 4))]
+}
+
+function collectAttempts(apiRoot, candidates, maximumAttempts, request) {
+  const descriptors = [...candidates.values()].flatMap(run => {
+    positiveInteger(run.run_attempt, maximumAttempts, 'attempt count')
+    return Array.from({ length: run.run_attempt }, (_, index) => ({ run, attempt: index + 1 }))
+  })
+  // Independent attempts share at most four API requests; pages within an
+  // attempt remain sequential so completeness is checked before proceeding.
+  return collectAttemptBatch(apiRoot, descriptors, request)
+}
+
 export async function collectExecutionLedger({
   repository,
   workflow,
@@ -137,48 +201,14 @@ export async function collectExecutionLedger({
   positiveInteger(maximumAttempts, 100, 'attempt count')
   positiveInteger(maximumRunPages, 10, 'run pages')
   const apiRoot = `https://api.github.com/repos/${repository}`
-  const candidates = new Map()
-  let pagesRead = 0
-  let exhaustedHistory = false
-  for (let page = 1; page <= maximumRunPages && candidates.size < maximumRuns; page++) {
-    const data = await request(
-      `${apiRoot}/actions/workflows/${encodeURIComponent(workflow)}/runs?event=pull_request&per_page=${PAGE_SIZE}&page=${page}`
-    )
-    if (!Array.isArray(data.workflow_runs)) throw new Error('Malformed execution runs response')
-    pagesRead++
-    for (const run of data.workflow_runs) {
-      positiveInteger(run.id, Number.MAX_SAFE_INTEGER, 'run ID')
-      const previous = candidates.get(run.id)
-      if (previous && JSON.stringify(previous) !== JSON.stringify(run)) {
-        throw new Error('Conflicting duplicate execution run evidence')
-      }
-      if (!previous && candidates.size < maximumRuns) candidates.set(run.id, run)
-    }
-    if (data.workflow_runs.length < PAGE_SIZE) {
-      exhaustedHistory = data.workflow_runs.every(run => candidates.has(run.id))
-      break
-    }
-  }
-  if (candidates.size < maximumRuns && !exhaustedHistory) {
-    throw new Error('Run-page bound reached before the requested ledger window')
-  }
-  const attempts = []
-  for (const run of candidates.values()) {
-    positiveInteger(run.run_attempt, maximumAttempts, 'attempt count')
-    for (let attempt = 1; attempt <= run.run_attempt; attempt++) {
-      const metadata = await request(`${apiRoot}/actions/runs/${run.id}/attempts/${attempt}`)
-      if (
-        metadata.id !== run.id ||
-        metadata.run_attempt !== attempt ||
-        metadata.head_sha !== run.head_sha
-      ) {
-        throw new Error('Attempt metadata does not match its run/head')
-      }
-      attempts.push(
-        measureExecutionAttempt(metadata, await attemptJobs(apiRoot, run.id, attempt, request))
-      )
-    }
-  }
+  const { candidates, pagesRead, exhaustedHistory } = await collectRunWindow(
+    apiRoot,
+    workflow,
+    maximumRuns,
+    maximumRunPages,
+    request
+  )
+  const attempts = await collectAttempts(apiRoot, candidates, maximumAttempts, request)
   return {
     schemaVersion: 1,
     collectedAt,
