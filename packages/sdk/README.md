@@ -342,6 +342,24 @@ wallet-derived locking key, and field signature before reading or spending it.
   separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
   Existing lookup and submission interfaces keep their current behavior.
 
+  BRC-195/196 release helpers preserve that distinction for private acquisitions.
+  `parseOutputReleaseEvidence` checks bounded representation and exact height
+  arithmetic; `bindOutputReleaseEvidence` matches independently selected chain,
+  transaction and policy. `verifyOutputProcessorAcceptance` verifies the registered
+  processor's exact BRC-77 statement. None proves mined inclusion, secret delivery
+  or usability. See the [release-evidence guide](../../docs/guides/private-overlay-release.md).
+  `OutputPurchaseProtocol` adds closed preparation, submission, recovery and
+  STEAK/POTATOES envelopes, seller-signed original-request terms and separately
+  authenticated private-result bindings. Persist the verified original contract
+  and exact transaction before dispatch; these codecs do not reserve, pay or
+  durably admit an acquisition.
+  `OutputPrivatePublicationProtocol` adds bounded protected-publication requests
+  and semantic digests that exclude only alternate BEEF proof bytes.
+  `OutputPaidLookupProtocol` adds frozen quote and recovery-state representations,
+  exact amount/deadline checks and bindings to the original request, selected
+  seller/rules and purchased output. Its unsigned quote and full response require
+  authenticated transport; parsing does not internalize a payment or release a key.
+
   Protocol JSON maps have a null prototype and ordinary writable, configurable,
   enumerable own data fields, including keys that resemble object builtins.
   Parsing and canonical encoding enforce the same explicit byte and structural
@@ -629,3 +647,9 @@ and the remaining complete-family integration work. The separate
 funded-layout checks and exact unlocking scripts with externally supplied seller
 and recipient signatures. See the [spend guide](../../docs/guides/revenue-listing-spends.md).
 Lineage, wallet integration and fulfillment are separate. Existing root imports remain unchanged.
+
+The optional overlay funding helpers parse bounded BRC-195 payment headers and inspect
+the exact single BRC-29 payment output against a retained quote and independently
+derived seller key. They return a proof-independent wallet operation identifier;
+chain acceptance, acquisition reservation and durable wallet credit remain separate.
+See the [private overlay release guide](../../docs/guides/private-overlay-release.md).

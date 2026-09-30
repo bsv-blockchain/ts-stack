@@ -27,6 +27,16 @@ or private delivery. See the [history guide](../../../docs/guides/revenue-listin
 for composition, funded-copy merge semantics and recovery. Existing root exports
 remain unchanged.
 
+That entry also exports `RevenueListingAuthority` and
+`createSoftwareRevenueListingAuthority`. They bind exact transaction signatures
+and seller-authorized genesis to one dedicated authority identity, with owned
+requests across asynchronous signing ports. Funding remains in the wallet;
+authority keys are explicitly provisioned separately. The software adapter is
+a reference for dedicated-key custody, and an installed port can use another
+signing implementation. Neither signs during ingestion or proves permission,
+lineage, currentness or fulfillment. See the
+[authority guide](../../../docs/guides/revenue-listing-authority.md).
+
 ## Durable progressive and live provider
 
 The optional `@bsv/output-knowledge/lookup` entry composes durable snapshot/live

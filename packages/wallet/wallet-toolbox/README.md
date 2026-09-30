@@ -6,6 +6,28 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Optional local transaction recovery
+
+The 2.15.0 source candidate adds explicit local SQLite recovery controllers as
+separate deep imports. Action recovery retains one fixed-layout, two-phase
+`noSend` allocation, prepared transaction and final signed bytes. Funding recovery
+binds one BRC-29 payment to its acquisition and atomically retains wallet ownership,
+monitor work and a durable receipt. Ordinary BRC-100 calls and defaults are unchanged.
+The new funding capability requires SDK 2.9.0; legacy root and existing deep
+consumers retain the declared older SDK peer compatibility.
+
+Install the auxiliary schemas explicitly in the active local wallet database.
+Reopen them after restart, and preserve a consistent whole database plus wallet
+keys. These journals are not included in ordinary entity backup/sync or BRC-38/39
+exports. Browser, mobile, IndexedDB and remote provider wrappers do not acquire
+these capabilities by upgrading. During rollback, stop new operations, reconcile
+outstanding work and retain the original journals; deleting them loses recovery.
+
+See [local action recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/)
+and [local funding recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-funding-recovery/)
+for construction limits, deep imports, verification and unresolved service obligations.
+A local receipt does not prove settlement, a content license or protected delivery.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users

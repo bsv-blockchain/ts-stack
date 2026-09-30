@@ -29,6 +29,10 @@ const steak: s.Schema<Record<string, ReturnType<typeof admission>>> = value => {
   return result
 }
 
+/** Owned BRC-22 shape for opt-in companion envelopes; no admission or mining verdict. */
+export const parseOutputSTEAK = (input: unknown): ReturnType<typeof steak> =>
+  s.normalized(input, steak)
+
 const simpleState = (status: 'active' | 'withdrawn' | 'expired') =>
   s.object({ status: s.literal(status), recordedAt: s.u64 })
 const finalization = { recordedAt: s.u64, operationId: s.requestId, txid: s.hex }

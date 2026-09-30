@@ -101,6 +101,37 @@ submission and GASP behavior remains available to applications that do not opt i
 
 ## Remaining checkpoint-two work
 
+Current wallet/domain work adds an opt-in local SQLite action-recovery controller,
+atomic allocation records and exact prepared/final transaction retention. The
+ordinary wallet route remains unchanged. The current complete wallet run passes
+3,272 tests across 304 suites with the existing governed skip. Focused cases cover five actual process-termination boundaries,
+all six wallet-funded covenant routes and ordinary allocation-failure compatibility.
+Plan, byte-codec and controller mutation qualification passes; the final
+action-store campaign passes 96.24%/585. Core/client/mobile 2.15.0 source candidates
+are coordinated; package publication remains a separate, unauthorized action.
+These tests do not establish the
+remaining same-seller genesis authority, selected-chain domain or private delivery
+integration. The [local guide](../../docs/guides/local-action-recovery.md) documents
+the opt-in schema, unsupported providers and whole-database backup requirement.
+
+The SDK private-release boundary now has bounded release-evidence parsing,
+independent selected-policy binding and registered processor BRC-77 verification.
+Its 69 focused/compatibility cases include a 300-case generated property; mutation
+passes 98% over 100 sites with zero uncovered/invalid. The purchase companion
+adds closed status envelopes, original-request terms and separately signed
+STEAK/POTATOES bindings. Its 30 focused/compatibility cases include a 300-case
+property; full-source mutation passes 99.5% over 200 sites with zero uncovered/invalid.
+The complete SDK including these additions passes 8,080 tests across 243 suites.
+New BRC-195 publication and paid-lookup codecs add semantic protected-publication
+fences and original-quote/result binding; twelve cases across four suites include
+two generated properties and reach 100% lines/branches. Their full-source mutation
+passes at 91.18% and 96.15%, respectively, with zero uncovered/invalid mutants.
+The exact-payment funding helper additionally passes at 94.03%; the complete SDK
+regression above includes these additions.
+These codecs authenticate statements and bindings, not complete
+acquisition, mining or decryption. Their [guide](../../docs/guides/private-overlay-release.md)
+keeps the remaining service obligations explicit.
+
 - Finish proposal contract configuration evolution, compaction preserving terminal
   fences, concrete durable admission bridges and restart-aware expiry scheduling.
 - Finish provider qualification and connect live lookup to actual admission/projection
@@ -329,7 +360,70 @@ against the exact candidate tarballs. These results qualify the historical
 verifier, not the remaining wallet/domain/application integration. The broader
 implementation checkpoint remains open.
 
-The concrete app is in `apps/output-knowledge-reference`. Five application tests
+Dedicated authority ports and a software adapter keep listing authority separate
+from funding-wallet custody. The same seller identity authorizes genesis and
+Script administration, with owned asynchronous signing requests and independent
+verification of returned signatures. Six frozen routes execute and rebuild byte
+for byte; 33 focused cases include a generated property with at least 300 runs.
+Full-source mutation passes 98% over 150 mutants, with zero uncovered/invalid.
+The complete current output runtime passes 967 tests across 63 suites (97.57%
+lines, 94.38% branches). No hardware signer, private fulfillment or live-chain
+integration is inferred from that adapter.
+
+SDK paid-funding inspection bounds the complete header and Atomic BEEF, derives
+the expected P2PKH script from an independently supplied BRC-29 public key, scans
+all outputs and rejects duplicates or inexact amounts. Six tests cover generated
+output positions and duplicate scripts, actual matching buyer/seller ProtoWallet
+derivations, representation-independent funding IDs and owned snapshots.
+Coverage is 100% lines/branches and mutation passes 94.03% over 67 sites with zero
+uncovered/invalid. The complete current SDK passes 8,080 tests across 243 suites
+(95.70% lines). The HTTP and durable acquisition layers still must authenticate,
+derive that key independently, verify Bitcoin/release policy, reserve the globally
+unique funding outpoint and reconcile wallet effects.
+
+Action-recovery qualification passes plan mutation at 95.90%, owned-byte codec at
+92.07% and controller at 96.46%, with zero uncovered/invalid mutants. The storage
+campaign passed 96.23% before a subsequently reproduced installation-configuration
+race: a caller could change the limits object while SQLite installation yielded.
+Both new recovery stores now copy the limits before any asynchronous work.
+Nineteen storage boundary cases pass; the final 585-mutant action-store campaign
+passes 96.24% with zero uncovered/invalid after a passing 158-test dry run.
+The complete current wallet regression passes 3,272 tests across 304 suites.
+
+Local funding recovery retains intent, a unique funding claim, ownership, durable
+monitor work and its terminal receipt in the same SQLite database. Its focused
+cases include three properties of at least 300 cases, five actual SIGKILL/reopen
+boundaries, a two-process duplicate-payment race, mined/cached proof reconciliation,
+existing noSend and legacy ownership, and offline terminal replay. The 25-case
+controller suite also passes the retained request to the ordinary TaskSendWaiting
+worker with a local synthetic processor response, then verifies the unmined
+transition, unchanged receipt and unchanged credit after retry. This makes no
+public processor or settlement claim.
+
+Funding-protocol mutation passes 94.83% over 58 sites and the combined controller
+and optional hooks pass 91.88% over 271 sites, with zero uncovered/invalid. The
+current funding-store campaign includes the owned-capacity fix and strengthened
+receipt/ownership checks; its 58-test dry run and 92.09%/430 mutation campaign pass
+with zero uncovered/invalid.
+Both stores require whole-database and wallet-key backup; their auxiliary state
+is not included in legacy entity snapshots or ordinary sync.
+
+Packed wallet/runtime consumers and 14 compiled examples pass. A permanent
+packed-consumer regression preserves root and existing deep wallet imports with
+SDK 2.8.11, and the existing Overlay Express check remains on SDK 2.8.9. Both use
+strict ESM/CJS TypeScript consumers with skipLibCheck disabled. An erased local
+commit-hook interface prevents the optional SDK 2.9 funding types from leaking
+into existing method declarations; its original new-module type export remains
+available and the runtime emit is unchanged. These local results do not complete
+the implementation checkpoint, qualify remote/mobile recovery or make CI green.
+
+Quote issuance still needs a durable wallet-capacity guarantee integrated with
+its protected-result and ledger reservations. The local funding adapter reserves
+only when retaining a known funding operation; a prior free-space check cannot
+make the complete BRC-195 readiness promise. Preserve this as an explicit service
+integration requirement before advertising the profile.
+
+The concrete app is in `apps/output-knowledge-reference`. Six application tests
 and a production-bundle Chrome/native IndexedDB scenario pass. Two independent
 providers and two clients demonstrate populated progressive snapshots, live
 Script/SPV updates, offline replay, provider restart, page-close recovery and
@@ -347,3 +441,21 @@ mutation campaigns receive a 90-minute hosted job limit after reaching the old
 45-minute deadline: lineage package/graph, SDK listing funding and lookup session
 records/payloads. All other job limits and all test, mutant, worker and quality
 thresholds remain unchanged. Exact-head hosted qualification is still required.
+
+
+The action store's complete 585 mutation sites are now partitioned into
+installation/binding (170), record/accounting (229) and operation transitions
+(186). All partitions retain the complete 160-test selection and independent
+90%/zero-uncovered/zero-invalid gates. Two additional generated properties each
+run at least 300 cases; a regression enforces contiguous, non-overlapping source
+coverage and identical runner/test configuration. The whole-file source already
+passes 96.24%; independent partition campaigns remain in progress.
+
+Core/client/mobile Wallet 2.15.0 artifacts pass their packed exports and strict
+consumer checks. Core's permanent SDK 2.8.11 root/deep compatibility regression
+passes. Client Vite/esbuild and mobile Metro/Hermes package compositions pass
+unchanged platform budgets. These checks establish package compatibility, not
+native device recovery or new SQLite capabilities in the wrappers. Candidate
+notes and API pages retain that boundary, whole-database/key recovery and rollback
+requirements. No npm publication, deployment or checkpoint approval follows
+from these local results.

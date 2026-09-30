@@ -23,6 +23,97 @@ They validate package names, exports, declarations, module resolution, and
 cross-package type identity. They do not replace behavioral examples, package
 tests, browser/mobile bundles, or live-service integration tests.
 
+## Private publication, lookup and purchase contracts
+
+These functions run only after the caller has authenticated the complete service
+response. Original requests, selected seller/rules and retained quotes come from
+the caller's durable operation record. The returned values describe bound claims;
+they do not establish payment acceptance, topical durability, mined inclusion or
+whether private context can actually be used. The
+[private-overlay guide](./private-overlay-release.md) explains those separate
+obligations. This example performs no payment, signing or network request.
+
+```ts compile
+// example-id: private-overlay-contracts
+import {
+  parseOutputPrivatePublish,
+  outputPrivatePublicationRequestDigest
+} from '@bsv/sdk/overlay-tools/OutputPrivatePublicationProtocol'
+import {
+  bindOutputPaidLookupChallenge,
+  bindOutputPaidLookupAcquired,
+  type OutputPaidLookupChallenge
+} from '@bsv/sdk/overlay-tools/OutputPaidLookupProtocol'
+import {
+  parseOutputPurchasePrepare,
+  verifyOutputPurchaseTerms,
+  verifyOutputPurchaseEnvelope,
+  type OutputSignedPurchaseTerms
+} from '@bsv/sdk/overlay-tools/OutputPurchaseProtocol'
+import {
+  inspectOutputPaidLookupFunding,
+  type OutputWalletFundingOperation
+} from '@bsv/sdk/overlay-tools/OutputPaidLookupFunding'
+import type { parseOutputChain } from '@bsv/sdk'
+
+function publicationSemanticFence(publication: unknown) {
+  const owned = parseOutputPrivatePublish(publication)
+  return { owned, digest: outputPrivatePublicationRequestDigest(owned) }
+}
+
+function checkAuthenticatedQuote(
+  response: unknown,
+  originalRequest: unknown,
+  selected: { seller: string; rulesDigest: string }
+): OutputPaidLookupChallenge {
+  return bindOutputPaidLookupChallenge(response, originalRequest, selected)
+}
+
+function checkAuthenticatedPaidResult(
+  response: unknown,
+  originalRequest: unknown,
+  retainedQuote: OutputPaidLookupChallenge,
+  selected: { seller: string; rulesDigest: string }
+) {
+  return bindOutputPaidLookupAcquired(response, retainedQuote, originalRequest, selected)
+}
+
+function checkPurchaseTerms(
+  response: unknown,
+  originalRequest: unknown,
+  selectedSeller: string
+): OutputSignedPurchaseTerms {
+  return verifyOutputPurchaseTerms(
+    response,
+    parseOutputPurchasePrepare(originalRequest),
+    selectedSeller
+  )
+}
+
+function checkAuthenticatedPurchaseResult(
+  response: unknown,
+  retainedTerms: OutputSignedPurchaseTerms,
+  constructedTransactionId: string
+) {
+  return verifyOutputPurchaseEnvelope(response, retainedTerms, constructedTransactionId)
+}
+
+function inspectSelectedPayment(
+  payment: unknown,
+  retainedQuote: OutputPaidLookupChallenge,
+  selected: { chain: ReturnType<typeof parseOutputChain>; sellerPaymentKey: string }
+): OutputWalletFundingOperation {
+  return inspectOutputPaidLookupFunding(payment, retainedQuote, selected).operation
+}
+
+void publicationSemanticFence
+void checkAuthenticatedQuote
+void checkAuthenticatedPaidResult
+void checkPurchaseTerms
+void checkAuthenticatedPurchaseResult
+void inspectSelectedPayment
+```
+
 ## SDK and high-level helpers
 
 ```ts compile
@@ -309,9 +400,15 @@ and Script verification, private fulfillment and wallet operation recovery.
 import { RevenueListing as HistoryCodec } from '@bsv/sdk/script/templates/RevenueListing'
 import {
   RevenueListingLineageVerifier,
+  RevenueListingAuthority,
+  type RevenueListingAuthorityPort,
   type ChainViewResolver as RevenueChainViewResolver,
   type VerificationContext as RevenueVerificationContext
 } from '@bsv/output-knowledge/revenue-listing'
+
+export function installDedicatedRevenueAuthority(port: RevenueListingAuthorityPort) {
+  return new RevenueListingAuthority(port)
+}
 
 export function installRevenueHistory(program: Uint8Array, chains: RevenueChainViewResolver) {
   return new RevenueListingLineageVerifier(new HistoryCodec(program), chains)
@@ -330,3 +427,31 @@ export async function inspectRevenueHistory(
 Install and reuse the verifier under a trusted immutable chain view. The caller
 compares the returned target with the selected input and separately checks asset
 authority, currentness and acquisition association before any wallet action.
+
+## Local wallet recovery capabilities
+
+These constructors are for trusted local wallet integrations after explicit
+same-database installation. They perform no wallet action or network request.
+See [action recovery](./local-action-recovery.md) and
+[funding recovery](./local-funding-recovery.md) for lifecycle and backup limits.
+
+```typescript compile
+// example-id: local-wallet-recovery
+import type { Wallet as LocalWallet } from '@bsv/wallet-toolbox'
+import { SQLiteActionRecoveryStore } from '@bsv/wallet-toolbox/out/src/storage/actionRecovery/SQLiteActionRecoveryStore'
+import { RecoverableActionController } from '@bsv/wallet-toolbox/out/src/signer/actionRecovery/RecoverableActionController'
+import { SQLiteFundingRecoveryStore } from '@bsv/wallet-toolbox/out/src/storage/fundingRecovery/SQLiteFundingRecoveryStore'
+import { RecoverableFundingController } from '@bsv/wallet-toolbox/out/src/signer/fundingRecovery/RecoverableFundingController'
+
+export function installLocalRecoveryControllers(
+  wallet: LocalWallet,
+  actions: SQLiteActionRecoveryStore,
+  funding: SQLiteFundingRecoveryStore,
+  originator: string
+) {
+  return {
+    actions: new RecoverableActionController(wallet, actions, originator),
+    funding: new RecoverableFundingController(wallet, funding)
+  }
+}
+```

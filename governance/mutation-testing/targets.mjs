@@ -135,7 +135,77 @@ function revenueSpendTargets(repositoryRoot) {
   }
 }
 
+function walletRecoveryTarget(repositoryRoot, source, property) {
+  const runner = jestTarget(
+    'jest.config.cjs',
+    [
+      '<rootDir>/src/storage/actionRecovery/__test/*.test.ts',
+      '<rootDir>/src/signer/actionRecovery/__test/*.test.ts',
+      '<rootDir>/src/storage/methods/__test/createActionInputResolution.test.ts',
+      '<rootDir>/src/storage/__test/createActionPerformance.test.ts'
+    ],
+    {
+      buildCommand: 'pnpm build',
+      config: {
+        // Null survives Stryker's worker serialization and disables the package's
+        // directory-wide sweep. The hook below removes only owned fixture files.
+        globalSetup: null,
+        globalTeardown: null,
+        setupFilesAfterEnv: [
+          '<rootDir>/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs'
+        ],
+        moduleNameMapper: {
+          '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+          '^(\\.{1,2}/.*)\\.js$': '$1'
+        }
+      }
+    }
+  )
+  return {
+    packageDirectory: 'packages/wallet/wallet-toolbox',
+    manifest: 'packages/wallet/wallet-toolbox/package.json',
+    propertyTest: `packages/wallet/wallet-toolbox/${property}`,
+    additionalInputs: [
+      'src/storage/actionRecovery/**',
+      'src/signer/actionRecovery/**',
+      'src/storage/methods/createAction.ts'
+    ],
+    mutate: [source],
+    ...runner
+  }
+}
+
+function walletFundingTarget(repositoryRoot, source, property) {
+  const target = walletRecoveryTarget(repositoryRoot, source, property)
+  target.additionalInputs = [
+    'src/storage/fundingRecovery/**',
+    'src/signer/fundingRecovery/**',
+    'src/storage/methods/internalizeAction.ts',
+    'src/signer/methods/internalizeAction.ts'
+  ]
+  target.runnerOptions.jest.config.testMatch = [
+    '<rootDir>/src/storage/fundingRecovery/__test/*.test.ts',
+    '<rootDir>/src/signer/fundingRecovery/__test/*.test.ts',
+    '<rootDir>/test/storage/internalizeActionManagedChangePolicy.test.ts',
+    '<rootDir>/test/storage/internalizeActionMarkInputsSpent.test.ts',
+    '<rootDir>/test/storage/internalizeActionBasketReclassification.test.ts'
+  ]
+  return target
+}
+
 export function buildMutationTargets(repositoryRoot) {
+  const actionStoreFile = 'src/storage/actionRecovery/SQLiteActionRecoveryStore.ts'
+  const actionStoreLines = readFileSync(
+    resolve(repositoryRoot, 'packages/wallet/wallet-toolbox', actionStoreFile),
+    'utf8'
+  ).split('\n')
+  const recordsStart = actionStoreLines.findIndex(line => line.startsWith('  async metadata(')) + 1
+  const transitionsStart =
+    actionStoreLines.findIndex(line =>
+      line.startsWith('export class SQLiteActionRecoveryOperation')
+    ) + 1
+  if (recordsStart < 2 || transitionsStart <= recordsStart)
+    throw new Error('Unable to partition action recovery store responsibilities')
   const sessionRecordFile = 'src/lookup/SQLiteLookupSessionRecords.ts'
   const sessionRecordLines = readFileSync(
     resolve(repositoryRoot, 'packages/application/output-knowledge', sessionRecordFile),
@@ -157,6 +227,135 @@ export function buildMutationTargets(repositoryRoot) {
     sessionRecordTests
   )
   return {
+    'sdk-paid-lookup-funding': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts',
+      additionalInputs: [
+        'src/overlay-tools/OutputPaidLookupProtocol.ts',
+        'src/overlay-tools/__tests/OutputPaidLookupFunding.fixture.ts'
+      ],
+      mutate: ['src/overlay-tools/OutputPaidLookupFunding.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts'
+      ])
+    },
+    'wallet-funding-protocol': walletFundingTarget(
+      repositoryRoot,
+      'src/storage/fundingRecovery/FundingRecoveryProtocol.ts',
+      'src/storage/fundingRecovery/__test/FundingRecoveryProtocol.property.test.ts'
+    ),
+    'wallet-funding-store': walletFundingTarget(
+      repositoryRoot,
+      'src/storage/fundingRecovery/SQLiteFundingRecoveryStore.ts',
+      'src/storage/fundingRecovery/__test/SQLiteFundingRecoveryStore.property.test.ts'
+    ),
+    'wallet-funding-controller': {
+      ...walletFundingTarget(
+        repositoryRoot,
+        'src/signer/fundingRecovery/RecoverableFundingController.ts',
+        'src/signer/fundingRecovery/__test/RecoverableFundingController.property.test.ts'
+      ),
+      mutate: [
+        'src/signer/fundingRecovery/RecoverableFundingController.ts',
+        ...[
+          ['  if (recovery !== undefined) requireFunding', '  await ctx.asyncSetup()'],
+          ['  private async loadExistingTransaction(', '  private computeWalletPaymentBalance()'],
+          ['  async setupEvidence()', '  async validateAtomicBeef(']
+        ].map(([start, end]) =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/wallet/wallet-toolbox',
+            'src/storage/methods/internalizeAction.ts',
+            start,
+            end
+          )
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/signer/methods/internalizeAction.ts',
+          '  const r: StorageInternalizeActionResult',
+          '  return r'
+        )
+      ]
+    },
+    'wallet-recovery-codec': walletRecoveryTarget(
+      repositoryRoot,
+      'src/storage/actionRecovery/ActionRecoveryCodec.ts',
+      'src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts'
+    ),
+    'wallet-recovery-installation': walletRecoveryTarget(
+      repositoryRoot,
+      `${actionStoreFile}:1-${recordsStart - 1}`,
+      'src/storage/actionRecovery/__test/SQLiteActionRecoveryInstallation.property.test.ts'
+    ),
+    'wallet-recovery-store': walletRecoveryTarget(
+      repositoryRoot,
+      `${actionStoreFile}:${recordsStart}-${transitionsStart - 1}`,
+      'src/storage/actionRecovery/__test/SQLiteActionRecoveryStore.property.test.ts'
+    ),
+    'wallet-recovery-transitions': walletRecoveryTarget(
+      repositoryRoot,
+      `${actionStoreFile}:${transitionsStart}-${actionStoreLines.length}`,
+      'src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts'
+    ),
+    'wallet-recovery-controller': walletRecoveryTarget(
+      repositoryRoot,
+      'src/signer/actionRecovery/RecoverableActionController.ts',
+      'src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts'
+    ),
+    'wallet-recovery-plan': {
+      ...walletRecoveryTarget(
+        repositoryRoot,
+        'src/storage/actionRecovery/ActionRecoveryPlan.ts',
+        'src/storage/actionRecovery/__test/ActionRecoveryPlan.property.test.ts'
+      ),
+      mutate: [
+        'src/storage/actionRecovery/ActionRecoveryPlan.ts',
+        ...[
+          ['  if (recovery != null) {', '  if (!storage.telemetry.enabled)'],
+          ['      const recovered = await recovery?.claim(trx)', '      const initialSatoshis ='],
+          ['      let recoveryPlan: ActionRecoveryPlan', '      return { ...funded,'],
+          ["    if ('recovered' in persisted", '    const committedTx ='],
+          ['        if (newTxCommitted && recovery != null)', '      } catch (cleanupError)'],
+          [
+            "      if (trx != null) throw new WERR_INVALID_OPERATION('Recoverable",
+            '      const beef = await getCompetingBeefForReview'
+          ]
+        ].map(([start, end]) =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/wallet/wallet-toolbox',
+            'src/storage/methods/createAction.ts',
+            start,
+            end
+          )
+        )
+      ]
+    },
+    'revenue-listing-authority': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/revenue-authority.property.test.ts',
+      additionalInputs: [
+        'src/revenue-listing/**',
+        'test/revenue-authority-fixture.ts',
+        'test/revenue-lineage-fixture.ts',
+        'test/fixtures/revenue-listing/**'
+      ],
+      mutate: ['src/revenue-listing/RevenueListingAuthority.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/revenue-authority.test.ts',
+          '<rootDir>/test/revenue-authority.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'revenue-lineage-package': lineageTarget(
       'LineagePackage',
       'revenue-lineage-package.property.test.ts'
@@ -169,6 +368,69 @@ export function buildMutationTargets(repositoryRoot) {
       'RevenueListingLineageVerifier',
       'revenue-lineage.property.test.ts'
     ),
+    'sdk-private-publication': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts',
+      mutate: ['src/overlay-tools/OutputPrivatePublicationProtocol.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts'
+      ])
+    },
+    'sdk-paid-lookup': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts',
+      mutate: ['src/overlay-tools/OutputPaidLookupProtocol.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts'
+      ])
+    },
+    'sdk-output-purchase': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts',
+      mutate: [
+        'src/overlay-tools/OutputPurchaseProtocol.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/overlay-tools/OutputObservation.ts',
+          'export const parseOutputSTEAK =',
+          'const simpleState ='
+        )
+      ],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputPurchaseProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputProposalProtocol.test.ts'
+      ])
+    },
+    'sdk-output-release': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest: 'packages/sdk/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts',
+      mutate: [
+        'src/overlay-tools/OutputReleaseProtocol.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/overlay-tools/OutputCapabilities.ts',
+          'export function parseOutputReleasePolicy(',
+          'const profile ='
+        )
+      ],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputReleaseProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputLookupProtocol.test.ts'
+      ])
+    },
     'sdk-output-json': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

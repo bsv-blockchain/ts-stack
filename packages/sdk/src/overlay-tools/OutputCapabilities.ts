@@ -41,6 +41,11 @@ const release = s.tagged('kind', {
 })
 export type OutputReleasePolicy = ReturnType<typeof release>
 
+/** Representation only. Selection and trust in a processor remain explicit caller decisions. */
+export function parseOutputReleasePolicy(input: unknown): OutputReleasePolicy {
+  return s.normalized(input, release)
+}
+
 const profile = s.object({
   id: s.iri,
   authentication: s.literal('none', 'brc103'),

@@ -73,8 +73,10 @@ mandatory outputs exactly as planned, at least one external funding input, and
 at most one final standard P2PKH change output. The wallet must preserve version
 1 or 2, zero locktime and final sequences on every input. Show the price,
 payout, both schedules when amending, retirement top-up, fee and change before
-requesting authorization. No generic wallet support is inferred from this guide:
-the actual createAction/signAction adapter remains separately tracked work.
+requesting authorization. The opt-in
+[local wallet recovery adapter](./local-action-recovery.md) exercises all six
+routes through an actual SQLite wallet. Other wallet providers require their own
+capability and recovery qualification.
 
 Attach complete source transactions from the funded wallet result's BEEF to
 all funding inputs, then call `spend.prepare(transaction)`. Preparation takes
@@ -92,6 +94,12 @@ Do not insert a signed-message envelope, derive an unrelated identity, or extrac
 a wallet identity secret. Each administrative merge input has its own seller
 request. Amendment recipient requests follow the old schedule's canonical order.
 The module never invokes the authority or obtains a private key.
+
+The separate [dedicated-authority adapter](./revenue-listing-authority.md)
+connects these requests to an explicitly installed signer and checks its returned
+signatures. Its software reference uses a separately provisioned key that also
+authorizes genesis under the same seller identity. Keep that authority separate
+from funding wallet custody.
 
 Supply one `{seller?, recipients: []}` record per listing input to
 `complete(signatures)`. Signatures are lowercase hex containing strict DER,

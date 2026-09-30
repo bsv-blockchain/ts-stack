@@ -728,6 +728,175 @@
           "Seller and all old-recipient signatures authorize their exact listing input.",
           "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet local action recovery bounded canonical records and exact retained descriptors",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Canonical owned maps preserve values independent of insertion order and caller mutation.",
+          "Retained descriptors reject unsupported encodings and duplicate input identities."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet atomic local action allocation identity, record capacity and exact retained signing state",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Claims and plans roll back together or retain the first immutable funding result.",
+          "Reopening preserves exact identity and operation counts across generated commits and rollbacks."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryPlan.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet fixed-layout noSend recovery profile and atomic construction hooks",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Only fixed-layout full-evidence two-phase noSend requests enter the local recovery profile.",
+          "Unsupported broadcast, cache and expiry options remain rejected."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact-action preparation, final Script verification and no-resign processing recovery",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Recovering an absent operation never allocates funds or invokes a signing key.",
+          "Exact retained actions are replayed without replacing the original transaction."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-196 exact release-policy binding and attributable processor acceptance",
+        "target": "At least 300 exact-depth and owned-binding cases across U64 heights",
+        "invariants": [
+          "A response cannot select its own trusted processor, chain, transaction or release policy.",
+          "Mined representations preserve exact U64 arithmetic without claiming header or inclusion verification.",
+          "Processor acceptance binds its signed domain, identity, policy, transaction, chain and accepted time."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-196 closed purchase statuses and exact retained request, recipient, transaction and secret-envelope binding",
+        "target": "At least 300 signed selected-request and minimum-recovery cases",
+        "invariants": [
+          "Signed purchase terms bind the entire separately retained request and selected seller.",
+          "Private delivery retains original acquisition, recipient, transaction and release-evidence commitments.",
+          "Status-specific fields and historical recovery cannot manufacture global transaction failure."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 bounded protected publication and semantic request fences",
+        "target": "At least 300 generated representation and binding cases",
+        "invariants": [
+          "Proof variation changes only evidence bytes, not protected publication identity.",
+          "Protected values remain owned, bounded and bound to the exact declared output."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 frozen quote, exact amounts and status-dependent recovery bindings",
+        "target": "At least 300 generated representation and binding cases",
+        "invariants": [
+          "Paid lookup quotes use exact wallet-range amounts and checked U64 recovery promises.",
+          "Acquisition status cannot replace the original quote, chain or purchased output."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-authority.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Dedicated listing authority signing and asynchronous port boundaries",
+        "target": "Same-identity genesis/Script signatures and ownership across delayed or mutating signers",
+        "invariants": [
+          "Genesis signatures bind the original descriptor and outpoint to the selected seller.",
+          "Transaction signatures bind the original preimage and ALL|FORKID scope to the selected input authority.",
+          "Mutations by callers or signing ports cannot change retained signature verification inputs."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 bounded payment headers and exact single-output BRC-29 funding identity",
+        "target": "Complete output scanning and exact amount binding before any wallet effect",
+        "invariants": [
+          "Exactly one matching standard BRC-29 script must exist at any output position.",
+          "A duplicate matching script fails even if its amount differs.",
+          "The retained funding identity uses the exact target transaction and output rather than BEEF representation."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/FundingRecoveryProtocol.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+        "target": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+        "invariants": [
+          "Every semantic field remains bound to the operation; alternate proof encodings do not change identity.",
+          "Malformed and changed amounts or outpoints cannot become retained wallet effects."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/SQLiteFundingRecoveryStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Same-database durable funding reservation and no-effect rejection fences",
+        "target": "Same-database durable funding reservation and no-effect rejection fences",
+        "invariants": [
+          "One funding outpoint cannot belong to another operation.",
+          "Reopening preserves pending and rejected fences without duplicating a claim or adding an output."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/RecoverableFundingController.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+        "target": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+        "invariants": [
+          "A selected output is credited once and retries return the exact retained receipt.",
+          "Duplicate matching payment scripts are durably rejected with no wallet credit."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryInstallation.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet explicit local recovery installation, immutable owned capacity and operation identity",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Installation snapshots both capacity limits before asynchronous storage work.",
+          "Reopening and retries preserve the installed configuration and reject a different capacity."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact retained preparation, final signing result and processed transition recovery",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Out-of-order transitions cannot prepare, finalize or process an incomplete allocation.",
+          "Reopened operations retain exact first final bytes and reject changed layouts or signing identities."
+        ]
       }
     ],
     "exclusions": [

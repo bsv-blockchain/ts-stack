@@ -18,7 +18,8 @@ test('compiled examples are scoped through their first-party dependency closure'
       'middleware',
       'overlay-and-gasp',
       'wallet-storage',
-      'durable-lookup-provider'
+      'durable-lookup-provider',
+      'local-wallet-recovery'
     ]
   )
 })

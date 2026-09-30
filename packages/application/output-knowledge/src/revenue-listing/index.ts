@@ -1,4 +1,9 @@
 export { RevenueListingLineageVerifier } from './RevenueListingLineageVerifier.js'
+export {
+  RevenueListingAuthority,
+  createSoftwareRevenueListingAuthority
+} from './RevenueListingAuthority.js'
+export type { RevenueListingAuthorityPort } from './RevenueListingAuthority.js'
 export type { RevenueListingLineageResult } from './RevenueListingLineageVerifier.js'
 export {
   parseRevenueListingLineagePackage,

@@ -576,6 +576,156 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-codec",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet local action recovery bounded canonical records and exact retained descriptors",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-store",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet atomic local action allocation identity, record capacity and exact retained signing state",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-plan",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryPlan.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet fixed-layout noSend recovery profile and atomic construction hooks",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-controller",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact-action preparation, final Script verification and no-resign processing recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-release",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-196 exact release-policy binding and attributable processor acceptance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-purchase",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-196 closed purchase statuses and exact retained request, recipient, transaction and secret-envelope binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-private-publication",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 bounded protected publication and semantic request fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 frozen quote, exact amounts and status-dependent recovery bindings",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-authority",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-authority.property.test.ts",
+      "risk": "critical",
+      "boundary": "Dedicated listing authority signing and asynchronous port boundaries",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup-funding",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 bounded payment headers and exact single-output BRC-29 funding identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-protocol",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/FundingRecoveryProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-store",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/SQLiteFundingRecoveryStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Same-database durable funding reservation and no-effect rejection fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-controller",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/RecoverableFundingController.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-installation",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryInstallation.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet explicit local recovery installation, immutable owned capacity and operation identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-transitions",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact retained preparation, final signing result and processed transition recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

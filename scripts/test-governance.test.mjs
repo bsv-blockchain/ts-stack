@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 56)
+  assert.equal(result.summary.propertySuites, 71)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 56)
+  assert.equal(result.summary.mutationTargets, 71)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -84,6 +84,58 @@ test('wallet discovery excludes generated children without hiding a mutation tes
     assert.equal(
       modules.some(pattern => pattern.test(`${root}/.stryker-tmp/nested/src/action.test.ts`)),
       true
+    )
+  }
+})
+
+test('SDK discovery preserves authored tests when the root is a mutation sandbox', async () => {
+  const { default: config } = await import('../packages/sdk/jest.config.js')
+  for (const root of ['/sdk', '/sdk/.stryker-tmp/sandbox-one']) {
+    const patterns = config.modulePathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    assert.equal(
+      patterns.some(pattern =>
+        pattern.test(`${root}/src/overlay-tools/__tests/OutputPurchaseProtocol.test.ts`)
+      ),
+      false
+    )
+    assert.equal(
+      patterns.some(pattern => pattern.test(`${root}/.stryker-tmp/nested/src/example.test.ts`)),
+      true
+    )
+    assert.equal(
+      patterns.some(pattern => pattern.test(`${root}/dist/src/example.test.ts`)),
+      true
+    )
+  }
+})
+
+test('wallet recovery mutations clean only their own randomly named SQLite fixtures', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const name of ['codec', 'store', 'controller', 'plan']) {
+    const target = targets[`wallet-recovery-${name}`]
+    assert.ok(Object.hasOwn(target.runnerOptions.jest.config, 'globalSetup'))
+    assert.equal(target.runnerOptions.jest.config.globalSetup, null)
+    assert.ok(Object.hasOwn(target.runnerOptions.jest.config, 'globalTeardown'))
+    assert.equal(target.runnerOptions.jest.config.globalTeardown, null)
+    assert.deepEqual(target.runnerOptions.jest.config.setupFilesAfterEnv, [
+      '<rootDir>/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs'
+    ])
+    assert.equal(
+      target.runnerOptions.jest.config.moduleNameMapper['^@bsv/sdk$'],
+      path.resolve(REPOSITORY_ROOT, 'packages/sdk/mod.ts')
+    )
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/signer/actionRecovery/__test/*.test.ts'
+      )
+    )
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/storage/methods/__test/createActionInputResolution.test.ts'
+      )
     )
   }
 })
@@ -219,5 +271,41 @@ test('revenue spend partitions cover every source line once with the complete su
   assert.equal(
     nextLine - 1,
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'packages/sdk', source), 'utf8').split('\n').length
+  )
+})
+
+test('action store partitions retain every source line, test and independent critical gate', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const names = [
+    'wallet-recovery-installation',
+    'wallet-recovery-store',
+    'wallet-recovery-transitions'
+  ]
+  const source = 'src/storage/actionRecovery/SQLiteActionRecoveryStore.ts'
+  let nextLine = 1
+  for (const name of names) {
+    const definition = targets[name]
+    assert.equal(definition.mutate.length, 1)
+    const [file, range] = definition.mutate[0].split(':')
+    const [start, end] = range.split('-').map(Number)
+    assert.equal(file, source)
+    assert.equal(start, nextLine)
+    assert.ok(end >= start)
+    nextLine = end + 1
+    assert.deepEqual(definition.runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(definition.additionalInputs, targets[names[0]].additionalInputs)
+    const registration = policy.targets.find(target => target.id === name)
+    assert.equal(registration.minimumScore, 90)
+    assert.equal(registration.maximumInvalid, 0)
+    assert.equal(registration.maximumNoCoverage, 0)
+  }
+  assert.equal(
+    nextLine - 1,
+    fs
+      .readFileSync(path.join(REPOSITORY_ROOT, 'packages/wallet/wallet-toolbox', source), 'utf8')
+      .split('\n').length
   )
 })
