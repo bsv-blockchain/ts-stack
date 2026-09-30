@@ -726,6 +726,86 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-root-eviction",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-199 root-local signed request/result attribution, exact targets, bounded lifetimes and independent restoration bases",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-journal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable root request fences, independent suppression bases, policy-bound action history and final transport queue ordering",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-evidence",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-advertisement-evidence.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current SHIP/SLAP advertisement authentication, original transaction binding and exact consuming evidence under an immutable chain view",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-records.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained root partial-batch action history, request identity and expiry under restart",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-storage",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-storage.property.test.ts",
+      "risk": "critical",
+      "boundary": "Root full-width durable revision encoding, atomic capacity reservation and projection acknowledgement",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "auth-express-queue",
+      "manifest": "packages/middleware/auth-express-middleware/package.json",
+      "propertyTest": "packages/middleware/auth-express-middleware/src/__tests/authenticatedResponseQueue.property.test.ts",
+      "risk": "critical",
+      "boundary": "Final authenticated HTTP queue ownership, cancellation and bounded replacement after signing",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-root-response-guard",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts",
+      "risk": "critical",
+      "boundary": "Actual authenticated root response enqueue under durable serving and current access fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-commit",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-commit.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current clock, access, installed policy and immutable-context selection inside the shared root commit gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

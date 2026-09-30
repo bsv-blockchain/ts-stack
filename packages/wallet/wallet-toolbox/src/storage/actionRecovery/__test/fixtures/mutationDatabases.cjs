@@ -15,10 +15,8 @@ _tu.newTmpFile = async (...args) => {
 afterAll(async () => {
   // Test afterEach/finally hooks have already closed wallets and child processes.
   // SQLite sidecars share the exact owned filename; no directory-wide deletion.
-  for (const filename of files) {
-    for (const suffix of ['', '-wal', '-shm', '-journal']) {
-      await rm(filename + suffix, { force: true })
-    }
-  }
+  await Promise.all(Array.from(files, filename =>
+    Promise.all(['', '-wal', '-shm', '-journal'].map(suffix => rm(filename + suffix, { force: true })))
+  ))
   files.clear()
 })

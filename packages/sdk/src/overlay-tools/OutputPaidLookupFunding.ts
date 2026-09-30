@@ -13,7 +13,7 @@ const derivation = (input: unknown): string => {
     typeof input === 'string' &&
       input.length > 0 &&
       input.length <= 128 &&
-      Array.from(input).every(character => character.charCodeAt(0) <= 127),
+      Array.from(input).every(character => character.codePointAt(0)! <= 127),
     'Expected bounded ASCII payment derivation'
   )
   return input
@@ -73,7 +73,7 @@ export function inspectOutputPaidLookupFunding(
   )
   const transaction = beef.findTxid(beef.atomicTxid)?.tx
   outputAssert(
-    transaction !== undefined && transaction.id('hex') === beef.atomicTxid,
+    transaction?.id('hex') === beef.atomicTxid,
     'Payment target raw transaction required'
   )
   const lockingScript = new P2PKH()

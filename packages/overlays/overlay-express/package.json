@@ -51,18 +51,28 @@
         "types": "./dist/cjs/src/OutputLookupRoutes.d.ts",
         "default": "./dist/cjs/src/OutputLookupRoutes.js"
       }
+    },
+    "./root-eviction-response": {
+      "import": {
+        "types": "./dist/types/src/RootEvictionResponseGuard.d.ts",
+        "default": "./dist/esm/src/RootEvictionResponseGuard.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/RootEvictionResponseGuard.d.ts",
+        "default": "./dist/cjs/src/RootEvictionResponseGuard.js"
+      }
     }
   },
   "scripts": {
     "test": "jest --watchman=false",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts src/__tests__/OutputLookupRoutes.property.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts src/__tests__/OutputLookupRoutes.property.test.ts src/__tests__/RootEvictionResponseGuard.property.test.ts",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live src/__tests__/OverlayProviders.live.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay-express/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus --entry-exports \"./output-lookup=createOutputLookupRouter\" && node ../../../scripts/check-legacy-overlay-sdk.mjs",
+    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus --entry-exports \"./output-lookup=createOutputLookupRouter;./root-eviction-response=guardRootAdvertisementResponse\" && node ../../../scripts/check-legacy-overlay-sdk.mjs",
     "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
@@ -128,6 +138,9 @@
     "*": {
       "output-lookup": [
         "dist/types/src/OutputLookupRoutes.d.ts"
+      ],
+      "root-eviction-response": [
+        "dist/types/src/RootEvictionResponseGuard.d.ts"
       ]
     }
   }

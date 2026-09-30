@@ -14,6 +14,19 @@ submission and GASP behavior remains available to applications that do not opt i
 - Additive SDK wire codecs, canonical encodings, digest domains, signed capability
   profiles, observation schemas and bounded BRC-193 request/response schemas,
   plus closed BRC-194 put/get/finalize endpoint codecs.
+- Bounded BRC-199 signed request/result and status contracts, direct authenticated
+  root/requester/chain binding, exact decision IDs and independent restoration
+  bases. New-request clock checks remain separate from retained-outcome recovery;
+  this codec does not authorize or apply a suppression or guard serving paths.
+- Optional SQLite BRC-199 root journal with permanent request fences, immutable
+  terminal decisions, independent suppression bases and a durable projection
+  outbox. Shared-process and cross-process transaction gates guard final synchronous
+  enqueue; installed evidence/access policy and actual HTTP/index integration remain
+  separate. Admission reserves result bytes and completion revisions before effects.
+- Optional BRC-199 SDK evidence adapter for current SHIP/SLAP advertisements,
+  advertiser withdrawal and exact consuming transactions. Actual Script/Merkle
+  checks use one owned immutable chain view. Returned mined placements and operator
+  references remain inputs to installed policy, not currentness or restore authority.
 - Opt-in SDK BRC-197 exact locking-script and revenue-state codec, with pinned
   executable identity, canonical schedules and full descriptor binding. Its separate
   browser entry adds no program artifact to root imports. Recognition remains
@@ -104,7 +117,7 @@ submission and GASP behavior remains available to applications that do not opt i
 Current wallet/domain work adds an opt-in local SQLite action-recovery controller,
 atomic allocation records and exact prepared/final transaction retention. The
 ordinary wallet route remains unchanged. The current complete wallet run passes
-3,272 tests across 304 suites with the existing governed skip. Focused cases cover five actual process-termination boundaries,
+3,277 tests across 306 suites with the existing governed skip. Focused cases cover five actual process-termination boundaries,
 all six wallet-funded covenant routes and ordinary allocation-failure compatibility.
 Plan, byte-codec and controller mutation qualification passes; the final
 action-store campaign passes 96.24%/585. Core/client/mobile 2.15.0 source candidates
@@ -462,3 +475,150 @@ native device recovery or new SQLite capabilities in the wrappers. Candidate
 notes and API pages retain that boundary, whole-database/key recovery and rollback
 requirements. No npm publication, deployment or checkpoint approval follows
 from these local results.
+
+The BRC-199 codec passes 19 cases across two suites, including five frozen wire
+vectors and two generated
+properties of at least 300 cases each. Full-source mutation passes 97.07% over
+239 sites with zero uncovered/invalid; source line/branch coverage is complete.
+Tests distinguish pending partial results, saved action revisions, fresh serving
+snapshots, independent blockers, exact expiry and authenticated selection. SDK
+packed exports and strict ESM/CJS consumers pass, as do existing browser budgets.
+Fifteen documentation examples compile against 22 exact tarballs and 145 HTML
+pages validate. The [root guide](../../docs/guides/root-eviction-coordination.md)
+documents the remaining durable service, evidence, local-policy and all-path
+serving requirements. No root service readiness follows from codec qualification.
+
+The subsequent complete SDK run passes 8,094 tests across 245 suites with 95.72%
+line coverage, before adding the five frozen wire cases above. Those vectors also
+pass their focused suite and the same full-source mutation gate. Independent
+Python SHA-256 reproduces their request, result, advertisement and decision
+digests. Their mock chain and opaque proof fixtures qualify wire contracts only.
+
+Analyzer follow-ups preserve canonical recovery key order using an explicit
+UTF-16 comparator, exact ASCII derivation bounds, and sequential wallet SQL/input
+processing. The recovery suite passes 177 tests across 23 suites, and 63 ordinary
+wallet action tests pass across five suites. Current source mutation requalification
+passes plan 95.42%/131, codec 91.34%/439, transitions 94.54%/183, funding store
+92.45%/424 and funding controller 91.88%/271, all with zero uncovered or invalid
+mutants. The codec campaign recovered from one crashed V8 worker and completed in
+72 minutes 30 seconds on the shared host. Six additional exact recovery targets
+that reached their hosted 45-minute deadline receive the same bounded 90-minute
+allowance in both workflows; thresholds and selected tests remain unchanged.
+The coverage aggregator incorrectly classified three CommonJS
+test helpers under the existing singular `__test` convention as production. A
+classification regression now recognizes exact test directory names while keeping
+similarly named production paths governed. Against the exact published CI LCOV,
+the corrected gate passes at the unchanged target: 97.15% (13,020/13,402 points).
+These local results do not establish a green hosted branch.
+
+The root journal currently passes 130 tests across ten suites, including three
+replayable properties with at least 300 cases each, two actual process-kill
+boundaries and a separate writer excluded while an IPC response is queued.
+Additional cases cover corrupted retained bindings, exact 1 MiB result budgets,
+U64 completion reservations, native SQLite durability, full API limits and
+immutable partial-batch retries. The first whole-source campaign exposed test
+gaps (70.03%/981, five uncovered); that report is retained, and the expanded suite
+has been requalified across three disjoint source groups with the same complete
+test selection. Every original source file remains governed at 90%, zero
+uncovered and zero invalid; no waiver or exclusion was added.
+Before the checked-method increment below, the orchestration group passed 98.64% over 221 sites and the record group passes
+96.73% over 428 sites; storage passes 95.18% over 332 sites. All three had zero
+uncovered/invalid and exact source matches for that increment, preserving all 981
+original sites. Records and storage remain unchanged; the extended orchestration
+source is being requalified below. The orchestration runner recovered one V8 worker abort. Three additional
+API cases independently verify request/target quotas, exact retries at capacity
+and serving/reassessment binding to the original advertisement. These pass
+without changing production source or its qualified mutation reports.
+
+The preceding combined runtime passed 1,015 tests across 70 suites, 97.71% lines
+and 94.60% branches, before the expanded journal tests. Journal history and
+advertisement evidence properties also each passed 5,000 cases. The new complete
+runtime run passes 1,111 tests across 75 suites in 268 seconds, with 97.71% lines
+and 94.68% branches. Types, packed artifacts, browser/IndexedDB checks,
+17 compiled examples against 22 tarballs and 145 HTML pages passed before the
+new middleware integration. The root guide records same-host storage, consistent
+backups, permanent fences, manual policy and incomplete service integration.
+
+The root evidence component adds fourteen tests in two suites, including at least
+300 generated signed request identities/actions, both advertisement formats, exact
+consumption, independent proof variants and synthetic mined inclusion paths with
+checked header links and proof of work. Source line/branch coverage is complete.
+Full-source mutation passes 97.85% over 93 sites with zero uncovered or invalid.
+The fixtures contain public synthetic keys and a labelled easy-work ancestry;
+they do not qualify production chain currentness or operator policy.
+
+The optional authenticated response queue now has eighteen actual HTTP cases,
+22 additional boundary cases and expanded internal/legacy transport-failure and
+native lifecycle cases.
+Its generated property passes 5,000 authenticated exchanges. The complete
+middleware suite now passes 310 tests across fourteen suites, with 97.54% lines and
+94.27% branches, including native lifecycle, ownership, listener cleanup, legacy
+error reporting and final HTTP-framing assertions. The queue companion
+has complete line and branch coverage.
+A signing-time invalidation discards the original response and
+re-signs a bounded replacement for the same request. Disconnects, deadlines,
+late/duplicate callbacks, malformed replacement and unsupported buffering fail
+closed. Packed ESM/CJS and clean Express 4/5 consumers with old/current SDKs pass
+both ordinary and new guarded response probes. Mutation qualification is recorded below; expanded
+root-service wiring and final all-path demonstrations remain outstanding; this is
+not a claim that every root-host serving path is guarded. All eighteen compiled
+documentation examples pass against 22 exact tarballs, and 145 HTML pages validate.
+
+The first four-worker middleware mutation dry run selected all 262 tests. It was
+stopped for the framing correction before any final score. Its retained sandbox
+exposed duplicate normal Jest discovery. Root-anchored generated-child ignore
+patterns now preserve authored tests and the current mutation root, with a
+regression; no sandbox deletion or authored-test exclusion substitutes for the
+fix. Certificate tests use their actual assigned ephemeral port while retaining
+all assertions and the existing server helper. The ordinary suite passes on the
+corrected source. The first completed 387-site campaign failed at 74.29%, with one
+uncovered mutation and two invalid worker results; the failed report is retained.
+The expanded tests explicitly await internal builder completion so a bad legacy
+failure path fails its test instead of crashing a worker afterward. The next campaign reached 97.13% over 387 sites but still failed with four invalid
+worker results. Those failures exposed unawaited test promises, including two
+existing legacy hardening cases; explicit completion capture now preserves and
+awaits the original promises and all assertions. A separate production regression
+rejects nonempty HTTP 205 bodies before signing, as required by RFC 9110, with an
+actual authenticated empty-205 success case. Final full-source qualification passes at 97.42% over all 387 sites: 357 killed,
+20 timeouts and ten survivors, zero uncovered/invalid. All 310 tests run in its
+dry run; the report matches both current production sources exactly. Stryker
+recovered one V8 worker crash and completed in 22 minutes 45 seconds. These are
+shared-host qualification results, not performance guarantees or hosted CI.
+Neither failed report is waived and every gate remains unchanged.
+
+The optional Overlay Express root response guard connects actual BRC-104 signing
+and native enqueue to the SQLite journal fence. Twenty focused cases have full
+component line/branch coverage; mutation passes 97.59% over all 83 sites, with zero
+uncovered/invalid and an exact source match. The complete Overlay Express suite
+passes 579 tests across 22 suites. Packed ESM/CJS exports and the permanent legacy
+SDK 2.8.9 strict consumer pass. Generated-child Jest discovery now excludes only
+nested generated copies while retaining authored and current-sandbox-root tests.
+All 19 compiled documentation examples pass against 22 tarballs, and all 145 HTML
+pages validate. The guard does not yet mount the coordination service or retrofit
+every cache, snapshot, live, finite-lookup and GASP serving path.
+
+The separately coordinated Axios correction updates five standalone locks from
+1.18.1 to 1.20.0, preserving manifests, other resolutions and lock formats.
+Independent frozen installs, permitted native rebuilds, builds/lint, 645 service
+tests and five zero-finding audits pass. Ten local GET/POST requests and five
+pre-cancelled requests pass against the installed packages. Dependency evidence
+retains the prior ip-address correction. No workstation publication or deployment
+was performed.
+
+The optional checked root methods sample a trusted clock after acquiring the
+shared SQLite gate, recheck local authorization and the installed policy/context,
+and return an owned observation of the resulting head. Existing deterministic
+methods, persistence format and behavior remain available. Thirty-six focused
+cases include a separate-process writer holding the actual gate, expiry at the
+acquired decision boundary, denied access before effects and recovery of an old
+completed action under a newer current policy. The complete commit-context helper
+passes 100% over 30 mutation sites with zero uncovered/invalid. The complete changed
+store passes 98.73% over all 237 sites (234 killed, three surviving), with zero
+uncovered/invalid and an exact source match after its 166-test dry run.
+
+The complete current runtime passes 1,147 tests across 77 suites, with 97.72% line
+and 94.68% branch coverage. Types and packed consumers pass, as do all 20 compiled
+documentation examples against 22 exact tarballs, root health/lint/format and
+145 HTML pages. The registry has 79 implemented properties and 79 critical targets.
+Broader local blockers, the actual root coordinator and complete serving-path
+installation remain required; checked ports alone do not supply them.

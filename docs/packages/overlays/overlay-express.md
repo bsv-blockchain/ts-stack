@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
 version: '2.8.0'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
@@ -61,6 +61,14 @@ process.once('SIGINT', () => void server.close())
 - **Graceful lifecycle** — Idempotent `close()` drains HTTP and closes background work and databases
 
 ## Progressive and live lookup candidate
+
+The optional `@bsv/overlay-express/root-eviction-response` entry connects
+authenticated response queueing to a durable root-advertisement journal.
+`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 2.9.0, a revision
+captured before hydration, every disclosed target and current synchronous data/control
+access checks. It resets a stale response in full and separately fences the signed
+replacement. It does not mount routes or automatically guard existing serving
+paths. See [root coordination](../../guides/root-eviction-coordination.md).
 
 The unpublished 2.8.0 candidate adds `configureOutputLookup` and the separate
 `@bsv/overlay-express/output-lookup` entry. Supply a durable companion service,

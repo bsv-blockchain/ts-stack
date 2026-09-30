@@ -90,6 +90,22 @@ describe('local recoverable funding allocation', () => {
     await expect(SQLiteActionRecoveryStore.install(context.activeStorage)).rejects.toThrow('differs')
   })
 
+  test.each([true, false])('preserves the construction error when ordinary cleanup also fails (logger=%s)', async withLogger => {
+    const validated = args()
+    if (withLogger) validated.logger = new WalletLogger()
+    const constructionError = new Error('source read remains the authoritative failure')
+    const cleanupError = new Error('failed-status write interrupted')
+    jest.spyOn(context.activeStorage, 'getRawTxOfKnownValidTransaction').mockRejectedValueOnce(constructionError)
+    const update = jest.spyOn(context.activeStorage, 'updateTransactionStatus').mockRejectedValueOnce(cleanupError)
+    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toBe(constructionError)
+    expect(update).toHaveBeenCalledWith('failed', expect.any(Number))
+    const transactionId = update.mock.calls.find(call => call[0] === 'failed')![1]
+    const rows = await context.activeStorage.findTransactions({ partial: { userId: context.userId, transactionId } })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('unsigned')
+    if (withLogger) expect(validated.logger!.logs.some(entry => entry.log === `failed to clean up createAction transaction ${transactionId}: ${String(cleanupError)}`)).toBe(true)
+  })
+
   test('returns the original completed funding result across new store instances without another allocation', async () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage)
     const operation = await store.operation(binding())

@@ -131,13 +131,13 @@ export class SQLiteFundingRecoveryStore {
       reject: async () => await this.storage.transaction(async trx => {
         await this.lock(trx)
         const row = await this.readRow(userId, operation.id, trx)
-        requireFunding(row !== undefined && row.semantic === semantic && row.receipt === null, 'Accepted or absent funding cannot be rejected')
+        requireFunding(row?.semantic === semantic && row.receipt === null, 'Accepted or absent funding cannot be rejected')
         await this.storage.toDb(trx)(records).where({ id: operation.id }).update({ rejected: 1 })
       }),
       commit: async run => await this.storage.transaction(async trx => {
         await this.lock(trx)
         const row = await this.readRow(userId, operation.id, trx)
-        requireFunding(row !== undefined && row.semantic === semantic, 'Funding recovery intent is absent or changed')
+        requireFunding(row?.semantic === semantic, 'Funding recovery intent is absent or changed')
         requireFunding(row.rejected === 0, 'Rejected funding cannot be credited')
         if (row.receipt !== null) return { accepted: true, isMerge: true, txid: operation.funding.txid, satoshis: 0 }
         const result = await run(trx)

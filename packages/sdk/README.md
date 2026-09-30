@@ -653,3 +653,10 @@ the exact single BRC-29 payment output against a retained quote and independentl
 derived seller key. They return a proof-independent wallet operation identifier;
 chain acceptance, acquisition reservation and durable wallet credit remain separate.
 See the [private overlay release guide](../../docs/guides/private-overlay-release.md).
+
+The optional `OutputRootEvictionProtocol` helpers parse and authenticate BRC-199
+root requests/results, exact advertisement targets and independent restoration
+bases. Their new-request clock check is separate from retained-outcome recovery.
+They do not authorize suppression, verify BEEF, persist tombstones or guard
+serving paths. See the [root coordination guide](../../docs/guides/root-eviction-coordination.md).
+Existing SHIP/SLAP, lookup and GASP behavior remains unchanged.

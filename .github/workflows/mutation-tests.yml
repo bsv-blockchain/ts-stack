@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     # Match the PR allowance for the five measured hosted deadline failures.
     # Mutant/test deadlines and every detection/coverage ratchet are unchanged.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:

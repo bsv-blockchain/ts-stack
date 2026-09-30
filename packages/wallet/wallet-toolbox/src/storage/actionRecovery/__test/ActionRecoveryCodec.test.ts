@@ -54,6 +54,12 @@ test('canonical records round trip bytes and take independent snapshots of every
   expect(actionRecoveryJSON(JSON.parse('{"__proto__":{"kept":true}}'))).toBe('{"__proto__":{"kept":true}}')
 })
 
+test('canonical recovery key ordering preserves the persisted UTF-16 ordering rather than locale collation', () => {
+  const fields = { '\ue000': 6, '😀': 5, á: 4, a: 3, Z: 2, A: 1 }
+  expect(actionRecoveryJSON(fields)).toBe('{"A":1,"Z":2,"a":3,"á":4,"😀":5,"\ue000":6}')
+  expect(actionRecoveryJSON({ b: { a: 2, A: 1 }, a: 0 })).toBe('{"a":0,"b":{"A":1,"a":2}}')
+})
+
 test.each([
   ['number', 0.1], ['NaN', NaN], ['infinity', Infinity], ['bigint', 1n],
   ['undefined', undefined], ['function', () => 1], ['date', new Date(0)],
@@ -79,7 +85,7 @@ test('rejects accessors without invoking them and bounds depth, cycles, keys and
   for (let i = 0; i < 17; i++) nested = { next: nested }
   expect(() => actionRecoveryJSON(nested)).toThrow()
   const exact = 'x'.repeat(ACTION_RECOVERY_RECORD_BYTES - 2)
-  expect(actionRecoveryJSON(exact).length).toBe(ACTION_RECOVERY_RECORD_BYTES)
+  expect(actionRecoveryJSON(exact)).toHaveLength(ACTION_RECOVERY_RECORD_BYTES)
   expect(() => actionRecoveryJSON(exact + 'x')).toThrow()
   expect(() => actionRecoveryJSON({ [exact]: 1 })).toThrow()
   expect(() => actionRecoveryJSON('é'.repeat(ACTION_RECOVERY_RECORD_BYTES / 2))).toThrow()
@@ -120,7 +126,7 @@ test('binary snapshots accept the exact maximum and own the supplied typed array
   const encoded = encodeActionRecoveryBytes(bytes)
   bytes.fill(0)
   const decoded = Buffer.from(encoded, 'base64')
-  expect(decoded.length).toBe(ACTION_RECOVERY_RECORD_BYTES)
+  expect(decoded).toHaveLength(ACTION_RECOVERY_RECORD_BYTES)
   expect(decoded[0]).toBe(255)
   expect(decoded[decoded.length - 1]).toBe(1)
 })

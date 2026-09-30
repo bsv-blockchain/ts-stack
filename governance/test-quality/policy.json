@@ -897,6 +897,100 @@
           "Out-of-order transitions cannot prepare, finalize or process an incomplete allocation.",
           "Reopened operations retain exact first final bytes and reject changed layouts or signing identities."
         ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-199 root-local signed request/result attribution, exact targets, bounded lifetimes and independent restoration bases",
+        "target": "At least 300 generated ordering, identity and deadline cases",
+        "invariants": [
+          "Signed root request identity includes every evidence byte and exact target.",
+          "Decisions bind the root, request, output and revision; one restoration cannot lift a different basis.",
+          "New requests expire at the exact deadline without preventing retained-outcome recovery."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root request fences, independent suppression bases, policy-bound action history and final transport queue ordering",
+        "target": "At least 300 generated suppression, restoration, reassessment, projection and restart histories",
+        "invariants": [
+          "A restoration lifts exactly its named suppression; later currentness never edits a saved action.",
+          "Suppressed or unprojected advertisements never pass the final shared send gate.",
+          "Permanent request and assessment keys survive restart and cannot be reused."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-advertisement-evidence.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current SHIP/SLAP advertisement authentication, original transaction binding and exact consuming evidence under an immutable chain view",
+        "target": "At least 300 generated signed request identities, actions and advertisement evidence selections",
+        "invariants": [
+          "Verified advertisement bytes remain bound to the exact signed request and target.",
+          "Owner withdrawal requires the declared advertiser; spent evidence consumes the exact outpoint.",
+          "Verified evidence never asserts currentness or authority to lift a retained root decision."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-records.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Retained root partial-batch action history, request identity and expiry under restart",
+        "target": "At least 300 generated partial-batch outcomes and retained expiry histories",
+        "invariants": [
+          "Terminal actions remain immutable while remaining targets expire exactly once.",
+          "Retried retained identities bypass new-request clocks but changed bodies conflict."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-storage.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Root full-width durable revision encoding, atomic capacity reservation and projection acknowledgement",
+        "target": "At least 300 generated unsigned 64-bit revision and index acknowledgement cases",
+        "invariants": [
+          "Every counter survives lossless decimal and fixed-width hexadecimal encoding.",
+          "Assessments reserve their acknowledgement before commit and retry without consuming extra revisions."
+        ]
+      },
+      {
+        "path": "packages/middleware/auth-express-middleware/src/__tests/authenticatedResponseQueue.property.test.ts",
+        "manifest": "packages/middleware/auth-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Final authenticated HTTP queue ownership, cancellation and bounded replacement after signing",
+        "target": "At least300 generated actual authenticated HTTP response exchanges",
+        "invariants": [
+          "Only the admitted owned bytes and status reach the native HTTP queue after signing.",
+          "One discarded candidate may be replaced by one newly authenticated response for the same request.",
+          "Cancellation, stale callbacks and unsupported buffering never fall through to an unsigned response."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Actual authenticated root response enqueue under durable serving and current access fences",
+        "target": "At least 300 generated actual HTTP/SQLite signing and policy schedules",
+        "invariants": [
+          "A committed suppression or revoked access prevents the old candidate from reaching the native response queue.",
+          "A sanitized control replacement is separately authorized and checked under the current durable revision.",
+          "The root target inventory and permanent decision history survive each bounded fixture schedule."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-commit.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current clock, access, installed policy and immutable-context selection inside the shared root commit gate",
+        "target": "At least 300 generated exact-U64 observations and independent access/policy/context decisions",
+        "invariants": [
+          "The trusted clock is sampled only after the physical journal gate is acquired.",
+          "Access denial does not reveal whether a request key exists or a selected policy is stale.",
+          "A captured evaluation cannot commit after its installed policy or external context changes."
+        ]
       }
     ],
     "exclusions": [

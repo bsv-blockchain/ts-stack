@@ -224,7 +224,7 @@ export class SQLiteActionRecoveryOperation implements ActionRecoveryConstruction
 
   async retain(plan: ActionRecoveryPlan, trx: TrxToken): Promise<void> {
     const row = await this.store.read(this.key, this.binding, trx)
-    requireStore(row != null && row.plan === null, 'Action recovery allocation is not newly claimed')
+    requireStore(row?.plan === null, 'Action recovery allocation is not newly claimed')
     await this.store.replace(row, { ...row, plan: encodeActionRecoveryPlan(plan) }, trx)
   }
 

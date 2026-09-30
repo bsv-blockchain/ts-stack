@@ -2,7 +2,7 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.2'
+version: '1.3.3'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
 review_cadence_days: 30
@@ -151,6 +151,22 @@ The relevant upstream releases are [Engine.IO](https://github.com/socketio/socke
 [fast-uri](https://github.com/fastify/fast-uri/releases/tag/v3.1.8) and
 [Undici](https://github.com/nodejs/undici/releases/tag/v6.28.1).
 Source reconciliation does not release packages or deploy service images.
+
+The follow-up Axios audit correction selects `axios` 1.20.0 in the five existing
+Message Box, UHRP basic, UHRP cloud, notifier and WAB locks. Only Axios resolution
+and dependency metadata change; manifests, declared ranges, lock formats and all
+other resolved versions are preserved. The already-selected `form-data` 4.0.6
+satisfies the raised dependency floor. Review of the
+[1.19.0](https://github.com/axios/axios/releases/tag/v1.19.0) and
+[1.20.0](https://github.com/axios/axios/releases/tag/v1.20.0) releases includes
+configuration hardening, proxy behavior, cancellation and declaration changes.
+The services use ordinary own-property request options; their frozen installs,
+high/critical audits, builds where applicable and deterministic suites pass on
+Node 24. Public workspace manifests and browser/mobile dependency graphs are
+unchanged. Infrastructure locks are container/function build inputs, so this
+correction needs no public npm version change or consumer migration. Hosted
+Linux image and exact-head analysis gates remain required before promotion;
+these local results do not establish deployed behavior.
 
 The root workspace carries six narrow audited dependency overrides:
 

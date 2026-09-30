@@ -22,6 +22,12 @@ Stateful orchestration is provided by the separate
 [output-knowledge package](../application/output-knowledge.md). The candidate is
 not a package publication.
 
+The optional `OutputRootEvictionProtocol` entry adds BRC-199 signed request/result
+bindings, status parsing, exact root-local decision identities and a separate
+new-request clock check. An authenticated request does not authorize suppression;
+durable serving guards, evidence/currentness and local policy remain separate.
+See [root coordination](../../guides/root-eviction-coordination.md).
+
 Proposal endpoint parsers preserve the author-signed envelope separately from the
 provider's lifecycle state. They validate closed schemas and intrinsic proposal
 constraints, including predecessor shape and selected critical extensions. Signature,

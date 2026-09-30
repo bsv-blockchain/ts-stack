@@ -46,7 +46,8 @@ export function actionRecoveryJSON(value: unknown): string {
       requireValue(Object.getPrototypeOf(input) === Object.prototype || Object.getPrototypeOf(input) === null)
       requireValue(keys.length <= maximumItems && keys.every(key => typeof key === 'string'))
       const fields = new Map<string, JSONValue>()
-      for (const key of (keys as string[]).sort()) {
+      // Preserve the stored format's UTF-16 code-unit order, independent of locale.
+      for (const key of (keys as string[]).sort((left, right) => Number(left > right) - Number(left < right))) {
         own(key, depth + 1)
         const property = Object.getOwnPropertyDescriptor(input, key)!
         requireValue(property.enumerable && 'value' in property)

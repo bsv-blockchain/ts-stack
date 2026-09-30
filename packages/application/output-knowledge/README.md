@@ -52,6 +52,23 @@ Overlay Express adapter requires SDK 2.9.0 and a signed matching capability. Thi
 increment does not complete topic admission, payment, private acquisition or the
 full BRC-192–199 reference application.
 
+## Durable root advertisement decisions
+
+`@bsv/output-knowledge/root-eviction` supplies portable journal types. The separate
+`@bsv/output-knowledge/root-eviction/evidence` entry supplies `SDKRootEvictionEvidence`
+for current SHIP/SLAP authentication, owner attribution and exact consuming
+transactions against an installed immutable chain view. Verified facts remain
+separate from requester access, restoration rights and currentness.
+The Node entry `@bsv/output-knowledge/root-eviction/sqlite` supplies
+`SQLiteRootEvictionStore`: bounded immutable request fences, independent suppression
+bases, exact restoration, local currentness assessments, durable index intents and a
+shared final synchronous response-queue gate. Explicit creation and recovery preserve
+the root identity, chain and sealed capacities. This component leaves installed
+requester/evidence authority, broader bans, scheduling and actual HTTP/index adapters
+to the service; it does not enable a discovery endpoint by itself. See
+[root coordination](../../../docs/guides/root-eviction-coordination.md) for API
+contracts, limits, crash recovery and the remaining integration obligations.
+
 ## Getting started
 
 This package is an unpublished implementation candidate. From this TS Stack
@@ -915,3 +932,10 @@ before checkpoint-two approval.
 
 See the package-local [LICENSE.txt](./LICENSE.txt) and
 [third-party notices](./THIRD_PARTY_NOTICES.md) for distribution terms.
+
+The optional root journal also implements `RootEvictionCheckedStorage`: checked
+retention, evaluation, assessment and result reads sample the trusted clock and
+recheck access, installed policy and external context inside the shared commit
+gate. Their observations include the exact current head for later signing and
+final enqueue. Existing deterministic methods and the local stored format remain
+unchanged. See the root coordination guide for callback and service obligations.

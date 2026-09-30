@@ -23,6 +23,32 @@ They validate package names, exports, declarations, module resolution, and
 cross-package type identity. They do not replace behavioral examples, package
 tests, browser/mobile bundles, or live-service integration tests.
 
+## Checked root decision observations
+
+The host supplies synchronous clock, access and context ports that participate
+in the journal's actual gate. These types preserve the observed revision for the
+later signing and final enqueue stage. This example does not install a root policy
+or network route; see the [root coordination guide](./root-eviction-coordination.md).
+
+```ts compile
+// example-id: root-checked-observation
+import type {
+  RootEvictionCheckedStorage,
+  RootEvictionCommitGuard,
+  RootEvictionObservation
+} from '@bsv/output-knowledge/root-eviction'
+import type { OutputRootEvictionResult } from '@bsv/sdk'
+
+async function readAuthorizedRootDecision(
+  journal: RootEvictionCheckedStorage,
+  authenticatedRequester: string,
+  requestId: string,
+  guard: RootEvictionCommitGuard
+): Promise<RootEvictionObservation<OutputRootEvictionResult>> {
+  return journal.resultChecked(authenticatedRequester, requestId, guard)
+}
+```
+
 ## Private publication, lookup and purchase contracts
 
 These functions run only after the caller has authenticated the complete service
@@ -113,6 +139,94 @@ void checkPurchaseTerms
 void checkAuthenticatedPurchaseResult
 void inspectSelectedPayment
 ```
+
+## Root advertisement response admission
+
+Capture the revision before loading the complete response. The installed reader
+supplies every disclosed advertisement; current data and control access checks
+share the journal's gate with all policy writers. This example establishes public
+type composition, not a complete root service or requester policy.
+
+```ts compile
+// example-id: root-advertisement-response
+import {
+  guardRootAdvertisementResponse,
+  type RootAdvertisementResponseGuard
+} from '@bsv/overlay-express/root-eviction-response'
+import { SQLiteRootEvictionStore as HTTPRootJournal } from '@bsv/output-knowledge/root-eviction/sqlite'
+
+async function serveAdvertisements(
+  response: Parameters<typeof guardRootAdvertisementResponse>[0],
+  journal: HTTPRootJournal,
+  read: () => Promise<{ body: string; targets: RootAdvertisementResponseGuard['targets'] }>,
+  authorize: RootAdvertisementResponseGuard['authorize'],
+  controlHeaders: RootAdvertisementResponseGuard['controlHeaders']
+): Promise<void> {
+  const { revision } = await journal.head()
+  const result = await read()
+  guardRootAdvertisementResponse(response, {
+    journal,
+    revision,
+    targets: result.targets,
+    authorize,
+    controlHeaders
+  })
+  response.status(200).set('content-type', 'application/json').end(result.body)
+}
+
+void serveAdvertisements
+```
+
+## Final authenticated response admission
+
+This interface example requires an application-owned durable fence. Every writer
+that can revoke access or suppress a disclosed target must acquire its paired
+write gate. The example's fence implementation is intentionally supplied by the
+host; an in-process callback alone does not prove cross-process ordering.
+
+```ts compile
+// example-id: authenticated-response-admission
+import {
+  guardAuthenticatedResponse,
+  type AuthenticatedResponseCandidate
+} from '@bsv/auth-express-middleware'
+
+interface DurableSendFence {
+  withReadGate(signal: AbortSignal, commit: () => void): Promise<void>
+  currentAccess(identityKey: string): boolean
+  candidateStillCurrent(candidate: AuthenticatedResponseCandidate): boolean
+}
+
+type GuardedHTTPResponse = Parameters<typeof guardAuthenticatedResponse>[0]
+
+function installFinalAdmission(res: GuardedHTTPResponse, fence: DurableSendFence) {
+  guardAuthenticatedResponse(res, async (candidate, enqueue, signal) => {
+    let stale = false
+    await fence.withReadGate(signal, () => {
+      if (!fence.currentAccess(candidate.identityKey)) throw new Error('Access revoked')
+      if (fence.candidateStillCurrent(candidate)) enqueue()
+      else stale = true
+    })
+    if (stale && candidate.attempt === 0) {
+      return {
+        statusCode: 409,
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'x-bsv-result': 'reset-required'
+        },
+        body: new TextEncoder().encode(JSON.stringify({ error: 'reset-required' }))
+      }
+    }
+  })
+}
+
+void installFinalAdmission
+```
+
+The second attempt must also pass current access and the host's control-response
+policy. Add the deployment's required CORS and profile headers to the replacement.
+No body or header from the discarded candidate is inherited automatically.
 
 ## SDK and high-level helpers
 
@@ -453,5 +567,108 @@ export function installLocalRecoveryControllers(
     actions: new RecoverableActionController(wallet, actions, originator),
     funding: new RecoverableFundingController(wallet, funding)
   }
+}
+```
+
+## Root advertisement request and result binding
+
+These functions receive independently authenticated context and retained request
+policy. They validate attributable protocol claims without authorizing or applying
+suppression. Apply the clock check only on new requests, after checking the durable
+request fence; exact retries recover their saved outcome under current access rules.
+See [root coordination](./root-eviction-coordination.md) for the serving obligations.
+
+```typescript compile
+// example-id: root-eviction-contracts
+import type { OutputChain, OutputSignedRootEvictionRequest } from '@bsv/sdk'
+import {
+  verifyOutputRootEvictionRequest,
+  validateOutputRootEvictionWindow,
+  verifyOutputRootEvictionResult
+} from '@bsv/sdk/overlay-tools/OutputRootEvictionProtocol'
+
+export function authenticateRootRequest(
+  bytes: Uint8Array,
+  transport: { requester: string },
+  installed: { root: string; chain: OutputChain }
+) {
+  return verifyOutputRootEvictionRequest(bytes, { ...installed, requester: transport.requester })
+}
+
+export function checkNewRequestClock(request: OutputSignedRootEvictionRequest, now: string) {
+  return validateOutputRootEvictionWindow(request, {
+    now,
+    maximumLifetimeSeconds: '3600',
+    futureClockSeconds: '30'
+  })
+}
+
+export function authenticateRootResult(
+  bytes: Uint8Array,
+  original: OutputSignedRootEvictionRequest,
+  retainedEvaluationPolicy: string
+) {
+  return verifyOutputRootEvictionResult(bytes, original, retainedEvaluationPolicy)
+}
+```
+
+## Root decision projection
+
+This function demonstrates the durable journal's projection handshake. The installed
+adapter must apply each intent idempotently to its actual index and coherent live
+membership stream before acknowledging it. A newer decision can supersede the intent
+while the adapter is working, so the serving gate remains authoritative.
+
+```typescript compile
+// example-id: root-decision-projection
+import type {
+  RootEvictionProjection,
+  RootEvictionStorage
+} from '@bsv/output-knowledge/root-eviction'
+import { SQLiteRootEvictionStore } from '@bsv/output-knowledge/root-eviction/sqlite'
+
+export async function projectRootDecisions(
+  journal: RootEvictionStorage,
+  applyDurably: (intent: RootEvictionProjection) => Promise<void>
+) {
+  const results: boolean[] = []
+  for (const intent of await journal.projections(64)) {
+    await applyDurably(intent)
+    results.push(await journal.projected(intent))
+  }
+  return results
+}
+
+export function recoverRootJournal(
+  path: string,
+  configuration: Parameters<typeof SQLiteRootEvictionStore.open>[1]
+): RootEvictionStorage {
+  return SQLiteRootEvictionStore.open(path, configuration)
+}
+```
+
+## Root advertisement evidence
+
+This adapter uses the caller's independently installed immutable chain view.
+Its result supplies verified facts to local policy; it does not authorize a
+suppression or restoration, assess currentness, or modify the journal.
+
+```typescript compile
+// example-id: root-advertisement-evidence
+import type { ChainViewResolver, VerificationContext } from '@bsv/output-knowledge'
+import { SDKRootEvictionEvidence } from '@bsv/output-knowledge/root-eviction/evidence'
+
+export function createRootEvidenceVerifier(chains: ChainViewResolver) {
+  return new SDKRootEvictionEvidence(chains)
+}
+
+export async function verifySelectedAdvertisement(
+  verifier: SDKRootEvictionEvidence,
+  signedRequest: unknown,
+  targetIndex: number,
+  installedContext: VerificationContext,
+  signal: AbortSignal
+) {
+  return verifier.verify(signedRequest, targetIndex, installedContext, signal)
 }
 ```

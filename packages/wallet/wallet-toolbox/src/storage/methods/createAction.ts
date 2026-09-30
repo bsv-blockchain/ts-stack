@@ -365,23 +365,35 @@ async function createActionCore(
     // reuses the provider. Its error is surfaced on the success path above;
     // here the construction error remains authoritative.
     await allocatedBeefPrefetch
-    if (newTx?.transactionId != null) {
-      try {
-        if (newTxCommitted && recovery != null) {
-          logger?.log('retained recoverable allocation after evidence completion error')
-        } else if (newTxCommitted) {
-          await storage.updateTransactionStatus('failed', newTx.transactionId)
-          logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
-        } else if (recovery == null) {
-          const failed = await createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, undefined, 'failed')
-          logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
-        }
-      } catch (cleanupError) {
-        logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
-      }
-    }
+    await recordCreateActionFailure(storage, userId, vargs, storageBeefBytes, newTx, newTxCommitted, recovery)
     logger?.groupEnd()
     throw error
+  }
+}
+
+async function recordCreateActionFailure(
+  storage: StorageProvider,
+  userId: number,
+  vargs: ValidCreateActionArgs,
+  storageBeefBytes: number[],
+  newTx: TableTransaction | undefined,
+  committed: boolean,
+  recovery: ActionRecoveryConstruction | undefined
+): Promise<void> {
+  if (newTx?.transactionId == null) return
+  const logger = vargs.logger
+  try {
+    if (committed && recovery != null) {
+      logger?.log('retained recoverable allocation after evidence completion error')
+    } else if (committed) {
+      await storage.updateTransactionStatus('failed', newTx.transactionId)
+      logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
+    } else if (recovery == null) {
+      const failed = await createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, undefined, 'failed')
+      logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
+    }
+  } catch (cleanupError) {
+    logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
   }
 }
 
@@ -561,16 +573,15 @@ async function createNewInputs(
 
   for (const o of allocatedChange) newInputs.push({ o, unlockLen: 107 })
 
-  let vin = -1
-  for (const { i, o, unlockLen } of newInputs) {
-    vin++
+  await newInputs.reduce<Promise<void>>(async (previous, { i, o, unlockLen }, vin) => {
+    await previous
     if (o != null) {
       r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen, trx))
     } else {
       if (i == null) throw new WERR_INTERNAL(`vin ${vin} without output or xinput`)
       r.push(buildSdkInputFromXInput(vin, i))
     }
-  }
+  }, Promise.resolve())
   return r
 }
 

@@ -36,7 +36,9 @@
     "SQLiteLookupSessions",
     "RevenueListingLineageVerifier",
     "parseRevenueListingLineagePackage",
-    "REVENUE_LISTING_LINEAGE_LIMITS"
+    "REVENUE_LISTING_LINEAGE_LIMITS",
+    "SQLiteRootEvictionStore",
+    "SDKRootEvictionEvidence"
   ],
   "maximumBytes": {
     "vite": {
@@ -210,6 +212,28 @@
           "raw": 375000,
           "gzip": 120000,
           "brotli": 103000
+        }
+      }
+    },
+    {
+      "entry": "./root-eviction/evidence",
+      "requiredExports": ["SDKRootEvictionEvidence"],
+      "prohibitedExports": [
+        "SQLiteRootEvictionStore",
+        "SQLiteJournal",
+        "OutputKnowledge",
+        "RevenueListingLineageVerifier"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 525000,
+          "gzip": 142000,
+          "brotli": 118000
+        },
+        "esbuild": {
+          "raw": 405000,
+          "gzip": 130000,
+          "brotli": 111000
         }
       }
     }

@@ -27,6 +27,7 @@ export * from './OutputPurchaseProtocol.js'
 export * from './OutputPrivatePublicationProtocol.js'
 export * from './OutputPaidLookupProtocol.js'
 export * from './OutputPaidLookupFunding.js'
+export * from './OutputRootEvictionProtocol.js'
 export * from './OutputCapabilityRetention.js'
 export * from './OutputServiceError.js'
 export {

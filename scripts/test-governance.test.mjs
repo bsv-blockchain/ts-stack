@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 71)
+  assert.equal(result.summary.propertySuites, 79)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 71)
+  assert.equal(result.summary.mutationTargets, 79)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -107,6 +107,61 @@ test('SDK discovery preserves authored tests when the root is a mutation sandbox
     )
     assert.equal(
       patterns.some(pattern => pattern.test(`${root}/dist/src/example.test.ts`)),
+      true
+    )
+  }
+})
+
+test('auth discovery excludes generated children while preserving its own mutation root', async () => {
+  const { default: config } =
+    await import('../packages/middleware/auth-express-middleware/jest.config.js')
+  for (const root of ['/auth', '/auth/.stryker-tmp/sandbox-one']) {
+    for (const selected of [config.testPathIgnorePatterns, config.modulePathIgnorePatterns]) {
+      const patterns = selected.map(
+        pattern =>
+          new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      )
+      const ignored = file => patterns.some(pattern => pattern.test(`${root}/${file}`))
+      assert.equal(ignored('src/__tests/testCertificaterequests.test.ts'), false)
+      assert.equal(ignored('src/__tests/authenticatedResponseQueue.property.test.ts'), false)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/package.json'), true)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('xstryker-tmp/src/__tests/example.test.ts'), false)
+    }
+    const tests = config.testPathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    assert.equal(
+      tests.some(pattern => pattern.test(`${root}/node_modules/dependency/example.test.ts`)),
+      true
+    )
+  }
+})
+
+test('overlay discovery excludes generated children while preserving its own mutation root', async () => {
+  const { default: config } = await import('../packages/overlays/overlay-express/jest.config.js')
+  for (const root of ['/overlay', '/overlay/.stryker-tmp/sandbox-one']) {
+    for (const selected of [config.testPathIgnorePatterns, config.modulePathIgnorePatterns]) {
+      const patterns = selected.map(
+        pattern =>
+          new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      )
+      const ignored = file => patterns.some(pattern => pattern.test(`${root}/${file}`))
+      assert.equal(ignored('src/__tests__/OverlayExpress.test.ts'), false)
+      assert.equal(ignored('src/__tests__/RootEvictionResponseGuard.property.test.ts'), false)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/package.json'), true)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('xstryker-tmp/src/__tests/example.test.ts'), false)
+    }
+    const tests = config.testPathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    assert.equal(
+      tests.some(pattern => pattern.test(`${root}/node_modules/dependency/example.test.ts`)),
       true
     )
   }
@@ -308,4 +363,40 @@ test('action store partitions retain every source line, test and independent cri
       .readFileSync(path.join(REPOSITORY_ROOT, 'packages/wallet/wallet-toolbox', source), 'utf8')
       .split('\n').length
   )
+})
+
+test('root eviction partitions retain the complete source set, tests and independent critical gates', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const names = ['root-eviction-journal', 'root-eviction-records', 'root-eviction-storage']
+  const files = names.flatMap(name => targets[name].mutate)
+  assert.equal(new Set(files).size, files.length)
+  assert.deepEqual(
+    files.toSorted(),
+    [
+      'RootEvictionCodec',
+      'RootEvictionRequests',
+      'RootEvictionServingRecords',
+      'RootEvictionStorage',
+      'SQLiteRootEvictionDatabase',
+      'SQLiteRootEvictionStore'
+    ]
+      .map(name => `src/root-eviction/${name}.ts`)
+      .toSorted()
+  )
+  assert.equal(new Set(names.map(name => targets[name].propertyTest)).size, names.length)
+  for (const name of names) {
+    const definition = targets[name]
+    assert.deepEqual(definition.runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(definition.additionalInputs, targets[names[0]].additionalInputs)
+    assert.deepEqual(definition.runnerOptions.jest.config.testMatch, [
+      '<rootDir>/test/root-eviction*.test.ts'
+    ])
+    const registration = policy.targets.find(target => target.id === name)
+    assert.equal(registration.minimumScore, 90)
+    assert.equal(registration.maximumInvalid, 0)
+    assert.equal(registration.maximumNoCoverage, 0)
+  }
 })

@@ -21,6 +21,21 @@ currentness and application projection. Receiving data never authorizes a wallet
 action. The implementation branch is still being qualified; this page does not
 announce a registry release or completed BRC-192–199 implementation.
 
+## Root advertisement journal
+
+The optional `root-eviction/evidence` entry verifies actual SHIP/SLAP advertisements,
+advertiser withdrawal and exact consuming transactions under the installed immutable
+chain view. Its returned facts do not establish requester authority or currentness.
+The `root-eviction` type entry and Node-only `root-eviction/sqlite` entry
+supply `SQLiteRootEvictionStore` and its portable contracts. The store retains exact
+request identity, frozen evaluation policy, immutable action outcomes, independent
+suppression bases and current serving assessments. Suppression and index-removal
+intent commit together; restoration stays fenced until projection acknowledgement.
+All instances sharing the database use the same final synchronous enqueue gate.
+The service must separately install access/evidence authority and actual serving
+adapters. See [root coordination](../../guides/root-eviction-coordination.md) for
+bounds, creation/recovery, currentness, policy changes and remaining integration work.
+
 ## Public composition
 
 The optional revenue-listing entry supplies RevenueListingLineageVerifier and its
@@ -180,3 +195,10 @@ snapshot/live withdrawal through the public runtime. Browser persistence still
 requires actual-browser qualification beyond the fake-indexeddb unit tests. All 32 approved reconciliation traces now run through the default worker and
 SQLite with delayed verification and offline restart. Service, application and
 remote CI gates remain required before review.
+
+The optional root journal also implements `RootEvictionCheckedStorage`: checked
+retention, evaluation, assessment and result reads sample the trusted clock and
+recheck access, installed policy and external context inside the shared commit
+gate. Their observations include the exact current head for later signing and
+final enqueue. Existing deterministic methods and the local stored format remain
+unchanged. See the root coordination guide for callback and service obligations.

@@ -216,6 +216,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (2.9.0 candidate)
 
+- Add bounded BRC-199 signed request/result and status representations, direct authenticated requester/root/chain bindings, exact decision identities and restoration-basis checks. New-request clocks are separate from historical recovery. Evidence, local authority, durable decisions and all-path serving guards remain separate; existing discovery behavior is unchanged.
 - Add bounded BRC-195 payment-header parsing and exact single BRC-29 funding-output inspection with proof-independent wallet operation identifiers. Callers retain responsibility for independently derived payment keys, chain acceptance, acquisition reservation and durable idempotent wallet credit.
 
 - Add bounded BRC-195 private-publication and paid-lookup representations, publication semantic digests, frozen quote bindings and exact amount/recovery checks. Protected storage, authenticated transport, payment validation/internalization and usable secret delivery remain separate. Existing BRC-105 and lookup-context behavior is unchanged.

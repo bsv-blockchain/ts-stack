@@ -2,8 +2,14 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/', 'node_modules/', String.raw`\.live\.test\.ts$`],
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/dist/',
+    '/node_modules/',
+    String.raw`\.live\.test\.ts$`,
+    String.raw`<rootDir>/\.stryker-tmp/`
+  ],
+  // Generated children are excluded; a mutation sandbox retains its own tests.
+  modulePathIgnorePatterns: ['<rootDir>/dist/', String.raw`<rootDir>/\.stryker-tmp/`],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   moduleNameMapper: {

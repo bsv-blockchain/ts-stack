@@ -22,6 +22,17 @@ The release candidate advances the packed Overlay dependency to support optional
 
 ## Requirements and installation
 
+The unpublished 2.8.0 candidate also provides the optional
+`@bsv/overlay-express/root-eviction-response` companion. With middleware 2.3.0,
+SDK 2.9.0 and a shared root journal, `guardRootAdvertisementResponse` checks current
+access and every disclosed advertisement after signing and queues the native HTTP
+response under the journal's gate. Stale responses are replaced in full by a
+separately authorized signed reset. Capture the revision before hydration and
+supply the complete target inventory and safe control-response headers. The
+[root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+explains storage, policy and all-path integration obligations. Existing routes
+remain unchanged; importing this companion does not enable the BRC-199 profile.
+
 Overlay Express requires Node.js 22 or newer and a separately installed
 `@bsv/sdk` peer dependency.
 

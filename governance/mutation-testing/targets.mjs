@@ -71,6 +71,25 @@ function lookupProviderTarget(property, files, tests) {
   }
 }
 
+function rootEvictionTarget(property, files) {
+  return {
+    packageDirectory: 'packages/application/output-knowledge',
+    manifest: 'packages/application/output-knowledge/package.json',
+    propertyTest: `packages/application/output-knowledge/test/${property}`,
+    additionalInputs: [
+      'src/root-eviction/**',
+      'test/root-eviction-fixture.ts',
+      'test/fixtures/root-eviction-worker.mjs',
+      'test/fixtures/root-commit-lock-worker.mjs'
+    ],
+    mutate: files.map(name => `src/root-eviction/${name}.ts`),
+    ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction*.test.ts'], {
+      esm: true,
+      buildCommand: 'pnpm build'
+    })
+  }
+}
+
 function lineageTarget(source, property) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
@@ -320,7 +339,8 @@ export function buildMutationTargets(repositoryRoot) {
           ['      const recovered = await recovery?.claim(trx)', '      const initialSatoshis ='],
           ['      let recoveryPlan: ActionRecoveryPlan', '      return { ...funded,'],
           ["    if ('recovered' in persisted", '    const committedTx ='],
-          ['        if (newTxCommitted && recovery != null)', '      } catch (cleanupError)'],
+          ['    await recordCreateActionFailure(', '    logger?.groupEnd()'],
+          ['async function recordCreateActionFailure(', 'interface CreateTransactionSdkContext'],
           [
             "      if (trx != null) throw new WERR_INVALID_OPERATION('Recoverable",
             '      const beef = await getCompetingBeefForReview'
@@ -368,6 +388,50 @@ export function buildMutationTargets(repositoryRoot) {
       'RevenueListingLineageVerifier',
       'revenue-lineage.property.test.ts'
     ),
+    'root-eviction-evidence': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/root-advertisement-evidence.property.test.ts',
+      additionalInputs: [
+        'src/SDKEvidenceVerifier.ts',
+        'src/EvidenceAssembler.ts',
+        'test/evidence-fixture.ts',
+        'test/root-advertisement-fixture.ts',
+        'test/fixtures/reconciliation-vectors.json'
+      ],
+      mutate: ['src/root-eviction/SDKRootEvictionEvidence.ts'],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/root-advertisement-evidence*.test.ts'], {
+        esm: true,
+        buildCommand: 'pnpm build'
+      })
+    },
+    'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
+      'RootEvictionCommitContext'
+    ]),
+    'root-eviction-journal': rootEvictionTarget('root-eviction.property.test.ts', [
+      'SQLiteRootEvictionStore'
+    ]),
+    'root-eviction-records': rootEvictionTarget('root-eviction-records.property.test.ts', [
+      'RootEvictionRequests',
+      'RootEvictionServingRecords'
+    ]),
+    'root-eviction-storage': rootEvictionTarget('root-eviction-storage.property.test.ts', [
+      'RootEvictionCodec',
+      'SQLiteRootEvictionDatabase',
+      'RootEvictionStorage'
+    ]),
+    'sdk-root-eviction': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts',
+      mutate: ['src/overlay-tools/OutputRootEvictionProtocol.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts'
+      ])
+    },
     'sdk-private-publication': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
@@ -461,6 +525,37 @@ export function buildMutationTargets(repositoryRoot) {
         '<rootDir>/src/script/templates/__tests/RevenueListing.test.ts',
         '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
       ])
+    },
+    'overlay-root-response-guard': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts',
+      mutate: ['src/RootEvictionResponseGuard.ts'],
+      additionalInputs: [
+        'src/__tests__/RootEvictionResponseGuard.fixture.ts',
+        '../../application/output-knowledge/src/root-eviction/**',
+        '../../application/output-knowledge/test/root-eviction-fixture.ts',
+        '../../middleware/auth-express-middleware/src/**',
+        '../../middleware/auth-express-middleware/mod.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/src/__tests__/RootEvictionResponseGuard*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/root-eviction-fixture\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/application/output-knowledge/test/root-eviction-fixture.ts'
+                ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
+          }
+        }
+      )
     },
     'overlay-output-lookup-http': {
       packageDirectory: 'packages/overlays/overlay-express',
@@ -1083,6 +1178,28 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/middleware/402-pay/src/server.property.test.ts',
       mutate: ['src/server.ts'],
       ...vitestTarget('vitest.config.ts')
+    },
+    'auth-express-queue': {
+      packageDirectory: 'packages/middleware/auth-express-middleware',
+      manifest: 'packages/middleware/auth-express-middleware/package.json',
+      propertyTest:
+        'packages/middleware/auth-express-middleware/src/__tests/authenticatedResponseQueue.property.test.ts',
+      mutate: [
+        'src/authenticatedResponseQueue.ts',
+        ...[
+          ['  private async sendGeneralMessage(', '  private readResponseHeaders('],
+          ['  private setupAuthenticatedResponse(', '  private captureNativeResponseState(']
+        ].map(([start, end]) =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/middleware/auth-express-middleware',
+            'src/index.ts',
+            start,
+            end
+          )
+        )
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/**/*.test.ts'])
     },
     'auth-express-bytes': {
       packageDirectory: 'packages/middleware/auth-express-middleware',

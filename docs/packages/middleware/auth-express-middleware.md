@@ -3,7 +3,7 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.9'
+version: '2.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
@@ -45,9 +45,11 @@ Version 2.2.7 preserves Express's one-argument response header-map overload.
 same Express validation, signed headers and wire format. No client migration
 is required.
 
-The unpublished 2.2.9 candidate adds a development dependency for rate-limited
-local authenticated HTTP tests. It changes no runtime middleware, transport
-representation, peer range or deployment default; no consumer migration is required.
+The unpublished 2.3.0 candidate adds optional final response admission after
+BRC-104 signing, with native synchronous enqueue, one bounded re-signed replacement
+and deadline/disconnect cancellation. Existing routes, peer ranges and wire
+representations remain compatible. New guarded routes explicitly install the
+boundary described below; ordinary applications need no migration.
 
 Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
 header-count ceilings. `createAuthMiddleware` configures its Peer with
@@ -88,6 +90,64 @@ app.get('/private', (req: AuthRequest, res) => {
 Authentication is required by default. `allowUnauthenticated: true` permits
 requests without auth and marks them with identity key `unknown`; that value
 must never be treated as authorization.
+
+## Final authenticated response admission
+
+`guardAuthenticatedResponse(res, guard)` is an opt-in boundary for services that
+must recheck authorization or output eligibility after asynchronous response
+signing. Install it in an authenticated handler before sending the response. It
+rejects unauthenticated requests, repeated registration and late registration.
+
+The guard receives an owned candidate containing the authenticated caller,
+BRC-104 transport request ID, attempt number, status, response headers and body
+bytes. Logical application operation IDs remain separate. Headers include the
+BRC-104 authentication metadata and normalized content length; Node may add its
+ordinary Date/connection metadata. Signature coverage remains BRC-104's existing
+status/body and selected-header rules; ordinary CORS/cache headers do not become
+cryptographically signed merely because they appear in this snapshot. It may await
+acquisition of the application's durable send fence. While holding that fence,
+recheck current authorization and every disclosed target, then call `enqueue()`
+synchronously. The callback queues the already signed bytes through Node's native
+HTTP response methods. It never signs, waits for a database, or authorizes the
+caller itself. A handler-level lock around `res.send()` is insufficient because
+signing happens later. The application's writers must use the paired fence,
+including writers in other processes.
+
+If the candidate became stale, return a complete replacement with `statusCode`,
+`headers` and `body: Uint8Array` without calling `enqueue()`. The middleware
+discards the first signed candidate and signs the replacement for the same
+request and session. The guard runs again with `attempt: 1`; it must recheck
+current access and enqueue this response or fail closed. Only one replacement is
+allowed. Its body plus UTF-8 header names and values may total at most 64 KiB, and
+its body must also fit the configured response-body limit. Include required CORS,
+service capability and error-profile headers explicitly: discarded candidate
+headers are not inherited. Never copy confidential candidate headers into a
+public error.
+
+Both signing attempts and guard acquisition share the configured response
+timeout. Disconnect or timeout aborts the supplied signal, closes the response
+and invalidates retained enqueue callbacks. A guard must honor cancellation and
+release its own acquired resources. Calling enqueue twice, calling it after the
+guard returns, returning without a decision, or failing after bytes were queued
+cannot append an unsigned fallback. Failure may close the connection without an
+HTTP error; clients should recover through their durable operation protocol.
+
+This mode supports native Node HTTP/1 responses, including HTTPS, with no
+compression, deferred encoding, or replacement response/header methods before
+or after authentication. Unsupported composition is rejected. Configure the
+route outside such middleware and qualify the complete transport stack.
+`content-encoding` may be absent or `identity`; transfer framing and exact
+content length belong to the native transport. Guarded responses send their
+explicit bytes and status without Express's automatic ETag, conditional-response
+or body transformations. HEAD, 204, 205 and 304 responses must already have empty
+signed bodies. In particular, [HTTP 205 Reset Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-205-reset-content)
+prohibits response content; the guard rejects it before signing rather than
+letting a client discard signed bytes. Ordinary routes keep their existing Express behavior.
+
+The guard provides the transport boundary, not a root-eviction policy, shared
+database, access policy, or index projection adapter. Those components must be
+installed and tested together. See the [root coordination guide](../../guides/root-eviction-coordination.md)
+and the [compiled interface example](../../guides/compiled-package-examples.md).
 
 ## Configuration
 

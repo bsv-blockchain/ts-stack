@@ -390,9 +390,10 @@ class InternalizeActionContext {
    */
   private async validateBasketMerges(trx?: TrxToken): Promise<void> {
     if (!this.isMerge) return
-    for (const basket of this.basketInsertions) {
+    await this.basketInsertions.reduce<Promise<void>>(async (previous, basket) => {
+      await previous
       const eo = basket.eo
-      if (eo == null) continue
+      if (eo == null) return
       // Widened so the type guard's false branch does not narrow `eo` to never.
       if (isManagedChangeOutput(eo as TableOutput | undefined)) {
         throw new WERR_INVALID_PARAMETER(
@@ -401,7 +402,7 @@ class InternalizeActionContext {
         )
       }
       const currentBasketId = eo.basketId
-      if (currentBasketId == null || currentBasketId === this.changeBasket.basketId) continue
+      if (currentBasketId == null || currentBasketId === this.changeBasket.basketId) return
       const requestedBasket = verifyOneOrNone(
         await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: basket.basket }, trx })
       )
@@ -414,7 +415,7 @@ class InternalizeActionContext {
       // Same basket already: cache it so mergeBasketInsertionForOutput's later
       // getBasket call reuses this lookup instead of repeating it.
       this.baskets[basket.basket] = requestedBasket
-    }
+    }, Promise.resolve())
   }
 
   private computeWalletPaymentBalance(): void {
@@ -481,30 +482,35 @@ class InternalizeActionContext {
     await this.addLabels(transactionId, trx)
     await this.mergeWalletPayments(transactionId, trx)
     await this.mergeBasketInsertions(transactionId, trx)
-    if (proven !== undefined) {
-      const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid, trx)
-      if (req !== undefined && req.status !== 'completed') {
-        req.provenTxId = proven.provenTxId
-        req.status = 'completed'
-        req.addHistoryNote({ what: 'fundingRecovery-proof', userId: this.userId })
-        await req.updateStorageDynamicProperties(this.storage, trx)
-      }
-    } else {
-      const request = EntityProvenTxReq.fromTxid(this.txid, this.tx.toBinary(), this.ab.toBinaryAtomic(this.txid))
-      request.status = 'unsent'
-      request.addHistoryNote({ what: 'fundingRecovery-queued', userId: this.userId })
-      request.addNotifyTransactionId(transactionId)
-      const known = await this.storage.getProvenOrReq(this.txid, request.toApi(), trx)
-      if (known.proven !== undefined) {
-        await this.storage.updateTransaction(transactionId, { provenTxId: known.proven.provenTxId, status: 'completed' }, trx)
-      } else {
-        requireFunding(existing?.status !== 'completed' && known.req?.status !== 'completed', 'Funding recovery completed state lacks a retained proof')
-        requireFunding(known.req !== undefined && !['invalid', 'doubleSpend', 'unfail'].includes(known.req.status), 'Funding recovery broadcast record cannot be accepted')
-        if (known.req.status === 'nosend') await this.storage.updateProvenTxReq(known.req.provenTxReqId, { status: 'unsent' }, trx)
-        if (existing === undefined || existing.status === 'nosend') await this.storage.updateTransaction(transactionId, { status: 'unprocessed' }, trx)
-      }
-    }
+    if (proven !== undefined) await this.completeRecoveryProof(proven, trx)
+    else await this.queueRecoveryMonitoring(existing, transactionId, trx)
     return this.r
+  }
+
+  private async completeRecoveryProof(proven: TableProvenTx, trx: TrxToken): Promise<void> {
+    const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid, trx)
+    if (req !== undefined && req.status !== 'completed') {
+      req.provenTxId = proven.provenTxId
+      req.status = 'completed'
+      req.addHistoryNote({ what: 'fundingRecovery-proof', userId: this.userId })
+      await req.updateStorageDynamicProperties(this.storage, trx)
+    }
+  }
+
+  private async queueRecoveryMonitoring(existing: TableTransaction | undefined, transactionId: number, trx: TrxToken): Promise<void> {
+    const request = EntityProvenTxReq.fromTxid(this.txid, this.tx.toBinary(), this.ab.toBinaryAtomic(this.txid))
+    request.status = 'unsent'
+    request.addHistoryNote({ what: 'fundingRecovery-queued', userId: this.userId })
+    request.addNotifyTransactionId(transactionId)
+    const known = await this.storage.getProvenOrReq(this.txid, request.toApi(), trx)
+    if (known.proven !== undefined) {
+      await this.storage.updateTransaction(transactionId, { provenTxId: known.proven.provenTxId, status: 'completed' }, trx)
+    } else {
+      requireFunding(existing?.status !== 'completed' && known.req?.status !== 'completed', 'Funding recovery completed state lacks a retained proof')
+      requireFunding(known.req !== undefined && !['invalid', 'doubleSpend', 'unfail'].includes(known.req.status), 'Funding recovery broadcast record cannot be accepted')
+      if (known.req.status === 'nosend') await this.storage.updateProvenTxReq(known.req.provenTxReqId, { status: 'unsent' }, trx)
+      if (existing === undefined || existing.status === 'nosend') await this.storage.updateTransaction(transactionId, { status: 'unprocessed' }, trx)
+    }
   }
 
   /**

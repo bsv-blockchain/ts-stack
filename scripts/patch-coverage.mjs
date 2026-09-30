@@ -27,7 +27,7 @@ export function runtimeComparisonAvailable() {
 }
 
 const EXCLUDED_SOURCE_PATTERNS = [
-  /(?:^|\/)__tests(?:__)?(?:\/|$)/,
+  /(?:^|\/)__tests?(?:__)?(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
   /(?:^|\/)bench(?:marks?)?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,

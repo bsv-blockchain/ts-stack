@@ -108,6 +108,18 @@ diff --git a/packages/sdk/src/__tests/fixtures/slow-worker.cjs b/packages/sdk/sr
 diff --git a/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
 +++ b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
 @@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs b/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs
++++ b/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs b/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs
++++ b/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs b/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs
++++ b/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/sdk/src/__test__/fixture.cjs b/packages/sdk/src/__test__/fixture.cjs
++++ b/packages/sdk/src/__test__/fixture.cjs
+@@ -0,0 +1,20 @@
 `)
   const coverage = mergeLcov([
     `SF:packages/sdk/src/example.ts
@@ -125,6 +137,21 @@ end_of_record
   assert.ok(Math.abs(result.percent - 200 / 3) < Number.EPSILON * 100)
   assert.deepEqual(result.misses, ['packages/sdk/src/example.ts:3 (branch 0:1)'])
   assert.deepEqual(result.missingFiles, [])
+})
+
+test('test-directory classification retains similarly named production files and fixtures outside tests', () => {
+  const paths = [
+    'packages/sdk/src/__testing/worker.cjs',
+    'packages/sdk/src/__test_helpers/worker.cjs',
+    'packages/sdk/src/__tests_extra/worker.cjs',
+    'packages/sdk/src/prefix__test/worker.cjs',
+    'packages/sdk/src/fixtures/worker.cjs'
+  ]
+  const changed = changedLinesFromDiff(
+    paths.map(file => `diff --git a/${file} b/${file}\n+++ b/${file}\n@@ -0,0 +1,2 @@\n`).join('')
+  )
+  assert.deepEqual([...changed.keys()], paths)
+  assert.deepEqual(evaluatePatchCoverage(changed, new Map()).missingFiles, paths)
 })
 
 test('patch coverage fails closed when a changed production file is absent from LCOV', () => {

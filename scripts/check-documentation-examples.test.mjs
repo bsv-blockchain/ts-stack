@@ -14,6 +14,8 @@ test('compiled examples are scoped through their first-party dependency closure'
   assert.deepEqual(
     selected.map(example => example.id),
     [
+      'root-advertisement-response',
+      'authenticated-response-admission',
       'sdk-and-simple',
       'middleware',
       'overlay-and-gasp',

@@ -464,7 +464,7 @@ jobs:
     # These full-source campaigns reached the hosted 45-minute job deadline
     # without a report. Keep their full tests/mutants and quality ratchets;
     # additional job time is distinct from individual mutant/test deadlines.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
