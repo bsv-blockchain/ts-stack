@@ -6,7 +6,11 @@ import {
   signOutputPacket,
   verifyOutputRootEvictionResult
 } from '@bsv/sdk'
-import { rootServiceFixture, rootDeferred } from './root-eviction-service-fixture.js'
+import {
+  rootServiceFixture,
+  rootDeferred,
+  rootAwaitStart
+} from './root-eviction-service-fixture.js'
 import {
   rootContractKey,
   rootContractManifest,
@@ -264,7 +268,7 @@ it('holds cancelled signer capacity until physical settlement, preserving retain
     const service = f.service({ work: { maximum: 1, perPrincipal: 1 } })
     const task = service.submit(f.text, f.caller, f.selection.manifest, abort.signal)
     void task.catch(() => {})
-    await started.promise
+    await rootAwaitStart(started.promise, task)
     abort.abort()
     await expect(task).rejects.toMatchObject({
       code: 'cancelled',
@@ -296,7 +300,7 @@ it('does not commit after cancellation during installed authority work', async (
     })
     const task = service.submit(f.text, f.caller, f.selection.manifest, abort.signal)
     void task.catch(() => {})
-    await started.promise
+    await rootAwaitStart(started.promise, task)
     abort.abort()
     await expect(task).rejects.toMatchObject({ code: 'cancelled' })
     physical.resolve()
@@ -443,7 +447,7 @@ it('bounds caller time with root diagnostics while retaining physical signer occ
     const service = f.service({ work: { maximum: 1, perPrincipal: 1, timeoutMs: 20 } })
     const task = service.submit(f.text, f.caller, f.selection.manifest)
     void task.catch(() => {})
-    await started.promise
+    await rootAwaitStart(started.promise, task)
     await jest.advanceTimersByTimeAsync(20)
     await expect(task).rejects.toMatchObject({
       code: 'unavailable',

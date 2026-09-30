@@ -1,7 +1,11 @@
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { parseOutputJSON, signOutputPacket, verifyOutputRootEvictionResult } from '@bsv/sdk'
-import { rootServiceFixture, rootDeferred } from './root-eviction-service-fixture.js'
+import {
+  rootServiceFixture,
+  rootDeferred,
+  rootAwaitStart
+} from './root-eviction-service-fixture.js'
 import { rootContractKey } from './root-contract-fixture.js'
 import { policy, signed } from './root-eviction-fixture.js'
 
@@ -54,7 +58,7 @@ it(
               )
             running = task
             void task.catch(() => {})
-            await started.promise
+            await rootAwaitStart(started.promise, task)
             expect((await f.store.head()).revision).toBe('0')
             if (schedule.cancel) abort.abort()
             if (schedule.revoke) f.state.access = false

@@ -22,6 +22,19 @@ export function rootDeferred<T>() {
   return { promise, resolve, reject }
 }
 
+/** A failed operation must reject the test instead of leaving its start barrier pending. */
+export async function rootAwaitStart(
+  started: Promise<void>,
+  operation: Promise<unknown>
+): Promise<void> {
+  await Promise.race([
+    started,
+    operation.then(() => {
+      throw new Error('Root operation completed before the expected signing/authority boundary')
+    })
+  ])
+}
+
 export async function rootServiceFixture() {
   const f = await coordinatedFixture()
   const state = { now: '150', policy, access: true, context: true }
