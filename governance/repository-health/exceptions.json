@@ -90,7 +90,7 @@
         "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
         "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
         "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
-        "https://github.com/juliangruber/brace-expansion/releases/tag/v5.0.12"
+        "https://github.com/juliangruber/brace-expansion/compare/v5.0.9...v5.0.12"
       ],
       "created": "2026-07-25",
       "reviewBy": "2026-10-30",
@@ -233,7 +233,7 @@
         "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
         "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
         "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
-        "https://github.com/juliangruber/brace-expansion/releases/tag/v5.0.12"
+        "https://github.com/juliangruber/brace-expansion/compare/v5.0.9...v5.0.12"
       ],
       "created": "2026-07-25",
       "reviewBy": "2026-10-30",
