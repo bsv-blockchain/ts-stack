@@ -58,6 +58,36 @@ test('every property suite must retain an exact mutation-quality target', () => 
   assert.match(result.errors.join('\n'), /executable mutation target .* is unregistered/)
 })
 
+test('wallet discovery excludes generated children without hiding a mutation test root', async () => {
+  const { default: getConfig } = await import('../packages/wallet/wallet-toolbox/jest.config.cjs')
+  const config = await getConfig()
+  for (const root of ['/wallet', '/wallet/.stryker-tmp/sandbox-one']) {
+    const patterns = config.testPathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    const ignored = file => patterns.some(pattern => pattern.test(`${root}/${file}`))
+    assert.equal(ignored('src/storage/actionRecovery/__test/ActionRecoveryPlan.test.ts'), false)
+    assert.equal(ignored('src/storage/snapshot/SnapshotSync.property.test.ts'), false)
+    assert.equal(ignored('test/wallet/action.test.ts'), false)
+    assert.equal(ignored('node_modules/dependency/example.test.ts'), true)
+    assert.equal(ignored('.stryker-tmp/sandbox-two/src/action.test.ts'), true)
+    assert.equal(ignored('xstryker-tmp/src/action.test.ts'), false)
+    const modules = config.modulePathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    assert.equal(
+      modules.some(pattern => pattern.test(`${root}/src/action.test.ts`)),
+      false
+    )
+    assert.equal(
+      modules.some(pattern => pattern.test(`${root}/.stryker-tmp/nested/src/action.test.ts`)),
+      true
+    )
+  }
+})
+
 test('an unregistered required skip fails the exact inventory', () => {
   const changedPolicy = structuredClone(policy)
   changedPolicy.requiredSkips.pop()
