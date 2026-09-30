@@ -197,30 +197,24 @@ export function omitStaticMarkdownModules(changed, readSource) {
   }
 }
 
-function omitTypeOnlyChanges(changed, base) {
-  const mergeBase = execFileSync('/usr/bin/git', ['merge-base', base, 'HEAD'], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8'
-  }).trim()
-  for (const file of changed.keys()) {
-    if (!/\.[cm]?ts$/.test(file)) continue
-    let before
-    try {
-      before = execFileSync('/usr/bin/git', ['show', `${mergeBase}:${file}`], {
-        cwd: REPOSITORY_ROOT,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        maxBuffer: 20 * 1024 * 1024
-      })
-    } catch {
-      // New or unreadable files remain governed.
-      continue
-    }
-    const after = execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
-      cwd: REPOSITORY_ROOT,
+export function omitTypeOnlyChanges(changed, base, repositoryRoot = REPOSITORY_ROOT) {
+  const git = arguments_ =>
+    execFileSync('/usr/bin/git', arguments_, {
+      cwd: repositoryRoot,
       encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
       maxBuffer: 20 * 1024 * 1024
     })
+  const mergeBase = git(['merge-base', base, 'HEAD']).trim()
+  // Only a successfully read base tree can prove that a path is new. A failed
+  // blob read is not evidence of an empty file: Git/read errors fail the gate.
+  const baseFiles = new Set(
+    git(['ls-tree', '-r', '--name-only', '-z', mergeBase, '--', 'packages']).split('\0')
+  )
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    const before = baseFiles.has(file) ? git(['show', `${mergeBase}:${file}`]) : ''
+    const after = git(['show', `HEAD:${file}`])
     if (!hasRuntimeChange(before, after)) changed.delete(file)
   }
 }

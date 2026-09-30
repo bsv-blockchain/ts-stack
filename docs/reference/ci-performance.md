@@ -123,6 +123,12 @@ no privileged trigger or additional write/OIDC permission is granted. The upload
 processing check and final notifications run for every nonempty report, so the
 advisory `codecov/patch` report is available for contributors as well as maintainers.
 The repository-owned 90% patch-coverage check is mandatory on the exact diff.
+TypeScript classification compares JavaScript emitted by the locked compiler.
+A new declaration-only file is compared with empty source only after Git's base
+tree proves the path was absent. Runtime code, enums and side-effect imports
+remain governed; unsupported syntax remains governed, and Git/read errors fail
+the gate. This avoids an impossible LCOV obligation for erased declarations
+without adding path exclusions or reducing the coverage floor.
 The repository ruleset must require `merge-gate` and must not require the duplicate
 external `codecov/patch` status. Uploading, processing and notification run in a
 separate reporting job after the local gate, so an external service outage cannot
