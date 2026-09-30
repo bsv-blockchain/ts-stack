@@ -338,3 +338,16 @@ test('acquisition failure clears its expiry timer and removes its signal listene
   expect(jest.getTimerCount()).toBe(0)
   expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
 })
+
+test('closing before consuming the opening promise remains observed and preserves the opening rejection', async () => {
+  const lifetime = retainReadSnapshot(
+    async read => await read({ synthetic: true }),
+    async () => undefined
+  )
+  lifetimes.push(lifetime)
+  // The owner may drain a cancelled opening before its opening consumer resumes.
+  // Unlike fixture(), deliberately attach no observer to opened until a later turn.
+  await lifetime.close()
+  await new Promise(resolve => setImmediate(resolve))
+  await expect(lifetime.opened).rejects.toThrow('closed')
+})

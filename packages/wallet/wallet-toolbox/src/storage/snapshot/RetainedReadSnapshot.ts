@@ -71,8 +71,10 @@ export function retainReadSnapshot(
   let busy = false
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  // Automatic expiry/failure cleanup remains observed even if a caller only
-  // awaits read(). The original promise still reports cleanup failure to close().
+  // A provider can close a still-opening view before its opening consumer
+  // resumes. Observe automatic rejection of both lifecycle promises while
+  // preserving their original errors for consumers awaiting opened/closed.
+  void opened.promise.catch(() => undefined)
   void closed.promise.catch(() => undefined)
 
   const stop = (reason: WERR_INVALID_OPERATION): void => {

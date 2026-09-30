@@ -10,6 +10,8 @@ attention to changes that materially alter behavior or extend functionality.
   cleanup ownership. Opening pins the transaction before the first consumer read;
   one view per provider and one read per view prevent unbounded admission. Closing
   discards late results and awaits physical cleanup, including failed reads.
+  Internal opening/cleanup rejections remain observed if a view is cancelled
+  before its opening consumer resumes; callers still receive the original errors.
   Driver/query deadlines remain separate. Each view occupies a pool connection;
   IndexedDB and RPC explicitly remain unsupported for retention. This is a paging
   prerequisite, without changing ordinary backup locks, schemas or wire formats.
