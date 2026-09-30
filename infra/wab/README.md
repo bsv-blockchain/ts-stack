@@ -5,6 +5,12 @@ Welcome to the **Wallet Authentication Backend (WAB)** project! This README prov
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for bounded defaults, database sizing, and HPA prerequisites.
 
+The Dockerfile uses the governed, digest-pinned Node base from Docker Hub, matching
+the other TS Stack services. This preserves the reviewed image bytes while
+avoiding public ECR mirror throttling during builds. Base versions, equivalent
+registry references and runtime package pins remain governed by
+[`governance/container-images.json`](../../governance/container-images.json).
+
 ---
 
 ## What Is the WAB?
