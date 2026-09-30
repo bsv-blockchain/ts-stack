@@ -165,6 +165,29 @@ correction needs no public npm version change or consumer migration. Hosted
 Linux image and exact-head analysis gates remain required before promotion;
 these local results do not establish deployed behavior.
 
+The subsequent gRPC correction selects `@grpc/grpc-js` 1.14.5 in all seven
+standalone service locks for the September 30 audit correction, addressing
+[GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j) and
+[GHSA-f596-whhp-79r4](https://github.com/advisories/GHSA-f596-whhp-79r4).
+The reviewed [1.14.5 release](https://github.com/grpc/grpc-node/releases/tag/%40grpc/grpc-js%401.14.5)
+preserves the Node engine and dependency ranges; its fixes also cover stale call
+retention, status fields and completed HTTP/2 streams. Chaintracks Server and
+Wallet Infra additionally adopt the already-reviewed `ip-address` 10.7.2 within
+their existing ranges; the [10.7.2 release](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.2) accepts case-insensitive ARPA suffixes. Package-manager regeneration changes only these nine
+resolved nodes; manifests, lock formats, all other dependencies, the workspace
+lock and the earlier Axios correction are unchanged.
+
+All seven frozen installs, allowlisted native rebuilds, builds and lints pass
+on Node 24, with 658 service tests and seven zero-finding audits. Wallet Infra
+has no standalone test script; its build/lint and the shared dependency checks
+are reported separately. Each installed gRPC copy passes an ordinary loopback
+unary call and client cancellation; both changed IP consumers pass IPv4/IPv6
+parsing and invalid-syntax checks. The gRPC registry's unpacked size grows by
+49,814 bytes; no public workspace/browser/mobile graph changes. These are
+compatibility checks, not a throughput or memory benchmark. No public npm
+version or consumer migration changes; protected Linux image and exact-head
+analysis gates still qualify the eventual service artifacts before promotion.
+
 The root workspace carries six narrow audited dependency overrides:
 
 - Jest 30.4.2 still constrains parts of its reporting and coverage graph to
