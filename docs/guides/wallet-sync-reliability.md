@@ -390,8 +390,46 @@ binding private and give callers fresh metadata copies.
 The maximum accepted directory fits below a one-MiB metadata budget. Transport
 integration must separately limit incoming envelope bytes before parsing. These
 checks establish inclusion under the received root, not independent trust in the
-source's data or proof semantics. The wire adapter, durable creation receipts,
-capability negotiation and actual authenticated HTTP lifecycle remain incomplete.
+source's data or proof semantics. The wire adapter, capability negotiation and
+actual authenticated HTTP lifecycle remain incomplete.
+
+The internal creation-request store adds the separate
+`2026-09-30-003 add snapshot archive requests` migration. A request ID hashes its
+version, nonce, immutable absolute deadline and byte reservation. Admission checks
+the database clock; the same expired request cannot reopen after its receipt has
+been collected. A future client must obtain fresh authenticated server time
+before selecting that deadline. This is not yet an exposed wire capability.
+
+Claiming a request reserves the existing shared handle/byte capacity before a
+source pool opens. Archive assignment and the handoff from that pending charge
+commit together; sealing and ready-receipt publication also share a transaction.
+Lost acknowledgements recover the same ready archive. A process that loses an
+incomplete source view cannot replace it under the same request. Terminal status
+is separate from cleanup ownership: capacity stays occupied until pending charges
+or staged pages are released exactly once. Retained receipts are limited to four
+per profile and 64 globally, including terminal history; only expired, released
+receipts can be collected. Close outstanding requests before removing this schema.
+
+The request lifecycle is tested through actual SQLite transactions, independent
+connections, interrupted assignment/publication and generated retry/cancel
+schedules. Separate synchronous SQLite pools in one event loop can return
+`SQLITE_BUSY`; tests drain both operations, check that exact refusal and retry
+without double release. This does not qualify foreground latency or transparent
+contention recovery.
+
+The internal capture service now uses the provider's existing single owned reader
+slot, shared with local sync. It tracks admission synchronously before any await,
+claims SQL capacity before pool acquisition, and binds same-request retries to the
+same completion or durable receipt. Capture and pool cleanup precede ready
+publication. Explicit cancellation and service shutdown wait for owned cleanup;
+shutdown fences new captures while completed archives remain available to a
+replacement service. Failed physical cleanup fences the controller and retains
+its reservation, including failure during source opening before a view is returned.
+The source view lasts at most five minutes or the request's remaining lifetime;
+the ready archive retains its original fixed deadline. This bounds process-local
+reader ownership, not distributed physical pools through arbitrary process loss
+or unbounded driver cleanup. Authentication, capability negotiation and bounded
+HTTP/client integration remain required before enabling remote snapshots.
 
 The initial policy allows at most eight handles and 128 MiB of logical reserved
 storage globally, one handle and 32 MiB per profile, 1 MiB per page, 1,000 rows per

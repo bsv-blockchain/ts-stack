@@ -150,6 +150,8 @@ function snapshotSyncMutationTargets(repositoryRoot) {
       [
         '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts',
         '<rootDir>/src/storage/snapshot/ConcurrentSnapshotSyncSource.test.ts',
+        '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
+        '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
         '<rootDir>/src/storage/schema/snapshotSyncMigration.test.ts',
         '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
         '<rootDir>/src/storage/sync/syncFailure.test.ts',
@@ -426,19 +428,33 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts',
         'src/storage/snapshot/archive/SnapshotArchive.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveClosure.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveSource.ts',
         'src/storage/snapshot/archive/captureKnexSnapshotArchive.ts',
+        'src/storage/snapshot/archive/captureSnapshotArchiveSource.ts',
         'src/storage/schema/snapshotArchiveMigration.ts'
       ],
-      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/archive/*.test.ts'], {
-        config: {
-          moduleNameMapper: {
-            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
-            '^(\\.{1,2}/.*)\\.js$': '$1'
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveCapture.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts',
+          '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
           }
         }
-      })
+      )
     },
     'wallet-snapshot-remote-directory': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
@@ -449,6 +465,37 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget(
         'jest.config.cjs',
         ['<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-service': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveRequest.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveService.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
+        'src/storage/schema/snapshotArchiveRequestMigration.ts'
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveRequest.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts'
+        ],
         {
           config: {
             moduleNameMapper: {

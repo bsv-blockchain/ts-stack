@@ -4,6 +4,11 @@ import { KnexSnapshotSyncDestination } from './snapshot/KnexSnapshotSyncDestinat
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
 import { openKnexWalletReadSnapshot } from './snapshot/KnexWalletReadSnapshot'
 import {
+  openKnexSnapshotArchiveSource,
+  SnapshotArchiveSourceCleanupError,
+  type SnapshotArchiveSource
+} from './snapshot/archive/KnexSnapshotArchiveSource'
+import {
   retainReadSnapshot,
   type RetainedReadSnapshot,
   type RetainedReadSnapshotLifetime,
@@ -302,17 +307,42 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const destination = new KnexSnapshotSyncDestination(this, chunk => this.prepareSyncProofs(chunk))
     return {
       supportsDestination: () => destination.supportsDestination(),
-      openSource: (identityKey, options) => this.openConcurrentSyncSource(identityKey, options),
+      openSource: (identityKey, options) =>
+        this.openConcurrentSyncSource(identityKey, options ?? {}, (reader, identity, settings) =>
+          reader.openWalletReadSnapshot(identity, settings)
+        ),
       begin: (source, activeStorage) => destination.begin(source, activeStorage),
       checkpoint: (identityKey, sourceIdentity) => destination.checkpoint(identityKey, sourceIdentity),
       prepare: (checkpoint, page) => destination.prepare(checkpoint, page)
     }
   }
 
-  private async openConcurrentSyncSource(
+  /** Local capability probe; no reader pool is constructed or RPC advertised. */
+  async supportsSnapshotArchiveSource(): Promise<boolean> {
+    if (this.retainedReadSnapshotsStopped) return false
+    const config = await this.concurrentSnapshotReaderConfig()
+    return !this.retainedReadSnapshotsStopped && config !== undefined
+  }
+
+  /** Shares local sync's single owned reader slot and awaited physical cleanup. */
+  async openSnapshotArchiveSource(
     identityKey: string,
     options: WalletReadSnapshotOptions = {}
-  ): Promise<WalletReadSnapshot | undefined> {
+  ): Promise<SnapshotArchiveSource | undefined> {
+    try {
+      return await this.openConcurrentSyncSource(identityKey, options, openKnexSnapshotArchiveSource)
+    } catch (error) {
+      if (this.retainedReadSnapshotsStopped && this.snapshotSyncSource !== undefined)
+        throw new SnapshotArchiveSourceCleanupError(error)
+      throw error
+    }
+  }
+
+  private async openConcurrentSyncSource<T extends WalletReadSnapshot>(
+    identityKey: string,
+    options: WalletReadSnapshotOptions,
+    openSource: (reader: StorageKnex, identityKey: string, options: WalletReadSnapshotOptions) => Promise<T>
+  ): Promise<T | undefined> {
     if (this.retainedReadSnapshotsStopped)
       throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
     if (this.snapshotSyncBusy)
@@ -323,10 +353,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
     const deadline = { expiresAt: Date.now() + lifetimeMs, startedAt: performance.now(), lifetimeMs }
     this.snapshotSyncBusy = true
-    const opening: Promise<WalletReadSnapshot | undefined> = this.createConcurrentSyncSource(
+    const opening: Promise<T | undefined> = this.createConcurrentSyncSource(
       identityKey,
       { ...options },
-      deadline
+      deadline,
+      openSource
     )
       .then(
         view => {
@@ -345,12 +376,54 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return await opening
   }
 
-  private async createConcurrentSyncSource(
+  private async createConcurrentSyncSource<T extends WalletReadSnapshot>(
     identityKey: string,
     options: WalletReadSnapshotOptions,
-    deadline: { expiresAt: number; startedAt: number; lifetimeMs: number }
-  ): Promise<WalletReadSnapshot | undefined> {
+    deadline: { expiresAt: number; startedAt: number; lifetimeMs: number },
+    openSource: (reader: StorageKnex, identityKey: string, options: WalletReadSnapshotOptions) => Promise<T>
+  ): Promise<T | undefined> {
     if (options.signal?.aborted === true) throw new WERR_INVALID_OPERATION('Snapshot sync source was cancelled')
+    const config = await this.concurrentSnapshotReaderConfig()
+    if (config === undefined) return undefined
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
+    const remaining = Math.floor(
+      Math.min(deadline.expiresAt - Date.now(), deadline.lifetimeMs - (performance.now() - deadline.startedAt))
+    )
+    if (remaining < 1) throw new SnapshotResourceLimitError('Snapshot sync source expired during connection setup')
+    const reader = new StorageKnex({
+      ...StorageProvider.createStorageBaseOptions(this.chain),
+      snapshotSync: false,
+      telemetry: this.snapshotSyncTelemetry,
+      knex: createKnex(config)
+    })
+    this.snapshotSyncSource = reader
+    try {
+      const view = await openSource(reader, identityKey, { ...options, lifetimeMs: remaining })
+      if (this.retainedReadSnapshotsStopped) {
+        await view.close()
+        throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
+      }
+      const closed = view.closed.finally(() => this.releaseConcurrentSource(reader))
+      void closed.catch(() => undefined)
+      return {
+        ...view,
+        get isOpen() {
+          return view.isOpen
+        },
+        closed,
+        close: async () => {
+          await view.close().catch(() => undefined)
+          await closed
+        }
+      }
+    } catch (error) {
+      await this.releaseConcurrentSource(reader)
+      throw error
+    }
+  }
+
+  private async concurrentSnapshotReaderConfig(): Promise<Knex.Config | undefined> {
     const config = this.knex.client.config as Knex.Config
     const connection = config.connection
     // A function or external pool cannot promise an independent connection.
@@ -378,46 +451,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       typeof connection.database !== 'string'
     )
       return undefined
-    if (this.retainedReadSnapshotsStopped)
-      throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
-    const remaining = Math.floor(
-      Math.min(deadline.expiresAt - Date.now(), deadline.lifetimeMs - (performance.now() - deadline.startedAt))
-    )
-    if (remaining < 1) throw new SnapshotResourceLimitError('Snapshot sync source expired during connection setup')
-    const reader = new StorageKnex({
-      ...StorageProvider.createStorageBaseOptions(this.chain),
-      snapshotSync: false,
-      telemetry: this.snapshotSyncTelemetry,
-      knex: createKnex({
-        ...config, // Knex deliberately makes passwords non-enumerable. Preserve descriptors
-        // in memory instead of dropping credentials or making them log-visible.
-        connection: Object.create(Object.getPrototypeOf(connection), Object.getOwnPropertyDescriptors(connection)),
-        pool: { ...config.pool, min: 0, max: 1 }
-      })
-    })
-    this.snapshotSyncSource = reader
-    try {
-      const view = await reader.openWalletReadSnapshot(identityKey, { ...options, lifetimeMs: remaining })
-      if (this.retainedReadSnapshotsStopped) {
-        await view.close()
-        throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
-      }
-      const closed = view.closed.finally(() => this.releaseConcurrentSource(reader))
-      void closed.catch(() => undefined)
-      return {
-        ...view,
-        get isOpen() {
-          return view.isOpen
-        },
-        closed,
-        close: async () => {
-          await view.close().catch(() => undefined)
-          await closed
-        }
-      }
-    } catch (error) {
-      await this.releaseConcurrentSource(reader)
-      throw error
+    return {
+      ...config,
+      // Preserve hidden credentials and accessors without making them log-visible.
+      connection: Object.create(Object.getPrototypeOf(connection), Object.getOwnPropertyDescriptors(connection)),
+      pool: { ...config.pool, min: 0, max: 1 }
     }
   }
 

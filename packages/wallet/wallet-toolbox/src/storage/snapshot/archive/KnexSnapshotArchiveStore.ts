@@ -4,6 +4,7 @@ import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WER
 import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
 import type { WalletSnapshotTable } from '../WalletReadSnapshot'
 import { runInSeries } from '../../../utility/runInSeries'
+import { lockSnapshotArchiveCapacity, snapshotArchiveDatabaseNow } from './SnapshotArchiveSql'
 import { snapshotArchiveEncoding, type SnapshotArchiveDirectory } from './SnapshotArchiveDirectory'
 
 import {
@@ -92,26 +93,11 @@ export class KnexSnapshotArchiveStore {
   constructor(private readonly knex: Knex) {}
 
   private async now(k: Knex): Promise<number> {
-    const mysql = String(k.client.config.client).includes('mysql')
-    if (mysql) {
-      const [rows]: Array<Array<{ now: number | string }>> = await k.raw(
-        'SELECT FLOOR(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000) AS now'
-      )
-      return Number(rows[0].now)
-    }
-    const rows: Array<{ now: number }> = await k.raw(
-      "SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) AS now"
-    )
-    return rows[0].now
+    return await snapshotArchiveDatabaseNow(k)
   }
 
   private async capacity(k: Knex): Promise<{ archives: number; reservedBytes: number | string }> {
-    // A harmless write acquires SQLite's writer reservation before any reads.
-    // MySQL takes this exact row lock, shared by all staging state mutations.
-    await k('snapshot_archive_capacity').where({ id: 1 }).update({ id: 1 })
-    const row = await k('snapshot_archive_capacity').where({ id: 1 }).first()
-    if (row === undefined) throw new WERR_INVALID_OPERATION('Snapshot archive schema is unavailable')
-    return row
+    return await lockSnapshotArchiveCapacity(k)
   }
 
   async begin(

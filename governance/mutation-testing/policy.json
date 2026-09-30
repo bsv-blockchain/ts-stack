@@ -118,6 +118,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "wallet-snapshot-remote-service",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation and cleanup lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "overlay-linkage",
       "manifest": "packages/overlays/topics/package.json",
       "propertyTest": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",

@@ -535,6 +535,19 @@
           "Changed payload, receipt or previously pinned root bytes reject.",
           "Caller mutation does not alter verified receipt positions or metadata."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation and cleanup lifecycle",
+        "target": "Generated SQL claim, retry, capture publication and terminal cleanup schedules",
+        "invariants": [
+          "A retry returns the original request and immutable ready archive without a second admission or writer token.",
+          "Pending requests reserve the same shared capacity used by local archives before source acquisition.",
+          "Archive assignment and ready receipt publication commit atomically.",
+          "Terminal requests retain bounded receipts and release physical capacity exactly once."
+        ]
       }
     ],
     "exclusions": [

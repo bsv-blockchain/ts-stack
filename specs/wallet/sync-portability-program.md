@@ -126,6 +126,18 @@ size boundaries and cross-connection SQL capture reads exercise this contract.
 This advances S3 table positioning without adding a remote endpoint, negotiating
 capabilities or establishing portable semantic/proof validation.
 
+The durable request-lifecycle foundation reserves shared capacity before source
+acquisition and atomically assigns an archive and publishes its ready receipt.
+Its immutable deadline is part of request identity, so bounded receipt collection
+does not allow an old request to reopen. A separate auxiliary migration retains
+bounded terminal history and cleanup ownership. SQLite fault and generated
+schedule tests cover these persistence rules. The local service controller now
+integrates the existing owned source slot and shared capture path, reserves before
+pool acquisition and drains cancellation/shutdown before releasing its admission.
+Ready publication follows physical reader cleanup; failed cleanup fences the
+controller, and completed archives survive replacement. Authenticated HTTP/client
+integration and performance qualification under contention remain open.
+
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water
 positions, authenticated remote views, durable source views, streaming or staged

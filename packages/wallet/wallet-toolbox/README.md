@@ -56,6 +56,14 @@ positions to the archive root before arbitrary-table reads; each payload is
 checked against that verified directory. The original binding JSON bytes are
 preserved as the hash preimage. This verifies transport integrity, not the source's
 honesty or portable transaction/proof semantics.
+An additional internal SQL request table binds retries to an immutable deadline
+and archive, reserves capacity before source acquisition, and retains bounded
+terminal receipts through cleanup. Its internal capture controller shares the
+provider's single owned reader slot, publishes readiness after physical cleanup,
+and drains cancellation/shutdown. Completed archives survive controller replacement;
+failed cleanup fences admission and retains its reservation. Authenticated HTTP,
+capability negotiation and bounded client integration remain incomplete; this does
+not enable remote snapshots.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

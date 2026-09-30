@@ -631,7 +631,7 @@ test('only acknowledged sequence positions are readable, even if an unacknowledg
 
 test('the auxiliary migration is registered after the durable sync schema', async () => {
   const migrations = new KnexMigrations('test', 'source', 'source', 1024)
-  expect(await migrations.getLatestMigration()).toBe('2026-09-30-002 add snapshot archive staging')
+  expect(await migrations.getLatestMigration()).toBe('2026-09-30-003 add snapshot archive requests')
 })
 
 test('MySQL DDL accommodates the declared metadata and page byte ceilings', async () => {

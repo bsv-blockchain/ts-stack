@@ -6,6 +6,14 @@ import { createKnexWalletSnapshotPageReader } from '../KnexWalletReadSnapshot'
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from '../WalletReadSnapshot'
 import { assertKnexSnapshotArchiveClosure } from './KnexSnapshotArchiveClosure'
 
+/** Internal ownership failure; no caller may release its admission as cleaned up. */
+export class SnapshotArchiveSourceCleanupError extends Error {
+  constructor(override readonly cause: unknown) {
+    super('Snapshot archive source cleanup failed')
+    this.name = 'SnapshotArchiveSourceCleanupError'
+  }
+}
+
 export interface SnapshotArchiveSource extends WalletReadSnapshot {
   readonly sourceSchema: string
   /** Verify profile relations using the same read view as the header and pages. */
