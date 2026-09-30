@@ -277,6 +277,13 @@ export function buildMutationTargets(repositoryRoot) {
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
+          'src/storage/sync/syncSession.ts',
+          'if (chunk.user != null && session.activeStorage',
+          "notify('preparing', { readMs })"
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
           'src/storage/methods/validateSyncProof.ts',
           'if (!(candidate.rawTx instanceof Uint8Array',
           '  try {'

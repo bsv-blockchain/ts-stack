@@ -54,7 +54,8 @@ interface PullSession {
   reader: WalletStorageSyncReader
   writer: WalletStorageSync
   mode: 'paged' | 'exclusive'
-  activeStorage: string
+  /** Pull preserves its destination selection; push forwards the source row unchanged. */
+  activeStorage?: string
   atomicCheckpoint: boolean
   loadRequest: () => Promise<RequestSyncChunkArgs>
   prepare?: (args: RequestSyncChunkArgs, chunk: SyncChunk) => Promise<() => Promise<ProcessSyncChunkResult>>
@@ -97,7 +98,7 @@ async function readAndPreparePage(
   ) {
     throw new WERR_INVALID_PARAMETER('chunk', 'bound to this sync source, destination and wallet identity')
   }
-  if (chunk.user != null) chunk.user.activeStorage = session.activeStorage
+  if (chunk.user != null && session.activeStorage !== undefined) chunk.user.activeStorage = session.activeStorage
   notify('preparing', { readMs })
   if (cancelled()) return undefined
   const prepareAt = Date.now()

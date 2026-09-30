@@ -1244,6 +1244,9 @@ atomically. `syncToWriterResumable` joins `syncFromReaderResumable` for progress
 cancellation. A dedicated reader preserves foreground pool capacity. SQLite
 requires file-backed WAL; MySQL requires a static database connection. Unsupported
 providers, oversized rows and retention limits use the serialized fallback.
+Push and backup propagate the source view's stored primary selection, even when
+the manager's cached selection is older. Pull keeps its destination selection.
+The same direction-specific behavior applies during serialized fallback.
 
 Apply migration `2026-09-30-001 add durable snapshot sync` through `migrate()`.
 It adds auxiliary session/mapping/primary-epoch tables and a primary-change trigger;

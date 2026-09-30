@@ -11,6 +11,7 @@ import { snapshotSyncTables, type SnapshotSyncCheckpoint, type SnapshotSyncStora
 import type { WalletReadSnapshot } from './WalletReadSnapshot'
 import { runSnapshotSyncSession } from './runSnapshotSyncSession'
 import { KnexSnapshotSyncDestination } from './KnexSnapshotSyncDestination'
+import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
 import { runInSeries } from '../../utility/runInSeries'
 import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 
@@ -482,6 +483,63 @@ test('destroy during the SQLite WAL probe rejects opening before creating a priv
   await expect(opening).rejects.toThrow('destruction')
   await destroying
   expect(privateReader).not.toHaveBeenCalled()
+})
+
+const primaryCopyModes = ['snapshot', 'non-WAL', 'disabled-source', 'disabled-destination', 'resource-limit'] as const
+async function primaryCopyFixture(mode: (typeof primaryCopyModes)[number]) {
+  const result = await fixture(
+    1,
+    mode !== 'non-WAL',
+    mode === 'disabled-source' ? 'source' : mode === 'disabled-destination' ? 'destination' : undefined
+  )
+  if (mode === 'resource-limit') {
+    const capability = result.source.getSnapshotSync()!
+    jest.spyOn(result.source, 'getSnapshotSync').mockReturnValue({
+      ...capability,
+      openSource: async () => {
+        throw new SnapshotResourceLimitError('Synthetic retention admission limit')
+      }
+    })
+  }
+  // The manager deliberately retains its earlier primary while an independent
+  // writer records a newer source selection. Push must forward the stored row.
+  await result.source.updateUser(result.user.userId, {
+    activeStorage: 'new-primary',
+    updated_at: new Date('2030-01-01T00:00:00.000Z')
+  })
+  expect(result.manager.getActiveUser().activeStorage).toBe('source')
+  return result
+}
+
+describe.each(primaryCopyModes)('primary metadata through %s', mode => {
+  test.each(['push', 'resumable-push', 'backup', 'borrowed-push'] as const)(
+    '%s preserves the newer source selection',
+    async operation => {
+      const { source, destination, manager, user } = await primaryCopyFixture(mode)
+      const auth = await manager.getAuth()
+      if (operation === 'push') await manager.syncToWriter(auth, destination)
+      else if (operation === 'resumable-push') await manager.syncToWriterResumable(auth, destination)
+      else if (operation === 'backup') await manager.updateBackups()
+      else await manager.runAsSync(active => manager.syncToWriter(auth, destination, active))
+      expect((await destination.findUserByIdentityKey(identity))!.activeStorage).toBe('new-primary')
+      expect((await source.findUserByIdentityKey(identity))!.activeStorage).toBe('new-primary')
+      expect(await source.findTxLabels({ partial: { userId: user.userId } })).toHaveLength(1)
+      expect(await destination.findTxLabels({ partial: {} })).toHaveLength(1)
+    }
+  )
+
+  test.each(['pull', 'resumable-pull'] as const)('%s retains the destination selection', async operation => {
+    const { source, destination } = await primaryCopyFixture(mode)
+    const user = (await destination.findUserByIdentityKey(identity))!
+    await destination.updateUser(user.userId, { activeStorage: 'destination' })
+    const manager = new WalletStorageManager(identity, destination)
+    await manager.makeAvailable()
+    if (operation === 'pull') await manager.syncFromReader(identity, source)
+    else await manager.syncFromReaderResumable(identity, source)
+    expect((await destination.findUserByIdentityKey(identity))!.activeStorage).toBe('destination')
+    expect((await source.findUserByIdentityKey(identity))!.activeStorage).toBe('new-primary')
+    expect(await destination.findTxLabels({ partial: {} })).toHaveLength(1)
+  })
 })
 
 test('snapshot pull preserves the active destination and remaps into an occupied profile', async () => {

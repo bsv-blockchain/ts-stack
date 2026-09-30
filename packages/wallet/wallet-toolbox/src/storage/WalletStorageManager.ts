@@ -783,6 +783,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   private async runSnapshotCopy(
     view: WalletReadSnapshot,
     destination: SnapshotSyncStorage,
+    direction: 'push' | 'pull',
     options: SyncSessionOptions,
     generation: number,
     active: sdk.WalletStorageProvider
@@ -792,7 +793,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
       {
         view,
         destination,
-        activeStorage: this.getActiveUser().activeStorage,
+        activeStorage: direction === 'push' ? view.user.activeStorage : this.getActiveUser().activeStorage,
         commit: operation =>
           this.withAccess(
             () => {
@@ -821,6 +822,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   private async runLegacySnapshotFallback(
     reader: sdk.WalletStorageSyncReader,
     writer: sdk.WalletStorageProvider,
+    direction: 'push' | 'pull',
     options: SyncSessionOptions,
     selected: { generation: number; active: sdk.WalletStorageProvider }
   ): Promise<SyncSessionResult> {
@@ -837,7 +839,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
           writer,
           mode: 'exclusive',
           atomicCheckpoint: false,
-          activeStorage: this.getActiveUser().activeStorage,
+          activeStorage: direction === 'pull' ? this.getActiveUser().activeStorage : undefined,
           loadRequest: () =>
             this.loadSyncRequest(this._authId, writer, readerSettings, writerSettings.storageIdentityKey),
           commit: operation => operation()
@@ -850,6 +852,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   private async trySnapshotCopy(
     reader: sdk.WalletStorageSyncReader,
     writer: sdk.WalletStorageProvider,
+    direction: 'push' | 'pull',
     options: SyncSessionOptions = {},
     selected = { generation: this.generation, active: this.getActive() }
   ): Promise<SyncSessionResult | undefined> {
@@ -869,6 +872,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
         return await this.runSnapshotCopy(
           view,
           destination,
+          direction,
           {
             ...options,
             onProgress: progress => {
@@ -898,6 +902,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const result = await this.runLegacySnapshotFallback(
       reader,
       writer,
+      direction,
       {
         ...options,
         onProgress: progress => {
@@ -932,7 +937,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const auth = await this.getAuth()
 
     if (activeSync == null) {
-      const snapshot = await this.trySnapshotCopy(reader, this.getActive(), { maxRoughSize: 10000000 })
+      const snapshot = await this.trySnapshotCopy(reader, this.getActive(), 'pull', { maxRoughSize: 10000000 })
       if (snapshot !== undefined)
         return {
           inserts: snapshot.inserts,
@@ -1010,7 +1015,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const writer = this.getActive()
     const writerSettings = writer.getSettings()
     assertSyncNetwork(readerSettings, writerSettings)
-    const snapshot = await this.trySnapshotCopy(reader, writer, options)
+    const snapshot = await this.trySnapshotCopy(reader, writer, 'pull', options)
     if (snapshot !== undefined) return snapshot
     const generation = this.generation
     const activeStorage = this.getActiveUser().activeStorage
@@ -1072,7 +1077,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const writerSettings = await writer.makeAvailable()
     await this.preflightManagedNetworks(writerSettings)
     await this.getAuth()
-    const snapshot = await this.trySnapshotCopy(this.getActive(), writer, options)
+    const snapshot = await this.trySnapshotCopy(this.getActive(), writer, 'push', options)
     if (snapshot !== undefined) return snapshot
     return await this.runAsSync(async reader => {
       const settings = reader.getSettings()
@@ -1081,7 +1086,6 @@ export class WalletStorageManager implements sdk.WalletStorage {
         {
           reader,
           writer,
-          activeStorage: this.getActiveUser().activeStorage,
           atomicCheckpoint: false,
           mode: 'exclusive',
           loadRequest: () => this.loadSyncRequest(auth, writer, settings, writerSettings.storageIdentityKey),
@@ -1108,7 +1112,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
     if (activeSync == null) {
       await this.getAuth()
-      const snapshot = await this.trySnapshotCopy(this.getActive(), writer, {
+      const snapshot = await this.trySnapshotCopy(this.getActive(), writer, 'push', {
         maxRoughSize: 10000000,
         onProgress: progress => {
           log += this.committedPageLog(progress, progLog)
@@ -1187,8 +1191,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
           }
         }
         const result =
-          (await this.trySnapshotCopy(selected.active, backup.storage, options, selected)) ??
-          (await this.runLegacySnapshotFallback(selected.active, backup.storage, options, selected))
+          (await this.trySnapshotCopy(selected.active, backup.storage, 'push', options, selected)) ??
+          (await this.runLegacySnapshotFallback(selected.active, backup.storage, 'push', options, selected))
         log += progLog(
           `${result.mode === 'paged' ? 'snapshot' : 'serialized'} complete: ${result.inserts} inserts, ${result.updates} updates\n`
         )

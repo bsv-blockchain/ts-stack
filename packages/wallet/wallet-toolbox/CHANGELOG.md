@@ -10,6 +10,8 @@ attention to changes that materially alter behavior or extend functionality.
   a dedicated source reader and short, fair destination commits. Add resumable
   push progress/cancellation. Commit rows, normalized ID maps and durable cursors
   together; reject stale sessions and independent primary ABA transitions.
+  Preserve source primary metadata for push/backup and destination selection
+  for pull, including serialized fallback when the manager's cache is older.
   Add the version-one auxiliary schema migration and primary-epoch trigger.
   Existing legacy checkpoint JSON is preserved. Unsupported configurations and
   explicit row/reference/retention limits retain serialized fallback; genuine

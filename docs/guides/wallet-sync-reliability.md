@@ -259,6 +259,11 @@ A session binds the wallet identity, source/destination storage identities,
 network, source view, selected primary and its epoch. Rows, normalized ID mappings
 and the destination cursor commit together. Source user metadata joins the first
 page commit; cancellation before that commit leaves the selected primary intact.
+Push and backup merge the source view's stored primary metadata using the existing
+timestamp rule; they do not replace it with a manager's older cached selection.
+Pull retains the destination manager's selection. Serialized fallback preserves
+the same directional rules. This compatibility behavior does not refresh the
+manager cache or implement primary reconciliation.
 A prepared page is single-use and stale checkpoints reject. If an acknowledgement
 is lost while the same source view remains alive, read the destination checkpoint
 and resume it. When the source view is lost, open a new view and restart traversal
