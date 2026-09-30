@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -37,6 +38,38 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
       "oxlint src --ignore-pattern 'src/generated/**' --deny-warnings"
     ),
     false
+  )
+})
+
+test('workspace inventory ignores generated mutation sandboxes while retaining neighboring packages', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-inventory-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const authored = [
+    '.',
+    'packages/application/example',
+    'packages/application/example/.stryker-tmp-lookalike',
+    'packages/application/example/nested'
+  ]
+  const generated = [
+    'packages/application/example/.stryker-tmp/sandbox-fixture',
+    'tools/example/.stryker-tmp/sandbox-fixture'
+  ]
+  for (const directory of [...authored, ...generated]) {
+    fs.mkdirSync(path.join(root, directory), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, directory, 'package.json'),
+      JSON.stringify({ name: directory, private: true })
+    )
+  }
+  assert.deepEqual(
+    discoverWorkspaceProjects(root).map(project => project.path),
+    authored
+  )
+  assert.deepEqual(
+    discoverPackageManifests(root).map(project => project.path),
+    authored
+      .map(directory => (directory === '.' ? 'package.json' : directory + '/package.json'))
+      .sort((a, b) => a.localeCompare(b))
   )
 })
 
