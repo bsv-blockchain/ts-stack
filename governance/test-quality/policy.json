@@ -477,12 +477,24 @@
         "path": "packages/application/output-knowledge/test/lookup-framing.test.ts",
         "manifest": "packages/application/output-knowledge/package.json",
         "risk": "critical",
-        "boundary": "Retained lookup identity, bounded capture, exact durable cursor receipt, source generation and local continuity reset across concurrent workers and restart",
+        "boundary": "Whole lookup response framing, exact durable core receipt guards and physical work capacity through cancellation and deadlines",
         "target": "Canonical receipt framing preserves whole groups and checkpoint scope under escaped provider metadata",
         "invariants": [
           "Every valid snapshot or live batch preserves its complete groups and exact continuity metadata.",
           "Complete source framing fits within its reserved wire-plus-envelope budget for escaped identifiers.",
           "Local resets contain no observations or successful cursor and retain the exact predecessor scope."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-state.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original live lookup identity, durable state and orchestration across restart, concurrent workers and continuity reset",
+        "target": "Original opening and exact durable receipt remain stable across arbitrary cursors and source journal minima",
+        "invariants": [
+          "No captured response can advance before an exact durable core receipt exists.",
+          "Retrying one captured operation preserves its original opening, cursor, receipt and job increment.",
+          "Advancement retains the greater of the existing source minimum and committed core receipt position."
         ]
       }
     ],

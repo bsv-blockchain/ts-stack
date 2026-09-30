@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
+import fc from 'fast-check'
 import {
   PrivateKey,
   OUTPUT_LOOKUP_PROFILE,
@@ -16,6 +17,18 @@ import {
 import { runtimeLimits } from '../src/validation.js'
 import { MemoryJournal } from '../src/storage/MemoryJournal.js'
 import { knowledgeMutation, type MutationLookup } from '../src/storage/Journal.js'
+
+const MIN_PROPERTY_RUNS = 300
+const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
+const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
+const replayPath = process.env.FAST_CHECK_PATH
+fc.configureGlobal({
+  numRuns: Number.isSafeInteger(requestedRuns)
+    ? Math.max(MIN_PROPERTY_RUNS, requestedRuns)
+    : MIN_PROPERTY_RUNS,
+  ...(Number.isSafeInteger(requestedSeed) ? { seed: requestedSeed } : {}),
+  ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+})
 
 function fixture(query: unknown = { collection: 'records' }, stateBytes = 4194304) {
   const key = new PrivateKey(1),
@@ -127,6 +140,36 @@ async function receipt(
 }
 
 describe('saved lookup source transitions', () => {
+  it('preserves the original operation and exact receipt under arbitrary captured cursors and journal minima', async () => {
+    const { codec, packet, original } = fixture()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 1000000 }),
+        fc
+          .array(fc.constantFrom('a', 'z', '\\', '\n', 'é'), { minLength: 1, maxLength: 16 })
+          .map(parts => parts.join('')),
+        async (minimum, cursor) => {
+          const initial = codec.initial(String(minimum))
+          const captured = codec.capture(initial, { ...packet, cursor }, '1000')
+          expect(() => codec.advance(captured, { status: 'absent' })).toThrow(
+            expect.objectContaining({ code: 'conflict' })
+          )
+          const committed = await receipt(captured.pending!)
+          const advanced = codec.advance(captured, committed)
+          expect(advanced.original).toEqual(original)
+          expect(advanced.previous?.cursor).toBe(cursor)
+          expect(advanced.previousReceipt?.received).toBe('1')
+          expect(advanced.minimumReceived).toBe(String(Math.max(minimum, 1)))
+          expect(advanced.job).toBe('1')
+          expect(advanced.pending).toBeNull()
+          expect(codec.advance(captured, committed)).toEqual(advanced)
+          expect(captured.previous).toBeNull()
+          expect(initial.pending).toBeNull()
+        }
+      )
+    )
+  })
+
   it('rejects invalid control capacities and an unknown local state format', () => {
     for (const capacity of [0, -1, 1.5, Number.NaN, 4194305])
       expect(() => fixture({}, capacity)).toThrow(

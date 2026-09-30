@@ -61,13 +61,33 @@ export function buildMutationTargets(repositoryRoot) {
     'output-knowledge-live': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
-      propertyTest: 'packages/application/output-knowledge/test/lookup-framing.test.ts',
+      propertyTest: 'packages/application/output-knowledge/test/lookup-state.test.ts',
       mutate: [
         'src/sources/LiveLookupConfiguration.ts',
         'src/sources/LiveLookupSource.ts',
+        'src/sources/LookupSourceState.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/lookup-framing.test.ts',
+          '<rootDir>/test/lookup-state.test.ts',
+          '<rootDir>/test/lookup-guard.test.ts',
+          '<rootDir>/test/lookup-work.test.ts',
+          '<rootDir>/test/live-lookup-source.test.ts',
+          '<rootDir>/test/live-lookup-indexeddb.test.ts',
+          '<rootDir>/test/live-lookup-http.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
+    'output-knowledge-live-boundaries': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/lookup-framing.test.ts',
+      mutate: [
         'src/sources/LookupSourceFraming.ts',
         'src/sources/LookupSourceGuard.ts',
-        'src/sources/LookupSourceState.ts',
         'src/sources/LookupSourceWork.ts'
       ],
       ...jestTarget(

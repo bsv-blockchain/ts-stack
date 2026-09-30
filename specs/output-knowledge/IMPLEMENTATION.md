@@ -122,14 +122,20 @@ and cancelled-poll recovery. The complete middleware suite passes 217 tests.
 These transport fixtures intentionally do not claim durable provider qualification.
 The additional live source integration exercises actual loopback HTTP, SDK BEEF
 verification and SQLite, including progressive pages and a missed live group
-recovered after disconnect/reopen. Its 85 focused cases also cover five actual
+recovered after disconnect/reopen. Its 86 focused cases also cover five actual
 process-exit stages, exact receipt substitution, reset persistence, physical
 cancellation ownership, authenticated binding, timing and storage capacity.
-After the analysis refactor, the complete live-source mutation target passes
-91.18% over 941 mutations (751 killed, 107 timeouts, 83 surviving, zero uncovered
-or invalid) at the unchanged 90% gate. This run covers all six production files
-at `a8f75b04e`; a subsequent guard assertion also checks that a newer conflicting
-context cannot be hidden by an older matching context. The complete provider and
+The live-source mutation coverage is split into two independently gated campaigns
+after the combined hosted job exceeded its 45-minute deadline. The original
+operation/configuration/source-state target passes 90.27% over 586 mutations
+(459 killed, 70 timeouts, 57 surviving); the framing/receipt/work-boundary target
+passes 92.68% over 355 mutations (299 killed, 30 timeouts, 26 surviving). Both have
+zero uncovered or invalid mutants and retain the unchanged 90% minimum. The same
+six production files and complete focused test selection participate, with no
+mutation/operator exclusions; governance tests enforce the exact union. Local
+campaigns finished in 16m35s and 10m31s. These runs include the stronger latest-context
+assertion and a 300-case property preserving original identity and receipt-gated
+advancement. Exact-head hosted checks remain required. The complete provider and
 required live application remain open.
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.

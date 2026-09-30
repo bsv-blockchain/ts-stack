@@ -360,9 +360,19 @@
     {
       "id": "output-knowledge-live",
       "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-state.test.ts",
+      "risk": "critical",
+      "boundary": "Original live lookup identity, durable state and orchestration across restart, concurrent workers and continuity reset",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-live-boundaries",
+      "manifest": "packages/application/output-knowledge/package.json",
       "propertyTest": "packages/application/output-knowledge/test/lookup-framing.test.ts",
       "risk": "critical",
-      "boundary": "Retained lookup identity, bounded capture, exact durable cursor receipt, source generation and local continuity reset across concurrent workers and restart",
+      "boundary": "Whole lookup response framing, exact durable core receipt guards and physical work capacity through cancellation and deadlines",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

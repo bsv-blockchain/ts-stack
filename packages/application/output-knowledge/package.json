@@ -94,7 +94,7 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/application/output-knowledge/**/*.{json,md,ts,mjs,html}\"",
     "lint": "oxlint src test --deny-warnings",
     "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
-    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts test/lookup-framing.test.ts",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts test/lookup-framing.test.ts test/lookup-state.test.ts",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs . && node test/browser/test.mjs",
     "test:browser:runtime": "pnpm build && node test/browser/test.mjs",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",

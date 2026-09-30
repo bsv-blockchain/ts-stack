@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 
 import {
+  REPOSITORY_ROOT,
   calculateMutationMetrics,
   evaluateMutationReport,
   parseArguments,
@@ -146,4 +148,31 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
       'one has 1 invalid mutants; maximum is 0'
     ]
   )
+})
+
+// Each hosted campaign retains the complete regression selection; together the
+// bounded jobs instrument the same six production modules exactly once.
+test('live lookup mutation campaigns preserve complete source and test coverage', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const orchestration = configured['output-knowledge-live']
+  const boundaries = configured['output-knowledge-live-boundaries']
+  const combined = [...orchestration.mutate, ...boundaries.mutate]
+  assert.equal(new Set(combined).size, combined.length)
+  assert.deepEqual(
+    combined.sort(),
+    [
+      'src/sources/LiveLookupConfiguration.ts',
+      'src/sources/LiveLookupSource.ts',
+      'src/sources/LookupSourceFraming.ts',
+      'src/sources/LookupSourceGuard.ts',
+      'src/sources/LookupSourceState.ts',
+      'src/sources/LookupSourceWork.ts'
+    ].sort()
+  )
+  assert.deepEqual(orchestration.runnerOptions, boundaries.runnerOptions)
+  const selected = selectAffectedMutationTargets(configured, [
+    'packages/application/output-knowledge/test/live-lookup-http.test.ts'
+  ])
+  assert.ok(selected.includes('output-knowledge-live'))
+  assert.ok(selected.includes('output-knowledge-live-boundaries'))
 })
