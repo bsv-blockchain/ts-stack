@@ -184,7 +184,8 @@ export class KnexSnapshotArchiveService {
     return this.closing
   }
 
-  private async closedWithoutCapture(): Promise<void> {
-    if (this.cleanupFailure !== undefined) throw this.cleanupFailure.error
+  private closedWithoutCapture(): Promise<void> {
+    if (this.cleanupFailure !== undefined) return Promise.reject(this.cleanupFailure.error)
+    return Promise.resolve()
   }
 }

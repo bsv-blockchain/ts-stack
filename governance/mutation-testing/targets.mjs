@@ -553,8 +553,13 @@ export function buildMutationTargets(repositoryRoot) {
           ],
           [
             'src/storage/remoting/StorageServer.ts',
-            'const snapshotArchive = await',
+            '...(await this.snapshotArchiveSettings())',
             'this.finishRpcLogging(logger, result)'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private async snapshotArchiveSettings(',
+            'private async dispatchSyncTransfer('
           ],
           [
             'src/storage/remoting/StorageServer.ts',

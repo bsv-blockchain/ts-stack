@@ -79,23 +79,29 @@ export type SnapshotArchiveRpcInput =
   | { method: 'getSnapshotArchiveDirectory'; identityKey: string; archiveId: string }
   | { method: 'readSnapshotArchivePage'; identityKey: string; archiveId: string; sequence: number }
 
+function requestFields(method: SnapshotArchiveMethod): string[] {
+  switch (method) {
+    case 'startSnapshotArchive':
+      return ['request']
+    case 'getSnapshotArchiveStatus':
+    case 'cancelSnapshotArchive':
+      return ['requestId']
+    case 'getSnapshotArchiveDirectory':
+      return ['archiveId']
+    case 'readSnapshotArchivePage':
+      return ['archiveId', 'sequence']
+    default:
+      return []
+  }
+}
+
 /** Exact method-specific data only; ownership tokens have no wire representation. */
 export function parseSnapshotArchiveRpcInput(
   method: SnapshotArchiveMethod,
   params: unknown[]
 ): SnapshotArchiveRpcInput {
   if (params.length !== 1) invalid()
-  const extras =
-    method === 'startSnapshotArchive'
-      ? ['request']
-      : method === 'getSnapshotArchiveStatus' || method === 'cancelSnapshotArchive'
-        ? ['requestId']
-        : method === 'getSnapshotArchiveDirectory'
-          ? ['archiveId']
-          : method === 'readSnapshotArchivePage'
-            ? ['archiveId', 'sequence']
-            : []
-  const input = record(params[0], ['version', 'identityKey', ...extras])
+  const input = record(params[0], ['version', 'identityKey', ...requestFields(method)])
   if (input.version !== 1 || typeof input.identityKey !== 'string' || !/^(02|03)[0-9a-f]{64}$/.test(input.identityKey))
     invalid()
   const identityKey = input.identityKey

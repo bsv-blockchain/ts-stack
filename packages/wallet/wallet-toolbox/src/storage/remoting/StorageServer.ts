@@ -30,7 +30,7 @@ import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_INTERNAL, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
@@ -74,7 +74,6 @@ import {
   snapshotArchiveResponseBytes,
   type SnapshotArchiveMethod
 } from '../snapshot/archive/SnapshotArchiveProtocol'
-import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -659,11 +658,14 @@ export class StorageServer {
     const logObj = this.createRpcLog(req, method, id, params)
     try {
       this.enforceRpcRequestBudgets(method, params)
-      const dispatch = snapshotArchiveMethods.includes(method as SnapshotArchiveMethod)
-        ? await this.dispatchSnapshotArchive(method as SnapshotArchiveMethod, params, req, useBinary, id)
-        : method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
-          ? await this.dispatchSyncTransfer(method, params, req)
-          : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      let dispatch: RpcDispatchResult
+      if (snapshotArchiveMethods.includes(method as SnapshotArchiveMethod)) {
+        dispatch = await this.dispatchSnapshotArchive(method as SnapshotArchiveMethod, params, req, useBinary, id)
+      } else if (method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')) {
+        dispatch = await this.dispatchSyncTransfer(method, params, req)
+      } else {
+        dispatch = await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      }
       if (!dispatch.found) {
         return this.sendRpc(
           res,
@@ -958,10 +960,9 @@ export class StorageServer {
         result = {
           ...result,
           syncCheckpointVersion: 1,
-          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities })
+          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities }),
+          ...(await this.snapshotArchiveSettings())
         }
-        const snapshotArchive = await this.snapshotArchives?.capabilities()
-        if (snapshotArchive !== undefined) result.snapshotArchive = snapshotArchive
       }
       this.finishRpcLogging(logger, result)
       return { found: true, result }
@@ -970,6 +971,11 @@ export class StorageServer {
       logger?.flush?.()
       throw error
     }
+  }
+
+  private async snapshotArchiveSettings(): Promise<Record<string, unknown>> {
+    const snapshotArchive = await this.snapshotArchives?.capabilities()
+    return snapshotArchive === undefined ? {} : { snapshotArchive }
   }
 
   private async dispatchSyncTransfer(method: string, params: any[], req: Request): Promise<RpcDispatchResult> {
