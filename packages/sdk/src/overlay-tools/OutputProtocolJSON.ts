@@ -122,29 +122,24 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    const result: OutputJSONObject = Object.create(null) as OutputJSONObject
-    let count = 0
+    const fields = new Map<string, OutputJSON>()
+    // fromEntries creates own data properties without invoking object setters.
+    const result = (): OutputJSONObject => Object.setPrototypeOf(Object.fromEntries(fields), null)
     if (this.source[this.offset] === '}') {
       this.offset++
-      return result
+      return result()
     }
     for (;;) {
       this.whitespace()
       const key = this.string()
-      outputAssert(!Object.hasOwn(result, key), 'Duplicate decoded JSON key')
-      outputAssert(++count <= this.bounds.mapKeys, 'JSON map limit', 'limited')
+      outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
+      outputAssert(fields.size < this.bounds.mapKeys, 'JSON map limit', 'limited')
       this.whitespace()
       outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-      // Define a plain own data field even when a key resembles an object builtin.
-      Object.defineProperty(result, key, {
-        value: this.value(depth + 1),
-        enumerable: true,
-        configurable: true,
-        writable: true
-      })
+      fields.set(key, this.value(depth + 1))
       this.whitespace()
       const end = this.source[this.offset++]
-      if (end === '}') return result
+      if (end === '}') return result()
       outputAssert(end === ',', 'Expected JSON object separator')
     }
   }

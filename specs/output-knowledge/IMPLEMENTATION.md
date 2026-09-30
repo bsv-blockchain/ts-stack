@@ -258,10 +258,11 @@ pass against 22 exact tarballs and documentation validates 138 HTML routes. Thes
 results do not establish full lineage, wallet, private fulfillment or application
 qualification.
 
-The bounded JSON parser now defines explicit own data properties while preserving
-null prototypes, accepted keys and writable/configurable/enumerable attributes.
+The bounded JSON parser builds own data fields through a Map and native
+Object.fromEntries while preserving null prototypes, accepted keys and
+writable/configurable/enumerable attributes.
 Its 58 focused tests include a generated property with at least 300 cases. Full
-source mutation passes 91.76% over 376 mutants (339 killed, 31 surviving, six
+source mutation passes 91.67% over 372 mutants (335 killed, 31 surviving, six
 timeouts, zero uncovered/invalid). The two local authenticated HTTP fixtures use
 the already governed express-rate-limit 8.6.1 development dependency; middleware
 runtime behavior is unchanged. The manifest change carries patch candidate 2.2.9.
