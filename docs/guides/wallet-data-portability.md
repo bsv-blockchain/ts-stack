@@ -43,7 +43,9 @@ requests repeatable-read isolation; IndexedDB uses one readonly transaction
 covering settings and the wallet stores. SQLite WAL permits an independent
 writer during capture. IndexedDB queues overlapping writers until capture ends;
 this checkpoint does not claim bounded foreground write latency for that phase.
-MySQL's configuration is implemented but still requires live qualification.
+A local MySQL 8.4.11 fixture with independent connections verifies source
+isolation, enforced read-only access, unchanged session defaults and failure
+cleanup. This is not deployed-provider or PXC recovery qualification.
 
 Pass `{ requireSnapshot: true }` to `exportBRC38`, `exportBRC38Json` or the
 `exportBRC39` options to require a coherent source view. Custom `StorageProvider`

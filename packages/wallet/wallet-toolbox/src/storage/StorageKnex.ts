@@ -183,9 +183,38 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       return await this.knex.transaction(read)
     }
     if (database === 'mysql') {
-      return await this.knex.transaction(read, { isolationLevel: 'repeatable read', readOnly: true })
+      return await this.readMySQLSnapshot(read)
     }
     throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots require SQLite or MySQL isolation')
+  }
+
+  private async readMySQLSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    const client = this.knex.client
+    const connection = await client.acquireConnection()
+    try {
+      // MySQL requires a comma between transaction characteristics. Knex's
+      // combined isolationLevel/readOnly options currently omit it. Reserve
+      // one connection, set only its NEXT transaction, then let Knex own the
+      // begin/commit/rollback lifecycle without changing pool session defaults.
+      await this.knex.raw('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY').connection(connection)
+      return await this.knex.transaction(
+        async trx => {
+          if (trx.isCompleted()) throw new WERR_INTERNAL('MySQL snapshot transaction did not begin')
+          return await read(trx)
+        },
+        { connection }
+      )
+    } catch (error) {
+      // A setup/begin failure can leave pending transaction characteristics.
+      // Closing before release prevents a later wallet write inheriting them.
+      // Driver destroy also removes native mysql2 pooled connections; end()
+      // may merely return those connections to their external pool.
+      connection.destroy()
+      throw error
+    } finally {
+      delete connection.__knexTxId
+      await client.releaseConnection(connection)
+    }
   }
 
   protected override supportsNoSendExpiryPersistence(): boolean {

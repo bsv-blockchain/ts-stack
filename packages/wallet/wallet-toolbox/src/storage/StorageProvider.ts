@@ -527,8 +527,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * Custom providers must implement their actual isolation guarantee rather
    * than inheriting an ordinary transaction with unknown isolation.
    */
-  async readSnapshot<T>(_read: (trx: TrxToken) => Promise<T>): Promise<T> {
-    throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
+  readSnapshot<T>(_read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    return Promise.reject(
+      new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
+    )
   }
 
   protected supportsActionBatchPersistence(): boolean {

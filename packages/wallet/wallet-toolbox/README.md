@@ -30,8 +30,9 @@ key-and-data disaster recovery.
 
 The unpublished 2.15 candidate captures BRC-38 source settings, wallet identity
 and standard table closure in one local provider read view. SQLite and IndexedDB
-tests cover independent writes during capture; MySQL explicitly requests
-repeatable-read isolation but still needs live qualification. Custom providers
+tests cover independent writes during capture. A local MySQL 8.4.11 fixture
+verifies repeatable-read isolation, read-only enforcement and connection cleanup
+without changing session defaults; deployed/PXC recovery remains unqualified. Custom providers
 opt in with `supportsReadSnapshot` and `readSnapshot`. Use the export option
 `requireSnapshot: true` to refuse unsupported capture; old custom-provider calls
 retain their documented caller-quiesced fallback.

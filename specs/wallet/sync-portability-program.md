@@ -77,7 +77,9 @@ capture instead of being filtered out of the archive.
 This checkpoint is only part of S2/P1. It does not yet implement keysets, immutable
 retained snapshots, streaming, bounded push/backup work or staged restore.
 IndexedDB writers wait during capture and the legacy helpers still materialize
-the document. MySQL's explicit repeatable-read path needs live qualification.
+the document. A local MySQL 8.4.11 fixture confirms repeatable-read capture under
+an independent writer, read-only enforcement, unchanged session defaults and
+failure cleanup. Deployed MySQL/PXC behavior is not qualified by that fixture.
 
 For every checkpoint record the exact source revision, commands, fixture and
 platform, measured result, compatibility result and remaining limitation. Link

@@ -10,7 +10,9 @@ attention to changes that materially alter behavior or extend functionality.
   Custom providers opt in with `supportsReadSnapshot` and `readSnapshot`. The
   additive `requireSnapshot` export option refuses unsupported views; old
   custom-provider calls keep their caller-quiesced compatibility path. SQLite,
-  MySQL and IndexedDB implement the local boundary. Recognized optional nullable
+  MySQL and IndexedDB implement the local boundary. MySQL uses valid
+  next-transaction characteristics on one reserved connection and closes failed
+  connections before returning them to the pool. Recognized optional nullable
   JSON object fields normalize in a detached copy without
   dropping array values. Streaming files and the full #544 program remain in
   implementation; IndexedDB writers still wait during source capture.
