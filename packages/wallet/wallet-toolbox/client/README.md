@@ -241,3 +241,13 @@ push progress/cancellation with an explicit exclusive fallback. These exports
 support adapter integration; they do not enable SQL retention or the auxiliary
 SQL migration in this browser/mobile entry point. Current IndexedDB and remote
 paths retain their documented behavior. See the [local SQL integration and remaining limits](../../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).
+
+The candidate now includes `getSnapshotArchiveTransport(identityKey)` on
+`StorageClient`. It negotiates a migrated WAL/MySQL server's immutable archive
+capability and validates bounded authenticated admission/status, directories and
+pages. A dedicated response ceiling applies before parsing; server and storage
+identity bindings remain shared with ordinary RPC. `snapshotArchives: false`
+disables the transport, and old/disabled peers decline it. This is a low-level
+transport, not a retained database adapter or adoption by ordinary sync/export.
+Remote row cursors, manager integration, portable semantics and physical platform
+acceptance remain open. See the [archive transport contract](../../../../docs/guides/wallet-sync-reliability.md#authenticated-snapshot-archive-transport-unpublished-candidate).

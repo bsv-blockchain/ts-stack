@@ -91,6 +91,16 @@ import {
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
 import { pruneBeefForTxids } from '../../utility/beefForTxids'
+import { SnapshotArchiveTransport } from '../snapshot/archive/SnapshotArchiveTransport'
+import {
+  snapshotArchiveResponseBytes,
+  snapshotArchiveRequestBytes,
+  validateSnapshotArchiveCapabilities,
+  type SnapshotArchiveCapabilities,
+  type SnapshotArchiveMethod
+} from '../snapshot/archive/SnapshotArchiveProtocol'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc, validateJsonRpcResponse } from './BinaryJson'
+import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 
 const syncChunkResponseRetryLimit = 4
 const minimumSyncChunkRoughSize = 64 * 1024
@@ -103,9 +113,12 @@ type RemoteStorageSettings = TableSettings & {
   /** Runtime-only RPC advertisement, not a persisted settings-table column. */
   syncCheckpointVersion?: 1
   syncTransfer?: SyncTransferCapabilities
+  snapshotArchive?: SnapshotArchiveCapabilities
 }
 
 export interface StorageClientOptions {
+  /** Disable immutable remote snapshots during a mixed-version rollout. */
+  snapshotArchives?: boolean
   /**
    * Send compact tagged binary request values after the server advertises
    * support. Leave disabled during rolling deployments where an endpoint may
@@ -250,6 +263,7 @@ function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
   if (properties.syncCheckpointVersion != null && properties.syncCheckpointVersion.value !== 1) {
     throw new Error('Wallet storage returned invalid settings.')
   }
+  if (properties.snapshotArchive != null) validateSnapshotArchiveCapabilities(properties.snapshotArchive.value)
   return value as RemoteStorageSettings
 }
 
@@ -270,6 +284,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   private authenticatedServerIdentityKey?: string
   private readonly expectedStorageIdentityKey?: string
   private syncChunkRoughSizeLimit?: number
+  private readonly snapshotArchivesEnabled: boolean
+  private readonly snapshotWallet: WalletInterface
+  private snapshotAuthClient?: AuthFetch
+  private snapshotSource?: { identityKey: string; chain: 'main' | 'test' }
   /** Optional progress/cancellation hook for a bounded transfer; never receives wallet contents. */
   onSyncTransferProgress?: (progress: { direction: 'read' | 'write'; bytes: number; totalBytes: number }) => void
 
@@ -278,6 +296,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     this.authClient = new AuthFetch(wallet)
+    this.snapshotWallet = wallet
+    this.snapshotArchivesEnabled = options.snapshotArchives !== false
     this.endpointUrl = normalizeStorageEndpointUrl(endpointUrl)
     this.binaryRequests = options.binaryRequests === true
     this.telemetry = new Telemetry(options.telemetry)
@@ -288,7 +308,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   }
 
   protected async authenticatedFetch(url: string, config: Parameters<AuthFetch['fetch']>[1]): Promise<Response> {
-    const response = await this.authClient.fetch(url, config)
+    return this.validateAuthenticatedResponse(await this.authClient.fetch(url, config))
+  }
+
+  private validateAuthenticatedResponse(response: Response): Response {
     const authenticatedIdentityKey = response.headers.get('x-bsv-auth-identity-key')
     if (authenticatedIdentityKey == null) {
       throw new Error('Wallet storage response was not mutually authenticated.')
@@ -299,6 +322,46 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     }
     this.authenticatedServerIdentityKey = identityKey
     return response
+  }
+
+  /** Available only after an authenticated compatible advertisement. */
+  async getSnapshotArchiveTransport(identityKey: string): Promise<SnapshotArchiveTransport | undefined> {
+    await this.makeAvailable()
+    if (!this.snapshotArchivesEnabled || this.snapshotSource === undefined) return undefined
+    return new SnapshotArchiveTransport(
+      (method, params, signal) => this.snapshotRpcCall(method, params, signal),
+      identityKey,
+      this.snapshotSource.identityKey,
+      this.snapshotSource.chain
+    )
+  }
+
+  private async snapshotRpcCall(
+    method: SnapshotArchiveMethod,
+    params: unknown[],
+    signal?: AbortSignal
+  ): Promise<unknown> {
+    const id = this.nextRequestId()
+    const body = JSON.stringify({ jsonrpc: '2.0', method, params, id })
+    if (new TextEncoder().encode(body).length > snapshotArchiveRequestBytes)
+      throw new TypeError('Snapshot archive request exceeds its transport limit')
+    this.snapshotAuthClient ??= new AuthFetch(this.snapshotWallet, undefined, undefined, undefined, {
+      maxResponseBytes: snapshotArchiveResponseBytes
+    })
+    const response = this.validateAuthenticatedResponse(
+      await this.snapshotAuthClient.fetch(this.endpointUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', [BINARY_ENCODING_HEADER]: BINARY_ENCODING },
+        body,
+        signal
+      })
+    )
+    if (!response.ok) throw this.rpcResponseError(response)
+    if (response.headers.get(BINARY_ENCODING_HEADER) !== BINARY_ENCODING)
+      throw new TypeError('Snapshot archive requires compact binary responses')
+    const json = validateJsonRpcResponse(parseJsonRpc(await response.text(), true), id)
+    if ('error' in json) throw WalletErrorFromJson(json.error as object)
+    return json.result
   }
 
   protected async traceRpcCall<T>(
@@ -406,6 +469,9 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     )
     if (this.expectedStorageIdentityKey !== undefined && storageIdentityKey !== this.expectedStorageIdentityKey) {
       throw new Error('Wallet storage settings identity does not match the configured storage identity.')
+    }
+    if (settings.snapshotArchive !== undefined && (settings.chain === 'main' || settings.chain === 'test')) {
+      this.snapshotSource = { identityKey: storageIdentityKey, chain: settings.chain }
     }
     this.settings = settings
     return this.settings

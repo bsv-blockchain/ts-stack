@@ -506,6 +506,97 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-snapshot-remote-http': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveTransport.ts',
+        ...[
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'if (properties.snapshotArchive != null)',
+            'return value as RemoteStorageSettings'
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'this.snapshotWallet = wallet',
+            'this.endpointUrl ='
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'protected async authenticatedFetch(',
+            'protected async traceRpcCall<T>('
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'if (settings.snapshotArchive !== undefined',
+            'this.settings = settings'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private readonly snapshotArchivesEnabled:',
+            'private readonly app ='
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'this.snapshotArchivesEnabled =',
+            '// Keep legacy configurations working'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private async handleRpcRequestCore(',
+            'private async sendOversizedSyncResponse('
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'const snapshotArchive = await',
+            'this.finishRpcLogging(logger, result)'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private createSnapshotArchiveRpc(',
+            'private async traceRpcStep<T>('
+          ],
+          ['src/storage/remoting/StorageServer.ts', 'public start(): void', 'validateDate(date:']
+        ].map(([filePath, startMarker, endMarker]) =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/wallet/wallet-toolbox',
+            filePath,
+            startMarker,
+            endMarker
+          )
+        )
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchive*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.test.ts',
+          '<rootDir>/src/storage/remoting/__test/BinaryJson.test.ts',
+          '<rootDir>/src/storage/remoting/__test/KnexPaymentReplayStore.test.ts',
+          '<rootDir>/src/storage/remoting/__test/KnexSessionManager.test.ts',
+          '<rootDir>/src/storage/remoting/__test/RateLimitPolicy.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageServerRpc.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClientBase.*.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.security.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.transport.security.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.telemetry.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
     ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',

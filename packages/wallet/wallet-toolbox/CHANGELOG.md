@@ -13,7 +13,15 @@ attention to changes that materially alter behavior or extend functionality.
   The local capture controller binds source metadata/schema to one read view,
   verifies profile relationships and stores all thirteen raw tables through
   bounded binary frames, with cancellation and cleanup. Canonical portable
-  validation, authenticated endpoints and larger-wallet policy remain open.
+  validation and larger-wallet policy remain open.
+
+- Add negotiated authenticated archive admission/status/directory/page/cancel
+  methods for migrated static WAL/MySQL sources, with exact profile-bound
+  arguments and no writer credentials. Both client variants enforce a separate
+  two-MiB response ceiling and retain server/storage identity binding. Expired
+  request cleanup precedes admission; resource-limit receipts are explicit.
+  Shutdown awaits physical capture and HTTP cleanup. Remote row-reader/manager
+  integration, portable semantics and the full program remain incomplete.
 
 - Integrate coherent SQL pages into ordinary local push, pull and backup, with
   a dedicated source reader and short, fair destination commits. Add resumable

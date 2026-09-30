@@ -44,8 +44,8 @@ test('generated creation/retry/close schedules preserve request identity, atomic
         fc.integer({ min: 0, max: 13 }),
         fc.integer({ min: 0, max: 3 }),
         fc.uint8Array({ minLength: 1, maxLength: 16 }),
-        fc.boolean(),
-        async (stage, prefix, retries, bytes, fail) => {
+        fc.constantFrom('failed' as const, 'closed' as const, 'resource-limited' as const),
+        async (stage, prefix, retries, bytes, terminalState) => {
           const identityKey = '02' + bytes[0].toString(16).padStart(64, '0')
           const other = '03' + '11'.repeat(32)
           const notAfter = Date.now() + 300000
@@ -99,10 +99,10 @@ test('generated creation/retry/close schedules preserve request identity, atomic
           await replacement.close(other, requestId)
           await expect(replacement.status(other, requestId)).rejects.toThrow('unavailable')
           expect((await db('snapshot_archive_capacity').first()).archives).toBe(1)
-          await replacement.close(identityKey, requestId, fail ? 'failed' : 'closed')
+          await replacement.close(identityKey, requestId, terminalState)
           await requests.close(identityKey, requestId)
           const terminal = (await requests.claim(identityKey, request)).receipt
-          expect(terminal.state).toBe(fail ? 'failed' : 'closed')
+          expect(terminal.state).toBe(terminalState)
           expect(terminal.archiveId).toBeUndefined()
           expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
           expect(await db('snapshot_archives')).toHaveLength(0)

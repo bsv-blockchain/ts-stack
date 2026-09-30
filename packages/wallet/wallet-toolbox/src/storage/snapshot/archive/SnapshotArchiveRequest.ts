@@ -9,11 +9,13 @@ export interface SnapshotArchiveRequest {
   requestId: string
 }
 
+export type SnapshotArchiveTerminalState = 'closed' | 'failed' | 'expired' | 'resource-limited'
+
 export interface SnapshotArchiveRequestReceipt {
   version: 1
   requestId: string
   expiresAt: number
-  state: 'building' | 'ready' | 'closed' | 'failed' | 'expired'
+  state: 'building' | 'ready' | SnapshotArchiveTerminalState
   archiveId?: string
   digest?: string
 }

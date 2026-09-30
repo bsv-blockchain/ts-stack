@@ -61,9 +61,13 @@ and archive, reserves capacity before source acquisition, and retains bounded
 terminal receipts through cleanup. Its internal capture controller shares the
 provider's single owned reader slot, publishes readiness after physical cleanup,
 and drains cancellation/shutdown. Completed archives survive controller replacement;
-failed cleanup fences admission and retains its reservation. Authenticated HTTP,
-capability negotiation and bounded client integration remain incomplete; this does
-not enable remote snapshots.
+failed cleanup fences admission and retains its reservation. The candidate now
+adds a negotiated authenticated archive transport on migrated WAL/MySQL servers
+and both client variants, with bounded responses and durable admission/status.
+`getSnapshotArchiveTransport(identityKey)` is a low-level API; remote row reading,
+ordinary sync/export adoption and portable validation remain incomplete. Server
+or client `snapshotArchives: false`, or provider `snapshotSync: false`, disables
+this capability. See the [transport contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#authenticated-snapshot-archive-transport-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

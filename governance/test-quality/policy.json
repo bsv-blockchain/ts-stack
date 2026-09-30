@@ -548,6 +548,19 @@
           "Archive assignment and ready receipt publication commit atomically.",
           "Terminal requests retain bounded receipts and release physical capacity exactly once."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet authenticated snapshot HTTP negotiation, exact protocol fields, profile binding, immutable client receipts and bounded transport lifecycle",
+        "target": "Generated deadline-bound requests, exact RPC shapes and client receipt validation",
+        "invariants": [
+          "Requests and receipts retain the original immutable identity and deadline across start/status retries.",
+          "Every RPC accepts only its exact typed fields and never an internal ownership token.",
+          "Ready receipts bind one archive/root while every distinct terminal state remains explicit.",
+          "Unexpected identity, expiry or ownership fields are rejected rather than silently normalized."
+        ]
       }
     ],
     "exclusions": [

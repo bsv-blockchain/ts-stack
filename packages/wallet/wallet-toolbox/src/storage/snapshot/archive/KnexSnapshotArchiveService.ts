@@ -7,7 +7,9 @@ import { KnexSnapshotArchiveStore } from './KnexSnapshotArchiveStore'
 import {
   parseSnapshotArchiveRequest,
   type SnapshotArchiveRequest,
-  type SnapshotArchiveRequestReceipt
+  type SnapshotArchiveRequestReceipt,
+  type SnapshotArchiveRequestOwner,
+  type SnapshotArchiveTerminalState
 } from './SnapshotArchiveRequest'
 import { snapshotArchiveDatabaseNow } from './SnapshotArchiveSql'
 import { assertSnapshotArchiveCaptureActive, captureSnapshotArchiveSource } from './captureSnapshotArchiveSource'
@@ -16,7 +18,8 @@ interface Capture {
   identityKey: string
   request: Readonly<SnapshotArchiveRequest>
   controller: AbortController
-  terminal: 'closed' | 'failed'
+  terminal: Exclude<SnapshotArchiveTerminalState, 'expired'>
+  accepted: Promise<SnapshotArchiveRequestReceipt>
   completion: Promise<SnapshotArchiveRequestReceipt>
 }
 
@@ -50,15 +53,33 @@ export class KnexSnapshotArchiveService {
    * Completion waits for capture; status remains available while it runs.
    */
   create(identityKey: string, input: unknown): Promise<SnapshotArchiveRequestReceipt> {
+    return this.admit(identityKey, input).completion
+  }
+
+  /** Return the durable admission promptly; poll status while the owned capture continues. */
+  start(identityKey: string, input: unknown): Promise<SnapshotArchiveRequestReceipt> {
+    return this.admit(identityKey, input).accepted
+  }
+
+  private admit(identityKey: string, input: unknown): Capture {
     this.assertOpen()
     const request = parseSnapshotArchiveRequest(input)
     if (this.active !== undefined) {
       if (this.active.identityKey === identityKey && this.active.request.requestId === request.requestId)
-        return this.active.completion
+        return this.active
       throw new SnapshotResourceLimitError('Snapshot archive capture is opening or active')
     }
-    const completion = Promise.resolve()
-      .then(() => this.capture(job))
+    const claim = Promise.resolve().then(async () => {
+      assertSnapshotArchiveCaptureActive(job.controller.signal)
+      // Reap outside the claim transaction, before reserving or opening a pool.
+      await this.requests.reap()
+      await this.archives.reap()
+      assertSnapshotArchiveCaptureActive(job.controller.signal)
+      return await this.requests.claim(identityKey, request)
+    })
+    const accepted = claim.then(result => Object.freeze({ ...result.receipt }))
+    const completion = claim
+      .then(result => this.capture(job, result))
       .finally(() => {
         if (this.active === job) this.active = undefined
       })
@@ -67,21 +88,25 @@ export class KnexSnapshotArchiveService {
       request,
       controller: new AbortController(),
       terminal: 'failed',
+      accepted,
       completion
     }
     this.active = job
     // Cancellation/shutdown can observe completion even after a caller disconnects.
     void completion.catch(() => undefined)
-    return completion
+    void accepted.catch(() => undefined)
+    return job
   }
 
-  private async capture(job: Capture): Promise<SnapshotArchiveRequestReceipt> {
+  private async capture(
+    job: Capture,
+    claimed: { receipt: SnapshotArchiveRequestReceipt; owner?: SnapshotArchiveRequestOwner }
+  ): Promise<SnapshotArchiveRequestReceipt> {
     const { identityKey, request, controller } = job
-    assertSnapshotArchiveCaptureActive(controller.signal)
-    const claimed = await this.requests.claim(identityKey, request)
     if (claimed.owner === undefined) return claimed.receipt
     let source: SnapshotArchiveSource | undefined
-    const cleanup = async (): Promise<void> => {
+    const cleanup = async (error?: unknown): Promise<void> => {
+      if (job.terminal !== 'closed' && error instanceof SnapshotResourceLimitError) job.terminal = 'resource-limited'
       try {
         // Keep the logical reservation through this process's physical cleanup.
         await source?.close()
@@ -106,7 +131,7 @@ export class KnexSnapshotArchiveService {
           begin: binding => this.requests.begin(owner, binding),
           append: (writer, page) => this.archives.append(writer, page),
           seal: writer => this.requests.seal(owner, writer),
-          close: cleanup
+          close: (_identityKey, _archiveId, error) => cleanup(error)
         },
         identityKey,
         this.storage.chain,
@@ -115,7 +140,7 @@ export class KnexSnapshotArchiveService {
       return await this.requests.status(identityKey, request.requestId)
     } catch (error) {
       if (error instanceof SnapshotArchiveSourceCleanupError) this.failedCleanup(error)
-      await cleanup()
+      await cleanup(error)
       throw error
     }
   }

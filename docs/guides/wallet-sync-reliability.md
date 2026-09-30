@@ -390,15 +390,15 @@ binding private and give callers fresh metadata copies.
 The maximum accepted directory fits below a one-MiB metadata budget. Transport
 integration must separately limit incoming envelope bytes before parsing. These
 checks establish inclusion under the received root, not independent trust in the
-source's data or proof semantics. The wire adapter, capability negotiation and
-actual authenticated HTTP lifecycle remain incomplete.
+source's data or proof semantics. The authenticated transport below consumes this directory; the remote row reader
+and manager integration remain incomplete.
 
 The internal creation-request store adds the separate
 `2026-09-30-003 add snapshot archive requests` migration. A request ID hashes its
 version, nonce, immutable absolute deadline and byte reservation. Admission checks
 the database clock; the same expired request cannot reopen after its receipt has
-been collected. A future client must obtain fresh authenticated server time
-before selecting that deadline. This is not yet an exposed wire capability.
+been collected. The authenticated transport obtains fresh server time before a caller selects
+that deadline.
 
 Claiming a request reserves the existing shared handle/byte capacity before a
 source pool opens. Archive assignment and the handoff from that pending charge
@@ -428,8 +428,8 @@ its reservation, including failure during source opening before a view is return
 The source view lasts at most five minutes or the request's remaining lifetime;
 the ready archive retains its original fixed deadline. This bounds process-local
 reader ownership, not distributed physical pools through arbitrary process loss
-or unbounded driver cleanup. Authentication, capability negotiation and bounded
-HTTP/client integration remain required before enabling remote snapshots.
+or unbounded driver cleanup. The HTTP layer below exposes this controller; a
+remote row reader and manager adoption remain separate work.
 
 The initial policy allows at most eight handles and 128 MiB of logical reserved
 storage globally, one handle and 32 MiB per profile, 1 MiB per page, 1,000 rows per
@@ -461,8 +461,8 @@ rollback and partial DDL recovery. Its controller fixture captures thirteen
 tables over fourteen pages, retaining 140 original labels and primary metadata
 while an independent writer updates both. It also verifies schema provenance,
 packed binary and cross-profile relationship refusal. These results apply to
-those fixtures. Deployed PXC, authenticated HTTP, canonical streaming, complete
-portable semantic validation and the full #544 program remain open.
+those fixtures. Deployed PXC, remote row/manager integration, canonical streaming,
+complete portable semantic validation and the full #544 program remain open.
 
 Run the synthetic process-termination fixture from the repository root on macOS
 or Linux (Node 24 and the package build are required):
@@ -572,3 +572,53 @@ and 56.8 MB paged. Inclusive boundary replay and the two-page settled unchanged
 copy remain intact. The same timing/sample limitations above apply; HTTP crypto
 and serialization still contribute event-loop delay. Subsequent forwarding and
 immutable-descriptor allocation refinements preserve the measured queue algorithm.
+
+## Authenticated snapshot archive transport (unpublished candidate)
+
+`StorageServer` now advertises a version-one `snapshotArchive` capability in its
+runtime settings when the provider supports a dedicated static SQLite-WAL/MySQL
+reader, the archive/request tables exist, and the configured envelopes can fit
+the protocol. `snapshotSync: false` on the provider or `snapshotArchives: false`
+on the server disables it. Persisted settings and ordinary RPC behavior remain
+unchanged. Migration alone installs neither a listener nor a housekeeping worker.
+
+Both full and mobile clients expose `getSnapshotArchiveTransport(identityKey)`
+after authenticated negotiation; old, disabled or unsupported peers return no
+transport. A client can also set `snapshotArchives: false`. This is a low-level
+archive transport. Ordinary remote sync and portable export do not yet adopt it.
+It does not supply a `WalletReadSnapshot`, a remote destination, canonical BRC-38
+or independently validated transaction/proof semantics.
+
+The transport obtains a fresh authenticated database-clock offer carrying the
+source storage identity, chain and schema. `start` acknowledges durable admission
+promptly; `status` polls the same exact deadline-bound request. A disconnected
+caller retries that tuple, without extending its deadline or opening a second
+source. A replacement server recovers completed receipts/directories/pages from
+shared storage. An interrupted incomplete capture cannot resume as a new view
+under the old request. `cancel` closes that request; a new capture needs a new ID.
+
+Every method accepts exactly one versioned, profile-bound argument and rejects
+extra ownership fields. The server binds the profile to BRC-103 authentication;
+internal claim/writer tokens have no wire representation. The client retains its
+shared authenticated server pin and separate storage-identity binding. Tagged
+binary responses are mandatory. The dedicated AuthFetch caps response bytes at
+2 MiB before framing/parsing, including the JSON-RPC envelope; maximum directory
+and one-MiB-page fixtures fit that ceiling after HTML escaping and base64 encoding.
+The server applies an additional 4-KiB request-envelope bound after its existing
+bounded JSON parser. This is not a claim of a 4-KiB pre-parse allocation limit.
+
+Creation reaps expired pending, partial, ready and legacy archives before claiming
+new capacity. Explicit `resource-limited` terminal receipts distinguish a failed
+capture budget from other failures, preserving the first terminal state through
+cleanup. Future sync integration may consider serialized fallback before it has
+exposed a source or begun a destination session; corruption, authentication,
+network failures and mid-stream errors must still fail the active operation.
+
+Server shutdown fences new captures synchronously and awaits both physical reader
+cleanup and the HTTP close callback. A failed cleanup stays observable and keeps
+its reservation. Temporary HTTP disconnection does not implicitly cancel an
+accepted capture. Tests use real authenticated loopback HTTP with synthetic
+SQLite profiles, both client variants, lost admission acknowledgements, server
+replacement, profile isolation, rollback combinations, response limits and
+shutdown during opening. These fixtures do not establish deployed performance,
+physical mobile acceptance or completion of #544.

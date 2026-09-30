@@ -67,6 +67,14 @@ import {
 } from '../../utility/actionBatchPack'
 import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
 import { validateSyncProofs } from './validateRpcSyncProofs'
+import { KnexSnapshotArchiveRpc } from '../snapshot/archive/KnexSnapshotArchiveRpc'
+import {
+  snapshotArchiveMethods,
+  snapshotArchiveRequestBytes,
+  snapshotArchiveResponseBytes,
+  type SnapshotArchiveMethod
+} from '../snapshot/archive/SnapshotArchiveProtocol'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -270,12 +278,18 @@ export interface WalletStorageServerOptions {
   maxRpcResponseBytes?: number
   /** Disable the additive durable transfer transport during a mixed-version rollout. Knex only. */
   syncTransfers?: boolean
+  /** Disable immutable snapshot archives during a mixed-version rollout. Requires migrated WAL/MySQL storage and snapshotSync. */
+  snapshotArchives?: boolean
   /** Durable BRC-105 replay claims for monetized multi-replica deployments. */
   paymentReplayStore?: PaymentReplayStore
 }
 
 export class StorageServer {
   private readonly syncTransfers?: KnexSyncTransferStore
+  private readonly snapshotArchivesEnabled: boolean
+  private snapshotArchives?: KnexSnapshotArchiveRpc
+  private closing?: Promise<void>
+  private closed = false
   private readonly app = express()
   private readonly host?: string
   private readonly port: number
@@ -396,6 +410,11 @@ export class StorageServer {
         highThroughput: 32 * 1024 * 1024
       })
     )
+    this.snapshotArchivesEnabled =
+      options.snapshotArchives !== false &&
+      jsonBodyLimit >= snapshotArchiveRequestBytes &&
+      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= snapshotArchiveResponseBytes)
+    this.snapshotArchives = this.createSnapshotArchiveRpc()
     // Keep legacy configurations working when their envelopes cannot fit even a minimum part.
     if (
       options.syncTransfers !== false &&
@@ -640,8 +659,9 @@ export class StorageServer {
     const logObj = this.createRpcLog(req, method, id, params)
     try {
       this.enforceRpcRequestBudgets(method, params)
-      const dispatch =
-        method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
+      const dispatch = snapshotArchiveMethods.includes(method as SnapshotArchiveMethod)
+        ? await this.dispatchSnapshotArchive(method as SnapshotArchiveMethod, params, req, useBinary, id)
+        : method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
           ? await this.dispatchSyncTransfer(method, params, req)
           : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
       if (!dispatch.found) {
@@ -663,6 +683,12 @@ export class StorageServer {
       // JSON.stringify silently omit an undefined result.
       const payload = { jsonrpc: '2.0', result: result ?? null, id }
       const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
+      if (
+        snapshotArchiveMethods.includes(method as SnapshotArchiveMethod) &&
+        Buffer.byteLength(serialized, 'utf8') > snapshotArchiveResponseBytes
+      ) {
+        throw new WERR_INVALID_OPERATION('Snapshot archive response exceeds its transport limit')
+      }
       // Apply the response bound before consulting any client transport preference.
       if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
         return await this.sendOversizedSyncResponse(req, res, useBinary, method, params, payload)
@@ -934,6 +960,8 @@ export class StorageServer {
           syncCheckpointVersion: 1,
           ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities })
         }
+        const snapshotArchive = await this.snapshotArchives?.capabilities()
+        if (snapshotArchive !== undefined) result.snapshotArchive = snapshotArchive
       }
       this.finishRpcLogging(logger, result)
       return { found: true, result }
@@ -1009,6 +1037,36 @@ export class StorageServer {
         return { found: false }
     }
     return { found: true, result }
+  }
+
+  private createSnapshotArchiveRpc(): KnexSnapshotArchiveRpc | undefined {
+    return this.snapshotArchivesEnabled && this.storage instanceof StorageKnex
+      ? new KnexSnapshotArchiveRpc(this.storage)
+      : undefined
+  }
+
+  private async dispatchSnapshotArchive(
+    method: SnapshotArchiveMethod,
+    params: unknown[],
+    req: Request,
+    useBinary: boolean,
+    id: unknown
+  ): Promise<RpcDispatchResult> {
+    if (this.snapshotArchives === undefined) return { found: false }
+    // The shared JSON parser already bounds ingress. This smaller post-parse
+    // envelope check is an additional protocol bound, not a pre-parse claim.
+    if (
+      !useBinary ||
+      !Number.isSafeInteger(id) ||
+      Number(id) < 1 ||
+      Buffer.byteLength(JSON.stringify(req.body), 'utf8') > snapshotArchiveRequestBytes
+    ) {
+      throw new WERR_INVALID_OPERATION('Snapshot archive requests require bounded compact-binary RPC framing')
+    }
+    return {
+      found: true,
+      result: await this.snapshotArchives.dispatch(method, params, requiredAuthenticatedIdentityKey(req))
+    }
   }
 
   private async traceRpcStep<T>(
@@ -1165,6 +1223,12 @@ export class StorageServer {
   server: any
 
   public start(): void {
+    if (this.closing !== undefined) {
+      if (!this.closed) throw new WERR_INVALID_OPERATION('Storage server is closing')
+      this.closing = undefined
+      this.closed = false
+      this.snapshotArchives = this.createSnapshotArchiveRpc()
+    }
     const listening = (): void => {
       console.log(`WalletStorageServer listening at http://${this.host ?? 'localhost'}:${this.port}`)
     }
@@ -1173,12 +1237,25 @@ export class StorageServer {
     configureHttpServer(this.server, 'WALLET_STORAGE', this.httpPolicy)
   }
 
-  public async close(): Promise<void> {
-    if (this.server) {
-      await this.server.close(() => {
-        // console.log('WalletStorageServer closed')
+  public close(): Promise<void> {
+    if (this.closing !== undefined) return this.closing
+    // Fence capture admission synchronously, then await BOTH physical drains.
+    const captures = this.snapshotArchives?.close() ?? Promise.resolve()
+    const http = new Promise<void>((resolve, reject) => {
+      if (!this.server) {
+        resolve()
+        return
+      }
+      this.server.close((error?: NodeJS.ErrnoException) => {
+        if (error !== undefined && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error)
+        else resolve()
       })
-    }
+    })
+    this.closing = Promise.allSettled([captures, http]).then(results => {
+      for (const result of results) if (result.status === 'rejected') throw result.reason
+      this.closed = true
+    })
+    return this.closing
   }
 
   /** @see {@link validateDate} */

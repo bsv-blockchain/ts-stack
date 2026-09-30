@@ -7,6 +7,8 @@ import { StorageProvider } from '../../StorageProvider'
 import { seedArchiveClosure } from '../../../../test/utils/snapshotArchiveFixtures'
 import { KnexSnapshotArchiveService } from './KnexSnapshotArchiveService'
 import { KnexSnapshotArchiveRequestStore } from './KnexSnapshotArchiveRequestStore'
+import { KnexSnapshotArchiveStore } from './KnexSnapshotArchiveStore'
+import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
 import { snapshotArchiveRequestId } from './SnapshotArchiveRequest'
 import { verifySnapshotArchiveDirectory, verifySnapshotArchivePage } from './SnapshotArchiveDirectory'
 import * as ArchiveSql from './SnapshotArchiveSql'
@@ -286,11 +288,16 @@ test('an already claimed request is not resumed under a replacement source', asy
 test('expiry between durable admission and source acquisition refuses without opening a pool', async () => {
   const { storage, controller } = await fixture()
   const input = request()
-  const now = jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow')
-  now
-    .mockResolvedValueOnce(input.notAfter - 100)
-    .mockResolvedValueOnce(input.notAfter - 100)
-    .mockResolvedValueOnce(input.notAfter)
+  const claim = KnexSnapshotArchiveRequestStore.prototype.claim
+  jest.spyOn(KnexSnapshotArchiveRequestStore.prototype, 'claim').mockImplementationOnce(async function (
+    this: KnexSnapshotArchiveRequestStore,
+    key,
+    value
+  ) {
+    const admitted = await claim.call(this, key, value)
+    jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(input.notAfter)
+    return admitted
+  })
   const open = jest.spyOn(storage, 'openSnapshotArchiveSource')
   await expect(controller.create(identity, input)).rejects.toThrow('expired before capture')
   expect(open).not.toHaveBeenCalled()
@@ -334,3 +341,108 @@ test('failed cleanup while opening retains admission even though no source was r
   await reader.destroy()
   await new KnexSnapshotArchiveRequestStore(storage.knex).close(identity, input.requestId, 'failed')
 })
+
+test('start returns a durable receipt before capture completes and repeats only that admission', async () => {
+  const { storage, controller, open } = await fixture()
+  const input = request()
+  const entered = gate()
+  const finish = gate()
+  const original = storage.openSnapshotArchiveSource.bind(storage)
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
+    entered.resolve()
+    await finish.promise
+    return await original(key, options)
+  })
+  const accepted = controller.start(identity, input)
+  expect(controller.start(identity, { ...input })).toBe(accepted)
+  const completion = controller.create(identity, input)
+  void completion.catch(() => undefined)
+  try {
+    const receipt = await accepted
+    expect(receipt).toEqual({ version: 1, state: 'building', requestId: input.requestId, expiresAt: input.notAfter })
+    expect(Object.isFrozen(receipt)).toBe(true)
+    await entered.promise
+    const replacementStorage = open()
+    await replacementStorage.makeAvailable()
+    const replacement = service(replacementStorage)
+    expect(await replacement.start(identity, input)).toEqual(receipt)
+    expect(Reflect.get(replacementStorage, 'snapshotSyncSource')).toBeUndefined()
+    finish.resolve()
+    const ready = await completion
+    expect(ready.state).toBe('ready')
+    expect(await replacement.start(identity, input)).toEqual(ready)
+    expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+    await replacement.cancel(identity, input.requestId)
+  } finally {
+    finish.resolve()
+    await completion.catch(() => undefined)
+  }
+})
+
+test('resource exhaustion has a durable distinct terminal status and never replaces its archive on retry', async () => {
+  const { storage, controller, open } = await fixture()
+  const fields = { ...request(), maxBytes: 4097 }
+  const input = { ...fields, requestId: snapshotArchiveRequestId(fields) }
+  await expect(controller.create(identity, input)).rejects.toBeInstanceOf(SnapshotResourceLimitError)
+  expect(await controller.status(identity, input.requestId)).toEqual({
+    version: 1,
+    requestId: input.requestId,
+    expiresAt: input.notAfter,
+    state: 'resource-limited'
+  })
+  const replacementStorage = open()
+  await replacementStorage.makeAvailable()
+  const replacement = service(replacementStorage)
+  const reader = jest.spyOn(replacementStorage, 'openSnapshotArchiveSource')
+  expect((await replacement.start(identity, input)).state).toBe('resource-limited')
+  expect(reader).not.toHaveBeenCalled()
+  expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await replacement.cancel(identity, input.requestId)
+  expect((await replacement.status(identity, input.requestId)).state).toBe('resource-limited')
+  expect((await replacement.create(identity, request('c'.repeat(64)))).state).toBe('ready')
+})
+
+test.each(['pending', 'capturing', 'ready', 'legacy'] as const)(
+  'new admission reaps an abandoned expired %s capture',
+  async state => {
+    const { storage, controller } = await fixture()
+    const input = request()
+    const requests = new KnexSnapshotArchiveRequestStore(storage.knex)
+    const archives = new KnexSnapshotArchiveStore(storage.knex)
+    if (state === 'ready') await controller.create(identity, input)
+    else {
+      const admitted = state === 'legacy' ? undefined : await requests.claim(identity, input)
+      if (state === 'capturing' || state === 'legacy') {
+        const source = (await storage.openSnapshotArchiveSource(identity))!
+        const binding = {
+          version: 1 as const,
+          snapshotId: source.snapshotId,
+          sourceSchema: source.sourceSchema,
+          sourceStorage: source.sourceStorage,
+          user: source.user
+        }
+        await source.close()
+        const writer =
+          state === 'legacy'
+            ? await archives.begin(binding, { maxBytes: 32768, lifetimeMs: 200000 })
+            : await requests.begin(admitted!.owner!, binding)
+        await archives.append(writer, { sequence: 0, table: 'provenTxs', rows: 0, done: true, bytes: Uint8Array.of(0) })
+      }
+    }
+    const now = input.notAfter + 60000
+    jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(now)
+    const fields = { ...input, nonce: 'c'.repeat(64), notAfter: now + 300000 }
+    const next = { ...fields, requestId: snapshotArchiveRequestId(fields) }
+    const ready = await controller.create(identity, next)
+    expect(ready.state).toBe('ready')
+    expect(await storage.knex('snapshot_archive_requests')).toHaveLength(1)
+    expect(await storage.knex('snapshot_archives')).toHaveLength(1)
+    expect((await storage.knex('snapshot_archives').first()).archiveId).toBe(ready.archiveId)
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({
+      archives: 1,
+      reservedBytes: next.maxBytes
+    })
+    await controller.cancel(identity, next.requestId)
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  }
+)

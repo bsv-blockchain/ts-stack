@@ -40,7 +40,10 @@ function packedRows(rows: object[]): Array<Record<string, unknown>> {
   )
 }
 
-export type SnapshotArchiveCaptureStore = Pick<KnexSnapshotArchiveStore, 'begin' | 'append' | 'seal' | 'close'>
+export type SnapshotArchiveCaptureStore = Pick<KnexSnapshotArchiveStore, 'begin' | 'append' | 'seal'> & {
+  /** The initiating error allows a durable request owner to retain a bounded failure classification. */
+  close: (identityKey: string, archiveId: string, error?: unknown) => Promise<void>
+}
 
 /** Shared ordered capture; source.close must finish physical ownership cleanup before sealing. */
 export async function captureSnapshotArchiveSource(
@@ -110,7 +113,7 @@ export async function captureSnapshotArchiveSource(
   } catch (error) {
     // Preserve the initiating error; interrupted cleanup keeps its reservation
     // and is recovered by reap rather than exposing a partial result.
-    if (writer !== undefined) await store.close(identityKey, writer.archiveId).catch(() => undefined)
+    if (writer !== undefined) await store.close(identityKey, writer.archiveId, error).catch(() => undefined)
     throw error
   } finally {
     if (!closed) await source.close().catch(() => undefined)

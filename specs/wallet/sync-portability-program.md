@@ -135,8 +135,18 @@ schedule tests cover these persistence rules. The local service controller now
 integrates the existing owned source slot and shared capture path, reserves before
 pool acquisition and drains cancellation/shutdown before releasing its admission.
 Ready publication follows physical reader cleanup; failed cleanup fences the
-controller, and completed archives survive replacement. Authenticated HTTP/client
-integration and performance qualification under contention remain open.
+controller, and completed archives survive replacement.
+
+The subsequent authenticated HTTP layer now negotiates the migrated WAL/MySQL
+archive capability, returns prompt durable admission and accepts exact profile-bound
+status/directory/page/cancel requests. Full and mobile client transports enforce
+a dedicated response cap before parsing and bind immutable receipts, source
+metadata and page inclusion. Actual synthetic HTTP tests cover lost admission,
+replacement, cross-profile refusal and physical shutdown. Admission invokes
+expiry cleanup; explicit resource-limit terminal status remains distinct from
+other failures. This advances the S3 transport portion. The clock/cursor-compatible
+remote row reader, sync-manager adoption, remote destination, portable semantics
+and performance qualification under contention remain open.
 
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water

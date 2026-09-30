@@ -20,7 +20,7 @@ export interface SnapshotArchiveSource extends WalletReadSnapshot {
   validateClosure: () => Promise<void>
 }
 
-async function sourceSchema(storage: StorageKnex, k: Knex): Promise<string> {
+export async function readSnapshotArchiveSourceSchema(storage: StorageKnex, k: Knex): Promise<string> {
   const config = storage.knex.client.config.migrations
   const query = k(config?.tableName ?? 'knex_migrations')
     .select('name')
@@ -52,7 +52,7 @@ export async function openKnexSnapshotArchiveSource(
       const sourceStorage = await storage.readSettings(trx)
       const user = await storage.findUserByIdentityKey(identityKey, trx)
       if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
-      return { sourceStorage, user, sourceSchema: await sourceSchema(storage, storage.toDb(trx)) }
+      return { sourceStorage, user, sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx)) }
     })
     const userId = header.user.userId
     const snapshotId = Utils.toHex(Random(32))

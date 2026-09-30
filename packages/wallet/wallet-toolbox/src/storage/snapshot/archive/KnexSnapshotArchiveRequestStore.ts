@@ -15,14 +15,15 @@ import {
   parseSnapshotArchiveRequest,
   validateSnapshotArchiveRequest,
   type SnapshotArchiveRequestOwner,
-  type SnapshotArchiveRequestReceipt
+  type SnapshotArchiveRequestReceipt,
+  type SnapshotArchiveTerminalState
 } from './SnapshotArchiveRequest'
 
 interface RequestRow {
   identityKey: string
   requestId: string
   claimToken: string
-  state: 'claimed' | 'capturing' | 'ready' | 'closed' | 'failed' | 'expired'
+  state: 'claimed' | 'capturing' | 'ready' | SnapshotArchiveTerminalState
   requestJson: string
   expiresAt: number | string
   reservedBytes: number | string
@@ -169,11 +170,7 @@ export class KnexSnapshotArchiveRequestStore {
     })
   }
 
-  async close(
-    identityKey: string,
-    requestId: string,
-    state: 'closed' | 'failed' | 'expired' = 'closed'
-  ): Promise<void> {
+  async close(identityKey: string, requestId: string, state: SnapshotArchiveTerminalState = 'closed'): Promise<void> {
     identity(identityKey)
     identifier(requestId)
     await this.knex.transaction(async trx => {
@@ -190,7 +187,8 @@ export class KnexSnapshotArchiveRequestStore {
     const archiveId = await this.knex.transaction(async trx => {
       const capacity = await lockSnapshotArchiveCapacity(trx)
       const row: RequestRow | undefined = await trx(table).where({ identityKey, requestId }).first()
-      if (row === undefined || row.released || !['closed', 'failed', 'expired'].includes(row.state)) return undefined
+      if (row === undefined || row.released || !['closed', 'failed', 'expired', 'resource-limited'].includes(row.state))
+        return undefined
       if (row.archiveId !== null) return row.archiveId
       await trx('snapshot_archive_capacity')
         .where({ id: 1 })
@@ -213,7 +211,7 @@ export class KnexSnapshotArchiveRequestStore {
     const now = await snapshotArchiveDatabaseNow(this.knex)
     const rows: RequestRow[] = await this.knex(table)
       .where(query => {
-        void query.where('expiresAt', '<=', now).orWhereIn('state', ['closed', 'failed', 'expired'])
+        void query.where('expiresAt', '<=', now).orWhereIn('state', ['closed', 'failed', 'expired', 'resource-limited'])
       })
       .limit(snapshotArchiveRequestLimits.total)
     await runInSeries(rows, async row => {
