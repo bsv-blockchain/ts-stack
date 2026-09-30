@@ -54,7 +54,10 @@ full BRC-192–199 reference application.
 
 ## Durable root advertisement decisions
 
-`@bsv/output-knowledge/root-eviction` supplies portable journal types. The separate
+`@bsv/output-knowledge/root-eviction` supplies portable journal types and
+`RootEvictionContracts` for exact signed capability selection and original-contract
+recovery. The helper enforces the stricter advertised/profile limits; a coordinator
+must still retain its record atomically with request intake. The separate
 `@bsv/output-knowledge/root-eviction/evidence` entry supplies `SDKRootEvictionEvidence`
 for current SHIP/SLAP authentication, owner attribution and exact consuming
 transactions against an installed immutable chain view. Verified facts remain

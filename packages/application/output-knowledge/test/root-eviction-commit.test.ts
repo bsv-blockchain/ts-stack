@@ -355,8 +355,8 @@ it('samples the clock only after a separate SQLite writer releases the actual ga
     body = request('fixture_checked_waiting_expiry')
   const child = fork(
     fileURLToPath(new URL('./fixtures/root-commit-lock-worker.mjs', import.meta.url)),
-    [f.path],
-    { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], execArgv: [] }
+    [],
+    { cwd: f.directory, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], execArgv: [] }
   )
   const ended = new Promise<void>(resolve => child.once('exit', () => resolve()))
   try {

@@ -202,3 +202,10 @@ recheck access, installed policy and external context inside the shared commit
 gate. Their observations include the exact current head for later signing and
 final enqueue. Existing deterministic methods and the local stored format remain
 unchanged. See the root coordination guide for callback and service obligations.
+
+`RootEvictionContracts` in the portable `root-eviction` entry validates the exact
+signed coordination service and selected limits, then restores its original
+retained manifest after expiry without aliasing a newer selector. Persist its
+record atomically with the operation before effects. This helper does not add
+contract storage or mount the root service; see the
+[root coordination guide](../../guides/root-eviction-coordination.md).

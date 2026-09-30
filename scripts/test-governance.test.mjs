@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 79)
+  assert.equal(result.summary.propertySuites, 81)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 79)
+  assert.equal(result.summary.mutationTargets, 81)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -169,7 +169,7 @@ test('overlay discovery excludes generated children while preserving its own mut
 
 test('wallet recovery mutations clean only their own randomly named SQLite fixtures', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  for (const name of ['codec', 'store', 'controller', 'plan']) {
+  for (const name of ['codec', 'encoding', 'store', 'controller', 'plan']) {
     const target = targets[`wallet-recovery-${name}`]
     assert.ok(Object.hasOwn(target.runnerOptions.jest.config, 'globalSetup'))
     assert.equal(target.runnerOptions.jest.config.globalSetup, null)
@@ -398,5 +398,26 @@ test('root eviction partitions retain the complete source set, tests and indepen
     assert.equal(registration.minimumScore, 90)
     assert.equal(registration.maximumInvalid, 0)
     assert.equal(registration.maximumNoCoverage, 0)
+  }
+})
+
+test('wallet recovery encoding and descriptors retain complete modules and the same full test selection', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const registry = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const names = ['wallet-recovery-codec', 'wallet-recovery-encoding']
+  assert.deepEqual(names.flatMap(name => targets[name].mutate).toSorted(), [
+    'src/storage/actionRecovery/ActionRecoveryCodec.ts',
+    'src/storage/actionRecovery/ActionRecoveryEncoding.ts'
+  ])
+  for (const name of names) {
+    assert.deepEqual(targets[name].runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(targets[name].additionalInputs, targets[names[0]].additionalInputs)
+    assert.ok(fs.existsSync(path.join(REPOSITORY_ROOT, targets[name].propertyTest)))
+    const entry = registry.targets.find(entry => entry.id === name)
+    assert.equal(entry.minimumScore, 90)
+    assert.equal(entry.maximumNoCoverage, 0)
+    assert.equal(entry.maximumInvalid, 0)
   }
 })

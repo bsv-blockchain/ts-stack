@@ -71,7 +71,7 @@ export async function fixture(options: Partial<RootEvictionConfiguration> = {}) 
       return next
     },
     async cleanup() {
-      for (const value of stores) await value.close()
+      await stores.reduce((closed, value) => closed.then(() => value.close()), Promise.resolve())
       await rm(directory, { recursive: true, force: true })
     }
   }

@@ -83,7 +83,7 @@ it('accepts the inclusive final status and body limits, and an initial response 
   expect(queue.queued).toBe(true)
   const large = fixture(-1).queue
   large.register(enqueue)
-  expect(large.prepare(candidate(new Uint8Array(65537)), 0).body.length).toBe(65537)
+  expect(large.prepare(candidate(new Uint8Array(65537)), 0).body).toHaveLength(65537)
 })
 it('owns both the submitted candidate and the snapshot returned for signing', async () => {
   const { queue, res } = fixture()

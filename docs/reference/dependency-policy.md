@@ -169,7 +169,7 @@ Linux image and exact-head analysis gates remain required before promotion;
 these local results do not establish deployed behavior.
 
 The subsequent gRPC correction selects `@grpc/grpc-js` 1.14.5 in all seven
-standalone service locks, addressing the September 30 disclosures
+standalone service locks, addressing two advisories found by the September 30 audit:
 [GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j) and
 [GHSA-f596-whhp-79r4](https://github.com/advisories/GHSA-f596-whhp-79r4).
 The reviewed [1.14.5 release](https://github.com/grpc/grpc-node/releases/tag/%40grpc/grpc-js%401.14.5)
@@ -190,6 +190,15 @@ parsing and invalid-syntax checks. The gRPC registry's unpacked size grows by
 compatibility checks, not a throughput or memory benchmark. No public npm
 version or consumer migration changes; protected Linux image and exact-head
 analysis gates still qualify the eventual service artifacts before promotion.
+
+The Overlay Express authenticated root-response test fixture declares
+`express-rate-limit` 8.6.1 as a development dependency, reusing the existing
+workspace resolution. Its limiter runs before JSON parsing and authentication,
+and teardown shuts down its per-fixture memory store. The reviewed
+[8.6.1 changelog](https://github.com/express-rate-limit/express-rate-limit/blob/v8.6.1/docs/reference/changelog.mdx)
+retains the middleware API used here; Node and Express peer requirements fit the
+existing toolchain. Only that importer reference is added to the generated lock.
+No package resolution, production route, runtime dependency or wallet graph changes.
 
 The root workspace carries six narrow audited dependency overrides:
 

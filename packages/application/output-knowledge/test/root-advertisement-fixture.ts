@@ -168,11 +168,11 @@ export function minedRootEvidence(fixture: Awaited<ReturnType<typeof rootAdverti
       return {
         view,
         tracker: {
-          currentHeight: async () => height,
+          currentHeight: () => Promise.resolve(height),
           isValidRootForHeight: async (root, height) =>
             extension.has(height)
               ? extension.get(height)!.merkleRoot === root
-              : base.tracker.isValidRootForHeight(root, height)
+              : await base.tracker.isValidRootForHeight(root, height)
         },
         header: async (height, signal) =>
           extension.get(height) ?? (await base.header(height, signal))

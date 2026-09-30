@@ -733,11 +733,22 @@
         "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
-        "boundary": "Wallet local action recovery bounded canonical records and exact retained descriptors",
+        "boundary": "Wallet local action recovery bounded canonical JSON and binary ownership",
         "target": "At least 300 bounded recovery model cases",
         "invariants": [
-          "Canonical owned maps preserve values independent of insertion order and caller mutation.",
-          "Retained descriptors reject unsupported encodings and duplicate input identities."
+          "Canonical owned maps preserve values and bytes independent of insertion order.",
+          "Changing caller-owned nested values cannot change an already encoded recovery record."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet local action recovery exact retained transaction descriptors and funding roots",
+        "target": "At least 300 generated retained descriptor plans",
+        "invariants": [
+          "Retained plans preserve every descriptor, original order and independent owned bytes.",
+          "Duplicate input identities and unrelated funding roots are rejected."
         ]
       },
       {
@@ -990,6 +1001,18 @@
           "The trusted clock is sampled only after the physical journal gate is acquired.",
           "Access denial does not reveal whether a request key exists or a selected policy is stale.",
           "A captured evaluation cannot commit after its installed policy or external context changes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-contract.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact retained root capability selection and fixed versus narrower advertised profile bounds",
+        "target": "At least 300 generated signed manifests and original-selection recovery cases",
+        "invariants": [
+          "Recovery uses the original retained selection and cannot silently alias a newer manifest.",
+          "A new operation requires a currently valid signed manifest and an installed rule contract.",
+          "Advertised limits can narrow but never expand the fixed BRC-199 bounds."
         ]
       }
     ],

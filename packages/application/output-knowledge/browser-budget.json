@@ -38,7 +38,8 @@
     "parseRevenueListingLineagePackage",
     "REVENUE_LISTING_LINEAGE_LIMITS",
     "SQLiteRootEvictionStore",
-    "SDKRootEvictionEvidence"
+    "SDKRootEvictionEvidence",
+    "RootEvictionContracts"
   ],
   "maximumBytes": {
     "vite": {
@@ -234,6 +235,27 @@
           "raw": 405000,
           "gzip": 130000,
           "brotli": 111000
+        }
+      }
+    },
+    {
+      "entry": "./root-eviction",
+      "requiredExports": ["RootEvictionContracts"],
+      "prohibitedExports": [
+        "SQLiteRootEvictionStore",
+        "SDKRootEvictionEvidence",
+        "OutputKnowledge"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 190000,
+          "gzip": 62000,
+          "brotli": 53000
+        },
+        "esbuild": {
+          "raw": 150000,
+          "gzip": 58000,
+          "brotli": 50000
         }
       }
     }

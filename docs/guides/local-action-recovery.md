@@ -123,6 +123,14 @@ and descriptor text fields are limited to 4,096 UTF-8 bytes. These are local
 capability bounds, not changed BRC-100 limits. A large transaction may exceed the
 aggregate record bound even when an individual BEEF fits.
 
+The implementation separates canonical JSON/binary ownership from wallet-specific
+descriptor validation. The existing `ActionRecoveryCodec` deep imports and
+version-one record bytes remain unchanged. Funding-root membership uses a set
+of the validated input transaction IDs, avoiding a repeated scan for every root
+without changing order, duplicate rejection or source binding. This internal
+refactor requires no persisted-data migration. Both complete modules retain
+the full recovery test selection and independent critical mutation gates.
+
 Capacity exhaustion is explicit. There is no automatic pruning or deletion of
 completed operation identities, no implicit namespace reset, and no claim of
 unbounded retention. Preserve existing state and resolve outstanding operations

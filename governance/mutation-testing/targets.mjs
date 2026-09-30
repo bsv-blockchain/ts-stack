@@ -304,6 +304,11 @@ export function buildMutationTargets(repositoryRoot) {
     'wallet-recovery-codec': walletRecoveryTarget(
       repositoryRoot,
       'src/storage/actionRecovery/ActionRecoveryCodec.ts',
+      'src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts'
+    ),
+    'wallet-recovery-encoding': walletRecoveryTarget(
+      repositoryRoot,
+      'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
       'src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts'
     ),
     'wallet-recovery-installation': walletRecoveryTarget(
@@ -405,6 +410,21 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true,
         buildCommand: 'pnpm build'
       })
+    },
+    'root-eviction-contracts': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/root-contract.property.test.ts',
+      additionalInputs: ['test/root-contract-fixture.ts'],
+      mutate: ['src/root-eviction/RootEvictionContracts.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/root-contract.test.ts', '<rootDir>/test/root-contract.property.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build'
+        }
+      )
     },
     'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
       'RootEvictionCommitContext'

@@ -580,9 +580,19 @@
     {
       "id": "wallet-recovery-codec",
       "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet local action recovery exact retained transaction descriptors and funding roots",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-encoding",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
       "risk": "critical",
-      "boundary": "Wallet local action recovery bounded canonical records and exact retained descriptors",
+      "boundary": "Wallet local action recovery bounded canonical JSON and binary ownership",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
@@ -803,6 +813,16 @@
       "propertyTest": "packages/application/output-knowledge/test/root-eviction-commit.property.test.ts",
       "risk": "critical",
       "boundary": "Current clock, access, installed policy and immutable-context selection inside the shared root commit gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-contracts",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-contract.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact retained root capability selection and fixed versus narrower advertised profile bounds",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

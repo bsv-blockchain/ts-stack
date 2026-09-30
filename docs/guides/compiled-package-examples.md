@@ -23,6 +23,30 @@ They validate package names, exports, declarations, module resolution, and
 cross-package type identity. They do not replace behavioral examples, package
 tests, browser/mobile bundles, or live-service integration tests.
 
+## Original root coordination contracts
+
+This helper prepares an owned local record for a future atomic intake transaction.
+It performs no persistence or request effect. Recovery uses that original record
+and selector; current authorization remains a separate obligation.
+
+```ts compile
+// example-id: root-coordination-contract
+import {
+  RootEvictionContracts,
+  type RootEvictionCapabilityTrust
+} from '@bsv/output-knowledge/root-eviction'
+
+function selectRootCoordinationContract(
+  trust: RootEvictionCapabilityTrust,
+  signedManifest: unknown,
+  authenticatedSelector: string,
+  initiationTime: string
+) {
+  const contracts = new RootEvictionContracts(trust)
+  return contracts.retain(signedManifest, authenticatedSelector, initiationTime)
+}
+```
+
 ## Checked root decision observations
 
 The host supplies synchronous clock, access and context ports that participate

@@ -105,6 +105,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
+    "express-rate-limit": "^8.6.1",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.76.0",

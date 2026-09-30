@@ -17,3 +17,10 @@ export type {
   RootEvictionObservation,
   RootEvictionCheckedStorage
 } from './RootEvictionCommitContext.js'
+
+export { RootEvictionContracts } from './RootEvictionContracts.js'
+export type {
+  RootEvictionCapabilityTrust,
+  RootEvictionContractLimits,
+  RootEvictionSelectedContract
+} from './RootEvictionContracts.js'

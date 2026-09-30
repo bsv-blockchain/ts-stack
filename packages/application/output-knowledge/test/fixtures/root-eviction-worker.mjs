@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { SQLiteRootEvictionStore } from '../../dist/root-eviction/SQLiteRootEvictionStore.js'
 
-const setup = JSON.parse(readFileSync(process.argv[2], 'utf8'))
-const store = SQLiteRootEvictionStore.open(setup.path, setup.configuration)
+const setup = JSON.parse(readFileSync('worker.json', 'utf8'))
+const store = SQLiteRootEvictionStore.open('root.db', setup.configuration)
 try {
   if (setup.mode === 'queue') {
     await store.enqueue(
@@ -13,7 +13,7 @@ try {
         // middleware and delivery adapters require their own qualification.
         process.send({ kind: 'queued', bytes: Array.from(bytes) })
         const deadline = Date.now() + 10000
-        while (!existsSync(setup.release)) {
+        while (!existsSync('release-gate')) {
           if (Date.now() >= deadline) throw new Error('Parent did not release the root gate')
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10)
         }

@@ -65,13 +65,11 @@ export class RootEvictionServingRecords {
       'unavailable'
     )
     const row = this.view(target, requireAdvertisement)
+    let state: RootEvictionServing['state'] = 'unresolved'
+    if (blockers.length > 0) state = 'suppressed'
+    else if (row?.eligible === 1 && row.ready === 1) state = 'eligible'
     return {
-      state:
-        blockers.length > 0
-          ? 'suppressed'
-          : row?.eligible === 1 && row.ready === 1
-            ? 'eligible'
-            : 'unresolved',
+      state,
       revision: row ? rootDecimal(row.revision) : '0',
       blockers
     }
@@ -228,7 +226,7 @@ export class RootEvictionServingRecords {
       intent.membership === 'include' || intent.membership === 'withdraw',
       'Invalid root projection membership'
     )
-    if (!row || row.projection_revision !== revision) return false
+    if (row?.projection_revision !== revision) return false
     const key = rootTargetKey(target)
     const membership =
       row.eligible === 1 && this.blockers(key).length === 0 ? 'include' : 'withdraw'

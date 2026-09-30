@@ -33,14 +33,11 @@ afterEach(async () => {
 })
 async function launch(f: Awaited<ReturnType<typeof fixture>>, setup: Record<string, unknown>) {
   const settings = join(f.directory, 'worker.json')
-  await writeFile(
-    settings,
-    JSON.stringify({ path: f.path, configuration: f.configuration, ...setup })
-  )
+  await writeFile(settings, JSON.stringify({ configuration: f.configuration, ...setup }))
   const child = fork(
     fileURLToPath(new URL('./fixtures/root-eviction-worker.mjs', import.meta.url)),
-    [settings],
-    { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], execArgv: [] }
+    [],
+    { cwd: f.directory, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], execArgv: [] }
   )
   workers.push(child)
   const boundary = new Promise<{ kind: string; bytes?: number[] }>((resolve, reject) => {
@@ -125,8 +122,7 @@ describe('root journal process boundaries', () => {
     const { child, boundary } = await launch(f, {
       mode: 'queue',
       revision,
-      target: selected(),
-      release
+      target: selected()
     })
     expect(await boundary).toEqual({ kind: 'queued', bytes: [1, 2, 3] })
     const evaluation = {

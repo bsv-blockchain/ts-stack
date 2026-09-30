@@ -1,5 +1,8 @@
+import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-const database = new DatabaseSync(process.argv[2])
+// The parent creates this database in its isolated fixture directory.
+closeSync(openSync('root.db', 'r+'))
+const database = new DatabaseSync('root.db')
 database.exec('BEGIN IMMEDIATE')
 process.once('message', () => {
   setTimeout(() => {

@@ -214,12 +214,9 @@ export class RootEvictionRequests {
   }
   expire(record: RootEvictionRetainedRequest, now: string): void {
     const head = this.database.head()
-    const reason =
-      record.policyDigest !== head.policyDigest
-        ? 'policy-changed'
-        : outputU64(now) >= outputU64(record.request.body.expiresAt)
-          ? 'request-expired'
-          : undefined
+    let reason: string | undefined
+    if (record.policyDigest !== head.policyDigest) reason = 'policy-changed'
+    else if (outputU64(now) >= outputU64(record.request.body.expiresAt)) reason = 'request-expired'
     if (!reason) return
     const pending = this.pending(record)
     if (pending.length === 0) return

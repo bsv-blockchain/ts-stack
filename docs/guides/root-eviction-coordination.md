@@ -24,6 +24,37 @@ The output-knowledge source candidate also supplies a durable local decision jou
 HTTP routes, installed evidence policy and complete serving integration remain under implementation. Importing
 these helpers does not enable the profile or modify existing discovery behavior.
 
+## Preserve the selected coordination contract
+
+`RootEvictionContracts`, from `@bsv/output-knowledge/root-eviction`, validates the
+exact BRC-194 coordination service `root-advertisements` and BRC-199 profile. Its
+trusted configuration supplies the approved HTTPS base, root identity, chain,
+finite freshness policy and installed immutable rule validators. It copies the
+configuration and registry. A rule IRI names installed code; the helper never
+downloads or grants authority from that IRI.
+
+`retain(manifest, selector, now)` verifies the signed manifest at initiation and
+returns its owned local retention record, selected service/profile and effective
+limits. Sample `now` inside the actual intake decision gate. The manifest may
+narrow the fixed maximums of 64 targets, 86,400 seconds and 1 MiB per request/result;
+its larger values cannot expand them. Admission must check those selected bounds
+and reserve a complete future result, including the maximum permitted blockers,
+before accepting the operation. A valid manifest with an impractically small
+response budget does not entitle a caller to create an unreportable decision.
+
+Persist the returned record atomically with the original request, frozen decision
+policy and capacity reservations. `restore(record, selector)` revalidates that
+original selection at its recorded initiation time, even after manifest expiry.
+It requires the exact retained digest; a current discovery manifest cannot silently
+replace it. Keep original rule validators and authenticated recovery identity
+available while obligations remain. Caller/auditor authorization and request expiry
+are separate current checks; restoring a contract alone does not authorize effects.
+
+The helper performs no persistence or network calls. The current primitive root
+journal does not yet store this capability record atomically with intake; the
+contract-aware coordinator/storage integration remains required before advertising
+the full profile. Never fill a missing historical selection from today's manifest.
+
 ## Validate before evaluating
 
 `parseOutputRootEvictionRequest` owns a complete signed packet, bounds it to 1 MiB,

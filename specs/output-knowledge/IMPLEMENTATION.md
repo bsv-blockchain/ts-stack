@@ -117,10 +117,11 @@ submission and GASP behavior remains available to applications that do not opt i
 Current wallet/domain work adds an opt-in local SQLite action-recovery controller,
 atomic allocation records and exact prepared/final transaction retention. The
 ordinary wallet route remains unchanged. The current complete wallet run passes
-3,277 tests across 306 suites with the existing governed skip. Focused cases cover five actual process-termination boundaries,
+3,278 tests across 307 suites with the existing governed skip. Focused cases cover five actual process-termination boundaries,
 all six wallet-funded covenant routes and ordinary allocation-failure compatibility.
-Plan, byte-codec and controller mutation qualification passes; the final
-action-store campaign passes 96.24%/585. Core/client/mobile 2.15.0 source candidates
+Plan, the preceding combined byte-codec and controller mutation qualification
+pass; the action-store campaign passes 96.24%/585. The later encoding/descriptor
+refactor below requires fresh qualification of both complete modules. Core/client/mobile 2.15.0 source candidates
 are coordinated; package publication remains a separate, unauthorized action.
 These tests do not establish the
 remaining same-seller genesis authority, selected-chain domain or private delivery
@@ -497,7 +498,7 @@ digests. Their mock chain and opaque proof fixtures qualify wire contracts only.
 Analyzer follow-ups preserve canonical recovery key order using an explicit
 UTF-16 comparator, exact ASCII derivation bounds, and sequential wallet SQL/input
 processing. The recovery suite passes 177 tests across 23 suites, and 63 ordinary
-wallet action tests pass across five suites. Current source mutation requalification
+wallet action tests pass across five suites. The preceding source mutation requalification
 passes plan 95.42%/131, codec 91.34%/439, transitions 94.54%/183, funding store
 92.45%/424 and funding controller 91.88%/271, all with zero uncovered or invalid
 mutants. The codec campaign recovered from one crashed V8 worker and completed in
@@ -616,9 +617,71 @@ passes 100% over 30 mutation sites with zero uncovered/invalid. The complete cha
 store passes 98.73% over all 237 sites (234 killed, three surviving), with zero
 uncovered/invalid and an exact source match after its 166-test dry run.
 
-The complete current runtime passes 1,147 tests across 77 suites, with 97.72% line
+At the checked-methods increment, the complete runtime passes 1,147 tests across 77 suites, with 97.72% line
 and 94.68% branch coverage. Types and packed consumers pass, as do all 20 compiled
 documentation examples against 22 exact tarballs, root health/lint/format and
 145 HTML pages. The registry has 79 implemented properties and 79 critical targets.
 Broader local blockers, the actual root coordinator and complete serving-path
 installation remain required; checked ports alone do not supply them.
+
+The portable root-contract component passes 16 focused cases and 100% line/branch
+coverage, including a generated property of at least 300 signed selections. Its
+first mutation run reached 87.50%; adding assertions that installation/selection
+refusals include usable diagnostics brings the unchanged complete source to
+93.75% over 32 sites, zero uncovered/invalid, with an exact source match. Original
+selection survives manifest expiry, rejects a different digest, retains explicit
+critical-extension support and honors narrower advertised limits.
+
+The optional root entry passes measured and enforced exact-tarball browser
+contracts: Vite 169,709/54,839/46,557 and esbuild 131,158/50,825/43,951 raw/gzip/Brotli
+bytes, one chunk and two packages. Existing entry budgets are unchanged. Packed
+exports and all 21 compiled examples against 22 tarballs pass. The registry now
+has 80 actual properties and 80 critical targets at this increment. The helper does not yet add the
+atomic request/contract persistence or mount the coordination service.
+
+## September 30 corrective qualification in progress
+
+The later complete runtime passes 1,163 tests across 79 suites, with 97.72% line
+and 94.68% branch coverage. Analyzer corrections preserve lazy expiry priority,
+serving-state precedence and projection revision checks. Process workers now use
+fixed files in their isolated fixture directory; all cross-process gate and
+crash assertions remain. The complete changed records source passes 97.65% over
+426 mutations (416 killed, ten surviving), with an exact source match and zero
+uncovered or invalid mutations. Authentication production sources are unchanged by the
+remaining assertion-style correction; all 310 middleware tests pass.
+
+The published combined wallet-codec campaign exceeded its 90-minute hosted limit
+after a successful 163-test dry run. The internal refactor separates canonical
+JSON/binary ownership from retained wallet descriptor validation while preserving
+all existing Codec exports, encodings, errors and resource limits. Funding-root
+membership now uses a set rather than a repeated input scan. The same maximum-input
+fixture retains its exact 580,733 bytes and digest. Shared-host diagnostic medians
+were 22.1 ms before and 10.5 ms after; these are not controlled performance results.
+Both complete modules retain the same full recovery test selection and independent
+90%/zero-uncovered/zero-invalid gates. No deadline or worker limit is raised. A
+new descriptor property and partition regression bring actual registries to
+81 properties and 81 mutation targets. Encoding passes 91.81% over all 171 sites
+(157 killed,14 surviving), with zero uncovered or invalid mutations; the runner
+recovered one worker crash. Its source matched exactly before removal of one
+trailing blank line; executable code is unchanged. The descriptor campaign and
+fresh hosted reports remain required.
+
+The refactor passes 57 focused cases and all 3,278 wallet cases across 307 suites,
+with the existing governed skip. Core, client and mobile packed checks pass,
+as do strict older-SDK consumers, Vite/esbuild browser and Metro/Hermes mobile
+checks. All 21 compiled examples pass against 22 tarballs; 145 HTML pages validate.
+
+The separate infrastructure audit correction changes only seven gRPC resolutions
+and two IP resolutions, with 658 service tests, seven zero-finding audits and
+ordinary gRPC/cancellation/IP checks. The root-response test fixture gains a
+pre-authentication limiter using the already locked development dependency and
+explicit store teardown. All 579 Overlay Express tests and packed/older-SDK
+consumers pass. Fresh exact-head Sonar, CodeQL and complete CI remain required;
+local corrections do not resolve a hosted review thread by themselves. The
+published root-journal and root-record jobs also reached their 45-minute job caps
+after successful 166-test dry runs. Only those two existing targets join the
+existing bounded 90-minute CI allowance, covered by the exact orchestration
+regression; source/test selections, workers, per-test deadlines and pass gates
+remain unchanged. Their next exact-head hosted reports are still required. None of
+these corrections completes atomic root contract/request storage, the full root
+service or the remaining checkpoint-two integration work.

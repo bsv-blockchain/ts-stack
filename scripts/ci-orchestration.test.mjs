@@ -161,7 +161,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
     if (job.name === 'mutation-tests') {
-      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage"]'), matrix.target) && 90 || 45 }}`
+      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records"]'), matrix.target) && 90 || 45 }}`
       assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
       const dedicated = readFileSync(
         join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),

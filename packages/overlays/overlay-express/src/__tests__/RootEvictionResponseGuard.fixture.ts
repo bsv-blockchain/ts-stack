@@ -1,4 +1,5 @@
 import express from 'express'
+import { MemoryStore, rateLimit } from 'express-rate-limit'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AuthFetch, CompletedProtoWallet, PrivateKey } from '@bsv/sdk'
@@ -46,6 +47,8 @@ export async function rootResponseFixture() {
     return signature
   }
   const app = express()
+  const rateStore = new MemoryStore()
+  app.use(rateLimit({ windowMs: 60_000, limit: 300, store: rateStore }))
   app.use(express.json())
   app.use(createAuthMiddleware({ wallet, transportLimits: { requestTimeoutMs: 2000 } }))
   app.post('/advertisements', async (_req, res) => {
@@ -121,10 +124,14 @@ export async function rootResponseFixture() {
     },
     async cleanup() {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve()))
-      )
-      await root.cleanup()
+      try {
+        await new Promise<void>((resolve, reject) =>
+          server.close(error => (error ? reject(error) : resolve()))
+        )
+      } finally {
+        rateStore.shutdown()
+        await root.cleanup()
+      }
     }
   }
 }
