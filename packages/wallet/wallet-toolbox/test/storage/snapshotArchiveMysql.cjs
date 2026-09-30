@@ -27,6 +27,10 @@ const {
   snapshotArchiveLimits
 } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveStore.js')
 const { addSnapshotArchiveTables } = require('../../out/src/storage/schema/snapshotArchiveMigration.js')
+const { StorageKnex } = require('../../out/src/storage/StorageKnex.js')
+const { StorageProvider } = require('../../out/src/storage/StorageProvider.js')
+const { captureKnexSnapshotArchive } = require('../../out/src/storage/snapshot/archive/captureKnexSnapshotArchive.js')
+const { decodeSyncTransfer } = require('../../out/src/storage/remoting/SyncTransfer.js')
 const open = () => knex({ client: 'mysql2', connection, pool: { min: 1, max: 1 } })
 const database = open(),
   replica = open(),
@@ -48,6 +52,124 @@ const binding = {
     maxOutputScript: 1024
   },
   user: { created_at: date, updated_at: date, userId: 7, identityKey: identity, activeStorage: 'source' }
+}
+
+async function captureFixture() {
+  const writer = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: open() })
+  const reader = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: open() })
+  const originalAppend = KnexSnapshotArchiveStore.prototype.append
+  try {
+    await writer.migrate('native capture source', 'native-source')
+    await writer.makeAvailable()
+    await reader.makeAvailable()
+    const { user } = await writer.findOrInsertUser(identity)
+    const { user: foreign } = await writer.findOrInsertUser(other)
+    const labels = Array.from({ length: 140 }, (_, index) => ({
+      userId: user.userId,
+      label: `original-${index}`,
+      isDeleted: index % 7 === 0,
+      created_at: date,
+      updated_at: date
+    }))
+    await writer.knex('tx_labels').insert(labels)
+    await writer.findOrInsertTxLabel(foreign.userId, 'foreign label')
+    const tx = {
+      created_at: date,
+      updated_at: date,
+      status: 'completed',
+      isOutgoing: false,
+      satoshis: 1,
+      description: 'synthetic fixture'
+    }
+    const proof = await writer.insertProvenTx({
+      created_at: date,
+      updated_at: date,
+      provenTxId: 0,
+      txid: 'a'.repeat(64),
+      height: 1,
+      index: 0,
+      merklePath: [4, 5, 255],
+      rawTx: [1, 2, 255],
+      blockHash: 'b'.repeat(64),
+      merkleRoot: 'c'.repeat(64)
+    })
+    await writer.insertTransaction({
+      ...tx,
+      transactionId: 0,
+      userId: user.userId,
+      provenTxId: proof,
+      txid: 'a'.repeat(64),
+      reference: 'owned'
+    })
+    const foreignTransaction = await writer.insertTransaction({
+      ...tx,
+      transactionId: 0,
+      userId: foreign.userId,
+      reference: 'foreign'
+    })
+    await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'historical selection' })
+    let changedDuringCapture = false
+    KnexSnapshotArchiveStore.prototype.append = async function (owner, page) {
+      await originalAppend.call(this, owner, page)
+      if (page.sequence === 0) {
+        await writer
+          .knex('tx_labels')
+          .where({ userId: user.userId, label: 'original-0' })
+          .update({ label: 'replacement' })
+        await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'replacement selection' })
+        changedDuringCapture = true
+      }
+    }
+    const manifest = await captureKnexSnapshotArchive(reader, writer.knex, identity, 'test')
+    KnexSnapshotArchiveStore.prototype.append = originalAppend
+    assert.equal(changedDuringCapture, true)
+    assert.equal(manifest.pages, 14)
+    assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
+    assert.equal(manifest.binding.user.activeStorage, 'historical selection')
+    assert.equal(manifest.binding.sourceSchema, '2026-09-30-002 add snapshot archive staging')
+    const store = new KnexSnapshotArchiveStore(writer.knex)
+    const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
+    const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
+    assert.equal(first.table, 'txLabels')
+    assert.equal(first.rows.length, 128)
+    assert.equal(second.rows.length, 12)
+    assert.deepEqual(
+      [...first.rows, ...second.rows].map(row => row.label),
+      labels.map(row => row.label)
+    )
+    assert.equal(first.rows[0].created_at, date.toISOString())
+    assert.equal(first.rows[0].isDeleted, true)
+    const proofPage = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 0)).bytes)
+    assert.deepEqual(proofPage.rows[0].rawTx, new Uint8Array([1, 2, 255]))
+    await store.close(identity, manifest.archiveId)
+    await writer.insertCommission({
+      created_at: date,
+      updated_at: date,
+      commissionId: 0,
+      userId: user.userId,
+      transactionId: foreignTransaction,
+      satoshis: 1,
+      keyOffset: 'synthetic',
+      isRedeemed: false,
+      lockingScript: [1]
+    })
+    await assert.rejects(captureKnexSnapshotArchive(reader, writer.knex, identity, 'test'), /relation/)
+    assert.equal((await writer.knex('snapshot_archive_capacity').first()).archives, 0)
+    return {
+      tables: 13,
+      pages: manifest.pages,
+      labels: 140,
+      pinnedConcurrentWrites: true,
+      originalPrimary: true,
+      originalSchema: true,
+      packedBinary: true,
+      crossProfileClosureRejected: true
+    }
+  } finally {
+    KnexSnapshotArchiveStore.prototype.append = originalAppend
+    await reader.destroy()
+    await writer.destroy()
+  }
 }
 async function main() {
   try {
@@ -99,6 +221,7 @@ async function main() {
     await addSnapshotArchiveTables(database)
     assert.equal(await database.schema.hasTable('snapshot_archive_pages'), true)
     assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 0)
+    const capture = await captureFixture()
     console.log(
       JSON.stringify({
         version,
@@ -110,7 +233,8 @@ async function main() {
         appendRollback: true,
         expiredPartialUnreadable: true,
         profileReservationRace: true,
-        idempotentPartialDdl: true
+        idempotentPartialDdl: true,
+        capture
       })
     )
   } finally {

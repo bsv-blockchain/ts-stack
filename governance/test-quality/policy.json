@@ -123,6 +123,28 @@
         ]
       },
       {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable snapshot destination binding, atomic checkpoint admission and primary-generation fencing",
+        "target": "Randomized original profile metadata, same-view binding drift, independent profiles and replacement views",
+        "invariants": [
+          "Same-view metadata changes reject without modifying the durable checkpoint.",
+          "A replacement view starts at table zero with a fresh session while preserving another profile."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet bounded snapshot row detachment and profile/source-scoped normalized parent and child ID mapping",
+        "target": "Randomized overlapping incoming IDs across profiles and sources with independent expected mapping and persisted-row oracles",
+        "invariants": [
+          "Incoming parent IDs resolve only within the selected profile and source storage.",
+          "Only newly learned child IDs are persisted, existing parent and foreign mappings remain unchanged, and missing parents reject."
+        ]
+      },
+      {
         "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
         "manifest": "packages/overlays/topics/package.json",
         "risk": "critical",
@@ -491,13 +513,14 @@
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
-        "boundary": "Wallet shared snapshot archive staging, immutable page receipts, profile isolation, quotas and physical cleanup accounting",
+        "boundary": "Wallet coherent SQL snapshot capture and staging, profile closure, immutable receipts, quotas and cleanup accounting",
         "target": "Persistent bounded archive staging across capture retries, incomplete captures, independent readers and expired/cancelled cleanup",
         "invariants": [
           "A partial or expired capture is never readable as a completed archive.",
           "Exact page retries preserve immutable bytes and the independent hash-chain receipt without double charging.",
           "The authenticated profile cannot read or release another profile's archive.",
-          "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted."
+          "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted.",
+          "A complete SQL capture contains the selected profile\u2019s original rows; cancellation removes all staged pages and reservations without activating wallet data."
         ]
       }
     ],

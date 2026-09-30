@@ -353,6 +353,23 @@ capture becomes immutable and readable from another server connection. The
 capture controller must validate complete source closure before sealing it; this
 store alone does not validate wallet records or cryptographic proofs.
 
+The internal `captureKnexSnapshotArchive` controller now takes a dedicated SQL
+reader and a separate staging connection. It reads original settings, the
+profile and the migration version in one retained view; verifies every selected
+foreign-key relationship against that profile; and captures all thirteen raw
+standard tables through the shared keyset reader. Relationship checks return
+only an invalid-row marker, without loading payloads or building full ID maps.
+Pages use the existing binary transport frame. They are not canonical BRC-38
+output, and this step does not authenticate transaction/proof contents.
+
+The controller reads at most 128 rows and a 128 KiB conservative SQL payload
+charge per page, then checks the encoded one-MiB limit before staging. It reports
+acknowledged page/row/byte counts, releases the source view before sealing, and
+discards staging after cancellation or a capture failure. If cleanup itself
+fails, the reservation remains available for expiry/reaping recovery. Callers
+must supply independent reader/staging pools and keep schema migrations outside
+active capture windows. No RPC route or advertised capability is added.
+
 The initial policy allows at most eight handles and 128 MiB of logical reserved
 storage globally, one handle and 32 MiB per profile, 1 MiB per page, 1,000 rows per
 page and 4,096 pages. Metadata is at most 64 KiB. A reservation includes encoded
@@ -370,7 +387,8 @@ capacity once. The current component requires its owning controller to invoke
 cleanup/reaping. No unattended worker or public capability is installed by the
 migration.
 
-SQLite tests cover 300 generated capture schedules, independent hash-chain
+SQLite tests cover 300 generated staging schedules and 300 actual SQL capture/
+cancellation schedules, independent hash-chain
 receipts, cross-profile reads and cleanup, exact limits, and failures between page
 insertion and checkpoint update. A synthetic process fixture terminates the
 writer at five durable boundaries: before data, after page insertion, after the
@@ -378,9 +396,12 @@ checkpoint write, after transaction commit and after sealing but before the
 acknowledgement. Uncommitted pages roll back; committed pages retain exact retry
 receipts; only sealed captures are readable. Isolated MySQL 8.4.11 also exercises
 1 MiB pages, independent connections racing for one profile, concurrent cleanup,
-rollback and partial DDL recovery. These results apply to those fixtures.
-Deployed PXC, authenticated HTTP, complete source capture and the full #544
-program still require implementation or qualification.
+rollback and partial DDL recovery. Its controller fixture captures thirteen
+tables over fourteen pages, retaining 140 original labels and primary metadata
+while an independent writer updates both. It also verifies schema provenance,
+packed binary and cross-profile relationship refusal. These results apply to
+those fixtures. Deployed PXC, authenticated HTTP, canonical streaming, complete
+portable semantic validation and the full #544 program remain open.
 
 Run the synthetic process-termination fixture from the repository root on macOS
 or Linux (Node 24 and the package build are required):

@@ -4,6 +4,7 @@ import type { Knex } from 'knex'
 import type { StorageKnex } from '../StorageKnex'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_PARAMETER, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import type { RetainedReadSnapshot } from './RetainedReadSnapshot'
 import type {
   PackedSnapshotRow,
   WalletReadSnapshot,
@@ -94,7 +95,8 @@ function owned(k: Knex, table: string, id: string, source: string, userId: numbe
     .whereRaw('?? = ??', [`${table}.${id}`, source])
 }
 
-function scopedQuery(k: Knex, table: WalletSnapshotTable, userId: number): Knex.QueryBuilder {
+/** Shared profile selection for local paging and archive closure checks. */
+export function walletSnapshotSourceQuery(k: Knex, table: WalletSnapshotTable, userId: number): Knex.QueryBuilder {
   const { name } = definitions[table]
   const query = k(name)
   if (table === 'provenTxReqs') {
@@ -246,7 +248,7 @@ async function readPage<T extends WalletSnapshotTable>(
     columns.set(table, fields)
   }
   const base = (): Knex.QueryBuilder => {
-    const q = scopedQuery(k, table, userId)
+    const q = walletSnapshotSourceQuery(k, table, userId)
     if (after !== undefined) seek(q, schema.keys, after)
     for (const key of schema.keys) void q.orderBy(key)
     return q
@@ -273,6 +275,27 @@ async function readPage<T extends WalletSnapshotTable>(
   return { rows, payloadBytes, cursor, done: count === candidates.length && candidates.length < limits.maxRows }
 }
 
+/** Bind every page to one provider-owned view and immutable profile identifiers. */
+export function createKnexWalletSnapshotPageReader(
+  storage: StorageKnex,
+  userId: number,
+  snapshotId: string,
+  view: RetainedReadSnapshot
+): WalletReadSnapshot['readPage'] {
+  const context: SnapshotContext = { storage, userId, snapshotId, columns: new Map() }
+  return async <T extends WalletSnapshotTable>(
+    table: T,
+    cursor?: WalletSnapshotCursor,
+    limits: WalletSnapshotPageLimits = {}
+  ): Promise<WalletSnapshotPage<T>> => {
+    const schema = definition(table)
+    const after = position(cursor, snapshotId, table, schema.keys)
+    const maxRows = bound(limits.maxRows, 128, 1000, 'maxRows')
+    const maxBytes = bound(limits.maxBytes, 262144, 16777216, 'maxBytes')
+    return await view.read(trx => readPage(context, trx, table, after, { maxRows, maxBytes }))
+  }
+}
+
 /** SQL implementation, deliberately separate from legacy OFFSET sync and public RPC. */
 export async function openKnexWalletReadSnapshot(
   storage: StorageKnex,
@@ -292,7 +315,6 @@ export async function openKnexWalletReadSnapshot(
     })
     const userId = header.user.userId
     const snapshotId = Utils.toHex(Random(32))
-    const context: SnapshotContext = { storage, userId, snapshotId, columns: new Map() }
     return {
       version: 1,
       snapshotId,
@@ -303,17 +325,7 @@ export async function openKnexWalletReadSnapshot(
       },
       closed: view.closed,
       close: view.close,
-      async readPage<T extends WalletSnapshotTable>(
-        table: T,
-        cursor?: WalletSnapshotCursor,
-        limits: WalletSnapshotPageLimits = {}
-      ): Promise<WalletSnapshotPage<T>> {
-        const schema = definition(table)
-        const after = position(cursor, snapshotId, table, schema.keys)
-        const maxRows = bound(limits.maxRows, 128, 1000, 'maxRows')
-        const maxBytes = bound(limits.maxBytes, 262144, 16777216, 'maxBytes')
-        return await view.read(trx => readPage(context, trx, table, after, { maxRows, maxBytes }))
-      }
+      readPage: createKnexWalletSnapshotPageReader(storage, userId, snapshotId, view)
     }
   } catch (error) {
     // Keep the opening error authoritative while still awaiting physical cleanup.

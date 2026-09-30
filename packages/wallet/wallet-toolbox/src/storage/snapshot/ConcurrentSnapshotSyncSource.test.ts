@@ -244,3 +244,22 @@ test.each([null, 7])('unsupported connection value %p refuses before constructin
     source.knex.client.config.connection = original
   }
 })
+
+test('invalid static MySQL database metadata never creates a private reader', async () => {
+  const source = mysql()
+  const opening = jest.spyOn(StorageKnex.prototype, 'openWalletReadSnapshot').mockResolvedValue(view())
+  for (const database of [null, 42, undefined]) {
+    source.knex.client.config.connection = { host: '127.0.0.1', database }
+    expect(await source.getSnapshotSync()!.openSource('identity')).toBeUndefined()
+  }
+  expect(opening).not.toHaveBeenCalled()
+})
+
+test('a pre-cancelled source does no database or reader work', async () => {
+  const source = mysql()
+  const opening = jest.spyOn(StorageKnex.prototype, 'openWalletReadSnapshot').mockResolvedValue(view())
+  const signal = new AbortController()
+  signal.abort()
+  await expect(source.getSnapshotSync()!.openSource('identity', { signal: signal.signal })).rejects.toThrow('cancelled')
+  expect(opening).not.toHaveBeenCalled()
+})

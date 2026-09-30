@@ -1,6 +1,13 @@
 import fc from 'fast-check'
 import { createHash } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { knex } from 'knex'
+import { StorageKnex } from '../../StorageKnex'
+import { StorageProvider } from '../../StorageProvider'
+import { decodeSyncTransfer } from '../../remoting/SyncTransfer'
+import { captureKnexSnapshotArchive } from './captureKnexSnapshotArchive'
 import { addSnapshotArchiveTables } from '../../schema/snapshotArchiveMigration'
 import {
   KnexSnapshotArchiveStore,
@@ -37,6 +44,96 @@ const binding: SnapshotArchiveBinding = {
   user: { userId: 1, identityKey: identity, activeStorage: 'historical', created_at: date, updated_at: date }
 }
 const digest = (bytes: Uint8Array | string): string => createHash('sha256').update(bytes).digest('hex')
+
+test('generated SQL captures match the selected profile or leave no readable state after cancellation', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'wallet-capture-property-'))
+  const open = () =>
+    new StorageKnex({
+      ...StorageProvider.createStorageBaseOptions('test'),
+      knex: knex({
+        client: 'better-sqlite3',
+        connection: { filename: join(directory, 'wallet.sqlite') },
+        useNullAsDefault: true,
+        pool: { min: 1, max: 1 }
+      })
+    })
+  const writer = open()
+  const reader = open()
+  try {
+    await writer.knex.raw('PRAGMA journal_mode = WAL')
+    await writer.migrate('generated capture', 'generated-source')
+    await writer.makeAvailable()
+    await reader.makeAvailable()
+    const { user: first } = await writer.findOrInsertUser(identity)
+    const { user: second } = await writer.findOrInsertUser(other)
+    const store = new KnexSnapshotArchiveStore(writer.knex)
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uniqueArray(fc.integer({ min: 0, max: 10000 }), { maxLength: 8 }),
+        fc.uniqueArray(fc.integer({ min: 0, max: 10000 }), { maxLength: 8 }),
+        fc.boolean(),
+        fc.integer({ min: -1, max: 14 }),
+        async (firstLabels, secondLabels, chooseSecond, cancelAfter) => {
+          await writer.knex('tx_labels').delete()
+          const rows = [
+            ...firstLabels.map(label => ({ userId: first.userId, label: `first-${label}` })),
+            ...secondLabels.map(label => ({ userId: second.userId, label: `second-${label}` }))
+          ].map(row => ({
+            ...row,
+            isDeleted: row.label.endsWith('0'),
+            created_at: date.toISOString(),
+            updated_at: date.toISOString()
+          }))
+          if (rows.length > 0) await writer.knex('tx_labels').insert(rows)
+          const selected = chooseSecond ? second : first
+          const expected = rows
+            .filter(row => row.userId === selected.userId)
+            .map(row => ({ label: row.label, isDeleted: row.isDeleted }))
+          const signal = new AbortController()
+          if (cancelAfter === 0) signal.abort()
+          const seen: number[] = []
+          const pending = captureKnexSnapshotArchive(reader, writer.knex, selected.identityKey, 'test', {
+            signal: signal.signal,
+            onProgress: progress => {
+              seen.push(progress.pages)
+              if (progress.pages === cancelAfter) signal.abort()
+              progress.pages = -100 // A consumer cannot mutate the controller's cursor.
+            }
+          })
+          if (cancelAfter >= 0 && cancelAfter <= 13) await expect(pending).rejects.toThrow('cancelled')
+          else {
+            const manifest = await pending
+            expect(manifest.pages).toBe(13)
+            expect(manifest.binding.user.identityKey).toBe(selected.identityKey)
+            const page = await store.read(selected.identityKey, manifest.archiveId, 8)
+            const frame = decodeSyncTransfer(page.bytes) as {
+              table: string
+              rows: Array<{ label: string; isDeleted: boolean }>
+            }
+            expect(frame.table).toBe('txLabels')
+            expect(frame.rows.map(row => ({ label: row.label, isDeleted: row.isDeleted }))).toEqual(expected)
+            await expect(store.read(chooseSecond ? identity : other, manifest.archiveId, 8)).rejects.toThrow(
+              'unavailable'
+            )
+            await store.close(selected.identityKey, manifest.archiveId)
+          }
+          expect(seen).toEqual(Array.from({ length: seen.length }, (_, index) => index + 1))
+          expect(await writer.knex('snapshot_archives')).toHaveLength(0)
+          expect(await writer.knex('snapshot_archive_pages')).toHaveLength(0)
+          expect(await writer.knex('snapshot_archive_capacity').first()).toMatchObject({
+            archives: 0,
+            reservedBytes: 0
+          })
+        }
+      ),
+      { seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 5442026 }
+    )
+  } finally {
+    await reader.destroy()
+    await writer.destroy()
+    await rm(directory, { recursive: true, force: true })
+  }
+}, 120000)
 
 // The model uses Node's independent hash implementation and only the persisted
 // public receipts; it does not call the store's hashing/accounting helpers.

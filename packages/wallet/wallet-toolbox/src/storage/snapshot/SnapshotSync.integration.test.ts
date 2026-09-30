@@ -873,6 +873,15 @@ test('an uncommitted auxiliary migration keeps ordinary backup on the compatible
 
 test('large valid rows select serialized fallback after bounded commits without losing counts or data', async () => {
   const { source, destination, manager, user } = await fixture(2)
+  const destinationUser = (await destination.findUserByIdentityKey(identity))!
+  await destination.insertTxLabel({
+    txLabelId: 0,
+    userId: destinationUser.userId,
+    created_at: new Date('2025-01-01'),
+    updated_at: new Date('2025-01-01'),
+    label: 'label-0',
+    isDeleted: false
+  })
   const bytes = new Uint8Array(200000).fill(173)
   await source.insertTransaction({
     transactionId: 0,
@@ -888,12 +897,23 @@ test('large valid rows select serialized fallback after bounded commits without 
   })
   const legacy = jest.spyOn(destination, 'processSyncChunk')
   const modes: string[] = []
+  const progress: Array<{ mode: string; state: string; pages: number; inserts: number; updates: number }> = []
   const result = await manager.syncToWriterResumable(await manager.getAuth(), destination, {
-    onProgress: p => modes.push(p.mode)
+    onProgress: p => {
+      modes.push(p.mode)
+      progress.push({ ...p })
+    }
   })
   expect(result.status).toBe('completed')
   expect(result.mode).toBe('exclusive')
-  expect(result.inserts).toBe(3)
+  expect(result.inserts).toBe(2)
+  expect(result.updates).toBe(1)
+  const paged = progress.filter(p => p.mode === 'paged').at(-1)!
+  const exclusive = progress.filter(p => p.mode === 'exclusive')
+  expect(paged).toMatchObject({ inserts: 1, updates: 1 })
+  expect(exclusive[0]).toMatchObject({ pages: paged.pages, inserts: 1, updates: 1 })
+  expect(exclusive.at(-1)).toMatchObject({ pages: result.pages, inserts: 2, updates: 1 })
+  expect(result.pages).toBe(paged.pages + exclusive.filter(p => p.state === 'committed').length)
   expect(modes).toContain('paged')
   expect(modes).toContain('exclusive')
   expect(legacy).toHaveBeenCalled()
@@ -1442,4 +1462,30 @@ test('snapshot capability configuration rejects a non-boolean before database ad
   } finally {
     await database.destroy()
   }
+})
+
+test('an expiry during cleanup preserves an earlier malformed-page failure', async () => {
+  const { source, destination, manager } = await fixture(1)
+  const capability = source.getSnapshotSync()!
+  const failure = new Error('synthetic malformed page')
+  const legacy = jest.spyOn(destination, 'processSyncChunk')
+  jest.spyOn(source, 'getSnapshotSync').mockReturnValue({
+    ...capability,
+    openSource: async (...args) => {
+      const view = (await capability.openSource(...args))!
+      return {
+        ...view,
+        readPage: async () => {
+          throw failure
+        },
+        close: async () => {
+          await view.close()
+          throw new SnapshotResourceLimitError('synthetic cleanup expiry')
+        }
+      }
+    }
+  })
+  await expect(manager.syncToWriterResumable({ identityKey: identity }, destination)).rejects.toBe(failure)
+  expect(legacy).not.toHaveBeenCalled()
+  expect(await destination.findTxLabels({ partial: {} })).toHaveLength(0)
 })

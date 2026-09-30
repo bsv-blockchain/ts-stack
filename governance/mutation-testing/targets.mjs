@@ -51,6 +51,160 @@ function vitestTarget(configFile) {
   }
 }
 
+// Preserve the complete original snapshot-sync source ranges and selected tests.
+// Each disjoint group runs the same behavioral suite and its own strict gate.
+function snapshotSyncMutationTargets(repositoryRoot) {
+  const complete = {
+    packageDirectory: 'packages/wallet/wallet-toolbox',
+    manifest: 'packages/wallet/wallet-toolbox/package.json',
+    propertyTest:
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts',
+    mutate: [
+      'src/utility/runInSeries.ts',
+      'src/storage/snapshot/SnapshotSync.ts',
+      'src/storage/snapshot/SnapshotSyncRows.ts',
+      'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
+      'src/storage/snapshot/runSnapshotSyncSession.ts',
+      'src/storage/schema/snapshotSyncMigration.ts',
+      'src/storage/schema/entities/mergeSyncChunkEntities.ts',
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/sync/syncSession.ts',
+        'if (chunk.user != null && session.activeStorage',
+        "notify('preparing', { readMs })"
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/methods/validateSyncProof.ts',
+        'if (!(candidate.rawTx instanceof Uint8Array',
+        '  try {'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'this.snapshotSyncEnabled = options.snapshotSync',
+        'this.preparedBeefPolicy ='
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/schema/entities/EntityProvenTxReq.ts',
+        'override async mergeExisting(',
+        'export interface ProvenTxReqHistorySummaryApi'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'override getSnapshotSync():',
+        'protected override supportsNoSendExpiryPersistence()'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'private async runSnapshotCopy(',
+        'async syncFromReader('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncFromReader(',
+        '    let inserts = 0'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncFromReaderResumable(',
+        '    const generation ='
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncToWriterResumable(',
+        'async syncToWriter('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncToWriter(',
+        '    let inserts = 0'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async updateBackups(',
+        'async setActive('
+      )
+    ],
+    ...jestTarget(
+      'jest.config.cjs',
+      [
+        '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts',
+        '<rootDir>/src/storage/snapshot/ConcurrentSnapshotSyncSource.test.ts',
+        '<rootDir>/src/storage/schema/snapshotSyncMigration.test.ts',
+        '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
+        '<rootDir>/src/storage/sync/syncFailure.test.ts',
+        '<rootDir>/src/storage/sync/syncSession.test.ts',
+        '<rootDir>/src/utility/__tests__/runInSeries.test.ts'
+      ],
+      {
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      }
+    )
+  }
+  const destination = new Set([
+    'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
+    'src/storage/schema/snapshotSyncMigration.ts'
+  ])
+  const rows = new Set([
+    'src/storage/snapshot/SnapshotSyncRows.ts',
+    'src/storage/schema/entities/mergeSyncChunkEntities.ts',
+    'src/storage/schema/entities/EntityProvenTxReq.ts',
+    'src/storage/methods/validateSyncProof.ts'
+  ])
+  const groups = {
+    'wallet-snapshot-sync': [],
+    'wallet-snapshot-sync-destination': [],
+    'wallet-snapshot-sync-rows': []
+  }
+  for (const range of complete.mutate) {
+    const file = range.replace(/:\d+(?:-\d+)?$/, '')
+    const name = destination.has(file)
+      ? 'wallet-snapshot-sync-destination'
+      : rows.has(file)
+        ? 'wallet-snapshot-sync-rows'
+        : 'wallet-snapshot-sync'
+    groups[name].push(range)
+  }
+  return Object.fromEntries(
+    Object.entries(groups).map(([name, mutate]) => [
+      name,
+      {
+        ...complete,
+        mutate,
+        propertyTest:
+          name === 'wallet-snapshot-sync'
+            ? complete.propertyTest
+            : `packages/wallet/wallet-toolbox/src/storage/snapshot/${name === 'wallet-snapshot-sync-destination' ? 'SnapshotSyncDestination' : 'SnapshotSyncRows'}.property.test.ts`
+      }
+    ])
+  )
+}
+
 export function buildMutationTargets(repositoryRoot) {
   return {
     'sdk-codecs': {
@@ -269,6 +423,9 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
       mutate: [
         'src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveClosure.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveSource.ts',
+        'src/storage/snapshot/archive/captureKnexSnapshotArchive.ts',
         'src/storage/schema/snapshotArchiveMigration.ts'
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/archive/*.test.ts'], {
@@ -280,118 +437,7 @@ export function buildMutationTargets(repositoryRoot) {
         }
       })
     },
-    'wallet-snapshot-sync': {
-      packageDirectory: 'packages/wallet/wallet-toolbox',
-      manifest: 'packages/wallet/wallet-toolbox/package.json',
-      propertyTest:
-        'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts',
-      mutate: [
-        'src/utility/runInSeries.ts',
-        'src/storage/snapshot/SnapshotSync.ts',
-        'src/storage/snapshot/SnapshotSyncRows.ts',
-        'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
-        'src/storage/snapshot/runSnapshotSyncSession.ts',
-        'src/storage/schema/snapshotSyncMigration.ts',
-        'src/storage/schema/entities/mergeSyncChunkEntities.ts',
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/sync/syncSession.ts',
-          'if (chunk.user != null && session.activeStorage',
-          "notify('preparing', { readMs })"
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/methods/validateSyncProof.ts',
-          'if (!(candidate.rawTx instanceof Uint8Array',
-          '  try {'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/StorageKnex.ts',
-          'this.snapshotSyncEnabled = options.snapshotSync',
-          'this.preparedBeefPolicy ='
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/schema/entities/EntityProvenTxReq.ts',
-          'override async mergeExisting(',
-          'export interface ProvenTxReqHistorySummaryApi'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/StorageKnex.ts',
-          'override getSnapshotSync():',
-          'protected override supportsNoSendExpiryPersistence()'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'private async runSnapshotCopy(',
-          'async syncFromReader('
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'async syncFromReader(',
-          '    let inserts = 0'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'async syncFromReaderResumable(',
-          '    const generation ='
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'async syncToWriterResumable(',
-          'async syncToWriter('
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'async syncToWriter(',
-          '    let inserts = 0'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/wallet/wallet-toolbox',
-          'src/storage/WalletStorageManager.ts',
-          'async updateBackups(',
-          'async setActive('
-        )
-      ],
-      ...jestTarget(
-        'jest.config.cjs',
-        [
-          '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts',
-          '<rootDir>/src/storage/snapshot/ConcurrentSnapshotSyncSource.test.ts',
-          '<rootDir>/src/storage/schema/snapshotSyncMigration.test.ts',
-          '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
-          '<rootDir>/src/storage/sync/syncFailure.test.ts',
-          '<rootDir>/src/storage/sync/syncSession.test.ts',
-          '<rootDir>/src/utility/__tests__/runInSeries.test.ts'
-        ],
-        {
-          config: {
-            moduleNameMapper: {
-              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
-              '^(\\.{1,2}/.*)\\.js$': '$1'
-            }
-          }
-        }
-      )
-    },
+    ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',

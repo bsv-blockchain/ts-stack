@@ -10,8 +10,10 @@ attention to changes that materially alter behavior or extend functionality.
   immutable completed pages, exact replay receipts, explicit logical byte/page
   reservations and resumable bounded cleanup. A second auxiliary migration
   leaves standard tables, legacy sync checkpoints and wire formats unchanged.
-  This is an internal prerequisite: source capture/closure validation, authenticated
-  remote endpoints and larger-wallet resource policy remain under implementation.
+  The local capture controller binds source metadata/schema to one read view,
+  verifies profile relationships and stores all thirteen raw tables through
+  bounded binary frames, with cancellation and cleanup. Canonical portable
+  validation, authenticated endpoints and larger-wallet policy remain open.
 
 - Integrate coherent SQL pages into ordinary local push, pull and backup, with
   a dedicated source reader and short, fair destination commits. Add resumable

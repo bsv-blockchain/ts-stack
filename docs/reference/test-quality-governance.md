@@ -198,15 +198,20 @@ lanes finish after a sibling failure, and every CI job has a reviewed timeout
 instead of GitHub's six-hour default. The zero-install orchestration tests
 enforce these resource and complete-campaign controls.
 
-The `wallet-retained-snapshot` and `wallet-snapshot-sync` mutation jobs have a
-90-minute limit in PR CI and the standalone mutation workflow. Both complete
-campaigns reached the 45-minute hosted job deadline without producing a report
-([retained-view job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36713747014/job/109883824573),
-[sync job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36713747014/job/109883824697)).
+The retained-snapshot campaign and the three snapshot-sync groups have a
+90-minute limit in PR CI and the standalone mutation workflow. The retained
+campaign completed within that allowance, but the complete snapshot-sync campaign
+still exceeded it ([hosted timeout](https://github.com/bsv-blockchain/ts-stack/actions/runs/36721037438/job/109907026722)).
+Snapshot sync is therefore divided into orchestration (`wallet-snapshot-sync`),
+destination (`wallet-snapshot-sync-destination`) and row mapping
+(`wallet-snapshot-sync-rows`). Their disjoint ranges preserve the entire original
+source scope, and every group runs the complete original selected test suite.
+Each group independently requires at least 90% detection and zero uncovered or
+invalid mutants; an aggregate score cannot hide a weak group.
+
 Other targets retain their respective 45-minute PR and 20-minute standalone
-limits. This allowance changes only the job deadline: source scopes, test
-selection, four mutation workers, six parallel jobs, individual mutant/test
-deadlines and all quality ratchets are unchanged. A deadline cancellation is
+limits. Four mutation workers, six parallel jobs, individual mutant/test
+deadlines and all quality ratchets remain unchanged. A deadline cancellation is
 not a completed report or a passing score.
 
 List and run targets locally:

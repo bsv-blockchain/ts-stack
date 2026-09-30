@@ -107,10 +107,14 @@ The subsequent internal SQL staging component adds shared immutable-page storage
 for remote snapshots. It binds profile/source metadata, reserves bounded logical
 capacity, commits pages and retry receipts atomically, and retains capacity until
 resumable cleanup finishes. Independent-connection SQLite/MySQL and actual SQLite
-process-termination fixtures cover its persistence boundaries. The source capture
-controller, complete semantic closure validation, authenticated client/server
-integration, larger-wallet resource policy and measured physical storage costs
-remain open. The migration does not expose or advertise a remote snapshot API.
+process-termination fixtures cover its persistence boundaries. The local capture controller
+now binds metadata and the migration version to the same SQL read view, checks
+profile relationships without full ID maps, and captures all thirteen raw tables
+into bounded binary frames. SQLite generated cases and a MySQL independent-writer
+fixture exercise capture and cleanup. Canonical portable semantic validation,
+authenticated client/server integration, larger-wallet resource policy and
+measured physical storage costs remain open. The migration and local controller
+do not expose or advertise a remote snapshot API.
 
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water
