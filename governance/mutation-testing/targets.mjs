@@ -116,10 +116,32 @@ function lineageTarget(source, property) {
         '<rootDir>/test/revenue-lineage-graph.test.ts',
         '<rootDir>/test/revenue-lineage.property.test.ts',
         '<rootDir>/test/revenue-lineage-package.property.test.ts',
-        '<rootDir>/test/revenue-lineage-graph.property.test.ts'
+        '<rootDir>/test/revenue-lineage-graph.property.test.ts',
+        '<rootDir>/test/revenue-lineage-traversal.property.test.ts'
       ],
       { esm: true, buildCommand: 'pnpm build' }
     )
+  }
+}
+
+function lineageGraphTargets(repositoryRoot) {
+  const file = 'src/revenue-listing/LineageGraph.ts'
+  const lines = readFileSync(
+    resolve(repositoryRoot, 'packages/application/output-knowledge', file),
+    'utf8'
+  ).split('\n')
+  const traversalStart = lines.findIndex(line => line === 'interface Traversal {') + 1
+  if (traversalStart < 2 || traversalStart >= lines.length)
+    throw new Error('Unable to partition lineage layout and traversal responsibilities')
+  return {
+    'revenue-lineage-graph': {
+      ...lineageTarget('LineageGraph', 'revenue-lineage-graph.property.test.ts'),
+      mutate: [`${file}:1-${traversalStart - 1}`]
+    },
+    'revenue-lineage-traversal': {
+      ...lineageTarget('LineageGraph', 'revenue-lineage-traversal.property.test.ts'),
+      mutate: [`${file}:${traversalStart}-${lines.length}`]
+    }
   }
 }
 
@@ -389,10 +411,7 @@ export function buildMutationTargets(repositoryRoot) {
       'LineagePackage',
       'revenue-lineage-package.property.test.ts'
     ),
-    'revenue-lineage-graph': lineageTarget(
-      'LineageGraph',
-      'revenue-lineage-graph.property.test.ts'
-    ),
+    ...lineageGraphTargets(repositoryRoot),
     'revenue-lineage-verifier': lineageTarget(
       'RevenueListingLineageVerifier',
       'revenue-lineage.property.test.ts'
@@ -436,7 +455,11 @@ export function buildMutationTargets(repositoryRoot) {
     ]),
     'root-eviction-coordination': rootEvictionTarget(
       'root-eviction-coordination.property.test.ts',
-      ['RootEvictionContractRecords', 'RootEvictionCoordinatedStorage']
+      [
+        'RootEvictionContractRecords',
+        'RootEvictionCoordinatedStorage',
+        'RootEvictionRecoveryStorage'
+      ]
     ),
     'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
       'RootEvictionCommitContext'
@@ -448,8 +471,10 @@ export function buildMutationTargets(repositoryRoot) {
       'RootEvictionRequests',
       'RootEvictionServingRecords'
     ]),
+    'root-eviction-codec': rootEvictionTarget('root-eviction-codec.property.test.ts', [
+      'RootEvictionCodec'
+    ]),
     'root-eviction-storage': rootEvictionTarget('root-eviction-storage.property.test.ts', [
-      'RootEvictionCodec',
       'SQLiteRootEvictionDatabase',
       'RootEvictionStorage'
     ]),

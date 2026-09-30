@@ -74,6 +74,20 @@ export class RootEvictionContractRecords {
     return { ...retained, contract }
   }
 
+  /** Resolve local saved selection only; never ask current discovery to fill a gap. */
+  recover(
+    retained: RootEvictionRetainedRequest,
+    contracts: RootEvictionContracts
+  ): RootEvictionCoordinatedRequest {
+    this.configured()
+    const row = this.database.get(
+      'SELECT selector FROM root_contracts WHERE request_digest=?',
+      retained.digest
+    )
+    outputAssert(row, 'Original root capability is unavailable', 'unavailable')
+    return this.restore(retained, outputHex32(row.selector), contracts)
+  }
+
   retain(
     input: unknown,
     requester: string,

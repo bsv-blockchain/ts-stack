@@ -74,6 +74,12 @@ it(
                 contracts,
                 coordinationGuard(later.toString())
               )
+              const recovered = await reopened.recoverCoordinated(
+                first.value.digest,
+                contracts,
+                coordinationGuard(later.toString())
+              )
+              expect(recovered).toEqual(status)
               expect(status.value.retained.contract.selection.digest).toBe(selection.selector)
               expect(status.value.result.outcomes[0]).toMatchObject({
                 actionStatus: 'rejected',

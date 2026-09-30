@@ -846,6 +846,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-codec",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Sealed root configuration, finite capacities, canonical byte accounting and full-width revision representation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-traversal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-traversal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Complete listing ancestry traversal, both merge parents and exact missing-history frontier",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

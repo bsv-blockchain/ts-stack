@@ -780,3 +780,27 @@ export async function expireOneRootPage(
   }
 }
 ```
+
+## Recover a selected root operation
+
+This is an installed worker read after bounded pending discovery and independent
+expiry maintenance. The guard authorizes the worker; it is not constructed by
+pretending to be the requester. No current manifest is consulted.
+
+```typescript compile
+// example-id: root-original-contract-recovery
+import type {
+  RootEvictionRecoveryStorage,
+  RootEvictionContracts as RecoveryRootContracts,
+  RootEvictionCommitGuard as RecoveryRootGuard
+} from '@bsv/output-knowledge/root-eviction'
+
+export async function recoverOriginalRootOperation(
+  store: RootEvictionRecoveryStorage,
+  digest: string,
+  contracts: RecoveryRootContracts,
+  installedWorkerGuard: RecoveryRootGuard
+) {
+  return store.recoverCoordinated(digest, contracts, installedWorkerGuard)
+}
+```

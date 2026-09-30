@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 83)
+  assert.equal(result.summary.propertySuites, 85)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 83)
+  assert.equal(result.summary.mutationTargets, 85)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -375,7 +375,8 @@ test('root eviction partitions retain the complete source set, tests and indepen
     'root-eviction-records',
     'root-eviction-storage',
     'root-eviction-coordination',
-    'root-eviction-maintenance'
+    'root-eviction-maintenance',
+    'root-eviction-codec'
   ]
   const files = names.flatMap(name => targets[name].mutate)
   assert.equal(new Set(files).size, files.length)
@@ -385,6 +386,7 @@ test('root eviction partitions retain the complete source set, tests and indepen
       'RootEvictionCodec',
       'RootEvictionContractRecords',
       'RootEvictionCoordinatedStorage',
+      'RootEvictionRecoveryStorage',
       'RootEvictionMaintenanceStorage',
       'SQLiteRootEvictionMaintenance',
       'RootEvictionRequests',
@@ -430,4 +432,49 @@ test('wallet recovery encoding and descriptors retain complete modules and the s
     assert.equal(entry.maximumNoCoverage, 0)
     assert.equal(entry.maximumInvalid, 0)
   }
+})
+
+test('lineage layout and traversal partitions cover every original line with identical complete tests and gates', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const names = ['revenue-lineage-graph', 'revenue-lineage-traversal']
+  const source = 'src/revenue-listing/LineageGraph.ts'
+  let nextLine = 1
+  for (const name of names) {
+    const target = targets[name]
+    assert.equal(target.mutate.length, 1)
+    const [file, range] = target.mutate[0].split(':')
+    const [start, end] = range.split('-').map(Number)
+    assert.equal(file, source)
+    assert.equal(start, nextLine)
+    assert.ok(end >= start)
+    nextLine = end + 1
+    assert.deepEqual(target.runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(target.additionalInputs, targets[names[0]].additionalInputs)
+    const gate = policy.targets.find(candidate => candidate.id === name)
+    assert.equal(gate.minimumScore, 90)
+    assert.equal(gate.maximumNoCoverage, 0)
+    assert.equal(gate.maximumInvalid, 0)
+  }
+  assert.equal(
+    nextLine - 1,
+    fs
+      .readFileSync(
+        path.join(REPOSITORY_ROOT, 'packages/application/output-knowledge', source),
+        'utf8'
+      )
+      .split('\n').length
+  )
+  assert.deepEqual(targets[names[0]].runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/revenue-lineage.test.ts',
+    '<rootDir>/test/revenue-lineage-work.test.ts',
+    '<rootDir>/test/revenue-lineage-package.test.ts',
+    '<rootDir>/test/revenue-lineage-graph.test.ts',
+    '<rootDir>/test/revenue-lineage.property.test.ts',
+    '<rootDir>/test/revenue-lineage-package.property.test.ts',
+    '<rootDir>/test/revenue-lineage-graph.property.test.ts',
+    '<rootDir>/test/revenue-lineage-traversal.property.test.ts'
+  ])
 })

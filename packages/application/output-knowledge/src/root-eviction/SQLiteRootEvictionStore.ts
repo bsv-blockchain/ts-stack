@@ -23,6 +23,10 @@ import type {
   RootEvictionCoordinatedRequest,
   RootEvictionCoordinatedStorage
 } from './RootEvictionCoordinatedStorage.js'
+import type {
+  RootEvictionRecoveredRequest,
+  RootEvictionRecoveryStorage
+} from './RootEvictionRecoveryStorage.js'
 import { RootEvictionRequests } from './RootEvictionRequests.js'
 import { RootEvictionServingRecords } from './RootEvictionServingRecords.js'
 import { SQLiteRootEvictionDatabase } from './SQLiteRootEvictionDatabase.js'
@@ -46,7 +50,11 @@ import type {
  * immutable retry fences and a shared final synchronous enqueue gate.
  */
 export class SQLiteRootEvictionStore
-  implements RootEvictionStorage, RootEvictionCheckedStorage, RootEvictionCoordinatedStorage
+  implements
+    RootEvictionStorage,
+    RootEvictionCheckedStorage,
+    RootEvictionCoordinatedStorage,
+    RootEvictionRecoveryStorage
 {
   readonly durability = 'durable' as const
   private readonly database: SQLiteRootEvictionDatabase
@@ -123,6 +131,25 @@ export class SQLiteRootEvictionStore
       outputAssert(record, 'Root request is not retained', 'not-found')
       const retained = this.contracts.restore(record, selector, contracts)
       return { retained, result: this.resultWithinGate(requester, requestId, now) }
+    })
+  }
+  recoverCoordinated(
+    digest: string,
+    contracts: RootEvictionContracts,
+    guard: RootEvictionCommitGuard
+  ): Promise<RootEvictionObservation<RootEvictionRecoveredRequest>> {
+    return this.checked(guard, now => {
+      const record = this.requests.byDigest(digest)
+      outputAssert(record, 'Root request is not retained', 'not-found')
+      const retained = this.contracts.recover(record, contracts)
+      return {
+        retained,
+        result: this.resultWithinGate(
+          record.request.body.requester,
+          record.request.body.requestId,
+          now
+        )
+      }
     })
   }
   retainChecked(

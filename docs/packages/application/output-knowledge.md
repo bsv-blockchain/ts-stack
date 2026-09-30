@@ -36,7 +36,10 @@ The optional `RootEvictionCoordinatedStorage` companion additionally retains the
 original capability and request atomically with selected result capacity. Explicit
 format2 configuration and `upgradeCoordination` preserve default format1 behavior,
 retain old history and fence older open connections. Legacy missing selections
-remain unavailable rather than adopting current discovery.
+remain unavailable rather than adopting current discovery. The optional
+`RootEvictionRecoveryStorage` worker companion recovers that original selection
+and current result by durable digest under current local-worker authority, without
+rediscovery or requester impersonation.
 The same Node entry exports `SQLiteRootEvictionMaintenance` for bounded local
 pending scans and exact expiry under the journal gate. It opens existing storage
 only, preserves original requests and completed actions, and checks installed

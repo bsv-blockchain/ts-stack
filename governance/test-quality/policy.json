@@ -1038,6 +1038,30 @@
           "Only still-pending targets expire, exactly at their deadline, with immutable completed actions and original requests.",
           "Current maintenance authority is checked under the shared journal gate; expiry never grants peer suppression or serving authority."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-codec.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Sealed root configuration, finite capacities, canonical byte accounting and full-width revision representation",
+        "target": "At least 300 generated capacity, ownership, Unicode byte and U64 encoding cases",
+        "invariants": [
+          "Sealed configuration keeps exact root/chain/capacities without aliasing mutable caller data.",
+          "Default format1 and opted-in format2 retain their explicit canonical meanings.",
+          "Capacity validation and full-width revision encoding preserve finite exact bounds."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-lineage-traversal.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Complete listing ancestry traversal, both merge parents and exact missing-history frontier",
+        "target": "At least 300 generated entry-order and missing-parent histories through split and merge graphs",
+        "invariants": [
+          "Entry order cannot change the authenticated ancestry or omit either merge parent.",
+          "Missing listing history stays incomplete with the exact required parent outpoints.",
+          "A complete traversal includes the authorized genesis and each shared transaction once."
+        ]
       }
     ],
     "exclusions": [

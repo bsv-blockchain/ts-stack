@@ -356,6 +356,28 @@ HTTP/status policy, broader local blocking-decision records, scheduled reassessm
 and every real lookup/cache/snapshot/live/GASP adapter. These remain explicit work
 in the implementation tracker; the journal alone is not a complete BRC-199 service.
 
+## Original-contract worker recovery
+
+The optional `RootEvictionRecoveryStorage` companion adds
+`recoverCoordinated(digest, contracts, guard)` on the SQLite journal. It resolves
+the retained request and its saved selector under one checked gate, restores the
+original signed capability, and returns the retained operation plus its current
+result, head and observation time. No current manifest or requester identity is
+needed. This is an installed local worker read, not a public digest endpoint:
+its guard must authorize the worker's current read/evaluation scope before any
+record lookup. Authenticated requester and auditor status reads retain their
+separate `resultCoordinated` access policy.
+
+Missing legacy selections remain unavailable, and an incompatible retained
+selector fails rather than choosing a new contract. Current discovery can be
+completely offline. Original request policy and completed action revisions remain
+fixed after later policy changes; the caller must still supply the current
+installed guard policy/context. Recovery alone does not authorize acceptance or
+restore eligibility. An unavailable chain context can prevent this richer worker
+read; run the independent maintenance expiry below so that it cannot leave
+expired pending work unfinished. Every subsequent asynchronous evaluation still
+needs its exact observed revision, current context and authority checked at commit.
+
 ## Pending recovery and expiry maintenance
 
 The Node entry also exports `SQLiteRootEvictionMaintenance`. Open it against an

@@ -960,3 +960,10 @@ original selections, requires no requester reconnection, and never grants peer
 authority or changes eligibility. The host still installs a bounded startup and
 periodic scheduling loop; see the root guide and compiled example. No existing
 journal API or storage-format migration is required for this companion.
+
+`RootEvictionRecoveryStorage` is a further optional worker companion implemented
+by the SQLite journal. `recoverCoordinated` resolves a pending digest to its original
+saved signed capability and current result under a checked local-worker guard,
+without discovery or requester impersonation. It cannot adopt legacy operations
+with missing selections or authorize new decisions. Independent maintenance expiry
+continues even when chain/context-dependent recovery cannot proceed.

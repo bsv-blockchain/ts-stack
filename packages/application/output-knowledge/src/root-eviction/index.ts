@@ -35,3 +35,8 @@ export type {
   RootEvictionPendingPage,
   RootEvictionMaintenanceStorage
 } from './RootEvictionMaintenanceStorage.js'
+
+export type {
+  RootEvictionRecoveredRequest,
+  RootEvictionRecoveryStorage
+} from './RootEvictionRecoveryStorage.js'

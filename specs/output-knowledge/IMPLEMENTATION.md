@@ -741,3 +741,38 @@ strict consumers pass. Repository health/lint/format/types,
 23 compiled examples against 22 exact tarballs and 145 HTML pages pass. The
 remaining changed journal groups are tracked separately. The append-only registry now contains 83 actual properties
 and critical mutation targets with all prior unions and quality gates preserved.
+
+The subsequent original-contract worker recovery companion has five focused cases
+passing across two suites, including an extended 300-case original-selection
+property. It resolves the saved selector and current result by permanent digest
+under local worker authority, without rediscovery or requester impersonation.
+Absent legacy selection remains unavailable, and independent maintenance expiry
+continues under revoked requester access or unavailable chain context. Existing
+coordinated signatures and stored formats remain unchanged. Complete changed
+contract/journal mutation qualification and final integration evidence are pending.
+The preceding maintenance increment also passes all 579 Overlay Express cases.
+
+Exact published head99 also reached its 90-minute limits for the 320-site lineage
+graph and 332-site root storage campaigns after successful full dry runs. These
+remain cancelled qualification, not passing evidence. The subsequent complete
+435-site changed-storage campaign continues locally under its original captured
+configuration and test selection; its eventual report must be recorded as that
+combined campaign, not relabeled as a new partition.
+
+The next governed configuration separates the complete RootEvictionCodec from
+the remaining database/storage sources and partitions unchanged LineageGraph
+source contiguously into layout/ABI/genesis checks and traversal/execution. Every
+original source line and test remains selected; each partition keeps independent
+90%/zero-uncovered/zero-invalid gates, the same workers and its existing/default
+deadline. Two new generated properties pass at least 300 cases each, and 19
+registry regressions prove the exact disjoint source union and full identical
+test/additional-input selections. Actual registries now contain 85 properties and
+85 critical targets. Fresh independent partition reports and hosted qualification
+remain required; no implementation byte was changed merely for instrumentation.
+
+The combined recovery/property increment passes all 1,199 runtime cases across
+89 suites, with 97.76% line and 94.75% branch coverage. Changed contract records
+and the SQLite journal have complete line/branch coverage. Packed exports and
+strict consumers, all 24 compiled examples against 22 exact tarballs,
+health/lint/format/types and 145 HTML pages pass. The source/test cohort remained
+unchanged during this run. Complete mutation qualification remains in progress.
