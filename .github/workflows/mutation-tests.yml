@@ -78,7 +78,9 @@ jobs:
     name: Mutation / ${{ matrix.target }}
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Full wallet snapshot campaigns exceeded the hosted 45-minute deadline.
+    # Preserve their tests, mutants and per-test deadlines with a bounded allowance.
+    timeout-minutes: ${{ contains(fromJSON('["wallet-retained-snapshot","wallet-snapshot-sync"]'), matrix.target) && 90 || 20 }}
     permissions:
       contents: read
     strategy:

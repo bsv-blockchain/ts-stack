@@ -460,9 +460,9 @@ jobs:
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
     needs: prepare
     runs-on: ubuntu-latest
-    # The governed air-gap codec target currently instruments 352 mutants and
-    # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: 45
+    # Full wallet snapshot campaigns exceeded the hosted 45-minute deadline.
+    # Preserve their tests, mutants and per-test deadlines with a bounded allowance.
+    timeout-minutes: ${{ contains(fromJSON('["wallet-retained-snapshot","wallet-snapshot-sync"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:

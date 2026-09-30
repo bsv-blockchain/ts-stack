@@ -147,8 +147,8 @@ when an arbitrary-input invariant can be stated.
 ## Mutation-validated fuzzing
 
 Property generation is only valuable when its assertions can detect a broken
-invariant. Every one of the 25 registered property suites therefore has a
-matching Stryker mutation target. The target mutates the implementation owned
+invariant. Each registered property suite therefore has a matching Stryker mutation
+target. The target mutates the implementation owned
 by that property boundary and runs the smallest relevant combination of
 property and deterministic regression tests. This catches weak round trips,
 uncorrelated generators, assertions that only prove “did not throw,” and rare
@@ -180,7 +180,7 @@ fan out to all targets; selector, scoring, unrelated SDK, CI, or governance
 edits do not. Selector and score evaluation are covered by the zero-install
 repository contract. The independent `Mutation quality` workflow runs the full
 matrix every Sunday and can run one exact target manually. Targets execute
-in parallel, reuse one workspace build, cancel unfinished siblings after a
+in parallel, reuse one workspace build, let selected siblings finish after a
 failure, and preserve machine-readable reports for 30 days. Mutation runs use
 the policy's fixed 300-case fast-check seed by default so the dry run and every
 mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
@@ -192,11 +192,22 @@ browser/mobile consumers, infrastructure, and runtime images. Empty image and
 infrastructure matrices do not allocate build runners. The standalone
 TypeScript conformance workflow runs only when its vectors, specifications,
 generator, or workflow change; SDK-dependent conformance behavior remains an
-affected workspace regression. Cheap repository, dependency, scope, and Sonar
-checks gate installation and compilation, matrix lanes cancel siblings on a
-failure, and every CI job has a reviewed timeout instead of GitHub's six-hour
-default. The zero-install orchestration tests enforce these resource and
-fail-fast controls.
+affected workspace regression. Cheap repository, dependency and scope checks gate installation and
+compilation; Sonar remains required by the final merge gate. Selected matrix
+lanes finish after a sibling failure, and every CI job has a reviewed timeout
+instead of GitHub's six-hour default. The zero-install orchestration tests
+enforce these resource and complete-campaign controls.
+
+The `wallet-retained-snapshot` and `wallet-snapshot-sync` mutation jobs have a
+90-minute limit in PR CI and the standalone mutation workflow. Both complete
+campaigns reached the 45-minute hosted job deadline without producing a report
+([retained-view job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36713747014/job/109883824573),
+[sync job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36713747014/job/109883824697)).
+Other targets retain their respective 45-minute PR and 20-minute standalone
+limits. This allowance changes only the job deadline: source scopes, test
+selection, four mutation workers, six parallel jobs, individual mutant/test
+deadlines and all quality ratchets are unchanged. A deadline cancellation is
+not a completed report or a passing score.
 
 List and run targets locally:
 

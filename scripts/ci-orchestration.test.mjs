@@ -6,6 +6,7 @@ import test from 'node:test'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
+const MUTATION_PATH = join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml')
 const CONFORMANCE_PATH = join(REPOSITORY_ROOT, '.github/workflows/conformance.yml')
 const RUNTIME_PATH = join(REPOSITORY_ROOT, '.github/workflows/container-runtime-contract.yml')
 const WALLET_MOBILE_COVERAGE_PATH = join(
@@ -21,6 +22,12 @@ function workflowJobBlocks(workflow) {
     name: match[1],
     source: jobs.slice(match.index, matches[index + 1]?.index ?? jobs.length)
   }))
+}
+
+function assertWalletMutationTimeout(job, defaultMinutes) {
+  const targets = '["wallet-retained-snapshot","wallet-snapshot-sync"]'
+  const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
+  assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
 }
 
 test('CI shares one audited build across coverage and browser consumer lanes', () => {
@@ -121,7 +128,11 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
-    assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    if (job.name === 'mutation-tests') {
+      assertWalletMutationTimeout(job, 45)
+    } else {
+      assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    }
   }
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
   assert.match(
@@ -129,6 +140,25 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
     /^    if: always\(\) && !cancelled\(\) && needs\.infra-scope\.result == 'success' && needs\.infra-scope\.outputs\.has-infra == 'true'$/m
   )
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
+})
+
+test('wallet mutation allowances preserve other limits and complete campaign execution', () => {
+  for (const [path, defaultMinutes] of [
+    [CI_PATH, 45],
+    [MUTATION_PATH, 20]
+  ]) {
+    const job = workflowJobBlocks(readFileSync(path, 'utf8')).find(
+      job => job.name === 'mutation-tests'
+    )
+    assert.ok(job, path)
+    assertWalletMutationTimeout(job, defaultMinutes)
+    assert.match(job.source, /^      fail-fast: false$/m)
+    assert.match(job.source, /^      max-parallel: 6$/m)
+    assert.match(
+      job.source,
+      /^        run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}"$/m
+    )
+  }
 })
 
 test('specialized workflows are bounded and required conformance checks always run on PRs', () => {
