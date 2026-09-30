@@ -6,6 +6,7 @@ import { createSyncMap, type SyncMap } from '../schema/entities/EntityBase'
 import { snapshotSyncPage } from '../sync/snapshotSyncPage'
 import { snapshotSyncTables, type SnapshotSyncCheckpoint, type SnapshotSyncTable } from './SnapshotSync'
 import type { WalletSnapshotPage } from './WalletReadSnapshot'
+import { runInSeries } from '../../utility/runInSeries'
 
 const entities: Record<SnapshotSyncTable, keyof SyncMap> = {
   provenTxs: 'provenTx',
@@ -198,6 +199,11 @@ function collectReferences(sourceUserId: number, table: SnapshotSyncTable, chunk
   return refs
 }
 
+/** Produce one SQL parameter batch at a time without creating an eager query queue. */
+function* idBatches<T>(values: T[]): Generator<T[]> {
+  for (let offset = 0; offset < values.length; offset += 128) yield values.slice(offset, offset + 128)
+}
+
 /** Load only incoming IDs and their parent references; never parse or overwrite the legacy JSON map. */
 export async function loadSnapshotIdMap(
   k: Knex,
@@ -209,17 +215,16 @@ export async function loadSnapshotIdMap(
   const { wanted, required } = collectReferences(sourceUserId, table, chunk)
   const map = createSyncMap()
   const known = new Map<keyof SyncMap, Set<number>>()
-  for (const [entity, values] of wanted) {
-    const list = [...values]
-    for (let offset = 0; offset < list.length; offset += 128) {
+  await runInSeries(wanted, async ([entity, values]) => {
+    await runInSeries(idBatches([...values]), async batch => {
       const found: IdRow[] = await k('snapshot_sync_ids')
         .select('incomingId', 'localId')
         .where({ ...scope, entity })
-        .whereIn('incomingId', list.slice(offset, offset + 128))
+        .whereIn('incomingId', batch)
       for (const row of found) map[entity].idMap[row.incomingId] = row.localId
-    }
+    })
     known.set(entity, new Set(Object.keys(map[entity].idMap).map(Number)))
-  }
+  })
   for (const [entity, values] of required) {
     for (const id of values) {
       if (map[entity].idMap[id] === undefined)
@@ -237,8 +242,9 @@ export async function loadSnapshotIdMap(
             additions.push({ ...scope, entity, incomingId: id, localId })
         }
       }
-      for (let offset = 0; offset < additions.length; offset += 128)
-        await k('snapshot_sync_ids').insert(additions.slice(offset, offset + 128))
+      await runInSeries(idBatches(additions), async batch => {
+        await k('snapshot_sync_ids').insert(batch)
+      })
     }
   }
 }

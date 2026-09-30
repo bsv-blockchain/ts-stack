@@ -854,8 +854,9 @@ export class WalletStorageManager implements sdk.WalletStorage {
     writer: sdk.WalletStorageProvider,
     direction: 'push' | 'pull',
     options: SyncSessionOptions = {},
-    selected = { generation: this.generation, active: this.getActive() }
+    selection?: { generation: number; active: sdk.WalletStorageProvider }
   ): Promise<SyncSessionResult | undefined> {
+    const selected = selection ?? { generation: this.generation, active: this.getActive() }
     const source = reader instanceof StorageProvider ? reader.getSnapshotSync() : undefined
     const destination = writer instanceof StorageProvider ? writer.getSnapshotSync() : undefined
     if (source === undefined || destination === undefined || reader === writer) return undefined
@@ -1183,7 +1184,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
       const selected = { generation: this.generation, active: this.getActive() }
       const backups = [...(this._backups as ManagedStorage[])]
       let log = progLog(`BACKUP CURRENT ACTIVE TO ${backups.length} STORES\n`)
-      for (const backup of backups) {
+      // One source view at a time; stop before starting another backup on failure.
+      await runInSeries(backups, async backup => {
         const options: SyncSessionOptions = {
           maxRoughSize: 10000000,
           onProgress: progress => {
@@ -1196,7 +1198,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
         log += progLog(
           `${result.mode === 'paged' ? 'snapshot' : 'serialized'} complete: ${result.inserts} inserts, ${result.updates} updates\n`
         )
-      }
+      })
       return log
     }
     return await this.runAsSync(async sync => {

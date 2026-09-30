@@ -1,5 +1,6 @@
 import type { SyncChunk, TrxToken } from '../../../sdk/WalletStorage.interfaces'
 import { maxDate } from '../../../utility/utilityHelpers'
+import { runInSeries } from '../../../utility/runInSeries'
 import type { EntityStorage, SyncMap } from './EntityBase'
 import { EntityCertificate } from './EntityCertificate'
 import { EntityCertificateField } from './EntityCertificateField'
@@ -57,8 +58,8 @@ export async function mergeSyncChunkEntities(
     }
   }
 
-  // Merge everything else...
-  for (const me of mes) {
+  // Child entities depend on ID mappings committed by their predecessors.
+  await runInSeries(mes, async me => {
     const r = await me.merge(since, writer, userId, syncMap, trx)
     // The counts become the offsets for the next chunk.
     me.esm.count += me.stateArray?.length || 0
@@ -67,7 +68,7 @@ export async function mergeSyncChunkEntities(
     maxUpdated_at = maxDate(maxUpdated_at, me.esm.maxUpdated_at)
     // If any entity type either did not report results or if there were at least one, then we aren't done.
     if (me.stateArray === undefined || me.stateArray.length > 0) done = false
-  }
+  })
 
   if (done) for (const me of mes) me.esm.count = 0
   return { done, maxUpdated_at, updates, inserts }

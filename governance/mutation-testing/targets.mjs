@@ -268,6 +268,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts',
       mutate: [
+        'src/utility/runInSeries.ts',
         'src/storage/snapshot/SnapshotSync.ts',
         'src/storage/snapshot/SnapshotSyncRows.ts',
         'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
@@ -360,7 +361,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/schema/snapshotSyncMigration.test.ts',
           '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
           '<rootDir>/src/storage/sync/syncFailure.test.ts',
-          '<rootDir>/src/storage/sync/syncSession.test.ts'
+          '<rootDir>/src/storage/sync/syncSession.test.ts',
+          '<rootDir>/src/utility/__tests__/runInSeries.test.ts'
         ],
         {
           config: {

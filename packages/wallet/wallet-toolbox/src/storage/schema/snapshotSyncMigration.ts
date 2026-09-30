@@ -1,4 +1,5 @@
 import type { Knex } from 'knex'
+import { runInSeries } from '../../utility/runInSeries'
 
 export const SNAPSHOT_SYNC_MIGRATION = '2026-09-30-001 add durable snapshot sync'
 
@@ -54,7 +55,7 @@ export async function addSnapshotSyncTables(knex: Knex): Promise<void> {
   // A primary may change away and back to the same identity. A database-owned
   // counter fences that ABA transition, including older/independent writers.
   if (mysql) {
-    for (const table of ['snapshot_sync_sessions', 'snapshot_sync_ids', 'snapshot_sync_primary_epochs']) {
+    await runInSeries(['snapshot_sync_sessions', 'snapshot_sync_ids', 'snapshot_sync_primary_epochs'], async table => {
       const constraint = table + '_user'
       const [existing]: Array<Array<{ name: string }>> = await knex.raw(
         "SELECT CONSTRAINT_NAME AS name FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
@@ -64,7 +65,7 @@ export async function addSnapshotSyncTables(knex: Knex): Promise<void> {
         await knex.schema.table(table, definition => {
           definition.foreign('userId', constraint).references('userId').inTable('users')
         })
-    }
+    })
     const [triggers]: Array<Array<{ name: string }>> = await knex.raw(
       'SELECT TRIGGER_NAME AS name FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?',
       ['snapshot_sync_primary_change']

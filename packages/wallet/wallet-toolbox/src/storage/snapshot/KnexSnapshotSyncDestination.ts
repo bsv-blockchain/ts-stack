@@ -4,6 +4,7 @@ import type { StorageKnex } from '../StorageKnex'
 import type { SyncChunk, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { verifyOne } from '../../utility/utilityHelpers'
+import { runInSeries } from '../../utility/runInSeries'
 import type { TableProvenTx, TableUser } from '../schema/tables'
 import { mergeSyncChunkEntities } from '../schema/entities/mergeSyncChunkEntities'
 import { sameSyncProof } from '../methods/validateSyncProof'
@@ -302,13 +303,14 @@ export class KnexSnapshotSyncDestination {
   }
 
   private async verifyProofs(proofs: Map<string, TableProvenTx>, trx: TrxToken): Promise<void> {
-    for (const previous of [...proofs.values()].sort((left, right) => left.txid.localeCompare(right.txid))) {
+    const ordered = [...proofs.values()].sort((left, right) => left.txid.localeCompare(right.txid))
+    await runInSeries(ordered, async previous => {
       const rows = await this.storage.findProvenTxs({ partial: { txid: previous.txid }, trx })
       if (rows.length !== 1 || !sameSyncProof(rows[0], previous)) {
         throw new WERR_INVALID_OPERATION(
           'Proof changed during snapshot preparation; resume from its durable checkpoint'
         )
       }
-    }
+    })
   }
 }

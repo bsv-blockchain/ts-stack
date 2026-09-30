@@ -231,7 +231,11 @@ preparation run outside manager ownership; only destination admission and each
 atomic page commit enter the fair background queue. Foreground reads and writes
 can proceed between those commits. Existing `progLog` callbacks receive each
 committed page and the completion summary, including during serialized fallback;
-their returned text remains part of the ordinary result log. Primary reconciliation still uses its existing
+their returned text remains part of the ordinary result log. Backup destinations,
+entity dependencies, proof checks and 128-ID SQL batches run sequentially through
+the lazy series coordinator. A failure stops before the next operation starts;
+neither parallel database work nor an eager promise queue is introduced.
+Primary reconciliation still uses its existing
 exclusive path and remains required work in the full program.
 
 The source gets a dedicated one-connection pool, preserving the original pool's
