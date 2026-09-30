@@ -301,3 +301,32 @@ export function bindListingFunding(
 The caller establishes lineage first and obtains transaction signatures from an
 explicit authority. Final layout validation remains separate from full transaction
 and Script verification, private fulfillment and wallet operation recovery.
+
+## Revenue listing full-history verification
+
+```typescript compile
+// example-id: revenue-listing-lineage
+import { RevenueListing as HistoryCodec } from '@bsv/sdk/script/templates/RevenueListing'
+import {
+  RevenueListingLineageVerifier,
+  type ChainViewResolver as RevenueChainViewResolver,
+  type VerificationContext as RevenueVerificationContext
+} from '@bsv/output-knowledge/revenue-listing'
+
+export function installRevenueHistory(program: Uint8Array, chains: RevenueChainViewResolver) {
+  return new RevenueListingLineageVerifier(new HistoryCodec(program), chains)
+}
+
+export async function inspectRevenueHistory(
+  verifier: RevenueListingLineageVerifier,
+  packet: unknown,
+  context: RevenueVerificationContext,
+  signal: AbortSignal
+) {
+  return await verifier.verify(packet, context, signal)
+}
+```
+
+Install and reuse the verifier under a trusted immutable chain view. The caller
+compares the returned target with the selected input and separately checks asset
+authority, currentness and acquisition association before any wallet action.

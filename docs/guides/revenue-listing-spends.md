@@ -50,8 +50,10 @@ It has no wallet, fee estimator or broadcast effect. `planRevenueListingSpend`
 provides the same pure planning operation without retaining a spend object.
 Neither operation proves that the inputs are genuine, unspent listings. A caller
 must first validate the descriptor's authority, both histories through every
-merge, chain evidence and the application's acquisition binding. The eventual
-high-level domain adapter must enforce those checks before requesting signatures.
+merge, chain evidence and the application's acquisition binding. The
+[full-history verifier](./revenue-listing-lineage.md) supplies the lineage and
+Bitcoin checks. The eventual high-level wallet/domain adapter must also enforce
+the remaining authority, currentness and acquisition checks before signatures.
 
 All six routes preserve the exact specified economic rules. Purchases add the
 price to the listing and bind the receipt to the acquisition and recipient.

@@ -33,7 +33,10 @@
     "liveLookupSourceBinding",
     "LookupProviderService",
     "SQLiteLookupIndex",
-    "SQLiteLookupSessions"
+    "SQLiteLookupSessions",
+    "RevenueListingLineageVerifier",
+    "parseRevenueListingLineagePackage",
+    "REVENUE_LISTING_LINEAGE_LIMITS"
   ],
   "maximumBytes": {
     "vite": {
@@ -180,6 +183,33 @@
           "raw": 210000,
           "gzip": 75000,
           "brotli": 66000
+        }
+      }
+    },
+    {
+      "entry": "./revenue-listing",
+      "requiredExports": [
+        "RevenueListingLineageVerifier",
+        "parseRevenueListingLineagePackage",
+        "REVENUE_LISTING_LINEAGE_LIMITS"
+      ],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "SQLiteOperationStateStore",
+        "SQLiteLookupIndex",
+        "SQLiteLookupSessions",
+        "OutputKnowledge"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 485000,
+          "gzip": 131000,
+          "brotli": 110000
+        },
+        "esbuild": {
+          "raw": 375000,
+          "gzip": 120000,
+          "brotli": 103000
         }
       }
     }

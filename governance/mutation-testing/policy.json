@@ -508,6 +508,26 @@
       "maximumInvalid": 0
     },
     {
+      "id": "sdk-revenue-listing-funding",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingFunding.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-unlock",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingUnlock.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "sdk-revenue-listing-spend",
       "manifest": "packages/sdk/package.json",
       "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts",
@@ -523,6 +543,36 @@
       "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts",
       "risk": "critical",
       "boundary": "BRC-192 bounded canonical JSON and explicit own-data map construction",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-package",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-package.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-graph",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-graph.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-verifier",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

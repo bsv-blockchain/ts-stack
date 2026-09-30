@@ -15,6 +15,18 @@ integrations, proposal processing and complete qualification evidence are still 
 checkpoint-two review. The package version does not
 indicate a published or production-qualified release.
 
+## Revenue listing history
+
+The optional @bsv/output-knowledge/revenue-listing entry exports
+RevenueListingLineageVerifier, its bounded package parser, limits and types.
+It checks authorized genesis, both paths of every merge, immutable-view Bitcoin
+evidence and every exact-family covenant invocation, including mined transactions.
+It keeps missing history, invalid history, cancellation and local limits distinct.
+It does not establish asset authority, current unspentness, acquisition association
+or private delivery. See the [history guide](../../../docs/guides/revenue-listing-lineage.md)
+for composition, funded-copy merge semantics and recovery. Existing root exports
+remain unchanged.
+
 ## Durable progressive and live provider
 
 The optional `@bsv/output-knowledge/lookup` entry composes durable snapshot/live

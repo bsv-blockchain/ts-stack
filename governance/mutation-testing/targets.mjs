@@ -71,6 +71,70 @@ function lookupProviderTarget(property, files, tests) {
   }
 }
 
+function lineageTarget(source, property) {
+  return {
+    packageDirectory: 'packages/application/output-knowledge',
+    manifest: 'packages/application/output-knowledge/package.json',
+    propertyTest: `packages/application/output-knowledge/test/${property}`,
+    additionalInputs: [
+      'src/revenue-listing/**',
+      'src/SDKEvidenceVerifier.ts',
+      'src/EvidenceAssembler.ts',
+      'test/revenue-lineage-fixture.ts',
+      'test/fixtures/revenue-listing/**'
+    ],
+    mutate: [`src/revenue-listing/${source}.ts`],
+    ...jestTarget(
+      'jest.config.js',
+      [
+        '<rootDir>/test/revenue-lineage.test.ts',
+        '<rootDir>/test/revenue-lineage-work.test.ts',
+        '<rootDir>/test/revenue-lineage-package.test.ts',
+        '<rootDir>/test/revenue-lineage-graph.test.ts',
+        '<rootDir>/test/revenue-lineage.property.test.ts',
+        '<rootDir>/test/revenue-lineage-package.property.test.ts',
+        '<rootDir>/test/revenue-lineage-graph.property.test.ts'
+      ],
+      { esm: true, buildCommand: 'pnpm build' }
+    )
+  }
+}
+
+function revenueSpendTargets(repositoryRoot) {
+  const file = 'src/script/templates/RevenueListingSpend.ts'
+  const lines = readFileSync(resolve(repositoryRoot, 'packages/sdk', file), 'utf8').split('\n')
+  const signatureStart = lines.findIndex(line => line.startsWith('function preimage(')) + 1
+  const apiStart = lines.findIndex(line => line.startsWith('function pushedBytes(')) + 1
+  if (signatureStart < 2 || apiStart <= signatureStart)
+    throw new Error('Unable to partition revenue spend responsibilities')
+  const common = {
+    packageDirectory: 'packages/sdk',
+    manifest: 'packages/sdk/package.json',
+    propertyTest: 'packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts',
+    ...jestTarget('jest.config.js', [
+      '<rootDir>/src/script/templates/__tests/RevenueListingSpend.test.ts',
+      '<rootDir>/src/script/templates/__tests/RevenueListingSpend.property.test.ts',
+      '<rootDir>/src/script/templates/__tests/RevenueListingFunding.property.test.ts',
+      '<rootDir>/src/script/templates/__tests/RevenueListingUnlock.property.test.ts'
+    ])
+  }
+  // Exhaustive adjacent ranges retain every source line and the complete test
+  // suite. Independent jobs keep this expensive Script campaign within CI time.
+  return {
+    'sdk-revenue-listing-funding': {
+      ...common,
+      propertyTest: common.propertyTest.replace('Spend.property', 'Funding.property'),
+      mutate: [`${file}:1-${signatureStart - 1}`]
+    },
+    'sdk-revenue-listing-unlock': {
+      ...common,
+      propertyTest: common.propertyTest.replace('Spend.property', 'Unlock.property'),
+      mutate: [`${file}:${signatureStart}-${apiStart - 1}`]
+    },
+    'sdk-revenue-listing-spend': { ...common, mutate: [`${file}:${apiStart}-${lines.length}`] }
+  }
+}
+
 export function buildMutationTargets(repositoryRoot) {
   const sessionRecordFile = 'src/lookup/SQLiteLookupSessionRecords.ts'
   const sessionRecordLines = readFileSync(
@@ -93,6 +157,18 @@ export function buildMutationTargets(repositoryRoot) {
     sessionRecordTests
   )
   return {
+    'revenue-lineage-package': lineageTarget(
+      'LineagePackage',
+      'revenue-lineage-package.property.test.ts'
+    ),
+    'revenue-lineage-graph': lineageTarget(
+      'LineageGraph',
+      'revenue-lineage-graph.property.test.ts'
+    ),
+    'revenue-lineage-verifier': lineageTarget(
+      'RevenueListingLineageVerifier',
+      'revenue-lineage.property.test.ts'
+    ),
     'sdk-output-json': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
@@ -113,17 +189,7 @@ export function buildMutationTargets(repositoryRoot) {
         '<rootDir>/src/script/templates/__tests/RevenueListingPlan.property.test.ts'
       ])
     },
-    'sdk-revenue-listing-spend': {
-      packageDirectory: 'packages/sdk',
-      manifest: 'packages/sdk/package.json',
-      propertyTest:
-        'packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts',
-      mutate: ['src/script/templates/RevenueListingSpend.ts'],
-      ...jestTarget('jest.config.js', [
-        '<rootDir>/src/script/templates/__tests/RevenueListingSpend.test.ts',
-        '<rootDir>/src/script/templates/__tests/RevenueListingSpend.property.test.ts'
-      ])
-    },
+    ...revenueSpendTargets(repositoryRoot),
     'sdk-revenue-listing': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

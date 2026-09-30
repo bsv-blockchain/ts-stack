@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { resolveGovernedTest } from './run-governed-test.mjs'
 import {
   REPOSITORY_ROOT,
@@ -32,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 51)
+  assert.equal(result.summary.propertySuites, 56)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 51)
+  assert.equal(result.summary.mutationTargets, 56)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -153,4 +154,40 @@ test('governed test runner rejects traversal and wrong test modes', () => {
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true })
   }
+})
+
+test('revenue spend partitions cover every source line once with the complete suite and thresholds', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const names = [
+    'sdk-revenue-listing-funding',
+    'sdk-revenue-listing-unlock',
+    'sdk-revenue-listing-spend'
+  ]
+  const source = 'src/script/templates/RevenueListingSpend.ts'
+  let nextLine = 1
+  for (const name of names) {
+    const definition = targets[name]
+    const [scope] = definition.mutate
+    const [file, range] = scope.split(':')
+    const [start, end] = range.split('-').map(Number)
+    assert.equal(file, source)
+    assert.equal(start, nextLine)
+    assert.ok(end >= start)
+    nextLine = end + 1
+    assert.deepEqual(
+      definition.runnerOptions.jest.config.testMatch,
+      targets[names[0]].runnerOptions.jest.config.testMatch
+    )
+    const registration = policy.targets.find(target => target.id === name)
+    assert.equal(registration.minimumScore, 90)
+    assert.equal(registration.maximumInvalid, 0)
+    assert.equal(registration.maximumNoCoverage, 0)
+  }
+  assert.equal(
+    nextLine - 1,
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'packages/sdk', source), 'utf8').split('\n').length
+  )
 })

@@ -23,6 +23,11 @@ submission and GASP behavior remains available to applications that do not opt i
   seller and all-old-recipient transaction signatures, owned preparation snapshots
   and final-layout checks. These low-level interfaces do not establish lineage,
   chain validity, wallet support or private entitlement.
+- Optional bounded BRC-197 full-history verification with authorized genesis,
+  collect-before-resolve BEEF, both merge histories, a visited DAG and explicit
+  execution of every actual covenant input even for mined transitions. It binds
+  Bitcoin verification to the installed immutable view; asset authority,
+  currentness and acquisition/private delivery remain separate checks.
 - Bounded common service errors, explicit capacity minimums and the specified
   BRC-193 HTTP status mapping, separate from local cancellation/storage failures.
 - An additive AuthFetch automatic-payment opt-out for unpaid authenticated requests,
@@ -106,7 +111,7 @@ submission and GASP behavior remains available to applications that do not opt i
   non-final profiles while preserving finite legacy defaults.
 - Exercise existing private off-chain values and lookup context, then implement
   acquisition, funding/recovery, STEAK/POTATOES readiness and secret release.
-- Finish BRC-197 bounded lineage validation and BRC-100 wallet integration for
+- Complete the BRC-100 wallet/domain integration above the BRC-197 lineage verifier for
   purchase, split, merge, payout, unanimous recipient-change and retirement.
   Low-level construction and final-layout checks do not establish those guarantees.
 - Integrate BRC-198 LCH acquisition and playback without changing BRC-170 behavior.
@@ -266,8 +271,17 @@ source mutation passes 91.67% over 372 mutants (335 killed, 31 surviving, six
 timeouts, zero uncovered/invalid). The two local authenticated HTTP fixtures use
 the already governed express-rate-limit 8.6.1 development dependency; middleware
 runtime behavior is unchanged. The manifest change carries patch candidate 2.2.9.
-All 217 middleware tests and packed Express 4/5 consumers pass. Hosted Sonar and
-CodeQL must requalify these corrections on the next published revision.
+All 217 middleware tests and packed Express 4/5 consumers pass. Published head `0140b37ea8b620394ba4f26a0ea40ee63f4f3ba7` passes both CodeQL and
+the exact-head zero-new-Sonar gate, with all four analyzer review threads resolved.
+Its hosted spend mutation job reached the 45-minute deadline, so complete CI is
+not qualified. The follow-up keeps every source line and original test while
+partitioning funding, signature/ABI and public spend behavior into independently
+checked jobs. Two additional 300-case properties and a no-gap/no-overlap partition
+regression pass. The partitions retain the 90% gate and reject all uncovered or
+invalid mutants: funding 93.63%/157, unlock 93.70%/127 and spend 95.20%/125.
+Together they still mutate all 409 original sites. No source or gate was weakened.
+The expanded SDK suite passes 8,020 tests across 233 suites; packed conditional
+exports, strict consumers and every declared browser entry pass again.
 
 Compatible dependency remediation advances the existing brace-expansion
 substitution and affected lock resolutions without adding an override or relaxing
@@ -296,3 +310,18 @@ implementation increments require their own validation.
 These are intermediate results. The PR remains draft until the entire
 checkpoint and all required checks succeed on its exact final head. Remote CI,
 CodeQL and Sonar evidence must be recorded in the PR before review.
+
+The lineage increment passes 98 focused tests, including three generated properties
+with at least 300 cases each, and the complete runtime passes 934 tests across
+61 suites (97.56% lines, 94.35% branches). All three new lineage sources have
+100% line and branch coverage. Full-source mutation passes at the unchanged 90%
+minimum with zero uncovered/invalid mutants: package 97.26%/146 (141 killed,
+four surviving, one timeout), graph 96.25%/320 (306 killed, twelve surviving,
+two timeouts), and verifier 91.87%/123 (111 killed, ten surviving, two timeouts).
+The frozen cases separately prove that a funded-copy merge can pass Script yet
+fail shared-genesis provenance, and that a mining proof does not bypass explicit
+covenant execution. Exact packed consumers and the optional Vite/esbuild entry
+pass; existing entry budgets are unchanged. The compiled lineage example passes
+against the exact candidate tarballs. These results qualify the historical
+verifier, not the remaining wallet/domain/application integration. The broader
+implementation checkpoint remains open.

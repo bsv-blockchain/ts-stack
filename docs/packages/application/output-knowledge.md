@@ -5,8 +5,8 @@ kind: package
 domain: application
 npm: '@bsv/output-knowledge'
 version: '0.1.0'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge'
 status: experimental
@@ -22,6 +22,13 @@ action. The implementation branch is still being qualified; this page does not
 announce a registry release or completed BRC-192–199 implementation.
 
 ## Public composition
+
+The optional revenue-listing entry supplies RevenueListingLineageVerifier and its
+bounded authorized-genesis package parser. It checks both histories of every merge,
+Bitcoin evidence in an installed immutable view and actual fixed-family Script
+invocations. Asset authority, currentness and private fulfillment remain separate.
+See [revenue listing history](../../guides/revenue-listing-lineage.md) for the
+public interfaces, bounds, cancellation, missing evidence and funded-copy semantics.
 
 `BitcoinKnowledge` implements the trusted protocol reducer and worker.
 `KnowledgeStore` binds it to an account partition and a receipt journal.
