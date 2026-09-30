@@ -1062,6 +1062,18 @@
           "Missing listing history stays incomplete with the exact required parent outpoints.",
           "A complete traversal includes the authorized genesis and each shared transaction once."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-service.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root intake, exact observed-result signing and current final delivery authority",
+        "target": "At least 300 generated cancellation, signer alteration, policy revision and access-revocation schedules",
+        "invariants": [
+          "Intake precedes signing and never implies authority to apply a peer decision.",
+          "An authentic signature over a changed observation is rejected, and cancelled physical work remains bounded.",
+          "Only an unchanged observation with current access can enter the native final send queue."
+        ]
       }
     ],
     "exclusions": [

@@ -88,6 +88,22 @@ export class RootEvictionContractRecords {
     return this.restore(retained, outputHex32(row.selector), contracts)
   }
 
+  private requestBytes(
+    input: unknown,
+    packet: unknown,
+    contract: RootEvictionSelectedContract
+  ): void {
+    canonicalOutputJSON(packet, { bytes: contract.limits.maximumRequestBytes })
+    // Only actual transport text can carry this fact; an object field cannot
+    // assert its own received length. Check before retaining any new operation.
+    if (typeof input === 'string')
+      outputAssert(
+        rootBytes(input) <= contract.limits.maximumRequestBytes,
+        'Root request exceeds the selected received-byte limit',
+        'limited'
+      )
+  }
+
   retain(
     input: unknown,
     requester: string,
@@ -96,7 +112,9 @@ export class RootEvictionContractRecords {
     now: string
   ): RootEvictionCoordinatedRequest {
     const capacity = this.configured()
-    const packet = parseOutputRootEvictionRequest(input)
+    const packet = parseOutputRootEvictionRequest(
+      typeof input === 'string' ? parseOutputJSON(input, { bytes: 1048576 }) : input
+    )
     verifyOutputRootEvictionRequest(packet, {
       root: packet.body.recipient,
       chain: packet.body.chain,
@@ -109,7 +127,9 @@ export class RootEvictionContractRecords {
         'Root request ID conflicts with its retained body',
         'conflict'
       )
-      return this.restore(previous, selection.selector, contracts)
+      const retained = this.restore(previous, selection.selector, contracts)
+      this.requestBytes(input, packet, retained.contract)
+      return retained
     }
     const { record, ...contract } = contracts.retain(selection.manifest, selection.selector, now)
     this.bound(contract)
@@ -118,7 +138,7 @@ export class RootEvictionContractRecords {
       'Root request exceeds the selected target limit',
       'limited'
     )
-    canonicalOutputJSON(packet, { bytes: contract.limits.maximumRequestBytes })
+    this.requestBytes(input, packet, contract)
     const text = canonicalOutputJSON(record, { bytes: 524288 })
     const bytes = rootBytes(text)
     const retainedBytes = this.database.get(

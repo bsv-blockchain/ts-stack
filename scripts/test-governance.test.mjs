@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 85)
+  assert.equal(result.summary.propertySuites, 86)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 85)
+  assert.equal(result.summary.mutationTargets, 86)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -376,13 +376,15 @@ test('root eviction partitions retain the complete source set, tests and indepen
     'root-eviction-storage',
     'root-eviction-coordination',
     'root-eviction-maintenance',
-    'root-eviction-codec'
+    'root-eviction-codec',
+    'root-eviction-service'
   ]
   const files = names.flatMap(name => targets[name].mutate)
   assert.equal(new Set(files).size, files.length)
   assert.deepEqual(
     files.toSorted(),
     [
+      'RootEvictionService',
       'RootEvictionCodec',
       'RootEvictionContractRecords',
       'RootEvictionCoordinatedStorage',
@@ -432,6 +434,27 @@ test('wallet recovery encoding and descriptors retain complete modules and the s
     assert.equal(entry.maximumNoCoverage, 0)
     assert.equal(entry.maximumInvalid, 0)
   }
+})
+
+test('lookup work extraction retains the full legacy service selection and the complete shared helper', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['output-lookup-service']
+  assert.deepEqual(target.mutate, [
+    'src/lookup/LookupProviderService.ts',
+    'src/lookup/LookupProviderContracts.ts',
+    'src/lookup/LookupProviderWork.ts',
+    'src/internal/BoundedOutputWork.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/lookup-provider.test.ts',
+    '<rootDir>/test/lookup-provider-work.test.ts',
+    '<rootDir>/test/lookup-session.test.ts',
+    '<rootDir>/test/lookup-provider-work.test.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/lookup-provider-work.test.ts'
+  )
+  assert.ok(target.additionalInputs.includes('src/internal/BoundedOutputWork.ts'))
 })
 
 test('lineage layout and traversal partitions cover every original line with identical complete tests and gates', () => {

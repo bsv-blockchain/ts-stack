@@ -40,6 +40,12 @@ remain unavailable rather than adopting current discovery. The optional
 `RootEvictionRecoveryStorage` worker companion recovers that original selection
 and current result by durable digest under current local-worker authority, without
 rediscovery or requester impersonation.
+`RootEvictionService` adds bounded received-text intake and authorized result
+signing under that original selection. It compares the signed body with the exact
+journal observation and carries its revision to the separate final transport gate.
+It applies no automatic peer decision and does not mount HTTP routes. Existing
+lookup work uses the same internal physical-capacity primitive without changing its
+public defaults or diagnostics.
 The same Node entry exports `SQLiteRootEvictionMaintenance` for bounded local
 pending scans and exact expiry under the journal gate. It opens existing storage
 only, preserves original requests and completed actions, and checks installed

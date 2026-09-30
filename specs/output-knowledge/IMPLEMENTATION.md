@@ -776,3 +776,35 @@ and the SQLite journal have complete line/branch coverage. Packed exports and
 strict consumers, all 24 compiled examples against 22 exact tarballs,
 health/lint/format/types and 145 HTML pages pass. The source/test cohort remained
 unchanged during this run. Complete mutation qualification remains in progress.
+
+## Root intake and signing composition in qualification
+
+The optional `RootEvictionService` now connects actual received-text intake,
+original-contract recovery, separately authorized status reads and installed root
+signing. It retains requests before signing, checks the original selected raw and
+canonical request bounds, and rejects authentic signatures over changed observations.
+It returns the observed revision for the separate native final-enqueue guard;
+it does not mount HTTP routes or authorize automatic peer decisions. A shared
+internal bounded-work primitive preserves the existing lookup constructor, defaults,
+diagnostics and cancellation behavior. Cancelled callers retain physical capacity
+until the installed authority/signing operation settles.
+
+The complete runtime passes 1,222 cases across 92 suites, with 97.78% line and
+94.76% branch coverage. The new service, contract records and lookup wrapper have
+complete line/branch coverage. Thirty governance/selection/example regressions,
+packed consumers, 25 compiled examples against 22 exact tarballs, browser checks,
+root health/lint/format/types and 145 HTML pages pass. Two explicit mock type
+annotations were added during the runtime run to fix portable test declarations;
+a compiler comparison verifies their emitted JavaScript is identical. All other entries in the
+233-file cohort stayed unchanged. Actual property/critical-target counts
+are 86, with complete prior source/test selections and independent gates retained.
+
+The original combined storage campaign passes 91.26% across 435 sites (395 killed,
+38 surviving and two detected timeouts), zero uncovered/invalid and exact source
+bytes, after one automatic worker recovery. This is the pre-partition campaign,
+not a report for either new independent target. The database-only subset motivates
+stronger exact capacity, inventory-recovery and pre-invocation callback assertions;
+15 focused storage cases pass. Complete independent database/codec reports, the
+changed 97-site coordination and 426-site records campaigns, service/lookup/journal
+mutation and final hosted qualification remain required. No broader checkpoint or
+complete root-service readiness is implied.

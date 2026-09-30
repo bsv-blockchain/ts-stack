@@ -866,6 +866,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-service.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable root intake, exact observed-result signing and current final delivery authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

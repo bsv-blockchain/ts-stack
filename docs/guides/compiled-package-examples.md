@@ -804,3 +804,29 @@ export async function recoverOriginalRootOperation(
   return store.recoverCoordinated(digest, contracts, installedWorkerGuard)
 }
 ```
+
+## Sign a retained root status for guarded delivery
+
+Install explicit status authority and the root signer. This returns a candidate
+for the separate native final-enqueue companion, which must recheck current access
+and `head.revision` with an empty advertisement inventory. It does not send bytes,
+mount an endpoint or authorize a peer decision.
+
+```typescript compile
+// example-id: root-status-signing
+import {
+  RootEvictionService,
+  type RootEvictionServiceOptions,
+  type RootEvictionCaller
+} from '@bsv/output-knowledge/root-eviction'
+
+export function createRootStatusHandler(installed: RootEvictionServiceOptions) {
+  // One shared instance per installed service, not a fresh capacity pool per request.
+  const service = new RootEvictionService(installed)
+  return async (
+    receivedUTF8Text: string,
+    authenticatedCaller: RootEvictionCaller,
+    signal: AbortSignal
+  ) => service.status(receivedUTF8Text, authenticatedCaller, signal)
+}
+```

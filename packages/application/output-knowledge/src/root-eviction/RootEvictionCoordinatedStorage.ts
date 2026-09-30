@@ -17,6 +17,11 @@ export interface RootEvictionCoordinatedRequest extends RootEvictionRetainedRequ
 
 /** Optional companion: ordinary deterministic root journals remain supported. */
 export interface RootEvictionCoordinatedStorage extends RootEvictionCheckedStorage {
+  /**
+   * Accept a parsed packet or the actual received UTF-8 JSON text. For text,
+   * enforce both raw and canonical byte limits under the original selection
+   * before intake, including on retries. Never trust a body-supplied byte count.
+   */
   retainCoordinated(
     request: unknown,
     authenticatedRequester: string,

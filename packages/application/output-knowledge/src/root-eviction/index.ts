@@ -40,3 +40,11 @@ export type {
   RootEvictionRecoveredRequest,
   RootEvictionRecoveryStorage
 } from './RootEvictionRecoveryStorage.js'
+
+export { RootEvictionService } from './RootEvictionService.js'
+export type {
+  RootEvictionAccess,
+  RootEvictionCaller,
+  RootEvictionServiceOptions,
+  RootEvictionServiceResponse
+} from './RootEvictionService.js'

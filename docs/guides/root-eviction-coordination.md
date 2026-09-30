@@ -356,6 +356,69 @@ HTTP/status policy, broader local blocking-decision records, scheduled reassessm
 and every real lookup/cache/snapshot/live/GASP adapter. These remain explicit work
 in the implementation tracker; the journal alone is not a complete BRC-199 service.
 
+## Durable intake and exact result signing
+
+`RootEvictionService` from the portable `root-eviction` entry composes original
+contract intake, authorized status observations and asynchronous signing. Install
+a durable coordinated journal, `RootEvictionContracts`, a finite future-clock
+allowance, an authority port and a root signer. The authority port receives the
+operation, authenticated principal, requester and request ID. It returns the current
+policy digest and synchronous clock, access and context callbacks, checked inside
+each actual journal gate. Status authority permits that requester or a configured
+auditor; it does not confer suppression or restoration authority.
+
+`submit(text, caller, manifestSnapshot, signal)` consumes the actual received UTF-8
+JSON text, including whitespace. The transport rejects invalid UTF-8 instead of
+replacing undecodable bytes. `caller` binds a transport-authenticated principal
+and the capability digest header. A body cannot assert its own byte count or caller
+identity. Both the global 1 MiB and original selected request limits apply. The
+SQLite coordinated adapter accepts this text in addition to its existing parsed
+packet form; it checks canonical and received bytes before retaining a new request,
+and uses the original limit for a retry. Third-party coordinated adapters must
+implement the documented text-intake contract before serving this component.
+
+Pass a manifest already available to the host, not a mandatory fresh discovery
+fetch. A new operation requires a valid signed selection at the commit-time clock.
+An exact retry can pass `undefined` when discovery is unavailable: the journal
+resolves its saved contract first. Retention precedes signing. A failed signer or
+cancelled response can therefore leave a retained request; recover it by the same
+request ID and selector. Never create a replacement operation merely because the
+response was lost. Intake applies no peer decision and leaves advisory work pending.
+
+`status(text, caller, signal)` parses the BRC-199 status request, checks current
+requester/auditor access before record lookup and resolves the saved contract. Its
+received bytes must also fit that original limit before signing. Reading an
+authorized observation can complete independent expiry maintenance even when an
+oversized status request is subsequently refused; it cannot admit a new
+peer operation. Both methods give the signer an owned result, then require an
+authentic root signature and exact canonical equality with the observation captured
+before signing. A valid signature over a different otherwise permitted outcome is
+rejected. The complete signed packet must fit the original response reservation.
+
+Work defaults to 64 physical operations, four per principal and a 30-second
+deadline; installation can narrow them. Share one instance across the installed
+service, not a fresh capacity pool per request. These are per-instance bounds;
+operators also bound total process/replica capacity. There is no waiting queue. Cancellation
+and timeout return promptly but keep physical capacity occupied until the underlying
+authority or signing work actually settles. Cancellation is checked around each
+installed synchronous callback and after asynchronous work. The same internal
+primitive serves `LookupProviderWork`, whose existing constructor, defaults,
+diagnostics and behavior remain unchanged.
+
+Returned bytes are only a candidate response. The returned `head.revision` is the
+observation fence, not permission to send. Install the native final-response
+companion after authentication; use an empty advertisement inventory for these
+control/status packets and recheck current requester/auditor access under the final
+gate. A policy change or revocation during signing must prevent the original bytes
+from entering the queue. Supply complete safe CORS/profile headers for replacements.
+Do not append independently hydrated advertisements to the signed status packet.
+The generated scheduling property exercises real SQLite intake and final enqueue
+across cancellation, signer alteration, access revocation and policy rotation.
+
+This front end does not mount HTTP routes, install automatic evaluation policy,
+run a recovery scheduler or complete every serving/currentness adapter. Those
+remain separate integrations before advertising the complete profile.
+
 ## Original-contract worker recovery
 
 The optional `RootEvictionRecoveryStorage` companion adds

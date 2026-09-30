@@ -61,7 +61,12 @@ function lookupProviderTarget(property, files, tests) {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
     propertyTest: `packages/application/output-knowledge/test/${property}`,
-    additionalInputs: ['src/lookup/**', 'test/lookup-*-fixture.ts', 'test/fixtures/lookup-*.mjs'],
+    additionalInputs: [
+      'src/lookup/**',
+      'src/internal/BoundedOutputWork.ts',
+      'test/lookup-*-fixture.ts',
+      'test/fixtures/lookup-*.mjs'
+    ],
     mutate: files.map(name => `src/lookup/${name}.ts`),
     ...jestTarget(
       'jest.config.js',
@@ -78,6 +83,8 @@ function rootEvictionTarget(property, files) {
     propertyTest: `packages/application/output-knowledge/test/${property}`,
     additionalInputs: [
       'src/root-eviction/**',
+      'src/internal/BoundedOutputWork.ts',
+      'test/root-eviction-service-fixture.ts',
       'test/root-eviction-fixture.ts',
       'test/fixtures/root-eviction-worker.mjs',
       'test/fixtures/root-commit-lock-worker.mjs',
@@ -449,6 +456,9 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'root-eviction-service': rootEvictionTarget('root-eviction-service.property.test.ts', [
+      'RootEvictionService'
+    ]),
     'root-eviction-maintenance': rootEvictionTarget('root-eviction-maintenance.property.test.ts', [
       'SQLiteRootEvictionMaintenance',
       'RootEvictionMaintenanceStorage'
@@ -657,11 +667,19 @@ export function buildMutationTargets(repositoryRoot) {
       ['LookupBatchBuilder', 'LookupLiveReader', 'LookupWake'],
       ['lookup-batch', 'lookup-provider', 'lookup-provider-work']
     ),
-    'output-lookup-service': lookupProviderTarget(
-      'lookup-provider-work.test.ts',
-      ['LookupProviderService', 'LookupProviderContracts', 'LookupProviderWork'],
-      ['lookup-provider', 'lookup-provider-work', 'lookup-session']
-    ),
+    'output-lookup-service': {
+      ...lookupProviderTarget(
+        'lookup-provider-work.test.ts',
+        ['LookupProviderService', 'LookupProviderContracts', 'LookupProviderWork'],
+        ['lookup-provider', 'lookup-provider-work', 'lookup-session']
+      ),
+      mutate: [
+        'src/lookup/LookupProviderService.ts',
+        'src/lookup/LookupProviderContracts.ts',
+        'src/lookup/LookupProviderWork.ts',
+        'src/internal/BoundedOutputWork.ts'
+      ]
+    },
     'output-lookup-session-codec': lookupProviderTarget(
       'lookup-session.test.ts',
       ['LookupSessionCodec', 'SQLiteLookupDisclosure'],

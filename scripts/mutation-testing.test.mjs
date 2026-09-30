@@ -184,7 +184,8 @@ test('provider mutation campaigns cover executable layers and follow shared fixt
   const names = Object.keys(configured).filter(id => id.startsWith('output-lookup-'))
   const files = names.flatMap(id => configured[id].mutate)
   assert.equal(new Set(files).size, files.length)
-  assert.equal(new Set(files.map(file => file.replace(/:\d+-\d+$/, ''))).size, 22)
+  assert.equal(new Set(files.map(file => file.replace(/:\d+-\d+$/, ''))).size, 23)
+  assert.ok(files.includes('src/internal/BoundedOutputWork.ts'))
   const records = configured['output-lookup-session-records']
   const payloads = configured['output-lookup-session-payloads']
   assert.deepEqual(records.runnerOptions, payloads.runnerOptions)
@@ -204,7 +205,8 @@ test('provider mutation campaigns cover executable layers and follow shared fixt
   for (const fixture of [
     'test/lookup-provider-fixture.ts',
     'test/fixtures/lookup-session-process.mjs',
-    'src/lookup/SQLiteLookupIndex.ts'
+    'src/lookup/SQLiteLookupIndex.ts',
+    'src/internal/BoundedOutputWork.ts'
   ]) {
     const selected = selectAffectedMutationTargets(configured, [
       `packages/application/output-knowledge/${fixture}`

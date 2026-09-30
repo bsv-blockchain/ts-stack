@@ -97,7 +97,19 @@ it('rejects asynchronous, reentrant and closed use of the transaction bridge bef
   const f = await make(),
     bridge = new SQLiteRootEvictionDatabase(f.path, f.configuration, undefined)
   try {
-    expect(() => bridge.transaction(async () => true)).toThrow('synchronous')
+    let invoked = false
+    expect(() =>
+      bridge.transaction(async () => {
+        invoked = true
+        return true
+      })
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Root journal callbacks must be synchronous'
+      })
+    )
+    expect(invoked).toBe(false)
     expect(() => bridge.transaction(() => Promise.resolve(true))).toThrow('asynchronous')
     expect(() => bridge.transaction(() => bridge.transaction(() => true))).toThrow('reentered')
     expect(() => bridge.transaction(() => bridge.close())).toThrow('Cannot close')

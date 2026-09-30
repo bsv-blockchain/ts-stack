@@ -72,6 +72,14 @@ to the service; it does not enable a discovery endpoint by itself. See
 [root coordination](../../../docs/guides/root-eviction-coordination.md) for API
 contracts, limits, crash recovery and the remaining integration obligations.
 
+The portable entry also supplies `RootEvictionService` for bounded raw-text intake
+and authorized status signing. It preserves the original capability on retry,
+retains before signing and verifies the exact observed result returned by the
+installed signer. Returned bytes carry their observation revision for the separate
+native final-enqueue guard. The component installs no automatic peer policy or
+HTTP route. Existing parsed-packet journal calls and lookup work behavior remain
+unchanged; cancellation retains physical signing capacity until work settles.
+
 ## Getting started
 
 This package is an unpublished implementation candidate. From this TS Stack
