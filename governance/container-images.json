@@ -14,12 +14,12 @@
       "runtimePackagePins": [
         {
           "name": "libcrypto3",
-          "version": "3.5.8-r0",
+          "version": "3.5.9-r0",
           "reason": "CVE-2026-14456"
         },
         {
           "name": "libssl3",
-          "version": "3.5.8-r0",
+          "version": "3.5.9-r0",
           "reason": "CVE-2026-14456"
         }
       ]
