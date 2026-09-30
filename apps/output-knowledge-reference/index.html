@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Output knowledge · Reference workbench</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">BSV · Application state reference</p>
+        <h1>One shared history.<br />Independent views.</h1>
+        <p class="intro">
+          Publish an output, learn its replacement live, and pick up where you left off. Source
+          membership and Bitcoin spend knowledge stay separate.
+        </p>
+        <p class="fixture">Synthetic chain · Public test identities · No real funds</p>
+      </header>
+      <section class="connection" aria-labelledby="connect-title">
+        <h2 id="connect-title">Your local view</h2>
+        <div class="inputs">
+          <label
+            >Participant
+            <select id="account">
+              <option value="alice">Alice</option>
+              <option value="bob">Bob</option>
+            </select></label
+          >
+          <label
+            >Workspace
+            <input id="workspace" value="workbench" maxlength="40" pattern="[A-Za-z0-9-]+"
+          /></label>
+          <label class="check"
+            ><input type="checkbox" id="federate" /> Include the other host</label
+          >
+        </div>
+        <div class="buttons">
+          <button id="start">Start a new view</button>
+          <button id="resume" class="secondary">Resume saved view</button>
+          <button id="offline" class="secondary" disabled>Go offline</button>
+          <button id="reconnect" class="secondary" disabled>Reconnect</button>
+        </div>
+        <p id="status" role="status">
+          Start Alice in one tab and Bob in another. Choose a new workspace name for a fresh
+          experiment.
+        </p>
+      </section>
+      <section class="producer" aria-labelledby="producer-title">
+        <h2 id="producer-title">Change this host's catalogue</h2>
+        <p>
+          These explicit commands use public fixture transactions. Subscribers update automatically.
+        </p>
+        <div class="buttons">
+          <button data-command="publish" disabled>1. Publish three records</button>
+          <button data-command="replace" disabled>2. Spend and replace</button>
+          <button data-command="withdraw" disabled>3. Withdraw independent record</button>
+          <button data-command="reintroduce" disabled>4. Reintroduce old output</button>
+        </div>
+      </section>
+      <section aria-labelledby="records-title">
+        <div class="section-heading">
+          <h2 id="records-title">What this client knows</h2>
+          <span id="revision">No journal open</span>
+        </div>
+        <div id="records" class="records"></div>
+      </section>
+      <section class="explanation">
+        <h2>Try the recovery boundary</h2>
+        <p>
+          Take Bob offline. Replace the first record from Alice, then withdraw the independent
+          record. Reconnect Bob or reload his tab and resume the same workspace. His saved cursor
+          receives the missed changes. Reintroducing the old output changes source membership, but
+          its verified spend remains.
+        </p>
+        <p>
+          A provider does not prove universal unspentness. “No spend observed” is deliberately
+          weaker than “unspent.” The workbench checks real Script and Merkle evidence against its
+          synthetic header chain.
+        </p>
+      </section>
+      <section>
+        <h2>Recent activity</h2>
+        <ol id="activity"></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

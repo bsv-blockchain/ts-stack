@@ -1,0 +1,35 @@
+{
+  "name": "output-knowledge-reference-app",
+  "version": "0.1.0",
+  "private": true,
+  "author": "BSV Association",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && node scripts/copy-notices.mjs",
+    "serve": "node dist-server/nodeServer.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src test --deny-warnings",
+    "format:check": "pnpm --workspace-root exec prettier --check \"apps/output-knowledge-reference/**/*.{css,html,json,md,mjs,ts}\"",
+    "test": "vitest run",
+    "test:browser": "pnpm build && node scripts/check-browser.mjs"
+  },
+  "dependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@bsv/output-knowledge": "workspace:^",
+    "@bsv/overlay-express": "workspace:^",
+    "@bsv/auth-express-middleware": "workspace:^",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "oxlint": "^1.76.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.11",
+    "puppeteer-core": "^25.4.0"
+  }
+}

@@ -92,7 +92,7 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 43 |
+| Governed projects | 44 |
 | Package-area projects | 38 |
 | Public npm packages | 35 |
 | Private package-area projects | 3 |

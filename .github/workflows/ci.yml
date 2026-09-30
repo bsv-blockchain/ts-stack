@@ -388,6 +388,7 @@ jobs:
           {
             find packages -type d \( -name dist -o -name out \) -prune -print0
             find packages -type f -name '*.tsbuildinfo' -print0
+            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server \) -print0 -prune
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
@@ -460,9 +461,10 @@ jobs:
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.mutation-targets != '[]'
     needs: prepare
     runs-on: ubuntu-latest
-    # The governed air-gap codec target currently instruments 352 mutants and
-    # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: 45
+    # These full-source campaigns reached the hosted 45-minute job deadline
+    # without a report. Keep their full tests/mutants and quality ratchets;
+    # additional job time is distinct from individual mutant/test deadlines.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:

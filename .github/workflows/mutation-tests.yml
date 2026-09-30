@@ -78,9 +78,9 @@ jobs:
     name: Mutation / ${{ matrix.target }}
     needs: prepare
     runs-on: ubuntu-latest
-    # Match the PR workflow: complete governed targets (including the durable
-    # live lookup target) legitimately exceed 20 minutes without omitting mutants.
-    timeout-minutes: 45
+    # Match the PR allowance for the five measured hosted deadline failures.
+    # Mutant/test deadlines and every detection/coverage ratchet are unchanged.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:

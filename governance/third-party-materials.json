@@ -807,6 +807,11 @@
       "reason": "The deployable browser bundle incorporates @bsv/sdk and must carry its scoped notice archive."
     },
     {
+      "path": "apps/output-knowledge-reference",
+      "inherits": "packages/sdk",
+      "reason": "The deployable browser bundle incorporates @bsv/sdk and must carry its scoped notice archive."
+    },
+    {
       "path": "packages/helpers/did-client",
       "packageName": "@bsv/did-client",
       "inherits": "packages/sdk",

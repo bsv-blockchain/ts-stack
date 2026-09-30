@@ -117,8 +117,11 @@ submission and GASP behavior remains available to applications that do not opt i
 - Integrate BRC-198 LCH acquisition and playback without changing BRC-170 behavior.
 - Implement BRC-199 root-host output eviction, all serving/replay/admission/GASP
   fences, restoration and multi-host consistency demonstrations.
-- Complete a working reference application, actual-browser persistence/restart,
-  multi-host demonstrations and an application consuming live lookup updates.
+- Extend the now-working live reference application with the remaining admission,
+  private acquisition/release, covenant authority and root-serving integrations.
+  Actual Chrome/native IndexedDB already exercises two authenticated hosts, live
+  Script/SPV updates, tab-close recovery and independent source membership.
+  The SQLite application also proves progressive populated snapshots.
 - Finish API guides, operator guidance, conformance, property/mutation evidence,
   mobile/browser/packed-consumer checks and all exact-head remote quality gates.
 
@@ -325,3 +328,22 @@ pass; existing entry budgets are unchanged. The compiled lineage example passes
 against the exact candidate tarballs. These results qualify the historical
 verifier, not the remaining wallet/domain/application integration. The broader
 implementation checkpoint remains open.
+
+The concrete app is in `apps/output-knowledge-reference`. Five application tests
+and a production-bundle Chrome/native IndexedDB scenario pass. Two independent
+providers and two clients demonstrate populated progressive snapshots, live
+Script/SPV updates, offline replay, provider restart, page-close recovery and
+independent source membership. Both desktop and narrow layouts were inspected.
+The workbench uses public fixture identities and a pinned synthetic easy-PoW
+chain; its trusted producer explicitly writes the read model. Ordinary topic
+admission, private acquisition and native mobile qualification remain separate
+work. The [workbench guide](../../docs/guides/output-knowledge-workbench.md)
+provides reproducible commands and those boundaries.
+
+CI's shared artifact now includes application browser and server bundles; an
+actual archive-content regression preserves existing package outputs and excludes
+application dependencies and mutation sandboxes. Five previously canceled full
+mutation campaigns receive a 90-minute hosted job limit after reaching the old
+45-minute deadline: lineage package/graph, SDK listing funding and lookup session
+records/payloads. All other job limits and all test, mutant, worker and quality
+thresholds remain unchanged. Exact-head hosted qualification is still required.

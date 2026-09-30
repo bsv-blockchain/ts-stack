@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
@@ -12,6 +14,43 @@ const WALLET_MOBILE_COVERAGE_PATH = join(
   REPOSITORY_ROOT,
   'packages/wallet/wallet-toolbox/mobile/vitest.config.ts'
 )
+
+test('the shared build archive carries application browser and server bundles', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const archiveStep = workflow.match(
+    /- name: Archive build outputs\n        run: \|\n([\s\S]*?)\n      - name:/
+  )?.[1]
+  assert.ok(archiveStep, 'the actual archive command must be exercised')
+  const directory = mkdtempSync(join(tmpdir(), 'stack-build-archive-'))
+  const included = [
+    'packages/example/dist/index.js',
+    'packages/example/out/cjs/index.js',
+    'packages/example/build.tsbuildinfo',
+    'apps/reference/dist/assets/main.js',
+    'apps/reference/dist-server/server.js',
+    'apps/another app/dist/index.html'
+  ]
+  const excluded = [
+    'apps/reference/src/main.ts',
+    'apps/reference/node_modules/dependency/dist/index.js',
+    'apps/reference/.stryker-tmp/sandbox/dist/index.js'
+  ]
+  try {
+    for (const path of [...included, ...excluded]) {
+      mkdirSync(dirname(join(directory, path)), { recursive: true })
+      writeFileSync(join(directory, path), path)
+    }
+    execFileSync('bash', ['-e', '-o', 'pipefail', '-c', archiveStep], { cwd: directory })
+    const entries = execFileSync('tar', ['-tzf', 'build-outputs.tar.gz'], {
+      cwd: directory,
+      encoding: 'utf8'
+    }).split('\n')
+    for (const path of included) assert.ok(entries.includes(path), `${path} must be reusable`)
+    for (const path of excluded) assert.ok(!entries.includes(path), `${path} is not a build output`)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
 
 function workflowJobBlocks(workflow) {
   const jobsMarker = '\njobs:\n'
@@ -121,7 +160,20 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
-    assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    if (job.name === 'mutation-tests') {
+      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads"]'), matrix.target) && 90 || 45 }}`
+      assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
+      const dedicated = readFileSync(
+        join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
+        'utf8'
+      )
+      const dedicatedJob = workflowJobBlocks(dedicated).find(
+        candidate => candidate.name === 'mutation-tests'
+      )
+      assert.equal(dedicatedJob?.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
+    } else {
+      assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    }
   }
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
   assert.match(
