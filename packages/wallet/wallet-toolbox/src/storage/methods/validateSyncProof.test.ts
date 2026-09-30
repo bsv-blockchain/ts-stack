@@ -180,3 +180,28 @@ test('validates packed proof bytes without expanding or changing them', async ()
   expect(candidate.merklePath).toBe(merklePath)
   expect(() => assertSyncProofReplacementAuthorized(candidate)).not.toThrow()
 })
+
+describe.each([
+  ['rawTx', 'raw transaction is required'],
+  ['merklePath', 'Merkle path is required']
+] as const)('%s input admission', (field, reason) => {
+  test.each([
+    ['empty number array', []],
+    ['empty packed array', new Uint8Array()],
+    ['string', '01'],
+    ['array-like object', { 0: 1, length: 1 }],
+    ['missing value', undefined],
+    ['null', null]
+  ])('rejects %s before service access or proof authorization', async (_description, bytes) => {
+    const f = fixture()
+    const services = jest.spyOn(f.storage, 'getServices')
+    const candidate = { ...f.candidate, [field]: bytes as unknown as number[] }
+    const original = structuredClone(candidate)
+    await expect(validateSyncProof(f.storage, candidate)).rejects.toThrow(reason)
+    expect(services).not.toHaveBeenCalled()
+    expect(candidate).toEqual(original)
+    expect(() => assertSyncProofReplacementAuthorized(candidate)).toThrow(
+      'replacement requires active-chain validation'
+    )
+  })
+})
