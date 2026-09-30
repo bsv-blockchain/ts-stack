@@ -61,8 +61,7 @@ function position(
 ): Array<number | string> | undefined {
   if (cursor === undefined) return undefined
   if (
-    cursor === null ||
-    cursor.version !== 1 ||
+    cursor?.version !== 1 ||
     cursor.snapshotId !== snapshotId ||
     cursor.table !== table ||
     !Array.isArray(cursor.after) ||
@@ -149,10 +148,8 @@ function normalize<T>(storage: StorageKnex, row: Record<string, unknown>, schema
 
 function charge(k: Knex, columns: string[], mysql: boolean): Knex.Raw {
   const length = mysql ? 'octet_length(??)' : 'length(cast(?? as blob))'
-  return k.raw(`(${columns.map(() => `2 * coalesce(${length}, 0) + 64`).join(' + ')}) as ??`, [
-    ...columns,
-    '__snapshotBytes'
-  ])
+  const cellCharge = `2 * coalesce(${length}, 0) + 64`
+  return k.raw(`(${columns.map(() => cellCharge).join(' + ')}) as ??`, [...columns, '__snapshotBytes'])
 }
 
 function keyColumn(k: Knex, key: string, mysql: boolean): string | Knex.Raw {
@@ -200,16 +197,45 @@ async function columnNames(k: Knex, table: string, mysql: boolean): Promise<stri
   return rows.map(row => row.name)
 }
 
+interface SnapshotContext {
+  storage: StorageKnex
+  userId: number
+  snapshotId: string
+  columns: Map<WalletSnapshotTable, string[]>
+}
+
+/** Select a complete prefix without fetching payloads or skipping oversized rows. */
+function boundedPrefix(
+  candidates: Array<Record<string, number | string>>,
+  maxBytes: number
+): { count: number; payloadBytes: number } {
+  let payloadBytes = 0
+  let count = 0
+  for (const candidate of candidates) {
+    if (Number(candidate.__snapshotOwned) !== 1) {
+      throw new WERR_INVALID_OPERATION('Snapshot relation does not belong to this wallet profile')
+    }
+    const bytes = Number(candidate.__snapshotBytes)
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new WERR_INVALID_OPERATION('Invalid snapshot row size')
+    if (payloadBytes + bytes > maxBytes) {
+      if (count === 0)
+        throw new WERR_INVALID_OPERATION('Snapshot row exceeds maxBytes; large-value streaming is required')
+      break
+    }
+    payloadBytes += bytes
+    count++
+  }
+  return { count, payloadBytes }
+}
+
 async function readPage<T extends WalletSnapshotTable>(
-  storage: StorageKnex,
+  context: SnapshotContext,
   trx: TrxToken,
-  userId: number,
   table: T,
   after: Array<number | string> | undefined,
-  limits: { maxRows: number; maxBytes: number },
-  columns: Map<WalletSnapshotTable, string[]>,
-  snapshotId: string
+  limits: { maxRows: number; maxBytes: number }
 ): Promise<WalletSnapshotPage<T>> {
+  const { storage, userId, columns, snapshotId } = context
   const k = storage.toDb(trx)
   const schema = definitions[table]
   let fields = columns.get(table)
@@ -230,22 +256,7 @@ async function readPage<T extends WalletSnapshotTable>(
   const candidates: Array<Record<string, number | string>> = await base()
     .select(...keyColumns, charge(k, fields, storage.dbtype === 'MySQL'), relationGuard(k, table, userId))
     .limit(limits.maxRows)
-  let payloadBytes = 0
-  let count = 0
-  for (const candidate of candidates) {
-    if (Number(candidate.__snapshotOwned) !== 1) {
-      throw new WERR_INVALID_OPERATION('Snapshot relation does not belong to this wallet profile')
-    }
-    const bytes = Number(candidate.__snapshotBytes)
-    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new WERR_INVALID_OPERATION('Invalid snapshot row size')
-    if (payloadBytes + bytes > limits.maxBytes) {
-      if (count === 0)
-        throw new WERR_INVALID_OPERATION('Snapshot row exceeds maxBytes; large-value streaming is required')
-      break
-    }
-    payloadBytes += bytes
-    count++
-  }
+  const { count, payloadBytes } = boundedPrefix(candidates, limits.maxBytes)
   const last = candidates[count - 1]
   const cursor: WalletSnapshotCursor | undefined =
     last === undefined ? undefined : { version: 1, snapshotId, table, after: schema.keys.map(key => last[key]) }
@@ -280,7 +291,7 @@ export async function openKnexWalletReadSnapshot(
     })
     const userId = header.user.userId
     const snapshotId = Utils.toHex(Random(32))
-    const columns = new Map<WalletSnapshotTable, string[]>()
+    const context: SnapshotContext = { storage, userId, snapshotId, columns: new Map() }
     return {
       version: 1,
       snapshotId,
@@ -300,9 +311,7 @@ export async function openKnexWalletReadSnapshot(
         const after = position(cursor, snapshotId, table, schema.keys)
         const maxRows = bound(limits.maxRows, 128, 1000, 'maxRows')
         const maxBytes = bound(limits.maxBytes, 262144, 16777216, 'maxBytes')
-        return await view.read(trx =>
-          readPage(storage, trx, userId, table, after, { maxRows, maxBytes }, columns, snapshotId)
-        )
+        return await view.read(trx => readPage(context, trx, table, after, { maxRows, maxBytes }))
       }
     }
   } catch (error) {
