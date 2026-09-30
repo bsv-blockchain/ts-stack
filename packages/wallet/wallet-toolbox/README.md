@@ -42,10 +42,11 @@ materialize the full document/file, and IndexedDB writers wait during capture.
 SQL providers also expose `supportsRetainedReadSnapshot` / `openReadSnapshot`
 for a local view held across idle reads, with one view per provider, one read at
 a time, and bounded lifetime/cancellation. Await `closed`/`close()` for physical
-cleanup. The view occupies a connection; driver deadlines remain separate and a
-single-connection pool cannot serve other work until release. IndexedDB and
-remote RPC do not expose retained views. This does not yet yield ordinary backup
-work or add a bounded paging API. See the
+cleanup. This low-level view occupies a caller-pool connection; driver deadlines
+remain separate and a single-connection pool cannot serve other work until
+release. The [durable local SQL backup integration](#durable-local-sql-backup-integration-215-candidate)
+below adds bounded pages and uses a dedicated reader to preserve foreground
+capacity. IndexedDB and remote RPC do not expose retained views. See the
 [retained view contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
