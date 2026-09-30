@@ -242,20 +242,31 @@ unchanged 90% gate. Exact ESM/CJS and strict TypeScript consumers and the separa
 bounded Vite/esbuild entry pass. This is codec qualification, not completed spend,
 lineage, consent, wallet or application qualification.
 
-The next route-construction increment passes 54 planner tests, 87 signing tests,
+The route-construction increment passes 54 planner cases, 99 signing cases,
 30 independent frozen rejection cases and two properties with at least 300 cases
 each. All twelve accepted frozen transactions rebuild byte for byte and every
 input executes under the SDK interpreter. Tests include eight-recipient consent,
-maximum input/output dimensions, complete signature authority, value conservation,
-owned snapshots and both prepared/completed byte limits. Planner mutation passes
-98.08% over 260 mutants (255 killed, five surviving, zero uncovered/invalid).
-Funded-construction mutation passes 93.80% over 387 mutants (363 killed, 24
-surviving, zero uncovered/invalid), including the completed-byte bound and expanded
-tests. The campaign finished in 13m53s at the unchanged 90% gate.
-Root health/lint/format/types, complete
-SDK coverage and exact packed consumers pass. Eleven compiled examples pass
-against 22 exact tarballs. These results do not establish full lineage, wallet,
-private fulfillment or application qualification.
+maximum dimensions, exact signature authority, conservation, complete owned display
+plans, funded snapshots and prepared/completed byte limits. After analyzer-driven
+refactoring, planner mutation passes 97.71% over 262 mutants (256 killed, six
+surviving, zero uncovered/invalid). Funded-construction mutation passes 94.13% over 409 mutants (385 killed,
+24 surviving, zero uncovered/invalid), including complete owned display plans,
+at the unchanged 90% gate. The campaign finished in 14m18s.
+The complete SDK run passes 8,018 tests across 231 suites. Exact ESM/CJS/strict
+packed consumers and all declared browser entries pass. Eleven compiled examples
+pass against 22 exact tarballs and documentation validates 138 HTML routes. These
+results do not establish full lineage, wallet, private fulfillment or application
+qualification.
+
+The bounded JSON parser now defines explicit own data properties while preserving
+null prototypes, accepted keys and writable/configurable/enumerable attributes.
+Its 58 focused tests include a generated property with at least 300 cases. Full
+source mutation passes 91.76% over 376 mutants (339 killed, 31 surviving, six
+timeouts, zero uncovered/invalid). The two local authenticated HTTP fixtures use
+the already governed express-rate-limit 8.6.1 development dependency; middleware
+runtime behavior is unchanged. The manifest change carries patch candidate 2.2.9.
+All 217 middleware tests and packed Express 4/5 consumers pass. Hosted Sonar and
+CodeQL must requalify these corrections on the next published revision.
 
 Compatible dependency remediation advances the existing brace-expansion
 substitution and affected lock resolutions without adding an override or relaxing

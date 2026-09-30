@@ -215,8 +215,8 @@ test.each([
 test('predecessor envelope accepts exact byte capacity and rejects typed, empty and nonhex values precisely', () => {
   const rawTransaction = '00'.repeat(1048576)
   expect(
-    parseRevenueListingPrevious([{ rawTransaction, outputIndex: 0 }])[0].rawTransaction.length
-  ).toBe(2097152)
+    parseRevenueListingPrevious([{ rawTransaction, outputIndex: 0 }])[0].rawTransaction
+  ).toHaveLength(2097152)
   for (const value of ['', 1234, null, [], '00'.repeat(1048577)]) {
     expect(() => parseRevenueListingPrevious([{ rawTransaction: value, outputIndex: 0 }])).toThrow(
       'transaction length'

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { RevenueListingSpend, type PreparedRevenueListingSpend } from '../RevenueListingSpend.js'
 import { type RevenueListing } from '../RevenueListing.js'
+import { planRevenueListingSpend } from '../RevenueListingPlan.js'
 import {
   accepted,
   corpus,
@@ -37,6 +38,26 @@ function fixture(name: string) {
   )
   return { trace, tx, spend }
 }
+
+test.each(accepted)('returns complete, independently owned display terms for $name', trace => {
+  const { spend } = fixture(trace.name)
+  const expected = planRevenueListingSpend(
+    family,
+    corpus.descriptor,
+    previous(trace),
+    action(trace, family)
+  )
+  const plan = spend.plan()
+  expect(plan).toEqual(expected)
+  plan.inputs[0].satoshis = '0'
+  plan.outputs[0].satoshis = '0'
+  plan.currentState.recipients[0].weight = 999
+  if (plan.successorState !== undefined) plan.successorState.recipients[0].weight = 888
+  plan.signers.recipients.push(keys[0].toPublicKey().toString())
+  plan.signers.seller = keys[1].toPublicKey().toString()
+  expect(spend.plan()).toEqual(expected)
+})
+
 function signatures(prepared: PreparedRevenueListingSpend, count: number) {
   const result: { seller?: string; recipients: string[] }[] = Array.from({ length: count }, () => ({
     recipients: []

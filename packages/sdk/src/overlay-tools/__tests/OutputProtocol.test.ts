@@ -53,6 +53,85 @@ describe('BRC-192 representation boundary', () => {
     expect(canonicalOutputJSON(foreign)).toBe('{"groups":[],"scope":{"epoch":"one"}}')
   })
 
+  it('retains ordinary own-data attributes and a null prototype for decoded maps', () => {
+    const parsed = parseOutputJSON('{"constructor":1,"prototype":2,"entry":3}') as Record<
+      string,
+      unknown
+    >
+    expect(Object.getPrototypeOf(parsed)).toBeNull()
+    for (const [key, value] of Object.entries(parsed))
+      expect(Object.getOwnPropertyDescriptor(parsed, key)).toEqual({
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true
+      })
+    parsed.entry = 4
+    expect(canonicalOutputJSON(parsed)).toBe('{"constructor":1,"entry":4,"prototype":2}')
+    delete parsed.entry
+    expect(Object.keys(parsed)).toEqual(['constructor', 'prototype'])
+  })
+
+  it.each([
+    ['12345', { bytes: 4 }, 'Output JSON byte limit'],
+    ['"é"', { bytes: 3 }, 'Output JSON byte limit'],
+    [new TextEncoder().encode('null '), { bytes: 4 }, 'Output JSON byte limit'],
+    [new TextEncoder().encode('\ufeff{}'), {}, 'JSON BOM is not permitted'],
+    [Uint8Array.of(0xc0, 0xaf), {}, 'Malformed UTF-8'],
+    [123, {}, 'Expected UTF-8 bytes'],
+    ['0 trailing', {}, 'Trailing JSON data'],
+    ['{1:2}', {}, 'Expected JSON string'],
+    ['"bad\\x"', {}, 'Malformed JSON string'],
+    ['"unfinished', {}, 'Unterminated JSON string'],
+    ['{"a":1,"a":2}', {}, 'Duplicate decoded JSON key'],
+    ['{"a":1,"b":2}', { mapKeys: 1 }, 'JSON map limit'],
+    ['{"a" 1}', {}, 'Expected JSON colon'],
+    ['{"a":1 "b":2}', {}, 'Expected JSON object separator'],
+    ['[1,2]', { arrayElements: 1 }, 'JSON array limit'],
+    ['[1 2]', {}, 'Expected JSON array separator'],
+    ['{"a":{"b":1}}', { depth: 2 }, 'JSON depth limit'],
+    ['?1', {}, 'Invalid JSON token'],
+    ['1e-1', {}, 'Protocol numbers must be safe integers']
+  ])('preserves actionable parsing diagnostics for %j', (value, limits, reason) => {
+    expect(() => parseOutputJSON(value as string, limits as { bytes: number })).toThrow(
+      reason as string
+    )
+  })
+
+  it('accepts exact structural and byte bounds including exponent and decimal spellings', () => {
+    expect(parseOutputJSON(Uint8Array.of(0x30), { bytes: 1 })).toBe(0)
+    expect(parseOutputJSON('{"a":1}', { mapKeys: 1, depth: 2 })).toEqual({ a: 1 })
+    expect(parseOutputJSON('[1]', { arrayElements: 1, depth: 2 })).toEqual([1])
+    expect(parseOutputJSON('[1.00,1e+10,100e-2]')).toEqual([1, 10000000000, 1])
+    expect(canonicalOutputJSON([1], { arrayElements: 1, depth: 2 })).toBe('[1]')
+    expect(canonicalOutputJSON({ a: 1 }, { mapKeys: 1, depth: 2 })).toBe('{"a":1}')
+    expect(() => canonicalOutputJSON({ a: { b: 1 } }, { depth: 2 })).toThrow('JSON depth limit')
+    expect(() => canonicalOutputJSON([1, 2], { arrayElements: 1 })).toThrow('JSON array limit')
+    expect(() => canonicalOutputJSON({ a: 1, b: 2 }, { mapKeys: 1 })).toThrow('JSON map limit')
+  })
+
+  it('reports unsupported values and accessors without invoking application code', () => {
+    const getter = jest.fn(() => 1)
+    const array = [1]
+    Object.defineProperty(array, 0, { get: getter, enumerable: true })
+    expect(() => canonicalOutputJSON(array)).toThrow('JSON array accessor or hole')
+    expect(getter).not.toHaveBeenCalled()
+    expect(() =>
+      canonicalOutputJSON(Object.defineProperty({}, 'a', { get: getter, enumerable: true }))
+    ).toThrow('JSON accessor or hidden key')
+    expect(() => canonicalOutputJSON(new Date(0))).toThrow('Expected plain JSON object')
+    const sparse: number[] = []
+    sparse[1] = 1
+    expect(() => canonicalOutputJSON(sparse)).toThrow('Sparse or decorated JSON array')
+    expect(() => canonicalOutputJSON({ [Symbol('key')]: 1 })).toThrow('Symbol JSON key')
+    expect(() => canonicalOutputJSON(undefined)).toThrow('Expected a JSON value')
+    expect(() => canonicalOutputJSON(0.5)).toThrow('Protocol numbers must be safe integers')
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => canonicalOutputJSON(cyclic)).toThrow('Cyclic JSON value')
+    expect(getter).not.toHaveBeenCalled()
+  })
+
   it.each([
     '{"a":1,"\\u0061":2}',
     '{"nested":{"x":1,"x":2}}',

@@ -1,4 +1,5 @@
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AuthFetch, CompletedProtoWallet, PrivateKey, SessionManager } from '@bsv/sdk'
@@ -10,6 +11,7 @@ const servers: Server[] = []
 
 async function endpoint(authenticated: boolean) {
   const app = express()
+  app.use(rateLimit({ windowMs: 60_000, limit: 300 }))
   const sessionManager = new SessionManager()
   const requests: string[] = []
   let writes = 0

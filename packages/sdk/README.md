@@ -342,6 +342,11 @@ wallet-derived locking key, and field signature before reading or spending it.
   separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
   Existing lookup and submission interfaces keep their current behavior.
 
+  Protocol JSON maps have a null prototype and ordinary writable, configurable,
+  enumerable own data fields, including keys that resemble object builtins.
+  Parsing and canonical encoding enforce the same explicit byte and structural
+  bounds; callers still validate each endpoint's closed schema.
+
   `retainOutputCapability(manifest, request)` validates a new selection and returns
   `{ record, selection }` as independent owned copies. Atomically persist `record`
   with the operation before any effect. `restoreOutputCapability(record, trust)`

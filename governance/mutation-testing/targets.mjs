@@ -93,6 +93,16 @@ export function buildMutationTargets(repositoryRoot) {
     sessionRecordTests
   )
   return {
+    'sdk-output-json': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest: 'packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts',
+      mutate: ['src/overlay-tools/OutputProtocolJSON.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/overlay-tools/__tests/OutputProtocol.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts'
+      ])
+    },
     'sdk-revenue-listing-plan': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

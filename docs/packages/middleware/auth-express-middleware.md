@@ -3,10 +3,10 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.8'
+version: '2.2.9'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -44,6 +44,10 @@ Version 2.2.7 preserves Express's one-argument response header-map overload.
 `res.set({ ...headers })` and authenticated payment challenges work with the
 same Express validation, signed headers and wire format. No client migration
 is required.
+
+The unpublished 2.2.9 candidate adds a development dependency for rate-limited
+local authenticated HTTP tests. It changes no runtime middleware, transport
+representation, peer range or deployment default; no consumer migration is required.
 
 Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
 header-count ceilings. `createAuthMiddleware` configures its Peer with

@@ -222,7 +222,7 @@ function unlock(
     plan.signers.seller === undefined ? [] : signature(signed.seller!, plan.signers.seller, pre)
   let consents: number[] = []
   if (action.operation === 'amend') {
-    consents = Array<number>(584).fill(0)
+    consents = Array.from({ length: 584 }, () => 0)
     plan.signers.recipients.forEach((identity, slot) => {
       const value = signature(signed.recipients[slot], identity, pre)
       consents[slot * 73] = value.length
@@ -231,7 +231,7 @@ function unlock(
       })
     })
   }
-  const newKeys = Array<number>(256).fill(0)
+  const newKeys = Array.from({ length: 256 }, () => 0)
   if (action.operation === 'amend')
     action.state.recipients.forEach((item, slot) => {
       y(item.identity).forEach((byte, offset) => {
@@ -258,10 +258,17 @@ function unlock(
     .writeBin(consents)
     .writeBin(
       change === undefined
-        ? Array<number>(20).fill(0)
+        ? Array.from({ length: 20 }, () => 0)
         : toArray(change.lockingScript.toHex().slice(6, 46), 'hex')
     )
     .writeNumber(change?.satoshis ?? 0)
+}
+
+function pushedBytes(length: number): number {
+  if (length < 76) return length + 1
+  if (length <= 255) return length + 2
+  if (length <= 65535) return length + 3
+  return length + 5
 }
 
 /**
@@ -283,7 +290,21 @@ export class RevenueListingSpend {
   }
   /** JSON-only owned plan suitable for displaying all economic terms before funding. */
   plan(): RevenueListingPlan {
-    return JSON.parse(JSON.stringify(this.planned)) as RevenueListingPlan
+    const plan = this.planned
+    const copyState = (state: RevenueListingPlan['currentState']) => ({
+      ...state,
+      recipients: state.recipients.map(item => ({ ...item }))
+    })
+    return {
+      ...plan,
+      inputs: plan.inputs.map(item => ({ ...item })),
+      outputs: plan.outputs.map(item => ({ ...item })),
+      currentState: copyState(plan.currentState),
+      ...(plan.successorState === undefined
+        ? {}
+        : { successorState: copyState(plan.successorState) }),
+      signers: { ...plan.signers, recipients: [...plan.signers.recipients] }
+    }
   }
 
   /** Conservative ABI size for funding, with all eight permitted final inputs. */
@@ -313,11 +334,7 @@ export class RevenueListingSpend {
       20,
       8
     ]
-    return fields.reduce(
-      (sum, length) =>
-        sum + length + (length < 76 ? 1 : length <= 255 ? 2 : length <= 65535 ? 3 : 5),
-      0
-    )
+    return fields.reduce((sum, length) => sum + pushedBytes(length), 0)
   }
 
   prepare(transaction: Transaction): PreparedRevenueListingSpend {

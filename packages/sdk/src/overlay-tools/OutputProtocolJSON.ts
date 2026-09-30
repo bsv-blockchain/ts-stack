@@ -135,7 +135,13 @@ class OutputJSONParser {
       outputAssert(++count <= this.bounds.mapKeys, 'JSON map limit', 'limited')
       this.whitespace()
       outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-      result[key] = this.value(depth + 1)
+      // Define a plain own data field even when a key resembles an object builtin.
+      Object.defineProperty(result, key, {
+        value: this.value(depth + 1),
+        enumerable: true,
+        configurable: true,
+        writable: true
+      })
       this.whitespace()
       const end = this.source[this.offset++]
       if (end === '}') return result

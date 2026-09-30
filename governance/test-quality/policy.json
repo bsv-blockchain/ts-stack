@@ -656,6 +656,18 @@
           "Seller and all old-recipient signatures authorize their exact listing input.",
           "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
         ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-192 bounded canonical JSON and explicit own-data map construction",
+        "target": "At least 300 map round trips and exact byte-limit cases",
+        "invariants": [
+          "Decoded maps preserve their null prototype and ordinary own data fields.",
+          "Canonical UTF-8 byte bounds admit exactly fitting values and reject overflow.",
+          "All permitted map keys retain their values and writable/configurable/enumerable attributes."
+        ]
       }
     ],
     "exclusions": [

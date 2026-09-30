@@ -516,6 +516,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-json",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-192 bounded canonical JSON and explicit own-data map construction",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

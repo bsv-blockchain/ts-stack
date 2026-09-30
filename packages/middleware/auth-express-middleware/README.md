@@ -5,6 +5,11 @@ BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
 
+The unpublished 2.2.9 candidate adds the existing governed rate-limit test dependency
+and bounds the local authenticated HTTP integration fixtures. Runtime middleware,
+wire formats, peer requirements and deployment defaults remain those of 2.2.8;
+no consumer migration is required.
+
 The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
 rejects parsed bodies that cannot be represented without losing semantics.

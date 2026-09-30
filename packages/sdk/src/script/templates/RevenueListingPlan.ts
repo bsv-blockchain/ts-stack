@@ -136,6 +136,19 @@ function serialized(outputs: RevenueListingPlannedOutput[]): number[] {
   return writer.toArray()
 }
 
+function checkMergeInputs(inputs: RevenueListingPlan['inputs']): void {
+  if (inputs.length === 2) {
+    outputAssert(
+      inputs[0].txid !== inputs[1].txid || inputs[0].outputIndex !== inputs[1].outputIndex,
+      'Duplicate listing input'
+    )
+    outputAssert(
+      inputs[0].lockingScript === inputs[1].lockingScript,
+      'Merge schedules or scripts differ'
+    )
+  }
+}
+
 /**
  * Plans exact mandatory outputs and authorities for all six BRC-197 routes.
  * It authenticates source bytes and family/state encoding, not Bitcoin validity,
@@ -170,16 +183,7 @@ export function planRevenueListingSpend(
     }
   })
   const states = inputs.map(item => family.decode(toArray(item.lockingScript, 'hex'), descriptor))
-  if (inputs.length === 2) {
-    outputAssert(
-      inputs[0].txid !== inputs[1].txid || inputs[0].outputIndex !== inputs[1].outputIndex,
-      'Duplicate listing input'
-    )
-    outputAssert(
-      inputs[0].lockingScript === inputs[1].lockingScript,
-      'Merge schedules or scripts differ'
-    )
-  }
+  checkMergeInputs(inputs)
   const state = states[0]
   const oldValue = inputs.reduce((sum, item) => sum + BigInt(item.satoshis), 0n)
   const script = inputs[0].lockingScript
@@ -195,7 +199,7 @@ export function planRevenueListingSpend(
     topUp = 0n,
     contribution = 1n
   let successorState: RevenueListingState | undefined = parseRevenueListingState(state)
-  let commitment = Array<number>(32).fill(0)
+  let commitment = Array.from({ length: 32 }, () => 0)
   switch (action.operation) {
     case 'purchase':
       continuing.push(output(oldValue + outputU64(descriptor.purchasePrice), script))

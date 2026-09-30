@@ -1,4 +1,5 @@
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import {
@@ -36,6 +37,7 @@ async function endpoint(
   options: { serverKey?: PrivateKey; authenticated?: boolean; fetch?: typeof fetch } = {}
 ) {
   const app = express()
+  app.use(rateLimit({ windowMs: 60_000, limit: 300 }))
   const requests: string[] = []
   const callers: string[] = []
   const cacheHeaders: string[] = []

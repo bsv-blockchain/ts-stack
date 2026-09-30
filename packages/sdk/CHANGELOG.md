@@ -216,6 +216,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (2.9.0 candidate)
 
+- Construct protocol JSON maps with explicit own data fields, retaining accepted keys, null prototypes and ordinary property attributes. Add full-source mutation and generated round-trip/byte-bound qualification; existing JSON encodings and parser limits remain unchanged.
 - Add opt-in `RevenueListingPlan` and `RevenueListingSpend` entries for all six BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
 - Add the separate `@bsv/sdk/script/templates/RevenueListing` codec for the frozen BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
 
