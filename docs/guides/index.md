@@ -77,6 +77,13 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 
 **Level:** Beginner to Intermediate
 
+### 8. [Durable Progressive and Live Lookup](./durable-live-lookup.md)
+
+Compose the experimental durable lookup provider, query policies and optional
+Overlay Express adapter, including recovery, authorization and retention boundaries.
+
+**Level:** Advanced | **Status:** Unpublished implementation candidate
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions

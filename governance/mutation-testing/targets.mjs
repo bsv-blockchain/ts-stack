@@ -56,8 +56,144 @@ function vitestTarget(configFile) {
   }
 }
 
-export function buildMutationTargets(repositoryRoot) {
+function lookupProviderTarget(property, files, tests) {
   return {
+    packageDirectory: 'packages/application/output-knowledge',
+    manifest: 'packages/application/output-knowledge/package.json',
+    propertyTest: `packages/application/output-knowledge/test/${property}`,
+    additionalInputs: ['src/lookup/**', 'test/lookup-*-fixture.ts', 'test/fixtures/lookup-*.mjs'],
+    mutate: files.map(name => `src/lookup/${name}.ts`),
+    ...jestTarget(
+      'jest.config.js',
+      [...tests.map(name => `<rootDir>/test/${name}.test.ts`), `<rootDir>/test/${property}`],
+      { esm: true, buildCommand: 'pnpm build' }
+    )
+  }
+}
+
+export function buildMutationTargets(repositoryRoot) {
+  const sessionRecordFile = 'src/lookup/SQLiteLookupSessionRecords.ts'
+  const sessionRecordLines = readFileSync(
+    resolve(repositoryRoot, 'packages/application/output-knowledge', sessionRecordFile),
+    'utf8'
+  ).split('\n')
+  const payloadStart = sessionRecordLines.findIndex(line => line.startsWith('  saveOpening(')) + 1
+  if (payloadStart < 2)
+    throw new Error('Unable to partition lookup session record responsibilities')
+  const sessionRecordTests = [
+    'lookup-sqlite-sessions',
+    'lookup-session',
+    'lookup-process',
+    'lookup-provider.property',
+    'lookup-session-records.property'
+  ]
+  const sessionRecordTarget = lookupProviderTarget(
+    'lookup-provider.property.test.ts',
+    [],
+    sessionRecordTests
+  )
+  return {
+    'overlay-output-lookup-http': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts',
+      mutate: ['src/OutputLookupRoutes.ts', 'src/OutputLookupHTTPPolicy.ts'],
+      additionalInputs: [
+        '../../application/output-knowledge/src/lookup/**',
+        '../../application/output-knowledge/test/lookup-provider-fixture.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/__tests__/OutputLookupRoutes.test.ts',
+          '<rootDir>/src/__tests__/OutputLookupRoutes.property.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              // The HTTP sandbox moves two levels deeper. Keep the real, unmutated
+              // provider fixture at its repository path; only this adapter is mutated.
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/lookup-provider-fixture\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/application/output-knowledge/test/lookup-provider-fixture.ts'
+                ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
+          }
+        }
+      )
+    },
+    'output-lookup-query': lookupProviderTarget(
+      'lookup-query.test.ts',
+      ['LookupQueryRegistry', 'CollectionOutputQueryPolicy', 'LookupLimitError'],
+      ['lookup-query', 'lookup-collection']
+    ),
+    'output-lookup-batches': lookupProviderTarget(
+      'lookup-batch.test.ts',
+      ['LookupBatchBuilder', 'LookupLiveReader', 'LookupWake'],
+      ['lookup-batch', 'lookup-provider', 'lookup-provider-work']
+    ),
+    'output-lookup-service': lookupProviderTarget(
+      'lookup-provider-work.test.ts',
+      ['LookupProviderService', 'LookupProviderContracts', 'LookupProviderWork'],
+      ['lookup-provider', 'lookup-provider-work', 'lookup-session']
+    ),
+    'output-lookup-session-codec': lookupProviderTarget(
+      'lookup-session.test.ts',
+      ['LookupSessionCodec', 'SQLiteLookupDisclosure'],
+      ['lookup-session', 'lookup-sqlite-sessions', 'lookup-provider']
+    ),
+    'output-lookup-index': lookupProviderTarget(
+      'lookup-sqlite-index.test.ts',
+      ['SQLiteLookupIndex'],
+      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch']
+    ),
+    'output-lookup-index-records': lookupProviderTarget(
+      'lookup-retention.test.ts',
+      ['SQLiteLookupRecords', 'SQLiteLookupEncoding', 'SQLiteLookupBridge'],
+      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process']
+    ),
+    'output-lookup-session-records': {
+      ...sessionRecordTarget,
+      mutate: [
+        `${sessionRecordFile}:1-${payloadStart - 1}`,
+        'src/lookup/SQLiteLookupSessionSchema.ts'
+      ]
+    },
+    'output-lookup-session-payloads': {
+      ...sessionRecordTarget,
+      propertyTest:
+        'packages/application/output-knowledge/test/lookup-session-records.property.test.ts',
+      mutate: [`${sessionRecordFile}:${payloadStart}-${sessionRecordLines.length}`]
+    },
+    'output-lookup-sessions': lookupProviderTarget(
+      'lookup-disclosure.property.test.ts',
+      ['SQLiteLookupSessions'],
+      ['lookup-sqlite-sessions', 'lookup-session', 'lookup-process', 'lookup-provider']
+    ),
+    'output-lookup-codecs': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/lookup-index-codec.test.ts',
+      mutate: [
+        'src/lookup/LookupIndexCodec.ts',
+        'src/lookup/LookupIndexKey.ts',
+        'src/lookup/LookupCursorCodec.ts',
+        'src/lookup/LookupServingEpoch.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/lookup-index-codec.test.ts',
+          '<rootDir>/test/lookup-cursor.test.ts',
+          '<rootDir>/test/lookup-serving-epoch.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'output-knowledge-live': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

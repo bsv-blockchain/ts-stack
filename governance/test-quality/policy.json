@@ -496,6 +496,130 @@
           "Retrying one captured operation preserves its original opening, cursor, receipt and job increment.",
           "Advancement retains the greater of the existing source minimum and committed core receipt position."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-index-codec.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Whole-domain lookup version predicates, original mutation identity, encrypted cursor binding and fresh storage-epoch selection",
+        "target": "Complete domain groups conserve predicates, exact U64 successor revisions and original retry identity under arbitrary row histories",
+        "invariants": [
+          "Every changed row receives exactly the next U64 revision; the complete before/after group remains indivisible.",
+          "Any changed existence or version predicate rejects the whole change before a commit.",
+          "Reconstructing a group preserves the exact original operation; changing event data changes its retry identity."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-provider.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Retained snapshot/live session history, whole query groups, original request fences and final current disclosure authorization",
+        "target": "Progressive snapshots and following domain changes across varying page sizes, authentication, connection restart and selector rotation",
+        "invariants": [
+          "Rows committed after the opening watermark never leak into its fixed snapshot.",
+          "Each following domain change remains one complete group with stable identity across independent readers.",
+          "Original response bytes survive selector rotation and reconnection, but current disclosure guard changes stop both reads and original retries."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-query.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Installed query identity and coherent observations across immutable access scopes",
+        "target": "Installed query identity and coherent observations across immutable access scopes under at least 300 generated histories",
+        "invariants": [
+          "Equivalent query views preserve group and observation identities independently of response limits.",
+          "Complete generated observation groups preserve order, scope and owned payloads."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-batch.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded progressive snapshot framing and atomic transition to live history",
+        "target": "Bounded progressive snapshot framing and atomic transition to live history under at least 300 generated histories",
+        "invariants": [
+          "Every selected snapshot row appears once in canonical order under varying page sizes.",
+          "The last snapshot boundary precedes live continuation even when the snapshot is empty."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-provider-work.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Physical provider capacity and cancellation ownership across authenticated callers",
+        "target": "Physical provider capacity and cancellation ownership across authenticated callers under at least 300 generated histories",
+        "invariants": [
+          "Cancelled callers cannot release capacity while their physical work is still running.",
+          "All slots become reusable only after actual work settles; results retain cancellation outcomes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-session.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private retained session framing and original capability restoration",
+        "target": "Private retained session framing and original capability restoration under at least 300 generated histories",
+        "invariants": [
+          "Retained request identities and exact U64 guard revisions round trip without changing original response bytes.",
+          "Returned records are owned and cannot rewrite the saved private opening."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-sqlite-index.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic lookup row predicates and exact commit acknowledgement recovery",
+        "target": "Atomic lookup row predicates and exact commit acknowledgement recovery under at least 300 generated histories",
+        "invariants": [
+          "The durable row map matches every generated atomic update or deletion.",
+          "Lost-ack retries return the original group without allocating another revision."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-retention.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Pinned historical lookup baselines and bounded compaction continuity",
+        "target": "Pinned historical lookup baselines and bounded compaction continuity under at least 300 generated histories",
+        "invariants": [
+          "Compaction preserves the exact pinned baseline and every later group.",
+          "Expired pins may advance the floor but cannot allow a successful read of discarded history."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable disclosure guard ordering across external policy changes and exact operation retries",
+        "target": "Durable disclosure guard ordering across external policy changes and exact operation retries under at least 300 generated histories",
+        "invariants": [
+          "A persisted block precedes release, and every change advances an exact guard revision.",
+          "Only the same external operation can release a block, with exact retries returning the original revision."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated lookup HTTP selection, bounded framing and non-disclosing error/CORS policy",
+        "target": "Bounded public classification and exact configured origins under arbitrary private diagnostics and audience sets",
+        "invariants": [
+          "Public errors preserve only validated codes and retryability, never private exception text.",
+          "Configured origin sets are owned, exact, unique HTTP(S) origins; a path or repeated authority is invalid."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-session-records.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic original lookup payload identity, bounded record framing and whole-record rollback",
+        "target": "At least 300 complete SQLite original-record histories retain query, first response and exact identity while rolling back every part together",
+        "invariants": [
+          "Every stored original query and first batch retain their exact identity and content.",
+          "Fence lookup and session lookup identify the same complete original record.",
+          "An aborted record transaction leaves no partial fence, payload or capacity accounting."
+        ]
       }
     ],
     "exclusions": [

@@ -15,6 +15,21 @@ integrations, proposal processing and complete qualification evidence are still 
 checkpoint-two review. The package version does not
 indicate a published or production-qualified release.
 
+## Durable progressive and live provider
+
+The optional `@bsv/output-knowledge/lookup` entry composes durable snapshot/live
+sessions, installed query policies, current authorization and bounded reads.
+`@bsv/output-knowledge/lookup/sqlite` supplies the Node SQLite index and session
+adapters. They preserve original Open identity, fixed history promises and whole
+change groups; notification hints reduce latency while polling recovers missed
+changes from other processes. The browser root remains unchanged.
+
+See the [provider guide](../../../docs/guides/durable-live-lookup.md) for creation,
+restart, projection, disclosure guards, HTTP mounting and retention. The optional
+Overlay Express adapter requires SDK 2.9.0 and a signed matching capability. This
+increment does not complete topic admission, payment, private acquisition or the
+full BRC-192–199 reference application.
+
 ## Getting started
 
 This package is an unpublished implementation candidate. From this TS Stack

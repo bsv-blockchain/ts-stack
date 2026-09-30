@@ -58,7 +58,9 @@ function globPattern(pattern) {
 
 function targetInputPatterns(target) {
   const packageDirectory = normalized(target.packageDirectory)
-  const patterns = []
+  const patterns = (target.additionalInputs ?? []).map(input =>
+    path.posix.normalize(`${packageDirectory}/${input}`)
+  )
   for (const mutate of target.mutate ?? []) {
     patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
   }

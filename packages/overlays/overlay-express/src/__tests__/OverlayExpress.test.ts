@@ -6,6 +6,7 @@ import { TopicManager, LookupService, serializeErrorForLog, serializeLogValue } 
 import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { createOutputLookupRouter } from '../OutputLookupRoutes.js'
 
 // Mock dependencies
 jest.mock('knex')
@@ -15,6 +16,9 @@ jest.mock('@bsv/sdk')
 jest.mock('@bsv/overlay-discovery-services')
 jest.mock('@bsv/auth-express-middleware', () => ({
   createAuthMiddleware: jest.fn(() => jest.fn())
+}))
+jest.mock('../OutputLookupRoutes.js', () => ({
+  createOutputLookupRouter: jest.fn(() => jest.fn())
 }))
 
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
@@ -1559,6 +1563,50 @@ describe('OverlayExpress', () => {
           allowUnauthenticated: true
         })
       )
+    })
+
+    it('shares lookup and admin authentication and mounts the companion before generic parsers', async () => {
+      const companion = { open: jest.fn<any>(), read: jest.fn<any>(), close: jest.fn<any>() }
+      const options = {
+        companion, service: 'records', baseURL: 'https://lookup.example.test', identity: 'configured-key',
+        chain: { network: 'test', genesisHash: '01'.repeat(32) }, authentication: 'brc103' as const,
+        manifest: () => ({}), now: () => '1000', allowedOrigins: ['https://client.example.test']
+      }
+      const getPublicKey = jest.fn<any>().mockResolvedValue({ publicKey: 'configured-key' })
+      instance.serverWallet = { getPublicKey } as any
+      instance.configureOutputLookup(options)
+      options.allowedOrigins.push('https://later.example.test')
+      const use = jest.spyOn(instance.app, 'use')
+      jest.spyOn(instance.app, 'listen').mockImplementation((_port: any, callback: any) => { callback(); return {} as any })
+      await instance.start()
+      expect(getPublicKey).toHaveBeenCalledWith({ identityKey: true })
+      expect(createAuthMiddleware).toHaveBeenCalledTimes(1)
+      const auth = jest.mocked(createAuthMiddleware).mock.results[0].value
+      expect(createOutputLookupRouter).toHaveBeenCalledWith(expect.objectContaining({ companion, authenticate: auth, allowedOrigins: ['https://client.example.test'] }))
+      const router = jest.mocked(createOutputLookupRouter).mock.results[0].value
+      const routeIndex = use.mock.calls.findIndex(args => args[0] === router)
+      const parserIndex = use.mock.calls.findIndex(args => {
+        const middleware: unknown = args[0]
+        return typeof middleware === 'function' && middleware.name === 'jsonParser'
+      })
+      expect(routeIndex).toBeGreaterThanOrEqual(0)
+      expect(parserIndex).toBeGreaterThan(routeIndex)
+      expect(use.mock.calls.some(args => args[0] === auth)).toBe(true)
+      expect(() => instance.configureOutputLookup(options)).toThrow('before start')
+    })
+
+    it.each([undefined, 'different-key'])('rejects unavailable or mismatched lookup wallet %s before adding routes', async publicKey => {
+      instance.configureOutputLookup({
+        companion: { open: jest.fn<any>(), read: jest.fn<any>(), close: jest.fn<any>() },
+        service: 'records', baseURL: 'https://lookup.example.test', identity: 'configured-key',
+        chain: { network: 'test', genesisHash: '01'.repeat(32) }, authentication: 'brc103',
+        manifest: () => ({}), now: () => '1000', allowedOrigins: []
+      })
+      if (publicKey !== undefined) instance.serverWallet = { getPublicKey: jest.fn<any>().mockResolvedValue({ publicKey }) } as any
+      const use = jest.spyOn(instance.app, 'use')
+      await expect(instance.start()).rejects.toThrow(publicKey === undefined ? 'requires a server wallet' : 'must match')
+      expect(use).not.toHaveBeenCalled()
+      expect(createOutputLookupRouter).not.toHaveBeenCalled()
     })
 
     it('does not expose internal engine errors in public responses', async () => {

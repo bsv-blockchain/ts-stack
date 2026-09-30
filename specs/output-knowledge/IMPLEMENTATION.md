@@ -36,6 +36,18 @@ submission and GASP behavior remains available to applications that do not opt i
   fences reject stale workers; fixed expiry and selected terminal service errors
   persist cursor-free continuity resets. The source never pays or opens a new
   generation automatically. Its separate browser entry preserves existing budgets.
+- Optional BRC-193 provider composition with installed query rules, stable whole-change
+  mapping, bounded physical request ownership, notification hints and cross-process
+  polling. Snapshot and live continuation share one retained history boundary.
+- SQLite provider indexes and sessions sharing an actual transaction: original Open,
+  signed contract, first response, private cursor material, permanent original-request
+  fence and history pin commit together. Explicit create/reopen, serving epochs,
+  monotonic clocks, capacity, expiry, compaction and durable disclosure guards are
+  separate from Bitcoin evidence acceptance.
+- Opt-in Overlay Express lookup routes with BRC-103/104 authentication before strict
+  JSON framing, signed capability/profile binding, explicit CORS, no-store responses,
+  byte/work limits and disconnect cancellation. The lazy host integration and separate
+  public entry preserve old root imports, routes and middleware defaults.
 - Exact-target BEEF assembly, alternative cross-source evidence, actual SDK
   Script/SPV verification, historical readiness and deterministic spend selection.
 - Whole-group acceptance, source membership order, generation replacement, context
@@ -77,9 +89,10 @@ submission and GASP behavior remains available to applications that do not opt i
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
   fences, concrete durable admission bridges and restart-aware expiry scheduling.
-- Complete BRC-193 durable snapshot/replay/long-poll services, retention, full
-  client/provider composition and consistent Overlay/Overlay Express storage hooks,
-  using the bounded transport and durable live source now implemented.
+- Finish provider qualification and connect live lookup to actual admission/projection
+  producers and the reference application. Generic index publication requires all
+  relevant producers and privacy writers to honor its atomic mutation/guard contracts;
+  the provider alone does not retrofit those guarantees into existing topic managers.
 - Bind BRC-101 capability selection to the authenticated transport and explicit
   non-final profiles while preserving finite legacy defaults.
 - Exercise existing private off-chain values and lookup context, then implement
@@ -99,10 +112,11 @@ publication, deployment or merge is authorized by this implementation checklist.
 
 ## Validation evidence and limits
 
-The SDK run passes 7,753 tests across 223 suites, including all proposal endpoint
-variants and closed-envelope, canonical encoding and intrinsic-policy checks. The output-knowledge
-run passes 474 tests across 38 suites, with more than 96% line and 92% branch
-coverage. Boundary tests cover durable assessment invalidation, exact replay
+The SDK foundation run passes 7,753 tests across 223 suites, including all proposal
+endpoint variants and closed-envelope, canonical encoding and intrinsic-policy checks.
+The provider increment's full output-knowledge run passes 829 tests across 53 suites,
+with 97.45% line and 94.16% branch coverage. Subsequent focused session-record cases
+also pass; final exact-head qualification remains required. Boundary tests cover durable assessment invalidation, exact replay
 checkpoints, immutable source/context identities, partial storage histories and
 projection publication/error isolation. Proposal tests also cover exact completion capacity,
 concurrent-writer limit sealing, immutable local context and malformed SQLite
@@ -135,8 +149,36 @@ six production files and complete focused test selection participate, with no
 mutation/operator exclusions; governance tests enforce the exact union. Local
 campaigns finished in 16m35s and 10m31s. These runs include the stronger latest-context
 assertion and a 300-case property preserving original identity and receipt-gated
-advancement. Exact-head hosted checks remain required. The complete provider and
-required live application remain open.
+advancement. That published client increment has its own hosted evidence below.
+The provider qualification and required live application remain open.
+The new provider and actual authenticated HTTP adapter exercise SQLite snapshot/live
+continuation with two clients, missed-change recovery, manifest rotation, immutable
+original responses, current revocation, exact limits and cross-process writes.
+Process tests terminate before and after opening commit, interrupt compaction, race
+two independent writers and move the clock while another process holds the database
+lock. These fixtures exercise membership/framing and provider recovery; they are not
+claims of application-level Bitcoin spend acceptance or production deployment.
+
+Nine new mutation campaigns pass the unchanged 90% minimum with zero uncovered or
+invalid mutants: codecs 94.44%, query mapping 96.41%, batch/wait composition 91.37%,
+provider service/work 96.31%, session codec/disclosure 92.80%, index 91.12%, index
+records 96.94%, session response gates 92.70%, and HTTP transport 90.13%. The session
+record/schema and retained-payload campaigns remain in progress. The initial combined
+record campaign ran for 40m07 and failed its mutation gate. Added independent
+record-integrity and capacity cases address the gaps. Its complete source is now
+partitioned at the `saveOpening` responsibility boundary to leave CI headroom;
+both jobs keep every previous regression and the 300-case provider property. A
+new 300-case SQLite record rollback/identity property participates in both as well.
+Governance checks require a contiguous complete source union and identical test
+selection; no operator, source or threshold is excluded. The complete Express suite passes 559
+tests across 19 suites. Root lint/format and affected type checks pass. Exact packed
+runtime and Express exports and clean consumers pass, including the legacy Express
+root with registry SDK 2.8.9 in ESM/CJS and strict .mts/.cts TypeScript consumers.
+The optional lookup feature requires SDK 2.9.0. Browser composition passes without
+SQLite, and two public-interface documentation examples compile against ten exact
+tarballs. The [provider guide](../../docs/guides/durable-live-lookup.md) covers initialization,
+recovery, privacy writers, mounting, retention and operational limits.
+
 The source tests include a held SQLite append, storage failure, finite pagination,
 non-cancellable wallet I/O, independent fast/slow hosts and host-local refresh.
 Observation identities remain immutable within their complete source epoch across
@@ -173,9 +215,9 @@ mutation targets pass without uncovered or invalid results. Explicit asynchronou
 iterators preserve dependent write order without scheduling transaction writes
 concurrently. Node-only Mongo iteration uses bounded object-mode streams; browser
 code retains a portable iterator contract. No analyzer suppression or gate is changed.
-Published head `c4f5655f9` passes all 43 applicable hosted checks, with two expected
-scope skips accepted by merge-gate. The live-source increment passes local
-mutation qualification and still requires its own exact-head hosted CI evidence.
+Published live-source head `74cc115d720e42c3d7364060bdb9b2a12dd76107` passes 76 hosted
+checks with two expected skips, including CodeQL and the exact-head Sonar gate.
+The provider increment is not part of that head and needs its own hosted qualification.
 
 Root health, lint, formatting and type checking pass. Packed-consumer resolution
 and all declared browser entries pass. Core browser byte limits remain unchanged;

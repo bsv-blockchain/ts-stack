@@ -59,7 +59,7 @@ void exampleDidDocument
 void acceptDidLookup
 ```
 
-The compiler combines the *selected* fences into one consumer module, and on a
+The compiler combines the _selected_ fences into one consumer module, and on a
 pull request it selects only the fences whose import closure reaches a changed
 package. So an earlier fence's imports are available only when that fence
 happened to be selected too, and a fence that leans on one is broken by any
@@ -187,3 +187,56 @@ pnpm docs:examples
 The command requires built package outputs and network access only when the
 clean temporary consumer's external dependencies are not already present in
 the pnpm store. It never publishes or deploys an artifact.
+
+## Durable lookup provider
+
+This unpublished candidate composes the portable provider, Node storage and
+optional dual-format HTTP adapter. Creation and reopening are deliberately
+separate: callers retain the epoch, signed manifest, immutable binding and storage
+configuration as described in the [provider guide](durable-live-lookup.md).
+
+```ts compile
+// example-id: durable-lookup-provider
+import {
+  LookupProviderService as ExampleLookupProvider,
+  LookupSessionCodec as ExampleLookupCodec,
+  type LookupProviderOptions as ExampleLookupOptions
+} from '@bsv/output-knowledge/lookup'
+import {
+  SQLiteLookupIndex as ExampleLookupIndex,
+  SQLiteLookupSessions as ExampleLookupSessions
+} from '@bsv/output-knowledge/lookup/sqlite'
+import {
+  createOutputLookupRouter as exampleLookupRouter,
+  type OutputLookupRouteOptions as ExampleLookupRoutes
+} from '@bsv/overlay-express/output-lookup'
+import type ExampleLookupHost from '@bsv/overlay-express'
+
+function reopenExampleLookupStorage(path: string, codec: ExampleLookupCodec, now: () => string) {
+  const index = ExampleLookupIndex.open(path, 'records', { service: 'records' })
+  const sessions = ExampleLookupSessions.open(index, codec, now)
+  return { index, sessions }
+}
+
+function composeExampleLookup(
+  options: ExampleLookupOptions,
+  routes: Omit<ExampleLookupRoutes, 'companion'>
+) {
+  const companion = new ExampleLookupProvider(options)
+  return { companion, router: exampleLookupRouter({ ...routes, companion }) }
+}
+
+function configureExampleLookupHost(
+  host: ExampleLookupHost,
+  options: ExampleLookupOptions,
+  routes: Omit<ExampleLookupRoutes, 'companion' | 'authenticate' | 'handleHandshake'>
+) {
+  const companion = new ExampleLookupProvider(options)
+  host.configureOutputLookup({ ...routes, companion })
+  return companion
+}
+
+void reopenExampleLookupStorage
+void composeExampleLookup
+void configureExampleLookupHost
+```

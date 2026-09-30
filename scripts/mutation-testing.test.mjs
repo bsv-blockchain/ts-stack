@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
@@ -175,4 +177,53 @@ test('live lookup mutation campaigns preserve complete source and test coverage'
   ])
   assert.ok(selected.includes('output-knowledge-live'))
   assert.ok(selected.includes('output-knowledge-live-boundaries'))
+})
+
+test('provider mutation campaigns cover executable layers and follow shared fixture changes', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const names = Object.keys(configured).filter(id => id.startsWith('output-lookup-'))
+  const files = names.flatMap(id => configured[id].mutate)
+  assert.equal(new Set(files).size, files.length)
+  assert.equal(new Set(files.map(file => file.replace(/:\d+-\d+$/, ''))).size, 22)
+  const records = configured['output-lookup-session-records']
+  const payloads = configured['output-lookup-session-payloads']
+  assert.deepEqual(records.runnerOptions, payloads.runnerOptions)
+  const recordPath = 'src/lookup/SQLiteLookupSessionRecords.ts'
+  const ranges = [...records.mutate, ...payloads.mutate]
+    .filter(file => file.startsWith(`${recordPath}:`))
+    .map(file => file.split(':')[1].split('-').map(Number))
+  assert.equal(ranges[0][0], 1)
+  assert.equal(ranges[0][1] + 1, ranges[1][0])
+  assert.equal(
+    ranges[1][1],
+    readFileSync(
+      resolve(REPOSITORY_ROOT, 'packages/application/output-knowledge', recordPath),
+      'utf8'
+    ).split('\n').length
+  )
+  for (const fixture of [
+    'test/lookup-provider-fixture.ts',
+    'test/fixtures/lookup-session-process.mjs',
+    'src/lookup/SQLiteLookupIndex.ts'
+  ]) {
+    const selected = selectAffectedMutationTargets(configured, [
+      `packages/application/output-knowledge/${fixture}`
+    ])
+    for (const name of names.filter(id => id !== 'output-lookup-codecs'))
+      assert.ok(selected.includes(name), name)
+  }
+  assert.deepEqual(
+    selectAffectedMutationTargets(configured, ['docs/guides/durable-live-lookup.md']),
+    []
+  )
+})
+
+test('HTTP mutation inputs follow its real provider dependency outside the package directory', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  for (const input of ['src/lookup/LookupProviderService.ts', 'test/lookup-provider-fixture.ts']) {
+    const selected = selectAffectedMutationTargets(configured, [
+      'packages/application/output-knowledge/' + input
+    ])
+    assert.ok(selected.includes('overlay-output-lookup-http'))
+  }
 })

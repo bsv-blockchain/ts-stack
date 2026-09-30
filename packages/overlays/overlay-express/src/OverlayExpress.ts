@@ -54,6 +54,7 @@ import { ResourceBoundedLookupWrapper } from './ResourceBoundedLookupWrapper.js'
 import { BanAwareTopicManager } from './BanAwareTopicManager.js'
 import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
+import type { OutputLookupRouteOptions } from './OutputLookupRoutes.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
@@ -594,6 +595,8 @@ export default class OverlayExpress {
   // Optional shared store for BSV mutual-auth sessions.
   authSessionManager?: SessionManager | AsyncSessionManager
 
+  private outputLookup?: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
+
   // Server start time for uptime tracking
   private startTime?: Date
 
@@ -957,6 +960,22 @@ export default class OverlayExpress {
   configureAuthSessionManager(sessionManager: SessionManager | AsyncSessionManager): void {
     this.authSessionManager = sessionManager
     this.logger.log(chalk.blue('BSV authentication session manager has been configured.'))
+  }
+
+  /**
+   * Opt in to a durable BRC-193 companion at its signed concrete base path.
+   * This never upgrades an existing finite LookupService or changes /lookup.
+   * Configure before start; the host retains ownership of provider storage.
+   */
+  configureOutputLookup(
+    options: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
+  ): void {
+    if (this.isListening) throw new Error('Configure the live lookup companion before start')
+    this.outputLookup = {
+      ...options,
+      chain: { ...options.chain },
+      allowedOrigins: [...options.allowedOrigins]
+    }
   }
 
   /**
@@ -2321,6 +2340,18 @@ export default class OverlayExpress {
   async start(): Promise<void> {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
+    let lookupAuth: express.RequestHandler | undefined
+    if (this.outputLookup?.authentication === 'brc103') {
+      if (!this.serverWallet) throw new Error('Authenticated live lookup requires a server wallet')
+      const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
+      if (publicKey !== this.outputLookup.identity)
+        throw new Error('Live lookup identity must match the server authentication wallet')
+      lookupAuth = createAuthMiddleware({
+        wallet: this.serverWallet,
+        sessionManager: this.authSessionManager,
+        allowUnauthenticated: true
+      })
+    }
     const hasConfiguredArcProvider =
       (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
       (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
@@ -2453,6 +2484,34 @@ export default class OverlayExpress {
         environmentPrefix: edgePolicy.environmentPrefix
       })
     )
+    const requestCapacity = concurrencyLimit(
+      edgePolicy.environmentPrefix,
+      edgePolicy.maxConcurrentRequests === 200
+        ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
+        : edgePolicy.maxConcurrentRequests
+    )
+    if (this.outputLookup) {
+      const { createOutputLookupRouter } = await import('./OutputLookupRoutes.js')
+      // Preserve signed raw bytes and keep private payloads ahead of all legacy
+      // body parsers, public CORS, response transformation and verbose logging.
+      // All routes still share one host request capacity, including long polls.
+      this.app.use(requestCapacity)
+      const jsonBytes = readBodyLimitBytes(
+        `${edgePolicy.environmentPrefix}_JSON`,
+        edgePolicy.jsonBodyLimitBytes
+      )
+      this.app.use(
+        createOutputLookupRouter({
+          ...this.outputLookup,
+          authenticate: lookupAuth,
+          maximumRequestBytes: Math.min(this.outputLookup.maximumRequestBytes ?? 1048576, jsonBytes),
+          maximumResponseBytes: Math.min(
+            this.outputLookup.maximumResponseBytes ?? 4194304,
+            maxResponseBytes === -1 ? 4194304 : maxResponseBytes
+          )
+        })
+      )
+    }
     this.app.use(
       corsPolicy({
         environmentPrefix: edgePolicy.environmentPrefix,
@@ -2460,14 +2519,7 @@ export default class OverlayExpress {
         methods: ['GET', 'POST', 'OPTIONS']
       })
     )
-    this.app.use(
-      concurrencyLimit(
-        edgePolicy.environmentPrefix,
-        edgePolicy.maxConcurrentRequests === 200
-          ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
-          : edgePolicy.maxConcurrentRequests
-      )
-    )
+    if (!this.outputLookup) this.app.use(requestCapacity)
     this.app.use(
       bodyParser.json({
         limit: readBodyLimitBytes(
@@ -3031,7 +3083,7 @@ export default class OverlayExpress {
      * are present, allowing Bearer token fallback.
      */
     if (this.serverWallet !== undefined) {
-      const bsvAuth = createAuthMiddleware({
+      const bsvAuth = lookupAuth ?? createAuthMiddleware({
         wallet: this.serverWallet,
         sessionManager: this.authSessionManager,
         allowUnauthenticated: true

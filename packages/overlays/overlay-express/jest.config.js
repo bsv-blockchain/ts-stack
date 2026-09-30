@@ -17,6 +17,7 @@ export default {
       {
         useESM: true,
         tsconfig: {
+          target: 'ES2022',
           module: 'ESNext',
           moduleResolution: 'bundler'
         }

@@ -376,6 +376,116 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-codecs",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-index-codec.test.ts",
+      "risk": "critical",
+      "boundary": "Whole-domain lookup version predicates, original mutation identity, encrypted cursor binding and fresh storage-epoch selection",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-query",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-query.test.ts",
+      "risk": "critical",
+      "boundary": "Installed query identity and coherent observations across immutable access scopes",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-batches",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-batch.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded progressive snapshot framing and atomic transition to live history",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-provider-work.test.ts",
+      "risk": "critical",
+      "boundary": "Physical provider capacity and cancellation ownership across authenticated callers",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-codec",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-session.test.ts",
+      "risk": "critical",
+      "boundary": "Private retained session framing and original capability restoration",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-index",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-sqlite-index.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic lookup row predicates and exact commit acknowledgement recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-index-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-retention.test.ts",
+      "risk": "critical",
+      "boundary": "Pinned historical lookup baselines and bounded compaction continuity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-provider.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained snapshot/live session history, whole query groups, original request fences and final current disclosure authorization",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-sessions",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable disclosure guard ordering across external policy changes and exact operation retries",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-output-lookup-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated lookup HTTP selection, bounded framing and non-disclosing error/CORS policy",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-payloads",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-session-records.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic original lookup payload identity, bounded record framing and whole-record rollback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

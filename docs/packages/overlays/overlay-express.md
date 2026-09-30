@@ -4,7 +4,7 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.7.4'
+version: '2.8.0'
 last_updated: '2026-09-29'
 last_verified: '2026-09-29'
 review_cadence_days: 30
@@ -59,6 +59,21 @@ process.once('SIGINT', () => void server.close())
 - **Chaintracks integration** — Header resolution and reorg SSE for BASM
 - **OverlayMonitor** — Lookup probes plus optional admin maintenance actions
 - **Graceful lifecycle** — Idempotent `close()` drains HTTP and closes background work and databases
+
+## Progressive and live lookup candidate
+
+The unpublished 2.8.0 candidate adds `configureOutputLookup` and the separate
+`@bsv/overlay-express/output-lookup` entry. Supply a durable companion service,
+signed capability identity, chain and explicit allowed browser origins before
+starting the host. The opt-in routes share authentication and enforce their own
+framing, selection, byte and physical-work limits. The host leaves injected
+provider database ownership with the application.
+
+The [durable lookup guide](../../guides/durable-live-lookup.md) explains the provider,
+SQLite recovery, current authorization and mounting rules. The feature requires
+SDK 2.9.0; legacy root imports and finite routes remain available without enabling
+it. The candidate is not a package publication or a claim of complete application
+qualification.
 
 ## Common patterns
 

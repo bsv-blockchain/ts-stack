@@ -111,6 +111,17 @@ contains composition examples, recovery semantics, resource limits and the curre
 qualification boundary. Exact exports and declarations are listed in the
 [generated API ledger](../../reference/package-api-migrations.md).
 
+## Progressive and live provider
+
+`@bsv/output-knowledge/lookup` exports the provider composition, installed query
+policies and backend-neutral index/session ports. The Node-only
+`@bsv/output-knowledge/lookup/sqlite` entry implements versioned index changes,
+original request fences, history pins, fixed deadlines and durable disclosure
+guards in one SQLite transaction domain. Optional Overlay Express routes supply
+BRC-103/104 authentication and bounded no-store transport. Existing finite lookup
+adapters remain unchanged. See [Durable Progressive and Live Lookup](../../guides/durable-live-lookup.md)
+for operational requirements and the current qualification boundary.
+
 ## Behavior and boundaries
 
 A source group's evidence qualifies as a whole. A later verification result cannot

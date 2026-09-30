@@ -435,3 +435,19 @@ under the Open BSV License Version 4. Redistributors must preserve
 [`LICENSES/`](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain Overlay Express Project. Let's build the future of BSV Blockchain together!
+
+## Optional progressive and live lookup
+
+Call `configureOutputLookup` before `start`, or import `createOutputLookupRouter`
+from `@bsv/overlay-express/output-lookup` for standalone Express composition. The
+new adapter requires SDK 2.9.0, a durable provider companion, a signed matching
+capability manifest, current authorization and explicit browser origins. The
+legacy root loads this adapter only when enabled. Existing finite lookup routes
+and default startup remain unchanged.
+
+The host shares its authentication instance, verifies the serving wallet identity
+and clamps advertised byte budgets to its existing edge limits. Provider storage
+lifecycle remains with the caller. See the [provider guide](../../../docs/guides/durable-live-lookup.md)
+for initialization, exact retry recovery, disclosure guards, multi-process wakeups,
+retention and standalone router ordering. The candidate is unpublished and the
+complete BRC-192–199 integration remains under qualification.

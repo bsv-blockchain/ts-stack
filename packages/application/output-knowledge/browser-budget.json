@@ -30,7 +30,10 @@
     "SQLiteOperationStateStore",
     "LiveLookupSource",
     "prepareLiveLookupSource",
-    "liveLookupSourceBinding"
+    "liveLookupSourceBinding",
+    "LookupProviderService",
+    "SQLiteLookupIndex",
+    "SQLiteLookupSessions"
   ],
   "maximumBytes": {
     "vite": {
@@ -148,6 +151,35 @@
           "raw": 320000,
           "gzip": 105000,
           "brotli": 90000
+        }
+      }
+    },
+    {
+      "entry": "./lookup",
+      "requiredExports": [
+        "LookupProviderService",
+        "LookupProviderContracts",
+        "LookupQueryRegistry",
+        "CollectionOutputQueryPolicy",
+        "LookupSessionCodec",
+        "LookupWake"
+      ],
+      "prohibitedExports": [
+        "SQLiteLookupIndex",
+        "SQLiteLookupSessions",
+        "BitcoinKnowledge",
+        "LiveLookupSource"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 250000,
+          "gzip": 78000,
+          "brotli": 67000
+        },
+        "esbuild": {
+          "raw": 210000,
+          "gzip": 75000,
+          "brotli": 66000
         }
       }
     }
