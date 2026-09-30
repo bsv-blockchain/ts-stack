@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   classifyRun,
   collectReport,
+  collectPerformanceEvidence,
   sampleErrors,
   compareToBaseline,
   createBaseline,
@@ -217,4 +218,27 @@ test('collector bounds history scanning even if the API keeps returning pages', 
   assert.equal(result.collection.candidatePages, 2)
   assert.equal(result.collection.examinedRuns, 1)
   assert.equal(sampleErrors(result).length, 2)
+})
+
+test('ledger collection failure cannot prevent independent successful-run budget evidence', async () => {
+  const result = await collectPerformanceEvidence({
+    repository: 'bsv-blockchain/ts-stack',
+    workflow: 'ci.yml',
+    executionLedger: true,
+    sampleSize: 1,
+    request: async url => {
+      if (url.includes('/workflows/')) {
+        if (!url.includes('status=success')) throw new Error('Conflicting duplicate execution run')
+        return { workflow_runs: [candidate(1), candidate(2)] }
+      }
+      const id = Number(new URL(url).pathname.split('/').at(-2))
+      const selected = jobs(id === 1 ? 55 : 3)
+      return { total_count: selected.length, jobs: selected }
+    }
+  })
+  assert.equal(result.ledger, null)
+  assert.deepEqual(result.collectionErrors, ['Execution ledger collection failed.'])
+  assert.deepEqual(sampleErrors(result.report), [])
+  assert.equal(result.report.groups.fullScope.runs.length, 1)
+  assert.equal(result.report.groups.targeted.runs.length, 1)
 })

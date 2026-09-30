@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.1'
+version: '1.3.2'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
 review_cadence_days: 30
@@ -59,6 +59,40 @@ packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+## Execution ledger across outcomes and attempts
+
+The weekly trend also writes `ci-execution-ledger.json`. This separate ledger
+includes the latest 20 PR CI runs of every outcome and every attempt, including
+failed, cancelled and unfinished work and multiple runs of the same head. It
+does not replace the successful-run latency ratchet or reset its baseline.
+
+Attempt-specific API pages retain run, attempt, head and job identities. Complete
+job durations, including setup and teardown, are summed as runner execution
+seconds; unfinished or missing durations remain unknown, so that total is a
+lower bound. Duplicate delivery is counted once; conflicting duplicates,
+inconsistent attempt metadata, incomplete pagination or exceeded bounds fail
+collection rather than silently omit work. Bounds are 20 recent runs, 10
+attempts per run and 1000 jobs per attempt. This is a recent window, not lifetime
+usage. The ledger is retained even if the subsequent successful-run budget fails.
+
+Declared/skipped mutation jobs do not prove selected source scope or passing
+qualification. A cancellation does not identify timeout versus supersession.
+Runner billing, actual scheduler queue, dependency-ready timing and selected
+target union remain unavailable; do not invent them from this API. Initial
+admission is reported only for the first attempt. Execution span uses observed
+job timestamps rather than a potentially stale workflow `updated_at`, and is
+unknown while the attempt is unfinished. The workflow retains its existing
+read-only permissions and 90-day artifact retention.
+
+Local read-only collection with an authenticated token:
+
+```bash
+node scripts/ci-performance.mjs --collect \
+  --baseline governance/ci-performance-baseline.json \
+  --output ci-performance-report.json \
+  --execution-ledger-output ci-execution-ledger.json
+```
 
 ## Explicit mutation diagnostics
 

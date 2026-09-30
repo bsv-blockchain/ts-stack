@@ -4,6 +4,8 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+import { collectExecutionLedger } from './ci-execution-ledger.mjs'
+
 const DEFAULT_REPOSITORY = 'bsv-blockchain/ts-stack'
 const DEFAULT_SAMPLE_SIZE = 20
 const FULL_SCOPE_MINIMUM_JOBS = 50
@@ -450,24 +452,63 @@ function option(arguments_, name) {
   return index === -1 ? undefined : arguments_[index + 1]
 }
 
+export async function collectPerformanceEvidence({
+  repository,
+  workflow,
+  token,
+  executionLedger = false,
+  sampleSize = DEFAULT_SAMPLE_SIZE,
+  request = url => githubJson(url, token)
+}) {
+  const [report, ledger] = await Promise.allSettled([
+    collectReport({ repository, workflow, token, sampleSize, request }),
+    executionLedger
+      ? collectExecutionLedger({ repository, workflow, request })
+      : Promise.resolve(null)
+  ])
+  return {
+    report: report.status === 'fulfilled' ? report.value : null,
+    ledger: ledger.status === 'fulfilled' ? ledger.value : null,
+    collectionErrors: [
+      ...(report.status === 'rejected' ? ['Successful-run collection failed.'] : []),
+      ...(ledger.status === 'rejected' ? ['Execution ledger collection failed.'] : [])
+    ]
+  }
+}
+
 async function main(arguments_) {
   const baselinePath = option(arguments_, '--baseline')
   const outputPath = option(arguments_, '--output')
+  const ledgerPath = option(arguments_, '--execution-ledger-output')
   const writeBaselinePath = option(arguments_, '--write-baseline')
   const workflow = option(arguments_, '--workflow') ?? 'ci.yml'
   if (!arguments_.includes('--collect')) {
     throw new Error(
       'Usage: ci-performance.mjs --collect [--baseline file] [--output file] ' +
-        '[--write-baseline file] [--workflow ci.yml]'
+        '[--execution-ledger-output file] [--write-baseline file] [--workflow ci.yml]'
     )
   }
   const token = process.env.GITHUB_TOKEN
   if (!token) throw new Error('GITHUB_TOKEN is required for --collect')
-  const report = await collectReport({
-    repository: process.env.GITHUB_REPOSITORY ?? DEFAULT_REPOSITORY,
+  const repository = process.env.GITHUB_REPOSITORY ?? DEFAULT_REPOSITORY
+  const { report, ledger, collectionErrors } = await collectPerformanceEvidence({
+    repository,
     workflow,
-    token
+    token,
+    executionLedger: Boolean(ledgerPath)
   })
+  if (ledgerPath && ledger) {
+    await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`)
+    const summary =
+      `Execution ledger: ${ledger.window.runCount} recent PR runs, ` +
+      `${ledger.summary.attemptCount} attempts, ` +
+      `${(ledger.summary.knownExecutionSeconds / 60).toFixed(2)} known runner-minutes, ` +
+      `${ledger.summary.unmeasuredJobCount} jobs with unknown/incomplete duration. ` +
+      'Execution is a lower bound, not billed cost or passing qualification.\n'
+    process.stdout.write(summary)
+    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary)
+  }
+  if (!report) throw new PerformanceCollectionError(collectionErrors.join('\n'))
   if (outputPath) await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`)
   if (writeBaselinePath) {
     const errors = [...sampleErrors(report), ...validateBaseline(createBaseline(report))]
@@ -484,7 +525,9 @@ async function main(arguments_) {
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(process.env.GITHUB_STEP_SUMMARY, summary)
   }
-  if (comparisons.length > 0) throw new PerformanceCollectionError(comparisons.join('\n'))
+  if (comparisons.length > 0 || collectionErrors.length > 0) {
+    throw new PerformanceCollectionError([...comparisons, ...collectionErrors].join('\n'))
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
