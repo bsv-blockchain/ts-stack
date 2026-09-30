@@ -16,11 +16,19 @@ import {
 import { selectAffectedMutationTargets } from './mutation-testing.mjs'
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
-const quote = value => `'${value.replaceAll("'", "'\\''")}'`
+const GIT_EXECUTABLE =
+  process.platform === 'win32' ? String.raw`C:\Program Files\Git\cmd\git.exe` : '/usr/bin/git'
+const SINGLE_QUOTE_ESCAPE = String.raw`'\''`
+const quote = value => `'${value.replaceAll("'", SINGLE_QUOTE_ESCAPE)}'`
 const packageCommand = (name, script) => `pnpm --filter ${quote(name)} run ${script}`
 
+function comparePaths(left, right) {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
 function git(root, arguments_) {
-  return execFileSync('git', arguments_, {
+  return execFileSync(GIT_EXECUTABLE, arguments_, {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -46,7 +54,9 @@ export function localChangedFiles(root, base) {
   ]
   return {
     baseline,
-    files: [...new Set(changes.flatMap(value => value.split('\0').filter(Boolean)))].sort()
+    files: [...new Set(changes.flatMap(value => value.split('\0').filter(Boolean)))].sort(
+      comparePaths
+    )
   }
 }
 
@@ -57,7 +67,9 @@ export function localChangedImporters(root, baseline) {
     git(root, ['show', ':pnpm-lock.yaml']),
     readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8')
   ]
-  return [...new Set(versions.flatMap(after => changedLockfileImporters(before, after)))].sort()
+  return [...new Set(versions.flatMap(after => changedLockfileImporters(before, after)))].sort(
+    comparePaths
+  )
 }
 
 function packageChecks(project, direct) {
@@ -110,6 +122,8 @@ export function planLocalFeedback(
       'Use focused negative/regression tests during editing; run the batch checks once before pushing.',
       'Commands validate working-tree bytes: align the index/worktree before treating them as pre-push evidence.',
       'Cold checkout: install frozen dependencies with scripts disabled, rebuild audited tools, and build the workspace before global typecheck.',
+      'Run printed command snippets in a POSIX shell; on Windows use Git Bash with the standard Git installation.',
+      'Git uses the fixed system installation (/usr/bin/git, or the default Program Files Git on Windows), never a workspace PATH executable.',
       'Package test/consumer commands may build internally; inspect their scripts before measuring setup or claiming a duplicate-build saving.',
       'Local Linux/native/live requirements still follow the affected service/platform profile.'
     ]
@@ -148,11 +162,11 @@ function editChecks(root, files) {
 
 function localMutationTargets(root, files, importers) {
   const targets = buildMutationTargets(root)
-  const controls = [
+  const controls = new Set([
     'governance/mutation-testing/targets.mjs',
     'governance/mutation-testing/policy.json'
-  ]
-  return files.some(file => controls.includes(file))
+  ])
+  return files.some(file => controls.has(file))
     ? Object.keys(targets)
     : selectAffectedMutationTargets(targets, files, { changedImporters: importers })
 }

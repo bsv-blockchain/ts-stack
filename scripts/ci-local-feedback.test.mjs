@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -98,6 +98,16 @@ test('working-tree planning includes commit history, both rename endpoints, stag
     'staged.md',
     'unstaged.md'
   ])
+  // A writable PATH entry must not replace the planner's system Git executable.
+  write('build/git', '#!/bin/sh\nexit 77\n')
+  chmodSync(path.join(root, 'build/git'), 0o755)
+  const originalPath = process.env.PATH
+  try {
+    process.env.PATH = `${path.join(root, 'build')}${path.delimiter}${originalPath}`
+    assert.ok(localChangedFiles(root, base).files.includes('staged.md'))
+  } finally {
+    process.env.PATH = originalPath
+  }
   assert.throws(() => localChangedFiles(root, ''), /intended PR baseline/)
   assert.throws(() => localChangedFiles(root, 'missing-baseline'))
 })
