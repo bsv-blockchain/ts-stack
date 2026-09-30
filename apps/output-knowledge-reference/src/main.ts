@@ -89,8 +89,17 @@ function render(input: AcceptedInput) {
     const title = document.createElement('h3')
     title.textContent = fixtureLabels[name]
     const badge = document.createElement('p')
-    badge.className = 'badge ' + (spent ? 'spent' : verified ? 'known' : 'unknown')
-    badge.textContent = spent ? 'Verified spend' : verified ? 'No spend observed' : 'Not discovered'
+    let state = 'unknown',
+      label = 'Not discovered'
+    if (spent) {
+      state = 'spent'
+      label = 'Verified spend'
+    } else if (verified) {
+      state = 'known'
+      label = 'No spend observed'
+    }
+    badge.className = 'badge ' + state
+    badge.textContent = label
     const sources = document.createElement('p')
     sources.textContent = present.length
       ? 'Present at ' +
@@ -106,19 +115,22 @@ function render(input: AcceptedInput) {
     records.append(card)
   }
 }
+async function connectHost(active: ReferenceClient, host: ReferenceHost, fresh: boolean) {
+  if (active.connectedHosts().includes(host.id)) return
+  const manifest = fresh
+    ? parseOutputCapabilities(await boundedJSON(host.baseURL + '/overlay/v1/capabilities'), true)
+    : undefined
+  await active.connect(host, manifest)
+}
 async function connect(fresh: boolean) {
   if (!client) throw new Error('Open a local view first')
+  const active = client
   try {
-    for (const host of hosts) {
-      if (client.connectedHosts().includes(host.id)) continue
-      const manifest = fresh
-        ? parseOutputCapabilities(
-            await boundedJSON(host.baseURL + '/overlay/v1/capabilities'),
-            true
-          )
-        : undefined
-      await client.connect(host, manifest)
-    }
+    // Preserve deterministic opening order and stop at the first failed host.
+    await hosts.reduce(
+      (previous, host) => previous.then(() => connectHost(active, host, fresh)),
+      Promise.resolve()
+    )
   } finally {
     const connected = client.connectedHosts().length
     element<HTMLButtonElement>('offline').disabled = connected === 0
@@ -149,7 +161,7 @@ async function start(fresh: boolean) {
   client = await createReferenceClient({
     account,
     journal: await IndexedDBJournal.open(database, 'knowledge'),
-    controls: async (namespace, binding, initial) =>
+    controls: (namespace, binding, initial) =>
       initial
         ? IndexedDBOperationStateStore.create(
             database + '-control',

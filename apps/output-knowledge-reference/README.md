@@ -61,6 +61,8 @@ on the page. Host two has its own producer page at `http://127.0.0.1:4175`.
 The servers store their SQLite databases under the ignored `reference-data`
 directory. Set `REFERENCE_DATA` to an absolute directory to choose another
 location. On restart, omit `REFERENCE_CREATE` to open the existing database.
+The loopback server bounds all requests to 600 per source address per minute,
+before authentication work, and keeps rejection responses uncacheable.
 Missing or inconsistent state is an error; never clear it to simulate recovery.
 A new browser workspace name starts a separate experiment; **Resume saved view**
 opens existing control records and does not rediscover a replacement contract.

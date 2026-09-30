@@ -164,6 +164,6 @@ try {
   )
 } finally {
   if (browser) await browser.close()
-  for (const child of servers.reverse()) await stop(child)
+  await Promise.all(servers.map(child => stop(child)))
   await rm(temporary, { recursive: true, force: true })
 }

@@ -37,7 +37,7 @@ const headers = fixture.headers.map((header, index) => {
     time: data.getUint32(68, true)
   }
 })
-const tip = headers[headers.length - 1]
+const tip = headers.at(-1)!
 const times = headers
   .slice(-11)
   .map(header => header.time)

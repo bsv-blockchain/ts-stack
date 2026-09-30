@@ -1,4 +1,5 @@
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { CompletedProtoWallet, PrivateKey, closedOutputObject, parseOutputJSON } from '@bsv/sdk'
@@ -60,6 +61,7 @@ export async function startReferenceServer(options: {
       }
       next()
     })
+    app.use(rateLimit({ windowMs: 60000, limit: 600 }))
     app.use(
       createOutputLookupRouter({
         companion: provider.service,

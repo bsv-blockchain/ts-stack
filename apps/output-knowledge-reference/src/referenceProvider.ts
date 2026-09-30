@@ -119,41 +119,49 @@ export async function createReferenceProvider(options: {
     })
     const verifier = new SDKEvidenceVerifier(referenceResolver)
     async function update(publish: FixtureRecord[], withdraw: FixtureRecord[]) {
-      for (const name of publish) {
-        const result = await verifier.verify(
-          referenceEvidence(name),
-          referenceContext({
-            application: 'reference-publisher',
-            account: trust.identity,
-            access: 'public'
-          }),
-          new AbortController().signal
-        )
-        if (result.status !== 'verified')
-          throw new Error('Reference publication failed Script/SPV verification: ' + result.status)
-      }
-      const head = await index.head()
-      const edits: LookupIndexEdit[] = []
-      for (const name of [...publish, ...withdraw]) {
-        const evidence = referenceEvidence(name).evidence
-        const key = collectionOutputIndexKey(evidence)
-        const row = await index.row(key, head.sequence)
-        if (!publish.includes(name) && row === null) continue
-        edits.push({
-          key,
-          previous: row?.revision ?? null,
-          next: publish.includes(name)
-            ? {
-                expiresAt: null,
-                data: {
-                  collection: 'records',
-                  audience: 'public',
-                  output: { evidence: { ...evidence } }
-                }
-              }
-            : null
+      await Promise.all(
+        publish.map(async name => {
+          const result = await verifier.verify(
+            referenceEvidence(name),
+            referenceContext({
+              application: 'reference-publisher',
+              account: trust.identity,
+              access: 'public'
+            }),
+            new AbortController().signal
+          )
+          if (result.status !== 'verified')
+            throw new Error(
+              'Reference publication failed Script/SPV verification: ' + result.status
+            )
         })
-      }
+      )
+      const head = await index.head()
+      const candidates = await Promise.all(
+        [...publish, ...withdraw].map(async name => {
+          const evidence = referenceEvidence(name).evidence
+          const key = collectionOutputIndexKey(evidence)
+          const row = await index.row(key, head.sequence)
+          if (!publish.includes(name) && row === null) return undefined
+          return {
+            key,
+            previous: row?.revision ?? null,
+            next: publish.includes(name)
+              ? {
+                  expiresAt: null,
+                  data: {
+                    collection: 'records',
+                    audience: 'public',
+                    output: { evidence: { ...evidence } }
+                  }
+                }
+              : null
+          } satisfies LookupIndexEdit
+        })
+      )
+      const edits = candidates.filter(
+        (edit): edit is NonNullable<typeof edit> => edit !== undefined
+      )
       if (edits.length === 0) return head.sequence
       const group = await index.commit({
         base: head.sequence,

@@ -160,7 +160,7 @@ export async function createReferenceClient(options: {
     async close() {
       await disconnect()
       await runtime.close()
-      for (const control of controls.values()) await control.close()
+      await Promise.all([...controls.values()].map(control => control.close()))
       await core.close()
     }
   }

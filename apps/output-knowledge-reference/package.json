@@ -20,7 +20,8 @@
     "@bsv/output-knowledge": "workspace:^",
     "@bsv/overlay-express": "workspace:^",
     "@bsv/auth-express-middleware": "workspace:^",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
