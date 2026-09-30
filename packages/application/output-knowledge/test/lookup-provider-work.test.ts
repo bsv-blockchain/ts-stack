@@ -36,9 +36,13 @@ describe('bounded physical provider work and notification ownership', () => {
     })
     await started.promise
     abort.abort()
-    await expect(task).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(task).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Lookup request cancelled'
+    })
     await expect(work.run(null, undefined, async () => 'too soon')).rejects.toMatchObject({
-      code: 'limited'
+      code: 'limited',
+      message: 'Lookup physical work capacity is full'
     })
     pending.reject(new Error('late physical failure'))
     for (let step = 0; step < 8; step++) await Promise.resolve()
@@ -69,7 +73,11 @@ describe('bounded physical provider work and notification ownership', () => {
     const work = new LookupProviderWork(1, 1, 20),
       physical = deferred<void>()
     const task = work.run(null, undefined, async () => await physical.promise)
-    const checked = expect(task).rejects.toMatchObject({ code: 'unavailable', retryable: true })
+    const checked = expect(task).rejects.toMatchObject({
+      code: 'unavailable',
+      retryable: true,
+      message: 'Lookup request deadline reached'
+    })
     await jest.advanceTimersByTimeAsync(20)
     await checked
     await expect(work.run(null, undefined, async () => {})).rejects.toMatchObject({
@@ -134,7 +142,9 @@ describe('bounded physical provider work and notification ownership', () => {
     [1, 1, 30001],
     [NaN, 1, 1]
   ])('rejects invalid work bounds %j', (a, b, c) => {
-    expect(() => new LookupProviderWork(a, b, c)).toThrow('Invalid')
+    expect(() => new LookupProviderWork(a, b, c)).toThrow(
+      'Invalid lookup work capacity or deadline'
+    )
   })
 })
 
