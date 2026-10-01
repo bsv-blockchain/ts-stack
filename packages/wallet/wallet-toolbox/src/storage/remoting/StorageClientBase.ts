@@ -73,7 +73,7 @@ import {
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
 import { TableSettings } from '../schema/tables/TableSettings'
-import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import { WERR_INVALID_OPERATION, WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
 import { WalletServices } from '../../sdk/WalletServices.interfaces'
 import { TableUser } from '../schema/tables/TableUser'
 import { TableSyncState } from '../schema/tables/TableSyncState'
@@ -92,6 +92,10 @@ import {
 } from '../../utility/actionBatchPack'
 import { pruneBeefForTxids } from '../../utility/beefForTxids'
 import { SnapshotArchiveTransport } from '../snapshot/archive/SnapshotArchiveTransport'
+import { openRemoteSnapshot } from '../snapshot/archive/openRemoteSnapshot'
+import { SnapshotCancelledError } from '../snapshot/SnapshotCancelledError'
+import { snapshotArchiveFetch } from '../snapshot/archive/SnapshotArchiveTransportFailure'
+import type { SnapshotSyncStorage } from '../snapshot/SnapshotSync'
 import {
   snapshotArchiveResponseBytes,
   snapshotArchiveRequestBytes,
@@ -114,6 +118,7 @@ type RemoteStorageSettings = TableSettings & {
   syncCheckpointVersion?: 1
   syncTransfer?: SyncTransferCapabilities
   snapshotArchive?: SnapshotArchiveCapabilities
+  snapshotArchiveReaderVersion?: 1
 }
 
 export interface StorageClientOptions {
@@ -264,6 +269,12 @@ function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
     throw new Error('Wallet storage returned invalid settings.')
   }
   if (properties.snapshotArchive != null) validateSnapshotArchiveCapabilities(properties.snapshotArchive.value)
+  if (
+    properties.snapshotArchiveReaderVersion != null &&
+    (properties.snapshotArchiveReaderVersion.value !== 1 || properties.snapshotArchive == null)
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
   return value as RemoteStorageSettings
 }
 
@@ -287,7 +298,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   private readonly snapshotArchivesEnabled: boolean
   private readonly snapshotWallet: WalletInterface
   private snapshotAuthClient?: AuthFetch
-  private snapshotSource?: { identityKey: string; chain: 'main' | 'test' }
+  private snapshotSource?: { identityKey: string; chain: 'main' | 'test'; supportsReader: boolean }
   /** Optional progress/cancellation hook for a bounded transfer; never receives wallet contents. */
   onSyncTransferProgress?: (progress: { direction: 'read' | 'write'; bytes: number; totalBytes: number }) => void
 
@@ -324,6 +335,23 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return response
   }
 
+  /** Source-only adapter. Opening performs authenticated capability negotiation, including on the first sync. */
+  getSnapshotSync(): SnapshotSyncStorage | undefined {
+    if (!this.snapshotArchivesEnabled) return undefined
+    const unavailable = () => Promise.reject(new WERR_NOT_IMPLEMENTED('Remote snapshot destination is unavailable'))
+    return {
+      fallbackOnResourceError: false,
+      supportsDestination: () => Promise.resolve(false),
+      openSource: async (identityKey, options) => {
+        const transport = await this.getSnapshotArchiveTransport(identityKey)
+        return transport === undefined ? undefined : await openRemoteSnapshot(transport, options)
+      },
+      begin: unavailable,
+      checkpoint: unavailable,
+      prepare: unavailable
+    }
+  }
+
   /** Available only after an authenticated compatible advertisement. */
   async getSnapshotArchiveTransport(identityKey: string): Promise<SnapshotArchiveTransport | undefined> {
     await this.makeAvailable()
@@ -332,7 +360,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       (method, params, signal) => this.snapshotRpcCall(method, params, signal),
       identityKey,
       this.snapshotSource.identityKey,
-      this.snapshotSource.chain
+      this.snapshotSource.chain,
+      this.snapshotSource.supportsReader
     )
   }
 
@@ -345,17 +374,35 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     const body = JSON.stringify({ jsonrpc: '2.0', method, params, id })
     if (new TextEncoder().encode(body).length > snapshotArchiveRequestBytes)
       throw new TypeError('Snapshot archive request exceeds its transport limit')
-    this.snapshotAuthClient ??= new AuthFetch(this.snapshotWallet, undefined, undefined, undefined, {
-      maxResponseBytes: snapshotArchiveResponseBytes
-    })
-    const response = this.validateAuthenticatedResponse(
-      await this.snapshotAuthClient.fetch(this.endpointUrl, {
+    this.snapshotAuthClient ??= new AuthFetch(
+      this.snapshotWallet,
+      undefined,
+      undefined,
+      undefined,
+      { maxResponseBytes: snapshotArchiveResponseBytes },
+      snapshotArchiveFetch(fetch)
+    )
+    let received: Response
+    try {
+      received = await this.snapshotAuthClient.fetch(this.endpointUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', [BINARY_ENCODING_HEADER]: BINARY_ENCODING },
         body,
         signal
       })
-    )
+    } catch (error) {
+      // AuthFetch uses its typed cancellation code before a native fetch may
+      // exist. Inspect only its own data code here, before RPC/response parsing;
+      // this also works with older SDKs that lack the exported error class.
+      if (
+        signal?.aborted === true &&
+        error instanceof Error &&
+        Object.getOwnPropertyDescriptor(error, 'code')?.value === 'ERR_PAYMENT_CANCELLED'
+      )
+        throw new SnapshotCancelledError('Snapshot archive authenticated request was cancelled')
+      throw error
+    }
+    const response = this.validateAuthenticatedResponse(received)
     if (!response.ok) throw this.rpcResponseError(response)
     if (response.headers.get(BINARY_ENCODING_HEADER) !== BINARY_ENCODING)
       throw new TypeError('Snapshot archive requires compact binary responses')
@@ -471,7 +518,11 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       throw new Error('Wallet storage settings identity does not match the configured storage identity.')
     }
     if (settings.snapshotArchive !== undefined && (settings.chain === 'main' || settings.chain === 'test')) {
-      this.snapshotSource = { identityKey: storageIdentityKey, chain: settings.chain }
+      this.snapshotSource = {
+        identityKey: storageIdentityKey,
+        chain: settings.chain,
+        supportsReader: settings.snapshotArchiveReaderVersion === 1
+      }
     }
     this.settings = settings
     return this.settings

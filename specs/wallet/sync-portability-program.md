@@ -148,6 +148,23 @@ other failures. This advances the S3 transport portion. The clock/cursor-compati
 remote row reader, sync-manager adoption, remote destination, portable semantics
 and performance qualification under contention remain open.
 
+The next unadvertised reader implementation adds distinct server-issued v2
+offers, require-existing admission, bounded exact-request retry, fixed client
+leases and verified packed row paging. Successful explicit close can collect a
+reader receipt without reopening it; failure receipts remain pollable until
+cancellation or expiry. The client source adapter and local manager/destination
+integration detach, compare and persist optional archive positions and preserve
+typed cancellation without treating unrelated failures as cancellation or
+fallback. Actual full/mobile HTTP fixtures cover all thirteen row schemas,
+replacement, admission loss and cancellation, alongside a generated reader
+property. A complete-suite restart failure exposed a reused HTTP connection
+reset; immutable requests now permit one native-fetch retry without renewing
+the lease or retrying authentication failures. Actual full/mobile HTTP-to-local
+sync fixtures retain durable positions on cancellation and complete a later
+view into an occupied profile without duplicate labels. The production server reader setting remains absent pending owner
+recovery and physical cleanup qualification across replicas. This checkpoint
+does not complete S3, V1, remote destination support or portable export/import.
+
 These checkpoints advance parts of S1/S2/P1/S4. They do not complete primary
 reconciliation, indexed identity/update predicates and commit-order high-water
 positions, authenticated remote views, durable source views, streaming or staged

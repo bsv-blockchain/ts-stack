@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto'
 import {
   parseSnapshotArchiveRpcInput,
   snapshotArchiveMethods,
-  validateSnapshotArchiveRequestReceipt
+  validateSnapshotArchiveRequestReceipt,
+  type SnapshotArchiveMethod
 } from './SnapshotArchiveProtocol'
 import { SnapshotArchiveTransport } from './SnapshotArchiveTransport'
 
@@ -33,6 +34,15 @@ test('generated protocol requests preserve exact identity, deadlines and termina
           .update(JSON.stringify(['wallet-snapshot-request/1', 1, nonce, notAfter, maxBytes]))
           .digest('hex')
         const request = { version: 1 as const, nonce, notAfter, maxBytes, requestId }
+        const readerRequest = {
+          version: 2 as const,
+          nonce,
+          notAfter,
+          maxBytes,
+          requestId: createHash('sha256')
+            .update(JSON.stringify(['wallet-snapshot-reader-request/1', 2, nonce, notAfter, maxBytes]))
+            .digest('hex')
+        }
         const archiveId = createHash('sha256')
           .update('archive:' + nonce)
           .digest('hex')
@@ -51,16 +61,18 @@ test('generated protocol requests preserve exact identity, deadlines and termina
         expect(await transport.start(request)).toEqual(receipt)
         expect(await transport.status(request)).toEqual(receipt)
         expect(rpc.mock.calls[0]).toEqual(['startSnapshotArchive', [{ version: 1, identityKey, request }], undefined])
-        const extra =
-          method === 'startSnapshotArchive'
-            ? { request }
-            : method === 'getSnapshotArchiveStatus' || method === 'cancelSnapshotArchive'
-              ? { requestId }
-              : method === 'getSnapshotArchiveDirectory'
-                ? { archiveId }
-                : method === 'readSnapshotArchivePage'
-                  ? { archiveId, sequence: duration % 4096 }
-                  : {}
+        const extras: Record<SnapshotArchiveMethod, object> = {
+          getSnapshotArchiveReaderOffer: { options: { lifetimeMs: duration, maxBytes } },
+          admitSnapshotArchive: { request: readerRequest },
+          cancelSnapshotArchiveRequest: { request: readerRequest },
+          getSnapshotArchiveOffer: {},
+          startSnapshotArchive: { request },
+          getSnapshotArchiveStatus: { requestId },
+          cancelSnapshotArchive: { requestId },
+          getSnapshotArchiveDirectory: { archiveId },
+          readSnapshotArchivePage: { archiveId, sequence: duration % 4096 }
+        }
+        const extra = extras[method]
         const input = { version: 1, identityKey, ...extra }
         expect(parseSnapshotArchiveRpcInput(method, [input])).toEqual({ method, identityKey, ...extra })
         expect(() => parseSnapshotArchiveRpcInput(method, [{ ...input, claimToken: nonce }])).toThrow()

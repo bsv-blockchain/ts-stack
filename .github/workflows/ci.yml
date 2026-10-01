@@ -478,7 +478,7 @@ jobs:
     runs-on: ubuntu-latest
     # Preserve complete wallet snapshot campaigns within a bounded allowance.
     # Snapshot sync is partitioned after the unsplit campaign exceeded 90 minutes.
-    timeout-minutes: ${{ contains(fromJSON('["wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ contains(fromJSON('["wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:

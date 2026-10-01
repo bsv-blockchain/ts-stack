@@ -18,7 +18,7 @@ export function gate() {
   return { promise, resolve }
 }
 
-export async function snapshotHttpFixture(snapshotSync = true) {
+export async function snapshotHttpFixture(snapshotSync = true, seedClosure = true) {
   const directory = await mkdtemp(join(tmpdir(), 'snapshot-http-'))
   const key = PrivateKey.fromRandom()
   const identityKey = key.toPublicKey().toString()
@@ -47,7 +47,7 @@ export async function snapshotHttpFixture(snapshotSync = true) {
     await storage.makeAvailable()
     const { user } = await storage.findOrInsertUser(identityKey)
     const { user: other } = await storage.findOrInsertUser(PrivateKey.fromRandom().toPublicKey().toString())
-    await seedArchiveClosure(storage, user.userId, other.userId)
+    if (seedClosure) await seedArchiveClosure(storage, user.userId, other.userId)
     const serve = async (options: Partial<WalletStorageServerOptions> = {}) => {
       const server = new StorageServer(storage, {
         port: 0,

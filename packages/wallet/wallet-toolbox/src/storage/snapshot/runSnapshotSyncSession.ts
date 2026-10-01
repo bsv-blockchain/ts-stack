@@ -5,6 +5,7 @@ import { SyncPageBudget } from '../sync/SyncPageBudget'
 import type { SyncSessionOptions, SyncSessionProgress, SyncSessionResult } from '../sync/syncSession'
 import { snapshotSyncTables, type SnapshotSyncCheckpoint, type SnapshotSyncStorage } from './SnapshotSync'
 import type { WalletReadSnapshot, WalletSnapshotCursor } from './WalletReadSnapshot'
+import { copySnapshotCursor, sameSnapshotArchivePosition } from './SnapshotCursor'
 
 interface SnapshotSession {
   view: WalletReadSnapshot
@@ -17,9 +18,7 @@ interface SnapshotSession {
 function copyCheckpoint(value: SnapshotSyncCheckpoint): SnapshotSyncCheckpoint
 function copyCheckpoint(value: SnapshotSyncCheckpoint | undefined): SnapshotSyncCheckpoint | undefined
 function copyCheckpoint(value: SnapshotSyncCheckpoint | undefined): SnapshotSyncCheckpoint | undefined {
-  return value === undefined
-    ? undefined
-    : { ...value, cursor: value.cursor === undefined ? undefined : { ...value.cursor, after: [...value.cursor.after] } }
+  return value === undefined ? undefined : { ...value, cursor: copySnapshotCursor(value.cursor) }
 }
 
 type NotifyProgress = (state: SyncSessionProgress['state'], timing?: Partial<SyncSessionProgress>) => void
@@ -53,7 +52,8 @@ function validateAcknowledgement(
     next.cursor?.version !== cursor?.version ||
     next.cursor?.snapshotId !== cursor?.snapshotId ||
     next.cursor?.table !== cursor?.table ||
-    JSON.stringify(next.cursor?.after) !== JSON.stringify(cursor?.after)
+    JSON.stringify(next.cursor?.after) !== JSON.stringify(cursor?.after) ||
+    !sameSnapshotArchivePosition(next.cursor?.archivePosition, cursor?.archivePosition)
   ) {
     throw new WERR_INVALID_OPERATION(
       'Snapshot destination acknowledgement does not match the committed page; reload its durable checkpoint'

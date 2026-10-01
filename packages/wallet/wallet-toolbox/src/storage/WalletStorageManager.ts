@@ -1,4 +1,6 @@
 import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
+import { SnapshotCancelledError } from './snapshot/SnapshotCancelledError'
+import { copySnapshotCursor } from './snapshot/SnapshotCursor'
 import { runSnapshotSyncSession } from './snapshot/runSnapshotSyncSession'
 import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
 import type { WalletReadSnapshot } from './snapshot/WalletReadSnapshot'
@@ -857,16 +859,23 @@ export class WalletStorageManager implements sdk.WalletStorage {
     selection?: { generation: number; active: sdk.WalletStorageProvider }
   ): Promise<SyncSessionResult | undefined> {
     const selected = selection ?? { generation: this.generation, active: this.getActive() }
-    const source = reader instanceof StorageProvider ? reader.getSnapshotSync() : undefined
-    const destination = writer instanceof StorageProvider ? writer.getSnapshotSync() : undefined
+    const source = reader.getSnapshotSync?.()
+    const destination = writer.getSnapshotSync?.()
     if (source === undefined || destination === undefined || reader === writer) return undefined
     if (!(await destination.supportsDestination())) return undefined
-    if (options.signal?.aborted === true)
-      return { status: 'cancelled', mode: 'paged', pages: 0, inserts: 0, updates: 0 }
+    const cancelled = (): boolean => options.signal?.aborted === true
+    if (cancelled()) return { status: 'cancelled', mode: 'paged', pages: 0, inserts: 0, updates: 0 }
     let view: WalletReadSnapshot | undefined
-    let partial = { pages: 0, inserts: 0, updates: 0 }
+    let partial: Pick<SyncSessionResult, 'pages' | 'inserts' | 'updates' | 'snapshotCheckpoint'> = {
+      pages: 0,
+      inserts: 0,
+      updates: 0
+    }
     try {
-      view = await source.openSource(this._authId.identityKey, { lifetimeMs: options.snapshotLifetimeMs })
+      view = await source.openSource(this._authId.identityKey, {
+        lifetimeMs: options.snapshotLifetimeMs,
+        signal: options.signal
+      })
       if (view === undefined) return undefined
       let failed = false
       try {
@@ -877,7 +886,15 @@ export class WalletStorageManager implements sdk.WalletStorage {
           {
             ...options,
             onProgress: progress => {
-              partial = { pages: progress.pages, inserts: progress.inserts, updates: progress.updates }
+              partial = {
+                pages: progress.pages,
+                inserts: progress.inserts,
+                updates: progress.updates,
+                snapshotCheckpoint:
+                  progress.snapshotCheckpoint === undefined
+                    ? undefined
+                    : { ...progress.snapshotCheckpoint, cursor: copySnapshotCursor(progress.snapshotCheckpoint.cursor) }
+              }
               options.onProgress?.(progress)
             }
           },
@@ -891,14 +908,17 @@ export class WalletStorageManager implements sdk.WalletStorage {
         await view.close().catch(error => {
           // A simultaneous expiry must not replace a malformed-row/session error.
           // A physical cleanup failure, however, cannot be hidden by fallback.
-          if (!failed || !(error instanceof SnapshotResourceLimitError)) throw error
+          if (source.fallbackOnResourceError === false || !failed || !(error instanceof SnapshotResourceLimitError))
+            throw error
         })
       }
     } catch (error) {
+      if (error instanceof SnapshotCancelledError && cancelled())
+        return { status: 'cancelled', mode: 'paged', ...partial }
       // Existing ordinary backups must continue to accept large records and long
       // copies. Only explicit resource limits select the established serialized
       // fallback; corrupt rows, changed sessions and I/O failures still reject.
-      if (!(error instanceof SnapshotResourceLimitError)) throw error
+      if (source.fallbackOnResourceError === false || !(error instanceof SnapshotResourceLimitError)) throw error
     }
     const result = await this.runLegacySnapshotFallback(
       reader,

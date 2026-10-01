@@ -12,6 +12,7 @@ import type { WalletReadSnapshot } from './WalletReadSnapshot'
 import { runSnapshotSyncSession } from './runSnapshotSyncSession'
 import { KnexSnapshotSyncDestination } from './KnexSnapshotSyncDestination'
 import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
+import { SnapshotCancelledError } from './SnapshotCancelledError'
 import { runInSeries } from '../../utility/runInSeries'
 import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 
@@ -542,20 +543,128 @@ describe.each(primaryCopyModes)('primary metadata through %s', mode => {
   })
 })
 
-test('snapshot pull preserves the active destination and remaps into an occupied profile', async () => {
-  const { source, destination } = await fixture(4)
-  const { user: foreign } = await destination.findOrInsertUser(foreignIdentity)
-  await destination.findOrInsertTxLabel(foreign.userId, 'foreign-existing')
-  const user = (await destination.findUserByIdentityKey(identity))!
-  await destination.updateUser(user.userId, { activeStorage: 'destination' })
-  const manager = new WalletStorageManager(identity, destination)
-  await manager.makeAvailable()
-  const result = await manager.syncFromReaderResumable(identity, source, { maxItems: 2 })
-  expect(result.snapshotCheckpoint?.done).toBe(true)
-  expect((await destination.findUserByIdentityKey(identity))!.activeStorage).toBe('destination')
-  expect(await destination.findTxLabels({ partial: { userId: user.userId } })).toHaveLength(4)
-  expect(await destination.findTxLabels({ partial: { userId: foreign.userId } })).toHaveLength(1)
+test.each(['provider', 'adapter'] as const)(
+  'snapshot pull through a %s preserves the active destination and remaps into an occupied profile',
+  async kind => {
+    const { source, destination } = await fixture(4)
+    const { user: foreign } = await destination.findOrInsertUser(foreignIdentity)
+    await destination.findOrInsertTxLabel(foreign.userId, 'foreign-existing')
+    const user = (await destination.findUserByIdentityKey(identity))!
+    await destination.updateUser(user.userId, { activeStorage: 'destination' })
+    const manager = new WalletStorageManager(identity, destination)
+    await manager.makeAvailable()
+    const reader =
+      kind === 'provider'
+        ? source
+        : {
+            makeAvailable: source.makeAvailable.bind(source),
+            getSyncChunk: source.getSyncChunk.bind(source),
+            getSnapshotSync: source.getSnapshotSync.bind(source)
+          }
+    const legacy = jest.spyOn(destination, 'processSyncChunk')
+    const result = await manager.syncFromReaderResumable(identity, reader, { maxItems: 2 })
+    expect(legacy).not.toHaveBeenCalled()
+    expect(result.snapshotCheckpoint?.done).toBe(true)
+    expect((await destination.findUserByIdentityKey(identity))!.activeStorage).toBe('destination')
+    expect(await destination.findTxLabels({ partial: { userId: user.userId } })).toHaveLength(4)
+    expect(await destination.findTxLabels({ partial: { userId: foreign.userId } })).toHaveLength(1)
+  }
+)
+
+test('typed cancellation during source reading awaits cleanup and returns the last durable checkpoint', async () => {
+  const { source, destination, manager } = await fixture(3)
+  const controller = new AbortController()
+  const sourceCapability = source.getSnapshotSync()!
+  const closing = deferred()
+  const release = deferred()
+  jest.spyOn(source, 'getSnapshotSync').mockReturnValue({
+    ...sourceCapability,
+    fallbackOnResourceError: false,
+    openSource: async (key, options) => {
+      expect(options?.signal).toBe(controller.signal)
+      const view = (await sourceCapability.openSource(key, options))!
+      return {
+        ...view,
+        readPage: async (...args) => {
+          if (args[0] === 'txLabels') {
+            controller.abort()
+            throw new SnapshotCancelledError('synthetic cancelled read')
+          }
+          return await view.readPage(...args)
+        },
+        close: async () => {
+          closing.resolve()
+          await release.promise
+          await view.close()
+        }
+      }
+    }
+  })
+  const legacy = jest.spyOn(destination, 'processSyncChunk')
+  const pending = observe(
+    manager.syncToWriterResumable(await manager.getAuth(), destination, { signal: controller.signal })
+  )
+  let finished = false
+  void pending.then(
+    () => {
+      finished = true
+    },
+    () => {
+      finished = true
+    }
+  )
+  try {
+    await waitForBoundary(closing.promise, pending)
+    expect(finished).toBe(false)
+    release.resolve()
+    const result = await pending
+    expect(result).toMatchObject({ status: 'cancelled', pages: 3, mode: 'paged' })
+    expect(result.snapshotCheckpoint).toEqual(await destination.getSnapshotSync()!.checkpoint(identity, 'source'))
+    expect(legacy).not.toHaveBeenCalled()
+    expect(Reflect.get(source, 'snapshotSyncSource')).toBeUndefined()
+  } finally {
+    release.resolve()
+    await pending.catch(() => undefined)
+  }
 })
+
+test.each(['resource', 'validation', 'cleanup'] as const)(
+  'source policy propagates %s failure without selecting fallback or mistaking it for cancellation',
+  async failureKind => {
+    const { source, destination, manager } = await fixture(1)
+    const controller = new AbortController()
+    const capability = source.getSnapshotSync()!
+    const failure =
+      failureKind === 'validation'
+        ? new Error('synthetic invalid row')
+        : new SnapshotResourceLimitError('synthetic resource failure')
+    jest.spyOn(source, 'getSnapshotSync').mockReturnValue({
+      ...capability,
+      fallbackOnResourceError: false,
+      openSource: async (...args) => {
+        const view = (await capability.openSource(...args))!
+        return {
+          ...view,
+          readPage: async () => {
+            controller.abort()
+            throw failureKind === 'cleanup' ? new Error('synthetic row before cleanup failure') : failure
+          },
+          close: async () => {
+            await view.close()
+            if (failureKind === 'cleanup') throw failure
+          }
+        }
+      }
+    })
+    const legacy = jest.spyOn(destination, 'processSyncChunk')
+    await expect(
+      manager.syncToWriterResumable(await manager.getAuth(), destination, { signal: controller.signal })
+    ).rejects.toBe(failure)
+    expect(legacy).not.toHaveBeenCalled()
+    expect(await destination.findTxLabels({ partial: {} })).toHaveLength(0)
+    expect(Reflect.get(source, 'snapshotSyncSource')).toBeUndefined()
+  }
+)
 
 async function seedClosure(source: StorageKnex, userId: number, otherId: number): Promise<void> {
   const date = when.toISOString()
@@ -1065,6 +1174,37 @@ test('rejects changed checkpoints and malformed pages without advancing durable 
   expect(await capability.checkpoint(identity, 'source')).toEqual(before)
   expect(await destination.findTxLabels({ partial: {} })).toHaveLength(0)
   await view.close()
+})
+
+test('archive positions persist with rows, detach before proof I/O and reject an omitted durable binding', async () => {
+  const { source, destination } = await fixture(3)
+  const view = (await source.getSnapshotSync()!.openSource(identity))!
+  const writer = destination.getSnapshotSync()!
+  try {
+    let checkpoint = await advance(view, writer, 3)
+    const first = await view.readPage('txLabels', undefined, { maxRows: 1 })
+    const second = await view.readPage('txLabels', first.cursor, { maxRows: 1 })
+    const last = await view.readPage('txLabels', second.cursor, { maxRows: 1 })
+    first.cursor!.archivePosition = { version: 1, archiveId: 'c'.repeat(64), sequence: 3, rowOffset: 1 }
+    checkpoint = (await (await writer.prepare(checkpoint, first))()).checkpoint
+    expect((await writer.checkpoint(identity, 'source'))!.cursor!.archivePosition).toEqual(
+      first.cursor!.archivePosition
+    )
+    second.cursor!.archivePosition = { ...first.cursor!.archivePosition, rowOffset: 2 }
+    const preparing = writer.prepare(checkpoint, second)
+    checkpoint.cursor!.archivePosition!.rowOffset = 999
+    second.cursor!.archivePosition.rowOffset = 999
+    checkpoint = (await (await preparing)()).checkpoint
+    expect(checkpoint.cursor!.archivePosition!.rowOffset).toBe(2)
+    expect(await destination.findTxLabels({ partial: {} })).toHaveLength(2)
+    const missing = { ...checkpoint, cursor: { ...checkpoint.cursor!, archivePosition: undefined } }
+    const apply = await writer.prepare(missing, last)
+    await expect(apply()).rejects.toThrow('Snapshot session changed')
+    expect(await writer.checkpoint(identity, 'source')).toEqual(checkpoint)
+    expect(await destination.findTxLabels({ partial: {} })).toHaveLength(2)
+  } finally {
+    await view.close()
+  }
 })
 
 test('source admission, expiry and destruction retain bounded reader ownership', async () => {

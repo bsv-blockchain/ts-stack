@@ -52,8 +52,10 @@ export interface SnapshotSyncCommit {
   updates: number
 }
 
-/** Additive local provider capability. These methods are deliberately absent from the RPC allowlist. */
+/** Additive provider capability. These adapter methods are absent from the RPC allowlist. */
 export interface SnapshotSyncStorage {
+  /** False prevents switching away from an accepted immutable remote view on a resource error. */
+  fallbackOnResourceError?: boolean
   /** True only after the version-one auxiliary schema and primary fencing migration committed. */
   supportsDestination: () => Promise<boolean>
   /** Undefined means this configuration cannot retain a view while foreground writes proceed. */

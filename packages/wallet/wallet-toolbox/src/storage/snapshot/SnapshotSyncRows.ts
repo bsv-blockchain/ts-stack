@@ -7,6 +7,7 @@ import { snapshotSyncPage } from '../sync/snapshotSyncPage'
 import { snapshotSyncTables, type SnapshotSyncCheckpoint, type SnapshotSyncTable } from './SnapshotSync'
 import type { WalletSnapshotPage } from './WalletReadSnapshot'
 import { runInSeries } from '../../utility/runInSeries'
+import { copySnapshotArchivePosition } from './SnapshotCursor'
 
 const entities: Record<SnapshotSyncTable, keyof SyncMap> = {
   provenTxs: 'provenTx',
@@ -104,6 +105,7 @@ export function detachSnapshotSyncPage(
   }
   validateAllocation(page.rows, page.payloadBytes)
   const cursor = page.cursor
+  if (cursor?.archivePosition !== undefined) copySnapshotArchivePosition(cursor.archivePosition)
   if (page.rows.length > 0) {
     const last = page.rows.at(-1) as unknown as Record<string, unknown>
     if (

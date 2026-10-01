@@ -446,3 +446,151 @@ test.each(['pending', 'capturing', 'ready', 'legacy'] as const)(
     expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
   }
 )
+
+test('a second controller fences a first start delayed before its durable claim', async () => {
+  const { storage, controller, open } = await fixture()
+  const replacementStorage = open()
+  await replacementStorage.makeAvailable()
+  const replacement = service(replacementStorage)
+  const input = request()
+  const entered = gate()
+  const resume = gate()
+  const original = KnexSnapshotArchiveRequestStore.prototype.claim
+  jest.spyOn(KnexSnapshotArchiveRequestStore.prototype, 'claim').mockImplementation(async function (
+    this: KnexSnapshotArchiveRequestStore,
+    key,
+    value
+  ) {
+    entered.resolve()
+    await resume.promise
+    return await original.call(this, key, value)
+  })
+  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource')
+  const pending = controller.create(identity, input)
+  void pending.catch(() => undefined)
+  try {
+    await entered.promise
+    // Client-side abort alone cannot drain this delayed server operation.
+    await replacement.cancelRequest(identity, input)
+    await replacement.cancelRequest(identity, input)
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+    resume.resolve()
+    expect((await pending).state).toBe('closed')
+    expect(opening).not.toHaveBeenCalled()
+    expect(await storage.knex('snapshot_archive_pages')).toHaveLength(0)
+    expect((await replacement.create(identity, input)).state).toBe('closed')
+  } finally {
+    resume.resolve()
+    await pending.catch(() => undefined)
+  }
+})
+
+test('reader offers acquire no source and a replacement recovers only the admitted immutable archive', async () => {
+  const { storage, controller, open } = await fixture()
+  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource')
+  const offered = (await controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  expect(offered.request.version).toBe(2)
+  expect(opening).not.toHaveBeenCalled()
+  expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await expect(controller.admitReader(other, offered.request)).rejects.toThrow('unavailable')
+  const admitted = await controller.admitReader(identity, offered.request)
+  expect(admitted).toMatchObject({ outcome: 'accepted', receipt: { state: 'building' } })
+  let receipt = await controller.status(identity, offered.request.requestId)
+  for (let attempt = 0; receipt.state === 'building' && attempt < 100; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 10))
+    receipt = await controller.status(identity, offered.request.requestId)
+  }
+  expect(receipt.state).toBe('ready')
+  expect(opening).toHaveBeenCalledTimes(1)
+  expect(Reflect.get(storage, 'snapshotSyncSource')).toBeUndefined()
+  const directory = await controller.directory(identity, receipt.archiveId!)
+  await controller.close()
+  const replacementStorage = open()
+  await replacementStorage.makeAvailable()
+  const replacement = service(replacementStorage)
+  const replacementOpening = jest.spyOn(replacementStorage, 'openSnapshotArchiveSource')
+  expect(await replacement.admitReader(identity, offered.request)).toEqual({
+    version: 1,
+    outcome: 'accepted',
+    receipt
+  })
+  expect(await replacement.directory(identity, receipt.archiveId!)).toEqual(directory)
+  expect(replacementOpening).not.toHaveBeenCalled()
+  await replacement.cancelReader(identity, offered.request)
+  await replacement.cancelReader(identity, offered.request)
+  expect(await storage.knex('snapshot_archive_requests')).toHaveLength(0)
+  expect(await storage.knex('snapshot_archive_pages')).toHaveLength(0)
+  expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await expect(replacement.admitReader(identity, offered.request)).rejects.toThrow('unavailable')
+  expect(replacementOpening).not.toHaveBeenCalled()
+})
+
+test('reader cancellation on a replacement removes an offer before a delayed admission can capture', async () => {
+  const { storage, controller, open } = await fixture()
+  const offered = (await controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  const replacementStorage = open()
+  await replacementStorage.makeAvailable()
+  const replacement = service(replacementStorage)
+  const entered = gate()
+  const resume = gate()
+  const original = KnexSnapshotArchiveRequestStore.prototype.claimReader
+  jest.spyOn(KnexSnapshotArchiveRequestStore.prototype, 'claimReader').mockImplementation(async function (
+    this: KnexSnapshotArchiveRequestStore,
+    key,
+    value
+  ) {
+    entered.resolve()
+    await resume.promise
+    return await original.call(this, key, value)
+  })
+  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource')
+  const pending = controller.admitReader(identity, offered.request)
+  void pending.catch(() => undefined)
+  try {
+    await entered.promise
+    await replacement.cancelReader(identity, offered.request)
+    await replacement.cancelReader(identity, offered.request)
+    expect(await storage.knex('snapshot_archive_requests')).toHaveLength(0)
+    resume.resolve()
+    await expect(pending).rejects.toThrow('unavailable')
+    expect(opening).not.toHaveBeenCalled()
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+    expect(await storage.knex('snapshot_archive_pages')).toHaveLength(0)
+    await expect(replacement.admitReader(identity, offered.request)).rejects.toThrow('unavailable')
+    expect(opening).not.toHaveBeenCalled()
+  } finally {
+    resume.resolve()
+    await pending.catch(() => undefined)
+  }
+})
+
+test.each(['failed', 'resource-limited'] as const)(
+  'reader %s capture remains observable until explicit cancellation collects its receipt',
+  async state => {
+    const { storage, controller, open } = await fixture()
+    const offered = (await controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+    const failure = state === 'failed' ? new Error('synthetic capture failure') : new SnapshotResourceLimitError('full')
+    const opening = jest.spyOn(storage, 'openSnapshotArchiveSource').mockRejectedValueOnce(failure)
+    expect(await controller.admitReader(identity, offered.request)).toMatchObject({ outcome: 'accepted' })
+    let receipt = await controller.status(identity, offered.request.requestId)
+    for (let attempt = 0; receipt.state === 'building' && attempt < 100; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+      receipt = await controller.status(identity, offered.request.requestId)
+    }
+    expect(receipt.state).toBe(state)
+    await controller.close()
+    const replacementStorage = open()
+    await replacementStorage.makeAvailable()
+    const replacement = service(replacementStorage)
+    expect(await replacement.admitReader(identity, offered.request)).toEqual({
+      version: 1,
+      outcome: 'accepted',
+      receipt
+    })
+    expect(opening).toHaveBeenCalledTimes(1)
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+    await replacement.cancelReader(identity, offered.request)
+    expect(await storage.knex('snapshot_archive_requests')).toHaveLength(0)
+    await expect(replacement.admitReader(identity, offered.request)).rejects.toThrow('unavailable')
+  }
+)

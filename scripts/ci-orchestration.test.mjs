@@ -27,7 +27,7 @@ function workflowJobBlocks(workflow) {
 
 function assertWalletMutationTimeout(job, defaultMinutes) {
   const targets =
-    '["wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows"]'
+    '["wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'
   const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
   assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
 }

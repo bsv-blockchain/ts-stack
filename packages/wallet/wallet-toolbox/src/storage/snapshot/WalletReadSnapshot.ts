@@ -1,7 +1,7 @@
 import type * as tables from '../schema/tables'
 import type { RetainedReadSnapshotOptions } from './RetainedReadSnapshot'
 
-/** Version-one local row contract. Binary columns never expand into number arrays. */
+/** Version-one retained row contract. Binary columns never expand into number arrays. */
 export type PackedSnapshotRow<T> = { [K in keyof T]: PackedSnapshotValue<T[K]> }
 type PackedSnapshotValue<T> = T extends number[] ? Uint8Array : T
 
@@ -23,12 +23,21 @@ export interface WalletSnapshotTables {
 
 export type WalletSnapshotTable = keyof WalletSnapshotTables
 
-/** A position within this live local view, not a durable checkpoint or authorization credential. */
+/** Verified position inside an immutable remote archive; never an authorization credential. */
+export interface WalletSnapshotArchivePosition {
+  readonly version: 1
+  readonly archiveId: string
+  readonly sequence: number
+  readonly rowOffset: number
+}
+
+/** A position within this retained view, not a durable checkpoint or authorization credential. */
 export interface WalletSnapshotCursor {
   readonly version: 1
   readonly snapshotId: string
   readonly table: WalletSnapshotTable
   readonly after: ReadonlyArray<number | string>
+  readonly archivePosition?: WalletSnapshotArchivePosition
 }
 
 export interface WalletSnapshotPageLimits {

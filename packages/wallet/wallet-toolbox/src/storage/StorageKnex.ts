@@ -1,4 +1,5 @@
 import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
+import { SnapshotCancelledError } from './snapshot/SnapshotCancelledError'
 import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
 import { KnexSnapshotSyncDestination } from './snapshot/KnexSnapshotSyncDestination'
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
@@ -382,7 +383,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     deadline: { expiresAt: number; startedAt: number; lifetimeMs: number },
     openSource: (reader: StorageKnex, identityKey: string, options: WalletReadSnapshotOptions) => Promise<T>
   ): Promise<T | undefined> {
-    if (options.signal?.aborted === true) throw new WERR_INVALID_OPERATION('Snapshot sync source was cancelled')
+    if (options.signal?.aborted === true) throw new SnapshotCancelledError('Snapshot sync source was cancelled')
     const config = await this.concurrentSnapshotReaderConfig()
     if (config === undefined) return undefined
     if (this.retainedReadSnapshotsStopped)

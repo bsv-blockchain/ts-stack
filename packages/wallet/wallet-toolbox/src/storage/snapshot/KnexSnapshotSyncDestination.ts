@@ -18,6 +18,7 @@ import {
 } from './SnapshotSync'
 import type { WalletSnapshotPage } from './WalletReadSnapshot'
 import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
+import { copySnapshotCursor, sameSnapshotArchivePosition } from './SnapshotCursor'
 
 interface SessionRow {
   version: 1
@@ -71,7 +72,8 @@ function notMatchingCheckpoint(actual: SnapshotSyncCheckpoint, expected: Snapsho
     actual.cursor?.version !== expected.cursor?.version ||
     actual.cursor?.snapshotId !== expected.cursor?.snapshotId ||
     actual.cursor?.table !== expected.cursor?.table ||
-    JSON.stringify(actual.cursor?.after) !== JSON.stringify(expected.cursor?.after)
+    JSON.stringify(actual.cursor?.after) !== JSON.stringify(expected.cursor?.after) ||
+    !sameSnapshotArchivePosition(actual.cursor?.archivePosition, expected.cursor?.archivePosition)
   )
 }
 
@@ -222,7 +224,7 @@ export class KnexSnapshotSyncDestination {
   ): Promise<() => Promise<SnapshotSyncCommit>> {
     const expected: SnapshotSyncCheckpoint = {
       ...input,
-      cursor: input.cursor === undefined ? undefined : { ...input.cursor, after: [...input.cursor.after] }
+      cursor: copySnapshotCursor(input.cursor)
     }
     if (
       expected.version !== 1 ||

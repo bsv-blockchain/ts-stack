@@ -1,3 +1,9 @@
+import {
+  validateSnapshotArchiveReaderOptions,
+  type SnapshotArchiveReaderOptions,
+  parseSnapshotArchiveReaderRequest,
+  type SnapshotArchiveReaderRequest
+} from './SnapshotArchiveReaderRequest'
 import { snapshotArchiveLimits } from './SnapshotArchive'
 import { snapshotArchiveEncoding } from './SnapshotArchiveDirectory'
 import {
@@ -26,7 +32,10 @@ export const snapshotArchiveMethods = Object.freeze([
   'getSnapshotArchiveStatus',
   'getSnapshotArchiveDirectory',
   'readSnapshotArchivePage',
-  'cancelSnapshotArchive'
+  'cancelSnapshotArchive',
+  'getSnapshotArchiveReaderOffer',
+  'admitSnapshotArchive',
+  'cancelSnapshotArchiveRequest'
 ] as const)
 export type SnapshotArchiveMethod = (typeof snapshotArchiveMethods)[number]
 
@@ -73,6 +82,12 @@ export function validateSnapshotArchiveCapabilities(input: unknown): SnapshotArc
 }
 
 export type SnapshotArchiveRpcInput =
+  | { method: 'getSnapshotArchiveReaderOffer'; identityKey: string; options: Readonly<SnapshotArchiveReaderOptions> }
+  | {
+      method: 'admitSnapshotArchive' | 'cancelSnapshotArchiveRequest'
+      identityKey: string
+      request: Readonly<SnapshotArchiveReaderRequest>
+    }
   | { method: 'getSnapshotArchiveOffer'; identityKey: string }
   | { method: 'startSnapshotArchive'; identityKey: string; request: Readonly<SnapshotArchiveRequest> }
   | { method: 'getSnapshotArchiveStatus' | 'cancelSnapshotArchive'; identityKey: string; requestId: string }
@@ -81,6 +96,10 @@ export type SnapshotArchiveRpcInput =
 
 function requestFields(method: SnapshotArchiveMethod): string[] {
   switch (method) {
+    case 'getSnapshotArchiveReaderOffer':
+      return ['options']
+    case 'admitSnapshotArchive':
+    case 'cancelSnapshotArchiveRequest':
     case 'startSnapshotArchive':
       return ['request']
     case 'getSnapshotArchiveStatus':
@@ -106,6 +125,11 @@ export function parseSnapshotArchiveRpcInput(
     invalid()
   const identityKey = input.identityKey
   switch (method) {
+    case 'getSnapshotArchiveReaderOffer':
+      return { method, identityKey, options: validateSnapshotArchiveReaderOptions(input.options) }
+    case 'admitSnapshotArchive':
+    case 'cancelSnapshotArchiveRequest':
+      return { method, identityKey, request: parseSnapshotArchiveReaderRequest(input.request) }
     case 'getSnapshotArchiveOffer':
       return { method, identityKey }
     case 'startSnapshotArchive':
@@ -151,7 +175,7 @@ export function validateSnapshotArchiveOffer(
 
 export function validateSnapshotArchiveRequestReceipt(
   input: unknown,
-  request: SnapshotArchiveRequest
+  request: Pick<SnapshotArchiveRequest, 'requestId' | 'notAfter'>
 ): Readonly<SnapshotArchiveRequestReceipt> {
   const state =
     input !== null && typeof input === 'object' ? Object.getOwnPropertyDescriptor(input, 'state')?.value : undefined

@@ -6,6 +6,16 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add the unadvertised remote row-reader foundation: immutable server-issued
+  offers, exact-request retry, fixed leases, verified packed rows and durable
+  cursor integration with local sync. Reader advertisement stays disabled while
+  cross-replica physical cleanup and owner recovery remain incomplete.
+
+- Preserve the public hash-wasm Argon2id generic signature in emitted types.
+  Strict CommonJS and ESM require-consumer checks cover binary/string results
+  without ambient internal-bundle declarations. Runtime bytes and SDK peer ranges
+  remain unchanged.
+
 - Add shared SQL snapshot staging with profile-bound internal capture ownership,
   immutable completed pages, exact replay receipts, explicit logical byte/page
   reservations and resumable bounded cleanup. A second auxiliary migration

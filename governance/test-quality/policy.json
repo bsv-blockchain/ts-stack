@@ -561,6 +561,19 @@
           "Ready receipts bind one archive/root while every distinct terminal state remains explicit.",
           "Unexpected identity, expiry or ownership fields are rejected rather than silently normalized."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet immutable remote snapshot row decoding, fixed archive cursors, bounded leases and exact admission recovery",
+        "target": "Generated packed frame and page boundaries, immutable retry positions and per-page allocation accounting",
+        "invariants": [
+          "Every generated row is returned exactly once in original source order across arbitrary frame and caller-page boundaries.",
+          "The archive position binds the exact frame and last consumed row without reading preceding tables.",
+          "Same-position retries reproduce identical rows, cursor and allocation charge.",
+          "A cursor for another archive is rejected and each opened reader cancels its original immutable request exactly once."
+        ]
       }
     ],
     "exclusions": [

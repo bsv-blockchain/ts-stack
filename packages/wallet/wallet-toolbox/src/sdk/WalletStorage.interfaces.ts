@@ -38,6 +38,7 @@ import {
 import { WalletServices } from './WalletServices.interfaces'
 import { Chain, Paged, ProvenTxReqStatus, TransactionStatus } from './types'
 import { WalletError } from './WalletError'
+import type { SnapshotSyncStorage } from '../storage/snapshot/SnapshotSync'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -146,7 +147,7 @@ export interface WalletStorageProvider extends WalletStorageSync {
   setServices: (v: WalletServices) => void
 }
 
-export interface WalletStorageSync extends WalletStorageWriter {
+export interface WalletStorageSync extends WalletStorageWriter, WalletStorageSyncReader {
   /** Compact writer checkpoint. Undefined means a legacy remote provider. */
   getSyncCheckpoint?: (
     auth: AuthId,
@@ -177,6 +178,8 @@ export interface WalletStorageSync extends WalletStorageWriter {
 export interface WalletStorageSyncReader {
   makeAvailable: () => Promise<TableSettings>
   getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
+  /** Optional local adapter; immutable remote sources negotiate their capability when opened. */
+  getSnapshotSync?: () => SnapshotSyncStorage | undefined
 }
 
 export interface WalletStorageWriter extends WalletStorageReader {

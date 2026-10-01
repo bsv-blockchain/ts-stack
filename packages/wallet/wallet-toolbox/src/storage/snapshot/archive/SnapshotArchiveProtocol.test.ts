@@ -5,9 +5,11 @@ import {
   parseSnapshotArchiveRpcInput,
   validateSnapshotArchiveCapabilities,
   validateSnapshotArchiveOffer,
-  validateSnapshotArchiveRequestReceipt
+  validateSnapshotArchiveRequestReceipt,
+  type SnapshotArchiveMethod
 } from './SnapshotArchiveProtocol'
 import { snapshotArchiveRequestId } from './SnapshotArchiveRequest'
+import { snapshotArchiveReaderRequestId } from './SnapshotArchiveReaderRequest'
 import { verifySnapshotArchiveDirectory } from './SnapshotArchiveDirectory'
 import { stringifyJsonRpc } from '../../remoting/BinaryJson'
 import { fixture, expected, now, rehash } from '../../../../test/utils/snapshotArchiveDirectoryFixtures'
@@ -136,17 +138,21 @@ test.each(['archiveId', 'digest'])('ready receipt requires a canonical %s', fiel
 })
 
 test('every RPC has exact typed arguments and no ownership-token parameter', () => {
+  const readerFields = { ...fields, version: 2 as const }
+  const readerRequest = { ...readerFields, requestId: snapshotArchiveReaderRequestId(readerFields) }
+  const extras: Record<SnapshotArchiveMethod, Record<string, unknown>> = {
+    getSnapshotArchiveOffer: {},
+    startSnapshotArchive: { request },
+    getSnapshotArchiveStatus: { requestId: request.requestId },
+    cancelSnapshotArchive: { requestId: request.requestId },
+    getSnapshotArchiveDirectory: { archiveId: 'b'.repeat(64) },
+    readSnapshotArchivePage: { archiveId: 'b'.repeat(64), sequence: 0 },
+    getSnapshotArchiveReaderOffer: { options: { lifetimeMs: 300000, maxBytes: 32768 } },
+    admitSnapshotArchive: { request: readerRequest },
+    cancelSnapshotArchiveRequest: { request: readerRequest }
+  }
   for (const method of snapshotArchiveMethods) {
-    const extra =
-      method === 'startSnapshotArchive'
-        ? { request }
-        : method === 'getSnapshotArchiveStatus' || method === 'cancelSnapshotArchive'
-          ? { requestId: request.requestId }
-          : method === 'getSnapshotArchiveDirectory'
-            ? { archiveId: 'b'.repeat(64) }
-            : method === 'readSnapshotArchivePage'
-              ? { archiveId: 'b'.repeat(64), sequence: 0 }
-              : {}
+    const extra = extras[method]
     const input = { version: 1, identityKey, ...extra }
     expect(parseSnapshotArchiveRpcInput(method, [input])).toEqual({ method, identityKey, ...extra })
     for (const params of [
@@ -160,6 +166,17 @@ test('every RPC has exact typed arguments and no ownership-token parameter', () 
     ]) {
       expect(() => parseSnapshotArchiveRpcInput(method, params)).toThrow()
     }
+  }
+})
+
+test('strong reader methods and legacy admission reject each other’s request version', () => {
+  const readerFields = { ...fields, version: 2 as const }
+  const readerRequest = { ...readerFields, requestId: snapshotArchiveReaderRequestId(readerFields) }
+  expect(() =>
+    parseSnapshotArchiveRpcInput('startSnapshotArchive', [{ version: 1, identityKey, request: readerRequest }])
+  ).toThrow()
+  for (const method of ['admitSnapshotArchive', 'cancelSnapshotArchiveRequest'] as const) {
+    expect(() => parseSnapshotArchiveRpcInput(method, [{ version: 1, identityKey, request }])).toThrow()
   }
 })
 

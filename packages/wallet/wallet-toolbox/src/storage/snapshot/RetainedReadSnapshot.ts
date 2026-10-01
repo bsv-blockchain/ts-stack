@@ -1,4 +1,5 @@
 import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
+import { SnapshotCancelledError } from './SnapshotCancelledError'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
@@ -86,7 +87,7 @@ export function retainReadSnapshot(
     opened.reject(reason)
     stopped.resolve()
   }
-  const abort = (): void => stop(new WERR_INVALID_OPERATION('Retained read snapshot was cancelled'))
+  const abort = (): void => stop(new SnapshotCancelledError('Retained read snapshot was cancelled'))
   const checkDeadline = (): void => {
     if (Date.now() >= expiresAt || performance.now() - startedAt >= lifetimeMs) {
       stop(new SnapshotResourceLimitError('Retained read snapshot expired'))

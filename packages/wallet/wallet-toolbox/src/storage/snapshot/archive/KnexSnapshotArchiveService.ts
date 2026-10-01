@@ -1,6 +1,9 @@
+import { parseSnapshotArchiveReaderRequest, type SnapshotArchiveReaderRequest } from './SnapshotArchiveReaderRequest'
+import { validateSnapshotArchiveReaderOptions, type SnapshotArchiveReaderOptions } from './SnapshotArchiveReaderOffer'
 import { WERR_INVALID_OPERATION, WERR_NOT_IMPLEMENTED } from '../../../sdk/WERR_errors'
 import type { StorageKnex } from '../../StorageKnex'
 import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
+import { SnapshotArchiveAdmissionLimitError, type SnapshotArchiveAdmission } from './SnapshotArchiveAdmission'
 import { SnapshotArchiveSourceCleanupError, type SnapshotArchiveSource } from './KnexSnapshotArchiveSource'
 import { KnexSnapshotArchiveRequestStore } from './KnexSnapshotArchiveRequestStore'
 import { KnexSnapshotArchiveStore } from './KnexSnapshotArchiveStore'
@@ -16,7 +19,7 @@ import { assertSnapshotArchiveCaptureActive, captureSnapshotArchiveSource } from
 
 interface Capture {
   identityKey: string
-  request: Readonly<SnapshotArchiveRequest>
+  request: Readonly<SnapshotArchiveRequest | SnapshotArchiveReaderRequest>
   controller: AbortController
   terminal: Exclude<SnapshotArchiveTerminalState, 'expired'>
   accepted: Promise<SnapshotArchiveRequestReceipt>
@@ -61,13 +64,49 @@ export class KnexSnapshotArchiveService {
     return this.admit(identityKey, input).accepted
   }
 
-  private admit(identityKey: string, input: unknown): Capture {
-    this.assertOpen()
+  /** Only a pre-admission capacity refusal selects the transient outcome. */
+  async admitRequest(identityKey: string, input: unknown): Promise<SnapshotArchiveAdmission> {
     const request = parseSnapshotArchiveRequest(input)
+    try {
+      return { version: 1, outcome: 'accepted', receipt: await this.start(identityKey, request) }
+    } catch (error) {
+      if (!(error instanceof SnapshotArchiveAdmissionLimitError)) throw error
+      return { version: 1, outcome: 'resource-limited', requestId: request.requestId, expiresAt: request.notAfter }
+    }
+  }
+
+  /** Offering retains metadata only; no SQL source or archive quota is acquired. */
+  async offerReader(identityKey: string, input: SnapshotArchiveReaderOptions) {
+    this.assertOpen()
+    const options = validateSnapshotArchiveReaderOptions(input)
+    if (this.active !== undefined) return undefined
+    await this.requests.reap()
+    this.assertOpen()
+    await this.archives.reap()
+    this.assertOpen()
+    const offer = await this.requests.offer(identityKey, options)
+    if (this.stopped && offer !== undefined) await this.requests.close(identityKey, offer.request.requestId)
+    this.assertOpen()
+    return offer
+  }
+
+  async admitReader(identityKey: string, input: unknown): Promise<SnapshotArchiveAdmission> {
+    const request = parseSnapshotArchiveReaderRequest(input)
+    try {
+      return { version: 1, outcome: 'accepted', receipt: await this.admit(identityKey, request, true).accepted }
+    } catch (error) {
+      if (!(error instanceof SnapshotArchiveAdmissionLimitError)) throw error
+      return { version: 1, outcome: 'resource-limited', requestId: request.requestId, expiresAt: request.notAfter }
+    }
+  }
+
+  private admit(identityKey: string, input: unknown, reader = false): Capture {
+    this.assertOpen()
+    const request = reader ? parseSnapshotArchiveReaderRequest(input) : parseSnapshotArchiveRequest(input)
     if (this.active !== undefined) {
       if (this.active.identityKey === identityKey && this.active.request.requestId === request.requestId)
         return this.active
-      throw new SnapshotResourceLimitError('Snapshot archive capture is opening or active')
+      throw new SnapshotArchiveAdmissionLimitError('Snapshot archive capture is opening or active')
     }
     const claim = Promise.resolve().then(async () => {
       assertSnapshotArchiveCaptureActive(job.controller.signal)
@@ -75,7 +114,9 @@ export class KnexSnapshotArchiveService {
       await this.requests.reap()
       await this.archives.reap()
       assertSnapshotArchiveCaptureActive(job.controller.signal)
-      return await this.requests.claim(identityKey, request)
+      return reader
+        ? await this.requests.claimReader(identityKey, request)
+        : await this.requests.claim(identityKey, request)
     })
     const accepted = claim.then(result => Object.freeze({ ...result.receipt }))
     const completion = claim
@@ -165,6 +206,27 @@ export class KnexSnapshotArchiveService {
     job.controller.abort()
     await job.completion.catch(() => undefined)
     if (this.cleanupFailure !== undefined) throw this.cleanupFailure.error
+  }
+
+  /** Fence the immutable request even if cancellation precedes its first claim. */
+  async cancelRequest(identityKey: string, input: unknown): Promise<void> {
+    this.assertOpen()
+    const request = parseSnapshotArchiveRequest(input)
+    await this.requests.markCancellation(identityKey, request)
+    const job = this.active
+    if (job?.identityKey === identityKey && job.request.requestId === request.requestId) await this.stop(job)
+    // markCancellation does not release an existing physical owner's reservation.
+    // stop drains this process first; then the normal cleanup path is resumable.
+    await this.requests.close(identityKey, request.requestId)
+  }
+
+  async cancelReader(identityKey: string, input: unknown): Promise<void> {
+    this.assertOpen()
+    const request = parseSnapshotArchiveReaderRequest(input)
+    await this.requests.markReaderCancellation(identityKey, request)
+    const job = this.active
+    if (job?.identityKey === identityKey && job.request.requestId === request.requestId) await this.stop(job)
+    await this.requests.close(identityKey, request.requestId)
   }
 
   async cancel(identityKey: string, requestId: string): Promise<void> {

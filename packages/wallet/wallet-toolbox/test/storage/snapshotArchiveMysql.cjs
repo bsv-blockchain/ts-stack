@@ -44,6 +44,12 @@ const {
 } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.js')
 const { snapshotArchiveRequestId } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveRequest.js')
 const { snapshotArchiveDatabaseNow } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveSql.js')
+const { KnexSnapshotArchiveRpc } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.js')
+const { SnapshotArchiveTransport } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveTransport.js')
+const { openRemoteSnapshot } = require('../../out/src/storage/snapshot/archive/openRemoteSnapshot.js')
+const {
+  SnapshotArchiveTransportFailure
+} = require('../../out/src/storage/snapshot/archive/SnapshotArchiveTransportFailure.js')
 const {
   verifySnapshotArchiveDirectory,
   verifySnapshotArchivePage
@@ -160,6 +166,7 @@ async function captureFixture() {
     assert.deepEqual(proofPage.rows[0].rawTx, new Uint8Array([1, 2, 255]))
     await store.close(identity, manifest.archiveId)
     const requestLifecycle = await requestFixture(writer, reader)
+    const remoteReader = await readerFixture(writer, reader)
     await writer.insertCommission({
       created_at: date,
       updated_at: date,
@@ -182,12 +189,111 @@ async function captureFixture() {
       originalSchema: true,
       packedBinary: true,
       crossProfileClosureRejected: true,
-      requestLifecycle
+      requestLifecycle,
+      remoteReader
     }
   } finally {
     KnexSnapshotArchiveStore.prototype.append = originalAppend
     await reader.destroy()
     await writer.destroy()
+  }
+}
+async function readerFixture(writer, reader) {
+  const owner = new KnexSnapshotArchiveRpc(writer)
+  const replacement = new KnexSnapshotArchiveRpc(reader)
+  const originalOpen = writer.openSnapshotArchiveSource.bind(writer)
+  const retained = Number((await writer.knex('snapshot_archive_requests').count({ count: '*' }).first()).count)
+  let captures = 0
+  let receiver = owner
+  let admissionLost = false
+  const admissions = []
+  writer.openSnapshotArchiveSource = async (...args) => {
+    captures++
+    return await originalOpen(...args)
+  }
+  const transport = new SnapshotArchiveTransport(
+    async (method, params) => {
+      const value = await receiver.dispatch(method, params, identity)
+      if (method === 'admitSnapshotArchive') {
+        admissions.push(params)
+        if (!admissionLost) {
+          admissionLost = true
+          throw new SnapshotArchiveTransportFailure('synthetic lost admission acknowledgement')
+        }
+      }
+      return value
+    },
+    identity,
+    'native-source',
+    'test',
+    true
+  )
+  try {
+    for (let iteration = 0; iteration < 5; iteration++) {
+      receiver = owner
+      const view = await openRemoteSnapshot(transport)
+      assert.ok(view)
+      try {
+        assert.equal(view.sourceStorage.dbtype, 'MySQL')
+        assert.equal(view.user.identityKey, identity)
+        assert.ok(view.user.created_at instanceof Date)
+        assert.equal(writer.snapshotSyncSource, undefined)
+        receiver = replacement
+        if (iteration === 0)
+          await writer.knex('tx_labels').where({ label: 'after-service-pin' }).update({ label: 'after-reader-pin' })
+        const labels = []
+        let cursor
+        let done = false
+        while (!done) {
+          const page = await view.readPage('txLabels', cursor, { maxRows: 17 })
+          assert.ok(page.rows.length <= 17)
+          assert.equal(page.cursor.archivePosition.version, 1)
+          assert.equal(page.cursor.archivePosition.archiveId.length, 64)
+          labels.push(...page.rows)
+          cursor = page.cursor
+          done = page.done
+        }
+        assert.equal(labels.length, 140)
+        assert.equal(labels[0].label, iteration === 0 ? 'after-service-pin' : 'after-reader-pin')
+        assert.equal(new Set(labels.map(row => row.txLabelId)).size, 140)
+        assert.ok(labels.every(row => row.userId === view.user.userId && row.created_at instanceof Date))
+        assert.ok(labels.every(row => typeof row.isDeleted === 'boolean'))
+        for (const table of snapshotArchiveTables) {
+          const page = await view.readPage(table, undefined, { maxRows: 1000 })
+          assert.equal(page.done, true)
+          if (table === 'provenTxs') assert.deepEqual(page.rows[0].rawTx, new Uint8Array([1, 2, 255]))
+        }
+      } finally {
+        await view.close()
+      }
+      assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
+      assert.equal((await writer.knex('snapshot_archive_requests')).length, retained)
+      assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    }
+    assert.equal(captures, 5)
+    assert.equal(admissions.length, 6)
+    assert.deepEqual(admissions[0], admissions[1])
+    const issued = await transport.readerOffer({ lifetimeMs: 300000, maxBytes: 1048576 })
+    assert.equal(issued.outcome, 'offered')
+    await transport.cancelRequest(issued.request)
+    await assert.rejects(transport.admit(issued.request), /unavailable/)
+    assert.equal(captures, 5)
+    assert.equal((await writer.knex('snapshot_archive_requests')).length, retained)
+    return {
+      transport: 'profile-bound dispatcher over independent MySQL connections; HTTP qualified separately',
+      tables: 13,
+      captures,
+      maxPageRows: 17,
+      pinnedConcurrentWrite: true,
+      packedBytesAndDates: true,
+      replacementReader: true,
+      exactLostAdmissionRetry: true,
+      readerReceiptsCollected: true,
+      cancellationBeforeAdmission: true
+    }
+  } finally {
+    writer.openSnapshotArchiveSource = originalOpen
+    await Promise.all([owner.close(), replacement.close()])
   }
 }
 async function requestFixture(writer, reader) {

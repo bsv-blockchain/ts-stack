@@ -1,3 +1,4 @@
+import type { SnapshotArchiveReaderOffer } from './SnapshotArchiveReaderOffer'
 import { WERR_INVALID_OPERATION, WERR_UNAUTHORIZED } from '../../../sdk/WERR_errors'
 import type { StorageKnex } from '../../StorageKnex'
 import { KnexSnapshotArchiveService } from './KnexSnapshotArchiveService'
@@ -38,6 +39,20 @@ export class KnexSnapshotArchiveRpc {
     return this.stopped ? undefined : snapshotArchiveCapabilities
   }
 
+  private async sourceOffer(serverTime?: number): Promise<SnapshotArchiveOffer> {
+    const chain = this.storage.chain
+    if (chain !== 'main' && chain !== 'test') throw new WERR_INVALID_OPERATION('Snapshot archive chain is unavailable')
+    const sourceSchema = await readSnapshotArchiveSourceSchema(this.storage, this.storage.knex)
+    const settings = this.storage.getSettings()
+    return {
+      version: 1,
+      sourceStorageIdentityKey: settings.storageIdentityKey,
+      sourceSchema,
+      chain,
+      serverTime: serverTime ?? (await snapshotArchiveDatabaseNow(this.storage.knex))
+    }
+  }
+
   async dispatch(method: SnapshotArchiveMethod, params: unknown[], authenticatedIdentityKey: string): Promise<unknown> {
     const input = parseSnapshotArchiveRpcInput(method, params)
     if (input.identityKey !== authenticatedIdentityKey)
@@ -46,21 +61,27 @@ export class KnexSnapshotArchiveRpc {
       throw new WERR_INVALID_OPERATION('Snapshot archive transport is unavailable')
     const identityKey = authenticatedIdentityKey
     switch (input.method) {
-      case 'getSnapshotArchiveOffer': {
-        const chain = this.storage.chain
-        if (chain !== 'main' && chain !== 'test')
-          throw new WERR_INVALID_OPERATION('Snapshot archive chain is unavailable')
-        const sourceSchema = await readSnapshotArchiveSourceSchema(this.storage, this.storage.knex)
-        const settings = this.storage.getSettings()
-        const result: SnapshotArchiveOffer = {
+      case 'getSnapshotArchiveReaderOffer': {
+        // Read source metadata before issuing a retained request, so failed metadata
+        // cannot leave a caller-owned request that was never returned.
+        const offer = await this.sourceOffer()
+        const issued = await this.service.offerReader(identityKey, input.options)
+        if (issued === undefined)
+          return { version: 1, outcome: 'resource-limited' } satisfies SnapshotArchiveReaderOffer
+        return {
           version: 1,
-          sourceStorageIdentityKey: settings.storageIdentityKey,
-          sourceSchema,
-          chain,
-          serverTime: await snapshotArchiveDatabaseNow(this.storage.knex)
-        }
-        return result
+          outcome: 'offered',
+          offer: { ...offer, serverTime: issued.serverTime },
+          request: issued.request
+        } satisfies SnapshotArchiveReaderOffer
       }
+      case 'admitSnapshotArchive':
+        return await this.service.admitReader(identityKey, input.request)
+      case 'cancelSnapshotArchiveRequest':
+        await this.service.cancelReader(identityKey, input.request)
+        return true
+      case 'getSnapshotArchiveOffer':
+        return await this.sourceOffer()
       case 'startSnapshotArchive':
         return await this.service.start(identityKey, input.request)
       case 'getSnapshotArchiveStatus':

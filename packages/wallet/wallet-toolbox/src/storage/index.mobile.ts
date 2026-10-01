@@ -16,6 +16,7 @@ export type {
   PackedSnapshotRow,
   WalletReadSnapshot,
   WalletReadSnapshotOptions,
+  WalletSnapshotArchivePosition,
   WalletSnapshotCursor,
   WalletSnapshotPage,
   WalletSnapshotPageLimits,

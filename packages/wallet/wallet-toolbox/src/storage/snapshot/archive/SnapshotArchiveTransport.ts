@@ -1,4 +1,12 @@
 import {
+  validateSnapshotArchiveReaderOffer,
+  validateSnapshotArchiveReaderOptions,
+  type SnapshotArchiveReaderOptions,
+  type SnapshotArchiveReaderOffer
+} from './SnapshotArchiveReaderOffer'
+import { parseSnapshotArchiveReaderRequest, type SnapshotArchiveReaderRequest } from './SnapshotArchiveReaderRequest'
+import { validateSnapshotArchiveAdmission, type SnapshotArchiveAdmission } from './SnapshotArchiveAdmission'
+import {
   verifySnapshotArchiveDirectory,
   verifySnapshotArchivePage,
   type VerifiedSnapshotArchiveDirectory
@@ -28,7 +36,8 @@ export class SnapshotArchiveTransport {
     private readonly rpc: SnapshotArchiveRpcCall,
     private readonly identityKey: string,
     private readonly sourceStorageIdentityKey: string,
-    private readonly chain: 'main' | 'test'
+    private readonly chain: 'main' | 'test',
+    readonly supportsReader = false
   ) {
     parseSnapshotArchiveRpcInput('getSnapshotArchiveOffer', [{ version: 1, identityKey }])
   }
@@ -62,6 +71,49 @@ export class SnapshotArchiveTransport {
       await this.call('getSnapshotArchiveStatus', { requestId: request.requestId }, signal),
       request
     )
+  }
+
+  private requireReader(): void {
+    if (!this.supportsReader) throw new TypeError('Snapshot archive reader was not negotiated')
+  }
+
+  async readerOffer(
+    input: SnapshotArchiveReaderOptions,
+    signal?: AbortSignal
+  ): Promise<Readonly<SnapshotArchiveReaderOffer>> {
+    this.requireReader()
+    const options = validateSnapshotArchiveReaderOptions(input)
+    return validateSnapshotArchiveReaderOffer(
+      await this.call('getSnapshotArchiveReaderOffer', { options }, signal),
+      options,
+      this.sourceStorageIdentityKey,
+      this.chain
+    )
+  }
+
+  async admit(input: SnapshotArchiveReaderRequest, signal?: AbortSignal): Promise<Readonly<SnapshotArchiveAdmission>> {
+    this.requireReader()
+    const request = parseSnapshotArchiveReaderRequest(input)
+    return validateSnapshotArchiveAdmission(await this.call('admitSnapshotArchive', { request }, signal), request)
+  }
+
+  async readerStatus(
+    input: SnapshotArchiveReaderRequest,
+    signal?: AbortSignal
+  ): Promise<Readonly<SnapshotArchiveRequestReceipt>> {
+    this.requireReader()
+    const request = parseSnapshotArchiveReaderRequest(input)
+    return validateSnapshotArchiveRequestReceipt(
+      await this.call('getSnapshotArchiveStatus', { requestId: request.requestId }, signal),
+      request
+    )
+  }
+
+  async cancelRequest(input: SnapshotArchiveReaderRequest, signal?: AbortSignal): Promise<void> {
+    this.requireReader()
+    const request = parseSnapshotArchiveReaderRequest(input)
+    if ((await this.call('cancelSnapshotArchiveRequest', { request }, signal)) !== true)
+      throw new TypeError('Invalid snapshot archive cancellation receipt')
   }
 
   async directory(

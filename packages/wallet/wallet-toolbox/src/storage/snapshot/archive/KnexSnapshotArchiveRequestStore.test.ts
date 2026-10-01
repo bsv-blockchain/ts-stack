@@ -1,3 +1,4 @@
+import { snapshotArchiveReaderRequestId } from './SnapshotArchiveReaderRequest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -404,4 +405,257 @@ test.each([0, 1])('admission rechecks %i remaining milliseconds after ownership 
   } finally {
     clock.mockRestore()
   }
+})
+
+test('full-request cancellation fences a delayed first claim on another connection without reserving capacity', async () => {
+  const { db, requests, second } = await fixture()
+  const input = request()
+  await second.markCancellation(identity, input)
+  const closed = { version: 1, requestId: input.requestId, expiresAt: input.notAfter, state: 'closed' }
+  expect(await requests.claim(identity, input)).toEqual({ receipt: closed })
+  expect(await second.status(identity, input.requestId)).toEqual(closed)
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({
+    state: 'closed',
+    released: 1,
+    reservedBytes: 0,
+    archiveId: null
+  })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await requests.markCancellation(identity, { ...input })
+  await second.close(identity, input.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(1)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  const separate = await requests.claim(other, input)
+  expect(separate.owner).toBeDefined()
+  expect(separate.receipt.state).toBe('building')
+  await requests.close(other, input.requestId)
+})
+
+test('the cancellation fence retains an existing reservation until ordinary physical cleanup', async () => {
+  const { db, requests, second } = await fixture()
+  const input = request()
+  const admitted = await requests.claim(identity, input)
+  await second.markCancellation(identity, input)
+  expect((await requests.status(identity, input.requestId)).state).toBe('closed')
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({ released: 0, reservedBytes: input.maxBytes })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: input.maxBytes })
+  await expect(requests.begin(admitted.owner!, binding)).rejects.toThrow('unavailable')
+  await second.close(identity, input.requestId)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('a cancellation tombstone expires at the original deadline and cannot make that request reusable', async () => {
+  const { db, requests, second } = await fixture()
+  const input = request()
+  await requests.markCancellation(identity, input)
+  const clock = jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(input.notAfter)
+  await second.reap()
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  await requests.markCancellation(identity, input)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  await expect(second.claim(identity, input)).rejects.toThrow('Invalid snapshot archive creation request')
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  clock.mockRestore()
+})
+
+test('cancellation history exhaustion fails observably without falsely acknowledging a durable fence', async () => {
+  const { db, requests, second } = await fixture()
+  const retained = []
+  for (let i = 0; i < 4; i++) {
+    const input = request(i.toString(16).padStart(64, '0'))
+    retained.push(input)
+    await requests.markCancellation(identity, input)
+  }
+  await expect(second.markCancellation(identity, request())).rejects.toThrow('history is occupied')
+  expect(await db('snapshot_archive_requests')).toHaveLength(4)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  // A retained request remains idempotently cancellable at the history ceiling.
+  await second.markCancellation(identity, retained[0])
+  expect((await requests.claim(identity, retained[0])).receipt.state).toBe('closed')
+})
+
+test('failed cancellation persistence rolls back and never creates a partial reservation', async () => {
+  const { db, requests } = await fixture()
+  const input = request()
+  await db.raw(
+    "CREATE TRIGGER fail_request_cancel BEFORE INSERT ON snapshot_archive_requests WHEN NEW.state = 'closed' BEGIN SELECT RAISE(ABORT, 'synthetic cancellation interruption'); END"
+  )
+  await expect(requests.markCancellation(identity, input)).rejects.toThrow('synthetic cancellation interruption')
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await db.raw('DROP TRIGGER fail_request_cancel')
+  await requests.markCancellation(identity, input)
+  expect((await requests.claim(identity, input)).receipt.state).toBe('closed')
+})
+
+// Append to RequestStore tests after implementing the offer. Uses real existing
+// independent SQLite fixture and assertions against independently read tables.
+test('server offers retain bounded cancellation ownership without charging a capture', async () => {
+  const { db, requests, second } = await fixture()
+  const options = { lifetimeMs: 300000, maxBytes: 32768 }
+  const issued = (await requests.offer(identity, options))!
+  expect(issued.request.notAfter).toBe(issued.serverTime + options.lifetimeMs)
+  expect(issued.request.maxBytes).toBe(options.maxBytes)
+  expect(issued.request.requestId).toBe(snapshotArchiveReaderRequestId(issued.request))
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({
+    identityKey: identity,
+    state: 'offered',
+    reservedBytes: 0,
+    released: 1,
+    archiveId: null
+  })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  expect(await db('snapshot_archives')).toHaveLength(0)
+  await second.markReaderCancellation(identity, issued.request)
+  await second.close(identity, issued.request.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  await expect(requests.claimReader(identity, issued.request)).rejects.toThrow('unavailable')
+  await expect(requests.claim(identity, issued.request)).rejects.toThrow('Invalid snapshot archive creation request')
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('a retained offer can be admitted when every history slot is occupied, charging exactly once', async () => {
+  const { db, requests, second } = await fixture()
+  const offers = []
+  for (let n = 0; n < 4; n++) offers.push((await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!)
+  expect(new Set(offers.map(offer => offer.request.requestId)).size).toBe(4)
+  expect(await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 })).toBeUndefined()
+  expect(await db('snapshot_archive_requests')).toHaveLength(4)
+  const admitted = await second.claimReader(identity, offers[0].request)
+  expect(admitted.owner).toBeDefined()
+  expect(await requests.claimReader(identity, offers[0].request)).toEqual({ receipt: admitted.receipt })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+  await expect(requests.claimReader(identity, offers[1].request)).rejects.toThrow('occupied')
+  await requests.markReaderCancellation(identity, offers[1].request)
+  await requests.close(identity, offers[1].request.requestId)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+  await second.close(identity, offers[0].request.requestId)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('lost offers expire without source or capture quota and cannot be admitted after collection', async () => {
+  const { db, requests } = await fixture()
+  const clock = jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(1000000)
+  const issued = (await requests.offer(identity, { lifetimeMs: 50, maxBytes: 32768 }))!
+  clock.mockResolvedValue(1000050)
+  await requests.reap()
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archives')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await expect(requests.claimReader(identity, issued.request)).rejects.toThrow(
+    'Invalid snapshot archive reader request'
+  )
+})
+
+test('failed offered-to-claimed persistence rolls back quota and remains cancellable', async () => {
+  const { db, requests, second } = await fixture()
+  const issued = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  await db.raw(
+    "CREATE TRIGGER fail_offer_claim BEFORE UPDATE ON snapshot_archive_requests WHEN NEW.state = 'claimed' BEGIN SELECT RAISE(ABORT, 'synthetic offered admission interruption'); END"
+  )
+  await expect(second.claimReader(identity, issued.request)).rejects.toThrow('synthetic offered admission interruption')
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({
+    state: 'offered',
+    released: 1,
+    reservedBytes: 0
+  })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await db.raw('DROP TRIGGER fail_offer_claim')
+  await requests.markReaderCancellation(identity, issued.request)
+  await requests.close(identity, issued.request.requestId)
+  await expect(second.claimReader(identity, issued.request)).rejects.toThrow('unavailable')
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+})
+
+test('frequent completed readers release history immediately without reopening delayed requests', async () => {
+  const { db, requests, second } = await fixture()
+  const old = []
+  for (let n = 0; n < 16; n++) {
+    const offer = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+    old.push(offer.request)
+    const admitted = await requests.claimReader(identity, offer.request)
+    expect(admitted.owner).toBeDefined()
+    await second.markReaderCancellation(identity, offer.request)
+    await second.close(identity, offer.request.requestId)
+    expect(await db('snapshot_archive_requests')).toHaveLength(0)
+    expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  }
+  for (const request of old) {
+    await expect(requests.claimReader(identity, request)).rejects.toThrow('unavailable')
+    await expect(requests.claim(identity, request)).rejects.toThrow('Invalid snapshot archive creation request')
+    await expect(second.markReaderCancellation(identity, request)).resolves.toBeUndefined()
+  }
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+})
+
+test('a caller cannot admit a reader tuple that the server never offered', async () => {
+  const { db, requests } = await fixture()
+  const fields = { version: 2 as const, nonce: 'a'.repeat(64), notAfter: Date.now() + 300000, maxBytes: 32768 }
+  const input = { ...fields, requestId: snapshotArchiveReaderRequestId(fields) }
+  await expect(requests.claimReader(identity, input)).rejects.toThrow('unavailable')
+  await expect(requests.claim(identity, input)).rejects.toThrow('Invalid snapshot archive creation request')
+  await expect(requests.markReaderCancellation(identity, input)).resolves.toBeUndefined()
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('reader cleanup keeps its reservation and fence through a failed page deletion', async () => {
+  const { db, requests, second, archives } = await fixture()
+  const offered = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  const admitted = await requests.claimReader(identity, offered.request)
+  const writer = await requests.begin(admitted.owner!, binding)
+  await append(archives, writer)
+  await requests.seal(admitted.owner!, writer)
+  await db.raw(
+    "CREATE TRIGGER fail_reader_cleanup BEFORE DELETE ON snapshot_archive_pages BEGIN SELECT RAISE(ABORT, 'synthetic reader cleanup interruption'); END"
+  )
+  await expect(second.close(identity, offered.request.requestId)).rejects.toThrow(
+    'synthetic reader cleanup interruption'
+  )
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({
+    state: 'closed',
+    released: 0,
+    archiveId: writer.archiveId
+  })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+  expect(await requests.claimReader(identity, offered.request)).toEqual({
+    receipt: { version: 1, requestId: offered.request.requestId, expiresAt: offered.request.notAfter, state: 'closed' }
+  })
+  expect(await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 })).toBeUndefined()
+  await db.raw('DROP TRIGGER fail_reader_cleanup')
+  await second.close(identity, offered.request.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_pages')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  await expect(requests.claimReader(identity, offered.request)).rejects.toThrow('unavailable')
+})
+
+test('reader offers remain profile-bound through claim and cancellation', async () => {
+  const { db, requests, second } = await fixture()
+  const issued = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  await expect(second.claimReader(other, issued.request)).rejects.toThrow('unavailable')
+  await second.markReaderCancellation(other, issued.request)
+  expect(await db('snapshot_archive_requests')).toHaveLength(1)
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({ identityKey: identity, state: 'offered' })
+  expect((await requests.claimReader(identity, issued.request)).owner).toBeDefined()
+  await second.close(identity, issued.request.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+})
+
+test('early reader collection refuses altered persisted tuple binding and rolls back release', async () => {
+  const { db, requests } = await fixture()
+  const issued = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  await requests.claimReader(identity, issued.request)
+  await db('snapshot_archive_requests').update({
+    requestJson: JSON.stringify({ ...issued.request, requestId: '0'.repeat(64) })
+  })
+  await expect(requests.close(identity, issued.request.requestId)).rejects.toThrow(
+    'Invalid snapshot archive reader request'
+  )
+  expect(await db('snapshot_archive_requests').first()).toMatchObject({ state: 'closed', released: 0 })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+  await db('snapshot_archive_requests').update({ requestJson: JSON.stringify(issued.request) })
+  await requests.close(identity, issued.request.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
 })

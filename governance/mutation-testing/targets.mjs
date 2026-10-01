@@ -581,6 +581,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.cjs',
         [
           '<rootDir>/src/storage/snapshot/archive/SnapshotArchive*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/RemoteSnapshotReaderHttp.test.ts',
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.test.ts',
           '<rootDir>/src/storage/remoting/__test/BinaryJson.test.ts',
           '<rootDir>/src/storage/remoting/__test/KnexPaymentReplayStore.test.ts',
@@ -591,6 +592,42 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/remoting/__test/StorageClient.security.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClient.transport.security.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClient.telemetry.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-reader': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveAdmission.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotLease.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotRows.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotPageReader.ts',
+        'src/storage/snapshot/archive/openRemoteSnapshot.ts',
+        'src/storage/snapshot/SnapshotCursor.ts',
+        'src/storage/snapshot/SnapshotCancelledError.ts'
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/RemoteSnapshot*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveReader*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveAdmission.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveTransportFailure.test.ts',
+          '<rootDir>/src/storage/snapshot/SnapshotCursor.test.ts'
         ],
         {
           config: {

@@ -1,5 +1,5 @@
 import { runSnapshotSyncSession } from './runSnapshotSyncSession'
-import type { WalletReadSnapshot } from './WalletReadSnapshot'
+import type { WalletReadSnapshot, WalletSnapshotCursor } from './WalletReadSnapshot'
 import type { SnapshotSyncCheckpoint, SnapshotSyncCommit, SnapshotSyncStorage } from './SnapshotSync'
 import type { SyncSessionOptions, SyncSessionProgress } from '../sync/syncSession'
 import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
@@ -56,6 +56,7 @@ test.each([
 
 test('progress uses detached checkpoints and reports the committed counts and timings', async () => {
   const f = session()
+  f.checkpoint.cursor!.archivePosition = { version: 1, archiveId: 'c'.repeat(64), sequence: 12, rowOffset: 7 }
   const states: SyncSessionProgress['state'][] = []
   const result = await runSnapshotSyncSession(f.input, {
     maxItems: 17,
@@ -63,6 +64,8 @@ test('progress uses detached checkpoints and reports the committed counts and ti
     onProgress: progress => {
       states.push(progress.state)
       if (progress.snapshotCheckpoint?.cursor) progress.snapshotCheckpoint.cursor.after[0] = 999
+      if (progress.snapshotCheckpoint?.cursor?.archivePosition)
+        progress.snapshotCheckpoint.cursor.archivePosition.rowOffset = 999
       if (progress.snapshotCheckpoint) progress.snapshotCheckpoint.identityKey = 'changed-by-listener'
       if (progress.state === 'committed') {
         expect(progress).toMatchObject({ pages: 1, inserts: 2, updates: 3 })
@@ -80,6 +83,7 @@ test('progress uses detached checkpoints and reports the committed counts and ti
   expect(limits.maxRows).toBeGreaterThanOrEqual(1)
   expect(limits.maxRows).toBeLessThanOrEqual(17)
   expect(f.checkpoint.cursor!.after).toEqual([7])
+  expect(f.checkpoint.cursor!.archivePosition!.rowOffset).toBe(7)
   expect(result).toMatchObject({
     status: 'completed',
     mode: 'paged',
@@ -186,14 +190,24 @@ test.each([
 
 test('a nonterminal acknowledgement advances a detached cursor before finishing its table', async () => {
   const f = session()
-  const cursor = { version: 1 as const, snapshotId: 'b'.repeat(64), table: 'provenTxReqs' as const, after: [8] }
+  const cursor: WalletSnapshotCursor = {
+    version: 1,
+    snapshotId: 'b'.repeat(64),
+    table: 'provenTxReqs',
+    after: [8],
+    archivePosition: { version: 1, archiveId: 'c'.repeat(64), sequence: 12, rowOffset: 8 }
+  }
   ;(f.view.readPage as jest.Mock).mockResolvedValueOnce({
     rows: [{ provenTxReqId: 8 }],
     payloadBytes: 128,
     done: false,
     cursor
   })
-  const acknowledged: SnapshotSyncCheckpoint = { ...f.checkpoint, sequence: 12, cursor: { ...cursor, after: [8] } }
+  const acknowledged: SnapshotSyncCheckpoint = {
+    ...f.checkpoint,
+    sequence: 12,
+    cursor: { ...cursor, after: [8], archivePosition: { ...cursor.archivePosition! } }
+  }
   f.apply.mockResolvedValueOnce({ inserts: 1, updates: 0, checkpoint: acknowledged })
   f.apply.mockResolvedValueOnce({
     inserts: 0,
@@ -204,6 +218,7 @@ test('a nonterminal acknowledgement advances a detached cursor before finishing 
     onProgress: progress => {
       if (progress.state === 'committed' && progress.pages === 1) {
         acknowledged.cursor!.after[0] = 999
+        acknowledged.cursor!.archivePosition!.rowOffset = 999
         acknowledged.sequence = 999
       }
     }
@@ -211,6 +226,42 @@ test('a nonterminal acknowledgement advances a detached cursor before finishing 
   expect((f.view.readPage as jest.Mock).mock.calls[1][1]).toEqual(cursor)
   expect(result).toMatchObject({ status: 'completed', pages: 2, inserts: 1, updates: 0 })
 })
+
+test.each(['omitted', 'archive', 'sequence', 'offset'] as const)(
+  'an acknowledgement with %s archive position cannot become the next read position',
+  async change => {
+    const f = session()
+    const position = { version: 1 as const, archiveId: 'c'.repeat(64), sequence: 12, rowOffset: 8 }
+    const cursor: WalletSnapshotCursor = {
+      version: 1,
+      snapshotId: 'b'.repeat(64),
+      table: 'provenTxReqs',
+      after: [8],
+      archivePosition: position
+    }
+    ;(f.view.readPage as jest.Mock).mockResolvedValue({
+      rows: [{ provenTxReqId: 8 }],
+      payloadBytes: 128,
+      done: false,
+      cursor
+    })
+    const changed = { ...position }
+    if (change === 'archive') changed.archiveId = 'd'.repeat(64)
+    if (change === 'sequence') changed.sequence++
+    if (change === 'offset') changed.rowOffset++
+    f.apply.mockResolvedValue({
+      inserts: 1,
+      updates: 0,
+      checkpoint: {
+        ...f.checkpoint,
+        sequence: 12,
+        cursor: { ...cursor, archivePosition: change === 'omitted' ? undefined : changed }
+      }
+    })
+    await expect(runSnapshotSyncSession(f.input, {})).rejects.toThrow('acknowledgement does not match')
+    expect(f.view.readPage).toHaveBeenCalledTimes(1)
+  }
+)
 
 test.each(['closed', 'expired', 'cleanup-failed'] as const)(
   'source %s while queued prevents a destination write',

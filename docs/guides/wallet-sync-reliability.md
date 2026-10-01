@@ -622,3 +622,56 @@ SQLite profiles, both client variants, lost admission acknowledgements, server
 replacement, profile isolation, rollback combinations, response limits and
 shutdown during opening. These fixtures do not establish deployed performance,
 physical mobile acceptance or completion of #544.
+
+## Remote row reader (unadvertised implementation)
+
+The client now implements a source-only `getSnapshotSync()` adapter that
+negotiates the separate `snapshotArchiveReaderVersion: 1` setting when opened.
+The server does not yet advertise that setting. Controlled HTTP fixtures opt in
+to exercise the implementation; ordinary remote sync continues its existing path.
+Old archive capability objects and all six legacy methods remain unchanged.
+The new adapter refuses destination operations and does not imply portable
+export, staged restore or a remote destination implementation.
+
+Reader offers retain bounded metadata without acquiring a source. An explicit
+capacity refusal returns no request. An offered request uses version two and a
+separate digest domain; admission requires that exact persisted offer and never
+creates an absent request. Consequently cancellation can collect a successfully
+released reader receipt immediately without allowing a delayed admission or the
+legacy start method to recreate it. Failed and resource-limited receipts remain
+observable until explicit cancellation or expiry. The existing four/profile,
+64-total metadata limits and logical archive reservations are unchanged.
+
+Only a native-fetch rejection permits one retry of an immutable admission,
+status, directory, page or cancellation request. An offer is never retried;
+recovery neither renews the lease nor starts another capture. Authentication,
+framing and RPC failures do not select that retry.
+Cancellation recognizes the local signal and the SDK's explicit cancellation
+code; concurrent independent errors remain failures. The client uses one fixed
+wall/monotonic lease, one operation at a time and one private decoded frame. It
+checks the complete directory, receipt and row representation before returning
+packed rows, fresh dates and an additive version-one `cursor.archivePosition`.
+The position identifies the archive, frame sequence and consumed row offset; it
+also checks the original row keys. Table lookup does not fetch earlier tables
+or reinterpret SQL collation as JavaScript ordering.
+
+Local destinations persist that optional position with the atomic row commit.
+Preparation and progress callbacks receive detached cursor metadata, and an
+acknowledgement with a missing or changed position is rejected. Legacy cursor
+JSON is unchanged when the position is absent. The manager forwards cancellation
+to source opening, returns committed progress only after successful cleanup and
+does not switch to a different copy after an accepted remote source fails.
+
+Actual loopback HTTP fixtures cover full/mobile negotiation, every archived
+table, original-source retention through replacement, native-fetch loss before
+and after immutable requests, failed authentication and cancellation. Both
+clients also sync over HTTP into an occupied local destination: cancellation
+retains the committed archive position, a later view completes without duplicate
+labels, and the active destination and unrelated profile remain unchanged. The generated
+reader property varies frame and caller-page boundaries over at least 300 cases.
+These are implementation checks, not completed performance or platform evidence.
+In particular, a cancellation handled by another replica can fence durable
+admission and staging without proving that the original replica has physically
+drained its SQL reader. Owner recovery and bounded driver/query cleanup remain
+open requirements before server advertisement and program completion. No claim
+of a distributed physical-pool ceiling follows from logical quota accounting.
