@@ -1098,6 +1098,18 @@
           "Signed results must bind the original request and independently retained evaluation policy.",
           "Authentication requires the expected root identity and never permits payment."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-scheduler.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Recoverable root scheduling with independent expiry, installed policy and retained physical capacity through cancellation",
+        "target": "At least 300 generated cancellation, revocation, context, policy and expiry schedules",
+        "invariants": [
+          "Only the installed policy may evaluate the original retained operation under its captured revision.",
+          "Cancellation and changed access, context, policy or deadline cannot apply a stale decision.",
+          "Physical work remains owned until settlement, while independent expiry and bounded wrapping scans continue."
+        ]
       }
     ],
     "exclusions": [

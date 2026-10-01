@@ -636,3 +636,58 @@ to evade physical work limits. The client sends no new suppression decision and
 performs no automatic payment, discovery, persistence or local serving change.
 Existing `OutputLookupTransport` signatures, diagnostics, defaults and behavior
 remain intact through the shared finite exchange.
+
+## Recoverable scheduling and shutdown
+
+`RootEvictionScheduler` in the portable `root-eviction` entry composes an existing
+maintenance port with optional explicitly installed automatic evaluation. Construct
+one shared scheduler for each configured root service. The maintenance and recovery
+ports must address the same sealed journal, identity and chain. Construction does
+not create storage, start a timer, publish capabilities or install policy.
+
+Omit `automatic` for manual/advisory operation. Each pass then only visits retained
+requests and expires still-pending targets under independently installed maintenance
+authority. Expiry remains available when chain context or requester privilege is
+unavailable; it cannot create suppression or restored membership. Completed actions,
+original contracts and permanent request fences remain intact.
+
+Automatic operation requires an explicitly installed versioned `policyId`, its
+independently selected `policyDigest`, the original-contract recovery port and
+contracts, and separate worker guard/evaluation callbacks. The evaluator must
+establish advertisement attribution, evidence, currentness and restoration authority;
+a reason string or agreeing peers supplies none of those facts. It receives an owned
+observation, performs asynchronous verification outside SQLite and returns only
+justified target decisions. Returning an empty array defers the request. Recovery
+and final commit recheck the installed digest and synchronous current access/context
+callbacks inside the actual gate. The scheduler retains the original observed
+revision independently of the evaluator's copy and checks cancellation at commit.
+It does not manufacture an original selection for legacy records.
+
+`runOnce()` performs a bounded pass; concurrent callers share it rather than queuing
+more scans. The defaults are 64 expiry references, four physical evaluations and a
+30-second evaluation deadline. Page size and physical concurrency are independently
+configurable from one through 64; deadlines remain at most 30 seconds. Separate
+wrapping expiry and evaluation cursors prevent stalled or repeatedly deferred work
+from starving expiry or later requests. An evaluation page is bounded by available
+physical slots, and each selected request is independently expired before recovery.
+Cursors are local hints, reset on a new scheduler instance; they are not immutable
+wire snapshots. Finite journal capacity bounds each pass through the retained set.
+
+`start(onPass)` explicitly performs a startup pass and periodic passes, every second
+by default, with a configurable interval from one millisecond through 60 seconds.
+`wake()` coalesces hints and interrupts the idle wait. Durable intake must commit
+before a hint is sent; lost hints remain recoverable through periodic scanning.
+Observe the lifetime promise and every report. Individual expiry/evaluation failures
+are reported with their phase and request digest and revisited on later passes.
+A scan or report-observer failure rejects the lifetime promise and stops new work.
+Observer promises are awaited; observers must not await this scheduler's own `stop()`.
+
+Cancellation and deadlines release logical callers while retaining the physical
+request slot and digest until the dependency actually settles. `stop()` irreversibly
+stops new work, cancels active evaluation, wakes the loop and waits for the current
+scan, observer and all physical jobs. A dependency that ignores cancellation keeps
+shutdown pending; a timeout is not a successful drain. Stop HTTP intake first, await
+scheduler/service work, and only then close caller-owned storage. The scheduler never
+closes injected databases. A restart uses a new scheduler and resumes durable work.
+This component does not add broader local rules, projection acknowledgements or
+serving/cache/live/GASP fences; those remain required integrations for the full profile.

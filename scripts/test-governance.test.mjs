@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 88)
+  assert.equal(result.summary.propertySuites, 89)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 88)
+  assert.equal(result.summary.mutationTargets, 89)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -549,6 +549,22 @@ test('finite HTTP extraction preserves existing authentication ranges and adds i
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = mutation.targets.find(value => value.id === 'sdk-root-eviction-http')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('root scheduling retains a complete source target and generated lifecycle schedules', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['root-eviction-scheduler']
+  assert.deepEqual(target.mutate, ['src/root-eviction/RootEvictionScheduler.ts'])
+  assert.ok(target.additionalInputs.includes('test/root-eviction-scheduler-fixture.ts'))
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/root-eviction-scheduler*.test.ts'
+  ])
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(value => value.id === 'root-eviction-scheduler')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

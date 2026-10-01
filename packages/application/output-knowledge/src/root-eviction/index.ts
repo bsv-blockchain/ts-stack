@@ -48,3 +48,10 @@ export type {
   RootEvictionServiceOptions,
   RootEvictionServiceResponse
 } from './RootEvictionService.js'
+
+export { RootEvictionScheduler } from './RootEvictionScheduler.js'
+export type {
+  RootEvictionAutomaticEvaluation,
+  RootEvictionSchedulerOptions,
+  RootEvictionScheduleReport
+} from './RootEvictionScheduler.js'

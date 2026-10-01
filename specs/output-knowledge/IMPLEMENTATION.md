@@ -925,3 +925,38 @@ sites. All seven production sources match its saved report. Its existing 80% gat
 and complete original source/test union were preserved; the separate new root
 client retains its independently passing 90% gate. These local results do not
 replace exact-head hosted qualification.
+
+## Bounded root recovery scheduler
+
+The optional root scheduler now performs startup and periodic durable scans, with
+coalesced wake hints and independent expiry/evaluation cursors. Manual mode only
+expires retained pending work. Automatic evaluation requires an explicitly
+installed policy identity and digest, retained contract recovery and current
+authority/context/revision checks inside the actual journal gate. An unavailable
+evaluator cannot prevent expiry. Physical jobs retain their digest and capacity
+until their callbacks actually settle, including after logical cancellation or
+timeout. Shutdown prevents new work, aborts outstanding jobs and waits for the
+observer and physical jobs before the caller closes its database. The scheduler
+does not own database closure or implicitly install a peer-requested policy.
+
+The complete production revision passes 1,248 tests across 94 output-runtime
+suites, packed consumers, exact-tarball browser checks including actual IndexedDB
+restart/CSP behavior, and all 29 compiled examples against 22 package tarballs.
+Root health, lint, formatting, types and the 145-page documentation build pass.
+Seven subsequent test-only additions bring the focused scheduler suite to 32
+cases, plus 300 generated schedules; all 33 mutation dry-run tests pass.
+
+The first complete 164-site mutation run failed at 85.37% (132 killed, 24 surviving
+and eight detected timeouts). Added tests cover repeated starts, wake hints during
+active work, expiry between discovery and evaluation, stopping between storage
+calls, missing checked-commit support and duplicate physical work while capacity
+remains available. The unchanged complete production source now passes 93.90%:
+144 killed, ten surviving and ten detected timeouts, with zero uncovered or
+invalid sites. The report source matches the current file exactly. All existing
+source/test unions and gates remain; the new critical target uses the unchanged
+90% threshold and the actual registry contains 89 properties and 89 targets.
+
+This supplies reusable recovery lifecycle, not a complete deployed root profile.
+Installed evidence/currentness policy, broader local-rule coverage, all serving
+and admission/GASP fences, host lifecycle demonstration and clean final database
+and exact-head hosted qualification remain outstanding.

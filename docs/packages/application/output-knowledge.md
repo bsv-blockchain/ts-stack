@@ -227,3 +227,11 @@ retained manifest after expiry without aliasing a newer selector. Persist its
 record atomically with the operation before effects. This helper does not add
 contract storage or mount the root service; see the
 [root coordination guide](../../guides/root-eviction-coordination.md).
+
+`RootEvictionScheduler` in the optional root entry runs bounded startup, periodic
+and wake-driven recovery with independent expiry. Manual handling remains the
+default. Explicit automatic policy, original-contract recovery and current checked
+authority compose separately from evidence verification and serving projections.
+Await its physical shutdown drain before closing injected storage. The
+[root coordination guide](../../guides/root-eviction-coordination.md) describes
+bounds, report handling, fair scans and restart behavior.

@@ -975,3 +975,11 @@ saved signed capability and current result under a checked local-worker guard,
 without discovery or requester impersonation. It cannot adopt legacy operations
 with missing selections or authorize new decisions. Independent maintenance expiry
 continues even when chain/context-dependent recovery cannot proceed.
+
+The optional root entry also exports `RootEvictionScheduler`. Explicit startup and
+periodic bounded scans recover durable work after lost wake hints or process restart.
+Manual/advisory mode is the default; automatic evaluation requires an installed
+versioned policy and current guarded authority. Separate expiry and evaluation scans
+preserve expiry progress while physical evidence work is stalled. Await `stop()`
+before closing caller-owned storage; logical cancellation alone does not drain a
+non-cooperating dependency. See the root coordination guide for bounds and lifecycle.

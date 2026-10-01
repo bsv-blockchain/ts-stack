@@ -895,3 +895,33 @@ export async function readOriginalRootDecision(options: RetainedRootClientOption
   return await client.status()
 }
 ```
+
+## Own the root recovery lifecycle
+
+Supply ports for the same existing sealed journal. Omit automatic evaluation for
+manual/advisory handling. This function observes the background lifetime, drains
+physical work on shutdown and leaves database close ownership with its caller.
+
+```typescript compile
+// example-id: root-recovery-lifecycle
+import {
+  RootEvictionScheduler,
+  type RootEvictionSchedulerOptions,
+  type RootEvictionScheduleReport
+} from '@bsv/output-knowledge/root-eviction'
+
+export async function runRootRecoveryUntilShutdown(
+  options: RootEvictionSchedulerOptions,
+  onReport: (report: RootEvictionScheduleReport) => void | Promise<void>,
+  shutdown: Promise<void>
+): Promise<void> {
+  const worker = new RootEvictionScheduler(options)
+  const completion = worker.start(onReport)
+  try {
+    await Promise.race([shutdown, completion])
+  } finally {
+    await worker.stop()
+    await completion
+  }
+}
+```
