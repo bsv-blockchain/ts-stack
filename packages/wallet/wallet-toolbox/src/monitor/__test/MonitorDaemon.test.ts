@@ -54,6 +54,33 @@ describe('MonitorDaemon setup', () => {
     expect(mysqlSetup.storageProvider).toBeInstanceOf(StorageKnex)
   })
 
+  test('derives a Postgres storage provider with int8 parsing from a connection setting', async () => {
+    const daemon = new MonitorDaemon({})
+    const connection = { setTypeParser: jest.fn() }
+    const acquireConnection = jest.fn(async () => connection)
+    const pgKnex = { client: { dialect: 'postgresql', acquireConnection } }
+    jest.mocked(makeKnex).mockReturnValueOnce(pgKnex as any)
+    const postgresSetup: any = {
+      chain: 'main',
+      postgresConnection: JSON.stringify({ host: 'database.example', database: 'wallet' })
+    }
+
+    ;(daemon as any).configureKnex(postgresSetup)
+
+    expect(makeKnex).toHaveBeenLastCalledWith({
+      client: 'pg',
+      connection: { host: 'database.example', database: 'wallet' },
+      pool: { min: 0, max: 7, idleTimeoutMillis: 15_000 }
+    })
+    expect(postgresSetup.storageProvider).toBeInstanceOf(StorageKnex)
+    expect(postgresSetup.storageProvider.knex).toBe(pgKnex)
+    await expect(pgKnex.client.acquireConnection()).resolves.toBe(connection)
+    expect(acquireConnection).toHaveBeenCalledTimes(1)
+    expect(connection.setTypeParser).toHaveBeenCalledWith(20, expect.any(Function))
+    const parse = connection.setTypeParser.mock.calls[0][1] as (value: string) => number
+    expect(parse('2100000000000000')).toBe(2_100_000_000_000_000)
+  })
+
   test('promotes an available storage provider into a storage manager', async () => {
     const daemon = new MonitorDaemon({})
     const storageProvider = {

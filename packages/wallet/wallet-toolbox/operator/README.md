@@ -69,6 +69,11 @@ wallet-review Jest snippets. Mainnet also requires `--allow-production`.
 Environment-variable names can be overridden with the documented `*-env`
 options; secret values never belong on the command line.
 
+For Postgres wallet storage, pass `--database-client postgres`. The default
+database environment variable then becomes `TEST_CLOUD_POSTGRES_CONNECTION`
+(or `MAIN_CLOUD_POSTGRES_CONNECTION`), holding a JSON node-postgres connection
+config.
+
 ## Dojo import
 
 The Dojo importer requires one explicit destination. Preview a bounded testnet

@@ -27,8 +27,8 @@ function parseInt8(value: string): number {
  * Does nothing for other dialects, and is idempotent.
  */
 export function usePostgresInt8Numbers(knex: Knex): void {
-  const client = knex.client as InstallableClient
-  if (client.dialect !== 'postgresql' || client[installed] === true) return
+  const client = knex.client as InstallableClient | undefined
+  if (client?.dialect !== 'postgresql' || client[installed] === true) return
   const acquire = client.acquireConnection.bind(client)
   client.acquireConnection = async () => {
     const connection = (await acquire()) as PgConnection
