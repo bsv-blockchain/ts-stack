@@ -681,8 +681,10 @@ BEEF encoding of the same raw transaction recovers the original job. Reusing the
 same operation for other bytes conflicts. Another operation on that already bound
 proposal resolves the original state and cannot start another transaction.
 
-An uncertain topic result remains finalizing. A positive recovered result, including
-an empty duplicate STEAK, links finalization. Definitive local rejection terminates
+An uncertain topic result remains finalizing. A positive recovered result backed
+by the original durable admission receipt links finalization, even if its STEAK
+instructions are empty. Empty or duplicate STEAK alone establishes neither
+admission nor rejection. Definitive local rejection terminates
 the channel as finalization-failed with global outcome unknown. Later callbacks and
 timer expiry do not rewrite finalized or failed history. Reorganizations belong in
 separate currentness assessments, not a reversal of the historical admission record.

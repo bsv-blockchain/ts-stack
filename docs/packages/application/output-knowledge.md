@@ -146,6 +146,15 @@ ports remain supported, but missing context is never synthesized for an adapter
 that requires it. Upgrade readers before writing v2; no wire migration is needed.
 The package guide describes each port's required behavior.
 
+`OverlayProposalAdmission`, from the optional `@bsv/overlay/proposal-admission`
+entry, implements the ordinary Engine/retained-history bridge. It requires the
+saved verification context and returns only the requested topic from the original
+durable receipt. The receipt's assessment identity is independent of the newer
+reservation context. Missing history and duplicate or failed submission remain
+unresolved; configure retained-history storage explicitly. Actual Engine/Mongo
+restart and lost-response tests qualify this boundary separately from the
+remaining complete HTTP and application composition.
+
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current
 qualification boundary. Exact exports and declarations are listed in the

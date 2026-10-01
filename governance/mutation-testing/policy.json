@@ -916,6 +916,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-proposal-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/ProposalAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Proposal admission recovery from original durable topic receipts with exact transaction, installation and selected-topic disclosure binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

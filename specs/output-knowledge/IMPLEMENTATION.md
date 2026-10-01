@@ -100,8 +100,11 @@ submission and GASP behavior remains available to applications that do not opt i
 - Optional owned verification-context retention in versioned proposal reservations,
   compatible legacy replay and original-context admission recovery after restart.
 - Optional Mongo admission-history retention and exact scoped lookup, preserving
-  default receipts and leaving older unbound provenance unresolved. This supplies
-  history access; the concrete bounded Engine admission bridge remains required.
+  default receipts and leaving older unbound provenance unresolved.
+- An optional bounded Engine proposal-admission bridge, recovering original
+  retained receipts and projecting only the selected topic. Actual Engine/Mongo
+  restart and lost-response tests pass; complete mutation qualification and full
+  HTTP/service composition remain required.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
@@ -147,7 +150,7 @@ acquisition, mining or decryption. Their [guide](../../docs/guides/private-overl
 keeps the remaining service obligations explicit.
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
-  fences, concrete durable admission bridges and restart-aware expiry scheduling.
+  fences, full service/admission composition and restart-aware expiry scheduling.
 - Finish provider qualification and connect live lookup to actual admission/projection
   producers and the reference application. Generic index publication requires all
   relevant producers and privacy writers to honor its atomic mutation/guard contracts;
@@ -1037,8 +1040,10 @@ request, withdrawal-authority and exact consuming-transaction checks. One bounde
 transaction verifier remains shared across each complete peer evaluation. The
 existing critical mutation target includes both complete production modules and
 retains its full original test selection and unchanged 90%/zero-uncovered/
-zero-invalid gates. Its fresh mutation campaign remains to be run; the former
-single-module result is not qualification of this changed implementation.
+zero-invalid gates. The fresh complete 132-site campaign passes at 98.48%:
+130 killed, two surviving, and zero timeouts, uncovered or invalid sites. All 69
+mutants in the new direct-evidence module were killed. Both production modules
+exactly match the saved report; the former single-module result is not reused.
 
 All 22 focused tests pass, including 300 generated local/peer equivalence
 schedules. Tests cover closed nested fields, exact service/output/digest binding,
@@ -1056,3 +1061,70 @@ it verifies cancellation after the second independent peer proof check, before
 publishing the result. The full 1,294-test run preceded this additional test.
 Remaining component mutation campaigns, complete root-host context, currentness,
 admission/serving integration and exact-head CI remain outstanding.
+
+The format-3 root codec's independent complete 182-site campaign also passes:
+97.80%, with 175 killed, four surviving and three timeouts, zero uncovered or
+invalid sites. It ran the full 280-test dry selection in 136 seconds and completed
+in 50m05s. Source bytes match its report, and all 1,803 compiled SDK dependency
+files remain unchanged. A bounded workflow allowance is being integrated under
+the same source/test/score requirements; this is not a performance improvement
+claim. Serving records, journal and clean database qualification remain separate.
+
+The subsequent full 475-site serving-records campaign passed its 288-test dry
+run, but exceeded the existing 90-minute execution bound after six worker
+out-of-memory restarts. It was stopped without a final report and supplies no
+mutation qualification. All five remaining owned processes exited, and the
+1,803 compiled SDK dependency files remained unchanged. The next campaign will
+use exhaustive file-based execution parts with the original combined gate;
+neither incomplete evidence nor previous-source results can qualify it.
+
+## Ordinary Engine admission for reserved proposals
+
+`@bsv/overlay/proposal-admission` supplies `OverlayProposalAdmission` as a
+structurally compatible `ProposalServiceAdmission` port. The optional leaf
+requires SDK 2.9 or newer; no new root export or old peer-floor change is made.
+It binds the installed provider, service, topic, rules digest and chain to the
+original signed selection and author proposal. The exact durably reserved raw
+transaction must match both the BEEF's default target and transaction ID. The
+host still owns policy-specific transaction relation checks, complete evidence
+verification, current access and durable reservation.
+
+The adapter reads retained ordinary topic history first. When absent, it checks
+the complete possible STEAK result against the service's reserved outcome budget
+before submitting through the real Engine. It rereads the same history even
+after submission throws. Only an original atomic receipt whose identity includes
+the exact topic, ordinary policy and off-chain context can finalize the proposal.
+Unknown history, legacy provenance and partial failure remain unresolved.
+Empty STEAK alone cannot establish either success or failure; a valid retained
+identity is the evidence of ordinary admission. Only the selected topic's instructions leave the adapter;
+the original multi-topic receipt is not disclosed. A stable assessment identifier
+binds the actual original operation and instructions, independently of a newer
+reservation or changing index/propagation observation.
+
+Canonical input/result bounds and a finite physical concurrency limit apply.
+Stalled calls retain capacity until actual settlement; configuration replacement
+requires draining work and installing a new bridge. Original-context requirements
+do not synthesize missing legacy verification material. Private publication and
+durable negative topic decisions remain separate contracts.
+
+The full Overlay run passes 899 tests across 43 suites, with its one existing
+governed skip unchanged. The bridge has full statement/function/line coverage
+and 99.09% branch coverage in that run. Its real local three-member Mongo fixture
+exercises historical multi-topic admission, adapter restart, serving eviction,
+concurrent calls and a response lost after actual Engine commit. The synthetic
+chain tracker and absent broadcaster/advertiser isolate these tests from public
+network or funded effects. The full run includes owned critical-extension support, independently bound
+selection/signature checks and valid empty retained receipts. Two subsequent
+test-only cases cover missing advertised services/profiles; 58 focused cases now
+pass, including a 300-case property. The full 899-test run preceded those two
+additional cases.
+
+Strict production and new test compilation are part of the package typecheck.
+Lint, packed ESM/CJS exports and consumers, existing strict SDK 2.8.9 consumers,
+and 32 compiled examples against 22 exact tarballs pass. The compiled example
+returns this bridge through the actual proposal-service port type. The complete
+source and generated property are registered with the unchanged critical
+90%/zero-uncovered/zero-invalid gate. Both Overlay property suites pass, as do
+all 34 governance regressions and repository health checks. Mutation execution
+and full HTTP/lifecycle composition remain pending; these results do not
+establish checkpoint-two readiness.

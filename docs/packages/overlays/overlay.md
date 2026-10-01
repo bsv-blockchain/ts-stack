@@ -17,6 +17,15 @@ tags: ['overlay', 'framework']
 
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
 
+The optional `@bsv/overlay/proposal-admission` entry supplies
+`OverlayProposalAdmission` for a durably reserved proposal service. With SDK 2.9
+or newer and explicit retained-history storage, it recovers the original ordinary
+topic receipt, projects only that topic's STEAK and preserves uncertainty after
+duplicate or failed submissions. It bounds physical concurrency and result
+capacity before new admission. Existing root imports and older SDK consumers
+remain compatible. See the [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/overlays/overlay/README.md#optional-proposal-admission-bridge)
+for installation, trust boundaries and recovery obligations.
+
 ## Install
 
 ```bash

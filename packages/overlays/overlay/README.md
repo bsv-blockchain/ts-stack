@@ -164,6 +164,63 @@ Disable the option to return to default writes without erasing retained history.
 This capability is a building block for proposal/admission recovery; it does not
 by itself implement a BRC-194 service or durable negative admission decisions.
 
+## Optional proposal admission bridge
+
+`@bsv/overlay/proposal-admission` exports `OverlayProposalAdmission`, an optional
+Node adapter for `ProposalServiceAdmission` from `@bsv/output-knowledge/proposals`.
+This entry requires SDK 2.9 or newer. The existing root entry, SDK peer floor,
+ordinary submit signature and storage defaults are unchanged.
+
+Construct the bridge with an actual `Engine`, retained-history storage, the
+installed ordinary topic, proposal service name, provider identity and exact
+service-rules digest. The proposal service must authenticate the caller, verify
+the author's proposal and policy-specific transaction relation, completely
+verify BEEF/Script, and durably reserve the exact job and original verification
+context before recovery. This bridge is a trusted local component, not a public
+request handler or a replacement for those checks.
+
+Recovery first reads original topic admission history. If it is absent, the
+bridge checks the complete possible result against its reserved capacity before
+ordinary Engine submission, then reads history again even if submission throws.
+Only an original committed receipt whose identity includes the selected topic
+and ordinary Engine policy can finalize the proposal. Without that provenance,
+duplicate STEAK, missing legacy history and submission errors remain unresolved.
+Empty instructions do not override a valid retained identity in either direction.
+The bridge does not
+invent a durable rejection from an exception; an operator must reconcile such
+jobs through retained evidence.
+
+The result exposes only the selected topic's STEAK. Its assessment identifier
+binds the original admission identity, operation and selected instructions;
+later reservations, index visibility and propagation observations cannot
+relabel that assessment. Historical admission survives serving eviction and
+spending, without asserting present visibility, unspentness or mining finality.
+Proposal payloads are not silently submitted as private off-chain values.
+
+The canonical job and retained record each have a 1 MiB bound. Configure evidence
+acceptance so the combined BEEF, raw transaction and job metadata fit that job
+bound. `maximumOutcomeBytes` defaults to 1 MiB (128 bytes through 1 MiB), and the
+proposal service reserves that exact outcome budget before effects. Size both
+the journal entry limit and selected response limits to include their enclosing
+records in addition to this result budget. A result
+that cannot fit is rejected before new ordinary submission. The default four
+physical recovery calls can be configured from one through 64; stalled calls
+retain their capacity until they actually settle. Excess calls return retryable
+`limited` errors rather than accumulating a queue. The host owns recovery
+scheduling and transport deadlines.
+
+Drain recovery work before replacing the Engine's storage, admission/history
+provider, topic manager or scope. The bridge detects installation changes across
+history reads; configuration mutation during Engine execution is unsupported.
+Create a new bridge for an explicitly installed replacement. No database
+migration or retroactive certification of old receipts is performed.
+
+Tests include real Engine submission against a local three-member Mongo replica
+set, receipt recovery after adapter restart and serving eviction, concurrent
+submission, and loss of the response after actual commit. Synthetic header
+fixtures and disabled broadcast/advertising isolate this evidence from a public
+network; they do not certify a deployed service or the full BRC-194 HTTP path.
+
 ## Runtime and package formats
 
 The package supports both module systems:

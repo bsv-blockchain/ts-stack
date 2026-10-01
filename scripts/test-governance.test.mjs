@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 90)
+  assert.equal(result.summary.propertySuites, 91)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 90)
+  assert.equal(result.summary.mutationTargets, 91)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -612,6 +612,29 @@ test('local advertisement verification retains the full signed-request source an
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = policy.targets.find(value => value.id === 'root-eviction-evidence')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('proposal admission retains its complete source and generated provenance tests', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['overlay-proposal-admission']
+  assert.deepEqual(target.mutate, ['src/ProposalAdmission.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests/ProposalAdmission.test.ts',
+    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, [
+    'src/EngineAdmission.ts',
+    'src/storage/AdmissionStorage.ts',
+    'src/__tests/ProposalAdmissionFixture.ts'
+  ])
+  const mutationPolicy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = mutationPolicy.targets.find(
+    value => value.id === 'overlay-proposal-admission'
+  )
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

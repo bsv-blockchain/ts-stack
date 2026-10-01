@@ -23,6 +23,37 @@ They validate package names, exports, declarations, module resolution, and
 cross-package type identity. They do not replace behavioral examples, package
 tests, browser/mobile bundles, or live-service integration tests.
 
+## Durable ordinary admission for a proposal service
+
+The bridge implements the proposal service's admission port using an explicitly
+installed Engine and retained topic receipts. The rest of the service still owns
+verification, policy, current access and durable reservation. This compiled
+example proves the public port types compose; it does not execute a server.
+
+```ts compile
+// example-id: proposal-engine-admission
+import type { Engine } from '@bsv/overlay'
+import { OverlayProposalAdmission } from '@bsv/overlay/proposal-admission'
+import type { ProposalServiceAdmission } from '@bsv/output-knowledge/proposals'
+
+function installedProposalAdmission(
+  engine: Engine,
+  providerIdentity: string,
+  installedRulesDigest: string
+): ProposalServiceAdmission {
+  return new OverlayProposalAdmission({
+    engine,
+    identity: providerIdentity,
+    rulesDigest: installedRulesDigest,
+    service: 'proposal-records',
+    topic: 'tm_records',
+    maximumOutcomeBytes: 65536,
+    maximumConcurrentAdmissions: 4
+  })
+}
+void installedProposalAdmission
+```
+
 ## Original root coordination contracts
 
 This helper prepares an owned local record for a future atomic intake transaction.

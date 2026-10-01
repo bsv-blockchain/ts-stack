@@ -1122,6 +1122,18 @@
           "Eligibility requires complete current-epoch coverage, verified currentness and completed projection.",
           "Lifting one basis cannot erase other blockers or replay an old assessment into current eligibility."
         ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/ProposalAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Proposal admission recovery from original durable topic receipts with exact transaction, installation and selected-topic disclosure binding",
+        "target": "At least 300 generated private-topic, index-visibility and reservation-context recovery combinations",
+        "invariants": [
+          "Only the selected topic is disclosed from a bound original durable admission receipt.",
+          "A later reservation or index observation cannot relabel the historical topic assessment.",
+          "An already retained admission is recovered without a second topic submission."
+        ]
       }
     ],
     "exclusions": [

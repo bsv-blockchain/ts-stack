@@ -617,6 +617,21 @@ export function buildMutationTargets(repositoryRoot) {
         '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
       ])
     },
+    'overlay-proposal-admission': {
+      packageDirectory: 'packages/overlays/overlay',
+      manifest: 'packages/overlays/overlay/package.json',
+      propertyTest: 'packages/overlays/overlay/src/__tests/ProposalAdmission.property.test.ts',
+      additionalInputs: [
+        'src/EngineAdmission.ts',
+        'src/storage/AdmissionStorage.ts',
+        'src/__tests/ProposalAdmissionFixture.ts'
+      ],
+      mutate: ['src/ProposalAdmission.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests/ProposalAdmission.test.ts',
+        '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+      ])
+    },
     'overlay-root-response-guard': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',
