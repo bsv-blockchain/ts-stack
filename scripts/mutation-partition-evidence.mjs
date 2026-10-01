@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
   partitionMutationTarget,
+  partitionedMutationTargets,
   selectedMutationPartition,
   mutationExecutionMatrix
 } from './mutation-partitions.mjs'
@@ -179,7 +180,7 @@ function packetDirectories(directory, file) {
 }
 function parseArguments(argv) {
   const [command, ...rest] = argv
-  if (!['matrix', 'capture', 'verify', 'recheck'].includes(command))
+  if (!['matrix', 'targets', 'capture', 'verify', 'recheck'].includes(command))
     throw new Error('Unknown partition command')
   const options = { command }
   for (let index = 0; index < rest.length; index += 2) {
@@ -219,6 +220,10 @@ async function main(argv) {
   const targets = buildMutationTargets(ROOT)
   if (options.command === 'matrix') {
     console.log(JSON.stringify(mutationExecutionMatrix(JSON.parse(options.selected), targets)))
+    return
+  }
+  if (options.command === 'targets') {
+    console.log(JSON.stringify(partitionedMutationTargets(JSON.parse(options.selected), targets)))
     return
   }
   const { identity, policy, parts, canonical } = await context(
