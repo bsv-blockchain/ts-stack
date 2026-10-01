@@ -4,33 +4,7 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.15.0
-
-- `StorageKnex` runs on Postgres through the knex `pg` client. Settings report
-  `dbtype: 'Postgres'`, and `StorageClient` accepts that value from a remote
-  `StorageServer`; older clients reject it. Install `pg` in the application.
-- On a Postgres knex, `StorageKnex` sets an int8 parser on each connection it
-  acquires, so bigint columns and counts come back as numbers, as with mysql2
-  and better-sqlite3. The process-wide `pg.types` defaults are not changed.
-  `usePostgresInt8Numbers(knex)` applies the same parser to a knex directly, and
-  `Setup.createPostgresKnex(connectionJson, database)` creates one with it.
-- Postgres runs at READ COMMITTED. The findOrInsert helpers retry a failed
-  insert as a find in the same transaction; on Postgres the insert now runs in
-  a savepoint so the transaction stays usable. `allocateChangeInput` re-checks
-  action batch reservations after taking the output row lock.
-- On Postgres, migrations that add indexes to existing tables run outside a
-  transaction and use `CREATE INDEX CONCURRENTLY IF NOT EXISTS`; an invalid
-  index left by an interrupted build is dropped and rebuilt. `StorageKnex.migrate`
-  runs Postgres migrations one at a time so every other migration keeps its
-  journal row in its own transaction. SQLite and MySQL migrations are unchanged.
-- `adminStats` and the admin server's proof request review run on MySQL and
-  Postgres. `adminStats` still reports `WERR_NOT_IMPLEMENTED` on SQLite.
-- `MonitorDaemon` accepts `postgresConnection` (JSON node-postgres config), and
-  the operator `monitor-daemon` command accepts `--database-client postgres`.
-- `ChaintracksStorageKnex` rejects a Postgres knex before running migrations.
-- Paged `StorageKnex` find queries and the `get*ForUser` sync queries order rows
-  by key. Without an order, Postgres could return consecutive LIMIT/OFFSET pages
-  in different orders, so `getSyncChunk` repeated some rows and skipped others.
+## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
   aliases when `createAction` or `signAction` reports them as `sending` or

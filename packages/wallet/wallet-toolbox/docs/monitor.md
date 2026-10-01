@@ -80,7 +80,6 @@ export interface MonitorDaemonSetup {
     chain?: Chain;
     sqliteFilename?: string;
     mySQLConnection?: string;
-    postgresConnection?: string;
     knexConfig?: Knex.Config;
     knex?: Knex<any, any[]>;
     storageKnexOptions?: StorageKnexOptions;
@@ -95,14 +94,6 @@ export interface MonitorDaemonSetup {
 ```
 
 See also: [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [Monitor](./monitor.md#class-monitor), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [Services](./services.md#class-services), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WalletStorageManager](./storage.md#class-walletstoragemanager)
-
-###### Property postgresConnection
-
-JSON node-postgres connection config.
-
-```ts
-postgresConnection?: string
-```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -230,7 +221,6 @@ export interface ReviewHeightRangeResult {
     mismatchedHeights: number;
     affectedTransactions: number;
     updatedTransactions: number;
-    unresolvedHeights: number[];
 }
 ```
 
@@ -324,7 +314,7 @@ and potentially that reorgs update proofs that were already received.
 
 ```ts
 export class Monitor {
-    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: ChaintracksClientApi, startupTaskMode: MonitorStartupTaskMode = "none"): MonitorOptions 
+    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: ChaintracksClientApi, startupTaskMode: MonitorStartupTaskMode = "none"): MonitorOptions
     options: MonitorOptions;
     services: Services | WalletServices;
     chain: Chain;
@@ -337,9 +327,9 @@ export class Monitor {
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
     onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
-    get ready(): Promise<void> 
-    constructor(options: MonitorOptions) 
-    async destroy(): Promise<void> 
+    get ready(): Promise<void>
+    constructor(options: MonitorOptions)
+    async destroy(): Promise<void>
     static readonly oneSecond = 1000;
     static readonly oneMinute = 60 * Monitor.oneSecond;
     static readonly oneHour = 60 * Monitor.oneMinute;
@@ -356,31 +346,31 @@ export class Monitor {
         purgeCompletedAge: 2 * Monitor.oneWeek,
         purgeFailedAge: 5 * Monitor.oneDay
     };
-    addAllTasksToOther(): void 
-    addDefaultTasks(): void 
-    addMultiUserTasks(): void 
-    addTask(task: WalletMonitorTask): void 
-    removeTask(name: string): void 
-    async runTask(name: string): Promise<string> 
-    async runOnce(): Promise<void> 
+    addAllTasksToOther(): void
+    addDefaultTasks(): void
+    addMultiUserTasks(): void
+    addTask(task: WalletMonitorTask): void
+    removeTask(name: string): void
+    async runTask(name: string): Promise<string>
+    async runOnce(): Promise<void>
     _runAsyncSetup: boolean = true;
     _tasksRunningPromise?: PromiseLike<void>;
     resolveCompletion: ((value: void | PromiseLike<void>) => void) | undefined = undefined;
-    async startTasks(): Promise<void> 
-    async logEvent(event: string, details?: string): Promise<void> 
-    stopTasks(): void 
+    async startTasks(): Promise<void>
+    async logEvent(event: string, details?: string): Promise<void>
+    stopTasks(): void
     lastNewHeader: BlockHeader | undefined;
     lastNewHeaderWhen: Date | undefined;
-    processNewBlockHeader(header: BlockHeader): void 
-    callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void 
-    callOnProvenTransaction(txStatus: ProvenTransactionStatus): void 
-    callOnTransactionStatusChanged(txid: string, newStatus: string): void 
-    async fetchSSEEvents(): Promise<number> 
+    processNewBlockHeader(header: BlockHeader): void
+    callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void
+    callOnProvenTransaction(txStatus: ProvenTransactionStatus): void
+    callOnTransactionStatusChanged(txid: string, newStatus: string): void
+    async fetchSSEEvents(): Promise<number>
     deactivatedHeaders: DeactivedHeader[] = [];
-    processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
-    enqueueDeactivatedHeader(item: DeactivedHeader): void 
-    shiftDeactivatedHeader(): DeactivedHeader | undefined 
-    processHeader(header: BlockHeader): void 
+    processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void
+    enqueueDeactivatedHeader(item: DeactivedHeader): void
+    shiftDeactivatedHeader(): DeactivedHeader | undefined
+    processHeader(header: BlockHeader): void
 }
 ```
 
@@ -409,7 +399,7 @@ See also: [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 Default tasks with settings appropriate for a single user storage
 
 ```ts
-addDefaultTasks(): void 
+addDefaultTasks(): void
 ```
 
 ###### Method addMultiUserTasks
@@ -417,7 +407,7 @@ addDefaultTasks(): void
 Tasks appropriate for multi-user storage
 
 ```ts
-addMultiUserTasks(): void 
+addMultiUserTasks(): void
 ```
 
 ###### Method callOnBroadcastedTransaction
@@ -427,7 +417,7 @@ This is a function run from a TaskSendWaiting Monitor task.
 This allows the user of wallet-toolbox to 'subscribe' for transaction broadcast updates.
 
 ```ts
-callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void 
+callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void
 ```
 See also: [ReviewActionResult](./client.md#interface-reviewactionresult)
 
@@ -438,7 +428,7 @@ This is a function run from a TaskCheckForProofs Monitor task.
 This allows the user of wallet-toolbox to 'subscribe' for transaction updates.
 
 ```ts
-callOnProvenTransaction(txStatus: ProvenTransactionStatus): void 
+callOnProvenTransaction(txStatus: ProvenTransactionStatus): void
 ```
 See also: [ProvenTransactionStatus](./client.md#interface-proventransactionstatus)
 
@@ -447,7 +437,7 @@ See also: [ProvenTransactionStatus](./client.md#interface-proventransactionstatu
 Called by TaskArcadeSSE when an SSE status event is received from Arcade.
 
 ```ts
-callOnTransactionStatusChanged(txid: string, newStatus: string): void 
+callOnTransactionStatusChanged(txid: string, newStatus: string): void
 ```
 
 ###### Method fetchSSEEvents
@@ -456,7 +446,7 @@ Fetch pending transaction status events from Arcade on demand.
 Call this on app open, balance refresh, transaction list view, etc.
 
 ```ts
-async fetchSSEEvents(): Promise<number> 
+async fetchSSEEvents(): Promise<number>
 ```
 
 ###### Method processHeader
@@ -467,7 +457,7 @@ To minimize reorg processing, new headers are aged before processing via TaskNew
 Therefore this handler is intentionally a no-op.
 
 ```ts
-processHeader(header: BlockHeader): void 
+processHeader(header: BlockHeader): void
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
 
@@ -478,7 +468,7 @@ Process new chain header event received from Chaintracks
 Kicks processing 'unconfirmed' and 'unmined' request processing.
 
 ```ts
-processNewBlockHeader(header: BlockHeader): void 
+processNewBlockHeader(header: BlockHeader): void
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
 
@@ -494,7 +484,7 @@ It is possible for a transaction to become invalid.
 Coinbase transactions always become invalid.
 
 ```ts
-processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
+processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
 
@@ -509,12 +499,12 @@ export class MonitorDaemon {
     doneListening?: Promise<void>;
     doneTasks?: Promise<void>;
     stopDaemon: boolean = false;
-    constructor(public args: MonitorDaemonSetup, public noRunTasks?: boolean) 
-    async createSetup(): Promise<void> 
-    async start(): Promise<void> 
-    async stop(): Promise<void> 
-    async destroy(): Promise<void> 
-    async runDaemon(): Promise<void> 
+    constructor(public args: MonitorDaemonSetup, public noRunTasks?: boolean)
+    async createSetup(): Promise<void>
+    async start(): Promise<void>
+    async stop(): Promise<void>
+    async destroy(): Promise<void>
+    async runDaemon(): Promise<void>
 }
 ```
 
@@ -533,14 +523,14 @@ when transactions are MINED.
 export class TaskArcadeSSE extends WalletMonitorTask {
     static readonly taskName = "ArcadeSSE";
     sseClient: ArcSSEClient | null = null;
-    constructor(monitor: Monitor) 
-    override async asyncSetup(): Promise<void> 
+    constructor(monitor: Monitor)
+    override async asyncSetup(): Promise<void>
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
-    async fetchNow(): Promise<number> 
-    close(): void 
+    }
+    async runTask(): Promise<string>
+    async fetchNow(): Promise<number>
+    close(): void
 }
 ```
 
@@ -551,7 +541,7 @@ See also: [ArcSSEClient](./services.md#class-arcsseclient), [Monitor](./monitor.
 Close the live stream and reject any unacknowledged monitor event.
 
 ```ts
-close(): void 
+close(): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -573,13 +563,13 @@ the original ProvenTxReq status is advanced to 'notifying'.
 ```ts
 export class TaskCheckForProofs extends WalletMonitorTask {
     static readonly taskName = "CheckForProofs";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
-    constructor(monitor: Monitor, public triggerMsecs = 0) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
+    constructor(monitor: Monitor, public triggerMsecs = 0)
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -592,7 +582,7 @@ Normally triggered by checkNow getting set by new block header found event from 
 ```ts
 trigger(_nowMsecsSinceEpoch: number): {
     run: boolean;
-} 
+}
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -651,8 +641,8 @@ even if the aging schedule on the checkNow path defers them.
 ```ts
 export class TaskCheckNoSends extends WalletMonitorTask {
     static readonly taskName = "CheckNoSends";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
     static readonly tier0FreshSkipMsecs = 5 * 60 * 1000;
     static readonly tier1EveryBlockMsecs = 60 * 60 * 1000;
     static readonly tier2HourlyMsecs = 24 * 60 * 60 * 1000;
@@ -660,12 +650,12 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     static readonly tier2BlockInterval = 6;
     static readonly tier3BlockInterval = 144;
     static readonly tier4BlockInterval = 1008;
-    static shouldCheckOnCheckNow(createdAt: Date, nowMs: number, currentBlockHeight: number, provenTxReqId: number): boolean 
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneDay * 1) 
+    static shouldCheckOnCheckNow(createdAt: Date, nowMs: number, currentBlockHeight: number, provenTxReqId: number): boolean
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneDay * 1)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -692,7 +682,7 @@ across the modulo cycle). See class docstring for the full schedule
 and staggering rationale.
 
 ```ts
-static shouldCheckOnCheckNow(createdAt: Date, nowMs: number, currentBlockHeight: number, provenTxReqId: number): boolean 
+static shouldCheckOnCheckNow(createdAt: Date, nowMs: number, currentBlockHeight: number, provenTxReqId: number): boolean
 ```
 
 ###### Method trigger
@@ -702,7 +692,7 @@ Normally triggered by checkNow getting set by new block header found event from 
 ```ts
 trigger(nowMsecsSinceEpoch: number): {
     run: boolean;
-} 
+}
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -715,11 +705,11 @@ Releases expired action-batch reservations and incomplete staged blobs.
 ```ts
 export class TaskCleanupActionBatches extends WalletMonitorTask {
     static readonly taskName = "CleanupActionBatches";
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -734,12 +724,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class TaskClock extends WalletMonitorTask {
     static readonly taskName = "Clock";
     nextMinute: number;
-    constructor(monitor: Monitor, public triggerMsecs = 1 * Monitor.oneSecond) 
+    constructor(monitor: Monitor, public triggerMsecs = 1 * Monitor.oneSecond)
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
-    getNextMinute(): number 
+    }
+    async runTask(): Promise<string>
+    getNextMinute(): number
 }
 ```
 
@@ -760,11 +750,11 @@ outputs are not spendable.
 ```ts
 export class TaskFailAbandoned extends WalletMonitorTask {
     static readonly taskName = "FailAbandoned";
-    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 5) 
+    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 5)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -778,13 +768,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class TaskMineBlock extends WalletMonitorTask {
     static readonly taskName = "MineBlock";
-    static get mineNow(): boolean 
-    static set mineNow(value: boolean) 
-    constructor(monitor: Monitor, public triggerMsecs = 10 * Monitor.oneMinute) 
+    static get mineNow(): boolean
+    static set mineNow(value: boolean)
+    constructor(monitor: Monitor, public triggerMsecs = 10 * Monitor.oneMinute)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -798,11 +788,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class TaskMonitorCallHistory extends WalletMonitorTask {
     static readonly taskName = "MonitorCallHistory";
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -830,13 +820,13 @@ export class TaskNewHeader extends WalletMonitorTask {
     header?: BlockHeader;
     queuedHeader?: BlockHeader;
     queuedHeaderWhen?: Date;
-    constructor(monitor: Monitor, public triggerMsecs = 1 * Monitor.oneMinute) 
-    async getHeader(): Promise<BlockHeader> 
-    override async asyncSetup(): Promise<void> 
+    constructor(monitor: Monitor, public triggerMsecs = 1 * Monitor.oneMinute)
+    async getHeader(): Promise<BlockHeader>
+    override async asyncSetup(): Promise<void>
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -877,7 +867,7 @@ and sometimes which block. In the case of coinbase transactions, a transaction m
 also fail after a reorg.
 
 ```ts
-override async asyncSetup(): Promise<void> 
+override async asyncSetup(): Promise<void>
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -892,12 +882,12 @@ access to wallet keys and is safe to run in a remote storage monitor.
 ```ts
 export class TaskNoSendExpiry extends WalletMonitorTask {
     static readonly taskName = "NoSendExpiry";
-    static requestCheck(): void 
-    constructor(monitor: Monitor, public triggerMsecs = 5 * Monitor.oneSecond) 
+    static requestCheck(): void
+    constructor(monitor: Monitor, public triggerMsecs = 5 * Monitor.oneSecond)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -911,13 +901,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class TaskPurge extends WalletMonitorTask {
     static readonly taskName = "Purge";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
-    constructor(monitor: Monitor, public params: TaskPurgeParams, public triggerMsecs = 0) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
+    constructor(monitor: Monitor, public params: TaskPurgeParams, public triggerMsecs = 0)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -937,11 +927,11 @@ never mutate storage; only a provider's explicit terminal verdict does.
 export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     static readonly taskName = "ReconcilePendingTransactions";
     triggerNextMsecs: number;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -979,11 +969,11 @@ createAction fails to verify a generated beef against the chaintracker.
 export class TaskReorg extends WalletMonitorTask {
     static readonly taskName = "Reorg";
     process: DeactivedHeader[] = [];
-    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3) 
+    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -996,7 +986,7 @@ Shift aged deactivated headers onto `process` array.
 ```ts
 trigger(nowMsecsSinceEpoch: number): {
     run: boolean;
-} 
+}
 ```
 
 Returns
@@ -1019,18 +1009,18 @@ back to 'unfail' so existing recovery handling can re-process them.
 ```ts
 export class TaskReviewDoubleSpends extends WalletMonitorTask {
     static readonly taskName = "ReviewDoubleSpends";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
     triggerNextMsecs: number;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute * 1) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute * 1)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
+    }
     async getLastReviewedCheckpoint(): Promise<{
         resumeOffset: number;
         expectedProvenTxReqId?: number;
-    } | undefined> 
-    async runTask(): Promise<string> 
+    } | undefined>
+    async runTask(): Promise<string>
 }
 ```
 
@@ -1050,17 +1040,16 @@ the currently canonical merkleRoot at a height no longer matches stored proven_t
 ```ts
 export class TaskReviewProvenTxs extends WalletMonitorTask {
     static readonly taskName = "ReviewProvenTxs";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
     triggerNextMsecs: number;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10, public maxHeightsPerRun = 100, public minBlockAge = 100, public triggerQuickMsecs = Monitor.oneMinute * 1, public maxRetryHeightsPerRun = 25) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10, public maxHeightsPerRun = 100, public minBlockAge = 100, public triggerQuickMsecs = Monitor.oneMinute * 1)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
-    async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> 
-    async getLastReviewedHeight(): Promise<number | undefined> 
-    async getLastCheckpoint(): Promise<Partial<ReviewProvenTxsCheckpoint> | undefined> 
+    }
+    async runTask(): Promise<string>
+    async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult>
+    async getLastReviewedHeight(): Promise<number | undefined>
 }
 ```
 
@@ -1082,13 +1071,13 @@ Looks for reqs with 'invalid' status that have corresonding transactions with st
 ```ts
 export class TaskReviewStatus extends WalletMonitorTask {
     static readonly taskName = "ReviewStatus";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
-    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 15, public agedMsecs = 1000 * 60 * 5) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
+    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 15, public agedMsecs = 1000 * 60 * 5)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -1111,20 +1100,20 @@ The task itself is disabled and will not run on a schedule; review must be trigg
 ```ts
 export class TaskReviewUtxos extends WalletMonitorTask {
     static readonly taskName = "ReviewUtxos";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
     public triggerMsecs: number;
     public userLimit: number;
     public userOffset: number;
     public tags: string[];
-    constructor(monitor: Monitor, triggerMsecs = 0, userLimit = 10, userOffset = 0, tags: string[] = ["all"]) 
+    constructor(monitor: Monitor, triggerMsecs = 0, userLimit = 10, userOffset = 0, tags: string[] = ["all"])
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
-    async reviewByIdentityKey(identityKey: string, mode: "all" | "change" = "all", release = false): Promise<string> 
-    async reviewPageByIdentityKey(identityKey: string, mode: "all" | "change" = "all", release = false, pageLimit = REVIEW_PAGE_DEFAULT_LIMIT, offset = 0): Promise<TaskReviewUtxosPageResult> 
-    async reviewManagedChangeByIdentityKey(identityKey: string): Promise<string> 
+    }
+    async runTask(): Promise<string>
+    async reviewByIdentityKey(identityKey: string, mode: "all" | "change" = "all", release = false): Promise<string>
+    async reviewPageByIdentityKey(identityKey: string, mode: "all" | "change" = "all", release = false, pageLimit = REVIEW_PAGE_DEFAULT_LIMIT, offset = 0): Promise<TaskReviewUtxosPageResult>
+    async reviewManagedChangeByIdentityKey(identityKey: string): Promise<string>
 }
 ```
 
@@ -1137,7 +1126,7 @@ has no signing authority; progressive migration occurs only during a
 caller-authorized createAction.
 
 ```ts
-async reviewManagedChangeByIdentityKey(identityKey: string): Promise<string> 
+async reviewManagedChangeByIdentityKey(identityKey: string): Promise<string>
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1151,12 +1140,12 @@ export class TaskSendWaiting extends WalletMonitorTask {
     lastSendingRunMsecsSinceEpoch: number | undefined;
     includeSending: boolean = true;
     triggerNextMsecs: number;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
-    async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> 
+    }
+    async runTask(): Promise<string>
+    async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string>
 }
 ```
 
@@ -1165,7 +1154,7 @@ See also: [Monitor](./monitor.md#class-monitor), [TableProvenTxReq](./storage.md
 ###### Constructor
 
 ```ts
-constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
+constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100)
 ```
 See also: [Monitor](./monitor.md#class-monitor)
 
@@ -1201,7 +1190,7 @@ Add mapi responses to database table if received.
 Increments attempts if sending was attempted.
 
 ```ts
-async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> 
+async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string>
 ```
 See also: [TableProvenTxReq](./storage.md#interface-tableproventxreq)
 
@@ -1213,11 +1202,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class TaskSyncWhenIdle extends WalletMonitorTask {
     static readonly taskName = "SyncWhenIdle";
-    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 1) 
+    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 1)
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
 }
 ```
 
@@ -1240,17 +1229,17 @@ If it fails (to find a merklePath), returns the req status to 'invalid'.
 ```ts
 export class TaskUnFail extends WalletMonitorTask {
     static readonly taskName = "UnFail";
-    static get checkNow(): boolean 
-    static set checkNow(value: boolean) 
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10) 
+    static get checkNow(): boolean
+    static set checkNow(value: boolean)
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    } 
-    async runTask(): Promise<string> 
+    }
+    async runTask(): Promise<string>
     async unfail(reqs: TableProvenTxReq[], indent = 0): Promise<{
         log: string;
-    }> 
-    async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string> 
+    }>
+    async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string>
 }
 ```
 
@@ -1263,7 +1252,7 @@ See also: [EntityProvenTxReq](./storage.md#class-entityproventxreq), [Monitor](.
 4. set the txs outputs to spendable
 
 ```ts
-async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string> 
+async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string>
 ```
 See also: [EntityProvenTxReq](./storage.md#class-entityproventxreq)
 
@@ -1290,8 +1279,8 @@ This is done by accessing the wathman.storage object.
 export abstract class WalletMonitorTask {
     lastRunMsecsSinceEpoch = 0;
     storage: MonitorStorage;
-    constructor(public monitor: Monitor, public name: string) 
-    async asyncSetup(): Promise<void> 
+    constructor(public monitor: Monitor, public name: string)
+    async asyncSetup(): Promise<void>
     abstract trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
     };
@@ -1316,7 +1305,7 @@ Override to handle async task setup configuration.
 Called before first call to `trigger`
 
 ```ts
-async asyncSetup(): Promise<void> 
+async asyncSetup(): Promise<void>
 ```
 
 ###### Method trigger
@@ -1351,7 +1340,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: copyMonitorTags
 
 ```ts
-export function copyMonitorTags(value: unknown, name = "tags"): string[] 
+export function copyMonitorTags(value: unknown, name = "tags"): string[]
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1360,7 +1349,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: copyValidatedMonitorHeader
 
 ```ts
-export function copyValidatedMonitorHeader(value: unknown, name = "header", requireProofOfWork = true): BlockHeader 
+export function copyValidatedMonitorHeader(value: unknown, name = "header", requireProofOfWork = true): BlockHeader
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -1390,7 +1379,7 @@ export async function getProofs(task: WalletMonitorTask, reqs: TableProvenTxReq[
         status: ProvenTxReqStatus;
     }>;
     log: string;
-}> 
+}>
 ```
 
 See also: [ProvenTxReqStatus](./client.md#type-proventxreqstatus), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
@@ -1405,7 +1394,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeMonitorIdentityKey
 
 ```ts
-export function normalizeMonitorIdentityKey(value: unknown, name = "identityKey"): string 
+export function normalizeMonitorIdentityKey(value: unknown, name = "identityKey"): string
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1414,7 +1403,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: optionalMonitorInteger
 
 ```ts
-export function optionalMonitorInteger(value: unknown, minimum: number, maximum: number): number | undefined 
+export function optionalMonitorInteger(value: unknown, minimum: number, maximum: number): number | undefined
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1423,7 +1412,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: requireMonitorInteger
 
 ```ts
-export function requireMonitorInteger(value: unknown, name: string, minimum: number, maximum: number): number 
+export function requireMonitorInteger(value: unknown, name: string, minimum: number, maximum: number): number
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1432,7 +1421,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateMonitorOptions
 
 ```ts
-export function validateMonitorOptions(value: unknown): void 
+export function validateMonitorOptions(value: unknown): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
