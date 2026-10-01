@@ -271,14 +271,19 @@ test('holds physical work capacity until stalled admission settles, then release
     throw new Error('delayed failure')
   })
   const first = bridge.recover(f.job, f.proposal, f.selection, f.context)
-  const failed = expect(first).rejects.toThrow('delayed failure')
-  await expect(bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'limited',
-    retryable: true
-  })
-  expect(f.read).toHaveBeenCalledTimes(1)
-  release()
-  await failed
+  // Observe either settlement immediately. A mutant that resolves this call
+  // must fail an awaited assertion rather than reject an unobserved matcher.
+  const settled = Promise.allSettled([first])
+  try {
+    await expect(bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
+      code: 'limited',
+      retryable: true
+    })
+    expect(f.read).toHaveBeenCalledTimes(1)
+  } finally {
+    release()
+  }
+  expect(await settled).toEqual([{ status: 'rejected', reason: new Error('delayed failure') }])
   f.read.mockResolvedValue({ state: 'committed', admission: retained() })
   expect(await bridge.recover(f.job, f.proposal, f.selection, f.context)).toMatchObject({
     status: 'admitted'
