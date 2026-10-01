@@ -155,6 +155,16 @@ unresolved; configure retained-history storage explicitly. Actual Engine/Mongo
 restart and lost-response tests qualify this boundary separately from the
 remaining complete HTTP and application composition.
 
+`SQLiteProposalJournal` also exposes the optional `ProposalJournalSend` companion.
+It reads the exact current channel or retained proposal under its writer lock,
+rechecks a trusted synchronous disclosure predicate and enters the native response
+queue before unlocking. The predicate must bind the outgoing bytes, original
+contract, retention and current access; missing records never authorize disclosure.
+Hydration and signing happen beforehand. Owned inputs, a 1 MiB response bound,
+reentry checks and independent-writer serialization leave existing journal bytes
+and APIs unchanged. This primitive is not a complete HTTP service; see the package
+guide for policy coherence and post-enqueue failure semantics.
+
 The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/application/output-knowledge/README.md)
 contains composition examples, recovery semantics, resource limits and the current
 qualification boundary. Exact exports and declarations are listed in the

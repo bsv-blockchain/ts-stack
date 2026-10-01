@@ -1040,3 +1040,41 @@ export async function assessInstalledRootRules(
   }
 }
 ```
+
+## Proposal response enqueue after signing
+
+Capture the exact record used to prepare a response. The final transport guard
+calls this helper only after signing, supplying the actual native enqueue. The
+fresh disclosure predicate checks current access, the retained capability and
+its deadline, and the relationship between the response bytes and that record.
+It must run synchronously under the journal gate. Control errors use a separate,
+explicit authorization path; a missing record is never sufficient.
+
+```typescript compile
+// example-id: proposal-native-enqueue
+import { canonicalOutputJSON as proposalCanonicalJSON } from '@bsv/sdk'
+import type {
+  ProposalJournalEntry,
+  ProposalJournalResponseReference,
+  ProposalJournalSend
+} from '@bsv/output-knowledge/proposals'
+
+export async function enqueuePreparedProposal(
+  journal: ProposalJournalSend,
+  reference: ProposalJournalResponseReference,
+  observedEntry: ProposalJournalEntry,
+  signedBodyBytes: Uint8Array,
+  currentDisclosure: (entry: ProposalJournalEntry, bytes: Uint8Array) => boolean,
+  nativeEnqueue: (bytes: Uint8Array) => undefined
+): Promise<void> {
+  const observed = proposalCanonicalJSON(observedEntry, { bytes: 4194304 })
+  await journal.enqueueResponse(
+    { reference, bytes: signedBodyBytes },
+    (entry, bytes) =>
+      entry !== undefined &&
+      proposalCanonicalJSON(entry, { bytes: 4194304 }) === observed &&
+      currentDisclosure(entry, bytes),
+    nativeEnqueue
+  )
+}
+```

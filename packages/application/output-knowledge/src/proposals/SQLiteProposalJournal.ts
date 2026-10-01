@@ -3,6 +3,8 @@ import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import {
   canonicalOutputJSON,
+  closedOutputObject,
+  outputHex32,
   outputString,
   outputU64,
   OutputProtocolError,
@@ -22,6 +24,10 @@ import type {
   ProposalTransition,
   ProposalChannelRecord
 } from './ProposalTransitions.js'
+import type {
+  ProposalJournalSend,
+  ProposalJournalResponseReference
+} from './ProposalJournalSend.js'
 
 const position = (value: string): string => outputU64(value).toString(16).padStart(16, '0')
 function decimal(value: unknown): string {
@@ -31,13 +37,15 @@ function decimal(value: unknown): string {
 }
 
 /** Node-only WAL/FULL reference journal. The event, head, operation claim and job are one commit. */
-export class SQLiteProposalJournal implements ProposalJournalStorage {
+export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJournalSend {
   readonly durability = 'durable' as const
   readonly contextRetention = 'proposal-journal-context/1' as const
   readonly completionReservation = 'proposal-journal-completion/1' as const
+  readonly responseEnqueue = 'proposal-journal-send/1' as const
   private readonly database: DatabaseSync
   private readonly state: ProposalJournalState
   private closed = false
+  private sending = false
 
   constructor(
     path: string,
@@ -196,8 +204,84 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
     })
   }
 
+  enqueueResponse(
+    candidate: { reference: ProposalJournalResponseReference; bytes: Uint8Array },
+    validate: (entry: ProposalJournalEntry | undefined, bytes: Uint8Array) => boolean,
+    enqueue: (bytes: Uint8Array) => undefined
+  ): Promise<void> {
+    return synchronousPromise(() => {
+      this.ready()
+      closedOutputObject(candidate, ['reference', 'bytes'])
+      if (!(candidate.bytes instanceof Uint8Array) || candidate.bytes.byteLength > 4194304)
+        throw new OutputProtocolError('invalid', 'Invalid proposal response byte capacity')
+      const reference = candidate.reference
+      closedOutputObject(reference, ['kind'], ['channelKey', 'proposalId'])
+      if (reference.kind === 'channel') {
+        closedOutputObject(reference, ['kind', 'channelKey'])
+        outputString(reference.channelKey)
+      } else if (reference.kind === 'proposal') {
+        closedOutputObject(reference, ['kind', 'proposalId'])
+        outputHex32(reference.proposalId)
+      } else if (reference.kind === 'control') closedOutputObject(reference, ['kind'])
+      else throw new OutputProtocolError('invalid', 'Invalid proposal response reference')
+      if (
+        typeof validate !== 'function' ||
+        typeof enqueue !== 'function' ||
+        validate.constructor.name === 'AsyncFunction' ||
+        enqueue.constructor.name === 'AsyncFunction'
+      )
+        throw new OutputProtocolError('invalid', 'Proposal response callbacks must be synchronous')
+      const bytes = candidate.bytes.slice()
+      try {
+        this.database.exec('BEGIN IMMEDIATE')
+      } catch (error) {
+        if (
+          error !== null &&
+          typeof error === 'object' &&
+          'errcode' in error &&
+          (error.errcode === 5 || error.errcode === 6)
+        )
+          throw new OutputProtocolError('unavailable', 'Proposal journal is busy', true)
+        throw error
+      }
+      this.sending = true
+      try {
+        this.refresh()
+        const entry =
+          reference.kind === 'channel'
+            ? this.state.channelEntry(reference.channelKey)
+            : reference.kind === 'proposal'
+              ? this.state.proposalEntry(reference.proposalId)
+              : undefined
+        if (validate(entry, bytes.slice()) !== true)
+          throw new OutputProtocolError('unauthorized', 'Proposal response is no longer authorized')
+        if (enqueue(bytes) !== undefined)
+          throw new OutputProtocolError('invalid', 'Proposal response enqueue must be synchronous')
+        this.database.exec('COMMIT')
+      } catch (error) {
+        try {
+          this.database.exec('ROLLBACK')
+        } catch {
+          // After an uncertain completion, never reuse this send connection.
+          // The caller separately tracks whether native enqueue already ran.
+          this.closed = true
+          try {
+            this.database.close()
+          } catch {
+            // Preserve the original failure; the connection is already retired.
+          }
+        }
+        throw error
+      } finally {
+        this.sending = false
+      }
+    })
+  }
+
   close(): Promise<void> {
     return synchronousPromise(() => {
+      if (this.sending)
+        throw new OutputProtocolError('unavailable', 'Proposal journal is reentered')
       if (!this.closed) {
         this.database.close()
         this.closed = true
@@ -283,6 +367,7 @@ export class SQLiteProposalJournal implements ProposalJournalStorage {
 
   private ready(): void {
     if (this.closed) throw new OutputProtocolError('unavailable', 'Proposal journal is closed')
+    if (this.sending) throw new OutputProtocolError('unavailable', 'Proposal journal is reentered')
   }
 
   private rollback(): void {

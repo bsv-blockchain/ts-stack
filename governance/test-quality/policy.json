@@ -1134,6 +1134,18 @@
           "A later reservation or index observation cannot relabel the historical topic assessment.",
           "An already retained admission is recovered without a second topic submission."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-send.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable proposal record, authorization and actual native response enqueue under one cross-process writer gate",
+        "target": "At least 300 generated current/historical proposal, update, authorization and reopen schedules",
+        "invariants": [
+          "Native enqueue requires the exact selected retained record and current trusted authorization under the writer lock.",
+          "Unrelated channel changes do not invalidate an unchanged selected record.",
+          "Reopening preserves original records and send checks without inventing delivery rollback or rewriting history."
+        ]
       }
     ],
     "exclusions": [

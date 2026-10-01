@@ -926,6 +926,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-journal-send",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-send.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable proposal record, authorization and actual native response enqueue under one cross-process writer gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

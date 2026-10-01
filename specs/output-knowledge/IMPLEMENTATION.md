@@ -103,8 +103,8 @@ submission and GASP behavior remains available to applications that do not opt i
   default receipts and leaving older unbound provenance unresolved.
 - An optional bounded Engine proposal-admission bridge, recovering original
   retained receipts and projecting only the selected topic. Actual Engine/Mongo
-  restart and lost-response tests pass; complete mutation qualification and full
-  HTTP/service composition remain required.
+  restart and lost-response tests pass, and complete-source mutation passes
+  96.88%; full HTTP/service composition remains required.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
@@ -1115,8 +1115,9 @@ concurrent calls and a response lost after actual Engine commit. The synthetic
 chain tracker and absent broadcaster/advertiser isolate these tests from public
 network or funded effects. The full run includes owned critical-extension support, independently bound
 selection/signature checks and valid empty retained receipts. Two subsequent
-test-only cases cover missing advertised services/profiles; 58 focused cases now
-pass, including a 300-case property. The full 899-test run preceded those two
+test-only cases cover missing advertised services/profiles, independent selection
+identities, exact error contracts and preflight capacity; 65 focused cases now
+pass, including a 300-case property. The full 899-test run preceded those
 additional cases.
 
 Strict production and new test compilation are part of the package typecheck.
@@ -1125,6 +1126,49 @@ and 32 compiled examples against 22 exact tarballs pass. The compiled example
 returns this bridge through the actual proposal-service port type. The complete
 source and generated property are registered with the unchanged critical
 90%/zero-uncovered/zero-invalid gate. Both Overlay property suites pass, as do
-all 34 governance regressions and repository health checks. Mutation execution
-and full HTTP/lifecycle composition remain pending; these results do not
-establish checkpoint-two readiness.
+all 34 governance regressions and repository health checks. The complete
+321-mutant bridge campaign passes at 96.88%: 311 killed and 10 survived, with
+zero uncovered or invalid results, in 4 minutes 33 seconds. One native worker
+SIGSEGV was recovered; its diagnostic remains retained. The earlier complete
+84.42% failed run is also preserved. Stronger independent contract assertions
+closed its test gaps without changing production source, thresholds or scope.
+Full HTTP/lifecycle composition remains pending; these results do not establish
+checkpoint-two readiness.
+
+## Proposal responses at native enqueue
+
+The optional `ProposalJournalSend` companion is implemented by the durable
+`SQLiteProposalJournal`. It accepts a trusted local selector for a current
+channel, retained proposal or sanitized control response. After hydration and
+response signing, it obtains the same `BEGIN IMMEDIATE` lock used by proposal
+writers, refreshes committed state, supplies owned record/body copies to a
+synchronous validator and performs the actual native enqueue before releasing
+the lock. Unrelated channel appends do not invalidate a selected record. Missing
+records and control selectors confer no permission. The validator must bind the
+exact response to the original contract and retained record and recheck current
+access; the storage primitive cannot infer these application semantics. Access
+writers must participate in this gate or an explicitly coherent policy domain.
+
+Bodies are bounded to four MiB, matching the SDK response framing; selected
+contract limits may be smaller. Existing methods and persisted bytes are unchanged. Read, write and close
+reentry is rejected while sending. Signing remains outside the lock. A failure
+after native enqueue cannot undo disclosure; callers track that fact and must
+not send a replacement. If transaction completion is uncertain and rollback
+fails, the connection is retired and recovery uses a new connection. Ordinary
+memory journals do not advertise this durable companion.
+
+The full runtime passes 1,317 tests across 101 suites before the send ceiling
+was aligned from one to four MiB. All 29 focused send/disclosure tests pass
+after that bound change, including its exact boundary. The earlier focused
+63-case journal/send/process/property selection passes, including
+300 generated schedules, two real SQLite connections and child-process
+termination while the native enqueue gate is held. Tests exercise stale channel
+heads, historical proposal responses, revocation, byte/record ownership,
+contention, callback failure and lost commit acknowledgement. Whole-journal
+coverage in this selection is 98% statements and 97.46% branches; the complete
+journal/service selection is retained in the new whole-module mutation target.
+Strict production/test types, lint, artifact checks, 27 governance regressions
+and all 33 compiled examples against 22 exact package tarballs pass. The new
+mutation registration is additive, with unchanged 90%/zero-uncovered/zero-invalid
+gates. Its complete execution and authenticated HTTP/service composition are
+still pending; this primitive alone does not establish profile readiness.

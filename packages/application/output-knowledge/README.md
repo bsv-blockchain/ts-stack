@@ -774,6 +774,38 @@ recovery obligations still need recovery from the original retained storage.
 
 ### Durable proposal service composition
 
+The SQLite journal also implements the optional `ProposalJournalSend` companion,
+identified by `responseEnqueue: 'proposal-journal-send/1'`. `enqueueResponse`
+selects either the current channel head, a proposal's latest retained record, or
+an explicitly record-free control response. It refreshes that record while
+holding the same `BEGIN IMMEDIATE` lock used by every journal writer, calls a
+trusted synchronous disclosure validator, and enters the actual native send
+queue before releasing the lock. Existing journal methods and stored bytes are
+unchanged. The volatile Memory adapter does not advertise this capability.
+
+The validator must match the exact outgoing response to the selected record,
+recheck the original capability and its retention deadline, and intersect policy
+authority with current access. An undefined entry is missing data, not permission.
+A `get` response normally binds the current channel; a historical recorded
+acknowledgement or finalization lookup can select the original proposal without
+pretending it is still the channel head. Unrelated channel changes do not
+invalidate an otherwise valid response. Control errors require their own current
+authorization and must not disclose a missing or inaccessible record.
+
+Response bytes are owned and bounded to 1 MiB. The validator receives separate
+copies of both the entry and bytes; its mutations cannot change saved history or
+the queued response. It must return exactly `true`. Callbacks cannot await,
+schedule later effects, close or reenter the journal. Access writers must share
+this gate or provide an explicitly coherent policy mechanism; an unrelated
+authorization database is not automatically protected by the SQLite lock.
+Perform hydration and BRC-104 signing before entering the gate. A buffered
+`res.send` that is signed later is not native enqueue. If transport enqueue has
+already occurred, a later driver or transport error cannot undo delivery; the
+transport must track that fact and avoid sending a replacement response.
+
+This is a local persistence/transport primitive. It does not mount HTTP routes,
+choose disclosure policy, or by itself qualify the complete BRC-194 profile.
+
 `ProposalService` composes the lifecycle and durable journal behind an authenticated
 transport. Its `put`, `get` and `finalize` methods accept the BRC-194 bodies and an
 already verified caller identity and capability digest. Those two values must come

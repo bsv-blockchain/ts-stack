@@ -617,6 +617,22 @@ export function buildMutationTargets(repositoryRoot) {
         '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
       ])
     },
+    'proposal-journal-send': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/proposal-send.property.test.ts',
+      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts', 'test/fixtures/proposal*.mjs'],
+      mutate: ['src/proposals/SQLiteProposalJournal.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-journal*.test.ts',
+          '<rootDir>/test/proposal-service*.test.ts',
+          '<rootDir>/test/proposal-send*.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'overlay-proposal-admission': {
       packageDirectory: 'packages/overlays/overlay',
       manifest: 'packages/overlays/overlay/package.json',
