@@ -10,6 +10,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 1.10.4 candidate — SDK 3 peer
+
+### Changed
+
+- Accept `@bsv/sdk` `^3.0.0` as well as `^2.1.6`. Published 1.10.3 only
+  accepts `^2.1.6`, so a release that stages SDK 3 cannot install
+  `@bsv/overlay-topics`, which depends on templates. The script
+  implementation is unchanged.
+
 ### 1.10.3 candidate — CommonJS SDK interop
 
 ### Fixed

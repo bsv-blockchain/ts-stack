@@ -173,10 +173,10 @@
     },
     {
       "name": "@bsv/templates",
-      "publishedVersion": "1.10.2",
+      "publishedVersion": "1.10.3",
       "releaseType": "patch",
-      "summary": "Fixes the CommonJS build so require('@bsv/templates') consumers can construct Mandala, MultiPushDrop, OpReturn, P2MSKH and R1K1Wallet scripts again (issue #571). The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. Emits declarations for the four existing wildcard entries mandala-encoding, mandala-signing, R1K1Wallet.artifact and signing-context so strict packed ESM/CJS consumers can resolve the advertised API. Adds an SDK3 peer alternative while preserving the existing SDK2 lower bound; clean packed SDK2.8.11 and SDK3 candidate consumers are documented in the identity/DID/VC migration guide.",
-      "migration": "None. CommonJS consumers that patched 1.10.2 locally can drop the patch after upgrading to 1.10.3; ESM consumers are unaffected. SDK consumers may retain ^2.1.6 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative."
+      "summary": "Publishes the SDK 3 peer alternative already declared in source. npm @bsv/templates@1.10.3 accepts only @bsv/sdk ^2.1.6, so staging @bsv/overlay-topics@2.0.0 with the SDK 3 candidate fails peer resolution. 1.10.4 keeps the published 1.10.3 implementation and accepts @bsv/sdk ^2.1.6 || ^3.0.0.",
+      "migration": "None. Existing ^2.1.6 consumers can stay on 1.10.3. Install 1.10.4 to use the SDK 3 peer. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No templates API or wire migration is introduced."
     },
     {
       "name": "@bsv/teranode-listener",
