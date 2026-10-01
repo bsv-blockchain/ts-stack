@@ -933,8 +933,20 @@ export class MessageBoxClient {
   private connectionInitPromise?: Promise<void>
   /** Settles the in-flight `connectionInitPromise`; driven by the socket's own handlers. */
   private settleAuthWait?: (error?: Error) => void
-  /** Rooms the consumer asked for. Survives a drop; `joinedRooms` does not. */
+  /**
+   * Rooms the consumer asked for. Survives a drop; `joinedRooms` does not. Also
+   * filled by `sendLiveMessage`, so it is bounded by the distinct boxes used.
+   * Only `leaveRoom` and `disconnectWebSocket` remove from it.
+   */
   private readonly requestedRooms: Set<string> = new Set()
+  /** Live-message handlers by room. A rebuilt socket has none of its own, so they are re-attached. */
+  private roomHandlers: Array<{
+    roomId: string
+    event: string
+    handler: (message: PeerMessage) => void
+  }> = []
+  /** A wait timed out with the socket still down: it may be dead, so the next caller rebuilds. */
+  private socketStale = false
   protected originator?: OriginatorDomainNameStringUnder250Bytes
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   private readonly expectedServerIdentityByOrigin: ReadonlyMap<string, PubKeyHex>
@@ -1085,7 +1097,8 @@ export class MessageBoxClient {
    * @method getJoinedRooms
    * @returns {Set<string>} A set of currently joined WebSocket room IDs
    * @description
-   * Returns a live list of WebSocket rooms the client is subscribed to.
+   * Returns a live list of WebSocket rooms joined on the current socket. Read
+   * only: mutating it does not cancel a rejoin; use `leaveRoom`.
    * Useful for inspecting state or ensuring no duplicates are joined.
    */
   public getJoinedRooms(): Set<string> {
@@ -1228,6 +1241,16 @@ export class MessageBoxClient {
       return
     }
 
+    // Reconnection can be disabled or exhausted by the host's managerOptions, and
+    // Socket.IO exposes no signal for it here. A wait that timed out while
+    // still down is the nearest evidence; rebuild rather than reject forever.
+    if (this.socket != null && this.socketStale) {
+      const stale = this.socket
+      this.socket = undefined
+      this.socketStale = false
+      stale.disconnect()
+    }
+
     if (this.socket == null) {
       const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
       const targetOrigin = new URL(targetHost).origin
@@ -1248,11 +1271,13 @@ export class MessageBoxClient {
         ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
       })
       this.socket = socket
+      for (const { event, handler } of this.roomHandlers) socket.on(event, handler)
 
       // Fires on the first connection and on every Socket.IO reconnection.
       socket.on('connect', () => {
         if (this.socket !== socket) return
         Logger.log('[MB CLIENT] Connected to WebSocket.')
+        this.socketStale = false
 
         if (this.connectionInitPromise == null) {
           this.beginAuthWait().catch(() => {})
@@ -1323,20 +1348,22 @@ export class MessageBoxClient {
   }
 
   /**
-   * Starts the single in-flight authentication attempt and registers it as
-   * `connectionInitPromise`. The socket's long-lived handlers settle it, so no
-   * per-attempt listeners accumulate across reconnects.
+   * Starts an authentication attempt and registers it as `connectionInitPromise`.
+   * Callers must check that slot first; this does not enforce a single attempt.
+   * The socket's long-lived handlers settle it, so no per-attempt listeners
+   * accumulate across reconnects.
    */
   private beginAuthWait(): Promise<void> {
     const promise = new Promise<void>((resolve, reject) => {
       const settle = (error?: Error): void => {
         clearTimeout(timeoutId)
         if (this.connectionInitPromise === promise) this.connectionInitPromise = undefined
-        this.settleAuthWait = undefined
+        if (this.settleAuthWait === settle) this.settleAuthWait = undefined
         if (error != null) reject(error)
         else resolve()
       }
       const timeoutId = setTimeout(() => {
+        this.socketStale = !this.socketAuthenticated && this.socket?.connected !== true
         settle(
           this.socketAuthenticated
             ? undefined
@@ -1534,7 +1561,8 @@ export class MessageBoxClient {
       forbidControls: true
     })
 
-    // Returns at once when authenticated; otherwise awaits the attempt in flight.
+    // Returns at once when authenticated; otherwise awaits the attempt in flight
+    // or starts one.
     await this.initializeConnection(overrideHost)
 
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
@@ -1611,7 +1639,8 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Listening for WebSocket room messages')
 
-    this.socket?.on(`sendMessage-${roomId}`, (message: PeerMessage) => {
+    const event = `sendMessage-${roomId}`
+    const handler = (message: PeerMessage): void => {
       void (async () => {
         Logger.log('[MB CLIENT] Received a WebSocket room message')
 
@@ -1670,7 +1699,9 @@ export class MessageBoxClient {
 
         onMessage(message)
       })()
-    })
+    }
+    this.roomHandlers.push({ roomId, event, handler })
+    this.socket?.on(event, handler)
   }
 
   /**
@@ -1830,6 +1861,8 @@ export class MessageBoxClient {
     // disconnected must not be left claiming a room it will never rejoin.
     this.joinedRooms.delete(roomId)
     this.requestedRooms.delete(roomId)
+    // The live socket keeps its copy (it cannot detach), but a rebuild will not.
+    this.roomHandlers = this.roomHandlers.filter(entry => entry.roomId !== roomId)
 
     // Emitting while disconnected would buffer a leave for a room the next
     // server-side socket is not in.
@@ -1865,12 +1898,14 @@ export class MessageBoxClient {
       // Detached first so the socket's own `disconnect` event is ignored.
       this.socket = undefined
       this.socketAuthenticated = false
+      this.socketStale = false
       socket.disconnect()
       this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
     }
     // Teardown is deliberate: nothing is left to restore.
     this.joinedRooms.clear()
     this.requestedRooms.clear()
+    this.roomHandlers = []
   }
 
   /**

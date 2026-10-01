@@ -13,28 +13,44 @@ import { jest } from '@jest/globals'
  *     src/__tests/MessageBoxClient.liveSocketDefects.test.ts
  */
 
-/** Every handler per event, so listener accumulation is observable. */
-const socketOnMap: Record<string, Array<(...args: any[]) => void>> = {}
-const fire = (event: string, ...args: any[]): void => {
-  for (const handler of socketOnMap[event] ?? []) handler(...args)
+/**
+ * One mock per construction, shaped like production's AuthSocketClientImpl:
+ * `on`, `emit`, `disconnect` and `connected`, and no `off`. Handlers are kept
+ * per event so listener accumulation is observable.
+ */
+interface MockSocket {
+  handlers: Record<string, Array<(...args: any[]) => void>>
+  on: jest.Mock
+  emit: jest.Mock
+  disconnect: jest.Mock
+  connected: boolean
+  serverIdentityKey: string
 }
-
-const mockSocket = {
-  on: jest.fn((event: string, callback: (...args: any[]) => void) => {
-    ;(socketOnMap[event] ??= []).push(callback)
-  }),
-  emit: jest.fn(),
-  disconnect: jest.fn(),
-  connected: true,
-  // Really removes, as Socket.IO's does.
-  off: jest.fn((event: string, callback: (...args: any[]) => void) => {
-    socketOnMap[event] = (socketOnMap[event] ?? []).filter(h => h !== callback)
-  }),
-  serverIdentityKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+const sockets: MockSocket[] = []
+const latest = (): MockSocket => sockets[sockets.length - 1]
+const makeSocket = (): MockSocket => {
+  const socket: MockSocket = {
+    handlers: {},
+    on: jest.fn((event: string, callback: (...args: any[]) => void) => {
+      ;(socket.handlers[event] ??= []).push(callback)
+    }),
+    emit: jest.fn(),
+    disconnect: jest.fn(),
+    connected: true,
+    serverIdentityKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+  }
+  sockets.push(socket)
+  return socket
 }
+const fireOn = (socket: MockSocket, event: string, ...args: any[]): void => {
+  for (const handler of socket.handlers[event] ?? []) handler(...args)
+}
+const fire = (event: string, ...args: any[]): void => fireOn(latest(), event, ...args)
+const handlerCount = (socket: MockSocket): number =>
+  Object.values(socket.handlers).reduce((n, list) => n + list.length, 0)
 
 jest.unstable_mockModule('@bsv/authsocket-client', () => ({
-  AuthSocketClient: jest.fn(() => mockSocket)
+  AuthSocketClient: jest.fn(() => makeSocket())
 }))
 
 const { AuthSocketClient } = await import('@bsv/authsocket-client')
@@ -64,6 +80,11 @@ jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue({
   status: 200
 } as unknown as Response)
 
+/** Authenticates whichever socket exists once the client has built it. */
+const authenticateSoon = (): void => {
+  setTimeout(() => fire('authenticationSuccess'), 10)
+}
+
 const connected = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
   const client = new MessageBoxClient({
     walletClient: new WalletClient(),
@@ -71,70 +92,78 @@ const connected = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
   })
   await client.init()
   const connecting = client.initializeConnection()
-  setTimeout(() => fire('authenticationSuccess', { status: 'ok' }), 0)
+  authenticateSoon()
   await connecting
   return client
 }
 
-const joinRoomEmits = (): unknown[][] =>
-  mockSocket.emit.mock.calls.filter(call => call[0] === 'joinRoom')
+const joinRoomEmits = (socket: MockSocket): unknown[][] =>
+  socket.emit.mock.calls.filter(call => call[0] === 'joinRoom')
 
-describe('live-socket defects, as the client behaves today', () => {
+const drop = (socket: MockSocket, reason = 'transport close'): void => {
+  socket.connected = false
+  fireOn(socket, 'disconnect', reason)
+}
+
+const reconnect = (socket: MockSocket): void => {
+  socket.connected = true
+  fireOn(socket, 'connect')
+  fireOn(socket, 'authenticationSuccess')
+}
+
+describe('live-socket reconnection', () => {
   beforeEach(() => {
-    for (const event of Object.keys(socketOnMap)) delete socketOnMap[event]
-    mockSocket.emit.mockClear()
-    mockSocket.disconnect.mockClear()
-    mockSocket.connected = true
+    sockets.length = 0
+    ;(AuthSocketClient as jest.Mock).mockClear()
   })
 
   /** Membership is per socket, so a new one has to join for itself. */
   it('rejoins a room after disconnectWebSocket', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
-    expect(joinRoomEmits()).toHaveLength(1)
+    expect(joinRoomEmits(latest())).toHaveLength(1)
 
     await client.disconnectWebSocket()
     expect(client.getJoinedRooms().has(ROOM)).toBe(false)
 
-    mockSocket.emit.mockClear()
-    setTimeout(() => fire('authenticationSuccess'), 0)
+    authenticateSoon()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
-    expect(joinRoomEmits()).toHaveLength(1)
+    expect(sockets).toHaveLength(2)
+    expect(joinRoomEmits(latest())).toHaveLength(1)
   })
 
   /** A transient drop is Socket.IO's to retry; the client restores the subscription. */
   it('keeps a dropped socket and rejoins its rooms when connect fires again', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
-    const socket = client.testSocket
+    const socket = latest()
 
-    mockSocket.connected = false
-    fire('disconnect', 'transport close')
+    drop(socket)
 
     expect(client.testSocket).toBe(socket)
-    expect(mockSocket.disconnect).not.toHaveBeenCalled()
+    expect(socket.disconnect).not.toHaveBeenCalled()
     expect(client.getJoinedRooms().size).toBe(0)
 
-    mockSocket.emit.mockClear()
-    mockSocket.connected = true
-    fire('connect')
-    expect(joinRoomEmits()).toHaveLength(0)
-    fire('authenticationSuccess')
+    socket.emit.mockClear()
+    socket.connected = true
+    fireOn(socket, 'connect')
+    expect(joinRoomEmits(socket)).toHaveLength(0)
+    fireOn(socket, 'authenticationSuccess')
 
-    expect(joinRoomEmits()).toEqual([['joinRoom', ROOM]])
+    expect(joinRoomEmits(socket)).toEqual([['joinRoom', ROOM]])
     expect(client.getJoinedRooms().has(ROOM)).toBe(true)
     expect(client.testSocket).toBe(socket)
+    expect(sockets).toHaveLength(1)
   })
 
   it('joins through the attempt in flight rather than building a second connection', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
-    const constructed = (AuthSocketClient as jest.Mock).mock.calls.length
+    const socket = latest()
 
-    mockSocket.connected = false
-    fire('disconnect', 'transport close')
-    mockSocket.emit.mockClear()
+    drop(socket)
+    socket.emit.mockClear()
 
     let joined = false
     const joining = client.joinRoom('other_inbox').then(() => {
@@ -142,50 +171,87 @@ describe('live-socket defects, as the client behaves today', () => {
     })
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(joined).toBe(false)
-    expect(joinRoomEmits()).toHaveLength(0)
+    expect(joinRoomEmits(socket)).toHaveLength(0)
 
-    mockSocket.connected = true
-    fire('connect')
-    fire('authenticationSuccess')
+    reconnect(socket)
     await joining
 
-    expect((AuthSocketClient as jest.Mock).mock.calls).toHaveLength(constructed)
-    expect(joinRoomEmits().map(call => call[1])).toEqual([ROOM, `${IDENTITY}-other_inbox`])
+    expect(sockets).toHaveLength(1)
+    expect(joinRoomEmits(socket).map(call => call[1])).toEqual([ROOM, `${IDENTITY}-other_inbox`])
   })
 
   it('does not accumulate listeners across reconnects', async () => {
     const client = await connected()
-    const counts = (): number[] => Object.values(socketOnMap).map(handlers => handlers.length)
-    const before = counts()
+    const socket = latest()
+    const before = handlerCount(socket)
 
     for (let i = 0; i < 3; i++) {
-      mockSocket.connected = false
-      fire('disconnect', 'transport close')
-      mockSocket.connected = true
-      fire('connect')
-      fire('authenticationSuccess')
+      drop(socket)
+      reconnect(socket)
     }
 
-    expect(counts()).toEqual(before)
-    expect(client.testSocket).toBeDefined()
+    expect(handlerCount(socket)).toBe(before)
+    expect(client.testSocket).toBe(socket)
   })
 
   it('treats a requested disconnect as terminal', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const socket = latest()
     await client.disconnectWebSocket()
 
-    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+    expect(socket.disconnect).toHaveBeenCalledTimes(1)
     expect(client.testSocket).toBeUndefined()
-    mockSocket.emit.mockClear()
-    fire('connect')
-    fire('authenticationSuccess')
-    expect(joinRoomEmits()).toHaveLength(0)
+    socket.emit.mockClear()
+    fireOn(socket, 'connect')
+    fireOn(socket, 'authenticationSuccess')
+    expect(joinRoomEmits(socket)).toHaveLength(0)
   })
 
+  /** Socket.IO does not retry a server-forced disconnect; the rebuild must restore handlers too. */
+  it('restores rooms and message handlers on a socket rebuilt after a server disconnect', async () => {
+    const client = await connected()
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const dead = latest()
+
+    drop(dead, 'io server disconnect')
+    expect(client.testSocket).toBeUndefined()
+
+    authenticateSoon()
+    await client.joinRoom('other_inbox')
+
+    const rebuilt = latest()
+    expect(rebuilt).not.toBe(dead)
+    expect(joinRoomEmits(rebuilt).map(call => call[1])).toContain(ROOM)
+    const handlers = rebuilt.handlers[`sendMessage-${ROOM}`] ?? []
+    expect(handlers).toHaveLength(1)
+
+    handlers[0]({ sender: IDENTITY, messageId: 'm1', body: 'hello' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  /** Reconnection disabled or exhausted leaves a non-null dead socket; a timed-out wait marks it. */
+  it('rebuilds once a wait times out with the socket still down', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const dead = latest()
+
+    drop(dead)
+    await expect(client.joinRoom('other_inbox')).rejects.toThrow(/timed out/)
+
+    authenticateSoon()
+    await client.joinRoom('other_inbox')
+
+    expect(sockets).toHaveLength(2)
+    expect(dead.disconnect).toHaveBeenCalledTimes(1)
+    expect(joinRoomEmits(latest()).map(call => call[1])).toContain(ROOM)
+  }, 15000)
+
   /**
-   * Not covered here: `leaveRoom` now drops the room before its no-socket
-   * guard, so leaving while disconnected clears the claim. Reaching it needs
+   * Not covered here: `leaveRoom` drops the room before its connected guard,
+   * so leaving while disconnected clears the claim. Reaching it needs
    * `assertInitialized` to pass after a disconnect, and stubbing that far pulls
    * in a server-identity check this harness does not model.
    */
