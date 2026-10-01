@@ -103,7 +103,6 @@
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
-    "@types/pg": "^8.23.1",
     "@types/ws": "^8.18.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "cors": "^2.8.6",

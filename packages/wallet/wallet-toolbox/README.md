@@ -66,23 +66,16 @@ journal before recovery; do not delete journal rows or wallet data blindly.
 ### Postgres storage
 
 `StorageKnex` runs on Postgres through the knex `pg` client. Install `pg` in the
-application. Settings report `dbtype: 'Postgres'`; remote clients older than
-this release reject that value.
+application and pass a Postgres knex:
 
-node-postgres returns int8 (bigint columns, counts) as strings by default.
-`StorageKnex` sets a parser on each connection its knex acquires so these come
-back as numbers, as with mysql2 and better-sqlite3. The process-wide `pg.types`
-defaults are not changed. `Setup.createPostgresKnex(connectionJson, database)`
-creates a knex with the same parser installed.
+```ts
+import { knex as makeKnex } from 'knex'
 
-Postgres migrations run one at a time. Migrations that add indexes to existing
-tables run outside a transaction and use `CREATE INDEX CONCURRENTLY`, so writes
-continue while an index is built. `MonitorDaemon` takes a `postgresConnection`
-(JSON node-postgres config). `ChaintracksStorageKnex` does not support Postgres.
+const knex = makeKnex({ client: 'pg', connection: { host, port, user, password, database } })
+const storage = new StorageKnex({ ...StorageKnex.defaultOptions(), chain: 'main', knex })
+```
 
-Set `RUNPOSTGRES=1` and `POSTGRES_CONNECTION` (JSON node-postgres connection
-config) to include Postgres in the Knex test suites. Test databases are created
-on that server as needed.
+`ChaintracksStorageKnex` and `adminStats` do not support Postgres.
 
 ## Overview
 
