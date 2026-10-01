@@ -136,12 +136,17 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries six narrow audited dependency overrides:
+The root workspace carries seven narrow audited dependency overrides:
 
-- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
-  minimatch releases with older `brace-expansion` ranges. The follow-up
-  GHSA-rgw5-rvv9-x895 requires `brace-expansion` 5.0.9, so the workspace
-  substitutes 5.0.9 until every supported path resolves it natively.
+- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage
+  graphs to minimatch releases with older `brace-expansion` ranges.
+  GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and
+  GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitutes 5.0.11
+  until every supported path resolves it natively.
+- `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
+  6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
+  the Node process during a transport upgrade, so the workspace selects
+  6.6.10, the first patched release, without changing the public Engine.IO API.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass
@@ -176,15 +181,17 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-09-16 review rechecked all 24 selectors against the frozen graphs,
-current upstream manifests, and the advisory audit. The supported graphs still
-select exact `gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their
-registered substitutions, while the current frontmatter plugin still requests
-TOML 3.x and Metro 0.87 still requests `image-size` 1.x. New upstream majors can
-remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. The Metro-scoped `image-size` substitution is independently verified
-through the mobile platform contract. The method, result, count, and next
-rehearsal are enforced in `governance/dependency-release-policy.json`.
+The 2026-10-01 review rechecked all 25 selectors against the frozen graph.
+Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
+`engine.io` ranges, so those two substitutions stay. The earlier findings still
+hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
+`uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
+current frontmatter plugin still requests TOML 3.x and Metro 0.87 still
+requests `image-size` 1.x. New upstream majors can remove some legacy paths
+only through a coordinated Stryker or Google Cloud migration. The Metro-scoped
+`image-size` substitution is independently verified through the mobile platform
+contract. The method, result, count, and next rehearsal are enforced in
+`governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with
