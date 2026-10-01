@@ -1,11 +1,13 @@
 import { OutputProtocolError } from '@bsv/sdk'
 import type { DatabaseSync } from 'node:sqlite'
 
-class RollbackValue {
+class RollbackValue extends Error {
   constructor(
     readonly owner: SQLiteTransactionDomain,
     readonly value: unknown
-  ) {}
+  ) {
+    super('SQLite transaction intentionally rolled back')
+  }
 }
 
 interface StagedValue {

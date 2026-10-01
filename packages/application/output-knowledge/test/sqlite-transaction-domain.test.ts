@@ -608,3 +608,167 @@ it('retires an uncertain commit when native transaction status cannot be inspect
     reopened.close()
   }
 })
+
+it('checks write authority directly and permits intentional rollback of a read scope', () => {
+  const { domain } = setup()
+  expect(() => domain.writing()).toThrow('SQLite operation requires a write transaction')
+  expect(domain.transaction(() => domain.rollback('read result'), { write: false })).toBe(
+    'read result'
+  )
+  domain.transaction(
+    () => {
+      expect(() => domain.writing()).toThrow('SQLite operation requires a write transaction')
+    },
+    { write: false }
+  )
+  domain.transaction(() => expect(domain.writing()).toBeUndefined())
+})
+
+it('forks immutable primitive state but rejects an aliased callable cache and async fork', () => {
+  const { domain } = setup()
+  for (const value of [null, 0, 'state']) {
+    const key = Symbol('primitive')
+    domain.transaction(() => {
+      domain.stage(
+        key,
+        () => value,
+        () => {},
+        value => value
+      )
+      domain.savepoint(() =>
+        expect(
+          domain.stage(
+            key,
+            () => value,
+            () => {}
+          )
+        ).toBe(value)
+      )
+    })
+  }
+  const callable = () => 1,
+    key = Symbol('callable')
+  domain.transaction(() => {
+    domain.stage(
+      key,
+      () => callable,
+      () => {},
+      value => value
+    )
+    expect(() =>
+      domain.savepoint(() =>
+        domain.stage(
+          key,
+          () => callable,
+          () => {}
+        )
+      )
+    ).toThrow('isolate mutable state')
+  })
+  let invoked = false
+  expect(() =>
+    domain.transaction(() =>
+      domain.stage(
+        Symbol(),
+        () => {
+          invoked = true
+          return 1
+        },
+        () => {},
+        (async (value: number) => value) as unknown as (value: number) => number
+      )
+    )
+  ).toThrow('callbacks must be synchronous')
+  expect(invoked).toBe(false)
+  // A callable may inherit Promise methods even though it is not a native Promise.
+  const thenable = Object.setPrototypeOf(() => 1, Promise.prototype)
+  expect(() => domain.transaction(() => thenable)).toThrow('asynchronous state')
+})
+
+it('inherits the nearest staged ancestor across an intermediate scope with no cache', () => {
+  const { domain } = setup(),
+    key = Symbol('nearest')
+  let published = { revision: 0 }
+  const stage = () =>
+    domain.stage(
+      key,
+      () => ({ ...published }),
+      value => {
+        published = value
+      },
+      value => ({ ...value })
+    )
+  domain.transaction(() => {
+    stage().revision = 1
+    domain.savepoint(() => {
+      stage().revision = 2
+      domain.savepoint(() =>
+        domain.savepoint(() => {
+          expect(stage().revision).toBe(2)
+          stage().revision = 3
+        })
+      )
+      expect(stage().revision).toBe(3)
+    })
+    expect(stage().revision).toBe(3)
+  })
+  expect(published.revision).toBe(3)
+})
+
+it('propagates foreign rollback control despite failure to roll back the inner connection', () => {
+  const first = setup(),
+    second = setup(),
+    exec = second.db.exec.bind(second.db)
+  second.db.exec = sql => {
+    if (sql === 'ROLLBACK') throw new Error('second rollback failed')
+    exec(sql)
+  }
+  const result = first.domain.transaction(() => {
+    first.db.exec('INSERT INTO item VALUES (1)')
+    second.domain.transaction(() => {
+      second.db.exec('INSERT INTO item VALUES (2)')
+      first.domain.rollback('first cancelled')
+    })
+  })
+  expect(result).toBe('first cancelled')
+  expect(first.values()).toEqual([])
+  expect(() => second.domain.idle()).toThrow('closed')
+})
+
+it('retires failed pre-commit work even if a participant already restored native autocommit', () => {
+  const { domain, db } = setup(),
+    failure = new Error('work failed')
+  expect(() =>
+    domain.transaction(() => {
+      db.exec('INSERT INTO item VALUES (1)')
+      db.exec('ROLLBACK')
+      throw failure
+    })
+  ).toThrow(failure)
+  expect(() => domain.idle()).toThrow('closed')
+})
+
+it('rejects a poisoned enclosing savepoint before it can report successful nested work', () => {
+  const { domain, db, values } = setup(),
+    exec = db.exec.bind(db),
+    poisoned = new Error('lost nested rollback')
+  db.exec = sql => {
+    if (sql.startsWith('ROLLBACK TO staged_domain_2')) throw poisoned
+    exec(sql)
+  }
+  expect(() =>
+    domain.transaction(() => {
+      expect(() =>
+        domain.savepoint(() => {
+          expect(() =>
+            domain.savepoint(() => {
+              db.exec('INSERT INTO item VALUES (1)')
+              throw new Error('inner work failed')
+            })
+          ).toThrow('inner work failed')
+        })
+      ).toThrow(poisoned)
+    })
+  ).toThrow(poisoned)
+  expect(values()).toEqual([])
+})

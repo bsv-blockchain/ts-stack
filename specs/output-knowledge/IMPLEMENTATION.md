@@ -1721,3 +1721,17 @@ domain. Every part retains the same canonical test/configuration inputs and
 thresholds. Source inventory, execution-union and selected-artifact-download
 regressions guard the final aggregate. These maps do not convert the earlier
 partial run into qualification or establish a score for the adopted sources.
+
+Native browser qualification at `6299d841f` passes exact packed entry contracts,
+Chrome/native IndexedDB replay and durable proposal expiry; documentation builds
+and all 147 built HTML page links pass. The transaction-domain mutation part
+completed 260 mutants in 1,031 seconds but failed qualification: three uncovered
+callable-state mutations and two runner errors while Jest formatted a thrown
+internal rollback object after SQLite closed. Its 84.88% partial score is not a
+canonical target pass. The same run's broad freeze receipt also detects 147
+regenerated documentation outputs; authored and package-runtime inputs and HEAD
+match, but the failed broad freeze must not be reported as unchanged. The report
+and receipt remain retained. Follow-up covers callable/primitive forks, nearest
+ancestor staging, direct write/read gates and foreign/poisoned rollback paths,
+and represents intentional rollback as a normal Error so diagnostics do not
+traverse native connection getters. A complete fresh run is required.
