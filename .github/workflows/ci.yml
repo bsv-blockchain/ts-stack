@@ -988,6 +988,10 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify native snapshot crash recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        run: node test/storage/snapshotArchiveCrash.cjs
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}

@@ -375,6 +375,32 @@ test('every HTTP latency scenario retains its own required coverage execution', 
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
 
+test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', async () => {
+  const { parse } = await import('yaml')
+  const wallet = parse(readFileSync(CI_PATH, 'utf8')).jobs['coverage-wallet']
+  const fixtures = wallet.steps.filter(
+    step => step.run === 'node test/storage/snapshotArchiveCrash.cjs'
+  )
+  assert.equal(fixtures.length, 1)
+  const fixture = fixtures[0]
+  assert.equal(fixture.if, "matrix.id == 'shard-1'")
+  assert.equal(fixture['working-directory'], 'packages/wallet/wallet-toolbox')
+  assert.equal(fixture['continue-on-error'], undefined)
+  assert.equal(wallet['continue-on-error'], undefined)
+  assert.equal(wallet.strategy.matrix.include.filter(entry => entry.id === 'shard-1').length, 1)
+  const restored = wallet.steps.findIndex(
+    step => step.run === 'tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz'
+  )
+  const proof = wallet.steps.indexOf(fixture)
+  const coverage = wallet.steps.findIndex(
+    step => step.name === 'Generate wallet-toolbox coverage shard'
+  )
+  assert.ok(restored >= 0 && restored < proof && proof < coverage)
+  assert.equal(wallet.needs, 'prepare')
+  assert.equal(wallet['timeout-minutes'], 40)
+  assert.deepEqual(wallet.permissions, { contents: 'read' })
+})
+
 test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
   const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     candidate => candidate.name === 'mutation-quality'
