@@ -4,7 +4,8 @@ import { parseArguments } from './mutation-testing.mjs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
-  mutationExecutionMatrix
+  mutationExecutionMatrix,
+  partitionedMutationTargets
 } from './mutation-partitions.mjs'
 const target = {
   mutate: [
@@ -88,4 +89,56 @@ test('partition command mode requires one exact target without weakening existin
     ['--target', 'sdk-auth-http', '--partition']
   ])
     assert.throws(() => parseArguments(args))
+})
+
+test('retained partitions preserve complete lifecycle/reader/storage unions and future additions', () => {
+  const retained = {
+    testRunner: 'jest',
+    runnerOptions: { jest: { config: { testMatch: ['all-original-retained-tests'] } } },
+    mutate: [
+      'src/storage/snapshot/RetainedReadSnapshot.ts',
+      'src/storage/snapshot/KnexWalletReadSnapshot.ts',
+      'src/storage/StorageKnex.ts:225-275',
+      'src/storage/StorageKnex.ts:250-280',
+      'src/storage/StorageProvider.ts:540-562',
+      'src/storage/snapshot/FutureHelper.ts'
+    ]
+  }
+  const parts = partitionMutationTarget('wallet-retained-snapshot', retained)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['lifecycle', 'reader', 'storage']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...retained.mutate].sort())
+  for (const part of parts) {
+    assert.equal(part.target.runnerOptions, retained.runnerOptions)
+    assert.equal(part.target.testRunner, retained.testRunner)
+  }
+  assert.deepEqual(parts[0].target.mutate, [retained.mutate[0], retained.mutate[5]])
+  assert.deepEqual(parts[2].target.mutate, retained.mutate.slice(2, 5))
+  for (const specification of [
+    'src/**/*.ts',
+    '!src/StorageKnex.ts',
+    '../outside.ts',
+    '/outside.ts'
+  ])
+    assert.throws(() =>
+      partitionMutationTarget('wallet-retained-snapshot', { mutate: [specification] })
+    )
+  assert.throws(() => selectedMutationPartition('wallet-retained-snapshot', retained, 'missing'))
+  const targets = {
+    'sdk-auth-http': target,
+    'wallet-retained-snapshot': retained,
+    other: { mutate: ['src/whole.ts'] }
+  }
+  assert.deepEqual(partitionedMutationTargets(['other'], targets), [])
+  assert.deepEqual(
+    partitionedMutationTargets(['wallet-retained-snapshot', 'other', 'sdk-auth-http'], targets),
+    ['wallet-retained-snapshot', 'sdk-auth-http']
+  )
+  assert.deepEqual(partitionedMutationTargets([], targets), [])
+  assert.throws(() =>
+    partitionedMutationTargets(['wallet-retained-snapshot'], { 'sdk-auth-http': target })
+  )
+  assert.throws(() => partitionedMutationTargets(['sdk-auth-http', 'sdk-auth-http'], targets))
 })
