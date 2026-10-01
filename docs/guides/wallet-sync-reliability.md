@@ -629,7 +629,9 @@ The client now implements a source-only `getSnapshotSync()` adapter that
 negotiates the separate `snapshotArchiveReaderVersion: 1` setting when opened.
 The server does not yet advertise that setting. Controlled HTTP fixtures opt in
 to exercise the implementation; ordinary remote sync continues its existing path.
-Old archive capability objects and all six legacy methods remain unchanged.
+Old archive capability objects and legacy request/response shapes remain unchanged.
+Legacy cancellation can report pending cleanup as an error; the explicit pending
+receipt belongs only to the v2 reader.
 The new adapter refuses destination operations and does not imply portable
 export, staged restore or a remote destination implementation.
 
@@ -688,8 +690,18 @@ the owner record remains. Each append checks the durable request fence in the
 same transaction as its page write. Direct archive close and expiry cleanup obey
 the same owner fence; a pending source does not prevent cleanup of other archives.
 
-A pending close raises `SnapshotArchiveCleanupPendingError`; it does not return
-successful cancellation. A failed local cleanup fences that controller's
+A pending low-level close raises `SnapshotArchiveCleanupPendingError`; it does
+not return successful cancellation. The v2 reader RPC carries an exact
+`{ version: 1, outcome: 'cleanup-pending', requestId }` receipt. Only the existing
+`true` acknowledgement proves completion. The higher reader validates that binding
+and polls with one separate 30-second wall/monotonic cleanup allowance, at most 32
+attempts, and delays of 100, 200, 400, 800 and then at most 1,000 ms. Each immutable
+operation retains its existing single native-fetch-loss retry. Neither source
+lifetime nor request identity is renewed. Exhaustion rejects with cleanup still
+pending. The deadline aborts outstanding I/O and waits for its settlement; it does
+not abandon that I/O through a racing promise. Transports must separately bound
+operations that ignore cancellation. Independent errors retain their identity,
+and a late valid completion acknowledgement still proves cleanup. A failed local cleanup fences that controller's
 admission. Repeating an acknowledgement is idempotent and an old or incorrect
 claim cannot release a successor. The owner migration refuses removal while
 owners remain. Run migrations before admitting captures, keep all serving
@@ -698,11 +710,19 @@ Older draft binaries do not enforce this new table; mixed-version capture is
 unsupported. Standard wallet tables and BRC-38/39 bytes are unchanged.
 
 This checkpoint deliberately retains ownership after an unproved process loss.
-Backend-bound orphan recovery and bounded client polling for pending cleanup are
-still required before reader advertisement. An elapsed lease is a fence, not
+Backend-bound orphan recovery remains required before reader advertisement. An elapsed lease is a fence, not
 proof that an old SQL operation stopped. The eight logical slots do not establish
 a global physical-connection ceiling; per-provider physical admission remains
 occupied until its acquisition and cleanup settle. Actual deployment replica and
 driver limits require separate qualification. The generated two-connection
 lifecycle suite exercises cancellation, repeated status/reaping, incorrect and
 exact acknowledgements, and preserved reservations across at least 300 schedules.
+
+Real full/mobile HTTP tests route cancellation through an independently connected
+controller while the original source pool is held in physical destruction. They
+observe pending receipts, retained quota and successful foreground writes, then
+confirm cleanup before the opening cancellation settles. Generated pending and
+lost-acknowledgement schedules preserve one signal, bounded attempts, independent
+failure identity and released timers/listeners. Same-server MySQL evidence covers
+the source-side fence and delayed pool destruction; these tests do not establish
+PXC, orphan recovery or a global physical-pool bound.

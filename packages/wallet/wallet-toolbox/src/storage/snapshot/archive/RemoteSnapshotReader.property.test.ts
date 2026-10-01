@@ -2,6 +2,9 @@ import fc from 'fast-check'
 import { openRemoteSnapshot } from './openRemoteSnapshot'
 import { label, remoteReaderFixture } from '../../../../test/utils/remoteSnapshotReaderFixtures'
 import type { WalletSnapshotCursor } from '../WalletReadSnapshot'
+import { drainSnapshotArchiveRequest, SnapshotArchiveCleanupPendingError } from './SnapshotArchiveCleanup'
+import { SnapshotArchiveTransportFailure } from './SnapshotArchiveTransportFailure'
+import { getEventListeners } from 'node:events'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -11,6 +14,51 @@ fc.configureGlobal({
   numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(MIN_PROPERTY_RUNS, requestedRuns) : MIN_PROPERTY_RUNS,
   ...(Number.isSafeInteger(requestedSeed) ? { seed: requestedSeed } : {}),
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+})
+
+test('generated pending-cleanup and lost-ack schedules preserve one signal, failure identity and bounded polling', async () => {
+  jest.useFakeTimers()
+  try {
+    await fc.assert(
+      fc.asyncProperty(fc.array(fc.boolean(), { maxLength: 8 }), fc.boolean(), async (lost, fails) => {
+        let position = 0
+        let retry = false
+        let calls = 0
+        const signals = new Set<AbortSignal>()
+        const failure = new Error('synthetic independent cleanup failure')
+        const closing = drainSnapshotArchiveRequest(async signal => {
+          calls++
+          signals.add(signal)
+          expect(signal.aborted).toBe(false)
+          expect(getEventListeners(signal, 'abort')).toHaveLength(0)
+          if (position < lost.length) {
+            if (lost[position] && !retry) {
+              retry = true
+              throw new SnapshotArchiveTransportFailure('synthetic lost acknowledgement')
+            }
+            position++
+            retry = false
+            throw new SnapshotArchiveCleanupPendingError()
+          }
+          if (fails) throw failure
+        })
+        const outcome = closing.then(
+          () => undefined,
+          error => error
+        )
+        await jest.advanceTimersByTimeAsync(10000)
+        if (fails) expect(await outcome).toBe(failure)
+        else expect(await outcome).toBeUndefined()
+        expect(calls).toBe(1 + lost.length + lost.filter(Boolean).length)
+        expect(position).toBe(lost.length)
+        expect(signals.size).toBe(1)
+        expect(jest.getTimerCount()).toBe(0)
+        for (const signal of signals) expect(getEventListeners(signal, 'abort')).toHaveLength(0)
+      })
+    )
+  } finally {
+    jest.useRealTimers()
+  }
 })
 
 test('generated frame/page boundaries preserve exact rows, final keys, allocation charges and immutable retries', async () => {

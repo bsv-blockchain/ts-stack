@@ -142,7 +142,7 @@
       "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts",
       "risk": "critical",
-      "boundary": "Wallet immutable remote snapshot row decoding, fixed archive cursors, bounded leases and exact admission recovery",
+      "boundary": "Wallet immutable remote snapshot row decoding, fixed archive cursors, bounded leases, exact admission recovery and pending cleanup",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

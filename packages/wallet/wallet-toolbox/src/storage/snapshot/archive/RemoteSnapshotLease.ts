@@ -5,6 +5,7 @@ import { isSnapshotArchiveTransportFailure, retrySnapshotArchiveOperation } from
 import type { WalletReadSnapshotOptions } from '../WalletReadSnapshot'
 import { parseSnapshotArchiveReaderRequest, type SnapshotArchiveReaderRequest } from './SnapshotArchiveReaderRequest'
 import type { SnapshotArchiveTransport } from './SnapshotArchiveTransport'
+import { drainSnapshotArchiveRequest } from './SnapshotArchiveCleanup'
 
 function observedCompletion() {
   let resolve!: () => void
@@ -165,7 +166,8 @@ export class RemoteSnapshotLease {
     this.closing = Promise.resolve().then(async () => {
       await pending
       const request = this.request
-      if (request !== undefined) await retrySnapshotArchiveOperation(async () => this.transport.cancelRequest(request))
+      if (request !== undefined)
+        await drainSnapshotArchiveRequest(signal => this.transport.cancelRequest(request, signal))
     })
     void this.closing.then(this.resolveClosed, this.rejectClosed)
     this.controller.abort()

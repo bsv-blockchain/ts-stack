@@ -2,8 +2,40 @@ import { KnexSnapshotArchiveRpc } from './KnexSnapshotArchiveRpc'
 import { snapshotArchiveCapabilities } from './SnapshotArchiveProtocol'
 import { StorageKnex } from '../../StorageKnex'
 import { gate, snapshotHttpFixture } from '../../../../test/utils/snapshotArchiveHttpFixtures'
+import type { SnapshotArchiveReaderOffer } from './SnapshotArchiveReaderOffer'
+import type { KnexSnapshotArchiveService } from './KnexSnapshotArchiveService'
+import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 
 afterEach(() => jest.restoreAllMocks())
+
+test.each([Error, WERR_INVALID_OPERATION])(
+  'a %p cancellation failure cannot impersonate a pending receipt',
+  async ErrorType => {
+    const fixture = await snapshotHttpFixture()
+    const rpc = new KnexSnapshotArchiveRpc(fixture.storage)
+    try {
+      const issued = (await rpc.dispatch(
+        'getSnapshotArchiveReaderOffer',
+        [{ version: 1, identityKey: fixture.identityKey, options: { lifetimeMs: 300000, maxBytes: 32768 } }],
+        fixture.identityKey
+      )) as SnapshotArchiveReaderOffer
+      if (issued.outcome !== 'offered') throw new Error('Fixture reader was not offered')
+      const failure = new ErrorType('Snapshot archive source cleanup is pending')
+      const service = Reflect.get(rpc, 'service') as KnexSnapshotArchiveService
+      jest.spyOn(service, 'cancelReader').mockRejectedValue(failure)
+      await expect(
+        rpc.dispatch(
+          'cancelSnapshotArchiveRequest',
+          [{ version: 1, identityKey: fixture.identityKey, request: issued.request }],
+          fixture.identityKey
+        )
+      ).rejects.toBe(failure)
+    } finally {
+      await rpc.close()
+      await fixture.close()
+    }
+  }
+)
 
 test.each([
   'snapshot_archive_requests',

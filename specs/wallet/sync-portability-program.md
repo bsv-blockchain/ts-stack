@@ -190,5 +190,6 @@ Cross-controller cancellation stops the next atomic append; request and direct
 archive cleanup both refuse to release outstanding owners. Ready publication
 follows the same cleanup acknowledgement. This closes premature logical release
 but deliberately does not reclaim unproved process loss: backend-bound recovery
-and pending-cleanup polling remain required. The server reader capability stays
+remains required. The client now validates exact pending-cleanup receipts and
+uses fixed, bounded cancellation polling while awaiting I/O settlement. The server reader capability stays
 off and S3 remains open.

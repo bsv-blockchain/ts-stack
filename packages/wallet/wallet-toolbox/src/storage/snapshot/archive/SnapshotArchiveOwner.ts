@@ -1,17 +1,11 @@
 import type { Knex } from 'knex'
-import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import { SnapshotArchiveAdmissionLimitError } from './SnapshotArchiveAdmission'
 import { snapshotArchiveLimits } from './SnapshotArchive'
 import type { SnapshotArchiveRequestOwner } from './SnapshotArchiveRequest'
 
 const table = 'snapshot_archive_owners'
 
-/** The durable request is fenced, but its source has not proved cleanup yet. */
-export class SnapshotArchiveCleanupPendingError extends WERR_INVALID_OPERATION {
-  constructor() {
-    super('Snapshot archive source cleanup is pending')
-  }
-}
+export { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveCleanup'
 
 /** Call only inside the shared capacity-locked claim transaction. */
 export async function reserveSnapshotArchiveOwner(k: Knex, owner: SnapshotArchiveRequestOwner): Promise<void> {

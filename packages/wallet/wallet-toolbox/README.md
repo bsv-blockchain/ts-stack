@@ -72,8 +72,9 @@ The candidate's additive source-owner table now retains request/archive capacity
 until the exact controller acknowledges physical source cleanup. Cross-controller
 cancellation fences the next page; pending cleanup reports an error and keeps its
 reservation. Do not mix older candidate binaries or remove the owner schema while
-captures remain. Backend-bound orphan recovery and client pending-cleanup polling
-are still incomplete, and the server reader capability remains unadvertised.
+captures remain. The reader now waits for an exact completion acknowledgement through bounded
+pending-cleanup polling, preserving independent failures. Backend-bound orphan
+recovery remains incomplete, and the server reader capability is unadvertised.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

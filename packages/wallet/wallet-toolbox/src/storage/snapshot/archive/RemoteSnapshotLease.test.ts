@@ -85,7 +85,7 @@ test('close fences synchronously, drains the client operation and cancels the ex
     expect(rpc).toHaveBeenCalledWith(
       'cancelSnapshotArchiveRequest',
       [expect.objectContaining({ request: expected })],
-      undefined
+      expect.any(AbortSignal)
     )
     expect(rpc).toHaveBeenCalledTimes(1)
   } finally {

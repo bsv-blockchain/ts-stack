@@ -6,6 +6,7 @@ import {
 } from './SnapshotArchiveReaderOffer'
 import { parseSnapshotArchiveReaderRequest, type SnapshotArchiveReaderRequest } from './SnapshotArchiveReaderRequest'
 import { validateSnapshotArchiveAdmission, type SnapshotArchiveAdmission } from './SnapshotArchiveAdmission'
+import { validateSnapshotArchiveCancellation } from './SnapshotArchiveCleanup'
 import {
   verifySnapshotArchiveDirectory,
   verifySnapshotArchivePage,
@@ -112,8 +113,10 @@ export class SnapshotArchiveTransport {
   async cancelRequest(input: SnapshotArchiveReaderRequest, signal?: AbortSignal): Promise<void> {
     this.requireReader()
     const request = parseSnapshotArchiveReaderRequest(input)
-    if ((await this.call('cancelSnapshotArchiveRequest', { request }, signal)) !== true)
-      throw new TypeError('Invalid snapshot archive cancellation receipt')
+    validateSnapshotArchiveCancellation(
+      await this.call('cancelSnapshotArchiveRequest', { request }, signal),
+      request.requestId
+    )
   }
 
   async directory(

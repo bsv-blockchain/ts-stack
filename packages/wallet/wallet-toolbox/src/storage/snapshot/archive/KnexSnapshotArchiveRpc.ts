@@ -1,4 +1,5 @@
 import type { SnapshotArchiveReaderOffer } from './SnapshotArchiveReaderOffer'
+import { SnapshotArchiveCleanupPendingError, type SnapshotArchiveCleanupPending } from './SnapshotArchiveCleanup'
 import { WERR_INVALID_OPERATION, WERR_UNAUTHORIZED } from '../../../sdk/WERR_errors'
 import type { StorageKnex } from '../../StorageKnex'
 import { KnexSnapshotArchiveService } from './KnexSnapshotArchiveService'
@@ -79,8 +80,17 @@ export class KnexSnapshotArchiveRpc {
       case 'admitSnapshotArchive':
         return await this.service.admitReader(identityKey, input.request)
       case 'cancelSnapshotArchiveRequest':
-        await this.service.cancelReader(identityKey, input.request)
-        return true
+        try {
+          await this.service.cancelReader(identityKey, input.request)
+          return true
+        } catch (error) {
+          if (!(error instanceof SnapshotArchiveCleanupPendingError)) throw error
+          return {
+            version: 1,
+            outcome: 'cleanup-pending',
+            requestId: input.request.requestId
+          } satisfies SnapshotArchiveCleanupPending
+        }
       case 'getSnapshotArchiveOffer':
         return await this.sourceOffer()
       case 'startSnapshotArchive':

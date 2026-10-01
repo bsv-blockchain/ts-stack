@@ -9,8 +9,10 @@ attention to changes that materially alter behavior or extend functionality.
 - Add an exact-claim source-owner fence and additive owner migration. Remote
   cancellation cannot release archive/request capacity or publish ready before
   the owning source and pool have closed. Append checks cancellation atomically;
-  direct archive cleanup follows the same fence. Orphan recovery and pending
-  cleanup polling remain incomplete; reader advertisement stays disabled.
+  direct archive cleanup follows the same fence. The reader validates request-bound
+  pending-cleanup receipts and uses a separate fixed deadline, bounded backoff and
+  awaited I/O settlement. Orphan recovery remains incomplete; reader advertisement
+  stays disabled.
 
 - Add the unadvertised remote row-reader foundation: immutable server-issued
   offers, exact-request retry, fixed leases, verified packed rows and durable

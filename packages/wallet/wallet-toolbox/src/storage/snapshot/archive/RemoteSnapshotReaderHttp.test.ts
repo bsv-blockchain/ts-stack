@@ -12,6 +12,7 @@ import { knex } from 'knex'
 import { StorageKnex } from '../../StorageKnex'
 import { StorageProvider } from '../../StorageProvider'
 import { WalletStorageManager } from '../../WalletStorageManager'
+import { KnexSnapshotArchiveRpc } from './KnexSnapshotArchiveRpc'
 
 afterEach(() => jest.restoreAllMocks())
 
@@ -35,6 +36,99 @@ function rpcBody(init: RequestInit | undefined): { method: string; params: unkno
   const body = JSON.parse(init.body)
   return typeof body.method === 'string' ? body : undefined
 }
+
+test.each([StorageClient, StorageMobile])(
+  'authenticated %p cancellation waits for a second controller to confirm the original source cleanup',
+  async Client => {
+    const fixture = await snapshotHttpFixture()
+    const peer = new StorageKnex({
+      ...StorageProvider.createStorageBaseOptions('test'),
+      knex: knex({ ...fixture.storage.knex.client.config, pool: { min: 1, max: 1 } })
+    })
+    const replacement = new KnexSnapshotArchiveRpc(peer)
+    const reading = gate()
+    const allowRead = gate()
+    const destroying = gate()
+    const allowDestroy = gate()
+    const pendingCancellation = gate()
+    const outcomes: unknown[] = []
+    let opening: Promise<WalletReadSnapshot | undefined> | undefined
+    try {
+      await peer.makeAvailable()
+      const { server, url } = await serveReader(fixture)
+      const originalRpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc
+      const dispatch = originalRpc.dispatch.bind(originalRpc)
+      // Both clients use real authentication/framing through this HTTP edge.
+      // Its cancellation handler is routed to an independent SQL/controller instance.
+      jest.spyOn(originalRpc, 'dispatch').mockImplementation(async (method, params, identityKey) => {
+        if (method !== 'cancelSnapshotArchiveRequest') return await dispatch(method, params, identityKey)
+        const result = await replacement.dispatch(method, params, identityKey)
+        outcomes.push(result)
+        if (result !== true) pendingCancellation.resolve()
+        return result
+      })
+      const originalOpen = fixture.storage.openSnapshotArchiveSource.bind(fixture.storage)
+      const open = jest.spyOn(fixture.storage, 'openSnapshotArchiveSource').mockImplementation(async (...args) => {
+        const source = (await originalOpen(...args))!
+        const owned = Reflect.get(fixture.storage, 'snapshotSyncSource') as StorageKnex
+        const destroy = owned.destroy.bind(owned)
+        jest.spyOn(owned, 'destroy').mockImplementation(async () => {
+          destroying.resolve()
+          await allowDestroy.promise
+          await destroy()
+        })
+        const read = source.readPage
+        source.readPage = async (table, cursor, limits) => {
+          reading.resolve()
+          await allowRead.promise
+          return await read(table, cursor, limits)
+        }
+        return source
+      })
+      const foreignOpen = jest.spyOn(peer, 'openSnapshotArchiveSource')
+      const controller = new AbortController()
+      const client = new Client(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+      opening = client.getSnapshotSync()!.openSource(fixture.identityKey, { signal: controller.signal })
+      let settled = false
+      void opening.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      await reading.promise
+      const request = await fixture.storage.knex('snapshot_archive_requests').first()
+      controller.abort()
+      await pendingCancellation.promise
+      expect(outcomes[0]).toEqual({ version: 1, outcome: 'cleanup-pending', requestId: request.requestId })
+      expect(settled).toBe(false)
+      expect((await peer.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+      allowRead.resolve()
+      await destroying.promise
+      expect(settled).toBe(false)
+      expect(await peer.knex('snapshot_archive_owners')).toHaveLength(1)
+      expect(await peer.knex('snapshot_archive_pages')).toHaveLength(0)
+      await peer.knex('tx_labels').where({ txLabelId: 1 }).update({ label: 'foreground while HTTP cleanup waits' })
+      allowDestroy.resolve()
+      await expect(opening).rejects.toBeInstanceOf(SnapshotCancelledError)
+      expect(outcomes.at(-1)).toBe(true)
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(foreignOpen).not.toHaveBeenCalled()
+      expect(await peer.knex('snapshot_archive_owners')).toHaveLength(0)
+      expect(await peer.knex('snapshot_archive_requests')).toHaveLength(0)
+      expect(await peer.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+    } finally {
+      allowRead.resolve()
+      allowDestroy.resolve()
+      await opening?.catch(() => undefined)
+      await replacement.close()
+      await peer.destroy()
+      await fixture.close()
+    }
+  }
+)
 
 test.each([StorageClient, StorageMobile])(
   'authenticated %p reader negotiates its first open and keeps the original archive through replacement',

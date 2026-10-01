@@ -615,6 +615,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts',
         'src/storage/snapshot/archive/SnapshotArchiveAdmission.ts',
         'src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveCleanup.ts',
         'src/storage/snapshot/archive/RemoteSnapshotLease.ts',
         'src/storage/snapshot/archive/RemoteSnapshotRows.ts',
         'src/storage/snapshot/archive/RemoteSnapshotPageReader.ts',
