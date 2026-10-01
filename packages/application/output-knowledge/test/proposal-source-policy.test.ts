@@ -16,10 +16,10 @@ import {
   outsider,
   chain,
   scope,
-  registry,
+  createRegistry,
   reference,
   signed
-} from './proposal-fixture.js'
+} from './proposal-client-fixture.js'
 
 const source = {
   chain,
@@ -40,12 +40,12 @@ function rule(): ProposalSourceRule {
     futureSkewSeconds: '2'
   }
 }
-const install = () => new ProposalSourcePolicy(registry, recipient, [rule()])
+const install = () => new ProposalSourcePolicy(createRegistry(), recipient, [rule()])
 
 describe('installed client proposal source interpretation', () => {
   it('binds the proposal service independently of the selected lookup service and owns installation bytes', () => {
     const selected = rule(),
-      policy = new ProposalSourcePolicy(registry, recipient, [selected])
+      policy = new ProposalSourcePolicy(createRegistry(), recipient, [selected])
     selected.source.service = 'uninstalled-service'
     selected.policy.digest = 'ff'.repeat(32)
     const proposal = signed()
@@ -78,7 +78,7 @@ describe('installed client proposal source interpretation', () => {
   })
 
   it('requires installed policy read permission and an actual author signature', () => {
-    const policy = new ProposalSourcePolicy(registry, outsider, [rule()])
+    const policy = new ProposalSourcePolicy(createRegistry(), outsider, [rule()])
     expect(() => policy.validate(signed(), source, '10')).toThrow('does not permit')
     const proposal = signed()
     proposal.body.payload = 'AQ=='
@@ -91,8 +91,10 @@ describe('installed client proposal source interpretation', () => {
   it('rejects changed or missing installed policy parameters before source intake', () => {
     const selected = rule()
     selected.policy.digest = 'ff'.repeat(32)
-    expect(() => new ProposalSourcePolicy(registry, recipient, [selected])).toThrow('not installed')
-    expect(() => new ProposalSourcePolicy(registry, 'not-an-identity', [rule()])).toThrow()
+    expect(() => new ProposalSourcePolicy(createRegistry(), recipient, [selected])).toThrow(
+      'not installed'
+    )
+    expect(() => new ProposalSourcePolicy(createRegistry(), 'not-an-identity', [rule()])).toThrow()
     expect(() => parseProposalSourceRules([])).toThrow('1–64')
     expect(() => parseProposalSourceRules([rule(), rule()])).toThrow('Duplicate')
     expect(() => parseProposalSourceRules([{ ...rule(), extra: true }])).toThrow('Unknown')
@@ -112,6 +114,10 @@ describe('installed client proposal source interpretation', () => {
     expect(proposalEnvelopeIdentity(structuredClone(proposal))).toBe(first)
     proposal.signature = 'AQ=='
     expect(proposalEnvelopeIdentity(proposal)).not.toBe(first)
+    // Pinned independently with Python SHA-256 over sorted canonical JSON.
+    expect(proposalEnvelopeIdentity(proposal)).toBe(
+      '305b61035f1515ac88ef4a992e9b707022ff25907239516db8896b6fcbab2bfb'
+    )
   })
 })
 
@@ -135,8 +141,8 @@ it('canonicalizes independently ordered installations and accepts the exact sour
     ...rule(),
     source: { ...rule().source, access: `reader-${index}` }
   }))
-  const ascending = new ProposalSourcePolicy(registry, recipient, sources)
-  const descending = new ProposalSourcePolicy(registry, recipient, [...sources].reverse())
+  const ascending = new ProposalSourcePolicy(createRegistry(), recipient, sources)
+  const descending = new ProposalSourcePolicy(createRegistry(), recipient, [...sources].reverse())
   expect(ascending.describe()).toEqual(descending.describe())
   expect(ascending.describe().rules).toHaveLength(64)
   expect(() =>
@@ -166,10 +172,31 @@ it('does not use a changed chain or caller-mutated rule description', () => {
   ).toThrow('No installed')
 })
 
+it('requires the selected policy identifier as well as its digest and preserves typed failures', () => {
+  const selected = rule()
+  selected.policy.id = 'urn:another:policy'
+  expect(() => new ProposalSourcePolicy(createRegistry(), recipient, [selected])).toThrow(
+    expect.objectContaining({ code: 'unsupported' })
+  )
+  expect(() =>
+    parseProposalSourceRules([{ ...rule(), policy: { ...reference, id: '!urn:invalid' } }])
+  ).toThrow(expect.objectContaining({ code: 'invalid' }))
+  expect(() => parseProposalSourceRules([])).toThrow(expect.objectContaining({ code: 'invalid' }))
+  expect(() => parseProposalSourceRules([rule(), rule()])).toThrow(
+    expect.objectContaining({ code: 'invalid' })
+  )
+  expect(() => parseProposalSourceRules([{ ...rule(), maxLifetimeSeconds: '0' }])).toThrow(
+    expect.objectContaining({ code: 'invalid' })
+  )
+  expect(() => install().validate(signed(), { ...source, access: 'not-installed' }, '10')).toThrow(
+    expect.objectContaining({ code: 'unsupported' })
+  )
+})
+
 it('keeps separately created journals isolated when they share one installed source policy', () => {
   const selected = rule()
   selected.source.service = selected.proposalService
-  const policy = new ProposalSourcePolicy(registry, recipient, [selected]),
+  const policy = new ProposalSourcePolicy(createRegistry(), recipient, [selected]),
     one = policy.createState(4096),
     two = policy.createState(4096),
     bitcoin = knowledgeLocalFrame(false, [], [], 3)

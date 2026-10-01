@@ -2,7 +2,14 @@ import { describe, expect, it } from '@jest/globals'
 import { knowledgeLocalFrame, parseKnowledgeLocalFrame } from '../src/VerificationLedger.js'
 import { proposalLocalFrame, parseProposalLocalFrame } from '../src/proposals/ProposalLocalFrame.js'
 import { ProposalSourcePolicy } from '../src/proposals/ProposalSourcePolicy.js'
-import { author, recipient, registry, reference, chain, scope } from './proposal-fixture.js'
+import {
+  author,
+  recipient,
+  createRegistry,
+  reference,
+  chain,
+  scope
+} from './proposal-client-fixture.js'
 const source = {
   chain,
   provider: author,
@@ -12,7 +19,7 @@ const source = {
   access: 'reader'
 }
 function policy(reader = recipient) {
-  return new ProposalSourcePolicy(registry, reader, [
+  return new ProposalSourcePolicy(createRegistry(), reader, [
     {
       source,
       proposalService: scope.service,
@@ -124,4 +131,61 @@ it('rejects malformed, oversized and unsupported retained proposal decisions', (
   const unsupported = structuredClone(base)
   unsupported.version = 5
   expect(() => parseProposalLocalFrame(unsupported, policy())).toThrow('namespace')
+})
+
+it.each([
+  null,
+  false,
+  1,
+  'frame',
+  [],
+  {},
+  { profile: 'urn:other:frame', version: 4 },
+  { profile: 'urn:bsv:output-knowledge:local-verification:4' },
+  { version: 4 },
+  { profile: 'urn:bsv:output-knowledge:local-verification:4', version: 3 }
+])('requires an explicit continuity reset for an incompatible replay header: %j', input => {
+  expect(() => parseProposalLocalFrame(input, policy())).toThrow(
+    expect.objectContaining({ code: 'reset-required' })
+  )
+})
+
+it.each(['verified', 'invalid', 'unsupported', 'unauthorized'] as const)(
+  'replays the exact retained %s decision without promoting it to a successful check',
+  status => {
+    const selected = policy(),
+      work = { ...stamp(), status }
+    const frame = proposalLocalFrame(bitcoin(), selected, '11', [], [work])
+    expect(parseProposalLocalFrame(frame, selected).proposals.work).toEqual([work])
+  }
+)
+
+it('accepts exact reference and record capacity while preserving typed malformed-input errors', () => {
+  const selected = policy()
+  const exact = stamp()
+  exact.reference.group = 'é'.repeat(8192)
+  expect(
+    parseProposalLocalFrame(proposalLocalFrame(bitcoin(), selected, '11', [exact]), selected)
+      .proposals.receipts
+  ).toEqual([exact])
+  for (const group of [1, false, null, {}, [], '']) {
+    const input = { ...stamp(), reference: { ...stamp().reference, group } }
+    const frame = proposalLocalFrame(bitcoin(), selected, '11')
+    ;(frame.proposals as Record<string, unknown>).receipts = [input]
+    expect(() => parseProposalLocalFrame(frame, selected)).toThrow(
+      expect.objectContaining({ code: 'invalid' })
+    )
+  }
+  const receipts = Array.from({ length: 4096 }, (_, index) => ({
+    ...stamp(),
+    reference: { ...stamp().reference, group: `g${index}` }
+  }))
+  const frame = proposalLocalFrame(bitcoin(), selected, '11', receipts)
+  expect(parseProposalLocalFrame(frame, selected).proposals.receipts).toHaveLength(4096)
+  expect(() => proposalLocalFrame(bitcoin(), selected, '11', [stamp(), stamp()])).toThrow(
+    expect.objectContaining({ code: 'invalid' })
+  )
+  expect(() => parseProposalLocalFrame(frame, policy(author))).toThrow(
+    expect.objectContaining({ code: 'reset-required' })
+  )
 })

@@ -5,7 +5,15 @@ import { proposalLocalFrame, parseProposalLocalFrame } from '../src/proposals/Pr
 import { ProposalVerificationPool } from '../src/proposals/ProposalVerificationPool.js'
 import { ProposalSourcePolicy } from '../src/proposals/ProposalSourcePolicy.js'
 import type { ReceivedSourceGroup } from '../src/SourceMembership.js'
-import { author, recipient, registry, reference, signed, chain, scope } from './proposal-fixture.js'
+import {
+  author,
+  recipient,
+  createRegistry,
+  reference,
+  signed,
+  chain,
+  scope
+} from './proposal-client-fixture.js'
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
 const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
@@ -28,18 +36,19 @@ const source = {
   epoch: 'first-epoch'
 }
 const { epoch: _epoch, ...selection } = source
-const policy = new ProposalSourcePolicy(registry, recipient, [
-  {
-    source: selection,
-    proposalService: scope.service,
-    policy: reference,
-    maxLifetimeSeconds: '90',
-    futureSkewSeconds: '2'
-  }
-])
+
 const packet = signed()
 
 it('keeps the first trusted receipt and exact envelope decision across generated duplicates, local frames and restart', () => {
+  const policy = new ProposalSourcePolicy(createRegistry(), recipient, [
+    {
+      source: selection,
+      proposalService: scope.service,
+      policy: reference,
+      maxLifetimeSeconds: '90',
+      futureSkewSeconds: '2'
+    }
+  ])
   fc.assert(
     fc.property(
       fc.integer({ min: 0, max: 200 }),

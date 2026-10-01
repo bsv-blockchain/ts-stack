@@ -568,3 +568,100 @@ describe('local proposal replay transition boundaries', () => {
     expect(state.pool.pending()).toEqual([])
   })
 })
+
+describe('bounded client acceptance recovery', () => {
+  it('bounds retained replay without changing the original journal', async () => {
+    let now = 10000,
+      advancing = false
+    const { store, worker } = open({
+      clock: () => {
+        if (advancing) now += 20000
+        return now
+      }
+    })
+    await initialize(store)
+    const history = await store.inspect()
+    advancing = true
+    await expect(worker.reduce(history.entries, signal())).rejects.toThrow(
+      'journal replay deadline'
+    )
+    advancing = false
+    now = 10000
+    expect((await store.read()).revision).toEqual(history.revision)
+  })
+
+  it('rejects an unsupported retained transition before accepting its state', async () => {
+    const { store, worker } = open()
+    await initialize(store)
+    const history = await store.inspect()
+    const malformed = structuredClone(history.entries[0])
+    malformed.body = { kind: 'unknown-transition' } as unknown as typeof malformed.body
+    malformed.revision = { received: '2', accepted: '2' }
+    await expect(worker.reduce([...history.entries, malformed], signal())).rejects.toMatchObject({
+      code: 'unsupported'
+    })
+    expect((await store.read()).revision).toEqual(history.revision)
+  })
+
+  it('rejects a source from another configured chain before retaining its Bitcoin evidence', async () => {
+    const { store, worker, verify } = open()
+    await initialize(store)
+    const foreign = { ...source, chain: { ...chain, genesisHash: 'ff'.repeat(32) } }
+    const next = batch([
+      {
+        id: 'other-chain',
+        scope: foreign,
+        kind: 'output',
+        payload: { evidence: candidate('A').evidence }
+      }
+    ])
+    next.provenance.scope = next.coverage.scope = foreign
+    await expect(
+      store.commit('1', knowledgeMutation({ kind: 'receive', batch: next }))
+    ).rejects.toMatchObject({ code: 'context-changed' })
+    expect((await store.revision()).received).toBe('1')
+    await worker.advance(store, signal())
+    expect(verify).not.toHaveBeenCalled()
+    expect((await store.read()).facts).toEqual([])
+  })
+
+  it.each(['write-failure', 'deadline'] as const)(
+    'retains an accepted first group and recovers the remaining group after %s',
+    async failure => {
+      let now = 10000
+      const { store, worker } = open({ clock: () => now })
+      await initialize(store)
+      const next = batch([observation()])
+      next.groups.push({
+        id: 'second',
+        sequence: '0',
+        observations: [observation(signed({ chain, channel: '0e'.repeat(32) }), 'second-head')]
+      })
+      await store.commit('1', knowledgeMutation({ kind: 'receive', batch: next }))
+      const commit = store.commit.bind(store)
+      let writes = 0
+      const failing = jest.spyOn(store, 'commit').mockImplementation(async (...args) => {
+        writes++
+        if (writes === 2 && failure === 'write-failure')
+          return { status: 'context-changed', reason: 'Synthetic writer context changed' }
+        const result = await commit(...args)
+        if (writes === 1 && failure === 'deadline') now = 30000
+        return result
+      })
+      try {
+        await expect(worker.advance(store, signal())).rejects.toMatchObject({
+          code: failure === 'write-failure' ? 'context-changed' : 'limited'
+        })
+        const partial = await store.read()
+        expect(partial.proposals?.heads).toHaveLength(1)
+        expect(partial.pendingGroups).toHaveLength(1)
+      } finally {
+        failing.mockRestore()
+      }
+      await worker.advance(store, signal())
+      const recovered = await store.read()
+      expect(recovered.proposals?.heads).toHaveLength(2)
+      expect(recovered.pendingGroups).toEqual([])
+    }
+  )
+})

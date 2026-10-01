@@ -391,3 +391,33 @@ describe('explicit source currentness and durable expiry', () => {
     await runtime.close()
   })
 })
+
+it('rejects an invalid currentness clock and permits a later valid pass', async () => {
+  const { store, worker, clock } = open()
+  await initialize(store)
+  clock.now = -1
+  await expect(worker.advance(store, abort())).rejects.toThrow('Invalid currentness clock')
+  clock.now = base
+  await worker.advance(store, abort())
+  expect((await store.revision()).received).toBe('1')
+})
+
+it('does not publish expired currentness when its durable invalidation fails', async () => {
+  const { store, worker, clock } = open()
+  await initialize(store)
+  await ingest(store, worker, batch('initial', [output()], base))
+  const before = await store.revision()
+  clock.now = base + 2000
+  const failing = jest
+    .spyOn(store, 'commit')
+    .mockResolvedValueOnce({ status: 'context-changed', reason: 'Synthetic expiry write conflict' })
+  try {
+    await expect(worker.advance(store, abort())).rejects.toMatchObject({ code: 'context-changed' })
+    expect(await store.revision()).toEqual(before)
+    await expect(store.read()).rejects.toMatchObject({ code: 'expired' })
+  } finally {
+    failing.mockRestore()
+  }
+  await worker.advance(store, abort())
+  expect(reports((await store.read()).assessments).every(row => row.state === 'stale')).toBe(true)
+})

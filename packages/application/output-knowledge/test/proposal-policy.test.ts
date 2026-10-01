@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 import {
   canonicalOutputJSON,
   LockingScript,
@@ -23,13 +23,18 @@ import {
   chain,
   scope,
   policy,
-  registry,
+  createRegistry,
   reference,
   bytes,
   signed,
   finalize,
   checkFinalization
-} from './proposal-fixture.js'
+} from './proposal-client-fixture.js'
+
+let registry: ProposalPolicyRegistry
+beforeEach(() => {
+  registry = createRegistry()
+})
 
 describe('installed BRC-194 proposal policies', () => {
   it('selects exact installed parameters and validates an owned, author-signed envelope', () => {
@@ -87,6 +92,23 @@ describe('installed BRC-194 proposal policies', () => {
     expect(
       () => new ProposalPolicyRegistry([{ policy: invalid, parameters: { maxTextBytes: 1 } }])
     ).toThrow('Invalid')
+  })
+
+  it('accepts all 32 distinct local installations and preserves canonical policy identifiers', () => {
+    const installations = Array.from({ length: 32 }, (_, index) => ({
+      policy: Object.assign(new AuthorDocumentPolicy(), { id: `urn:test:document:${index}` }),
+      parameters: { maxTextBytes: 32 }
+    }))
+    expect(new ProposalPolicyRegistry(installations).describe()).toHaveLength(32)
+    expect(
+      () =>
+        new ProposalPolicyRegistry([
+          {
+            policy: Object.assign(new AuthorDocumentPolicy(), { id: '!urn:invalid' }),
+            parameters: { maxTextBytes: 32 }
+          }
+        ])
+    ).toThrow(expect.objectContaining({ code: 'invalid' }))
   })
 
   it.each([null, false, 1, 'parameters', []])(

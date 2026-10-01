@@ -1,8 +1,18 @@
 import { describe, expect, it } from '@jest/globals'
+import { canonicalOutputJSON, OutputProtocolError } from '@bsv/sdk'
 import { ProposalVerificationPool } from '../src/proposals/ProposalVerificationPool.js'
 import { ProposalSourcePolicy } from '../src/proposals/ProposalSourcePolicy.js'
 import type { ReceivedSourceGroup } from '../src/SourceMembership.js'
-import { author, recipient, registry, reference, signed, chain, scope } from './proposal-fixture.js'
+import {
+  author,
+  recipient,
+  outsider,
+  createRegistry,
+  reference,
+  signed,
+  chain,
+  scope
+} from './proposal-client-fixture.js'
 const source = {
   chain,
   provider: author,
@@ -14,7 +24,7 @@ const source = {
 }
 function policy() {
   const { epoch: _epoch, ...selection } = source
-  return new ProposalSourcePolicy(registry, recipient, [
+  return new ProposalSourcePolicy(createRegistry(), recipient, [
     {
       source: selection,
       proposalService: scope.service,
@@ -213,4 +223,90 @@ it('does not collect or retain private proposal work from a quarantined source g
   const observation = rejected.group.observations[0]
   if (observation.kind !== 'proposal') throw new Error('fixture')
   expect(pool.check(rejected, observation.id, observation.payload.proposal)).toBeUndefined()
+})
+
+it('counts cumulative retained bytes and accepts the exact configured byte boundary', () => {
+  const first = row(),
+    second = row(),
+    selected = policy()
+  second.group.id = 'two'
+  const unbounded = new ProposalVerificationPool(selected)
+  const stamps = unbounded.stamps([first, second], '10')
+  const observation = first.group.observations[0]
+  if (observation.kind !== 'proposal') throw new Error('fixture')
+  const bytes = new TextEncoder().encode(
+    canonicalOutputJSON({
+      stamp: stamps[0],
+      scope: first.scope,
+      proposal: observation.payload.proposal
+    })
+  ).length
+  const exact = new ProposalVerificationPool(selected, 2, bytes)
+  exact.receive([first], [stamps[0]])
+  expect(exact.pending()).toEqual([stamps[0]])
+  const cumulative = new ProposalVerificationPool(selected, 2, bytes * 2 - 1)
+  cumulative.receive([first], [stamps[0]])
+  expect(() => cumulative.receive([second], [stamps[1]])).toThrow(
+    expect.objectContaining({ code: 'limited' })
+  )
+  expect(cumulative.pending()).toEqual([stamps[0]])
+})
+
+it.each(['unsupported', 'unauthorized'] as const)(
+  'retains an exact %s decision without retrying it as unresolved work',
+  status => {
+    const input = row()
+    const base = policy()
+    const selected =
+      status === 'unauthorized'
+        ? new ProposalSourcePolicy(createRegistry(), outsider, base.describe().rules)
+        : base
+    if (status === 'unsupported') input.scope = { ...source, access: 'uninstalled' }
+    const pool = new ProposalVerificationPool(selected)
+    pool.receive([input], pool.stamps([input], '10'))
+    const checked = pool.verify(pool.pending()[0])
+    expect(checked.status).toBe(status)
+    pool.apply([checked])
+    expect(pool.pending()).toEqual([])
+    const observation = input.group.observations[0]
+    if (observation.kind !== 'proposal') throw new Error('fixture')
+    const returned = pool.check(input, observation.id, observation.payload.proposal)!
+    returned.status = 'verified'
+    expect(pool.check(input, observation.id, observation.payload.proposal)?.status).toBe(status)
+  }
+)
+
+it('propagates an operational protocol error without recording it as a negative proposal verdict', () => {
+  const selected = policy()
+  selected.validate = () => {
+    throw new OutputProtocolError('unavailable', 'Temporary installed dependency failure', true)
+  }
+  const input = row(),
+    pool = new ProposalVerificationPool(selected)
+  pool.receive([input], pool.stamps([input], '10'))
+  expect(() => pool.verify(pool.pending()[0])).toThrow(
+    expect.objectContaining({ code: 'unavailable', retryable: true })
+  )
+  expect(pool.pending()).toHaveLength(1)
+})
+
+it('ignores a lifecycle-only observation while retaining its accompanying signed head', () => {
+  const input = row(),
+    pool = new ProposalVerificationPool(policy())
+  input.group.observations.push({
+    id: 'report',
+    scope: source,
+    kind: 'proposal-remove',
+    payload: {
+      service: scope.service,
+      policy: reference,
+      channel: '02'.repeat(32),
+      proposalId: '03'.repeat(32),
+      reason: 'Catalogue removal'
+    }
+  })
+  const stamps = pool.stamps([input], '10')
+  expect(stamps).toHaveLength(1)
+  pool.receive([input], stamps)
+  expect(pool.verify(pool.pending()[0]).status).toBe('verified')
 })
