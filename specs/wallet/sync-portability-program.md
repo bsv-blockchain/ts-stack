@@ -183,3 +183,12 @@ The implementation goal stays active until all required work is complete or an
 explicit external dependency prevents further progress. Prepare concrete release,
 deployment and funded-drill artifacts before requesting the separate operator
 authorization those actions require. PR #569 must remain open even when complete.
+
+The source-owner fence checkpoint adds an auxiliary exact-claim slot before
+service capture and retains archive/request quota through physical cleanup.
+Cross-controller cancellation stops the next atomic append; request and direct
+archive cleanup both refuse to release outstanding owners. Ready publication
+follows the same cleanup acknowledgement. This closes premature logical release
+but deliberately does not reclaim unproved process loss: backend-bound recovery
+and pending-cleanup polling remain required. The server reader capability stays
+off and S3 remains open.

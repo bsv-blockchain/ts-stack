@@ -36,7 +36,7 @@ export class KnexSnapshotArchiveService {
   private cleanupFailure?: { error: unknown }
 
   constructor(private readonly storage: StorageKnex) {
-    this.requests = new KnexSnapshotArchiveRequestStore(storage.knex)
+    this.requests = new KnexSnapshotArchiveRequestStore(storage.knex, true)
     this.archives = new KnexSnapshotArchiveStore(storage.knex)
   }
 
@@ -145,12 +145,14 @@ export class KnexSnapshotArchiveService {
   ): Promise<SnapshotArchiveRequestReceipt> {
     const { identityKey, request, controller } = job
     if (claimed.owner === undefined) return claimed.receipt
+    const owner = claimed.owner
     let source: SnapshotArchiveSource | undefined
     const cleanup = async (error?: unknown): Promise<void> => {
       if (job.terminal !== 'closed' && error instanceof SnapshotResourceLimitError) job.terminal = 'resource-limited'
       try {
         // Keep the logical reservation through this process's physical cleanup.
         await source?.close()
+        await this.requests.sourceClosed(owner)
         await this.requests.close(identityKey, request.requestId, job.terminal)
       } catch (error) {
         this.failedCleanup(error)
@@ -165,13 +167,15 @@ export class KnexSnapshotArchiveService {
         lifetimeMs: Math.min(300000, remaining)
       })
       if (source === undefined) throw new WERR_NOT_IMPLEMENTED('Snapshot archive capture requires SQLite WAL or MySQL')
-      const owner = claimed.owner
       await captureSnapshotArchiveSource(
         source,
         {
           begin: binding => this.requests.begin(owner, binding),
-          append: (writer, page) => this.archives.append(writer, page),
-          seal: writer => this.requests.seal(owner, writer),
+          append: (writer, page) => this.requests.append(owner, writer, page),
+          seal: async writer => {
+            await this.requests.sourceClosed(owner)
+            return await this.requests.seal(owner, writer)
+          },
           close: (_identityKey, _archiveId, error) => cleanup(error)
         },
         identityKey,
@@ -215,8 +219,8 @@ export class KnexSnapshotArchiveService {
     await this.requests.markCancellation(identityKey, request)
     const job = this.active
     if (job?.identityKey === identityKey && job.request.requestId === request.requestId) await this.stop(job)
-    // markCancellation does not release an existing physical owner's reservation.
-    // stop drains this process first; then the normal cleanup path is resumable.
+    // A different replica can fence the request, but only proved source cleanup
+    // permits release. Its pending outcome must not be acknowledged as complete.
     await this.requests.close(identityKey, request.requestId)
   }
 

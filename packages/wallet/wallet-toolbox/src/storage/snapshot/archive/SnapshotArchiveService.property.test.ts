@@ -6,9 +6,11 @@ import { join } from 'node:path'
 import { knex } from 'knex'
 import { addSnapshotArchiveTables } from '../../schema/snapshotArchiveMigration'
 import { addSnapshotArchiveRequestTable } from '../../schema/snapshotArchiveRequestMigration'
+import { addSnapshotArchiveOwnerTable } from '../../schema/snapshotArchiveOwnerMigration'
+import { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveOwner'
 import { KnexSnapshotArchiveStore } from './KnexSnapshotArchiveStore'
 import { KnexSnapshotArchiveRequestStore } from './KnexSnapshotArchiveRequestStore'
-import { snapshotArchiveTables, type SnapshotArchiveBinding } from './SnapshotArchive'
+import { snapshotArchiveTables, type SnapshotArchiveBinding, type SnapshotArchiveWriter } from './SnapshotArchive'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -18,6 +20,95 @@ fc.configureGlobal({
   numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(MIN_PROPERTY_RUNS, requestedRuns) : MIN_PROPERTY_RUNS,
   ...(Number.isSafeInteger(requestedSeed) ? { seed: requestedSeed } : {}),
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+})
+
+test('generated remote cancellation schedules retain source quota until exact cleanup acknowledgement', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'snapshot-owner-property-'))
+  const open = () =>
+    knex({
+      client: 'better-sqlite3',
+      connection: { filename: join(directory, 'owners.sqlite') },
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+  const db = open()
+  const peer = open()
+  try {
+    await db.raw('PRAGMA journal_mode = WAL')
+    await addSnapshotArchiveTables(db)
+    await addSnapshotArchiveRequestTable(db)
+    await addSnapshotArchiveOwnerTable(db)
+    const requests = new KnexSnapshotArchiveRequestStore(db, true)
+    const replacement = new KnexSnapshotArchiveRequestStore(peer, true)
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 13 }),
+        fc.array(fc.constantFrom('retry', 'reap', 'wrong-ack'), { minLength: 0, maxLength: 5 }),
+        fc.uint8Array({ minLength: 1, maxLength: 16 }),
+        async (pages, schedule, bytes) => {
+          const identityKey = '02' + bytes[0].toString(16).padStart(64, '0')
+          const issued = (await requests.offer(identityKey, { lifetimeMs: 300000, maxBytes: 32768 }))!
+          const { owner } = await requests.claimReader(identityKey, issued.request)
+          const date = new Date('2026-01-01T00:00:00.000Z')
+          let writer: SnapshotArchiveWriter | undefined
+          if (pages > 0) {
+            writer = await requests.begin(owner!, {
+              version: 1,
+              snapshotId: 'a'.repeat(64),
+              sourceSchema: 'owner-property-v1',
+              sourceStorage: {
+                created_at: date,
+                updated_at: date,
+                chain: 'test',
+                dbtype: 'SQLite',
+                storageIdentityKey: 'source',
+                storageName: '',
+                maxOutputScript: 1024
+              },
+              user: { created_at: date, updated_at: date, userId: 1, identityKey, activeStorage: 'source' }
+            })
+            for (const [sequence, table] of snapshotArchiveTables.slice(0, pages).entries())
+              await requests.append(owner!, writer, { sequence, table, rows: 0, done: true, bytes })
+          }
+          await replacement.markReaderCancellation(identityKey, issued.request)
+          for (const action of schedule) {
+            if (action === 'retry')
+              expect((await requests.claimReader(identityKey, issued.request)).receipt.state).toBe('closed')
+            else if (action === 'reap') await replacement.reap()
+            else await replacement.sourceClosed({ ...owner!, claimToken: 'wrong-claim-token' })
+          }
+          await expect(replacement.close(identityKey, issued.request.requestId)).rejects.toBeInstanceOf(
+            SnapshotArchiveCleanupPendingError
+          )
+          expect(await db('snapshot_archive_owners')).toHaveLength(1)
+          expect(await db('snapshot_archive_pages')).toHaveLength(pages)
+          expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+          if (writer !== undefined)
+            await expect(
+              requests.append(owner!, writer, {
+                sequence: 0,
+                table: snapshotArchiveTables[0],
+                rows: 0,
+                done: true,
+                bytes
+              })
+            ).rejects.toThrow('unavailable')
+          await requests.sourceClosed(owner!)
+          await replacement.close(identityKey, issued.request.requestId)
+          await replacement.close(identityKey, issued.request.requestId)
+          await expect(requests.claimReader(identityKey, issued.request)).rejects.toThrow('unavailable')
+          expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+          expect(await db('snapshot_archive_owners')).toHaveLength(0)
+          expect(await db('snapshot_archive_requests')).toHaveLength(0)
+          expect(await db('snapshot_archives')).toHaveLength(0)
+          expect(await db('snapshot_archive_pages')).toHaveLength(0)
+        }
+      )
+    )
+  } finally {
+    await Promise.all([db.destroy(), peer.destroy()])
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('generated creation/retry/close schedules preserve request identity, atomic publication and exact capacity', async () => {

@@ -1,3 +1,4 @@
+import { hasSnapshotArchiveOwner, SnapshotArchiveCleanupPendingError } from './SnapshotArchiveOwner'
 import { Hash, Random, Utils } from '@bsv/sdk'
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
@@ -183,7 +184,11 @@ export class KnexSnapshotArchiveStore {
     return row
   }
 
-  async append(writer: SnapshotArchiveWriter, page: Omit<SnapshotArchivePage, 'digest'>): Promise<void> {
+  async append(
+    writer: SnapshotArchiveWriter,
+    page: Omit<SnapshotArchivePage, 'digest'>,
+    authorize?: (trx: Knex) => Promise<void>
+  ): Promise<void> {
     integer(page.sequence, 0, snapshotArchiveLimits.pages - 1, 'sequence')
     integer(page.rows, 0, snapshotArchiveLimits.rowsPerPage, 'rows')
     if (
@@ -201,6 +206,7 @@ export class KnexSnapshotArchiveStore {
     const digest = hash(input.bytes)
     await this.knex.transaction(async trx => {
       await this.capacity(trx)
+      await authorize?.(trx)
       const row = await this.ownedWriter(trx, owner)
       if (input.sequence < row.nextSequence) {
         const prior: PageRow | undefined = await trx('snapshot_archive_pages')
@@ -346,11 +352,12 @@ export class KnexSnapshotArchiveStore {
     const found = await this.knex.transaction(async trx => {
       await this.capacity(trx)
       const row = await trx('snapshot_archives').where({ archiveId, identityKey }).first('archiveId')
-      if (row === undefined) return false
+      if (row === undefined) return 'absent'
       await trx('snapshot_archives').where({ archiveId, identityKey }).update({ state: 'closing' })
-      return true
+      return (await hasSnapshotArchiveOwner(trx, { identityKey, archiveId })) ? 'pending' : 'ready'
     })
-    if (!found) return
+    if (found === 'absent') return
+    if (found === 'pending') throw new SnapshotArchiveCleanupPendingError()
     // Bounded exact-key deletes do not hold source wallet locks or release the
     // capacity reservation early. A crash or concurrent closer can resume them.
     let hasPages = true
@@ -397,6 +404,12 @@ export class KnexSnapshotArchiveStore {
       .orWhere({ state: 'closing' })
       .orderBy('archiveId')
       .limit(snapshotArchiveLimits.archives)
-    await runInSeries(rows, row => this.close(row.identityKey, row.archiveId))
+    await runInSeries(rows, async row => {
+      try {
+        await this.close(row.identityKey, row.archiveId)
+      } catch (error) {
+        if (!(error instanceof SnapshotArchiveCleanupPendingError)) throw error
+      }
+    })
   }
 }

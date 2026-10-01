@@ -33,7 +33,7 @@ test.each([StorageClient, StorageMobile])(
       expect(storage.getSettings()).not.toHaveProperty('snapshotArchive')
       let transport = (await client.getSnapshotArchiveTransport(identityKey))!
       const offer = await transport.offer()
-      expect(offer.sourceSchema).toBe('2026-09-30-003 add snapshot archive requests')
+      expect(offer.sourceSchema).toBe('2026-10-01-001 add snapshot archive source owners')
       expect(Math.abs(offer.serverTime - Date.now())).toBeLessThan(5000)
       const fields = {
         version: 1 as const,
@@ -132,9 +132,7 @@ test.each(['server-disabled', 'provider-disabled', 'small-response', 'old-schema
       expect((await client.findOrInsertUser(fixture.identityKey)).user.identityKey).toBe(fixture.identityKey)
       const rpc = Reflect.get(client, 'rpcCall').bind(client)
       await expect(rpc('getSnapshotArchiveOffer', [{ version: 1, identityKey: fixture.identityKey }])).rejects.toThrow(
-        variant === 'server-disabled' || variant === 'small-response'
-          ? 'network error 400'
-          : 'unavailable'
+        variant === 'server-disabled' || variant === 'small-response' ? 'network error 400' : 'unavailable'
       )
     } finally {
       await fixture.close()

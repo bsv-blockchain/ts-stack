@@ -234,17 +234,20 @@ function record(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value))
 }
 
+function dateCell(value: unknown): Date {
+  if (typeof value !== 'string' || value.length > 32) invalid()
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime()) || date.toISOString() !== value) invalid()
+  return date
+}
+
 function cell(value: unknown, kind: Kind): Cell {
   switch (kind) {
     case 'bytes':
       if (!(value instanceof Uint8Array)) invalid()
       return value
-    case 'date': {
-      if (typeof value !== 'string' || value.length > 32) invalid()
-      const date = new Date(value)
-      if (!Number.isFinite(date.getTime()) || date.toISOString() !== value) invalid()
-      return date
-    }
+    case 'date':
+      return dateCell(value)
     case 'id':
       if (!Number.isSafeInteger(value) || (value as number) < 1) invalid()
       return value as number
@@ -263,16 +266,18 @@ function cell(value: unknown, kind: Kind): Cell {
   }
 }
 
+function fieldKind(schema: Schema, name: string): Kind | undefined {
+  if (Object.hasOwn(schema.required, name)) return schema.required[name]
+  if (schema.optional !== undefined && Object.hasOwn(schema.optional, name)) return schema.optional[name]
+  return undefined
+}
+
 function row(input: unknown, schema: Schema, userId: number): RemoteSnapshotRow {
   const fields = record(input)
   for (const name of Object.keys(schema.required)) if (!Object.hasOwn(fields, name)) invalid()
   const result: Record<string, Cell> = {}
   for (const [name, value] of Object.entries(fields)) {
-    const kind = Object.hasOwn(schema.required, name)
-      ? schema.required[name]
-      : schema.optional !== undefined && Object.hasOwn(schema.optional, name)
-        ? schema.optional[name]
-        : undefined
+    const kind = fieldKind(schema, name)
     if (kind === undefined) invalid()
     Object.defineProperty(result, name, { value: cell(value, kind), enumerable: true })
   }
@@ -283,6 +288,12 @@ function row(input: unknown, schema: Schema, userId: number): RemoteSnapshotRow 
 export interface RemoteSnapshotFrame {
   readonly rows: readonly RemoteSnapshotRow[]
   readonly charges: readonly number[]
+}
+
+function cellCharge(entry: Cell): number {
+  if (typeof entry === 'string') return 64 + entry.length * 2
+  if (entry instanceof Uint8Array) return 64 + entry.byteLength * 2
+  return 64
 }
 
 /** Decode one independently bounded frame only after its receipt hash was verified. */
@@ -304,24 +315,17 @@ export function decodeRemoteSnapshotFrame(
   )
     invalid()
   const rows = frame.rows.map(input => row(input, schemas[receipt.table], userId))
-  const charges = rows.map(value =>
-    Object.values(value).reduce<number>(
-      (sum, entry) =>
-        sum +
-        64 +
-        (typeof entry === 'string' ? entry.length * 2 : entry instanceof Uint8Array ? entry.byteLength * 2 : 0),
-      0
-    )
-  )
+  const charges = rows.map(value => Object.values(value).reduce<number>((sum, entry) => sum + cellCharge(entry), 0))
   return { rows, charges }
+}
+
+function detachCell(entry: Cell): Cell {
+  if (entry instanceof Uint8Array) return new Uint8Array(entry)
+  if (entry instanceof Date) return new Date(entry)
+  return entry
 }
 
 /** The cached frame remains private; callers own every returned mutable value. */
 export function detachRemoteSnapshotRow(value: RemoteSnapshotRow): Record<string, Cell> {
-  return Object.fromEntries(
-    Object.entries(value).map(([name, entry]) => [
-      name,
-      entry instanceof Uint8Array ? new Uint8Array(entry) : entry instanceof Date ? new Date(entry.getTime()) : entry
-    ])
-  )
+  return Object.fromEntries(Object.entries(value).map(([name, entry]) => [name, detachCell(entry)]))
 }

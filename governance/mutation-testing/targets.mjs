@@ -485,7 +485,9 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveService.ts',
         'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
-        'src/storage/schema/snapshotArchiveRequestMigration.ts'
+        'src/storage/schema/snapshotArchiveRequestMigration.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveOwner.ts',
+        'src/storage/schema/snapshotArchiveOwnerMigration.ts'
       ],
       ...jestTarget(
         'jest.config.cjs',

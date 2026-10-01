@@ -1,3 +1,10 @@
+import {
+  reserveSnapshotArchiveOwner,
+  assignSnapshotArchiveOwner,
+  releaseSnapshotArchiveOwner,
+  hasSnapshotArchiveOwner,
+  SnapshotArchiveCleanupPendingError
+} from './SnapshotArchiveOwner'
 import { Random, Utils } from '@bsv/sdk'
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
@@ -16,7 +23,8 @@ import {
   snapshotArchiveLimits,
   type SnapshotArchiveBinding,
   type SnapshotArchiveWriter,
-  type SnapshotArchiveManifest
+  type SnapshotArchiveManifest,
+  type SnapshotArchivePage
 } from './SnapshotArchive'
 import { lockSnapshotArchiveCapacity, snapshotArchiveDatabaseNow } from './SnapshotArchiveSql'
 import {
@@ -61,7 +69,10 @@ function identifier(value: string): void {
 
 /** Durable deduplication with admission charged before opening a source pool. */
 export class KnexSnapshotArchiveRequestStore {
-  constructor(private readonly knex: Knex) {}
+  constructor(
+    private readonly knex: Knex,
+    private readonly requireSourceDrain = false
+  ) {}
 
   private async receipt(k: Knex, row: RequestRow): Promise<SnapshotArchiveRequestReceipt> {
     const base = { version: 1 as const, requestId: row.requestId, expiresAt: Number(row.expiresAt) }
@@ -191,6 +202,7 @@ export class KnexSnapshotArchiveRequestStore {
       }
       if (reader) await trx(table).where({ identityKey, requestId: request.requestId }).update(row)
       else await trx(table).insert(row)
+      if (this.requireSourceDrain) await reserveSnapshotArchiveOwner(trx, owner)
       await trx('snapshot_archive_capacity')
         .where({ id: 1 })
         .update({ archives: capacity.archives + 1, reservedBytes: Number(capacity.reservedBytes) + request.maxBytes })
@@ -234,8 +246,32 @@ export class KnexSnapshotArchiveRequestStore {
         lifetimeMs: remaining
       })
       await trx('snapshot_archives').where({ archiveId: writer.archiveId }).update({ expiresAt: row.expiresAt })
+      await assignSnapshotArchiveOwner(trx, claim, writer.archiveId)
       await trx(table).where(claim).update({ state: 'capturing', archiveId: writer.archiveId })
       return writer
+    })
+  }
+
+  /** A remote cancellation fences the next append in its atomic archive transaction. */
+  async append(
+    owner: SnapshotArchiveRequestOwner,
+    writer: SnapshotArchiveWriter,
+    page: Omit<SnapshotArchivePage, 'digest'>
+  ): Promise<void> {
+    const claim = { ...owner }
+    const captured = { ...writer }
+    await new KnexSnapshotArchiveStore(this.knex).append(captured, page, async trx => {
+      const row = await this.owned(trx, claim)
+      if (row.state !== 'capturing' || row.archiveId !== captured.archiveId) unavailable()
+    })
+  }
+
+  /** Called only after the local source and its owned pool have physically closed. */
+  async sourceClosed(owner: SnapshotArchiveRequestOwner): Promise<void> {
+    const claim = { ...owner }
+    await this.knex.transaction(async trx => {
+      await lockSnapshotArchiveCapacity(trx)
+      await releaseSnapshotArchiveOwner(trx, claim)
     })
   }
 
@@ -246,6 +282,8 @@ export class KnexSnapshotArchiveRequestStore {
       await lockSnapshotArchiveCapacity(trx)
       const row = await this.owned(trx, claim)
       if (!['capturing', 'ready'].includes(row.state) || row.archiveId !== captured.archiveId) unavailable()
+      if (await hasSnapshotArchiveOwner(trx, { identityKey: row.identityKey, requestId: row.requestId }))
+        throw new SnapshotArchiveCleanupPendingError()
       const manifest = await new KnexSnapshotArchiveStore(trx).seal(captured)
       await trx(table).where(claim).update({ state: 'ready' })
       return manifest
@@ -347,6 +385,7 @@ export class KnexSnapshotArchiveRequestStore {
         await this.collectReader(trx, row)
         return undefined
       }
+      if (await hasSnapshotArchiveOwner(trx, { identityKey, requestId })) throw new SnapshotArchiveCleanupPendingError()
       if (row.archiveId !== null) return row.archiveId
       await trx('snapshot_archive_capacity')
         .where({ id: 1 })
@@ -377,8 +416,12 @@ export class KnexSnapshotArchiveRequestStore {
       })
       .limit(snapshotArchiveRequestLimits.total)
     await runInSeries(rows, async row => {
-      if (Number(row.expiresAt) <= now) await this.close(row.identityKey, row.requestId, 'expired')
-      else await this.release(row.identityKey, row.requestId)
+      try {
+        if (Number(row.expiresAt) <= now) await this.close(row.identityKey, row.requestId, 'expired')
+        else await this.release(row.identityKey, row.requestId)
+      } catch (error) {
+        if (!(error instanceof SnapshotArchiveCleanupPendingError)) throw error
+      }
     })
     await this.knex.transaction(async trx => {
       await lockSnapshotArchiveCapacity(trx)

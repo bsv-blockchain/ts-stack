@@ -22,7 +22,4 @@ const encoded: Promise<string> = hashWasm.argon2id({
   hashLength: 32,
   outputType: 'encoded'
 })
-void hasImplicitAny
-void original
-void binary
-void encoded
+export { hasImplicitAny, original, binary, encoded }

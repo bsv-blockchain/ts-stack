@@ -107,6 +107,13 @@ function limit(value: number | undefined, fallback: number, ceiling: number, nam
   return result
 }
 
+function fitsPage(rows: number, payloadBytes: number, charge: number, maxBytes: number): boolean {
+  if (payloadBytes + charge <= maxBytes) return true
+  if (rows === 0)
+    throw new SnapshotResourceLimitError('Snapshot row exceeds maxBytes; large-value streaming is required')
+  return false
+}
+
 /** One private decoded frame, plus returned rows charged to the caller's allocation budget. */
 export function createRemoteSnapshotPageReader(
   transport: SnapshotArchiveTransport,
@@ -192,9 +199,7 @@ export function createRemoteSnapshotPageReader(
         const receipt = directory.receipts[position.sequence]
         while (position.rowOffset < frame.rows.length && rows.length < maxRows) {
           const charge = frame.charges[position.rowOffset]
-          if (payloadBytes + charge > maxBytes) {
-            if (rows.length === 0)
-              throw new SnapshotResourceLimitError('Snapshot row exceeds maxBytes; large-value streaming is required')
+          if (!fitsPage(rows.length, payloadBytes, charge, maxBytes)) {
             full = true
             break
           }

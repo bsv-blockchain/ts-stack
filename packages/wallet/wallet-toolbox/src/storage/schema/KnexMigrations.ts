@@ -1,4 +1,9 @@
 import {
+  addSnapshotArchiveOwnerTable,
+  removeSnapshotArchiveOwnerTable,
+  SNAPSHOT_ARCHIVE_OWNER_MIGRATION
+} from './snapshotArchiveOwnerMigration'
+import {
   addSnapshotArchiveRequestTable,
   removeSnapshotArchiveRequestTable,
   SNAPSHOT_ARCHIVE_REQUEST_MIGRATION
@@ -22,6 +27,7 @@ import {
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
 
+export { SNAPSHOT_ARCHIVE_OWNER_MIGRATION } from './snapshotArchiveOwnerMigration'
 export { SNAPSHOT_ARCHIVE_REQUEST_MIGRATION } from './snapshotArchiveRequestMigration'
 export { SNAPSHOT_ARCHIVE_MIGRATION } from './snapshotArchiveMigration'
 export { SNAPSHOT_SYNC_MIGRATION } from './snapshotSyncMigration'
@@ -106,6 +112,12 @@ export class KnexMigrations implements MigrationSource<string> {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
       }
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_OWNER_MIGRATION] = {
+      config: { transaction: true },
+      up: addSnapshotArchiveOwnerTable,
+      down: removeSnapshotArchiveOwnerTable
     }
 
     migrations[SNAPSHOT_ARCHIVE_REQUEST_MIGRATION] = {

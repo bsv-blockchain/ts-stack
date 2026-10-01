@@ -5,24 +5,27 @@ import { gate, snapshotHttpFixture } from '../../../../test/utils/snapshotArchiv
 
 afterEach(() => jest.restoreAllMocks())
 
-test.each(['snapshot_archive_requests', 'snapshot_archives', 'snapshot_archive_pages', 'snapshot_archive_capacity'])(
-  'declines capability when migration table %s is missing',
-  async table => {
-    const fixture = await snapshotHttpFixture()
-    const rpc = new KnexSnapshotArchiveRpc(fixture.storage)
-    try {
-      expect(await rpc.capabilities()).toEqual(snapshotArchiveCapabilities)
-      await fixture.storage.knex.schema.dropTable(table)
-      expect(await rpc.capabilities()).toBeUndefined()
-      await expect(
-        rpc.dispatch('getSnapshotArchiveOffer', [{ version: 1, identityKey: fixture.identityKey }], fixture.identityKey)
-      ).rejects.toThrow('unavailable')
-    } finally {
-      await rpc.close()
-      await fixture.close()
-    }
+test.each([
+  'snapshot_archive_requests',
+  'snapshot_archive_owners',
+  'snapshot_archives',
+  'snapshot_archive_pages',
+  'snapshot_archive_capacity'
+])('declines capability when migration table %s is missing', async table => {
+  const fixture = await snapshotHttpFixture()
+  const rpc = new KnexSnapshotArchiveRpc(fixture.storage)
+  try {
+    expect(await rpc.capabilities()).toEqual(snapshotArchiveCapabilities)
+    await fixture.storage.knex.schema.dropTable(table)
+    expect(await rpc.capabilities()).toBeUndefined()
+    await expect(
+      rpc.dispatch('getSnapshotArchiveOffer', [{ version: 1, identityKey: fixture.identityKey }], fixture.identityKey)
+    ).rejects.toThrow('unavailable')
+  } finally {
+    await rpc.close()
+    await fixture.close()
   }
-)
+})
 
 test('unsupported source and a close during capability probing never advertise or open a pool', async () => {
   const fixture = await snapshotHttpFixture()

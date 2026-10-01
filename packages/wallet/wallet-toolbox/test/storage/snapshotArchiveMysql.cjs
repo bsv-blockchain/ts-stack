@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const { knex } = require('knex')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
+const { SnapshotArchiveCleanupPendingError } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveOwner.js')
 const executable = require('./snapshotArchiveDocker.cjs')
 const container = process.env.TS_STACK_SNAPSHOT_CONTAINER
 const expectedId = process.env.TS_STACK_SNAPSHOT_CONTAINER_ID
@@ -132,8 +133,8 @@ async function captureFixture() {
     })
     await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'historical selection' })
     let changedDuringCapture = false
-    KnexSnapshotArchiveStore.prototype.append = async function (owner, page) {
-      await originalAppend.call(this, owner, page)
+    KnexSnapshotArchiveStore.prototype.append = async function (owner, page, authorize) {
+      await originalAppend.call(this, owner, page, authorize)
       if (page.sequence === 0) {
         await writer
           .knex('tx_labels')
@@ -149,7 +150,7 @@ async function captureFixture() {
     assert.equal(manifest.pages, 14)
     assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
     assert.equal(manifest.binding.user.activeStorage, 'historical selection')
-    assert.equal(manifest.binding.sourceSchema, '2026-09-30-003 add snapshot archive requests')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-01-001 add snapshot archive source owners')
     const store = new KnexSnapshotArchiveStore(writer.knex)
     const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
     const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
@@ -167,6 +168,7 @@ async function captureFixture() {
     await store.close(identity, manifest.archiveId)
     const requestLifecycle = await requestFixture(writer, reader)
     const remoteReader = await readerFixture(writer, reader)
+    const ownerDrain = await ownerDrainFixture(writer, reader)
     await writer.insertCommission({
       created_at: date,
       updated_at: date,
@@ -190,7 +192,8 @@ async function captureFixture() {
       packedBinary: true,
       crossProfileClosureRejected: true,
       requestLifecycle,
-      remoteReader
+      remoteReader,
+      ownerDrain
     }
   } finally {
     KnexSnapshotArchiveStore.prototype.append = originalAppend
@@ -198,6 +201,91 @@ async function captureFixture() {
     await writer.destroy()
   }
 }
+function boundary() {
+  let resolve
+  const promise = new Promise(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+async function ownerDrainFixture(writer, reader) {
+  const controller = new KnexSnapshotArchiveService(writer)
+  const replacement = new KnexSnapshotArchiveService(reader)
+  const originalOpen = writer.openSnapshotArchiveSource.bind(writer)
+  const reading = boundary()
+  const allowRead = boundary()
+  const destroying = boundary()
+  const allowDestroy = boundary()
+  const fields = {
+    version: 1,
+    nonce: 'd'.repeat(64),
+    notAfter: (await snapshotArchiveDatabaseNow(writer.knex)) + 300000,
+    maxBytes: 1048576
+  }
+  const input = { ...fields, requestId: snapshotArchiveRequestId(fields) }
+  writer.openSnapshotArchiveSource = async (...args) => {
+    const source = await originalOpen(...args)
+    assert.ok(source)
+    const pool = writer.snapshotSyncSource
+    assert.ok(pool)
+    const destroy = pool.destroy.bind(pool)
+    pool.destroy = async () => {
+      destroying.resolve()
+      await allowDestroy.promise
+      await destroy()
+    }
+    return {
+      ...source,
+      readPage: async (...pageArgs) => {
+        reading.resolve()
+        await allowRead.promise
+        return await source.readPage(...pageArgs)
+      }
+    }
+  }
+  const capture = controller.create(identity, input)
+  void capture.catch(() => undefined)
+  try {
+    await reading.promise
+    await assert.rejects(replacement.cancelRequest(identity, input), SnapshotArchiveCleanupPendingError)
+    assert.equal((await replacement.status(identity, input.requestId)).state, 'closed')
+    const requests = new KnexSnapshotArchiveRequestStore(reader.knex, true)
+    await requests.reap()
+    await new KnexSnapshotArchiveStore(reader.knex).reap()
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 1)
+    allowRead.resolve()
+    await destroying.promise
+    assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 1)
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    await writer.knex('tx_labels').where({ label: 'after-reader-pin' }).update({ label: 'during-owner-drain' })
+    assert.equal((await writer.knex('tx_labels').where({ label: 'during-owner-drain' })).length, 1)
+    allowDestroy.resolve()
+    await assert.rejects(capture, /unavailable/)
+    assert.equal(writer.snapshotSyncSource, undefined)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 0)
+    assert.equal((await writer.knex('snapshot_archives')).length, 0)
+    assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
+    await replacement.cancelRequest(identity, input)
+    return {
+      crossControllerCancellation: true,
+      nextAppendFenced: true,
+      reapingRetainsQuota: true,
+      foregroundWriteDuringPoolDrain: true,
+      exactPhysicalCleanupAcknowledgement: true
+    }
+  } finally {
+    allowRead.resolve()
+    allowDestroy.resolve()
+    await capture.catch(() => undefined)
+    writer.openSnapshotArchiveSource = originalOpen
+    await Promise.all([controller.close(), replacement.close()])
+  }
+}
+
 async function readerFixture(writer, reader) {
   const owner = new KnexSnapshotArchiveRpc(writer)
   const replacement = new KnexSnapshotArchiveRpc(reader)
@@ -229,7 +317,7 @@ async function readerFixture(writer, reader) {
     true
   )
   try {
-    for (let iteration = 0; iteration < 5; iteration++) {
+    await runInSeries([0, 1, 2, 3, 4], async iteration => {
       receiver = owner
       const view = await openRemoteSnapshot(transport)
       assert.ok(view)
@@ -244,32 +332,35 @@ async function readerFixture(writer, reader) {
         const labels = []
         let cursor
         let done = false
-        while (!done) {
-          const page = await view.readPage('txLabels', cursor, { maxRows: 17 })
+        function* pendingPages() {
+          while (!done) yield cursor
+        }
+        await runInSeries(pendingPages(), async next => {
+          const page = await view.readPage('txLabels', next, { maxRows: 17 })
           assert.ok(page.rows.length <= 17)
           assert.equal(page.cursor.archivePosition.version, 1)
           assert.equal(page.cursor.archivePosition.archiveId.length, 64)
           labels.push(...page.rows)
           cursor = page.cursor
           done = page.done
-        }
+        })
         assert.equal(labels.length, 140)
         assert.equal(labels[0].label, iteration === 0 ? 'after-service-pin' : 'after-reader-pin')
         assert.equal(new Set(labels.map(row => row.txLabelId)).size, 140)
         assert.ok(labels.every(row => row.userId === view.user.userId && row.created_at instanceof Date))
         assert.ok(labels.every(row => typeof row.isDeleted === 'boolean'))
-        for (const table of snapshotArchiveTables) {
+        await runInSeries(snapshotArchiveTables, async table => {
           const page = await view.readPage(table, undefined, { maxRows: 1000 })
           assert.equal(page.done, true)
           if (table === 'provenTxs') assert.deepEqual(page.rows[0].rawTx, new Uint8Array([1, 2, 255]))
-        }
+        })
       } finally {
         await view.close()
       }
       assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
       assert.equal((await writer.knex('snapshot_archive_requests')).length, retained)
       assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
-    }
+    })
     assert.equal(captures, 5)
     assert.equal(admissions.length, 6)
     assert.deepEqual(admissions[0], admissions[1])
@@ -315,8 +406,8 @@ async function requestFixture(writer, reader) {
     claimedBeforePool = true
     return await originalOpen(...args)
   }
-  KnexSnapshotArchiveStore.prototype.append = async function (owner, page) {
-    await originalAppend.call(this, owner, page)
+  KnexSnapshotArchiveStore.prototype.append = async function (owner, page, authorize) {
+    await originalAppend.call(this, owner, page, authorize)
     if (page.sequence === 0) {
       const receipt = await replacement.create(identity, input)
       assert.equal(receipt.state, 'building')
@@ -340,7 +431,7 @@ async function requestFixture(writer, reader) {
       sourceStorageIdentityKey: 'native-source',
       digest: ready.digest
     })
-    assert.equal(verified.manifest.binding.sourceSchema, '2026-09-30-003 add snapshot archive requests')
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-001 add snapshot archive source owners')
     const page = await replacement.read(identity, ready.archiveId, 8)
     const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
     assert.equal(decoded.rows[0].label, 'replacement')

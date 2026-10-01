@@ -56,7 +56,7 @@ export function remoteReaderFixture(rows: object[], table: WalletSnapshotTable =
       digest: directory.digest
     }
   }
-  const implementation: SnapshotArchiveRpcCall = async (method, params) => {
+  const response = (...[method, params]: Parameters<SnapshotArchiveRpcCall>): unknown => {
     const input = params[0] as {
       request?: SnapshotArchiveReaderRequest
       sequence?: number
@@ -101,6 +101,13 @@ export function remoteReaderFixture(rows: object[], table: WalletSnapshotTable =
         return true
       default:
         throw new Error(`Unexpected fixture operation ${method}`)
+    }
+  }
+  const implementation: SnapshotArchiveRpcCall = (method, params) => {
+    try {
+      return Promise.resolve(response(method, params))
+    } catch (error) {
+      return Promise.reject(error)
     }
   }
   const rpc = jest.fn(implementation)

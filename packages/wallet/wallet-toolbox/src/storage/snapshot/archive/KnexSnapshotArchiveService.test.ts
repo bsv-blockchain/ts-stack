@@ -1,3 +1,4 @@
+import { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveOwner'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,6 +55,15 @@ async function fixture() {
   const { user: peer } = await storage.findOrInsertUser(other)
   await seedArchiveClosure(storage, user.userId, peer.userId)
   return { storage, controller: service(storage), open }
+}
+async function closeRepairedSource(storage: StorageKnex, requestId: string): Promise<void> {
+  const requests = new KnexSnapshotArchiveRequestStore(storage.knex)
+  await expect(requests.close(identity, requestId, 'failed')).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+  const owner = await storage.knex('snapshot_archive_owners').where({ identityKey: identity, requestId }).first()
+  expect(owner).toBeDefined()
+  await requests.sourceClosed({ identityKey: identity, requestId, claimToken: owner.claimToken })
+  await requests.close(identity, requestId, 'failed')
+  expect(await storage.knex('snapshot_archive_owners')).toHaveLength(0)
 }
 function request(nonce = 'b'.repeat(64)) {
   const fields = { version: 1 as const, nonce, notAfter: Date.now() + 300000, maxBytes: 32768 }
@@ -255,7 +265,7 @@ test('failed physical cleanup retains the reservation and fences the controller 
   expect(() => controller.create(identity, request('c'.repeat(64)))).toThrow('closed')
   await expect(controller.close()).rejects.toBe(failure)
   await source!.close()
-  await new KnexSnapshotArchiveRequestStore(storage.knex).close(identity, input.requestId, 'failed')
+  await closeRepairedSource(storage, input.requestId)
 })
 
 test('unsupported and busy sources fail without disturbing an existing local source', async () => {
@@ -339,7 +349,7 @@ test('failed cleanup while opening retains admission even though no source was r
   jest.restoreAllMocks()
   const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
   await reader.destroy()
-  await new KnexSnapshotArchiveRequestStore(storage.knex).close(identity, input.requestId, 'failed')
+  await closeRepairedSource(storage, input.requestId)
 })
 
 test('start returns a durable receipt before capture completes and repeats only that admission', async () => {
@@ -594,3 +604,58 @@ test.each(['failed', 'resource-limited'] as const)(
     await expect(replacement.admitReader(identity, offered.request)).rejects.toThrow('unavailable')
   }
 )
+
+test('cancellation through another controller retains quota until the capturing owner drains its physical pool', async () => {
+  const { storage, controller, open } = await fixture()
+  const replacementStorage = open()
+  await replacementStorage.makeAvailable()
+  const replacement = service(replacementStorage)
+  const input = request()
+  const reading = gate()
+  const allowRead = gate()
+  const destroying = gate()
+  const allowDestroy = gate()
+  const original = storage.openSnapshotArchiveSource.bind(storage)
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
+    const source = (await original(key, options))!
+    const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
+    const destroy = reader.destroy.bind(reader)
+    jest.spyOn(reader, 'destroy').mockImplementation(async () => {
+      destroying.resolve()
+      await allowDestroy.promise
+      await destroy()
+    })
+    return {
+      ...source,
+      readPage: async (...args) => {
+        reading.resolve()
+        await allowRead.promise
+        return await source.readPage(...args)
+      }
+    }
+  })
+  const capture = controller.create(identity, input)
+  void capture.catch(() => undefined)
+  try {
+    await reading.promise
+    await expect(replacement.cancelRequest(identity, input)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+    expect((await replacement.status(identity, input.requestId)).state).toBe('closed')
+    expect(await storage.knex('snapshot_archive_owners')).toHaveLength(1)
+    expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+    allowRead.resolve()
+    await destroying.promise
+    await expect(replacement.cancelRequest(identity, input)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+    expect(await storage.knex('snapshot_archive_pages')).toHaveLength(0)
+    await storage.knex('tx_labels').where({ txLabelId: 1 }).update({ label: 'foreground while owner drains' })
+    expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+    allowDestroy.resolve()
+    await expect(capture).rejects.toThrow('unavailable')
+    await replacement.cancelRequest(identity, input)
+    expect(await storage.knex('snapshot_archive_owners')).toHaveLength(0)
+    expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  } finally {
+    allowRead.resolve()
+    allowDestroy.resolve()
+    await capture.catch(() => undefined)
+  }
+})

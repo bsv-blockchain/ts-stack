@@ -1,3 +1,8 @@
+import {
+  addSnapshotArchiveOwnerTable,
+  removeSnapshotArchiveOwnerTable
+} from '../../schema/snapshotArchiveOwnerMigration'
+import { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveOwner'
 import { snapshotArchiveReaderRequestId } from './SnapshotArchiveReaderRequest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -35,7 +40,7 @@ const binding: SnapshotArchiveBinding = {
 const databases: Knex[] = []
 const directories: string[] = []
 
-async function fixture() {
+async function fixture(requireSourceDrain = false) {
   const directory = await mkdtemp(join(tmpdir(), 'snapshot-request-'))
   directories.push(directory)
   const open = () => {
@@ -53,12 +58,13 @@ async function fixture() {
   await db.raw('PRAGMA journal_mode = WAL')
   await addSnapshotArchiveTables(db)
   await addSnapshotArchiveRequestTable(db)
+  if (requireSourceDrain) await addSnapshotArchiveOwnerTable(db)
   const peer = open()
   return {
     db,
     peer,
-    requests: new KnexSnapshotArchiveRequestStore(db),
-    second: new KnexSnapshotArchiveRequestStore(peer),
+    requests: new KnexSnapshotArchiveRequestStore(db, requireSourceDrain),
+    second: new KnexSnapshotArchiveRequestStore(peer, requireSourceDrain),
     archives: new KnexSnapshotArchiveStore(db)
   }
 }
@@ -658,4 +664,134 @@ test('early reader collection refuses altered persisted tuple binding and rolls 
   await requests.close(identity, issued.request.requestId)
   expect(await db('snapshot_archive_requests')).toHaveLength(0)
   expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test.each(['cancel', 'expiry'] as const)(
+  '%s cannot release another source owner before its physical acknowledgement',
+  async reason => {
+    const { db, requests, second } = await fixture(true)
+    const input = request()
+    const { owner } = await requests.claim(identity, input)
+    expect(await db('snapshot_archive_owners')).toEqual([{ slot: 0, ...owner, archiveId: null }])
+    await expect(removeSnapshotArchiveOwnerTable(db)).rejects.toThrow('Drain snapshot archive sources')
+    if (reason === 'expiry') jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(input.notAfter)
+    await expect(
+      second.close(identity, input.requestId, reason === 'expiry' ? 'expired' : 'closed')
+    ).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+    await second.reap()
+    expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+    await requests.sourceClosed({ ...owner!, claimToken: 'f'.repeat(64) })
+    expect(await db('snapshot_archive_owners')).toHaveLength(1)
+    await expect(second.close(identity, input.requestId)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+    // The exact owner's acknowledgement remains valid after expiry.
+    await requests.sourceClosed(owner!)
+    await requests.sourceClosed(owner!)
+    await second.close(identity, input.requestId)
+    expect(await db('snapshot_archive_owners')).toHaveLength(0)
+    expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+    await removeSnapshotArchiveOwnerTable(db)
+    expect(await db.schema.hasTable('snapshot_archive_owners')).toBe(false)
+  }
+)
+
+test('request cancellation fences the next atomic append and direct archive reaping cannot bypass source ownership', async () => {
+  const { db, peer, requests, second, archives } = await fixture(true)
+  const input = request()
+  const { owner } = await requests.claim(identity, input)
+  const writer = await requests.begin(owner!, binding)
+  const page = { sequence: 0, table: snapshotArchiveTables[0], rows: 0, done: true, bytes: Uint8Array.of(7) }
+  const mutableWriter = { ...writer }
+  const appended = requests.append(owner!, mutableWriter, page)
+  mutableWriter.archiveId = 'f'.repeat(64)
+  page.bytes[0] = 9
+  await appended
+  expect(new Uint8Array((await db('snapshot_archive_pages').first()).payload)).toEqual(Uint8Array.of(7))
+  expect(await db('snapshot_archive_owners').first()).toMatchObject({ ...owner, archiveId: writer.archiveId })
+  await second.markCancellation(identity, input)
+  await expect(
+    requests.append(owner!, writer, { ...page, sequence: 1, table: snapshotArchiveTables[1] })
+  ).rejects.toThrow('unavailable')
+  await expect(new KnexSnapshotArchiveStore(peer).close(identity, writer.archiveId)).rejects.toBeInstanceOf(
+    SnapshotArchiveCleanupPendingError
+  )
+  await second.reap()
+  await archives.reap()
+  expect(await db('snapshot_archive_pages')).toHaveLength(1)
+  expect(await db('snapshot_archives').first()).toMatchObject({ state: 'closing' })
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+  await requests.sourceClosed(owner!)
+  await second.close(identity, input.requestId)
+  await second.close(identity, input.requestId)
+  expect(await db('snapshot_archive_pages')).toHaveLength(0)
+  expect(await db('snapshot_archives')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('a guarded request cannot publish a ready receipt until its source is physically acknowledged closed', async () => {
+  const { db, requests, second, archives } = await fixture(true)
+  const input = request()
+  const { owner } = await requests.claim(identity, input)
+  const writer = await requests.begin(owner!, binding)
+  for (const [sequence, table] of snapshotArchiveTables.entries())
+    await requests.append(owner!, writer, { sequence, table, rows: 0, done: true, bytes: Uint8Array.of(1) })
+  await expect(requests.seal(owner!, writer)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+  expect((await second.status(identity, input.requestId)).state).toBe('building')
+  await expect(archives.inspect(identity, writer.archiveId)).rejects.toThrow('unavailable')
+  await requests.sourceClosed(owner!)
+  const manifest = await requests.seal(owner!, writer)
+  expect(await second.status(identity, input.requestId)).toMatchObject({
+    state: 'ready',
+    archiveId: writer.archiveId,
+    digest: manifest.digest
+  })
+  expect(await db('snapshot_archive_owners')).toHaveLength(0)
+  await second.close(identity, input.requestId)
+})
+
+test('an occupied source-owner table refuses admission even if its capacity ledger was independently damaged', async () => {
+  const { db, requests } = await fixture(true)
+  await db('snapshot_archive_owners').insert(
+    Array.from({ length: 8 }, (_, slot) => ({
+      slot,
+      identityKey: other,
+      requestId: slot.toString(16).padStart(64, '0'),
+      claimToken: 'e'.repeat(64),
+      archiveId: null
+    }))
+  )
+  await expect(requests.claim(identity, request())).rejects.toThrow('source capacity is occupied')
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+  expect(await db('snapshot_archive_owners')).toHaveLength(8)
+})
+
+test('source slots are reused only after acknowledgement and stale owners cannot release a successor', async () => {
+  const { db, requests } = await fixture(true)
+  const first = request()
+  const firstClaim = await requests.claim(identity, first)
+  await requests.sourceClosed(firstClaim.owner!)
+  await requests.close(identity, first.requestId)
+  const next = request('c'.repeat(64))
+  const nextClaim = await requests.claim(identity, next)
+  expect(await db('snapshot_archive_owners').first()).toMatchObject({ slot: 0, ...nextClaim.owner })
+  await requests.sourceClosed(firstClaim.owner!)
+  await expect(requests.close(identity, next.requestId)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+  expect((await db('snapshot_archive_capacity').first()).archives).toBe(1)
+  await requests.sourceClosed(nextClaim.owner!)
+  await requests.close(identity, next.requestId)
+  expect((await db('snapshot_archive_capacity').first()).archives).toBe(0)
+})
+
+test('source-owner schema creation and removal are idempotent without discarding occupied slots', async () => {
+  const { db, requests } = await fixture(true)
+  const input = request()
+  const { owner } = await requests.claim(identity, input)
+  const rows = await db('snapshot_archive_owners')
+  await addSnapshotArchiveOwnerTable(db)
+  expect(await db('snapshot_archive_owners')).toEqual(rows)
+  await requests.sourceClosed(owner!)
+  await requests.close(identity, input.requestId)
+  await removeSnapshotArchiveOwnerTable(db)
+  await removeSnapshotArchiveOwnerTable(db)
+  expect(await db.schema.hasTable('snapshot_archive_owners')).toBe(false)
 })

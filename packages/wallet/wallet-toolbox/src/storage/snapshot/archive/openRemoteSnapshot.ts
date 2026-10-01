@@ -1,4 +1,5 @@
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
+import { runInSeries } from '../../../utility/runInSeries'
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from '../WalletReadSnapshot'
 import { snapshotArchiveLimits } from './SnapshotArchive'
 import type { SnapshotArchiveRequestReceipt } from './SnapshotArchiveRequest'
@@ -28,6 +29,26 @@ async function accepted(
   return result.outcome === 'accepted' ? result.receipt : undefined
 }
 
+async function waitForCapture(
+  transport: SnapshotArchiveTransport,
+  lease: RemoteSnapshotLease,
+  request: SnapshotArchiveReaderRequest,
+  receipt: Readonly<SnapshotArchiveRequestReceipt>
+): Promise<Readonly<SnapshotArchiveRequestReceipt>> {
+  function* intervals() {
+    let interval = 100
+    while (receipt.state === 'building') {
+      yield interval
+      interval = Math.min(interval * 2, 1000)
+    }
+  }
+  await runInSeries(intervals(), async interval => {
+    await lease.wait(interval)
+    receipt = await lease.runIdempotent(signal => transport.readerStatus(request, signal))
+  })
+  return receipt
+}
+
 /** Unsupported capacity may decline only before a source view is exposed. */
 export async function openRemoteSnapshot(
   transport: SnapshotArchiveTransport,
@@ -51,12 +72,7 @@ export async function openRemoteSnapshot(
       await lease.close()
       return undefined
     }
-    let interval = 100
-    while (receipt.state === 'building') {
-      await lease.wait(interval)
-      receipt = await lease.runIdempotent(signal => transport.readerStatus(request, signal))
-      interval = Math.min(interval * 2, 1000)
-    }
+    receipt = await waitForCapture(transport, lease, request, receipt)
     if (receipt.state === 'resource-limited') {
       await lease.close()
       return undefined
@@ -67,8 +83,8 @@ export async function openRemoteSnapshot(
     const binding = directory.manifest.binding
     const copyDates = <T extends { created_at: Date; updated_at: Date }>(value: T): T => ({
       ...value,
-      created_at: new Date(value.created_at.getTime()),
-      updated_at: new Date(value.updated_at.getTime())
+      created_at: new Date(value.created_at),
+      updated_at: new Date(value.updated_at)
     })
     return Object.freeze({
       version: 1 as const,
@@ -90,8 +106,8 @@ export async function openRemoteSnapshot(
   } catch (error) {
     try {
       await lease.close()
-    } catch (cleanup) {
-      throw new RemoteSnapshotOpeningCleanupError(error, cleanup)
+    } catch (error_) {
+      throw new RemoteSnapshotOpeningCleanupError(error, error_)
     }
     throw error
   }

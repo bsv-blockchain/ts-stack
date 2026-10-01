@@ -675,3 +675,34 @@ admission and staging without proving that the original replica has physically
 drained its SQL reader. Owner recovery and bounded driver/query cleanup remain
 open requirements before server advertisement and program completion. No claim
 of a distributed physical-pool ceiling follows from logical quota accounting.
+
+## Durable source cleanup fence (unadvertised implementation)
+
+The additive `2026-10-01-001 add snapshot archive source owners` migration
+registers each service capture's exact internal claim in one of eight shared
+slots before source-pool acquisition. The request and its archive remain charged
+until the owning controller acknowledges awaited source and pool cleanup. Ready
+publication requires that acknowledgement too. Another controller may cancel or
+expire the request, but cannot free its pages, logical reservation or slot while
+the owner record remains. Each append checks the durable request fence in the
+same transaction as its page write. Direct archive close and expiry cleanup obey
+the same owner fence; a pending source does not prevent cleanup of other archives.
+
+A pending close raises `SnapshotArchiveCleanupPendingError`; it does not return
+successful cancellation. A failed local cleanup fences that controller's
+admission. Repeating an acknowledgement is idempotent and an old or incorrect
+claim cannot release a successor. The owner migration refuses removal while
+owners remain. Run migrations before admitting captures, keep all serving
+binaries on the same candidate, and stop and drain captures before any downgrade.
+Older draft binaries do not enforce this new table; mixed-version capture is
+unsupported. Standard wallet tables and BRC-38/39 bytes are unchanged.
+
+This checkpoint deliberately retains ownership after an unproved process loss.
+Backend-bound orphan recovery and bounded client polling for pending cleanup are
+still required before reader advertisement. An elapsed lease is a fence, not
+proof that an old SQL operation stopped. The eight logical slots do not establish
+a global physical-connection ceiling; per-provider physical admission remains
+occupied until its acquisition and cleanup settle. Actual deployment replica and
+driver limits require separate qualification. The generated two-connection
+lifecycle suite exercises cancellation, repeated status/reaping, incorrect and
+exact acknowledgements, and preserved reservations across at least 300 schedules.

@@ -6,6 +6,17 @@ import type { WalletReadSnapshotOptions } from '../WalletReadSnapshot'
 import { parseSnapshotArchiveReaderRequest, type SnapshotArchiveReaderRequest } from './SnapshotArchiveReaderRequest'
 import type { SnapshotArchiveTransport } from './SnapshotArchiveTransport'
 
+function observedCompletion() {
+  let resolve!: () => void
+  let reject!: (error: unknown) => void
+  const closed = new Promise<void>((onResolve, onReject) => {
+    resolve = onResolve
+    reject = onReject
+  })
+  void closed.catch(() => undefined)
+  return { closed, resolve, reject }
+}
+
 /** Owns one opening/read operation and one expiry timer until remote cleanup settles. */
 export class RemoteSnapshotLease {
   readonly lifetimeMs: number
@@ -14,14 +25,14 @@ export class RemoteSnapshotLease {
   private readonly startedAt = performance.now()
   private readonly controller = new AbortController()
   private readonly signal: AbortSignal | undefined
-  private timer: ReturnType<typeof setTimeout> | undefined
+  private readonly timer: ReturnType<typeof setTimeout> | undefined
   private pending: Promise<void> | undefined
   private request: Readonly<SnapshotArchiveReaderRequest> | undefined
   private serverTime: number | undefined
   private reason: WERR_INVALID_OPERATION | undefined
   private closing: Promise<void> | undefined
-  private resolveClosed!: () => void
-  private rejectClosed!: (error: unknown) => void
+  private readonly resolveClosed: () => void
+  private readonly rejectClosed: (error: unknown) => void
 
   constructor(
     private readonly transport: SnapshotArchiveTransport,
@@ -32,11 +43,10 @@ export class RemoteSnapshotLease {
       throw new WERR_INVALID_PARAMETER('lifetimeMs', 'an integer from 1 to 3600000')
     this.expiresAt = Date.now() + this.lifetimeMs
     this.signal = options.signal
-    this.closed = new Promise<void>((resolve, reject) => {
-      this.resolveClosed = resolve
-      this.rejectClosed = reject
-    })
-    void this.closed.catch(() => undefined)
+    const completion = observedCompletion()
+    this.closed = completion.closed
+    this.resolveClosed = completion.resolve
+    this.rejectClosed = completion.reject
     this.signal?.addEventListener('abort', this.abort, { once: true })
     if (this.signal?.aborted === true) this.abort()
     else
@@ -128,7 +138,7 @@ export class RemoteSnapshotLease {
   async wait(milliseconds: number): Promise<void> {
     await this.run(
       async signal =>
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>(resolve => {
           const finish = (): void => {
             signal.removeEventListener('abort', abort)
             resolve()
@@ -136,9 +146,8 @@ export class RemoteSnapshotLease {
           const timer = setTimeout(finish, milliseconds)
           const abort = (): void => {
             clearTimeout(timer)
-            signal.removeEventListener('abort', abort)
-            // Only close() aborts this private signal, after setting its reason.
-            reject(this.reason)
+            // run() checks the recorded close reason after this wait settles.
+            finish()
           }
           // run() asserted openness immediately before this synchronous setup.
           signal.addEventListener('abort', abort, { once: true })
